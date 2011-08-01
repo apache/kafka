@@ -1,0 +1,5 @@
+StyleCop.Cache
+bin
+obj
+*.suo
+*.csproj.user
