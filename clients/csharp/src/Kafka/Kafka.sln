@@ -1,0 +1,38 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 11.00
+# Visual Studio 2010
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kafka.Client", "Kafka.Client\Kafka.Client.csproj", "{A92DD03B-EE4F-4A78-9FB2-279B6348C7D2}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kafka.Client.Tests", "Tests\Kafka.Client.Tests\Kafka.Client.Tests.csproj", "{9BA1A0BF-B207-4A11-8883-5F64B113C07D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{06FD20F1-CE06-430E-AF6E-2EBECE6E47B3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Kafka.Client.IntegrationTests", "Tests\Kafka.Client.IntegrationTests\Kafka.Client.IntegrationTests.csproj", "{AF29C330-49BD-4648-B692-882E922C435B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{A92DD03B-EE4F-4A78-9FB2-279B6348C7D2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A92DD03B-EE4F-4A78-9FB2-279B6348C7D2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A92DD03B-EE4F-4A78-9FB2-279B6348C7D2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A92DD03B-EE4F-4A78-9FB2-279B6348C7D2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9BA1A0BF-B207-4A11-8883-5F64B113C07D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9BA1A0BF-B207-4A11-8883-5F64B113C07D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9BA1A0BF-B207-4A11-8883-5F64B113C07D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9BA1A0BF-B207-4A11-8883-5F64B113C07D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AF29C330-49BD-4648-B692-882E922C435B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AF29C330-49BD-4648-B692-882E922C435B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AF29C330-49BD-4648-B692-882E922C435B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF29C330-49BD-4648-B692-882E922C435B}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{9BA1A0BF-B207-4A11-8883-5F64B113C07D} = {06FD20F1-CE06-430E-AF6E-2EBECE6E47B3}
+		{AF29C330-49BD-4648-B692-882E922C435B} = {06FD20F1-CE06-430E-AF6E-2EBECE6E47B3}
+	EndGlobalSection
+EndGlobal

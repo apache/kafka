@@ -1,0 +1,11 @@
+The network server for kafka. Now application specific code here, just general network server stuff.
+<br>
+The classes Receive and Send encapsulate the incoming and outgoing transmission of bytes. A Handler
+is a mapping between a Receive and a Send, and represents the users hook to add logic for mapping requests
+to actual processing code. Any uncaught exceptions in the reading or writing of the transmissions will result in 
+the server logging an error and closing the offending socket. As a result it is the duty of the Handler
+implementation to catch and serialize any application-level errors that should be sent to the client.
+<br>
+This slightly lower-level interface that models sending and receiving rather than requests and responses
+is necessary in order to allow the send or receive to be overridden with a non-user-space writing of bytes
+using FileChannel.transferTo.

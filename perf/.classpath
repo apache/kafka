@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src/java"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry kind="lib" path="/Kafka-example/lib/log4j-1.2.15.jar"/>
+	<classpathentry kind="lib" path="lib/jopt-simple-3.1.jar"/>
+	<classpathentry kind="lib" path="/Users/femekci/linkedInSrc/kafka-multifetch/lib/scala-library-2.8.0.jar"/>
+	<classpathentry kind="lib" path="/Users/femekci/linkedInSrc/kafka-multifetch/dist/kafka-0.04.6.0.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>

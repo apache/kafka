@@ -1,0 +1,8 @@
+This test replicates messages from 3 kafka brokers to 2 other kafka brokers using the embedded consumer.
+At the end, the messages produced at the source brokers should match that at the target brokers.
+
+To run this test, do
+bin/run-test.sh
+
+The expected output is given in bin/expected.out. There is only 1 thing that's important.
+1. The output should have a line "test passed".
