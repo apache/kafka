@@ -28,7 +28,7 @@ import java.io.PrintStream
 import kafka.message._
 import kafka.utils.Utils
 import kafka.utils.ZkUtils
-import kafka.utils.StringSerializer
+import kafka.utils.ZKStringSerializer
 
 /**
  * Consumer that dumps messages out to standard out.
@@ -200,7 +200,7 @@ object ConsoleConsumer {
     try {
       val dir = "/consumers/" + groupId
       logger.info("Cleaning up temporary zookeeper data under " + dir + ".")
-      val zk = new ZkClient(zkUrl, 30*1000, 30*1000, StringSerializer)
+      val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)
       zk.deleteRecursive(dir)
       zk.close()
     } catch {

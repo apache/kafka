@@ -9,7 +9,7 @@ import kafka.producer.async.DefaultEventHandler
 import kafka.serializer.{DefaultEncoder, StringEncoder}
 import kafka.producer.{ProducerData, DefaultPartitioner, ProducerConfig, Producer}
 import kafka.consumer._
-import kafka.utils.{StringSerializer, Utils}
+import kafka.utils.{ZKStringSerializer, Utils}
 import kafka.api.OffsetRequest
 import org.I0Itec.zkclient._
 import kafka.message.{CompressionCodec, Message, MessageSet, FileMessageSet}
@@ -131,7 +131,7 @@ object ReplayLogProducer {
     try {
       val dir = "/consumers/" + groupId
       logger.info("Cleaning up temporary zookeeper data under " + dir + ".")
-      val zk = new ZkClient(zkUrl, 30*1000, 30*1000, StringSerializer)
+      val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)
       zk.deleteRecursive(dir)
       zk.close()
     } catch {

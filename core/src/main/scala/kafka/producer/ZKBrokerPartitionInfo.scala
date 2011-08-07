@@ -15,7 +15,7 @@
 */
 package kafka.producer
 
-import kafka.utils.{StringSerializer, ZkUtils, ZKConfig}
+import kafka.utils.{ZKStringSerializer, ZkUtils, ZKConfig}
 import collection.mutable.HashMap
 import collection.mutable.Map
 import org.apache.log4j.Logger
@@ -59,7 +59,7 @@ private[producer] class ZKBrokerPartitionInfo(config: ZKConfig, producerCbk: (In
   private val logger = Logger.getLogger(classOf[ZKBrokerPartitionInfo])
   private val zkWatcherLock = new Object
   private val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-    StringSerializer)
+    ZKStringSerializer)
   // maintain a map from topic -> list of (broker, num_partitions) from zookeeper
   private var topicBrokerPartitions = getZKTopicPartitionInfo
   // maintain a map from broker id to the corresponding Broker object

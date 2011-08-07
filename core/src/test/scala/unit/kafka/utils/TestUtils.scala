@@ -209,7 +209,7 @@ object TestUtils {
    *  Throw an exception if an iterable has different length than expected
    *  
    */
-  def checkLength[T](s1: Iterator[T], expectedLength:Integer) {
+  def checkLength[T](s1: Iterator[T], expectedLength:Int) {
     var n = 0
     while (s1.hasNext) {
       n+=1
@@ -283,7 +283,7 @@ object TestUtils {
   }
 
   def updateConsumerOffset(config : ConsumerConfig, path : String, offset : Long) = {
-    val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, StringSerializer)
+    val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
     ZkUtils.updatePersistentPath(zkClient, path, offset.toString)
 
   }

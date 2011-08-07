@@ -21,7 +21,7 @@ import org.apache.zookeeper.server.NIOServerCnxn
 import kafka.utils.TestUtils
 import org.I0Itec.zkclient.ZkClient
 import java.net.InetSocketAddress
-import kafka.utils.{Utils, StringSerializer}
+import kafka.utils.{Utils, ZKStringSerializer}
 
 class EmbeddedZookeeper(val connectString: String) {
   val snapshotDir = TestUtils.tempDir()
@@ -31,7 +31,7 @@ class EmbeddedZookeeper(val connectString: String) {
   val factory = new NIOServerCnxn.Factory(new InetSocketAddress("127.0.0.1", port))
   factory.startup(zookeeper)
   val client = new ZkClient(connectString)
-  client.setZkSerializer(StringSerializer)
+  client.setZkSerializer(ZKStringSerializer)
 
   def shutdown() {
     factory.shutdown()

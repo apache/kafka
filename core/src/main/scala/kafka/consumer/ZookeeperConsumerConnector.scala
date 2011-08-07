@@ -92,8 +92,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   // queues : (topic,consumerThreadId) -> queue
   private val queues = new Pool[Tuple2[String,String], BlockingQueue[FetchedDataChunk]]
   private val scheduler = new KafkaScheduler(1, "Kafka-consumer-autocommit-", false)
-  connectZk
-  createFetcher
+  connectZk()
+  createFetcher()
   if (config.autoCommit) {
     logger.info("starting auto committer every " + config.autoCommitIntervalMs + " ms")
     scheduler.scheduleWithRate(autoCommit, config.autoCommitIntervalMs, config.autoCommitIntervalMs)
@@ -112,7 +112,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   private def connectZk() {
     logger.info("Connecting to zookeeper instance at " + config.zkConnect)
-    zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, StringSerializer)
+    zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
   }
 
   def shutdown() {
@@ -120,12 +120,14 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     if (canShutdown) {
       logger.info("ZKConsumerConnector shutting down")
       try {
-        scheduler.shutdown
+        scheduler.shutdown()
         fetcher match {
-          case Some(f) => f.shutdown
+          case Some(f) => f.shutdown()
           case None =>
         }
-        sendShudownToAllQueues
+        sendShudownToAllQueues()
+        if (config.autoCommit)
+          commitOffsets()
         if (zkClient != null) {
           zkClient.close()
           zkClient = null
@@ -186,7 +188,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       new ZKSessionExpireListenner(dirs, consumerIdString, topicCount, loadBalancerListener))
 
     // explicitly trigger load balancing for this consumer
-    loadBalancerListener.syncedRebalance
+    loadBalancerListener.syncedRebalance()
     ret
   }
 
@@ -199,7 +201,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private def sendShudownToAllQueues() = {
     for (queue <- queues.values) {
       logger.debug("Clearing up queue")
-      queue.clear
+      queue.clear()
       queue.put(ZookeeperConsumerConnector.shutdownCommand)
       logger.debug("Cleared queue and sent shutdown command")
     }
@@ -209,7 +211,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     if(logger.isTraceEnabled)
       logger.trace("auto committing")
     try {
-      commitOffsets
+      commitOffsets()
     }
     catch {
       case t: Throwable =>
@@ -419,7 +421,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           logger.info("begin rebalancing consumer " + consumerIdString + " try #" + i)
           var done = false
           try {
-            done = rebalance
+            done = rebalance()
           }
           catch {
             case e =>
@@ -432,8 +434,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           if (done)
             return
           // release all partitions, reset state and retry
-          releasePartitionOwnership
-          resetState
+          releasePartitionOwnership()
+          resetState()
           Thread.sleep(config.zkSyncTimeMs)
         }
       }
@@ -462,7 +464,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       commitOffsets
 
       logger.info("Releasing partition ownership")
-      releasePartitionOwnership
+      releasePartitionOwnership()
 
       val queuesToBeCleared = new mutable.HashSet[BlockingQueue[FetchedDataChunk]]
       for ((topic, consumerThreadIdSet) <- relevantTopicThreadIdsMap) {

@@ -18,7 +18,7 @@ package kafka.zk
 
 import kafka.consumer.ConsumerConfig
 import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{ZkUtils, StringSerializer}
+import kafka.utils.{ZkUtils, ZKStringSerializer}
 import kafka.utils.{TestZKUtils, TestUtils}
 import org.junit.Assert
 import org.scalatest.junit.JUnit3Suite
@@ -30,7 +30,7 @@ class ZKEphemeralTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testEphemeralNodeCleanup = {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
     var zkClient = new ZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-                                StringSerializer)
+                                ZKStringSerializer)
 
     try {
       ZkUtils.createEphemeralPathExpectConflict(zkClient, "/tmp/zktest", "node created")
@@ -48,7 +48,7 @@ class ZKEphemeralTest extends JUnit3Suite with ZooKeeperTestHarness {
     Thread.sleep(zkSessionTimeoutMs)
 
     zkClient = new ZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-                                StringSerializer)
+                                ZKStringSerializer)
 
     val nodeExists = ZkUtils.pathExists(zkClient, "/tmp/zktest")
     Assert.assertFalse(nodeExists)

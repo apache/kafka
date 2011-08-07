@@ -33,7 +33,7 @@ object UpdateOffsetsInZK {
       usage
     val config = new ConsumerConfig(Utils.loadProps(args(1)))
     val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs,
-        config.zkConnectionTimeoutMs, StringSerializer)
+        config.zkConnectionTimeoutMs, ZKStringSerializer)
     args(0) match {
       case Earliest => getAndSetOffsets(zkClient, OffsetRequest.EarliestTime, config, args(2))
       case Latest => getAndSetOffsets(zkClient, OffsetRequest.LatestTime, config, args(2))

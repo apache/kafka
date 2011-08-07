@@ -239,7 +239,7 @@ object ZkUtils {
   }
 }
 
-object StringSerializer extends ZkSerializer {
+object ZKStringSerializer extends ZkSerializer {
 
   @throws(classOf[ZkMarshallingError])
   def serialize(data : Object) : Array[Byte] = data.asInstanceOf[String].getBytes("UTF-8")

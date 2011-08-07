@@ -17,7 +17,7 @@
 package kafka
 
 import consumer.ConsumerConfig
-import utils.{StringSerializer, ZkUtils, Utils}
+import utils.{ZKStringSerializer, ZkUtils, Utils}
 import org.I0Itec.zkclient.ZkClient
 
 object DeleteZKPath {
@@ -31,7 +31,7 @@ object DeleteZKPath {
     val zkPath = args(1)
 
     val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-      StringSerializer)
+      ZKStringSerializer)
 
     try {
       ZkUtils.deletePathRecursive(zkClient, zkPath);

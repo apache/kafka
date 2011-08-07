@@ -42,7 +42,7 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) {
   def startup() {
     /* start client */
     logger.info("connecting to ZK: " + config.zkConnect)
-    zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, StringSerializer)
+    zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
     zkClient.subscribeStateChanges(new SessionExpireListener)
   }
 
