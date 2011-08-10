@@ -17,24 +17,29 @@
 
 package kafka.server
 
+import kafka.utils.Utils
+import kafka.consumer._
+import kafka.producer.{ProducerData, ProducerConfig, Producer}
+import kafka.message.Message
 import org.apache.log4j.Logger
-import kafka.consumer.{Consumer, ConsumerConnector, ConsumerConfig}
-import kafka.utils.{SystemTime, Utils}
-import kafka.api.RequestKeys
-import kafka.message.{NoCompressionCodec, ByteBufferMessageSet}
 
-class KafkaServerStartable(val serverConfig: KafkaConfig, val consumerConfig: ConsumerConfig) {
+import scala.collection.Map
+
+class KafkaServerStartable(val serverConfig: KafkaConfig,
+                           val consumerConfig: ConsumerConfig,
+                           val producerConfig: ProducerConfig) {
   private var server : KafkaServer = null
   private var embeddedConsumer : EmbeddedConsumer = null
 
   init
 
-  def this(serverConfig: KafkaConfig) = this(serverConfig, null)
+  def this(serverConfig: KafkaConfig) = this(serverConfig, null, null)
 
   private def init() {
     server = new KafkaServer(serverConfig)
     if (consumerConfig != null)
-      embeddedConsumer = new EmbeddedConsumer(consumerConfig, server)
+      embeddedConsumer =
+        new EmbeddedConsumer(consumerConfig, producerConfig, server)
   }
 
   def startup() {
@@ -55,43 +60,106 @@ class KafkaServerStartable(val serverConfig: KafkaConfig, val consumerConfig: Co
 }
 
 class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
-                       private val kafkaServer: KafkaServer) {
-  private val logger = Logger.getLogger(getClass())
-  private val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
-  private val topicMessageStreams = consumerConnector.createMessageStreams(consumerConfig.embeddedConsumerTopicMap)
+                       private val producerConfig: ProducerConfig,
+                       private val kafkaServer: KafkaServer) extends TopicEventHandler[String] {
 
-  def startup() = {
-    var threadList = List[Thread]()
-    for ((topic, streamList) <- topicMessageStreams)
-      for (i <- 0 until streamList.length)
-        threadList ::= Utils.newThread("kafka-embedded-consumer-" + topic + "-" + i, new Runnable() {
-          def run() {
-            logger.info("starting consumer thread " + i + " for topic " + topic)
-            val logManager = kafkaServer.getLogManager
-            val stats = kafkaServer.getStats
-            try {
-              for (message <- streamList(i)) {
-                val partition = logManager.chooseRandomPartition(topic)
-                val start = SystemTime.nanoseconds
-                logManager.getOrCreateLog(topic, partition).append(
-                                                          new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                                          messages = message))
-                stats.recordRequest(RequestKeys.Produce, SystemTime.nanoseconds - start)
+  private val logger = Logger.getLogger(getClass)
+
+  private val blackListTopics =
+    consumerConfig.mirrorTopicsBlackList.split(",").toList.map(_.trim)
+
+  // mirrorTopics should be accessed by handleTopicEvent only
+  private var mirrorTopics:Seq[String] = List()
+
+  private var consumerConnector: ConsumerConnector = null
+  private var topicEventWatcher:ZookeeperTopicEventWatcher = null
+
+  private val producer = new Producer[Null, Message](producerConfig)
+
+
+  private def isTopicAllowed(topic: String) = {
+    if (consumerConfig.mirrorTopicsWhitelistMap.nonEmpty)
+      consumerConfig.mirrorTopicsWhitelistMap.contains(topic)
+    else
+      !blackListTopics.contains(topic)
+  }
+
+  // TopicEventHandler call-back only
+  @Override
+  def handleTopicEvent(allTopics: Seq[String]) {
+    val newMirrorTopics = allTopics.filter(isTopicAllowed)
+
+    val addedTopics = newMirrorTopics filterNot (mirrorTopics contains)
+    if (addedTopics.nonEmpty)
+      logger.info("topic event: added topics = %s".format(addedTopics))
+
+    val deletedTopics = mirrorTopics filterNot (newMirrorTopics contains)
+    if (deletedTopics.nonEmpty)
+      logger.info("topic event: deleted topics = %s".format(deletedTopics))
+
+    mirrorTopics = newMirrorTopics
+
+    if (addedTopics.nonEmpty || deletedTopics.nonEmpty) {
+      logger.info("mirror topics = %s".format(mirrorTopics))
+      startNewConsumerThreads(makeTopicMap(mirrorTopics))
+    }
+  }
+
+  private def makeTopicMap(mirrorTopics: Seq[String]) = {
+    if (mirrorTopics.nonEmpty)
+      Utils.getConsumerTopicMap(mirrorTopics.mkString("", ":1,", ":1"))
+    else
+      Utils.getConsumerTopicMap("")
+  }
+
+  private def startNewConsumerThreads(topicMap: Map[String, Int]) {
+    if (topicMap.nonEmpty) {
+      if (consumerConnector != null)
+        consumerConnector.shutdown()
+      consumerConnector = Consumer.create(consumerConfig)
+      val topicMessageStreams =  consumerConnector.createMessageStreams(topicMap)
+      var threadList = List[Thread]()
+      for ((topic, streamList) <- topicMessageStreams)
+        for (i <- 0 until streamList.length)
+          threadList ::= Utils.newThread("kafka-embedded-consumer-%s-%d".format(topic, i), new Runnable() {
+            def run() {
+              logger.info("Starting consumer thread %d for topic %s".format(i, topic))
+
+              try {
+                for (message <- streamList(i)) {
+                  val pd = new ProducerData[Null, Message](topic, message)
+                  producer.send(pd)
+                }
+              }
+              catch {
+                case e =>
+                  logger.fatal(e + Utils.stackTrace(e))
+                  logger.fatal(topic + " stream " + i + " unexpectedly exited")
               }
             }
-            catch {
-              case e =>
-                logger.fatal(e + Utils.stackTrace(e))
-                logger.fatal(topic + " stream " + i + " unexpectedly exited")
-            }
-          }
-        }, false)
+          }, false)
 
-    for (thread <- threadList)
-      thread.start
+      for (thread <- threadList)
+        thread.start()
+    }
+    else
+      logger.info("Not starting consumer threads (mirror topic list is empty)")
   }
 
-  def shutdown() = {
-    consumerConnector.shutdown
+  def startup() {
+    topicEventWatcher = new ZookeeperTopicEventWatcher(consumerConfig, this)
+    /*
+     * consumer threads are (re-)started upon topic events (which includes an
+     * initial startup event which lists the current topics)
+     */
+   }
+
+  def shutdown() {
+    producer.close()
+    if (consumerConnector != null)
+      consumerConnector.shutdown()
+    if (topicEventWatcher != null)
+      topicEventWatcher.shutdown()
   }
 }
+

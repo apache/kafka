@@ -33,6 +33,14 @@ trait AsyncProducerConfigShared {
   /** the maximum size of the blocking queue for buffering on the producer */
   val queueSize = Utils.getInt(props, "queue.size", 10000)
 
+  /**
+   * Timeout for event enqueue:
+   * 0: events will be enqueued immediately or dropped if the queue is full
+   * -ve: enqueue will block indefinitely if the queue is full
+   * +ve: enqueue will block up to this many milliseconds if the queue is full
+   */
+  val enqueueTimeoutMs = Utils.getInt(props, "queue.enqueueTimeout.ms", 0)
+
   /** the number of messages batched at the producer */
   val batchSize = Utils.getInt(props, "batch.size", 200)
 

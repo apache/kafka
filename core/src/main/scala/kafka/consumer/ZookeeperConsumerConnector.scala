@@ -28,6 +28,7 @@ import java.net.InetAddress
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import kafka.api.OffsetRequest
+import java.util.UUID
 
 /**
  * This class handles the consumers interaction with zookeeper
@@ -156,7 +157,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       case Some(consumerId) // for testing only 
       => consumerUuid = consumerId
       case None // generate unique consumerId automatically
-      => consumerUuid = InetAddress.getLocalHost.getHostName + "-" + System.currentTimeMillis
+      => val uuid = UUID.randomUUID()
+        consumerUuid = "%s-%d-%s".format(
+          InetAddress.getLocalHost.getHostName, System.currentTimeMillis,
+          uuid.getMostSignificantBits().toHexString.substring(0,8))
     }
     val consumerIdString = config.groupId + "_" + consumerUuid
     val topicCount = new TopicCount(consumerIdString, topicCountMap)
@@ -164,6 +168,11 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     // listener to consumer and partition changes
     val loadBalancerListener = new ZKRebalancerListener(config.groupId, consumerIdString)
     registerConsumerInZK(dirs, consumerIdString, topicCount)
+
+    // register listener for session expired event
+    zkClient.subscribeStateChanges(
+      new ZKSessionExpireListenner(dirs, consumerIdString, topicCount, loadBalancerListener))
+
     zkClient.subscribeChildChanges(dirs.consumerRegistryDir, loadBalancerListener)
 
     // create a queue per topic per consumer thread
@@ -183,10 +192,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       ZkUtils.makeSurePersistentPathExists(zkClient, partitionPath)
       zkClient.subscribeChildChanges(partitionPath, loadBalancerListener)
     }
-
-    // register listener for session expired event
-    zkClient.subscribeStateChanges(
-      new ZKSessionExpireListenner(dirs, consumerIdString, topicCount, loadBalancerListener))
 
     // explicitly trigger load balancing for this consumer
     loadBalancerListener.syncedRebalance()

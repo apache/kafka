@@ -1,8 +1,27 @@
-This test replicates messages from 3 kafka brokers to 2 other kafka brokers using the embedded consumer.
-At the end, the messages produced at the source brokers should match that at the target brokers.
+This test replicates messages from 3 kafka brokers to 2 other kafka brokers
+using the embedded consumer.  At the end, the messages produced at the source
+brokers should match that at the target brokers.
 
 To run this test, do
 bin/run-test.sh
 
-The expected output is given in bin/expected.out. There is only 1 thing that's important.
+The expected output is given in bin/expected.out. There is only 1 thing that's
+important.
 1. The output should have a line "test passed".
+
+In the event of failure, by default the brokers and zookeepers remain running
+to make it easier to debug the issue - hit Ctrl-C to shut them down. You can
+change this behavior by setting the action_on_fail flag in the script to "exit"
+or "proceed", in which case a snapshot of all the logs and directories is
+placed in the test's base directory.
+
+If you are making any changes that may affect the embedded consumer, it is a
+good idea to run the test in a loop. E.g.:
+
+:>/tmp/embeddedconsumer_test.log
+for i in {1..10}; do echo "run $i"; ./bin/run-test.sh 2>1 >> /tmp/embeddedconsumer_test.log; done
+tail -F /tmp/embeddedconsumer_test.log
+
+grep -ic passed /tmp/embeddedconsumer_test.log
+grep -ic failed /tmp/embeddedconsumer_test.log
+

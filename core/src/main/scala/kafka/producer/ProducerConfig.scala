@@ -22,7 +22,7 @@ import java.util.Properties
 import kafka.utils.{ZKConfig, Utils}
 import kafka.common.InvalidConfigException
 
-class ProducerConfig(val props: Properties) extends ZKConfig(props) 
+class ProducerConfig(val props: Properties) extends ZKConfig(props)
         with AsyncProducerConfigShared with SyncProducerConfigShared{
 
   /** For bypassing zookeeper based auto partition discovery, use this config   *

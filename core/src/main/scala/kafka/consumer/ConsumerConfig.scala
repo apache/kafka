@@ -20,7 +20,7 @@ package kafka.consumer
 import java.util.Properties
 import kafka.utils.{ZKConfig, Utils}
 import kafka.api.OffsetRequest
-
+import kafka.common.InvalidConfigException
 object ConsumerConfig {
   val SocketTimeout = 30 * 1000
   val SocketBufferSize = 64*1024
@@ -32,7 +32,11 @@ object ConsumerConfig {
   val MaxQueuedChunks = 100
   val AutoOffsetReset = OffsetRequest.SmallestTimeString
   val ConsumerTimeoutMs = -1
-  val EmbeddedConsumerTopics = ""
+  val MirrorTopicsWhitelist = ""
+  val MirrorTopicsBlacklist = ""
+
+  val MirrorTopicsWhitelistProp = "mirror.topics.whitelist"
+  val MirrorTopicsBlacklistProp = "mirror.topics.blacklist"
 }
 
 class ConsumerConfig(props: Properties) extends ZKConfig(props) {
@@ -80,7 +84,18 @@ class ConsumerConfig(props: Properties) extends ZKConfig(props) {
   /** throw a timeout exception to the consumer if no message is available for consumption after the specified interval */
   val consumerTimeoutMs = Utils.getInt(props, "consumer.timeout.ms", ConsumerTimeoutMs)
 
-  /* embed a consumer in the broker. e.g., topic1:1,topic2:1 */
-  val embeddedConsumerTopicMap = Utils.getConsumerTopicMap(Utils.getString(props, "embeddedconsumer.topics",
-    EmbeddedConsumerTopics))
+  /** Whitelist of topics for this mirror's embedded consumer to consume. At
+   *  most one of whitelist/blacklist may be specified.
+   *  e.g., topic1:1,topic2:1 */
+  val mirrorTopicsWhitelistMap = Utils.getConsumerTopicMap(Utils.getString(
+    props, MirrorTopicsWhitelistProp, MirrorTopicsWhitelist))
+ 
+  /** Topics to skip mirroring. At most one of whitelist/blacklist may be
+   *  specified */
+  val mirrorTopicsBlackList = Utils.getString(
+    props, MirrorTopicsBlacklistProp, MirrorTopicsBlacklist)
+
+  if (mirrorTopicsWhitelistMap.nonEmpty && mirrorTopicsBlackList.nonEmpty)
+      throw new InvalidConfigException("The embedded consumer's mirror topics configuration can only contain one of blacklist or whitelist")
 }
+

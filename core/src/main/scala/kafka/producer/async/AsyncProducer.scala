@@ -17,7 +17,7 @@
 
 package kafka.producer.async
 
-import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
 import kafka.utils.Utils
 import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.log4j.{Level, Logger}
@@ -90,7 +90,28 @@ private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
     if(cbkHandler != null)
       data = cbkHandler.beforeEnqueue(data)
 
-    val added = queue.offer(data)
+    val added = if (config.enqueueTimeoutMs != 0) {
+      try {
+        if (config.enqueueTimeoutMs < 0) {
+          queue.put(data)
+          true
+        }
+        else {
+          queue.offer(data, config.enqueueTimeoutMs, TimeUnit.MILLISECONDS)
+        }
+      }
+      catch {
+        case e: InterruptedException =>
+          val msg = "%s interrupted during enqueue of event %s.".format(
+            getClass.getSimpleName, event.toString)
+          logger.error(msg)
+          throw new AsyncProducerInterruptedException(msg)
+      }
+    }
+    else {
+      queue.offer(data)
+    }
+
     if(cbkHandler != null)
       cbkHandler.afterEnqueue(data, added)
 

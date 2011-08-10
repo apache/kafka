@@ -103,6 +103,8 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
 
     override def javaCompileOptions = super.javaCompileOptions ++
       List(JavaCompileOption("-source"), JavaCompileOption("1.5"))
+
+    override def packageAction = super.packageAction dependsOn (testCompileAction)
   }
 
   class KafkaExamplesProject(info: ProjectInfo) extends DefaultProject(info)
