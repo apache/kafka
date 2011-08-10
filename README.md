@@ -9,14 +9,15 @@ It is designed to support the following
 
 Kafka is aimed at providing a publish-subscribe solution that can handle all activity stream data and processing on a consumer-scale web site. This kind of activity (page views, searches, and other user actions) are a key ingredient in many of the social feature on the modern web. This data is typically handled by "logging" and ad hoc log aggregation solutions due to the throughput requirements. This kind of ad hoc solution is a viable solution to providing logging data to an offline analysis system like Hadoop, but is very limiting for building real-time processing. Kafka aims to unify offline and online processing by providing a mechanism for parallel load into Hadoop as well as the ability to partition real-time consumption over a cluster of machines.
 
-See our [web site](http://sna-projects.com/kafka) for more details on the project.
+See our [web site](http://incubator.apache.org/kafka/) for more details on the project.
 
 ## Contribution ##
 
-Kafka is a new project, and we are interested in building the community; we would welcome any thoughts or patches. You can reach us [here](http://groups.google.com/group/kafka-dev). 
+Kafka is a new project, and we are interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://incubator.apache.org/kafka/contact.html).
 
-To get kafka code:
-  git clone git@github.com:kafka-dev/kafka.git kafka
+The Kafka code is available from svn or a read only git mirror:
+ * svn co http://svn.apache.org/repos/asf/incubator/kafka/trunk kafka
+ * git clone git://git.apache.org/kafka.git
 
 To build: 
 
