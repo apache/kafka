@@ -96,9 +96,11 @@ class KafkaServer(val config: KafkaConfig) {
       logger.info("Shutting down...")
       try {
         scheduler.shutdown
-        socketServer.shutdown()
+        if (socketServer != null)
+          socketServer.shutdown()
         Utils.swallow(logger.warn, Utils.unregisterMBean(statsMBeanName))
-        logManager.close()
+        if (logManager != null)
+          logManager.close()
 
         val cleanShutDownFile = new File(new File(config.logDir), CLEAN_SHUTDOWN_FILE)
         cleanShutDownFile.createNewFile
