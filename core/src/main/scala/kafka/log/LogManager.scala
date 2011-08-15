@@ -275,10 +275,10 @@ private[kafka] class LogManager(val config: KafkaConfig,
       }
       catch {
         case e =>
-          logger.error("error flushing " + log.getTopicName, e)
+          logger.error("Error flushing topic " + log.getTopicName, e)
           e match {
             case _: IOException =>
-              logger.error("force shutdown due to error in flushAllLogs" + e)
+              logger.fatal("Halting due to unrecoverable I/O error while flushing logs: " + e.getMessage, e)
               Runtime.getRuntime.halt(1)
             case _ =>
           }

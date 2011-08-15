@@ -78,10 +78,10 @@ private[kafka] class KafkaRequestHandlers(val logManager: LogManager) {
     }
     catch {
       case e =>
-        logger.error("error processing " + requestHandlerName + " on " + request.topic + ":" + partition, e)
+        logger.error("Error processing " + requestHandlerName + " on " + request.topic + ":" + partition, e)
         e match {
           case _: IOException =>
-            logger.error("force shutdown due to " + e)
+            logger.fatal("Halting due to unrecoverable I/O error while handling producer request: " + e.getMessage, e)
             Runtime.getRuntime.halt(1)
           case _ =>
         }
