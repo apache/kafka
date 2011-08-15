@@ -34,7 +34,7 @@ class BackwardsCompatibilityTest extends JUnit3Suite {
   val testConsumer = "consumer"
   val kafkaProps = new Properties
   val host = "localhost"
-  val port = 9892
+  val port = TestUtils.choosePort
   val loader = getClass.getClassLoader
   val kafkaLogDir = loader.getResource("test-kafka-logs")
   kafkaProps.put("brokerid", "12")

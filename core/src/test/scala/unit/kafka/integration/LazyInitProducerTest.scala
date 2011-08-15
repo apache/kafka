@@ -32,7 +32,7 @@ import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
  */
 class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness   {
 
-  val port = 9999
+  val port = TestUtils.choosePort
   val props = TestUtils.createBrokerConfig(0, port)
   val config = new KafkaConfig(props) {
                  override val enableZookeeper = false

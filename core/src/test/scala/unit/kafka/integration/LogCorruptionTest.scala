@@ -17,7 +17,7 @@ import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
 
 class LogCorruptionTest extends JUnit3Suite with ProducerConsumerTestHarness with KafkaServerTestHarness with ZooKeeperTestHarness {
   val zkConnect = TestZKUtils.zookeeperConnect  
-  val port = 9999
+  val port = TestUtils.choosePort
   val props = TestUtils.createBrokerConfig(0, port)
   val config = new KafkaConfig(props) {
                  override val hostName = "localhost"

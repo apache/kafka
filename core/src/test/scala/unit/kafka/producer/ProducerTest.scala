@@ -40,8 +40,8 @@ class ProducerTest extends JUnitSuite {
   private val topic = "test-topic"
   private val brokerId1 = 0
   private val brokerId2 = 1  
-  private val port1 = 9098
-  private val port2 = 9099
+  private val ports = TestUtils.choosePorts(2)
+  private val (port1, port2) = (ports(0), ports(1))
   private var server1: KafkaServer = null
   private var server2: KafkaServer = null
   private var producer1: SyncProducer = null
@@ -605,7 +605,8 @@ class ProducerTest extends JUnitSuite {
     val producerPool = new ProducerPool(config, serializer, syncProducers, new ConcurrentHashMap[Int, AsyncProducer[String]]())
     val producer = new Producer[String, String](config, partitioner, producerPool, false, null)
 
-    val serverProps = TestUtils.createBrokerConfig(2, 9094)
+    val port = TestUtils.choosePort
+    val serverProps = TestUtils.createBrokerConfig(2, port)
     val serverConfig = new KafkaConfig(serverProps) {
       override val numPartitions = 4
     }
@@ -615,7 +616,7 @@ class ProducerTest extends JUnitSuite {
     // send a message to the new broker to register it under topic "test-topic"
     val tempProps = new Properties()
     tempProps.put("host", "localhost")
-    tempProps.put("port", "9094")
+    tempProps.put("port", port.toString)
     val tempProducer = new SyncProducer(new SyncProducerConfig(tempProps))
     tempProducer.send("test-topic", new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
                                                              messages = new Message("test".getBytes())))

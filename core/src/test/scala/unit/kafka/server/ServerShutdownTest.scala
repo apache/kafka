@@ -31,7 +31,7 @@ import junit.framework.Assert._
 import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
 
 class ServerShutdownTest extends JUnitSuite {
-  val port = 9999
+  val port = TestUtils.choosePort
 
   @Test
   def testCleanShutdown() {

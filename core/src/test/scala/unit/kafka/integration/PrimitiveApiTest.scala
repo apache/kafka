@@ -35,7 +35,7 @@ import kafka.message.{DefaultCompressionCodec, NoCompressionCodec, Message, Byte
  */
 class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with KafkaServerTestHarness {
   
-  val port = 9999
+  val port = TestUtils.choosePort
   val props = TestUtils.createBrokerConfig(0, port)
   val config = new KafkaConfig(props) {
                  override val enableZookeeper = false
@@ -47,7 +47,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val topic = "test-topic"
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("broker.list", "0:localhost:9999")
+    props.put("broker.list", "0:localhost:" + port)
     val config = new ProducerConfig(props)
 
     val stringProducer1 = new Producer[String, String](config)
@@ -67,7 +67,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val topic = "test-topic"
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("broker.list", "0:localhost:9999")
+    props.put("broker.list", "0:localhost:" + port)
     props.put("compression", "true")
     val config = new ProducerConfig(props)
 

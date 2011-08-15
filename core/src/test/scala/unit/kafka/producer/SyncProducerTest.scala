@@ -36,7 +36,7 @@ class SyncProducerTest extends JUnitSuite {
 
   @Before
   def setUp() {
-    server = TestUtils.createServer(new KafkaConfig(TestUtils.createBrokerConfig(0, 9092))
+    server = TestUtils.createServer(new KafkaConfig(TestUtils.createBrokerConfig(0, TestUtils.choosePort))
     {
       override val enableZookeeper = false
     })
@@ -51,7 +51,7 @@ class SyncProducerTest extends JUnitSuite {
   def testUnreachableServer() {
     val props = new Properties()
     props.put("host", "NOT_USED")
-    props.put("port", "9092")
+    props.put("port", server.socketServer.port.toString)
     props.put("buffer.size", "102400")
     props.put("connect.timeout.ms", "300")
     props.put("reconnect.interval", "1000")
@@ -77,11 +77,10 @@ class SyncProducerTest extends JUnitSuite {
       producer.send("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)))
     }catch {
       case e: Exception => failed = true
-
     }
     val secondEnd = SystemTime.milliseconds
     println("Second message send retries took " + (secondEnd-secondStart) + " ms")
-    Assert.assertTrue((secondEnd-secondEnd) < 300)
+    Assert.assertTrue((secondEnd-secondStart) < 300)
     simpleProducerLogger.setLevel(Level.ERROR)
   }
 
@@ -89,7 +88,7 @@ class SyncProducerTest extends JUnitSuite {
   def testReachableServer() {
     val props = new Properties()
     props.put("host", "localhost")
-    props.put("port", "9092")
+    props.put("port", server.socketServer.port.toString)
     props.put("buffer.size", "102400")
     props.put("connect.timeout.ms", "500")
     props.put("reconnect.interval", "1000")
@@ -113,7 +112,7 @@ class SyncProducerTest extends JUnitSuite {
     }
     Assert.assertFalse(failed)
     val secondEnd = SystemTime.milliseconds
-    Assert.assertTrue((secondEnd-secondEnd) < 500)
+    Assert.assertTrue((secondEnd-secondStart) < 500)
 
     try {
       producer.multiSend(Array(new ProducerRequest("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)))))
@@ -127,7 +126,7 @@ class SyncProducerTest extends JUnitSuite {
   def testReachableServerWrongPort() {
     val props = new Properties()
     props.put("host", "localhost")
-    props.put("port", "9091")
+    props.put("port", (server.socketServer.port + 1).toString) // the wrong port
     props.put("buffer.size", "102400")
     props.put("connect.timeout.ms", "300")
     props.put("reconnect.interval", "500")
@@ -153,7 +152,7 @@ class SyncProducerTest extends JUnitSuite {
     }
     Assert.assertTrue(failed)
     val secondEnd = SystemTime.milliseconds
-    Assert.assertTrue((secondEnd-secondEnd) < 300)
+    Assert.assertTrue((secondEnd-secondStart) < 300)
     simpleProducerLogger.setLevel(Level.ERROR)
   }
 
@@ -161,7 +160,7 @@ class SyncProducerTest extends JUnitSuite {
   def testMessageSizeTooLarge() {
     val props = new Properties()
     props.put("host", "localhost")
-    props.put("port", "9091")
+    props.put("port", server.socketServer.port.toString)
     props.put("buffer.size", "102400")
     props.put("connect.timeout.ms", "300")
     props.put("reconnect.interval", "500")
