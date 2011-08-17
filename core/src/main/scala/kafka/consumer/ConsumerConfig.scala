@@ -34,9 +34,11 @@ object ConsumerConfig {
   val ConsumerTimeoutMs = -1
   val MirrorTopicsWhitelist = ""
   val MirrorTopicsBlacklist = ""
+  val MirrorConsumerNumThreads = 1
 
   val MirrorTopicsWhitelistProp = "mirror.topics.whitelist"
   val MirrorTopicsBlacklistProp = "mirror.topics.blacklist"
+  val MirrorConsumerNumThreadsProp = "mirror.consumer.numthreads"
 }
 
 class ConsumerConfig(props: Properties) extends ZKConfig(props) {
@@ -85,17 +87,19 @@ class ConsumerConfig(props: Properties) extends ZKConfig(props) {
   val consumerTimeoutMs = Utils.getInt(props, "consumer.timeout.ms", ConsumerTimeoutMs)
 
   /** Whitelist of topics for this mirror's embedded consumer to consume. At
-   *  most one of whitelist/blacklist may be specified.
-   *  e.g., topic1:1,topic2:1 */
-  val mirrorTopicsWhitelistMap = Utils.getConsumerTopicMap(Utils.getString(
-    props, MirrorTopicsWhitelistProp, MirrorTopicsWhitelist))
+   *  most one of whitelist/blacklist may be specified. */
+  val mirrorTopicsWhitelist = Utils.getString(
+    props, MirrorTopicsWhitelistProp, MirrorTopicsWhitelist)
  
   /** Topics to skip mirroring. At most one of whitelist/blacklist may be
    *  specified */
   val mirrorTopicsBlackList = Utils.getString(
     props, MirrorTopicsBlacklistProp, MirrorTopicsBlacklist)
 
-  if (mirrorTopicsWhitelistMap.nonEmpty && mirrorTopicsBlackList.nonEmpty)
+  if (mirrorTopicsWhitelist.nonEmpty && mirrorTopicsBlackList.nonEmpty)
       throw new InvalidConfigException("The embedded consumer's mirror topics configuration can only contain one of blacklist or whitelist")
+
+  val mirrorConsumerNumThreads = Utils.getInt(
+    props, MirrorConsumerNumThreadsProp, MirrorConsumerNumThreads)
 }
 

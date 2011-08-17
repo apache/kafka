@@ -65,6 +65,9 @@ class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
 
   private val logger = Logger.getLogger(getClass)
 
+  private val whiteListTopics =
+    consumerConfig.mirrorTopicsWhitelist.split(",").toList.map(_.trim)
+
   private val blackListTopics =
     consumerConfig.mirrorTopicsBlackList.split(",").toList.map(_.trim)
 
@@ -78,8 +81,8 @@ class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
 
 
   private def isTopicAllowed(topic: String) = {
-    if (consumerConfig.mirrorTopicsWhitelistMap.nonEmpty)
-      consumerConfig.mirrorTopicsWhitelistMap.contains(topic)
+    if (consumerConfig.mirrorTopicsWhitelist.nonEmpty)
+      whiteListTopics.contains(topic)
     else
       !blackListTopics.contains(topic)
   }
@@ -107,7 +110,9 @@ class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
 
   private def makeTopicMap(mirrorTopics: Seq[String]) = {
     if (mirrorTopics.nonEmpty)
-      Utils.getConsumerTopicMap(mirrorTopics.mkString("", ":1,", ":1"))
+      Utils.getConsumerTopicMap(mirrorTopics.mkString(
+        "", ":%d,".format(consumerConfig.mirrorConsumerNumThreads),
+        ":%d".format(consumerConfig.mirrorConsumerNumThreads)))
     else
       Utils.getConsumerTopicMap("")
   }
