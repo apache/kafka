@@ -31,24 +31,8 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
   def this(buffer: ByteBuffer) = this(buffer, 0L, ErrorMapping.NoError)
 
   def this(compressionCodec: CompressionCodec, messages: java.util.List[Message]) {
-    this(compressionCodec match {
-      case NoCompressionCodec =>
-        val buffer = ByteBuffer.allocate(MessageSet.messageSetSize(messages))
-        val messageIterator = messages.iterator
-        while(messageIterator.hasNext) {
-          val message = messageIterator.next
-          message.serializeTo(buffer)
-        }
-        buffer.rewind
-        buffer
-      case _ =>
-        import scala.collection.JavaConversions._
-        val message = CompressionUtils.compress(asBuffer(messages), compressionCodec)
-        val buffer = ByteBuffer.allocate(message.serializedSize)
-        message.serializeTo(buffer)
-        buffer.rewind
-        buffer
-    }, 0L, ErrorMapping.NoError)
+    this(MessageSet.createByteBuffer(compressionCodec, scala.collection.JavaConversions.asBuffer(messages): _*),
+         0L, ErrorMapping.NoError)
   }
 
   def this(messages: java.util.List[Message]) {

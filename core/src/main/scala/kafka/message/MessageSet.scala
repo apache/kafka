@@ -51,7 +51,30 @@ object MessageSet {
    * The size of a size-delimited entry in a message set
    */
   def entrySize(message: Message): Int = LogOverhead + message.size
-  
+
+  def createByteBuffer(compressionCodec: CompressionCodec, messages: Message*): ByteBuffer =
+    compressionCodec match {
+      case NoCompressionCodec =>
+        val buffer = ByteBuffer.allocate(MessageSet.messageSetSize(messages))
+        for (message <- messages) {
+          message.serializeTo(buffer)
+        }
+        buffer.rewind
+        buffer
+      case _ =>
+        messages.size match {
+          case 0 =>
+            val buffer = ByteBuffer.allocate(MessageSet.messageSetSize(messages))
+            buffer.rewind
+            buffer
+          case _ =>
+            val message = CompressionUtils.compress(messages, compressionCodec)
+            val buffer = ByteBuffer.allocate(message.serializedSize)
+            message.serializeTo(buffer)
+            buffer.rewind
+            buffer
+        }
+    }
 }
 
 /**

@@ -43,22 +43,7 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
   private var deepValidByteCount = -1L
 
   def this(compressionCodec: CompressionCodec, messages: Message*) {
-    this(
-      compressionCodec match {
-        case NoCompressionCodec =>
-          val buffer = ByteBuffer.allocate(MessageSet.messageSetSize(messages))
-          for (message <- messages) {
-            message.serializeTo(buffer)
-          }
-          buffer.rewind
-          buffer
-        case _ =>
-          val message = CompressionUtils.compress(messages, compressionCodec)
-          val buffer = ByteBuffer.allocate(message.serializedSize)
-          message.serializeTo(buffer)
-          buffer.rewind
-          buffer
-      }, 0L, ErrorMapping.NoError)
+    this(MessageSet.createByteBuffer(compressionCodec, messages:_*), 0L, ErrorMapping.NoError)
   }
 
   def this(messages: Message*) {

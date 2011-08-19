@@ -69,7 +69,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   @Test
   def testSizeInBytesWithCompression () {
     assertEquals("Empty message set should have 0 bytes.",
-                 30L,           // overhead of the GZIP output stream
+                 0L,           // overhead of the GZIP output stream
                  createMessageSet(Array[Message](), DefaultCompressionCodec).sizeInBytes)
   }
 }
