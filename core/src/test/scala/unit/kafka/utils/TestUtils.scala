@@ -288,6 +288,18 @@ object TestUtils {
     ZkUtils.updatePersistentPath(zkClient, path, offset.toString)
 
   }
+
+  def getMessageIterator(iter: Iterator[MessageAndOffset]): Iterator[Message] = {
+    new IteratorTemplate[Message] {
+      override def makeNext(): Message = {
+        if (iter.hasNext)
+          return iter.next.message
+        else
+          return allDone()
+      }
+    }
+  }
+
 }
 
 object TestZKUtils {
