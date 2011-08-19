@@ -104,7 +104,8 @@ private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
       remainingEvents = topicEvents._2
       distinctPartitions.foreach { p =>
         val topicPartitionEvents = (topicEvents._1 partition (e => (e.getPartition == p)))._1
-        collatedEvents += ( (topic, p) -> topicPartitionEvents.map(q => q.getData))
+		if(topicPartitionEvents.size > 0)
+          collatedEvents += ( (topic, p) -> topicPartitionEvents.map(q => q.getData))
       }
     }
     collatedEvents
