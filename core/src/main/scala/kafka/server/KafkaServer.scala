@@ -68,7 +68,8 @@ class KafkaServer(val config: KafkaConfig) {
       socketServer = new SocketServer(config.port,
                                       config.numThreads,
                                       config.monitoringPeriodSecs,
-                                      handlers.handlerFor)
+                                      handlers.handlerFor,
+                                      config.maxSocketRequestSize)
       Utils.swallow(logger.warn, Utils.registerMBean(socketServer.stats, statsMBeanName))
       socketServer.startup
       /**

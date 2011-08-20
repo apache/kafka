@@ -34,10 +34,11 @@ import kafka.api.RequestKeys
  *   1 Acceptor thread that handles new connections
  *   N Processor threads that each have their own selectors and handle all requests from their connections synchronously
  */
-private[kafka] class SocketServer(val port: Int,
+class SocketServer(val port: Int,
                    val numProcessorThreads: Int, 
                    monitoringPeriodSecs: Int,
-                   private val handlerFactory: Handler.HandlerMapping) {
+                   private val handlerFactory: Handler.HandlerMapping,
+                   val maxRequestSize: Int = Int.MaxValue) {
  
   private val logger = Logger.getLogger(classOf[SocketServer])
   private val time = SystemTime
@@ -50,7 +51,7 @@ private[kafka] class SocketServer(val port: Int,
    */
   def startup() {
     for(i <- 0 until numProcessorThreads) {
-      processors(i) = new Processor(handlerFactory, time, stats)
+      processors(i) = new Processor(handlerFactory, time, stats, maxRequestSize)
       Utils.newThread("kafka-processor-" + i, processors(i), false).start()
     }
     Utils.newThread("kafka-acceptor", acceptor, false).start()
@@ -179,8 +180,9 @@ private[kafka] class Acceptor(val port: Int, private val processors: Array[Proce
  * each of which has its own selectors
  */
 private[kafka] class Processor(val handlerMapping: Handler.HandlerMapping,
-                val time: Time, 
-                val stats: SocketServerStats) extends AbstractServerThread {
+                               val time: Time, 
+                               val stats: SocketServerStats,
+                               val maxRequestSize: Int) extends AbstractServerThread {
   
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]();
   private val requestLogger = Logger.getLogger("kafka.request.logger")
@@ -211,11 +213,14 @@ private[kafka] class Processor(val handlerMapping: Handler.HandlerMapping,
               throw new IllegalStateException("Unrecognized key state for processor thread.")
 		      } catch {
 		      	case e: EOFException => {
-		      		logger.info("Closing socket for " + channelFor(key).socket.getInetAddress + ".")
+		      		logger.info("Closing socket connection to %s.".format(channelFor(key).socket.getInetAddress))
 		      		close(key)
+				}
+				case e: InvalidRequestException => {
+					logger.info("Closing socket connection to %s due to invalid request: %s".format(channelFor(key).socket.getInetAddress, e.getMessage))
+					close(key)
 		      	} case e: Throwable => {
-              logger.info("Closing socket for " + channelFor(key).socket.getInetAddress + " because of error")
-              logger.error(e, e)
+              logger.error("Closing socket for " + channelFor(key).socket.getInetAddress + " because of error", e)
               close(key)
             }
           }
@@ -293,7 +298,7 @@ private[kafka] class Processor(val handlerMapping: Handler.HandlerMapping,
     val socketChannel = channelFor(key)
     var request = key.attachment.asInstanceOf[Receive]
     if(key.attachment == null) {
-      request = new BoundedByteBufferReceive()
+      request = new BoundedByteBufferReceive(maxRequestSize)
       key.attach(request)
     }
     val read = request.readFrom(socketChannel)

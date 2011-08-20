@@ -56,8 +56,10 @@ private[kafka] class BoundedByteBufferReceive(val maxSize: Int) extends Receive 
     if(contentBuffer == null && !sizeBuffer.hasRemaining) {
       sizeBuffer.rewind()
       val size = sizeBuffer.getInt()
-      if(size <= 0 || size > maxSize)
-        throw new InvalidRequestException(size + " is not a valid message size")
+      if(size <= 0)
+        throw new InvalidRequestException("%d is not a valid request size.".format(size))
+      if(size > maxSize)
+        throw new InvalidRequestException("Request of length %d is not valid, it is larger than the maximum size of %d bytes.".format(size, maxSize))
       contentBuffer = byteBufferAllocate(size)
     }
     // if we have a buffer read some stuff into it
