@@ -64,7 +64,7 @@ private[kafka] class KafkaRequestHandlers(val logManager: LogManager) {
   def handleMultiProducerRequest(receive: Receive): Option[Send] = {
     val request = MultiProducerRequest.readFrom(receive.buffer)
     if(requestLogger.isTraceEnabled)
-      requestLogger.trace("Multiproducer request ")
+      requestLogger.trace("Multiproducer request " + request.toString)
     request.produces.map(handleProducerRequest(_, "MultiProducerRequest"))
     None
   }
