@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.utils
+package kafka.tools
 
 import java.io._
 import kafka.message._
@@ -44,7 +44,7 @@ object DumpLogSegments {
             println("offset:\t %d \t invalid".format(offset))
           if (!isNoPrint)
             println("payload:\t" + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
-          offset += messageAndOffset.offset
+          offset = messageAndOffset.offset
         }
       }
     }

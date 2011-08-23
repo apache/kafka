@@ -219,7 +219,7 @@ object ProducerPerformance {
       props.put("zk.connect", brokerInfoList(1))
     else
       props.put("broker.list", brokerInfoList(1))
-    props.put("compression.codec", config.compressionCodec.toString)
+    props.put("compression.codec", config.compressionCodec.codec.toString)
     props.put("reconnect.interval", Integer.MAX_VALUE.toString)
     props.put("buffer.size", (64*1024).toString)
 

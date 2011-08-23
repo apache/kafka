@@ -23,6 +23,7 @@ import kafka.api.FetchRequest
 import kafka.utils._
 import kafka.consumer._
 import kafka.server._
+import org.apache.log4j.Logger
 
 /**
  * Command line program to dump out messages to standard out using the simple consumer
@@ -30,7 +31,9 @@ import kafka.server._
 object SimpleConsumerShell {
 
   def main(args: Array[String]): Unit = {
-    
+
+    val logger = Logger.getLogger(getClass)
+
     val parser = new OptionParser
     val urlOpt = parser.accepts("server", "REQUIRED: The hostname of the server to connect to.")
                            .withRequiredArg
@@ -55,12 +58,22 @@ object SimpleConsumerShell {
                            .describedAs("fetchsize")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1000000)
+    val printOffsetOpt = parser.accepts("print-offsets", "Print the offsets returned by the iterator")
+                           .withOptionalArg
+                           .describedAs("print offsets")
+                           .ofType(classOf[java.lang.Boolean])
+                           .defaultsTo(false)
+    val printMessageOpt = parser.accepts("print-messages", "Print the messages returned by the iterator")
+                           .withOptionalArg
+                           .describedAs("print messages")
+                           .ofType(classOf[java.lang.Boolean])
+                           .defaultsTo(false)
 
     val options = parser.parse(args : _*)
     
     for(arg <- List(urlOpt, topicOpt)) {
       if(!options.has(arg)) {
-        System.err.println("Missing required argument \"" + arg + "\"") 
+        logger.error("Missing required argument \"" + arg + "\"")
         parser.printHelpOn(System.err)
         System.exit(1)
       }
@@ -71,31 +84,35 @@ object SimpleConsumerShell {
     val partition = options.valueOf(partitionOpt).intValue
     val startingOffset = options.valueOf(offsetOpt).longValue
     val fetchsize = options.valueOf(fetchsizeOpt).intValue
+    val printOffsets = if(options.has(printOffsetOpt)) true else false
+    val printMessages = if(options.has(printMessageOpt)) true else false
 
-    println("Starting consumer...")
+    logger.info("Starting consumer...")
     val consumer = new SimpleConsumer(url.getHost, url.getPort, 10000, 64*1024)
     val thread = Utils.newThread("kafka-consumer", new Runnable() {
       def run() {
         var offset = startingOffset
         while(true) {
-	      val fetchRequest = new FetchRequest(topic, partition, offset, fetchsize)
-	      val messageSets = consumer.multifetch(fetchRequest)
-	      for (messages <- messageSets) {
-	        println("multi fetched " + messages.sizeInBytes + " bytes from offset " + offset)
+          val fetchRequest = new FetchRequest(topic, partition, offset, fetchsize)
+          val messageSets = consumer.multifetch(fetchRequest)
+          for (messages <- messageSets) {
+            if(logger.isDebugEnabled)
+            	logger.debug("multi fetched " + messages.sizeInBytes + " bytes from offset " + offset)
             var consumed = 0
             for(messageAndOffset <- messages) {
-              println("consumed: " + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
+              if(printMessages)
+                logger.info("consumed: " + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
+              offset = messageAndOffset.offset
+              if(printOffsets)
+                logger.info("next offset = " + offset)
               consumed += 1
-	        }
-	        if(consumed > 0)
-	          offset += messages.validBytes
+            }
           }
-          Thread.sleep(10000)
         }
-      }  
+      }
     }, false);
     thread.start()
     thread.join()
   }
-  
+
 }
