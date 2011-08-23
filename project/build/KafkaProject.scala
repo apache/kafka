@@ -41,6 +41,10 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
       <exclude module="jmxtools"/>
       <exclude module="mail"/>
       <exclude module="jms"/>
+      <dependency org="org.apache.zookeeper" name="zookeeper" rev="3.3.3">
+        <exclude module="log4j"/>
+        <exclude module="jline"/>
+      </dependency>
     </dependencies>
 
     override def repositories = Set(ScalaToolsSnapshots, "JBoss Maven 2 Repository" at "http://repository.jboss.com/maven2",
