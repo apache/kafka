@@ -90,26 +90,26 @@ private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
     if(cbkHandler != null)
       data = cbkHandler.beforeEnqueue(data)
 
-    val added = if (config.enqueueTimeoutMs != 0) {
-      try {
-        if (config.enqueueTimeoutMs < 0) {
-          queue.put(data)
-          true
+    val added = config.enqueueTimeoutMs match {
+      case 0  =>
+        queue.offer(data)
+      case _  =>
+        try {
+          config.enqueueTimeoutMs < 0 match {
+          case true =>
+            queue.put(data)
+            true
+          case _ =>
+            queue.offer(data, config.enqueueTimeoutMs, TimeUnit.MILLISECONDS)
+          }
         }
-        else {
-          queue.offer(data, config.enqueueTimeoutMs, TimeUnit.MILLISECONDS)
+        catch {
+          case e: InterruptedException =>
+            val msg = "%s interrupted during enqueue of event %s.".format(
+              getClass.getSimpleName, event.toString)
+            logger.error(msg)
+            throw new AsyncProducerInterruptedException(msg)
         }
-      }
-      catch {
-        case e: InterruptedException =>
-          val msg = "%s interrupted during enqueue of event %s.".format(
-            getClass.getSimpleName, event.toString)
-          logger.error(msg)
-          throw new AsyncProducerInterruptedException(msg)
-      }
-    }
-    else {
-      queue.offer(data)
     }
 
     if(cbkHandler != null)
@@ -121,7 +121,7 @@ private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
       throw new QueueFullException("Event queue is full of unsent messages, could not send event: " + event.toString)
     }else {
       if(logger.isTraceEnabled) {
-        logger.trace("Added event to send queue for topic: " + topic + ":" + event.toString)
+        logger.trace("Added event to send queue for topic: " + topic + ", partition: " + partition + ":" + event.toString)
         logger.trace("Remaining queue size: " + queue.remainingCapacity)
       }
     }
@@ -132,11 +132,13 @@ private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
       cbkHandler.close
       logger.info("Closed the callback handler")
     }
+    closed.set(true)
     queue.put(new QueueItem(AsyncProducer.Shutdown.asInstanceOf[T], null, -1))
+    if(logger.isDebugEnabled)
+      logger.debug("Added shutdown command to the queue")
     sendThread.shutdown
     sendThread.awaitShutdown
     producer.close
-    closed.set(true)
     logger.info("Closed AsyncProducer")
   }
 

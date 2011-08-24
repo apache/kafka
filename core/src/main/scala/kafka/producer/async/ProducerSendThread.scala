@@ -77,6 +77,9 @@ private[async] class ProducerSendThread[T](val threadName: String,
         // returns a null object
         val expired = currentQueueItem == null
         if(currentQueueItem != null) {
+          if(logger.isTraceEnabled)
+            logger.trace("Dequeued item for topic %s and partition %d"
+              .format(currentQueueItem.getTopic, currentQueueItem.getPartition))
           // handle the dequeued current item
           if(cbkHandler != null)
             events = events ++ cbkHandler.afterDequeuingExistingData(currentQueueItem)
@@ -97,6 +100,9 @@ private[async] class ProducerSendThread[T](val threadName: String,
           events = new ListBuffer[QueueItem[T]]
         }
     }
+    if(queue.size > 0)
+      throw new IllegalQueueStateException("Invalid queue state! After queue shutdown, %d remaining items in the queue"
+        .format(queue.size))
     if(cbkHandler != null) {
       logger.info("Invoking the callback handler before handling the last batch of %d events".format(events.size))
       val addedEvents = cbkHandler.lastBatchBeforeClose

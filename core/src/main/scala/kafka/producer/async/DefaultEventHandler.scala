@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 
 package kafka.producer.async
 
@@ -39,6 +39,10 @@ private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
     if(cbkHandler != null)
       processedEvents = cbkHandler.beforeSendingData(events)
 
+    if(logger.isTraceEnabled)
+      processedEvents.foreach(event => logger.trace("Handling event for Topic: %s, Partition: %d"
+        .format(event.getTopic, event.getPartition)))
+
     send(serialize(collate(processedEvents), serializer), syncProducer)
   }
 
@@ -54,7 +58,6 @@ private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
   private def serialize(eventsPerTopic: Map[(String,Int), Seq[T]],
                         serializer: Encoder[T]): Map[(String, Int), ByteBufferMessageSet] = {
     val eventsPerTopicMap = eventsPerTopic.map(e => ((e._1._1, e._1._2) , e._2.map(l => serializer.toMessage(l))))
-    val topicsAndPartitions = eventsPerTopic.map(e => e._1)
     /** enforce the compressed.topics config here.
      *  If the compression codec is anything other than NoCompressionCodec,
      *    Enable compression only for specified topics if any
@@ -66,25 +69,29 @@ private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
       ((topicAndEvents._1._1, topicAndEvents._1._2),
         config.compressionCodec match {
           case NoCompressionCodec =>
-            if(logger.isDebugEnabled)
-              logger.debug("Sending %d messages with no compression".format(topicAndEvents._2.size))
+            if(logger.isTraceEnabled)
+              logger.trace("Sending %d messages with no compression to topic %s on partition %d"
+                .format(topicAndEvents._2.size, topicAndEvents._1._1, topicAndEvents._1._2))
             new ByteBufferMessageSet(NoCompressionCodec, topicAndEvents._2: _*)
           case _ =>
             config.compressedTopics.size match {
               case 0 =>
-                if(logger.isDebugEnabled)
-                  logger.debug("Sending %d messages with compression %d".format(topicAndEvents._2.size, config.compressionCodec.codec))
+                if(logger.isTraceEnabled)
+                  logger.trace("Sending %d messages with compression codec %d to topic %s on partition %d"
+                    .format(topicAndEvents._2.size, config.compressionCodec.codec, topicAndEvents._1._1, topicAndEvents._1._2))
                 new ByteBufferMessageSet(config.compressionCodec, topicAndEvents._2: _*)
               case _ =>
                 if(config.compressedTopics.contains(topicAndEvents._1._1)) {
-                  if(logger.isDebugEnabled)
-                    logger.debug("Sending %d messages with compression %d".format(topicAndEvents._2.size, config.compressionCodec.codec))
+                  if(logger.isTraceEnabled)
+                    logger.trace("Sending %d messages with compression %d to topic %s on partition %d"
+                      .format(topicAndEvents._2.size, topicAndEvents._1._1, topicAndEvents._1._2, config.compressionCodec.codec))
                   new ByteBufferMessageSet(config.compressionCodec, topicAndEvents._2: _*)
                 }
                 else {
-                  if(logger.isDebugEnabled)
-                    logger.debug("Sending %d messages with no compression as %s is not in compressed.topics - %s"
-                      .format(topicAndEvents._2.size, topicAndEvents._1._1, config.compressedTopics.toString))
+                  if(logger.isTraceEnabled)
+                    logger.trace("Sending %d messages to topic %s and partition %d with no compression as %s is not in compressed.topics - %s"
+                      .format(topicAndEvents._2.size, topicAndEvents._1._1, topicAndEvents._1._2, topicAndEvents._1._1,
+                      config.compressedTopics.toString))
                   new ByteBufferMessageSet(NoCompressionCodec, topicAndEvents._2: _*)
                 }
             }
@@ -104,8 +111,8 @@ private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
       remainingEvents = topicEvents._2
       distinctPartitions.foreach { p =>
         val topicPartitionEvents = (topicEvents._1 partition (e => (e.getPartition == p)))._1
-		if(topicPartitionEvents.size > 0)
-          collatedEvents += ( (topic, p) -> topicPartitionEvents.map(q => q.getData))
+        if(topicPartitionEvents.size > 0)
+          collatedEvents += ((topic, p) -> topicPartitionEvents.map(q => q.getData))
       }
     }
     collatedEvents
