@@ -59,7 +59,7 @@ private[consumer] class PartitionTopicInfo(val topic: String,
    * @return the number of valid bytes
    */
   def enqueue(messages: ByteBufferMessageSet, fetchOffset: Long): Long = {
-    val size = messages.shallowValidBytes
+    val size = messages.validBytes
     if(size > 0) {
       // update fetched offset to the compressed data chunk size, not the decompressed message set size
       if(logger.isTraceEnabled)

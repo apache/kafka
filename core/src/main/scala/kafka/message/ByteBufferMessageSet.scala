@@ -40,7 +40,6 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
   private val logger = Logger.getLogger(getClass())  
   private var validByteCount = -1L
   private var shallowValidByteCount = -1L
-  private var deepValidByteCount = -1L
 
   def this(compressionCodec: CompressionCodec, messages: Message*) {
     this(MessageSet.createByteBuffer(compressionCodec, messages:_*), 0L, ErrorMapping.NoError)
@@ -58,9 +57,9 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
 
   def serialized(): ByteBuffer = buffer
 
-  def validBytes: Long = deepValidBytes
-  
-  def shallowValidBytes: Long = {
+  def validBytes: Long = shallowValidBytes
+
+  private def shallowValidBytes: Long = {
     if(shallowValidByteCount < 0) {
       val iter = deepIterator
       while(iter.hasNext) {
@@ -68,18 +67,10 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
         shallowValidByteCount = messageAndOffset.offset
       }
     }
-    shallowValidByteCount - initialOffset
+    if(shallowValidByteCount < initialOffset) 0
+    else (shallowValidByteCount - initialOffset)
   }
   
-  def deepValidBytes: Long = {
-    if (deepValidByteCount < 0) {
-      val iter = deepIterator
-      while (iter.hasNext)
-        iter.next
-    }
-    deepValidByteCount
-  }
-
   /** Write the messages in this set to the given channel */
   def writeTo(channel: WritableByteChannel, offset: Long, size: Long): Long =
     channel.write(buffer.duplicate)
@@ -98,7 +89,6 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
 
       def makeNextOuter: MessageAndOffset = {
         if (topIter.remaining < 4) {
-          deepValidByteCount = currValidBytes
           return allDone()
         }
         val size = topIter.getInt()
@@ -109,7 +99,6 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
           logger.trace("size of data = " + size)
         }
         if(size < 0 || topIter.remaining < size) {
-          deepValidByteCount = currValidBytes
           if (currValidBytes == 0 || size < 0)
             throw new InvalidMessageSizeException("invalid message size: " + size + " only received bytes: " +
               topIter.remaining + " at " + currValidBytes + "( possible causes (1) a single message larger than " +
