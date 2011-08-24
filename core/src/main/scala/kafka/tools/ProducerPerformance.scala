@@ -83,11 +83,6 @@ object ProducerPerformance {
       .defaultsTo(100)
     val varyMessageSizeOpt = parser.accepts("vary-message-size", "If set, message size will vary up to the given maximum.")
     val asyncOpt = parser.accepts("async", "If set, messages are sent asynchronously.")
-    val delayMSBtwBatchOpt = parser.accepts("delay-btw-batch-ms", "Delay in ms between 2 batch sends.")
-      .withRequiredArg
-      .describedAs("ms")
-      .ofType(classOf[java.lang.Long])
-      .defaultsTo(0)
     val batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch.")
       .withRequiredArg
       .describedAs("size")
@@ -122,7 +117,6 @@ object ProducerPerformance {
     val messageSize = options.valueOf(messageSizeOpt).intValue
     val isFixSize = !options.has(varyMessageSizeOpt)
     val isAsync = options.has(asyncOpt)
-    val delayedMSBtwSend = options.valueOf(delayMSBtwBatchOpt).longValue
     var batchSize = options.valueOf(batchSizeOpt).intValue
     val numThreads = options.valueOf(numThreadsOpt).intValue
     val topic = options.valueOf(topicOpt)
@@ -156,7 +150,7 @@ object ProducerPerformance {
     props.put("batch.size", config.batchSize.toString)
     props.put("reconnect.interval", Integer.MAX_VALUE.toString)
     props.put("buffer.size", (64*1024).toString)
-
+    props.put("queue.enqueueTimeout.ms", "-1")
     logger.info("Producer properties = " + props.toString)
 
     val producerConfig = new ProducerConfig(props)
@@ -183,8 +177,6 @@ object ProducerPerformance {
           bytesSent += config.messageSize
         try  {
           producer.send(new ProducerData[String,String](config.topic, message))
-          if (config.delayedMSBtwSend > 0 && (nSends + 1) % config.batchSize == 0)
-            Thread.sleep(config.delayedMSBtwSend)
           nSends += 1
         }catch {
           case e: Exception => e.printStackTrace
@@ -253,8 +245,6 @@ object ProducerPerformance {
           bytesSent += config.batchSize*config.messageSize
         try  {
           producer.send(new ProducerData[String,String](config.topic, messageSet))
-          if (config.delayedMSBtwSend > 0 && (nSends + 1) % config.batchSize == 0)
-            Thread.sleep(config.delayedMSBtwSend)
           nSends += 1
         }catch {
           case e: Exception => e.printStackTrace
