@@ -69,7 +69,7 @@ class FetcherRunnable(val name: String,
           try {
             var done = false
             if(messages.getErrorCode == ErrorMapping.OffsetOutOfRangeCode) {
-              logger.info("offset " + info.getFetchOffset + " out of range")
+              logger.info("offset for " + info + " out of range")
               // see if we can fix this error
               val resetOffset = resetConsumerOffsets(info.topic, info.partition)
               if(resetOffset >= 0) {
@@ -136,7 +136,8 @@ class FetcherRunnable(val name: String,
     val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
 
     // reset manually in zookeeper
-    logger.info("updating partition " + partition.name + " with " + (if(offset == OffsetRequest.EarliestTime) "earliest " else " latest ") + "offset " + offsets(0))
+    logger.info("updating partition " + partition.name + " for topic " + topic + " with " +
+            (if(offset == OffsetRequest.EarliestTime) "earliest " else " latest ") + "offset " + offsets(0))
     ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + partition.name, offsets(0).toString)
 
     offsets(0)

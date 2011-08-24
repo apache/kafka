@@ -137,8 +137,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       }
       catch {
         case e =>
-          logger.fatal(e)
-          logger.fatal(Utils.stackTrace(e))
+          logger.fatal("error during consumer connector shutdown", e)
       }
       logger.info("ZKConsumerConnector shut down completed")
     }
@@ -240,7 +239,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         catch {
           case t: Throwable =>
           // log it and let it go
-            logger.warn("exception during commitOffsets: " + t + Utils.stackTrace(t))
+            logger.warn("exception during commitOffsets",  t)
         }
         if(logger.isDebugEnabled)
           logger.debug("Committed offset " + newOffset + " for topic " + info)
@@ -434,7 +433,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
               // occasionally, we may hit a ZK exception because the ZK state is changing while we are iterating.
               // For example, a ZK node can disappear between the time we get all children and the time we try to get
               // the value of a child. Just let this go since another rebalance will be triggered.
-              logger.info("exception during rebalance " + e)
+              logger.info("exception during rebalance ", e)
           }
           logger.info("end rebalancing consumer " + consumerIdString + " try #" + i)
           if (done)
@@ -450,12 +449,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     }
 
     private def rebalance(): Boolean = {
-      // testing code
-      //if ("group1_consumer1" == consumerIdString) {
-      //  logger.info("sleeping " + consumerIdString)
-      //  Thread.sleep(20)
-      //}
-
       val myTopicThreadIdsMap = getTopicCount(consumerIdString).getConsumerThreadIdsPerTopic
       val cluster = ZkUtils.getCluster(zkClient)
       val consumersPerTopicMap = getConsumersPerTopic(group)
