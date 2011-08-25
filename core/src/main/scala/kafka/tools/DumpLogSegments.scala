@@ -37,14 +37,11 @@ object DumpLogSegments {
         println("Starting offset: " + offset)
         val messageSet = new FileMessageSet(file, false)
         for(messageAndOffset <- messageSet) {
-          println("----------------------------------------------")
-         if (messageAndOffset.message.isValid)
-            println("offset:\t" + offset)
-          else
-            println("offset:\t %d \t invalid".format(offset))
+          val msg = messageAndOffset.message
+          println("offset: " + offset + " isvalid: " + msg.isValid + " magic: " + msg.magic + " compresscodec: " + msg.compressionCodec)
           if (!isNoPrint)
             println("payload:\t" + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
-          offset = messageAndOffset.offset
+          offset += messageAndOffset.offset
         }
       }
     }
