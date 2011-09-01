@@ -33,15 +33,16 @@ object DumpLogSegments {
       if (! ("-noprint".compareToIgnoreCase(arg) == 0) ) {
         val file = new File(arg)
         println("Dumping " + file)
-        var offset = file.getName().split("\\.")(0).toLong
-        println("Starting offset: " + offset)
+        val startOffset = file.getName().split("\\.")(0).toLong
+        var offset = 0L
+        println("Starting offset: " + startOffset)
         val messageSet = new FileMessageSet(file, false)
         for(messageAndOffset <- messageSet) {
           val msg = messageAndOffset.message
-          println("offset: " + offset + " isvalid: " + msg.isValid + " magic: " + msg.magic + " compresscodec: " + msg.compressionCodec)
+          println("offset: " + (startOffset + offset) + " isvalid: " + msg.isValid + " magic: " + msg.magic + " compresscodec: " + msg.compressionCodec)
           if (!isNoPrint)
             println("payload:\t" + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
-          offset += messageAndOffset.offset
+          offset = messageAndOffset.offset
         }
       }
     }
