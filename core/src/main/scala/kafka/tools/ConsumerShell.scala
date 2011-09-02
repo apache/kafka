@@ -92,7 +92,7 @@ class ZKConsumerThread(stream: KafkaMessageStream) extends Thread {
     var count: Int = 0
     try {
       for (message <- stream) {
-        logger.debug("consumed: " + Utils.toString(message.payload, "UTF-8"))
+        println("consumed: " + Utils.toString(message.payload, "UTF-8"))
         count += 1
       }
     }catch {
