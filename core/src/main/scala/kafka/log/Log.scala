@@ -298,7 +298,9 @@ private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int,
   /**
    * Flush this log file to the physical disk
    */
-  def flush() = {
+  def flush() : Unit = {
+    if (unflushed.get == 0) return
+
     lock synchronized {
       if(logger.isDebugEnabled)
         logger.debug("Flushing log '" + name + "' last flushed: " + getLastFlushedTime + " current time: " +
