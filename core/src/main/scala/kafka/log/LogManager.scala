@@ -51,6 +51,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private val logFlusherScheduler = new KafkaScheduler(1, "kafka-logflusher-", false)
   private val logFlushIntervalMap = config.flushIntervalMap
   private val logRetentionMSMap = getLogRetentionMSMap(config.logRetentionHoursMap)
+  private val logRetentionSize = config.logRetentionSize
 
   /* Initialize a log for each subdirectory of the main log directory */
   private val logs = new Pool[String, Pool[Int, Log]]()
@@ -193,6 +194,51 @@ private[kafka] class LogManager(val config: KafkaConfig,
     log
   }
   
+  /* Attemps to delete all provided segments from a log and returns how many it was able to */
+  private def deleteSegments(log: Log, segments: Seq[LogSegment]): Int = {
+    var total = 0
+    for(segment <- segments) {
+      logger.info("Deleting log segment " + segment.file.getName() + " from " + log.name)
+      Utils.swallow(logger.warn, segment.messageSet.close())
+      if(!segment.file.delete()) {
+        logger.warn("Delete failed.")
+      } else {
+        total += 1
+      }
+    }
+    total
+  }
+
+  /* Runs through the log removing segments older than a certain age */
+  private def cleanupExpiredSegments(log: Log): Int = {
+    val startMs = time.milliseconds
+    val topic = Utils.getTopicPartition(log.dir.getName)._1
+    val logCleanupThresholdMS = logRetentionMSMap.get(topic).getOrElse(this.logCleanupDefaultAgeMs)
+    val toBeDeleted = log.markDeletedWhile(startMs - _.file.lastModified > logCleanupThresholdMS)
+    val total = deleteSegments(log, toBeDeleted)
+    total
+  }
+
+  /**
+   *  Runs through the log removing segments until the size of the log
+   *  is at least logRetentionSize bytes in size
+   */
+  private def cleanupSegmentsToMaintainSize(log: Log): Int = {
+    if(logRetentionSize < 0 || log.size < logRetentionSize) return 0
+    var diff = log.size - logRetentionSize
+    def shouldDelete(segment: LogSegment) = {
+      if(diff - segment.size >= 0) {
+        diff -= segment.size
+        true
+      } else {
+        false
+      }
+    }
+    val toBeDeleted = log.markDeletedWhile( shouldDelete )
+    val total = deleteSegments(log, toBeDeleted)
+    total
+  }
+
   /**
    * Delete any eligible logs. Return the number of segments deleted.
    */
@@ -204,19 +250,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
     while(iter.hasNext) {
       val log = iter.next
       logger.debug("Garbage collecting '" + log.name + "'")
-      var logCleanupThresholdMS = this.logCleanupDefaultAgeMs
-      val topic = Utils.getTopicPartition(log.dir.getName)._1
-      if (logRetentionMSMap.contains(topic))
-        logCleanupThresholdMS = logRetentionMSMap(topic)
-      val toBeDeleted = log.markDeletedWhile(startMs - _.file.lastModified > logCleanupThresholdMS)
-      for(segment <- toBeDeleted) {
-        logger.info("Deleting log segment " + segment.file.getName() + " from " + log.name)
-        Utils.swallow(logger.warn, segment.messageSet.close())
-        if(!segment.file.delete())
-          logger.warn("Delete failed.")
-        else
-          total += 1
-      }
+      total += cleanupExpiredSegments(log) + cleanupSegmentsToMaintainSize(log)
     }
     logger.debug("Log cleanup completed. " + total + " files deleted in " + 
                  (time.milliseconds - startMs) / 1000 + " seconds")
