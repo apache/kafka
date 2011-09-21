@@ -1,0 +1,109 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <!-- Specify where tasks are implemented. -->
+  <UsingTask AssemblyFile="Microsoft.StyleCop.dll" TaskName="StyleCopTask"/>
+
+  <PropertyGroup>
+    <BuildDependsOn>$(BuildDependsOn);StyleCop</BuildDependsOn>
+    <RebuildDependsOn>StyleCopForceFullAnalysis;$(RebuildDependsOn)</RebuildDependsOn>
+  </PropertyGroup>
+
+  <!-- Define StyleCopForceFullAnalysis property. -->
+  <PropertyGroup Condition="('$(SourceAnalysisForceFullAnalysis)' != '') and ('$(StyleCopForceFullAnalysis)' == '')">
+    <StyleCopForceFullAnalysis>$(SourceAnalysisForceFullAnalysis)</StyleCopForceFullAnalysis>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(StyleCopForceFullAnalysis)' == ''">
+    <StyleCopForceFullAnalysis>false</StyleCopForceFullAnalysis>
+  </PropertyGroup>
+
+  <!-- Define StyleCopCacheResults property. -->
+  <PropertyGroup Condition="('$(SourceAnalysisCacheResults)' != '') and ('$(StyleCopCacheResults)' == '')">
+    <StyleCopCacheResults>$(SourceAnalysisCacheResults)</StyleCopCacheResults>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(StyleCopCacheResults)' == ''">
+    <StyleCopCacheResults>true</StyleCopCacheResults>
+  </PropertyGroup>
+
+  <!-- Define StyleCopTreatErrorsAsWarnings property. -->
+  <PropertyGroup Condition="('$(SourceAnalysisTreatErrorsAsWarnings)' != '') and ('$(StyleCopTreatErrorsAsWarnings)' == '')">
+    <StyleCopTreatErrorsAsWarnings>$(SourceAnalysisTreatErrorsAsWarnings)</StyleCopTreatErrorsAsWarnings>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(StyleCopTreatErrorsAsWarnings)' == ''">
+    <StyleCopTreatErrorsAsWarnings>true</StyleCopTreatErrorsAsWarnings>
+  </PropertyGroup>
+
+  <!-- Define StyleCopEnabled property. -->
+  <PropertyGroup Condition="('$(SourceAnalysisEnabled)' != '') and ('$(StyleCopEnabled)' == '')">
+    <StyleCopEnabled>$(SourceAnalysisEnabled)</StyleCopEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(StyleCopEnabled)' == ''">
+    <StyleCopEnabled>true</StyleCopEnabled>
+  </PropertyGroup>
+
+  <!-- Define StyleCopOverrideSettingsFile property. -->
+  <PropertyGroup Condition="('$(SourceAnalysisOverrideSettingsFile)' != '') and ('$(StyleCopOverrideSettingsFile)' == '')">
+    <StyleCopOverrideSettingsFile>$(SourceAnalysisOverrideSettingsFile)</StyleCopOverrideSettingsFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(StyleCopOverrideSettingsFile)' == ''">
+    <StyleCopOverrideSettingsFile> </StyleCopOverrideSettingsFile>
+  </PropertyGroup>
+
+  <!-- Define StyleCopOutputFile property. -->
+  <PropertyGroup Condition="('$(SourceAnalysisOutputFile)' != '') and ('$(StyleCopOutputFile)' == '')">
+    <StyleCopOutputFile>$(SourceAnalysisOutputFile)</StyleCopOutputFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(StyleCopOutputFile)' == ''">
+    <StyleCopOutputFile>$(IntermediateOutputPath)StyleCopViolations.xml</StyleCopOutputFile>
+  </PropertyGroup>
+
+  <!-- Define all new properties which do not need to have both StyleCop and SourceAnalysis variations. -->
+  <PropertyGroup>
+    <!-- Specifying 0 will cause StyleCop to use the default violation count limit.
+         Specifying any positive number will cause StyleCop to use that number as the violation count limit.
+         Specifying any negative number will cause StyleCop to allow any number of violations without limit. -->
+    <StyleCopMaxViolationCount Condition="'$(StyleCopMaxViolationCount)' == ''">0</StyleCopMaxViolationCount>
+  </PropertyGroup>
+
+  <!-- Define target: StyleCopForceFullAnalysis -->
+  <Target Name="StyleCopForceFullAnalysis">
+    <CreateProperty Value="true">
+      <Output TaskParameter="Value" PropertyName="StyleCopForceFullAnalysis" />
+    </CreateProperty>
+  </Target>
+
+  <!-- Define target: StyleCop -->
+  <Target Name="StyleCop" Condition="'$(StyleCopEnabled)' != 'false'">
+    <!-- Determine what files should be checked. Take all Compile items, but exclude those that have
+        set ExcludeFromStyleCop=true or ExcludeFromSourceAnalysis=true. -->
+    <CreateItem Include="@(Compile)" Condition="('%(Compile.ExcludeFromStyleCop)' != 'true') and ('%(Compile.ExcludeFromSourceAnalysis)' != 'true')">
+      <Output TaskParameter="Include" ItemName="StyleCopFiles"/>
+    </CreateItem>
+
+    <Message Text="Forcing full StyleCop reanalysis." Condition="'$(StyleCopForceFullAnalysis)' == 'true'" Importance="Low" />
+
+    <Message Text="Analyzing @(StyleCopFiles)" Importance="Low" />
+
+    <!-- Run the StyleCop MSBuild task. -->
+    <StyleCopTask
+      ProjectFullPath="$(MSBuildProjectFile)"
+      SourceFiles="@(StyleCopFiles)"
+      AdditionalAddinPaths="@(StyleCopAdditionalAddinPaths)"
+      ForceFullAnalysis="$(StyleCopForceFullAnalysis)"
+      DefineConstants="$(DefineConstants)"
+      TreatErrorsAsWarnings="$(StyleCopTreatErrorsAsWarnings)"
+      CacheResults="$(StyleCopCacheResults)"
+      OverrideSettingsFile="$(StyleCopOverrideSettingsFile)"
+      OutputFile="$(StyleCopOutputFile)"
+      MaxViolationCount="$(StyleCopMaxViolationCount)"
+            />
+
+    <!-- Make output files cleanable -->
+    <CreateItem Include="$(StyleCopOutputFile)">
+      <Output TaskParameter="Include" ItemName="FileWrites"/>
+    </CreateItem>
+
+    <!-- Add the StyleCop.cache file to the list of files we've written - so they can be cleaned up on a Build Clean. -->
+    <CreateItem Include="StyleCop.Cache" Condition="'$(StyleCopCacheResults)' == 'true'">
+      <Output TaskParameter="Include" ItemName="FileWrites"/>
+    </CreateItem>
+  </Target>
+</Project>

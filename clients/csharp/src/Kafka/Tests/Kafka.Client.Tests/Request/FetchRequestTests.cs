@@ -1,48 +1,35 @@
-﻿using System;
-using System.Linq;
-using System.Text;
-using Kafka.Client.Request;
-using Kafka.Client.Util;
-using NUnit.Framework;
+﻿/*
+ * Copyright 2011 LinkedIn
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+*/
 
-namespace Kafka.Client.Request.Tests
+namespace Kafka.Client.Tests.Request
 {
+    using System;
+    using System.IO;
+    using System.Linq;
+    using System.Text;
+    using Kafka.Client.Requests;
+    using Kafka.Client.Utils;
+    using NUnit.Framework;
+
     /// <summary>
     /// Tests for the <see cref="FetchRequest"/> class.
     /// </summary>
     [TestFixture]
     public class FetchRequestTests
     {
-        /// <summary>
-        /// Tests a valid request.  
-        /// </summary>
-        [Test]
-        public void IsValidTrue()
-        {
-            FetchRequest request = new FetchRequest("topic", 1, 10L, 100);
-            Assert.IsTrue(request.IsValid());
-        }
-
-        /// <summary>
-        /// Tests a invalid request with no topic.
-        /// </summary>
-        [Test]
-        public void IsValidNoTopic()
-        {
-            FetchRequest request = new FetchRequest(" ", 1, 10L, 100);
-            Assert.IsFalse(request.IsValid());
-        }
-
-        /// <summary>
-        /// Tests a invalid request with no topic.
-        /// </summary>
-        [Test]
-        public void IsValidNulltopic()
-        {
-            FetchRequest request = new FetchRequest(null, 1, 10L, 100);
-            Assert.IsFalse(request.IsValid());
-        }
-
         /// <summary>
         /// Tests to ensure that the request follows the expected structure.
         /// </summary>
@@ -55,7 +42,9 @@ namespace Kafka.Client.Request.Tests
             // REQUEST TYPE ID + TOPIC LENGTH + TOPIC + PARTITION + OFFSET + MAX SIZE
             int requestSize = 2 + 2 + topicName.Length + 4 + 8 + 4;
 
-            byte[] bytes = request.GetBytes();
+            MemoryStream ms = new MemoryStream();
+            request.WriteTo(ms);
+            byte[] bytes = ms.ToArray();
             Assert.IsNotNull(bytes);
 
             // add 4 bytes for the length of the message at the beginning
@@ -65,7 +54,7 @@ namespace Kafka.Client.Request.Tests
             Assert.AreEqual(25, BitConverter.ToInt32(BitWorks.ReverseBytes(bytes.Take(4).ToArray<byte>()), 0));
 
             // next 2 bytes = the request type
-            Assert.AreEqual((short)RequestType.Fetch, BitConverter.ToInt16(BitWorks.ReverseBytes(bytes.Skip(4).Take(2).ToArray<byte>()), 0));
+            Assert.AreEqual((short)RequestTypes.Fetch, BitConverter.ToInt16(BitWorks.ReverseBytes(bytes.Skip(4).Take(2).ToArray<byte>()), 0));
 
             // next 2 bytes = the topic length
             Assert.AreEqual((short)topicName.Length, BitConverter.ToInt16(BitWorks.ReverseBytes(bytes.Skip(6).Take(2).ToArray<byte>()), 0));

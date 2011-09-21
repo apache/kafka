@@ -1,0 +1,58 @@
+﻿/*
+ * Copyright 2011 LinkedIn
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+*/
+
+namespace Kafka.Client.Producers.Sync
+{
+    using System.Collections.Generic;
+    using Kafka.Client.Messages;
+    using Kafka.Client.Requests;
+
+    /// <summary>
+    /// Sends messages encapsulated in request to Kafka server synchronously
+    /// </summary>
+    public interface ISyncProducer
+    {
+        /// <summary>
+        /// Constructs producer request and sends it to given broker partition synchronously
+        /// </summary>
+        /// <param name="topic">
+        /// The topic.
+        /// </param>
+        /// <param name="partition">
+        /// The partition.
+        /// </param>
+        /// <param name="messages">
+        /// The list of messages messages.
+        /// </param>
+        void Send(string topic, int partition, IEnumerable<Message> messages);
+
+        /// <summary>
+        /// Sends request to Kafka server synchronously
+        /// </summary>
+        /// <param name="request">
+        /// The request.
+        /// </param>
+        void Send(ProducerRequest request);
+
+        /// <summary>
+        /// Sends the data to a multiple topics on Kafka server synchronously
+        /// </summary>
+        /// <param name="requests">
+        /// The requests.
+        /// </param>
+        void MultiSend(IEnumerable<ProducerRequest> requests);
+    }
+}
