@@ -96,7 +96,7 @@ class KafkaServer(val config: KafkaConfig) {
     if (canShutdown) {
       logger.info("Shutting down...")
       try {
-        scheduler.shutdown
+        scheduler.shutdown()
         if (socketServer != null)
           socketServer.shutdown()
         Utils.swallow(logger.warn, Utils.unregisterMBean(statsMBeanName))

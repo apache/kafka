@@ -36,12 +36,19 @@ class KafkaScheduler(val numThreads: Int, val baseThreadName: String, isDaemon: 
       t
     }
   })
-  
+  executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false)
+  executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false)
+
   def scheduleWithRate(fun: () => Unit, delayMs: Long, periodMs: Long) =
     executor.scheduleAtFixedRate(Utils.loggedRunnable(fun), delayMs, periodMs, TimeUnit.MILLISECONDS)
 
-  def shutdown() = {
-    executor.shutdownNow
+  def shutdownNow() {
+    executor.shutdownNow()
+    logger.info("force shutdown scheduler " + baseThreadName)
+  }
+
+  def shutdown() {
+    executor.shutdown()
     logger.info("shutdown scheduler " + baseThreadName)
   }
 }

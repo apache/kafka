@@ -260,7 +260,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
    * Close all the logs
    */
   def close() {
-    logFlusherScheduler.shutdown
+    logFlusherScheduler.shutdown()
     val iter = getLogIterator
     while(iter.hasNext)
       iter.next.close()
@@ -317,7 +317,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
             case _ =>
           }
       }
-    }     
+    }
   }
 
 
