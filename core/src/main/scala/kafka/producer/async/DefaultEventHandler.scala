@@ -83,8 +83,8 @@ private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
               case _ =>
                 if(config.compressedTopics.contains(topicAndEvents._1._1)) {
                   if(logger.isTraceEnabled)
-                    logger.trace("Sending %d messages with compression %d to topic %s on partition %d"
-                      .format(topicAndEvents._2.size, topicAndEvents._1._1, topicAndEvents._1._2, config.compressionCodec.codec))
+                    logger.trace("Sending %d messages with compression codec %d to topic %s on partition %d"
+                      .format(topicAndEvents._2.size, config.compressionCodec.codec, topicAndEvents._1._1, topicAndEvents._1._2))
                   new ByteBufferMessageSet(config.compressionCodec, topicAndEvents._2: _*)
                 }
                 else {
