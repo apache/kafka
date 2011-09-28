@@ -18,6 +18,7 @@
 package kafka
 
 import consumer._
+import message.Message
 import utils.Utils
 import java.util.concurrent.CountDownLatch
 
@@ -55,7 +56,7 @@ object TestZKConsumerOffsets {
   }
 }
 
-private class ConsumerThread(stream: KafkaMessageStream) extends Thread {
+private class ConsumerThread(stream: KafkaMessageStream[Message]) extends Thread {
   val shutdownLatch = new CountDownLatch(1)
 
   override def run() {

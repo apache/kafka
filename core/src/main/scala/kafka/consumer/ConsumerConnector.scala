@@ -20,6 +20,7 @@ package kafka.consumer
 import scala.collection._
 import kafka.utils.Utils
 import org.apache.log4j.Logger
+import kafka.serializer.{DefaultDecoder, Decoder}
 
 /**
  *  Main interface for consumer
@@ -32,7 +33,9 @@ trait ConsumerConnector {
    *  @return a map of (topic, list of  KafkaMessageStream) pair. The number of items in the
    *          list is #streams. Each KafkaMessageStream supports an iterator of messages.
    */
-  def createMessageStreams(topicCountMap: Map[String,Int]) : Map[String,List[KafkaMessageStream]]
+  def createMessageStreams[T](topicCountMap: Map[String,Int],
+                              decoder: Decoder[T] = new DefaultDecoder)
+    : Map[String,List[KafkaMessageStream[T]]]
 
   /**
    *  Commit the offsets of all broker partitions connected by this connector.

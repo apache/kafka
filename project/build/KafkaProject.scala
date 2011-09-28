@@ -129,6 +129,8 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
 
     override def artifactID = "kafka-java-examples"
     override def filterScalaJars = false
+    override def javaCompileOptions = super.javaCompileOptions ++
+      List(JavaCompileOption("-Xlint:unchecked"))
   }
 
   class KafkaPerfProject(info: ProjectInfo) extends DefaultProject(info)

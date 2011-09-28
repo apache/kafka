@@ -17,6 +17,8 @@
 package kafka.javaapi.consumer
 
 import kafka.consumer.{KafkaMessageStream, ConsumerConfig}
+import kafka.message.Message
+import kafka.serializer.{DefaultDecoder, Decoder}
 
 /**
  * This class handles the consumers interaction with zookeeper
@@ -63,21 +65,29 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   def this(config: ConsumerConfig) = this(config, true)
 
  // for java client
-  def createMessageStreams(topicCountMap: java.util.Map[String,java.lang.Integer]):
-    java.util.Map[String,java.util.List[KafkaMessageStream]] = {
+  def createMessageStreams[T](
+        topicCountMap: java.util.Map[String,java.lang.Integer],
+        decoder: Decoder[T])
+      : java.util.Map[String,java.util.List[KafkaMessageStream[T]]] = {
     import scala.collection.JavaConversions._
 
     val scalaTopicCountMap: Map[String, Int] = Map.empty[String, Int] ++ asMap(topicCountMap.asInstanceOf[java.util.Map[String, Int]])
-    val scalaReturn = underlying.consume(scalaTopicCountMap)
-    val ret = new java.util.HashMap[String,java.util.List[KafkaMessageStream]]
+    val scalaReturn = underlying.consume(scalaTopicCountMap, decoder)
+    val ret = new java.util.HashMap[String,java.util.List[KafkaMessageStream[T]]]
     for ((topic, streams) <- scalaReturn) {
-      var javaStreamList = new java.util.ArrayList[KafkaMessageStream]
+      var javaStreamList = new java.util.ArrayList[KafkaMessageStream[T]]
       for (stream <- streams)
         javaStreamList.add(stream)
       ret.put(topic, javaStreamList)
     }
     ret
   }
+
+  def createMessageStreams(
+        topicCountMap: java.util.Map[String,java.lang.Integer])
+      : java.util.Map[String,java.util.List[KafkaMessageStream[Message]]] =
+    createMessageStreams(topicCountMap, new DefaultDecoder)
+
 
   def commitOffsets() {
     underlying.commitOffsets

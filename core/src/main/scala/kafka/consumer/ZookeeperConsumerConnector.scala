@@ -29,6 +29,7 @@ import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import kafka.api.OffsetRequest
 import java.util.UUID
+import kafka.serializer.Decoder
 
 /**
  * This class handles the consumers interaction with zookeeper
@@ -103,8 +104,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   def this(config: ConsumerConfig) = this(config, true)
 
-  def createMessageStreams(topicCountMap: Map[String,Int]) : Map[String,List[KafkaMessageStream]] = {
-    consume(topicCountMap)
+  def createMessageStreams[T](topicCountMap: Map[String,Int],
+                              decoder: Decoder[T])
+      : Map[String,List[KafkaMessageStream[T]]] = {
+    consume(topicCountMap, decoder)
   }
 
   private def createFetcher() {
@@ -143,13 +146,15 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     }
   }
 
-  def consume(topicCountMap: scala.collection.Map[String,Int]): Map[String,List[KafkaMessageStream]] = {
+  def consume[T](topicCountMap: scala.collection.Map[String,Int],
+                 decoder: Decoder[T])
+      : Map[String,List[KafkaMessageStream[T]]] = {
     logger.debug("entering consume ")
     if (topicCountMap == null)
       throw new RuntimeException("topicCountMap is null")
 
     val dirs = new ZKGroupDirs(config.groupId)
-    var ret = new mutable.HashMap[String,List[KafkaMessageStream]]
+    var ret = new mutable.HashMap[String,List[KafkaMessageStream[T]]]
 
     var consumerUuid : String = null
     config.consumerId match {
@@ -177,11 +182,11 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     // create a queue per topic per consumer thread
     val consumerThreadIdsPerTopic = topicCount.getConsumerThreadIdsPerTopic
     for ((topic, threadIdSet) <- consumerThreadIdsPerTopic) {
-      var streamList: List[KafkaMessageStream] = Nil
+      var streamList: List[KafkaMessageStream[T]] = Nil
       for (threadId <- threadIdSet) {
         val stream = new LinkedBlockingQueue[FetchedDataChunk](config.maxQueuedChunks)
         queues.put((topic, threadId), stream)
-        streamList ::= new KafkaMessageStream(stream, config.consumerTimeoutMs)
+        streamList ::= new KafkaMessageStream[T](stream, config.consumerTimeoutMs, decoder)
       }
       ret += (topic -> streamList)
       logger.debug("adding topic " + topic + " and stream to map..")

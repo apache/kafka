@@ -119,7 +119,7 @@ object ConsoleConsumer {
       }
     })
     
-    var stream: KafkaMessageStream = connector.createMessageStreams(Map(topic -> 1)).get(topic).get.get(0)
+    var stream = connector.createMessageStreams(Map(topic -> 1)).get(topic).get.get(0)
     val iter =
       if(maxMessages >= 0)
         stream.slice(0, maxMessages)

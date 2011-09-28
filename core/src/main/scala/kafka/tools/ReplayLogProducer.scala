@@ -139,7 +139,7 @@ object ReplayLogProducer {
     }
   }
 
-  class ZKConsumerThread(config: Config, stream: KafkaMessageStream) extends Thread {
+  class ZKConsumerThread(config: Config, stream: KafkaMessageStream[Message]) extends Thread {
     val shutdownLatch = new CountDownLatch(1)
     val logger = Logger.getLogger(getClass)
     val props = new Properties()

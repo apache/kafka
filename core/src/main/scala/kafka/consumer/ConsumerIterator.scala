@@ -22,32 +22,35 @@ import org.apache.log4j.Logger
 import java.util.concurrent.{TimeUnit, BlockingQueue}
 import kafka.cluster.Partition
 import kafka.message.{MessageAndOffset, MessageSet, Message}
+import kafka.serializer.Decoder
 
 /**
  * An iterator that blocks until a value can be read from the supplied queue.
  * The iterator takes a shutdownCommand object which can be added to the queue to trigger a shutdown
  * 
  */
-class ConsumerIterator(private val channel: BlockingQueue[FetchedDataChunk], consumerTimeoutMs: Int)
-        extends IteratorTemplate[Message] {
+class ConsumerIterator[T](private val channel: BlockingQueue[FetchedDataChunk],
+                          consumerTimeoutMs: Int,
+                          private val decoder: Decoder[T])
+        extends IteratorTemplate[T] {
   
-  private val logger = Logger.getLogger(classOf[ConsumerIterator])
+  private val logger = Logger.getLogger(classOf[ConsumerIterator[T]])
   private var current: Iterator[MessageAndOffset] = null
   private var currentDataChunk: FetchedDataChunk = null
   private var currentTopicInfo: PartitionTopicInfo = null
   private var consumedOffset: Long = -1L
 
-  override def next(): Message = {
-    val message = super.next
+  override def next(): T = {
+    val decodedMessage = super.next()
     if(consumedOffset < 0)
       throw new IllegalStateException("Offset returned by the message set is invalid %d".format(consumedOffset))
     currentTopicInfo.resetConsumeOffset(consumedOffset)
     if(logger.isTraceEnabled)
       logger.trace("Setting consumed offset to %d".format(consumedOffset))
-    message
+    decodedMessage
   }
 
-  protected def makeNext(): Message = {
+  protected def makeNext(): T = {
     // if we don't have an iterator, get one
     if(current == null || !current.hasNext) {
       if (consumerTimeoutMs < 0)
@@ -62,7 +65,7 @@ class ConsumerIterator(private val channel: BlockingQueue[FetchedDataChunk], con
         if(logger.isDebugEnabled)
           logger.debug("Received the shutdown command")
     	  channel.offer(currentDataChunk)
-        return allDone
+        return allDone()
       } else {
         currentTopicInfo = currentDataChunk.topicInfo
         if (currentTopicInfo.getConsumeOffset != currentDataChunk.fetchOffset) {
@@ -73,9 +76,9 @@ class ConsumerIterator(private val channel: BlockingQueue[FetchedDataChunk], con
         current = currentDataChunk.messages.iterator
       }
     }
-    val item = current.next
+    val item = current.next()
     consumedOffset = item.offset
-    item.message
+    decoder.toEvent(item.message)
   }
   
 }

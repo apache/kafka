@@ -22,6 +22,7 @@ import kafka.utils.Utils
 import java.util.concurrent.CountDownLatch
 import org.apache.log4j.Logger
 import kafka.consumer._
+import kafka.serializer.StringDecoder
 
 /**
  * Program to read using the rich consumer and dump the results to standard out
@@ -63,7 +64,7 @@ object ConsumerShell {
 
     val consumerConfig = new ConsumerConfig(Utils.loadProps(propsFile))
     val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
-    val topicMessageStreams = consumerConnector.createMessageStreams(Predef.Map(topic -> partitions))
+    val topicMessageStreams = consumerConnector.createMessageStreams(Predef.Map(topic -> partitions), new StringDecoder)
     var threadList = List[ZKConsumerThread]()
     for ((topic, streamList) <- topicMessageStreams)
       for (stream <- streamList)
@@ -83,7 +84,7 @@ object ConsumerShell {
   }
 }
 
-class ZKConsumerThread(stream: KafkaMessageStream) extends Thread {
+class ZKConsumerThread(stream: KafkaMessageStream[String]) extends Thread {
   val shutdownLatch = new CountDownLatch(1)
   val logger = Logger.getLogger(getClass)
 
@@ -92,7 +93,7 @@ class ZKConsumerThread(stream: KafkaMessageStream) extends Thread {
     var count: Int = 0
     try {
       for (message <- stream) {
-        println("consumed: " + Utils.toString(message.payload, "UTF-8"))
+        println("consumed: " + message)
         count += 1
       }
     }catch {

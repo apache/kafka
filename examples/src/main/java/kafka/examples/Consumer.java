@@ -16,15 +16,16 @@
  */
 package kafka.examples;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
-
 import kafka.consumer.ConsumerConfig;
 import kafka.consumer.ConsumerIterator;
 import kafka.consumer.KafkaMessageStream;
 import kafka.javaapi.consumer.ConsumerConnector;
+import kafka.message.Message;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 
 public class Consumer extends Thread
 {
@@ -33,7 +34,8 @@ public class Consumer extends Thread
   
   public Consumer(String topic)
   {
-    consumer = kafka.consumer.Consumer.createJavaConsumerConnector(createConsumerConfig());
+    consumer = kafka.consumer.Consumer.createJavaConsumerConnector(
+            createConsumerConfig());
     this.topic = topic;
   }
 
@@ -53,9 +55,9 @@ public class Consumer extends Thread
   public void run() {
     Map<String, Integer> topicCountMap = new HashMap<String, Integer>();
     topicCountMap.put(topic, new Integer(1));
-    Map<String, List<KafkaMessageStream>> consumerMap = consumer.createMessageStreams(topicCountMap);
-    KafkaMessageStream stream =  consumerMap.get(topic).get(0);
-    ConsumerIterator it = stream.iterator();
+    Map<String, List<KafkaMessageStream<Message>>> consumerMap = consumer.createMessageStreams(topicCountMap);
+    KafkaMessageStream<Message> stream =  consumerMap.get(topic).get(0);
+    ConsumerIterator<Message> it = stream.iterator();
     while(it.hasNext())
       System.out.println(ExampleUtils.getMessage(it.next()));
   }

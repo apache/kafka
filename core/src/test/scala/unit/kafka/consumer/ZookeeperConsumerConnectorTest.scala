@@ -27,6 +27,7 @@ import kafka.utils.{TestZKUtils, TestUtils}
 import org.scalatest.junit.JUnit3Suite
 import org.apache.log4j.{Level, Logger}
 import kafka.message._
+import kafka.serializer.StringDecoder
 
 class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with ZooKeeperTestHarness {
   private val logger = Logger.getLogger(getClass())
@@ -124,26 +125,6 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandlers])
     requestHandlerLogger.setLevel(Level.FATAL)
 
-    var actualMessages: List[Message] = Nil
-
-    // test consumer timeout logic
-    val consumerConfig0 = new ConsumerConfig(
-      TestUtils.createConsumerProperties(zkConnect, group, consumer0)) {
-      override val consumerTimeoutMs = 200
-    }
-    val zkConsumerConnector0 = new ZookeeperConsumerConnector(consumerConfig0, true)
-    val topicMessageStreams0 = zkConsumerConnector0.createMessageStreams(Predef.Map(topic -> numNodes*numParts/2))
-    try {
-      getMessages(nMessages*2, topicMessageStreams0)
-      fail("should get an exception")
-    }
-    catch {
-      case e: ConsumerTimeoutException => // this is ok
-        println("This is ok")
-      case e => throw e
-    }
-    zkConsumerConnector0.shutdown
-
     println("Sending messages for 1st consumer")
     // send some messages to each broker
     val sentMessages1 = sendMessages(nMessages, "batch1", DefaultCompressionCodec)
@@ -227,6 +208,41 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
+  def testConsumerDecoder() {
+    val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandlers])
+    requestHandlerLogger.setLevel(Level.FATAL)
+
+    val sentMessages = sendMessages(nMessages, "batch1", NoCompressionCodec).
+      map(m => Utils.toString(m.payload, "UTF-8")).
+      sortWith((s, t) => s.compare(t) == -1)
+    val consumerConfig = new ConsumerConfig(
+      TestUtils.createConsumerProperties(zkConnect, group, consumer1))
+
+    val zkConsumerConnector =
+      new ZookeeperConsumerConnector(consumerConfig, true)
+    val topicMessageStreams =
+      zkConsumerConnector.createMessageStreams(
+        Predef.Map(topic -> numNodes*numParts/2), new StringDecoder)
+
+    var receivedMessages: List[String] = Nil
+    for ((topic, messageStreams) <- topicMessageStreams) {
+      for (messageStream <- messageStreams) {
+        val iterator = messageStream.iterator
+        for (i <- 0 until nMessages * 2) {
+          assertTrue(iterator.hasNext())
+          val message = iterator.next()
+          receivedMessages ::= message
+          logger.debug("received message: " + message)
+        }
+      }
+    }
+    receivedMessages = receivedMessages.sortWith((s, t) => s.compare(t) == -1)
+    assertEquals(sentMessages, receivedMessages)
+
+    zkConsumerConnector.shutdown()
+    requestHandlerLogger.setLevel(Level.ERROR)
+  }
+
   def sendMessages(conf: KafkaConfig, messagesPerNode: Int, header: String, compression: CompressionCodec): List[Message]= {
     var messages: List[Message] = Nil
     val producer = TestUtils.createProducer("localhost", conf.port)
@@ -250,7 +266,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     messages.sortWith((s,t) => s.checksum < t.checksum)
   }
 
-  def getMessages(nMessagesPerThread: Int, topicMessageStreams: Map[String,List[KafkaMessageStream]]): List[Message]= {
+  def getMessages(nMessagesPerThread: Int, topicMessageStreams: Map[String,List[KafkaMessageStream[Message]]]): List[Message]= {
     var messages: List[Message] = Nil
     for ((topic, messageStreams) <- topicMessageStreams) {
       for (messageStream <- messageStreams) {

@@ -20,20 +20,23 @@ package kafka.consumer
 import java.util.concurrent.BlockingQueue
 import org.apache.log4j.Logger
 import kafka.message.Message
-
+import kafka.serializer.{DefaultDecoder, Decoder}
 
 /**
  * All calls to elements should produce the same thread-safe iterator? Should have a seperate thread
  * that feeds messages into a blocking queue for processing.
  */
-class KafkaMessageStream(private val queue: BlockingQueue[FetchedDataChunk], consumerTimeoutMs: Int)
-   extends Iterable[Message] with java.lang.Iterable[Message]{
+class KafkaMessageStream[T](private val queue: BlockingQueue[FetchedDataChunk],
+                            consumerTimeoutMs: Int,
+                            private val decoder: Decoder[T])
+   extends Iterable[T] with java.lang.Iterable[T]{
 
   private val logger = Logger.getLogger(getClass())
-  private val iter: ConsumerIterator = new ConsumerIterator(queue, consumerTimeoutMs)
+  private val iter: ConsumerIterator[T] =
+    new ConsumerIterator[T](queue, consumerTimeoutMs, decoder)
     
   /**
    *  Create an iterator over messages in the stream.
    */
-  def iterator(): ConsumerIterator = iter
+  def iterator(): ConsumerIterator[T] = iter
 }

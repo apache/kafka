@@ -18,19 +18,25 @@
 package kafka.javaapi.consumer;
 
 import kafka.consumer.KafkaMessageStream;
+import kafka.message.Message;
+import kafka.serializer.Decoder;
 
 import java.util.List;
 import java.util.Map;
 
 public interface ConsumerConnector {
     /**
-     *  Create a list of MessageStreams for each topic.
+     *  Create a list of MessageStreams of type T for each topic.
      *
      *  @param topicCountMap  a map of (topic, #streams) pair
+     *  @param decoder a decoder that converts from Message to T
      *  @return a map of (topic, list of  KafkaMessageStream) pair. The number of items in the
      *          list is #streams. Each KafkaMessageStream supports an iterator of messages.
      */
-    public Map<String, List<KafkaMessageStream>> createMessageStreams(Map<String, Integer> topicCountMap);
+    public <T> Map<String, List<KafkaMessageStream<T>>> createMessageStreams(
+            Map<String, Integer> topicCountMap, Decoder<T> decoder);
+    public Map<String, List<KafkaMessageStream<Message>>> createMessageStreams(
+            Map<String, Integer> topicCountMap);
 
     /**
      *  Commit the offsets of all broker partitions connected by this connector.
