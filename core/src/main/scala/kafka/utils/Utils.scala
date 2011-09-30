@@ -600,11 +600,13 @@ class SnapshotStats(private val monitorDurationNs: Long = 600L * 1000L * 1000L *
 
   private val complete = new AtomicReference(new Stats())
   private val current = new AtomicReference(new Stats())
+  private val total = new AtomicLong(0)
   private val numCumulatedRequests = new AtomicLong(0)
 
   def recordRequestMetric(requestNs: Long) {
     val stats = current.get
     stats.add(requestNs)
+    total.getAndAdd(requestNs)
     numCumulatedRequests.getAndAdd(1)
     val ageNs = time.nanoseconds - stats.start
     // if the current stats are too old it is time to swap
@@ -652,6 +654,8 @@ class SnapshotStats(private val monitorDurationNs: Long = 600L * 1000L * 1000L *
       stats.totalRequestMetric / stats.numRequests
     }
   }
+
+  def getTotalMetric: Long = total.get
 
   def getMaxMetric: Double = complete.get.maxRequestMetric
 

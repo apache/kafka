@@ -33,6 +33,10 @@ trait SocketServerStatsMBean {
   def getBytesWrittenPerSecond: Double
   def getNumFetchRequests: Long
   def getNumProduceRequests: Long
+  def getTotalBytesRead: Long
+  def getTotalBytesWritten: Long
+  def getTotalFetchRequestMs: Long
+  def getTotalProduceRequestMs: Long
 }
 
 @threadsafe
@@ -77,4 +81,12 @@ class SocketServerStats(val monitorDurationNs: Long, val time: Time) extends Soc
   def getNumFetchRequests: Long = fetchTimeStats.getNumRequests
 
   def getNumProduceRequests: Long = produceTimeStats.getNumRequests
+
+  def getTotalBytesRead: Long = produceBytesStats.getTotalMetric
+
+  def getTotalBytesWritten: Long = fetchBytesStats.getTotalMetric
+
+  def getTotalFetchRequestMs: Long = fetchTimeStats.getTotalMetric
+
+  def getTotalProduceRequestMs: Long = produceTimeStats.getTotalMetric
 }

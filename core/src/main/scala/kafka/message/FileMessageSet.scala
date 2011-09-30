@@ -257,6 +257,7 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
 trait LogFlushStatsMBean {
   def getFlushesPerSecond: Double
   def getAvgFlushMs: Double
+  def getTotalFlushMs: Long
   def getMaxFlushMs: Double
   def getNumFlushes: Long
 }
@@ -270,6 +271,8 @@ class LogFlushStats extends LogFlushStatsMBean {
   def getFlushesPerSecond: Double = flushRequestStats.getRequestsPerSecond
 
   def getAvgFlushMs: Double = flushRequestStats.getAvgMetric
+
+  def getTotalFlushMs: Long = flushRequestStats.getTotalMetric
 
   def getMaxFlushMs: Double = flushRequestStats.getMaxMetric
 
