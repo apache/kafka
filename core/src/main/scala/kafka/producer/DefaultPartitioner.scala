@@ -24,6 +24,6 @@ private[kafka] class DefaultPartitioner[T] extends Partitioner[T] {
     if(key == null)
       random.nextInt(numPartitions)
     else
-      key.hashCode % numPartitions
+      math.abs(key.hashCode) % numPartitions
   }
 }
