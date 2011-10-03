@@ -186,7 +186,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       for (threadId <- threadIdSet) {
         val stream = new LinkedBlockingQueue[FetchedDataChunk](config.maxQueuedChunks)
         queues.put((topic, threadId), stream)
-        streamList ::= new KafkaMessageStream[T](stream, config.consumerTimeoutMs, decoder)
+        streamList ::= new KafkaMessageStream[T](topic, stream, config.consumerTimeoutMs, decoder)
       }
       ret += (topic -> streamList)
       logger.debug("adding topic " + topic + " and stream to map..")

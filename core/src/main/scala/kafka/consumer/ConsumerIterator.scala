@@ -29,7 +29,8 @@ import kafka.serializer.Decoder
  * The iterator takes a shutdownCommand object which can be added to the queue to trigger a shutdown
  * 
  */
-class ConsumerIterator[T](private val channel: BlockingQueue[FetchedDataChunk],
+class ConsumerIterator[T](private val topic: String,
+                          private val channel: BlockingQueue[FetchedDataChunk],
                           consumerTimeoutMs: Int,
                           private val decoder: Decoder[T])
         extends IteratorTemplate[T] {
@@ -47,6 +48,7 @@ class ConsumerIterator[T](private val channel: BlockingQueue[FetchedDataChunk],
     currentTopicInfo.resetConsumeOffset(consumedOffset)
     if(logger.isTraceEnabled)
       logger.trace("Setting consumed offset to %d".format(consumedOffset))
+    ConsumerTopicStat.getConsumerTopicStat(topic).recordMessagesPerTopic(1)
     decodedMessage
   }
 
