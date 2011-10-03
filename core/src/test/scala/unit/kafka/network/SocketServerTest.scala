@@ -71,7 +71,7 @@ class SocketServerTest extends JUnitSuite {
     
   }
 
-  @Test(expected=classOf[EOFException])
+  @Test(expected=classOf[IOException])
   def tooBigRequestIsRejected() {
     val tooManyBytes = new Array[Byte](server.maxRequestSize + 1)
     new Random().nextBytes(tooManyBytes)
