@@ -6,6 +6,6 @@ then
 	exit 1
 fi
 
-export JMX_PORT="9999"
+export JMX_PORT=${JMX_PORT:-9999}
 
 $(dirname $0)/kafka-run-class.sh kafka.Kafka $@
