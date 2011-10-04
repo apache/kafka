@@ -155,8 +155,8 @@ class ProducerTest extends JUnitSuite {
     // 2 sync producers
     val syncProducers = new ConcurrentHashMap[Int, kafka.producer.SyncProducer]()
     val syncProducer1 = EasyMock.createMock(classOf[kafka.producer.SyncProducer])
-    // it should send to random partition on broker 1
-    syncProducer1.send(topic, -1, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message("t".getBytes())))
+    // it should send to partition 0 due to the StaticPartitioner
+    syncProducer1.send(topic, 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message("t".getBytes())))
     EasyMock.expectLastCall
     syncProducer1.close
     EasyMock.expectLastCall
@@ -374,7 +374,7 @@ class ProducerTest extends JUnitSuite {
     val asyncProducers = new ConcurrentHashMap[Int, AsyncProducer[String]]()
     val asyncProducer1 = EasyMock.createMock(classOf[AsyncProducer[String]])
     // it should send to partition 0 (first partition) on second broker i.e broker2
-    asyncProducer1.send(topic, "test1", -1)
+    asyncProducer1.send(topic, "test1", 0)
     EasyMock.expectLastCall
     asyncProducer1.close
     EasyMock.expectLastCall
@@ -610,9 +610,9 @@ class ProducerTest extends JUnitSuite {
     val serverConfig = new KafkaConfig(serverProps) {
       override val numPartitions = 4
     }
+
     val server3 = TestUtils.createServer(serverConfig)
     Thread.sleep(500)
-
     // send a message to the new broker to register it under topic "test-topic"
     val tempProps = new Properties()
     tempProps.put("host", "localhost")
@@ -622,7 +622,6 @@ class ProducerTest extends JUnitSuite {
                                                              messages = new Message("test".getBytes())))
 
     Thread.sleep(500)
-
     producer.send(new ProducerData[String, String]("test-topic", "test-topic", Array("test1")))
     producer.close
 
@@ -648,7 +647,7 @@ class ProducerTest extends JUnitSuite {
     val asyncProducers = new ConcurrentHashMap[Int, AsyncProducer[String]]()
     val asyncProducer1 = EasyMock.createMock(classOf[AsyncProducer[String]])
     // it should send to partition 0 (first partition) on second broker i.e broker2
-    asyncProducer1.send(topic, "test1", -1)
+    asyncProducer1.send(topic, "test1", 0)
     EasyMock.expectLastCall
     asyncProducer1.close
     EasyMock.expectLastCall

@@ -28,8 +28,8 @@ class ProducerConfig(val props: Properties) extends ZKConfig(props)
   /** For bypassing zookeeper based auto partition discovery, use this config   *
    *  to pass in static broker and per-broker partition information. Format-    *
    *  brokerid1:host1:port1, brokerid2:host2:port2*/
-  val brokerPartitionInfo = Utils.getString(props, "broker.list", null)
-  if(brokerPartitionInfo != null && Utils.getString(props, "partitioner.class", null) != null)
+  val brokerList = Utils.getString(props, "broker.list", null)
+  if(brokerList != null && Utils.getString(props, "partitioner.class", null) != null)
     throw new InvalidConfigException("partitioner.class cannot be used when broker.list is set")
 
   /** the partitioner class for partitioning events amongst sub-topics */
@@ -58,4 +58,14 @@ class ProducerConfig(val props: Properties) extends ZKConfig(props)
    *  If the compression codec is NoCompressionCodec, compression is disabled for all topics
    */
   val compressedTopics = Utils.getCSVList(Utils.getString(props, "compressed.topics", null))
+
+  /**
+   * The producer using the zookeeper software load balancer maintains a ZK cache that gets
+   * updated by the zookeeper watcher listeners. During some events like a broker bounce, the
+   * producer ZK cache can get into an inconsistent state, for a small time period. In this time
+   * period, it could end up picking a broker partition that is unavailable. When this happens, the
+   * ZK cache needs to be updated.
+   * This parameter specifies the number of times the producer attempts to refresh this ZK cache.
+   */
+  val zkReadRetries = Utils.getInt(props, "zk.read.num.retries", 3)
 }

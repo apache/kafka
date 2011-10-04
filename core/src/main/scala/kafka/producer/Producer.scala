@@ -23,7 +23,6 @@ import kafka.utils._
 import java.util.Properties
 import kafka.cluster.{Partition, Broker}
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.api.ProducerRequest
 import kafka.common.{NoBrokersForPartitionException, InvalidConfigException, InvalidPartitionException}
 
 class Producer[K,V](config: ProducerConfig,
@@ -35,9 +34,9 @@ class Producer[K,V](config: ProducerConfig,
 {
   private val logger = Logger.getLogger(classOf[Producer[K, V]])
   private val hasShutdown = new AtomicBoolean(false)
-  if(!Utils.propertyExists(config.zkConnect) && !Utils.propertyExists(config.brokerPartitionInfo))
+  if(!Utils.propertyExists(config.zkConnect) && !Utils.propertyExists(config.brokerList))
     throw new InvalidConfigException("At least one of zk.connect or broker.list must be specified")
-  if (Utils.propertyExists(config.zkConnect) && Utils.propertyExists(config.brokerPartitionInfo))
+  if (Utils.propertyExists(config.zkConnect) && Utils.propertyExists(config.brokerList))
     logger.warn("Both zk.connect and broker.list provided (zk.connect takes precedence).")
   private val random = new java.util.Random
   // check if zookeeper based auto partition discovery is enabled
@@ -94,45 +93,84 @@ class Producer[K,V](config: ProducerConfig,
            partitioner: Partitioner[K]) =
     this(config, if(partitioner == null) new DefaultPartitioner[K] else partitioner,
          new ProducerPool[V](config, encoder, eventHandler, cbkHandler), true, null)
+
   /**
    * Sends the data, partitioned by key to the topic using either the
    * synchronous or the asynchronous producer
    * @param producerData the producer data object that encapsulates the topic, key and message data
    */
   def send(producerData: ProducerData[K,V]*) {
+    zkEnabled match {
+      case true => zkSend(producerData: _*)
+      case false => configSend(producerData: _*)
+    }
+  }
+
+  private def zkSend(producerData: ProducerData[K,V]*) {
     val producerPoolRequests = producerData.map { pd =>
-    // find the number of broker partitions registered for this topic
-      logger.debug("Getting the number of broker partitions registered for topic: " + pd.getTopic)
-      val numBrokerPartitions = brokerPartitionInfo.getBrokerPartitionInfo(pd.getTopic).toSeq
-      logger.debug("Broker partitions registered for topic: " + pd.getTopic + " = " + numBrokerPartitions)
-      val totalNumPartitions = numBrokerPartitions.length
-      if(totalNumPartitions == 0) throw new NoBrokersForPartitionException("Partition = " + pd.getKey)
+      var brokerIdPartition: Option[Partition] = None
+      var brokerInfoOpt: Option[Broker] = None
 
-      var brokerIdPartition: Partition = null
-      var partition: Int = 0
-      if(zkEnabled) {
-        // get the partition id
+      var numRetries: Int = 0
+      while(numRetries <= config.zkReadRetries && brokerInfoOpt.isEmpty) {
+        if(numRetries > 0) {
+          logger.info("Try #" + numRetries + " ZK producer cache is stale. Refreshing it by reading from ZK again")
+          brokerPartitionInfo.updateInfo
+        }
+
+        val numBrokerPartitions = getNumPartitionsForTopic(pd)
+        val totalNumPartitions = numBrokerPartitions.length
+
         val partitionId = getPartition(pd.getKey, totalNumPartitions)
-        brokerIdPartition = numBrokerPartitions(partitionId)
-        val brokerInfo = brokerPartitionInfo.getBrokerInfo(brokerIdPartition.brokerId).get
-        logger.debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port +
-                " on partition " + brokerIdPartition.partId)
-        partition = brokerIdPartition.partId
-      }else {
-        // randomly select a broker
-        val randomBrokerId = random.nextInt(totalNumPartitions)
-        brokerIdPartition = numBrokerPartitions(randomBrokerId)
-        val brokerInfo = brokerPartitionInfo.getBrokerInfo(brokerIdPartition.brokerId).get
+        brokerIdPartition = Some(numBrokerPartitions(partitionId))
+        brokerInfoOpt = brokerPartitionInfo.getBrokerInfo(brokerIdPartition.get.brokerId)
+        numRetries += 1
+      }
 
-        logger.debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port +
-                " on a randomly chosen partition")
-        partition = ProducerRequest.RandomPartition
+      brokerInfoOpt match {
+        case Some(brokerInfo) =>
+          if(logger.isDebugEnabled) logger.debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port +
+                  " on partition " + brokerIdPartition.get.partId)
+        case None =>
+          throw new NoBrokersForPartitionException("Invalid Zookeeper state. Failed to get partition for topic: " +
+            pd.getTopic + " and key: " + pd.getKey)
       }
       producerPool.getProducerPoolData(pd.getTopic,
-                                       new Partition(brokerIdPartition.brokerId, partition),
-                                       pd.getData)
+        new Partition(brokerIdPartition.get.brokerId, brokerIdPartition.get.partId),
+        pd.getData)
     }
     producerPool.send(producerPoolRequests: _*)
+  }
+
+  private def configSend(producerData: ProducerData[K,V]*) {
+    val producerPoolRequests = producerData.map { pd =>
+    // find the broker partitions registered for this topic
+      val numBrokerPartitions = getNumPartitionsForTopic(pd)
+      val totalNumPartitions = numBrokerPartitions.length
+
+      val partitionId = getPartition(pd.getKey, totalNumPartitions)
+      val brokerIdPartition = numBrokerPartitions(partitionId)
+      val brokerInfo = brokerPartitionInfo.getBrokerInfo(brokerIdPartition.brokerId).get
+
+      if(logger.isDebugEnabled)
+        logger.debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port + " on a partition " +
+          brokerIdPartition.partId)
+      producerPool.getProducerPoolData(pd.getTopic,
+        new Partition(brokerIdPartition.brokerId, brokerIdPartition.partId),
+        pd.getData)
+    }
+    producerPool.send(producerPoolRequests: _*)
+  }
+
+  private def getNumPartitionsForTopic(pd: ProducerData[K,V]): Seq[Partition] = {
+    if(logger.isDebugEnabled)
+      logger.debug("Getting the number of broker partitions registered for topic: " + pd.getTopic)
+    val numBrokerPartitions = brokerPartitionInfo.getBrokerPartitionInfo(pd.getTopic).toSeq
+    if(logger.isDebugEnabled)
+      logger.debug("Broker partitions registered for topic: " + pd.getTopic + " = " + numBrokerPartitions)
+    val totalNumPartitions = numBrokerPartitions.length
+    if(totalNumPartitions == 0) throw new NoBrokersForPartitionException("Partition = " + pd.getKey)
+    numBrokerPartitions
   }
 
   /**

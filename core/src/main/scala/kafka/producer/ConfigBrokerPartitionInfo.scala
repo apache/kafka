@@ -53,13 +53,15 @@ private[producer] class ConfigBrokerPartitionInfo(config: ProducerConfig) extend
 
   def close {}
 
+  def updateInfo = {}
+
   /**
    * Generate a sequence of (brokerId, numPartitions) for all brokers
    * specified in the producer configuration
    * @return sequence of (brokerId, numPartitions)
    */
   private def getConfigTopicPartitionInfo(): SortedSet[Partition] = {
-    val brokerInfoList = config.brokerPartitionInfo.split(",")
+    val brokerInfoList = config.brokerList.split(",")
     if(brokerInfoList.size == 0) throw new InvalidConfigException("broker.list is empty")
     // check if each individual broker info is valid => (brokerId: brokerHost: brokerPort)
     brokerInfoList.foreach { bInfo =>
@@ -84,7 +86,7 @@ private[producer] class ConfigBrokerPartitionInfo(config: ProducerConfig) extend
    */
   private def getConfigBrokerInfo(): Map[Int, Broker] = {
     val brokerInfo = new HashMap[Int, Broker]()
-    val brokerInfoList = config.brokerPartitionInfo.split(",")
+    val brokerInfoList = config.brokerList.split(",")
     brokerInfoList.foreach{ bInfo =>
       val brokerIdHostPort = bInfo.split(":")
       brokerInfo += (brokerIdHostPort(0).toInt -> new Broker(brokerIdHostPort(0).toInt, brokerIdHostPort(1),

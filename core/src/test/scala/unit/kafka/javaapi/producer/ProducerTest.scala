@@ -169,10 +169,10 @@ class ProducerTest extends JUnitSuite {
     // 2 sync producers
     val syncProducers = new ConcurrentHashMap[Int, kafka.producer.SyncProducer]()
     val syncProducer1 = EasyMock.createMock(classOf[kafka.producer.SyncProducer])
-    // it should send to random partition on broker 1
+    // it should send to partition 0 due to the StaticPartitioner
     val messageList = new java.util.ArrayList[Message]
     messageList.add(new Message("t".getBytes()))
-    syncProducer1.send(topic, -1, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = messageList))
+    syncProducer1.send(topic, 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = messageList))
     EasyMock.expectLastCall
     syncProducer1.close
     EasyMock.expectLastCall
@@ -368,7 +368,7 @@ class ProducerTest extends JUnitSuite {
     val asyncProducers = new ConcurrentHashMap[Int, AsyncProducer[String]]()
     val asyncProducer1 = EasyMock.createMock(classOf[AsyncProducer[String]])
     // it should send to partition 0 (first partition) on second broker i.e broker2
-    asyncProducer1.send(topic, "test1", -1)
+    asyncProducer1.send(topic, "test1", 0)
     EasyMock.expectLastCall
     asyncProducer1.close
     EasyMock.expectLastCall
@@ -554,7 +554,6 @@ class ProducerTest extends JUnitSuite {
     val messageList = new java.util.ArrayList[Message]
     messageList.add(new Message("test".getBytes()))
     tempProducer.send("test-topic", new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = messageList))
-
     Thread.sleep(500)
 
     val messagesContent = new java.util.ArrayList[String]
@@ -585,7 +584,7 @@ class ProducerTest extends JUnitSuite {
     val asyncProducer1 = EasyMock.createMock(classOf[AsyncProducer[String]])
     val asyncProducer2 = EasyMock.createMock(classOf[AsyncProducer[String]])
     // it should send to partition 0 (first partition) on second broker i.e broker2
-    asyncProducer1.send(topic, "test1", -1)
+    asyncProducer1.send(topic, "test1", 0)
     EasyMock.expectLastCall
     asyncProducer1.close
     EasyMock.expectLastCall

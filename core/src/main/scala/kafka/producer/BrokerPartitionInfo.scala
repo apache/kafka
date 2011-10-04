@@ -44,6 +44,15 @@ trait BrokerPartitionInfo {
   def getAllBrokerInfo: Map[Int, Broker]
 
   /**
+   * This is relevant to the ZKBrokerPartitionInfo. It updates the ZK cache
+   * by reading from zookeeper and recreating the data structures. This API
+   * is invoked by the producer, when it detects that the ZK cache of
+   * ZKBrokerPartitionInfo is stale.
+   *
+   */
+  def updateInfo
+
+  /**
    * Cleanup
    */
   def close
