@@ -25,7 +25,7 @@ done
 
 for file in $base_dir/core/lib_managed/scala_2.8.0/compile/*.jar;
 do
-  if [ ${file##*/} != "sbt-launch.jar" ]; then
+  if [ ${file##*/} != "sbt-launch-0.7.7.jar" ]; then
     CLASSPATH=$CLASSPATH:$file
   fi
 done
