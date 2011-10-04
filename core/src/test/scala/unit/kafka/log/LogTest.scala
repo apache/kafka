@@ -43,7 +43,7 @@ class LogTest extends JUnitSuite {
   
   def createEmptyLogs(dir: File, offsets: Int*) = {
     for(offset <- offsets)
-    	new File(dir, Integer.toString(offset) + Log.FileSuffix).createNewFile()
+      new File(dir, Integer.toString(offset) + Log.FileSuffix).createNewFile()
   }
   
   @Test

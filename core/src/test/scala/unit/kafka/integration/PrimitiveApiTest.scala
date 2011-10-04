@@ -103,7 +103,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       Thread.sleep(700)
       val response = consumer.multifetch(fetches: _*)
       for((topic, resp) <- topics.zip(response.toList))
-    	  TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+        TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
     }
 
     // temporarily set request handler logger to a higher level
@@ -118,7 +118,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val responses = consumer.multifetch(fetches: _*)
         for(resp <- responses)
-    	    resp.iterator
+          resp.iterator
         fail("expect exception")
       }
       catch {
@@ -135,7 +135,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val responses = consumer.multifetch(fetches: _*)
         for(resp <- responses)
-    	    resp.iterator
+          resp.iterator
         fail("expect exception")
       }
       catch {
@@ -166,7 +166,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       Thread.sleep(200)
       val response = consumer.multifetch(fetches: _*)
       for((topic, resp) <- topics.zip(response.toList))
-    	  TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+        TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
     }
 
     // temporarily set request handler logger to a higher level
@@ -181,7 +181,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val responses = consumer.multifetch(fetches: _*)
         for(resp <- responses)
-    	    resp.iterator
+          resp.iterator
         fail("expect exception")
       }
       catch {
@@ -198,7 +198,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val responses = consumer.multifetch(fetches: _*)
         for(resp <- responses)
-    	    resp.iterator
+          resp.iterator
         fail("expect exception")
       }
       catch {
@@ -232,7 +232,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     Thread.sleep(200)
     val response = consumer.multifetch(fetches: _*)
     for((topic, resp) <- topics.zip(response.toList))
-  	  TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+      TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
   }
 
   def testMultiProduceWithCompression() {
@@ -257,6 +257,6 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     Thread.sleep(200)
     val response = consumer.multifetch(fetches: _*)
     for((topic, resp) <- topics.zip(response.toList))
-  	  TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+      TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
   }
 }

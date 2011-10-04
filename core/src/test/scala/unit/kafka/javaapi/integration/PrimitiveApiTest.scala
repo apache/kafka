@@ -152,7 +152,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       for(topic <- topics) {
         if (iter.hasNext) {
           val resp = iter.next
-      	  TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+          TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
         }
         else
           fail("fewer responses than expected")
@@ -172,7 +172,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
         val responses = consumer.multifetch(getFetchRequestList(fetches: _*))
         val iter = responses.iterator
         while (iter.hasNext)
-    	    iter.next.iterator
+          iter.next.iterator
         fail("expect exception")
       }
       catch {
@@ -190,7 +190,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
         val responses = consumer.multifetch(getFetchRequestList(fetches: _*))
         val iter = responses.iterator
         while (iter.hasNext)
-    	    iter.next.iterator
+          iter.next.iterator
         fail("expect exception")
       }
       catch {
@@ -225,7 +225,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       for(topic <- topics) {
         if (iter.hasNext) {
           val resp = iter.next
-      	  TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+          TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
         }
         else
           fail("fewer responses than expected")
@@ -245,7 +245,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
         val responses = consumer.multifetch(getFetchRequestList(fetches: _*))
         val iter = responses.iterator
         while (iter.hasNext)
-    	    iter.next.iterator
+          iter.next.iterator
         fail("expect exception")
       }
       catch {
@@ -263,7 +263,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
         val responses = consumer.multifetch(getFetchRequestList(fetches: _*))
         val iter = responses.iterator
         while (iter.hasNext)
-    	    iter.next.iterator
+          iter.next.iterator
         fail("expect exception")
       }
       catch {
@@ -298,7 +298,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       for(topic <- topics) {
         if (iter.hasNext) {
           val resp = iter.next
-      	  TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+          TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
         }
         else
           fail("fewer responses than expected")
@@ -329,7 +329,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       for(topic <- topics) {
         if (iter.hasNext) {
           val resp = iter.next
-      	  TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+          TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
         }
         else
           fail("fewer responses than expected")

@@ -91,7 +91,7 @@ abstract class MultiSend[S <: Send](val sends: List[S]) extends Send {
   var totalWritten = 0
 
   def writeTo(channel: WritableByteChannel): Int = {
-	  expectIncomplete
+    expectIncomplete
     val written = current.head.writeTo(channel)
     totalWritten += written
     if(current.head.complete)

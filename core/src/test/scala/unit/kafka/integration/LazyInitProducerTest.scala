@@ -104,7 +104,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       Thread.sleep(200)
       val response = consumer.multifetch(fetches: _*)
       for((topic, resp) <- topics.zip(response.toList))
-    	  TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+        TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
     }
 
     {
@@ -117,7 +117,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       try {
         val responses = consumer.multifetch(fetches: _*)
         for(resp <- responses)
-    	    resp.iterator
+          resp.iterator
       }
       catch {
         case e: OffsetOutOfRangeException => exceptionThrown = true
@@ -149,7 +149,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
     Thread.sleep(200)
     val response = consumer.multifetch(fetches: _*)
     for((topic, resp) <- topics.zip(response.toList))
-  	  TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+      TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
   }
 
   def testMultiProduceResend() {
@@ -180,6 +180,6 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       TestUtils.checkEquals(TestUtils.stackedIterator(messages(topic).map(m => m.message).iterator,
                                                       messages(topic).map(m => m.message).iterator),
                             resp.map(m => m.message).iterator)
-//  	  TestUtils.checkEquals(TestUtils.stackedIterator(messages(topic).iterator, messages(topic).iterator), resp.iterator)
+//      TestUtils.checkEquals(TestUtils.stackedIterator(messages(topic).iterator, messages(topic).iterator), resp.iterator)
   }
 }

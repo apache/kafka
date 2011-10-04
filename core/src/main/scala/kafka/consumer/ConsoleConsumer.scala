@@ -75,7 +75,7 @@ object ConsoleConsumer {
                            .describedAs("prop")
                            .ofType(classOf[String])
     val resetBeginningOpt = parser.accepts("from-beginning", "If the consumer does not already have an established offset to consume from, " +
-    		"start with the earliest message present in the log rather than the latest message.")
+        "start with the earliest message present in the log rather than the latest message.")
     val autoCommitIntervalOpt = parser.accepts("autocommit.interval.ms", "The time interval at which to save the current offset in ms")
                            .withRequiredArg
                            .describedAs("ms")
@@ -86,7 +86,7 @@ object ConsoleConsumer {
                            .describedAs("num_messages")
                            .ofType(classOf[java.lang.Integer])
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
-    		"skip it instead of halt.")
+        "skip it instead of halt.")
 
     val options: OptionSet = tryParse(parser, args)
     checkRequiredArgs(parser, options, topicIdOpt, zkConnectOpt)
@@ -170,9 +170,9 @@ object ConsoleConsumer {
   
   def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
     for(arg <- required) {
-    	if(!options.has(arg)) {
+      if(!options.has(arg)) {
         logger.error("Missing required argument \"" + arg + "\"")
-    		parser.printHelpOn(System.err)
+        parser.printHelpOn(System.err)
         System.exit(1)
       }
     }

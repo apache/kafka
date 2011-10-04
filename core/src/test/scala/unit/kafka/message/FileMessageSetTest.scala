@@ -46,7 +46,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
   @Test
   def testIterationOverPartialAndTruncation() {
     testPartialWrite(0, messageSet)
-	  testPartialWrite(2, messageSet)
+    testPartialWrite(2, messageSet)
     testPartialWrite(4, messageSet)
     testPartialWrite(5, messageSet)
     testPartialWrite(6, messageSet)
@@ -56,7 +56,7 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     val buffer = ByteBuffer.allocate(size)
     val originalPosition = messageSet.channel.position
     for(i <- 0 until size)
-    	buffer.put(0.asInstanceOf[Byte])
+      buffer.put(0.asInstanceOf[Byte])
     buffer.rewind()
     messageSet.channel.write(buffer)
     // appending those bytes should not change the contents

@@ -66,8 +66,8 @@ class ConsumerIterator[T](private val topic: String,
       if(currentDataChunk eq ZookeeperConsumerConnector.shutdownCommand) {
         if(logger.isDebugEnabled)
           logger.debug("Received the shutdown command")
-    	  channel.offer(currentDataChunk)
-        return allDone()
+        channel.offer(currentDataChunk)
+        return allDone
       } else {
         currentTopicInfo = currentDataChunk.topicInfo
         if (currentTopicInfo.getConsumeOffset != currentDataChunk.fetchOffset) {

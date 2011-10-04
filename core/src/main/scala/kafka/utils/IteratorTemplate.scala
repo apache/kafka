@@ -25,7 +25,7 @@ object FAILED extends State
 
 /**
  * Transliteration of the iterator template in google collections. To implement an iterator
- * override makeNext and call allDone() when there is no more items	
+ * override makeNext and call allDone() when there is no more items
  */
 abstract class IteratorTemplate[T] extends Iterator[T] with java.util.Iterator[T] {
   
