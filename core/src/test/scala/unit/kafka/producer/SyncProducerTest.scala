@@ -48,43 +48,6 @@ class SyncProducerTest extends JUnitSuite {
   }
 
   @Test
-  def testUnreachableServer() {
-    val props = new Properties()
-    props.put("host", "NOT_USED")
-    props.put("port", server.socketServer.port.toString)
-    props.put("buffer.size", "102400")
-    props.put("connect.timeout.ms", "300")
-    props.put("reconnect.interval", "1000")
-    val producer = new SyncProducer(new SyncProducerConfig(props))
-    var failed = false
-    val firstStart = SystemTime.milliseconds
-
-    //temporarily increase log4j level to avoid error in output
-    simpleProducerLogger.setLevel(Level.FATAL)
-    try {
-      producer.send("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)))
-    }catch {
-      case e: Exception => failed = true
-    }
-    Assert.assertTrue(failed)
-    failed = false
-    val firstEnd = SystemTime.milliseconds
-    println("First message send retries took " + (firstEnd-firstStart) + " ms")
-    Assert.assertTrue((firstEnd-firstStart) < 300)
-
-    val secondStart = SystemTime.milliseconds
-    try {
-      producer.send("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)))
-    }catch {
-      case e: Exception => failed = true
-    }
-    val secondEnd = SystemTime.milliseconds
-    println("Second message send retries took " + (secondEnd-secondStart) + " ms")
-    Assert.assertTrue((secondEnd-secondStart) < 300)
-    simpleProducerLogger.setLevel(Level.ERROR)
-  }
-
-  @Test
   def testReachableServer() {
     val props = new Properties()
     props.put("host", "localhost")
@@ -120,40 +83,6 @@ class SyncProducerTest extends JUnitSuite {
       case e: Exception => failed=true
     }
     Assert.assertFalse(failed)
-  }
-
-  @Test
-  def testReachableServerWrongPort() {
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", (server.socketServer.port + 1).toString) // the wrong port
-    props.put("buffer.size", "102400")
-    props.put("connect.timeout.ms", "300")
-    props.put("reconnect.interval", "500")
-    val producer = new SyncProducer(new SyncProducerConfig(props))
-    var failed = false
-    val firstStart = SystemTime.milliseconds
-    //temporarily increase log4j level to avoid error in output
-    simpleProducerLogger.setLevel(Level.FATAL)
-    try {
-      producer.send("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)))
-    }catch {
-      case e: Exception => failed = true
-    }
-    Assert.assertTrue(failed)
-    failed = false
-    val firstEnd = SystemTime.milliseconds
-    Assert.assertTrue((firstEnd-firstStart) < 300)
-    val secondStart = SystemTime.milliseconds
-    try {
-      producer.send("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)))
-    }catch {
-      case e: Exception => failed = true
-    }
-    Assert.assertTrue(failed)
-    val secondEnd = SystemTime.milliseconds
-    Assert.assertTrue((secondEnd-secondStart) < 300)
-    simpleProducerLogger.setLevel(Level.ERROR)
   }
 
   @Test
