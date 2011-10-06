@@ -22,7 +22,7 @@ import org.apache.log4j.Logger
 import kafka.log.LogManager
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.utils.{Utils, SystemTime, KafkaScheduler}
+import kafka.utils.{Mx4jLoader, Utils, SystemTime, KafkaScheduler}
 import kafka.network.{SocketServerStats, SocketServer}
 import java.io.File
 
@@ -72,6 +72,7 @@ class KafkaServer(val config: KafkaConfig) {
                                       config.maxSocketRequestSize)
       Utils.swallow(logger.warn, Utils.registerMBean(socketServer.stats, statsMBeanName))
       socketServer.startup
+      Mx4jLoader.maybeLoad
       /**
        *  Registers this broker in ZK. After this, consumers can connect to broker.
        *  So this should happen after socket server start.
