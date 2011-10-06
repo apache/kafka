@@ -44,6 +44,7 @@ object DumpLogSegments {
             println("payload:\t" + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
           offset = messageAndOffset.offset
         }
+        println("tail of the log is at offset: " + (startOffset + offset)) 
       }
     }
   }
