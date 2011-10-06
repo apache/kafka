@@ -19,13 +19,12 @@ import sbt._
 class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProject {
   lazy val core = project("core", "core-kafka", new CoreKafkaProject(_))
   lazy val examples = project("examples", "java-examples", new KafkaExamplesProject(_), core)
-  lazy val perf = project("perf", "perf", new KafkaPerfProject(_), core)
   lazy val contrib = project("contrib", "contrib", new ContribProject(_))
 
   lazy val releaseZipTask = core.packageDistTask
 
   val releaseZipDescription = "Compiles every sub project, runs unit tests, creates a deployable release zip file with dependencies, config, and scripts."
-  lazy val releaseZip = releaseZipTask dependsOn(core.corePackageAction, core.test, examples.examplesPackageAction, perf.perfPackageAction,
+  lazy val releaseZip = releaseZipTask dependsOn(core.corePackageAction, core.test, examples.examplesPackageAction,
     contrib.producerPackageAction, contrib.consumerPackageAction) describedAs releaseZipDescription
 
   class CoreKafkaProject(info: ProjectInfo) extends DefaultProject(info)
@@ -131,26 +130,6 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
     override def filterScalaJars = false
     override def javaCompileOptions = super.javaCompileOptions ++
       List(JavaCompileOption("-Xlint:unchecked"))
-  }
-
-  class KafkaPerfProject(info: ProjectInfo) extends DefaultProject(info)
-      with IdeaProject
-      with CoreDependencies {
-    val perfPackageAction = packageAllAction
-    val dependsOnCore = core
-  //The issue is going from log4j 1.2.14 to 1.2.15, the developers added some features which required
-  // some dependencies on various sun and javax packages.
-   override def ivyXML =
-    <dependencies>
-      <exclude module="javax"/>
-      <exclude module="jmxri"/>
-      <exclude module="jmxtools"/>
-      <exclude module="mail"/>
-      <exclude module="jms"/>
-    </dependencies>
-
-    override def artifactID = "kafka-perf"
-    override def filterScalaJars = false
   }
 
   class ContribProject(info: ProjectInfo) extends ParentProject(info) with IdeaProject {
