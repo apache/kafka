@@ -10,6 +10,7 @@ http://gcc.gnu.org/
 http://www.boost.org/
 
 ```bash
+./autoconf.sh
 ./configure
 ```
 
