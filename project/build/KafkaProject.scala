@@ -14,6 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 import sbt._
 
 class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProject {
@@ -26,6 +27,17 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
   val releaseZipDescription = "Compiles every sub project, runs unit tests, creates a deployable release zip file with dependencies, config, and scripts."
   lazy val releaseZip = releaseZipTask dependsOn(core.corePackageAction, core.test, examples.examplesPackageAction,
     contrib.producerPackageAction, contrib.consumerPackageAction) describedAs releaseZipDescription
+
+  // Not sure why rat does not get pulled from a Maven repo automatically.
+  val rat = "org.apache.rat" % "apache-rat-project" % "0.7"
+
+  val runRatDescription = "Runs Apache rat on Kafka"
+  lazy val runRatTask = task {
+    val rat = "org.apache.rat" % "apache-rat-project" % "0.7"
+    Runtime.getRuntime().exec("bin/run-rat.sh")
+    None
+  } describedAs runRatDescription
+
 
   class CoreKafkaProject(info: ProjectInfo) extends DefaultProject(info)
      with IdeaProject with CoreDependencies with TestDependencies {
@@ -108,6 +120,7 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
       List(JavaCompileOption("-source"), JavaCompileOption("1.5"))
 
     override def packageAction = super.packageAction dependsOn (testCompileAction)
+
   }
 
   class KafkaExamplesProject(info: ProjectInfo) extends DefaultProject(info)
