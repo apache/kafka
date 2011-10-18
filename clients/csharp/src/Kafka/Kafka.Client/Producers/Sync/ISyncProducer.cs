@@ -17,6 +17,7 @@
 
 namespace Kafka.Client.Producers.Sync
 {
+    using System;
     using System.Collections.Generic;
     using Kafka.Client.Messages;
     using Kafka.Client.Requests;
@@ -24,7 +25,7 @@ namespace Kafka.Client.Producers.Sync
     /// <summary>
     /// Sends messages encapsulated in request to Kafka server synchronously
     /// </summary>
-    public interface ISyncProducer
+    public interface ISyncProducer : IDisposable
     {
         /// <summary>
         /// Constructs producer request and sends it to given broker partition synchronously

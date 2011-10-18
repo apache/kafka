@@ -18,29 +18,53 @@
 namespace Kafka.Client.Utils
 {
     using System;
+    using System.Collections;
     using System.Collections.Generic;
     using System.Linq.Expressions;
     using System.Text.RegularExpressions;
 
     internal static class Guard
     {
-        /// <summary>
-        /// Checks whether given expression is true. Throws <see cref="InvalidOperationException" /> if not.
-        /// </summary>
-        /// <param name="assertion">
-        /// The assertion.
-        /// </param>
-        /// <exception cref="InvalidOperationException">
-        /// Thrown when condition is not met.
-        /// </exception>
-        public static void Assert(Expression<Func<bool>> assertion)
+        public static void NotNull(object parameter, string paramName)
         {
-            var compiled = assertion.Compile();
-            var evaluatedValue = compiled();
-            if (!evaluatedValue)
+            if (parameter == null)
             {
-                throw new InvalidOperationException(
-                    string.Format("'{0}' is not met.", Normalize(assertion.ToString())));
+                throw new ArgumentNullException(paramName);
+            }
+        }
+
+        public static void Count(ICollection parameter, int length, string paramName)
+        {
+            if (parameter.Count != length)
+            {
+                throw new ArgumentOutOfRangeException(paramName, parameter.Count, string.Empty);
+            }
+        }
+
+        public static void Greater(int parameter, int expected, string paramName)
+        {
+            if (parameter <= expected)
+            {
+                throw new ArgumentOutOfRangeException(paramName, parameter, string.Empty);
+            }
+        }
+
+        public static void NotNullNorEmpty(string parameter, string paramName)
+        {
+            if (string.IsNullOrEmpty(parameter))
+            {
+                throw new ArgumentException("Given string is empty", paramName);
+            }
+        }
+
+        public static void AllNotNull(IEnumerable parameter, string paramName)
+        {
+            foreach (var par in parameter)
+            {
+                if (par == null)
+                {
+                    throw new ArgumentNullException(paramName);
+                }
             }
         }
 

@@ -17,6 +17,7 @@
 
 namespace Kafka.Client.Producers
 {
+    using System;
     using System.Collections.Generic;
     using Kafka.Client.Cluster;
 
@@ -24,7 +25,7 @@ namespace Kafka.Client.Producers
     /// Pool of producers used by producer high-level API
     /// </summary>
     /// <typeparam name="TData">The type of the data.</typeparam>
-    internal interface IProducerPool<TData>
+    internal interface IProducerPool<TData> : IDisposable
     {
         /// <summary>
         /// Selects either a synchronous or an asynchronous producer, for

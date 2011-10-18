@@ -40,8 +40,10 @@ namespace Kafka.Client.Consumers
         private readonly int consumerTimeoutMs;
         private PartitionTopicInfo currentTopicInfo;
         private ConsumerIteratorState state = ConsumerIteratorState.NotReady;
-        private IEnumerator<Message> current;
+        private IEnumerator<MessageAndOffset> current;
+        private FetchedDataChunk currentDataChunk = null;
         private Message nextItem;
+        private long consumedOffset = -1;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConsumerIterator"/> class.
@@ -70,17 +72,27 @@ namespace Kafka.Client.Consumers
             {
                 if (!MoveNext())
                 {
-                    throw new Exception("No element");
+                    throw new NoSuchElementException();
                 }
 
                 state = ConsumerIteratorState.NotReady;
                 if (nextItem != null)
                 {
-                    currentTopicInfo.Consumed(MessageSet.GetEntrySize(nextItem));
+                    if (consumedOffset < 0)
+                    {
+                        throw new IllegalStateException(String.Format(CultureInfo.CurrentCulture, "Offset returned by the message set is invalid {0}.", consumedOffset));
+                    }
+
+                    currentTopicInfo.ResetConsumeOffset(consumedOffset);
+                    if (Logger.IsDebugEnabled)
+                    {
+                        Logger.DebugFormat(CultureInfo.CurrentCulture, "Setting consumed offset to {0}", consumedOffset);
+                    }
+
                     return nextItem;
                 }
 
-                throw new Exception("Expected item but none found.");
+                throw new IllegalStateException("Expected item but none found.");
             }
         }
 
@@ -105,7 +117,7 @@ namespace Kafka.Client.Consumers
         {
             if (state == ConsumerIteratorState.Failed)
             {
-                throw new Exception("Iterator is in failed state");
+                throw new IllegalStateException("Iterator is in failed state");
             }
             
             switch (state)
@@ -148,14 +160,13 @@ namespace Kafka.Client.Consumers
         {
             if (current == null || !current.MoveNext())
             {
-                FetchedDataChunk found;
                 if (consumerTimeoutMs < 0)
                 {
-                    found = this.channel.Take();
+                    currentDataChunk = this.channel.Take();
                 }
                 else
                 {
-                    bool done = channel.TryTake(out found, consumerTimeoutMs);
+                    bool done = channel.TryTake(out currentDataChunk, consumerTimeoutMs);
                     if (!done)
                     {
                         Logger.Debug("Consumer iterator timing out...");
@@ -163,30 +174,32 @@ namespace Kafka.Client.Consumers
                     }
                 }
 
-                if (found.Equals(ZookeeperConsumerConnector.ShutdownCommand))
+                if (currentDataChunk.Equals(ZookeeperConsumerConnector.ShutdownCommand))
                 {
                     Logger.Debug("Received the shutdown command");
-                    channel.Add(found);
+                    channel.Add(currentDataChunk);
                     return this.AllDone();
                 }
 
-                currentTopicInfo = found.TopicInfo;
-                if (currentTopicInfo.GetConsumeOffset() != found.FetchOffset)
+                currentTopicInfo = currentDataChunk.TopicInfo;
+                if (currentTopicInfo.GetConsumeOffset() != currentDataChunk.FetchOffset)
                 {
                     Logger.ErrorFormat(
                         CultureInfo.CurrentCulture,
                         "consumed offset: {0} doesn't match fetch offset: {1} for {2}; consumer may lose data",
                         currentTopicInfo.GetConsumeOffset(),
-                        found.FetchOffset,
+                        currentDataChunk.FetchOffset,
                         currentTopicInfo);
-                    currentTopicInfo.ResetConsumeOffset(found.FetchOffset);
+                    currentTopicInfo.ResetConsumeOffset(currentDataChunk.FetchOffset);
                 }
 
-                current = found.Messages.Messages.GetEnumerator();
+                current = currentDataChunk.Messages.GetEnumerator();
                 current.MoveNext();
             }
 
-            return current.Current;
+            var item = current.Current;
+            consumedOffset = item.Offset;
+            return item.Message;
         }
 
         private Message AllDone()

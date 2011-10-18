@@ -28,7 +28,7 @@ namespace Kafka.Client
         /// Initializes a new instance of the <see cref="ZooKeeperAwareKafkaClientBase"/> class.
         /// </summary>
         /// <param name="config">The config.</param>
-        protected ZooKeeperAwareKafkaClientBase(ZKConfig config)
+        protected ZooKeeperAwareKafkaClientBase(ZooKeeperConfiguration config)
         {
             this.IsZooKeeperEnabled = config != null && !string.IsNullOrEmpty(config.ZkConnect);
         }

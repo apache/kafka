@@ -77,9 +77,9 @@ namespace Kafka.Client.ZooKeeperIntegration.Listeners
         /// </param>
         public void HandleChildChange(ZooKeeperChildChangedEventArgs e)
         {
-            Guard.Assert<ArgumentNullException>(() => e != null);
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(e.Path));
-            Guard.Assert<ArgumentNullException>(() => e.Children != null);
+            Guard.NotNull(e, "e");
+            Guard.NotNullNorEmpty(e.Path, "e.Path");
+            Guard.NotNull(e.Children, "e.Children");
 
             lock (this.syncLock)
             {

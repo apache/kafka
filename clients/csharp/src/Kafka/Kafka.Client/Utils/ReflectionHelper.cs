@@ -25,23 +25,21 @@ namespace Kafka.Client.Utils
         public static T Instantiate<T>(string className)
             where T : class
         {
-            Type t1;
             object o1;
             if (string.IsNullOrEmpty(className))
             {
                 return default(T);
             }
 
-            if (className.Contains("`1"))
+            Type t1 = Type.GetType(className, true);
+            if (t1.IsGenericType)
             {
-                t1 = Type.GetType(className);
                 var t2 = typeof(T).GetGenericArguments();
                 var t3 = t1.MakeGenericType(t2);
                 o1 = Activator.CreateInstance(t3);
                 return o1 as T;
             }
 
-            t1 = Type.GetType(className, true);
             o1 = Activator.CreateInstance(t1);
             return o1 as T;
         }

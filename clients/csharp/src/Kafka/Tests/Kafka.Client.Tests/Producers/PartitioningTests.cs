@@ -21,17 +21,20 @@ namespace Kafka.Client.Tests.Producers
     using Kafka.Client.Cluster;
     using Kafka.Client.Producers.Partitioning;
     using NUnit.Framework;
+    using System.Collections.Generic;
 
     [TestFixture]
     public class PartitioningTests
     {
-        private ProducerConfig config;
+        private ProducerConfiguration config;
 
         [TestFixtureSetUp]
         public void SetUp()
         {
-            config = new ProducerConfig();
-            config.BrokerPartitionInfo = "1:192.168.0.1:1234,2:192.168.0.2:3456";
+            var brokers = new List<BrokerConfiguration>();
+            brokers.Add(new BrokerConfiguration { BrokerId = 1, Host = "192.168.0.1", Port = 1234 });
+            brokers.Add(new BrokerConfiguration { BrokerId = 2, Host = "192.168.0.2", Port = 3456 });
+            config = new ProducerConfiguration(brokers);
         }
 
         [Test]

@@ -19,6 +19,7 @@ namespace Kafka.Client.IntegrationTests
 {
     using System;
     using System.Threading;
+    using Kafka.Client.Cfg;
     using Kafka.Client.ZooKeeperIntegration;
     using NUnit.Framework;
 
@@ -26,20 +27,120 @@ namespace Kafka.Client.IntegrationTests
     {
         protected string CurrentTestTopic { get; set; }
 
+        protected ProducerConfiguration ConfigBasedSyncProdConfig
+        {
+            get
+            {
+                return ProducerConfiguration.Configure(ProducerConfiguration.DefaultSectionName);
+            }
+        }
+
+        protected SyncProducerConfiguration SyncProducerConfig1
+        {
+            get
+            {
+                var prodConfig = this.ConfigBasedSyncProdConfig;
+                return new SyncProducerConfiguration(
+                    prodConfig,
+                    prodConfig.Brokers[0].BrokerId,
+                    prodConfig.Brokers[0].Host,
+                    prodConfig.Brokers[0].Port);
+            }
+        }
+
+        protected SyncProducerConfiguration SyncProducerConfig2
+        {
+            get
+            {
+                var prodConfig = this.ConfigBasedSyncProdConfig;
+                return new SyncProducerConfiguration(
+                    prodConfig,
+                    prodConfig.Brokers[1].BrokerId,
+                    prodConfig.Brokers[1].Host,
+                    prodConfig.Brokers[1].Port);
+            }
+        }
+
+        protected SyncProducerConfiguration SyncProducerConfig3
+        {
+            get
+            {
+                var prodConfig = this.ConfigBasedSyncProdConfig;
+                return new SyncProducerConfiguration(
+                    prodConfig,
+                    prodConfig.Brokers[2].BrokerId,
+                    prodConfig.Brokers[2].Host,
+                    prodConfig.Brokers[2].Port);
+            }
+        }
+
+        protected ProducerConfiguration ZooKeeperBasedSyncProdConfig
+        {
+            get
+            {
+                return ProducerConfiguration.Configure(ProducerConfiguration.DefaultSectionName + 2);
+            }
+        }
+
+        protected AsyncProducerConfiguration AsyncProducerConfig1
+        {
+            get
+            {
+                var asyncUberConfig = ProducerConfiguration.Configure(ProducerConfiguration.DefaultSectionName + 3);
+                return new AsyncProducerConfiguration(
+                    asyncUberConfig,
+                    asyncUberConfig.Brokers[0].BrokerId,
+                    asyncUberConfig.Brokers[0].Host,
+                    asyncUberConfig.Brokers[0].Port);
+            }
+        }
+
+        protected ConsumerConfiguration ConsumerConfig1
+        {
+            get
+            {
+                return ConsumerConfiguration.Configure(ConsumerConfiguration.DefaultSection + 1);
+            }
+        }
+
+        protected ConsumerConfiguration ConsumerConfig2
+        {
+            get
+            {
+                return ConsumerConfiguration.Configure(ConsumerConfiguration.DefaultSection + 2);
+            }
+        }
+
+        protected ConsumerConfiguration ConsumerConfig3
+        {
+            get
+            {
+                return ConsumerConfiguration.Configure(ConsumerConfiguration.DefaultSection + 3);
+            }
+        }
+
+        protected ConsumerConfiguration ZooKeeperBasedConsumerConfig
+        {
+            get
+            {
+                return ConsumerConfiguration.Configure(ConsumerConfiguration.DefaultSection + 4);
+            }
+        }
+
         [SetUp]
         public void SetupCurrentTestTopic()
         {
-            CurrentTestTopic = TestContext.CurrentContext.Test.Name + "_" + Guid.NewGuid().ToString();
+            CurrentTestTopic = TestContext.CurrentContext.Test.Name + "_" + Guid.NewGuid();
         }
 
         internal static void WaitUntillIdle(IZooKeeperClient client, int timeout)
         {
             Thread.Sleep(timeout);
-            int rest = timeout - client.IdleTime;
+            int rest = client.IdleTime.HasValue ? timeout - client.IdleTime.Value : timeout;
             while (rest > 0)
             {
                 Thread.Sleep(rest);
-                rest = timeout - client.IdleTime;
+                rest = client.IdleTime.HasValue ? timeout - client.IdleTime.Value : timeout;
             }
         }
     }

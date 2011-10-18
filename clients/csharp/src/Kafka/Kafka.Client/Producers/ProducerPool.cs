@@ -33,6 +33,8 @@ namespace Kafka.Client.Producers
     internal abstract class ProducerPool<TData> : IProducerPool<TData>
         where TData : class 
     {
+        protected bool Disposed { get; set; }
+
         /// <summary>
         /// Factory method used to instantiating either, 
         /// synchronous or asynchronous, producer pool based on configuration.
@@ -46,7 +48,7 @@ namespace Kafka.Client.Producers
         /// <returns>
         /// Instantiated either, synchronous or asynchronous, producer pool
         /// </returns>
-        public static ProducerPool<TData> CreatePool(ProducerConfig config, IEncoder<TData> serializer)
+        public static ProducerPool<TData> CreatePool(ProducerConfiguration config, IEncoder<TData> serializer)
         {
             if (config.ProducerType == ProducerTypes.Async)
             {
@@ -78,7 +80,7 @@ namespace Kafka.Client.Producers
         /// Instantiated either, synchronous or asynchronous, producer pool
         /// </returns>
         public static ProducerPool<TData> CreatePool(
-            ProducerConfig config,
+            ProducerConfiguration config,
             IEncoder<TData> serializer,
             ICallbackHandler cbkHandler)
         {
@@ -104,11 +106,11 @@ namespace Kafka.Client.Producers
         /// Should be used for testing purpose only
         /// </remarks>
         protected ProducerPool(
-            ProducerConfig config,
+            ProducerConfiguration config,
             IEncoder<TData> serializer)
         {
-            Guard.Assert<ArgumentNullException>(() => config != null);
-            Guard.Assert<ArgumentNullException>(() => serializer != null);
+            Guard.NotNull(config, "config");
+            Guard.NotNull(serializer, "serializer");
 
             this.Config = config;
             this.Serializer = serializer;
@@ -127,19 +129,19 @@ namespace Kafka.Client.Producers
         /// The callback invoked after new broker is added.
         /// </param>
         protected ProducerPool(
-            ProducerConfig config,
+            ProducerConfiguration config,
             IEncoder<TData> serializer,
             ICallbackHandler callbackHandler)
         {
-            Guard.Assert<ArgumentNullException>(() => config != null);
-            Guard.Assert<ArgumentNullException>(() => serializer != null);
+            Guard.NotNull(config, "config");
+            Guard.NotNull(serializer, "serializer");
 
             this.Config = config;
             this.Serializer = serializer;
             this.CallbackHandler = callbackHandler;
         }
 
-        protected ProducerConfig Config { get; private set; }
+        protected ProducerConfiguration Config { get; private set; }
 
         protected IEncoder<TData> Serializer { get; private set; }
 
@@ -162,7 +164,9 @@ namespace Kafka.Client.Producers
         /// </remarks>
         public void Send(ProducerPoolData<TData> poolData)
         {
-            Guard.Assert<ArgumentNullException>(() => poolData != null);
+            this.EnsuresNotDisposed();
+            Guard.NotNull(poolData, "poolData");
+
             this.Send(new[] { poolData });
         }
 
@@ -176,5 +180,27 @@ namespace Kafka.Client.Producers
         /// Used for multi-topic request
         /// </remarks>
         public abstract void Send(IEnumerable<ProducerPoolData<TData>> poolData);
+
+        /// <summary>
+        /// Releases all unmanaged and managed resources
+        /// </summary>
+        public void Dispose()
+        {
+            this.Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected abstract void Dispose(bool disposing);
+
+        /// <summary>
+        /// Ensures that object was not disposed
+        /// </summary>
+        protected void EnsuresNotDisposed()
+        {
+            if (this.Disposed)
+            {
+                throw new ObjectDisposedException(this.GetType().Name);
+            }
+        }
     }
 }

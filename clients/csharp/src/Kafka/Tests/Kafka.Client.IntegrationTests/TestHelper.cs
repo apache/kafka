@@ -19,33 +19,30 @@ namespace Kafka.Client.IntegrationTests
 {
     using System;
     using System.Collections.Generic;
+    using System.Linq;
     using Kafka.Client.Cfg;
     using Kafka.Client.Consumers;
     using Kafka.Client.Requests;
 
     public static class TestHelper
     {
-        public static long GetCurrentKafkaOffset(string topic, KafkaClientConfiguration clientConfig)
+        public static long GetCurrentKafkaOffset(string topic, ConsumerConfiguration clientConfig)
         {
-            return GetCurrentKafkaOffset(topic, clientConfig.KafkaServer.Address, clientConfig.KafkaServer.Port);
+            return GetCurrentKafkaOffset(topic, clientConfig.Broker.Host, clientConfig.Broker.Port);
         }
 
         public static long GetCurrentKafkaOffset(string topic, string address, int port)
         {
-            OffsetRequest request = new OffsetRequest(topic, 0, DateTime.Now.AddDays(-5).Ticks, 10);
-            ConsumerConfig consumerConfig = new ConsumerConfig();
-            consumerConfig.Host = address;
-            consumerConfig.Port = port;
-            IConsumer consumer = new Consumers.Consumer(consumerConfig);
+            return GetCurrentKafkaOffset(topic, address, port, 0);
+        }
+
+        public static long GetCurrentKafkaOffset(string topic, string address, int port, int partition)
+        {
+            var request = new OffsetRequest(topic, partition, DateTime.Now.AddDays(-5).Ticks, 10);
+            var consumerConfig = new ConsumerConfiguration(address, port);
+            IConsumer consumer = new Consumer(consumerConfig, address, port);
             IList<long> list = consumer.GetOffsetsBefore(request);
-            if (list.Count > 0)
-            {
-                return list[0];
-            }
-            else
-            {
-                return 0;
-            }
+            return list.Sum();
         }
     }
 }

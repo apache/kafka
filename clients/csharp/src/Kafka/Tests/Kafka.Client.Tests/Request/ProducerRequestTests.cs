@@ -50,10 +50,10 @@ namespace Kafka.Client.Tests.Request
 
             byte[] bytes = ms.ToArray();
             Assert.IsNotNull(bytes);
-            Assert.AreEqual(40, bytes.Length);
+            Assert.AreEqual(41, bytes.Length);
 
             // next 4 bytes = the length of the request
-            Assert.AreEqual(36, BitConverter.ToInt32(BitWorks.ReverseBytes(bytes.Take(4).ToArray<byte>()), 0));
+            Assert.AreEqual(37, BitConverter.ToInt32(BitWorks.ReverseBytes(bytes.Take(4).ToArray<byte>()), 0));
 
             // next 2 bytes = the RequestType which in this case should be Produce
             Assert.AreEqual((short)RequestTypes.Produce, BitConverter.ToInt16(BitWorks.ReverseBytes(bytes.Skip(4).Take(2).ToArray<byte>()), 0));
@@ -68,10 +68,10 @@ namespace Kafka.Client.Tests.Request
             Assert.AreEqual(0, BitConverter.ToInt32(BitWorks.ReverseBytes(bytes.Skip(13).Take(4).ToArray<byte>()), 0));
 
             // next 4 bytes = the length of the individual messages in the pack
-            Assert.AreEqual(19, BitConverter.ToInt32(BitWorks.ReverseBytes(bytes.Skip(17).Take(4).ToArray<byte>()), 0));
+            Assert.AreEqual(20, BitConverter.ToInt32(BitWorks.ReverseBytes(bytes.Skip(17).Take(4).ToArray<byte>()), 0));
 
             // fianl bytes = the individual messages in the pack
-            Assert.AreEqual(19, bytes.Skip(21).ToArray<byte>().Length);
+            Assert.AreEqual(20, bytes.Skip(21).ToArray<byte>().Length);
         }
     }
 }

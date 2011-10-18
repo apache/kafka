@@ -22,55 +22,52 @@ namespace Kafka.Client.IntegrationTests
 
     public class TestMultipleBrokersHelper
     {
-        private BrokerPartitionInfoCollection configBrokers =
-            KafkaClientConfiguration.GetConfiguration().BrokerPartitionInfos;
+        private readonly Dictionary<int, Dictionary<int, long>> offsets = new Dictionary<int, Dictionary<int, long>>();
 
-        private Dictionary<int, long> offsets = new Dictionary<int, long>();
-
-        private BrokerPartitionInfo changedBroker;
-
-        private string topic;
+        private readonly string topic;
 
         public TestMultipleBrokersHelper(string topic)
         {
             this.topic = topic;
         }
 
-        public BrokerPartitionInfo BrokerThatHasChanged
-        {
-            get { return changedBroker; }
-        }
+        public SyncProducerConfiguration BrokerThatHasChanged { get; private set; }
+
+        public int PartitionThatHasChanged { get; private set; }
 
         public long OffsetFromBeforeTheChange
         {
             get
             {
-                if (changedBroker != null)
-                {
-                    return offsets[changedBroker.Id];
-                }
-                else
-                {
-                    return 0;
-                }
+                return this.BrokerThatHasChanged != null ? this.offsets[this.BrokerThatHasChanged.BrokerId][this.PartitionThatHasChanged] : 0;
             }
         }
 
-        public void GetCurrentOffsets()
+        public void GetCurrentOffsets(IEnumerable<SyncProducerConfiguration> brokers)
         {
-            foreach (BrokerPartitionInfo broker in configBrokers)
+            foreach (var broker in brokers)
             {
-                offsets.Add(broker.Id, TestHelper.GetCurrentKafkaOffset(topic, broker.Address, broker.Port));
+                offsets.Add(broker.BrokerId, new Dictionary<int, long>());
+                offsets[broker.BrokerId].Add(0, TestHelper.GetCurrentKafkaOffset(topic, broker.Host, broker.Port, 0));
+                offsets[broker.BrokerId].Add(1, TestHelper.GetCurrentKafkaOffset(topic, broker.Host, broker.Port, 1));
             }
         }
 
-        public bool CheckIfAnyBrokerHasChanged()
+        public bool CheckIfAnyBrokerHasChanged(IEnumerable<SyncProducerConfiguration> brokers)
         {
-            foreach (BrokerPartitionInfo broker in configBrokers)
+            foreach (var broker in brokers)
             {
-                if (TestHelper.GetCurrentKafkaOffset(topic, broker.Address, broker.Port) != offsets[broker.Id])
+                if (TestHelper.GetCurrentKafkaOffset(topic, broker.Host, broker.Port, 0) != offsets[broker.BrokerId][0])
                 {
-                    changedBroker = broker;
+                    this.BrokerThatHasChanged = broker;
+                    this.PartitionThatHasChanged = 0;
+                    return true;
+                }
+
+                if (TestHelper.GetCurrentKafkaOffset(topic, broker.Host, broker.Port, 1) != offsets[broker.BrokerId][1])
+                {
+                    this.BrokerThatHasChanged = broker;
+                    this.PartitionThatHasChanged = 1;
                     return true;
                 }
             }

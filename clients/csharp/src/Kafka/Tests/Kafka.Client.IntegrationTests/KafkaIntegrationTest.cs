@@ -22,7 +22,6 @@ namespace Kafka.Client.IntegrationTests
     using System.Linq;
     using System.Text;
     using System.Threading;
-    using Kafka.Client.Cfg;
     using Kafka.Client.Consumers;
     using Kafka.Client.Messages;
     using Kafka.Client.Producers.Async;
@@ -37,20 +36,9 @@ namespace Kafka.Client.IntegrationTests
     public class KafkaIntegrationTest : IntegrationFixtureBase
     {
         /// <summary>
-        /// Kafka Client configuration
-        /// </summary>
-        private static KafkaClientConfiguration clientConfig;
-
-        /// <summary>
         /// Maximum amount of time to wait trying to get a specific test message from Kafka server (in miliseconds)
         /// </summary>
         private static readonly int MaxTestWaitTimeInMiliseconds = 5000;
-
-        [TestFixtureSetUp]
-        public void SetUp()
-        {
-            clientConfig = KafkaClientConfiguration.GetConfiguration();
-        }
 
         /// <summary>
         /// Sends a pair of message to Kafka.
@@ -58,18 +46,21 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ProducerSendsMessage()
         {
+            var prodConfig = this.SyncProducerConfig1;
+
             string payload1 = "kafka 1.";
             byte[] payloadData1 = Encoding.UTF8.GetBytes(payload1);
-            Message msg1 = new Message(payloadData1);
- 
+            var msg1 = new Message(payloadData1);
+
             string payload2 = "kafka 2.";
             byte[] payloadData2 = Encoding.UTF8.GetBytes(payload2);
-            Message msg2 = new Message(payloadData2);
+            var msg2 = new Message(payloadData2);
 
-            var config = new SyncProducerConfig(clientConfig);
-            var producer = new SyncProducer(config);
-            var producerRequest = new ProducerRequest(CurrentTestTopic, 0, new List<Message>() { msg1, msg2 });
-            producer.Send(producerRequest);
+            using (var producer = new SyncProducer(prodConfig))
+            {
+                var producerRequest = new ProducerRequest(CurrentTestTopic, 0, new List<Message> { msg1, msg2 });
+                producer.Send(producerRequest);
+            }
         }
 
         /// <summary>
@@ -78,12 +69,15 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ProducerSendsMessageWithLongTopic()
         {
-            Message msg = new Message(Encoding.UTF8.GetBytes("test message"));
+            var prodConfig = this.SyncProducerConfig1;
+
+            var msg = new Message(Encoding.UTF8.GetBytes("test message"));
             string topic = "ThisIsAVeryLongTopicThisIsAVeryLongTopicThisIsAVeryLongTopicThisIsAVeryLongTopicThisIsAVeryLongTopicThisIsAVeryLongTopic";
-            var config = new SyncProducerConfig(clientConfig);
-            var producer = new SyncProducer(config);
-            var producerRequest = new ProducerRequest(topic, 0, new List<Message>() { msg });
-            producer.Send(producerRequest);
+            using (var producer = new SyncProducer(prodConfig))
+            {
+                var producerRequest = new ProducerRequest(topic, 0, new List<Message> { msg });
+                producer.Send(producerRequest);
+            }
         }
 
         /// <summary>
@@ -92,12 +86,12 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void AsyncProducerSendsManyLongRandomMessages()
         {
+            var prodConfig = this.AsyncProducerConfig1;
             List<Message> messages = GenerateRandomTextMessages(50);
-
-            var config = new AsyncProducerConfig(clientConfig);
-
-            var producer = new AsyncProducer(config);
-            producer.Send(CurrentTestTopic, 0, messages);
+            using (var producer = new AsyncProducer(prodConfig))
+            {
+                producer.Send(CurrentTestTopic, 0, messages);
+            }
         }
 
         /// <summary>
@@ -106,7 +100,9 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void AsyncProducerSendsFewShortFixedMessages()
         {
-            List<Message> messages = new List<Message>()
+            var prodConfig = this.AsyncProducerConfig1;
+
+            var messages = new List<Message>
                                          {
                                              new Message(Encoding.UTF8.GetBytes("Async Test Message 1")),
                                              new Message(Encoding.UTF8.GetBytes("Async Test Message 2")),
@@ -114,10 +110,10 @@ namespace Kafka.Client.IntegrationTests
                                              new Message(Encoding.UTF8.GetBytes("Async Test Message 4"))
                                          };
 
-            var config = new AsyncProducerConfig(clientConfig);
-
-            var producer = new AsyncProducer(config);
-            producer.Send(CurrentTestTopic, 0, messages);
+            using (var producer = new AsyncProducer(prodConfig))
+            {
+                producer.Send(CurrentTestTopic, 0, messages);
+            }
         }
 
         /// <summary>
@@ -126,25 +122,26 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void AsyncProducerSendsFewShortFixedMessagesInSeparateSendActions()
         {
-            var config = new AsyncProducerConfig(clientConfig);
-            using (var producer = new AsyncProducer(config))
+            var prodConfig = this.AsyncProducerConfig1;
+
+            using (var producer = new AsyncProducer(prodConfig))
             {
-                ProducerRequest req1 = new ProducerRequest(
+                var req1 = new ProducerRequest(
                     CurrentTestTopic,
                     0,
-                    new List<Message>() { new Message(Encoding.UTF8.GetBytes("Async Test Message 1")) });
+                    new List<Message> { new Message(Encoding.UTF8.GetBytes("Async Test Message 1")) });
                 producer.Send(req1);
 
-                ProducerRequest req2 = new ProducerRequest(
+                var req2 = new ProducerRequest(
                     CurrentTestTopic,
                     0,
-                    new List<Message>() { new Message(Encoding.UTF8.GetBytes("Async Test Message 2")) });
+                    new List<Message> { new Message(Encoding.UTF8.GetBytes("Async Test Message 2")) });
                 producer.Send(req2);
 
-                ProducerRequest req3 = new ProducerRequest(
+                var req3 = new ProducerRequest(
                     CurrentTestTopic,
                     0,
-                    new List<Message>() { new Message(Encoding.UTF8.GetBytes("Async Test Message 3")) });
+                    new List<Message> { new Message(Encoding.UTF8.GetBytes("Async Test Message 3")) });
                 producer.Send(req3);
             }
         }
@@ -152,14 +149,18 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void AsyncProducerSendsMessageWithCallbackClass()
         {
-            List<Message> messages = new List<Message>()
+            var prodConfig = this.AsyncProducerConfig1;
+
+            var messages = new List<Message>
                                          {
                                              new Message(Encoding.UTF8.GetBytes("Async Test Message 1")),
                                          };
-            var config = new AsyncProducerConfig(clientConfig);
-            TestCallbackHandler myHandler = new TestCallbackHandler();
-            var producer = new AsyncProducer(config, myHandler);
-            producer.Send(CurrentTestTopic, 0, messages);
+            var myHandler = new TestCallbackHandler();
+            using (var producer = new AsyncProducer(prodConfig, myHandler))
+            {
+                producer.Send(CurrentTestTopic, 0, messages);
+            }
+
             Thread.Sleep(1000);
             Assert.IsTrue(myHandler.WasRun);
         }
@@ -167,14 +168,18 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void AsyncProducerSendsMessageWithCallback()
         {
-            List<Message> messages = new List<Message>()
+            var prodConfig = this.AsyncProducerConfig1;
+
+            var messages = new List<Message>
                                          {
                                              new Message(Encoding.UTF8.GetBytes("Async Test Message 1")),
                                          };
-            var config = new AsyncProducerConfig(clientConfig);
-            TestCallbackHandler myHandler = new TestCallbackHandler();
-            var producer = new AsyncProducer(config);
-            producer.Send(CurrentTestTopic, 0, messages, myHandler.Handle);
+            var myHandler = new TestCallbackHandler();
+            using (var producer = new AsyncProducer(prodConfig))
+            {
+                producer.Send(CurrentTestTopic, 0, messages, myHandler.Handle);
+            }
+
             Thread.Sleep(1000);
             Assert.IsTrue(myHandler.WasRun);
         }
@@ -195,7 +200,9 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ProducerSendMultiRequest()
         {
-            List<ProducerRequest> requests = new List<ProducerRequest>
+            var prodConfig = this.SyncProducerConfig1;
+
+            var requests = new List<ProducerRequest>
             { 
                 new ProducerRequest(CurrentTestTopic, 0, new List<Message> { new Message(Encoding.UTF8.GetBytes("1: " + DateTime.UtcNow)) }),
                 new ProducerRequest(CurrentTestTopic, 0, new List<Message> { new Message(Encoding.UTF8.GetBytes("2: " + DateTime.UtcNow)) }),
@@ -203,9 +210,10 @@ namespace Kafka.Client.IntegrationTests
                 new ProducerRequest(CurrentTestTopic, 0, new List<Message> { new Message(Encoding.UTF8.GetBytes("4: " + DateTime.UtcNow)) })
             };
 
-            var config = new SyncProducerConfig(clientConfig);
-            var producer = new SyncProducer(config);
-            producer.MultiSend(requests);
+            using (var producer = new SyncProducer(prodConfig))
+            {
+                producer.MultiSend(requests);
+            }
         }
 
         /// <summary>
@@ -214,17 +222,21 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ConsumerFetchMessage()
         {
+            var consumerConfig = this.ConsumerConfig1;
             ProducerSendsMessage();
-
-            ConsumerConfig config = new ConsumerConfig(clientConfig);
-            IConsumer consumer = new Kafka.Client.Consumers.Consumer(config);
-            FetchRequest request = new FetchRequest(CurrentTestTopic, 0, 0);
+            Thread.Sleep(1000);
+            IConsumer consumer = new Consumer(consumerConfig);
+            var request = new FetchRequest(CurrentTestTopic, 0, 0);
             BufferedMessageSet response = consumer.Fetch(request);
             Assert.NotNull(response);
-            foreach (var message in response.Messages)
+            int count = 0;
+            foreach (var message in response)
             {
-                Console.WriteLine(message);
+                count++;
+                Console.WriteLine(message.Message);
             }
+
+            Assert.AreEqual(2, count);
         }
 
         /// <summary>
@@ -233,25 +245,28 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ConsumerMultiFetchGetsMessage()
         {
-            ProducerSendMultiRequest();
+            var config = this.ConsumerConfig1;
 
-            ConsumerConfig config = new ConsumerConfig(clientConfig);
-            IConsumer cons = new Consumers.Consumer(config);
-            MultiFetchRequest request = new MultiFetchRequest(new List<FetchRequest>
+            ProducerSendMultiRequest();
+            Thread.Sleep(2000);
+            IConsumer cons = new Consumer(config);
+            var request = new MultiFetchRequest(new List<FetchRequest>
             {
                 new FetchRequest(CurrentTestTopic, 0, 0),
                 new FetchRequest(CurrentTestTopic, 0, 0),
-                new FetchRequest(CurrentTestTopic + "2", 0, 0)
+                new FetchRequest(CurrentTestTopic, 0, 0)
             });
 
             IList<BufferedMessageSet> response = cons.MultiFetch(request);
+            Assert.AreEqual(3, response.Count);
             for (int ix = 0; ix < response.Count; ix++)
             {
                 IEnumerable<Message> messageSet = response[ix].Messages;
+                Assert.AreEqual(4, messageSet.Count());
                 Console.WriteLine(string.Format("Request #{0}-->", ix));
                 foreach (Message msg in messageSet)
                 {
-                    Console.WriteLine(msg);
+                    Console.WriteLine(msg.ToString());
                 }
             }
         }
@@ -262,10 +277,10 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ConsumerGetsOffsets()
         {
-            OffsetRequest request = new OffsetRequest(CurrentTestTopic, 0, DateTime.Now.AddHours(-24).Ticks, 10);
+            var consumerConfig = this.ConsumerConfig1;
 
-            ConsumerConfig config = new ConsumerConfig(clientConfig);
-            IConsumer consumer = new Consumers.Consumer(config);
+            var request = new OffsetRequest(CurrentTestTopic, 0, DateTime.Now.AddHours(-24).Ticks, 10);
+            IConsumer consumer = new Consumer(consumerConfig);
             IList<long> list = consumer.GetOffsetsBefore(request);
 
             foreach (long l in list)
@@ -280,20 +295,19 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ProducerSendsAndConsumerReceivesSingleSimpleMessage()
         {
-            Message sourceMessage = new Message(Encoding.UTF8.GetBytes("test message"));
+            var prodConfig = this.SyncProducerConfig1;
+            var consumerConfig = this.ConsumerConfig1;
 
-            var config = new SyncProducerConfig(clientConfig);
-            var producer = new SyncProducer(config);
-            var producerRequest = new ProducerRequest(CurrentTestTopic, 0, new List<Message>() { sourceMessage });
+            var sourceMessage = new Message(Encoding.UTF8.GetBytes("test message"));
+            long currentOffset = TestHelper.GetCurrentKafkaOffset(CurrentTestTopic, consumerConfig);
+            using (var producer = new SyncProducer(prodConfig))
+            {
+                var producerRequest = new ProducerRequest(CurrentTestTopic, 0, new List<Message> { sourceMessage });
+                producer.Send(producerRequest);
+            }
 
-            long currentOffset = TestHelper.GetCurrentKafkaOffset(CurrentTestTopic, clientConfig);
-
-            producer.Send(producerRequest);
-
-            ConsumerConfig consumerConfig = new ConsumerConfig(clientConfig);
-            IConsumer consumer = new Consumers.Consumer(consumerConfig);
-            FetchRequest request = new FetchRequest(CurrentTestTopic, 0, currentOffset);
-
+            IConsumer consumer = new Consumer(consumerConfig);
+            var request = new FetchRequest(CurrentTestTopic, 0, currentOffset);
             BufferedMessageSet response;
             int totalWaitTimeInMiliseconds = 0;
             int waitSingle = 100;
@@ -305,13 +319,11 @@ namespace Kafka.Client.IntegrationTests
                 {
                     break;
                 }
-                else
+
+                totalWaitTimeInMiliseconds += waitSingle;
+                if (totalWaitTimeInMiliseconds >= MaxTestWaitTimeInMiliseconds)
                 {
-                    totalWaitTimeInMiliseconds += waitSingle;
-                    if (totalWaitTimeInMiliseconds >= MaxTestWaitTimeInMiliseconds)
-                    {
-                        break;
-                    }
+                    break;
                 }
             }
 
@@ -327,19 +339,19 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void AsyncProducerSendsAndConsumerReceivesSingleSimpleMessage()
         {
-            Message sourceMessage = new Message(Encoding.UTF8.GetBytes("test message"));
+            var prodConfig = this.AsyncProducerConfig1;
+            var consumerConfig = this.ConsumerConfig1;
 
-            var config = new AsyncProducerConfig(clientConfig);
-            var producer = new AsyncProducer(config);
-            var producerRequest = new ProducerRequest(CurrentTestTopic, 0, new List<Message>() { sourceMessage });
+            var sourceMessage = new Message(Encoding.UTF8.GetBytes("test message"));
+            using (var producer = new AsyncProducer(prodConfig))
+            {
+                var producerRequest = new ProducerRequest(CurrentTestTopic, 0, new List<Message> { sourceMessage });
+                producer.Send(producerRequest);
+            }
 
-            long currentOffset = TestHelper.GetCurrentKafkaOffset(CurrentTestTopic, clientConfig);
-
-            producer.Send(producerRequest);
-
-            ConsumerConfig consumerConfig = new ConsumerConfig(clientConfig);
-            IConsumer consumer = new Consumers.Consumer(consumerConfig);
-            FetchRequest request = new FetchRequest(CurrentTestTopic, 0, currentOffset);
+            long currentOffset = TestHelper.GetCurrentKafkaOffset(CurrentTestTopic, consumerConfig);
+            IConsumer consumer = new Consumer(consumerConfig);
+            var request = new FetchRequest(CurrentTestTopic, 0, currentOffset);
 
             BufferedMessageSet response;
             int totalWaitTimeInMiliseconds = 0;
@@ -352,13 +364,11 @@ namespace Kafka.Client.IntegrationTests
                 {
                     break;
                 }
-                else
+
+                totalWaitTimeInMiliseconds += waitSingle;
+                if (totalWaitTimeInMiliseconds >= MaxTestWaitTimeInMiliseconds)
                 {
-                    totalWaitTimeInMiliseconds += waitSingle;
-                    if (totalWaitTimeInMiliseconds >= MaxTestWaitTimeInMiliseconds)
-                    {
-                        break;
-                    }
+                    break;
                 }
             }
 
@@ -374,16 +384,19 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ProducerSendsAndConsumerReceivesMultiRequest()
         {
+            var prodConfig = this.SyncProducerConfig1;
+            var consumerConfig = this.ConsumerConfig1;
+
             string testTopic1 = CurrentTestTopic + "1";
             string testTopic2 = CurrentTestTopic + "2";
             string testTopic3 = CurrentTestTopic + "3";
 
-            Message sourceMessage1 = new Message(Encoding.UTF8.GetBytes("1: TestMessage"));
-            Message sourceMessage2 = new Message(Encoding.UTF8.GetBytes("2: TestMessage"));
-            Message sourceMessage3 = new Message(Encoding.UTF8.GetBytes("3: TestMessage"));
-            Message sourceMessage4 = new Message(Encoding.UTF8.GetBytes("4: TestMessage"));
+            var sourceMessage1 = new Message(Encoding.UTF8.GetBytes("1: TestMessage"));
+            var sourceMessage2 = new Message(Encoding.UTF8.GetBytes("2: TestMessage"));
+            var sourceMessage3 = new Message(Encoding.UTF8.GetBytes("3: TestMessage"));
+            var sourceMessage4 = new Message(Encoding.UTF8.GetBytes("4: TestMessage"));
 
-            List<ProducerRequest> requests = new List<ProducerRequest>
+            var requests = new List<ProducerRequest>
             { 
                 new ProducerRequest(testTopic1, 0, new List<Message> { sourceMessage1 }),
                 new ProducerRequest(testTopic1, 0, new List<Message> { sourceMessage2 }),
@@ -391,18 +404,17 @@ namespace Kafka.Client.IntegrationTests
                 new ProducerRequest(testTopic3, 0, new List<Message> { sourceMessage4 })
             };
 
-            var config = new SyncProducerConfig(clientConfig);
-            var producer = new SyncProducer(config);
+            long currentOffset1 = TestHelper.GetCurrentKafkaOffset(testTopic1, consumerConfig);
+            long currentOffset2 = TestHelper.GetCurrentKafkaOffset(testTopic2, consumerConfig);
+            long currentOffset3 = TestHelper.GetCurrentKafkaOffset(testTopic3, consumerConfig);
 
-            long currentOffset1 = TestHelper.GetCurrentKafkaOffset(testTopic1, clientConfig);
-            long currentOffset2 = TestHelper.GetCurrentKafkaOffset(testTopic2, clientConfig);
-            long currentOffset3 = TestHelper.GetCurrentKafkaOffset(testTopic3, clientConfig);
+            using (var producer = new SyncProducer(prodConfig))
+            {
+                producer.MultiSend(requests);
+            }
 
-            producer.MultiSend(requests);
-
-            ConsumerConfig consumerConfig = new ConsumerConfig(clientConfig);
-            IConsumer consumer = new Consumers.Consumer(consumerConfig);
-            MultiFetchRequest request = new MultiFetchRequest(new List<FetchRequest>
+            IConsumer consumer = new Consumer(consumerConfig);
+            var request = new MultiFetchRequest(new List<FetchRequest>
             {
                 new FetchRequest(testTopic1, 0, currentOffset1),
                 new FetchRequest(testTopic2, 0, currentOffset2),
@@ -419,13 +431,11 @@ namespace Kafka.Client.IntegrationTests
                 {
                     break;
                 }
-                else
+
+                totalWaitTimeInMiliseconds += waitSingle;
+                if (totalWaitTimeInMiliseconds >= MaxTestWaitTimeInMiliseconds)
                 {
-                    totalWaitTimeInMiliseconds += waitSingle;
-                    if (totalWaitTimeInMiliseconds >= MaxTestWaitTimeInMiliseconds)
-                    {
-                        break;
-                    }
+                    break;
                 }
             }
 
@@ -440,43 +450,13 @@ namespace Kafka.Client.IntegrationTests
         }
 
         /// <summary>
-        /// Gererates a randome list of messages.
-        /// </summary>
-        /// <param name="numberOfMessages">The number of messages to generate.</param>
-        /// <returns>A list of random messages.</returns>
-        private static List<Message> GenerateRandomMessages(int numberOfMessages)
-        {
-            List<Message> messages = new List<Message>();
-            for (int ix = 0; ix < numberOfMessages; ix++)
-            {
-                messages.Add(new Message(GenerateRandomBytes(10000)));
-            }
-
-            return messages;
-        }
-
-        /// <summary>
-        /// Generate a random set of bytes.
-        /// </summary>
-        /// <param name="length">Length of the byte array.</param>
-        /// <returns>Random byte array.</returns>
-        private static byte[] GenerateRandomBytes(int length)
-        {
-            byte[] randBytes = new byte[length];
-            Random randNum = new Random();
-            randNum.NextBytes(randBytes);
-
-            return randBytes;
-        }
-
-        /// <summary>
         /// Gererates a randome list of text messages.
         /// </summary>
         /// <param name="numberOfMessages">The number of messages to generate.</param>
         /// <returns>A list of random text messages.</returns>
         private static List<Message> GenerateRandomTextMessages(int numberOfMessages)
         {
-            List<Message> messages = new List<Message>();
+            var messages = new List<Message>();
             for (int ix = 0; ix < numberOfMessages; ix++)
             {
                 ////messages.Add(new Message(GenerateRandomBytes(10000)));
@@ -493,12 +473,11 @@ namespace Kafka.Client.IntegrationTests
         /// <returns>Random message string.</returns>
         private static string GenerateRandomMessage(int length)
         {
-            StringBuilder builder = new StringBuilder();
-            Random random = new Random();
-            char ch;
+            var builder = new StringBuilder();
+            var random = new Random();
             for (int i = 0; i < length; i++)
             {
-                ch = Convert.ToChar(Convert.ToInt32(
+                char ch = Convert.ToChar(Convert.ToInt32(
                     Math.Floor((26 * random.NextDouble()) + 65)));
                 builder.Append(ch);
             }

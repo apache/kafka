@@ -23,7 +23,6 @@ namespace Kafka.Client.IntegrationTests
     using System.Reflection;
     using System.Text;
     using System.Threading;
-    using Kafka.Client.Cfg;
     using Kafka.Client.Consumers;
     using Kafka.Client.Exceptions;
     using Kafka.Client.Messages;
@@ -34,21 +33,10 @@ namespace Kafka.Client.IntegrationTests
     [TestFixture]
     public class ConsumerTests : IntegrationFixtureBase
     {
-        /// <summary>
-        /// Kafka Client configuration
-        /// </summary>
-        private static KafkaClientConfiguration clientConfig;
-
-        [TestFixtureSetUp]
-        public void SetUp()
-        {
-            clientConfig = KafkaClientConfiguration.GetConfiguration();
-        }
-
         [Test]
         public void ConsumerConnectorIsCreatedConnectsDisconnectsAndShutsDown()
         {
-            var config = new ConsumerConfig(clientConfig);
+            var config = this.ZooKeeperBasedConsumerConfig;
             using (new ZookeeperConsumerConnector(config, true))
             {
             }
@@ -57,6 +45,9 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void SimpleSyncProducerSends2MessagesAndConsumerConnectorGetsThemBack()
         {
+            var prodConfig = this.SyncProducerConfig1;
+            var consumerConfig = this.ZooKeeperBasedConsumerConfig;
+
             // first producing
             string payload1 = "kafka 1.";
             byte[] payloadData1 = Encoding.UTF8.GetBytes(payload1);
@@ -66,15 +57,15 @@ namespace Kafka.Client.IntegrationTests
             byte[] payloadData2 = Encoding.UTF8.GetBytes(payload2);
             var msg2 = new Message(payloadData2);
 
-            var producerConfig = new SyncProducerConfig(clientConfig);
-            var producer = new SyncProducer(producerConfig);
             var producerRequest = new ProducerRequest(CurrentTestTopic, 0, new List<Message> { msg1, msg2 });
-            producer.Send(producerRequest);
+            using (var producer = new SyncProducer(prodConfig))
+            {
+                producer.Send(producerRequest);
+            }
 
             // now consuming
-            var config = new ConsumerConfig(clientConfig) { AutoCommit = false };
             var resultMessages = new List<Message>();
-            using (IConsumerConnector consumerConnector = new ZookeeperConsumerConnector(config, true))
+            using (IConsumerConnector consumerConnector = new ZookeeperConsumerConnector(consumerConfig, true))
             {
                 var topicCount = new Dictionary<string, int> { { CurrentTestTopic, 1 } };
                 var messages = consumerConnector.CreateMessageStreams(topicCount);
@@ -103,53 +94,57 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void OneMessageIsSentAndReceivedThenExceptionsWhenNoMessageThenAnotherMessageIsSentAndReceived()
         {
+            var prodConfig = this.SyncProducerConfig1;
+            var consumerConfig = this.ZooKeeperBasedConsumerConfig;
+
             // first producing
             string payload1 = "kafka 1.";
             byte[] payloadData1 = Encoding.UTF8.GetBytes(payload1);
             var msg1 = new Message(payloadData1);
-
-            var producerConfig = new SyncProducerConfig(clientConfig);
-            var producer = new SyncProducer(producerConfig);
-            var producerRequest = new ProducerRequest(CurrentTestTopic, 0, new List<Message> { msg1 });
-            producer.Send(producerRequest);
-
-            // now consuming
-            var config = new ConsumerConfig(clientConfig) { AutoCommit = false, Timeout = 5000 };
-            using (IConsumerConnector consumerConnector = new ZookeeperConsumerConnector(config, true))
+            using (var producer = new SyncProducer(prodConfig))
             {
-                var topicCount = new Dictionary<string, int> { { CurrentTestTopic, 1 } };
-                var messages = consumerConnector.CreateMessageStreams(topicCount);
-                var sets = messages[CurrentTestTopic];
-                KafkaMessageStream myStream = sets[0];
-                var enumerator = myStream.GetEnumerator();
+                var producerRequest = new ProducerRequest(CurrentTestTopic, 0, new List<Message> { msg1 });
+                producer.Send(producerRequest);
 
-                Assert.IsTrue(enumerator.MoveNext());
-                Assert.AreEqual(msg1.ToString(), enumerator.Current.ToString());
+                // now consuming
+                using (IConsumerConnector consumerConnector = new ZookeeperConsumerConnector(consumerConfig, true))
+                {
+                    var topicCount = new Dictionary<string, int> { { CurrentTestTopic, 1 } };
+                    var messages = consumerConnector.CreateMessageStreams(topicCount);
+                    var sets = messages[CurrentTestTopic];
+                    KafkaMessageStream myStream = sets[0];
+                    var enumerator = myStream.GetEnumerator();
 
-                Assert.Throws<ConsumerTimeoutException>(() => enumerator.MoveNext());
+                    Assert.IsTrue(enumerator.MoveNext());
+                    Assert.AreEqual(msg1.ToString(), enumerator.Current.ToString());
 
-                Assert.Throws<Exception>(() => enumerator.MoveNext()); // iterator is in failed state
+                    Assert.Throws<ConsumerTimeoutException>(() => enumerator.MoveNext());
 
-                enumerator.Reset();
+                    Assert.Throws<IllegalStateException>(() => enumerator.MoveNext()); // iterator is in failed state
 
-                // producing again
-                string payload2 = "kafka 2.";
-                byte[] payloadData2 = Encoding.UTF8.GetBytes(payload2);
-                var msg2 = new Message(payloadData2);
+                    enumerator.Reset();
 
-                var producerRequest2 = new ProducerRequest(CurrentTestTopic, 0, new List<Message> { msg2 });
-                producer.Send(producerRequest2);
+                    // producing again
+                    string payload2 = "kafka 2.";
+                    byte[] payloadData2 = Encoding.UTF8.GetBytes(payload2);
+                    var msg2 = new Message(payloadData2);
 
-                Thread.Sleep(3000);
+                    var producerRequest2 = new ProducerRequest(CurrentTestTopic, 0, new List<Message> { msg2 });
+                    producer.Send(producerRequest2);
+                    Thread.Sleep(3000);
 
-                Assert.IsTrue(enumerator.MoveNext());
-                Assert.AreEqual(msg2.ToString(), enumerator.Current.ToString());
+                    Assert.IsTrue(enumerator.MoveNext());
+                    Assert.AreEqual(msg2.ToString(), enumerator.Current.ToString());
+                }
             }
         }
 
         [Test]
         public void ConsumerConnectorConsumesTwoDifferentTopics()
         {
+            var prodConfig = this.SyncProducerConfig1;
+            var consumerConfig = this.ZooKeeperBasedConsumerConfig;
+
             string topic1 = CurrentTestTopic + "1";
             string topic2 = CurrentTestTopic + "2";
 
@@ -162,18 +157,18 @@ namespace Kafka.Client.IntegrationTests
             byte[] payloadData2 = Encoding.UTF8.GetBytes(payload2);
             var msg2 = new Message(payloadData2);
 
-            var producerConfig = new SyncProducerConfig(clientConfig);
-            var producer = new SyncProducer(producerConfig);
-            var producerRequest1 = new ProducerRequest(topic1, 0, new List<Message> { msg1 });
-            producer.Send(producerRequest1);
-            var producerRequest2 = new ProducerRequest(topic2, 0, new List<Message> { msg2 });
-            producer.Send(producerRequest2);
+            using (var producer = new SyncProducer(prodConfig))
+            {
+                var producerRequest1 = new ProducerRequest(topic1, 0, new List<Message> { msg1 });
+                producer.Send(producerRequest1);
+                var producerRequest2 = new ProducerRequest(topic2, 0, new List<Message> { msg2 });
+                producer.Send(producerRequest2);
+            }
 
             // now consuming
-            var config = new ConsumerConfig(clientConfig) { AutoCommit = false };
             var resultMessages1 = new List<Message>();
             var resultMessages2 = new List<Message>();
-            using (IConsumerConnector consumerConnector = new ZookeeperConsumerConnector(config, true))
+            using (IConsumerConnector consumerConnector = new ZookeeperConsumerConnector(consumerConfig, true))
             {
                 var topicCount = new Dictionary<string, int> { { topic1, 1 }, { topic2, 1 } };
                 var messages = consumerConnector.CreateMessageStreams(topicCount);
@@ -224,9 +219,10 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ConsumerConnectorReceivesAShutdownSignal()
         {
+            var consumerConfig = this.ZooKeeperBasedConsumerConfig;
+
             // now consuming
-            var config = new ConsumerConfig(clientConfig) { AutoCommit = false };
-            using (IConsumerConnector consumerConnector = new ZookeeperConsumerConnector(config, true))
+            using (IConsumerConnector consumerConnector = new ZookeeperConsumerConnector(consumerConfig, true))
             {
                 var topicCount = new Dictionary<string, int> { { CurrentTestTopic, 1 } };
                 var messages = consumerConnector.CreateMessageStreams(topicCount);
@@ -260,6 +256,9 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ProducersSendMessagesToDifferentPartitionsAndConsumerConnectorGetsThemBack()
         {
+            var prodConfig = this.SyncProducerConfig1;
+            var consumerConfig = this.ZooKeeperBasedConsumerConfig;
+
             // first producing
             string payload1 = "kafka 1.";
             byte[] payloadData1 = Encoding.UTF8.GetBytes(payload1);
@@ -269,23 +268,21 @@ namespace Kafka.Client.IntegrationTests
             byte[] payloadData2 = Encoding.UTF8.GetBytes(payload2);
             var msg2 = new Message(payloadData2);
 
-            var producerConfig = new SyncProducerConfig(clientConfig);
-            var producer = new SyncProducer(producerConfig);
-            var producerRequest1 = new ProducerRequest(CurrentTestTopic, 0, new List<Message>() { msg1 });
-            producer.Send(producerRequest1);
-            var producerRequest2 = new ProducerRequest(CurrentTestTopic, 1, new List<Message>() { msg2 });
-            producer.Send(producerRequest2);
+            using (var producer = new SyncProducer(prodConfig))
+            {
+                var producerRequest1 = new ProducerRequest(CurrentTestTopic, 0, new List<Message> { msg1 });
+                producer.Send(producerRequest1);
+                var producerRequest2 = new ProducerRequest(CurrentTestTopic, 1, new List<Message> { msg2 });
+                producer.Send(producerRequest2);
+            }
 
             // now consuming
-            var config = new ConsumerConfig(clientConfig) { AutoCommit = false };
             var resultMessages = new List<Message>();
-            using (IConsumerConnector consumerConnector = new ZookeeperConsumerConnector(config, true))
+            using (IConsumerConnector consumerConnector = new ZookeeperConsumerConnector(consumerConfig, true))
             {
                 var topicCount = new Dictionary<string, int> { { CurrentTestTopic, 1 } };
                 var messages = consumerConnector.CreateMessageStreams(topicCount);
-
                 var sets = messages[CurrentTestTopic];
-                
                 try
                 {
                     foreach (var set in sets)

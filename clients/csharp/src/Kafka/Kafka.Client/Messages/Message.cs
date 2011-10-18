@@ -21,6 +21,7 @@ namespace Kafka.Client.Messages
     using System.IO;
     using System.Linq;
     using System.Text;
+    using Kafka.Client.Exceptions;
     using Kafka.Client.Serialization;
     using Kafka.Client.Utils;
 
@@ -35,10 +36,27 @@ namespace Kafka.Client.Messages
     /// </remarks>
     public class Message : IWritable
     {
-        private const byte DefaultMagicValue = 0;
+        private const byte DefaultMagicValue = 1;
         private const byte DefaultMagicLength = 1;
         private const byte DefaultCrcLength = 4;
         private const int DefaultHeaderSize = DefaultMagicLength + DefaultCrcLength;
+        private const byte CompressionCodeMask = 3;
+
+        public CompressionCodecs CompressionCodec
+        {
+            get
+            {
+                switch (Magic)
+                {
+                    case 0:
+                        return CompressionCodecs.NoCompressionCodec;
+                    case 1:
+                        return Messages.CompressionCodec.GetCompressionCodec(Attributes & CompressionCodeMask);
+                    default:
+                        throw new KafkaException(KafkaException.InvalidMessageCode);
+                }
+            }
+        }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Message"/> class.
@@ -53,11 +71,11 @@ namespace Kafka.Client.Messages
         /// Initializes with default magic number
         /// </remarks>
         public Message(byte[] payload, byte[] checksum)
-            : this(payload, DefaultMagicValue, checksum)
+            : this(payload, checksum, CompressionCodecs.NoCompressionCodec)
         {
-            Guard.Assert<ArgumentNullException>(() => payload != null);
-            Guard.Assert<ArgumentNullException>(() => checksum != null);
-            Guard.Assert<ArgumentException>(() => checksum.Length == 4);
+            Guard.NotNull(payload, "payload");
+            Guard.NotNull(checksum, "checksum");
+            Guard.Count(checksum, 4, "checksum");
         }
 
         /// <summary>
@@ -70,9 +88,9 @@ namespace Kafka.Client.Messages
         /// Initializes the magic number as default and the checksum as null. It will be automatically computed.
         /// </remarks>
         public Message(byte[] payload)
-            : this(payload, DefaultMagicValue)
+            : this(payload, CompressionCodecs.NoCompressionCodec)
         {
-            Guard.Assert<ArgumentNullException>(() => payload != null);
+            Guard.NotNull(payload, "payload");
         }
 
         /// <summary>
@@ -83,10 +101,10 @@ namespace Kafka.Client.Messages
         /// </remarks>
         /// <param name="payload">The data for the payload.</param>
         /// <param name="magic">The magic identifier.</param>
-        public Message(byte[] payload, byte magic)
-            : this(payload, magic, Crc32Hasher.Compute(payload))
+        public Message(byte[] payload, CompressionCodecs compressionCodec)
+            : this(payload, Crc32Hasher.Compute(payload), compressionCodec)
         {
-            Guard.Assert<ArgumentNullException>(() => payload != null);
+            Guard.NotNull(payload, "payload");
         }
 
         /// <summary>
@@ -95,23 +113,30 @@ namespace Kafka.Client.Messages
         /// <param name="payload">The data for the payload.</param>
         /// <param name="magic">The magic identifier.</param>
         /// <param name="checksum">The checksum for the payload.</param>
-        public Message(byte[] payload, byte magic, byte[] checksum)
+        public Message(byte[] payload, byte[] checksum, CompressionCodecs compressionCodec)
         {
-            Guard.Assert<ArgumentNullException>(() => payload != null);
-            Guard.Assert<ArgumentNullException>(() => checksum != null);
+            Guard.NotNull(payload, "payload");
+            Guard.NotNull(checksum, "checksum");
+            Guard.Count(checksum, 4, "checksum");
 
             int length = DefaultHeaderSize + payload.Length;
             this.Payload = payload;
-            this.Magic = magic;
-            this.Checksum = checksum;
-            this.MessageBuffer = new BoundedBuffer(length);
-            this.WriteTo(this.MessageBuffer);
-        }
+            this.Magic = DefaultMagicValue;
+            
+            if (compressionCodec != CompressionCodecs.NoCompressionCodec)
+            {
+                this.Attributes |=
+                    (byte)(CompressionCodeMask & Messages.CompressionCodec.GetCompressionCodecValue(compressionCodec));
+            }
 
-        /// <summary>
-        /// Gets internal message buffer.
-        /// </summary>
-        public MemoryStream MessageBuffer { get; private set; }
+            if (Magic == 1)
+            {
+                length++;
+            }
+
+            this.Checksum = checksum;
+            this.Size = length;
+        }
 
         /// <summary>
         /// Gets the payload.
@@ -129,15 +154,14 @@ namespace Kafka.Client.Messages
         public byte[] Checksum { get; private set; }
 
         /// <summary>
+        /// Gets the Attributes for the message.
+        /// </summary>
+        public byte Attributes { get; private set; }
+
+        /// <summary>
         /// Gets the total size of message.
         /// </summary>
-        public int Size
-        {
-            get
-            {
-                return (int)this.MessageBuffer.Length;
-            }
-        }
+        public int Size { get; private set; }
 
         /// <summary>
         /// Gets the payload size.
@@ -158,7 +182,7 @@ namespace Kafka.Client.Messages
         /// </param>
         public void WriteTo(MemoryStream output)
         {
-            Guard.Assert<ArgumentNullException>(() => output != null);
+            Guard.NotNull(output, "output");
 
             using (var writer = new KafkaBinaryWriter(output))
             {
@@ -174,9 +198,9 @@ namespace Kafka.Client.Messages
         /// </param>
         public void WriteTo(KafkaBinaryWriter writer)
         {
-            Guard.Assert<ArgumentNullException>(() => writer != null);
-
+            Guard.NotNull(writer, "writer");
             writer.Write(this.Magic);
+            writer.Write(this.Attributes);
             writer.Write(this.Checksum);
             writer.Write(this.Payload);
         }
@@ -187,44 +211,27 @@ namespace Kafka.Client.Messages
         /// <returns>The decoded payload as string.</returns>
         public override string ToString()
         {
-            using (var reader = new KafkaBinaryReader(this.MessageBuffer))
-            {
-                return ParseFrom(reader, this.Size);
-            }
-        }
-
-        /// <summary>
-        /// Creates string representation of message
-        /// </summary>
-        /// <param name="reader">
-        /// The reader.
-        /// </param>
-        /// <param name="count">
-        /// The count.
-        /// </param>
-        /// <returns>
-        /// String representation of message
-        /// </returns>
-        public static string ParseFrom(KafkaBinaryReader reader, int count)
-        {
-            Guard.Assert<ArgumentNullException>(() => reader != null);
             var sb = new StringBuilder();
-            int payloadSize = count - DefaultHeaderSize;
             sb.Append("Magic: ");
-            sb.Append(reader.ReadByte());
+            sb.Append(this.Magic);
+            if (this.Magic == 1)
+            {
+                sb.Append(", Attributes: ");
+                sb.Append(this.Attributes);
+            }
+
             sb.Append(", Checksum: ");
             for (int i = 0; i < 4; i++)
             {
                 sb.Append("[");
-                sb.Append(reader.ReadByte());
+                sb.Append(this.Checksum[i]);
                 sb.Append("]");
             }
 
             sb.Append(", topic: ");
-            var encodedPayload = reader.ReadBytes(payloadSize);
             try
             {
-                sb.Append(Encoding.UTF8.GetString(encodedPayload));
+                sb.Append(Encoding.UTF8.GetString(this.Payload));
             }
             catch (Exception)
             {
@@ -232,6 +239,63 @@ namespace Kafka.Client.Messages
             }
 
             return sb.ToString();
+        }
+
+        [Obsolete("Use KafkaBinaryReader instead")]
+        public static Message FromMessageBytes(byte[] data)
+        {
+            byte magic = data[0];
+            byte[] checksum;
+            byte[] payload;
+            byte attributes;
+            if (magic == (byte)1)
+            {
+                attributes = data[1];
+                checksum = data.Skip(2).Take(4).ToArray();
+                payload = data.Skip(6).ToArray();
+                return new Message(payload, checksum, Messages.CompressionCodec.GetCompressionCodec(attributes & CompressionCodeMask));
+            }
+            else
+            {
+                checksum = data.Skip(1).Take(4).ToArray();
+                payload = data.Skip(5).ToArray();
+                return new Message(payload, checksum);
+            }
+        }
+
+        internal static Message ParseFrom(KafkaBinaryReader reader, int size)
+        {
+            Message result;
+            int readed = 0;
+            byte magic = reader.ReadByte();
+            readed++;
+            byte[] checksum;
+            byte[] payload;
+            if (magic == 1)
+            {
+                byte attributes = reader.ReadByte();
+                readed++;
+                checksum = reader.ReadBytes(4);
+                readed += 4;
+                payload = reader.ReadBytes(size - (DefaultHeaderSize + 1));
+                readed += size - (DefaultHeaderSize + 1);
+                result = new Message(payload, checksum, Messages.CompressionCodec.GetCompressionCodec(attributes & CompressionCodeMask));
+            }
+            else
+            {
+                checksum = reader.ReadBytes(4);
+                readed += 4;
+                payload = reader.ReadBytes(size - DefaultHeaderSize);
+                readed += size - DefaultHeaderSize;
+                result = new Message(payload, checksum);
+            }
+
+            if (size != readed)
+            {
+                throw new KafkaException(KafkaException.InvalidRetchSizeCode);
+            }
+
+            return result;
         }
 
         /// <summary>
@@ -244,10 +308,22 @@ namespace Kafka.Client.Messages
         {
             int size = BitConverter.ToInt32(BitWorks.ReverseBytes(data.Take(4).ToArray()), 0);
             byte magic = data[4];
-            byte[] checksum = data.Skip(5).Take(4).ToArray();
-            byte[] payload = data.Skip(9).Take(size).ToArray();
-
-            return new Message(payload, magic, checksum);
+            byte[] checksum;
+            byte[] payload;
+            byte attributes;
+            if (magic == 1)
+            {
+                attributes = data[5];
+                checksum = data.Skip(6).Take(4).ToArray();
+                payload = data.Skip(10).Take(size).ToArray();
+                return new Message(payload, checksum, Messages.CompressionCodec.GetCompressionCodec(attributes & CompressionCodeMask));
+            }
+            else
+            {
+                checksum = data.Skip(5).Take(4).ToArray();
+                payload = data.Skip(9).Take(size).ToArray();
+                return new Message(payload, checksum);
+            }
         }
     }
 }

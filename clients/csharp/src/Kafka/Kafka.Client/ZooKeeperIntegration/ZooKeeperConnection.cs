@@ -130,7 +130,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </param>
         public void Delete(string path)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             this.Client.Delete(path, -1);
@@ -150,7 +150,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public bool Exists(string path, bool watch)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             return this.Client.Exists(path, true) != null;
@@ -173,7 +173,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public string Create(string path, byte[] data, CreateMode mode)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             return this.Client.Create(path, data, Ids.OPEN_ACL_UNSAFE, mode);
@@ -193,7 +193,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public IList<string> GetChildren(string path, bool watch)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             return this.Client.GetChildren(path, watch);
@@ -216,7 +216,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public byte[] ReadData(string path, Stat stats, bool watch)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             return this.Client.GetData(path, watch, stats);
@@ -233,7 +233,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </param>
         public void WriteData(string path, byte[] data)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             this.WriteData(path, data, -1);
@@ -253,7 +253,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </param>
         public void WriteData(string path, byte[] data, int version)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             this.Client.SetData(path, data, version);
@@ -270,7 +270,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public long GetCreateTime(string path)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             Stat stats = this.Client.Exists(path, false);

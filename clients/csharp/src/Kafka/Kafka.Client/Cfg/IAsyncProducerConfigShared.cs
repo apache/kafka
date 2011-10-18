@@ -17,24 +17,10 @@
 
 namespace Kafka.Client.Cfg
 {
-    using System.Collections.Generic;
-
     internal interface IAsyncProducerConfigShared
     {
-        int QueueTime { get; set; }
-
-        int QueueSize { get; set; }
-
-        int BatchSize { get; set; }
-
         string SerializerClass { get; set; }
 
-        string CallbackHandler { get; set; }
-
-        string EventHandler { get; set; }
-
-        IDictionary<string, string> CallbackHandlerProps { get; set; }
-
-        IDictionary<string, string> EventHandlerProps { get; set; }
+        string CallbackHandlerClass { get; set; }
     }
 }

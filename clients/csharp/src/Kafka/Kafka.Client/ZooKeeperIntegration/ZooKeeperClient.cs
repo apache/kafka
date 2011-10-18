@@ -209,7 +209,8 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public bool WaitUntilConnected(int connectionTimeout)
         {
-            Guard.Assert<ArgumentOutOfRangeException>(() => connectionTimeout > 0);
+            Guard.Greater(connectionTimeout, 0, "connectionTimeout");
+
             this.EnsuresNotDisposed();
             if (this.eventWorker != null && this.eventWorker == Thread.CurrentThread)
             {
@@ -250,7 +251,8 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public T RetryUntilConnected<T>(Func<T> callback)
         {
-            Guard.Assert<ArgumentNullException>(() => callback != null);
+            Guard.NotNull(callback, "callback");
+
             this.EnsuresNotDisposed();
             if (this.zooKeeperEventWorker != null && this.zooKeeperEventWorker == Thread.CurrentThread)
             {
@@ -290,7 +292,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </remarks>
         public bool Exists(string path)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             bool hasListeners = this.HasListeners(path);
@@ -311,7 +313,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public bool Exists(string path, bool watch)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             return this.RetryUntilConnected(
@@ -332,7 +334,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </remarks>
         public IList<string> GetChildren(string path)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             bool hasListeners = this.HasListeners(path);
@@ -353,7 +355,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public IList<string> GetChildren(string path, bool watch)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             return this.RetryUntilConnected(
@@ -375,7 +377,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </remarks>
         public int CountChildren(string path)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             try
@@ -413,7 +415,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         public T ReadData<T>(string path, Stat stats, bool watch)
             where T : class 
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             byte[] bytes = this.RetryUntilConnected(
@@ -443,7 +445,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </remarks>
         public T ReadData<T>(string path, Stat stats) where T : class
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             bool hasListeners = this.HasListeners(path);
@@ -461,7 +463,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </param>
         public void WriteData(string path, object data)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             this.WriteData(path, data, -1);
@@ -484,7 +486,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </remarks>
         public void WriteData(string path, object data, int expectedVersion)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             byte[] bytes = this.serializer.Serialize(data);
@@ -507,7 +509,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public bool Delete(string path)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             return this.RetryUntilConnected(
@@ -536,7 +538,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public bool DeleteRecursive(string path)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             IList<string> children;
@@ -568,7 +570,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </param>
         public void MakeSurePersistentPathExists(string path)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             if (!this.Exists(path))
@@ -588,7 +590,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public IList<string> GetChildrenParentMayNotExist(string path)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             try
@@ -616,7 +618,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         public T ReadData<T>(string path)
             where T : class
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
+            Guard.NotNullNorEmpty(path, "path");
 
             this.EnsuresNotDisposed();
             return this.ReadData<T>(path, false);
@@ -671,8 +673,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </remarks>
         public void CreatePersistent(string path, bool createParents)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
-
+            Guard.NotNullNorEmpty(path, "path");
             this.EnsuresNotDisposed();
             try
             {
@@ -710,8 +711,8 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </remarks>
         public void CreatePersistent(string path)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
-
+            Guard.NotNullNorEmpty(path, "path");
+            this.EnsuresNotDisposed();
             this.CreatePersistent(path, false);
         }
 
@@ -730,8 +731,8 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </remarks>
         public void CreatePersistent(string path, object data)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
-
+            Guard.NotNullNorEmpty(path, "path");
+            this.EnsuresNotDisposed();
             this.Create(path, data, CreateMode.Persistent);
         }
 
@@ -753,8 +754,8 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public string CreatePersistentSequential(string path, object data)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
-
+            Guard.NotNullNorEmpty(path, "path");
+            this.EnsuresNotDisposed();
             return this.Create(path, data, CreateMode.PersistentSequential);
         }
 
@@ -796,8 +797,8 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </remarks>
         public void CreateEphemeral(string path)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
-
+            Guard.NotNullNorEmpty(path, "path");
+            this.EnsuresNotDisposed();
             this.Create(path, null, CreateMode.Ephemeral);
         }
 
@@ -815,8 +816,8 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </remarks>
         public void CreateEphemeral(string path, object data)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
-
+            Guard.NotNullNorEmpty(path, "path");
+            this.EnsuresNotDisposed();
             this.Create(path, data, CreateMode.Ephemeral);
         }
 
@@ -837,8 +838,8 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public string CreateEphemeralSequential(string path, object data)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
-
+            Guard.NotNullNorEmpty(path, "path");
+            this.EnsuresNotDisposed();
             return this.Create(path, data, CreateMode.EphemeralSequential);
         }
 
@@ -861,8 +862,8 @@ namespace Kafka.Client.ZooKeeperIntegration
         public T ReadData<T>(string path, bool returnNullIfPathNotExists)
             where T : class 
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(path));
-
+            Guard.NotNullNorEmpty(path, "path");
+            this.EnsuresNotDisposed();
             try
             {
                 return this.ReadData<T>(path, null);

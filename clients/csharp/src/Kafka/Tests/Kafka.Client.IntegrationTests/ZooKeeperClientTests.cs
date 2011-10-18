@@ -35,15 +35,7 @@ namespace Kafka.Client.IntegrationTests
     internal class ZooKeeperClientTests : IntegrationFixtureBase, IZooKeeperDataListener, IZooKeeperStateListener, IZooKeeperChildListener
     {
         private static readonly ILog Logger = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
-
-        private KafkaClientConfiguration clientConfig;
         private readonly IList<ZooKeeperEventArgs> events = new List<ZooKeeperEventArgs>();
-
-        [TestFixtureSetUp]
-        public void SetUp()
-        {
-            clientConfig = KafkaClientConfiguration.GetConfiguration();
-        }
 
         [SetUp]
         public void TestSetup()
@@ -54,8 +46,12 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ZooKeeperClientCreateWorkerThreadsOnBeingCreated()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperClient client = new ZooKeeperClient(producerConfig.ZkConnect, producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                prodConfig.ZooKeeper.ZkConnect, 
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
                 var eventWorker = ReflectionHelper.GetInstanceField<Thread>("eventWorker", client);
@@ -68,8 +64,12 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ZooKeeperClientFailsWhenCreatedWithWrongConnectionInfo()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperClient client = new ZooKeeperClient("random text", producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                "random text", 
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 Assert.Throws<FormatException>(client.Connect);
             }
@@ -78,8 +78,12 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenStateChangedToConnectedStateListenerFires()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperClient client = new ZooKeeperClient(producerConfig.ZkConnect, producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 client.Subscribe(this);
                 client.Connect();
@@ -96,8 +100,12 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenStateChangedToDisconnectedStateListenerFires()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperClient client = new ZooKeeperClient(producerConfig.ZkConnect, producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 client.Subscribe(this);
                 client.Connect();
@@ -116,8 +124,12 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenStateChangedToExpiredStateAndSessionListenersFire()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperClient client = new ZooKeeperClient(producerConfig.ZkConnect, producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 client.Subscribe(this);
                 client.Connect();
@@ -143,10 +155,14 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenSessionExpiredClientReconnects()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             IZooKeeperConnection conn1;
             IZooKeeperConnection conn2;
-            using (IZooKeeperClient client = new ZooKeeperClient(producerConfig.ZkConnect, producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                prodConfig.ZooKeeper.ZkConnect, 
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
                 conn1 = ReflectionHelper.GetInstanceField<ZooKeeperConnection>("connection", client);
@@ -161,8 +177,12 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ZooKeeperClientChecksIfPathExists()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperClient client = new ZooKeeperClient(producerConfig.ZkConnect, producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
                 Assert.IsTrue(client.Exists(ZooKeeperClient.DefaultBrokerTopicsPath, false));
@@ -172,8 +192,12 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ZooKeeperClientCreatesANewPathAndDeletesIt()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperClient client = new ZooKeeperClient(producerConfig.ZkConnect, producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
                 string myPath = "/" + Guid.NewGuid();
@@ -187,9 +211,13 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenChildIsCreatedChilListenerOnParentFires()
         {
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             string myPath = "/" + Guid.NewGuid();
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperClient client = new ZooKeeperClient(producerConfig.ZkConnect, producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
                 WaitUntillIdle(client, 500);
@@ -212,9 +240,13 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenChildIsDeletedChildListenerOnParentFires()
         {
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             string myPath = "/" + Guid.NewGuid();
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperClient client = new ZooKeeperClient(producerConfig.ZkConnect, producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
                 client.CreatePersistent(myPath, true);
@@ -236,9 +268,13 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenZNodeIsDeletedChildAndDataDeletedListenersFire()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             string myPath = "/" + Guid.NewGuid();
-            using (IZooKeeperClient client = new ZooKeeperClient(producerConfig.ZkConnect, producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
                 client.CreatePersistent(myPath, true);
@@ -265,8 +301,12 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ZooKeeperClientCreatesAChildAndGetsChildren()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperClient client = new ZooKeeperClient(producerConfig.ZkConnect, producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                prodConfig.ZooKeeper.ZkConnect, 
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
                 string child = Guid.NewGuid().ToString();
@@ -284,11 +324,15 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenDataChangedDataListenerFires()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             string myPath = "/" + Guid.NewGuid();
             string sourceData = "my test data";
             string resultData;
-            using (IZooKeeperClient client = new ZooKeeperClient(producerConfig.ZkConnect, producerConfig.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            using (IZooKeeperClient client = new ZooKeeperClient(
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
+                ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
                 client.CreatePersistent(myPath, true);
@@ -317,11 +361,12 @@ namespace Kafka.Client.IntegrationTests
         [ExpectedException(typeof(ZooKeeperException))]
         public void WhenClientWillNotConnectWithinGivenTimeThrows()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             using (IZooKeeperClient client = 
                 new ZooKeeperClient(
-                    producerConfig.ZkConnect, 
-                    producerConfig.ZkSessionTimeoutMs, 
+                    prodConfig.ZooKeeper.ZkConnect,
+                    prodConfig.ZooKeeper.ZkSessionTimeoutMs, 
                     ZooKeeperStringSerializer.Serializer,
                     1))
             {

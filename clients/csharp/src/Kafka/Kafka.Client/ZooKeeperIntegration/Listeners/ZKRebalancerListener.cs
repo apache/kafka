@@ -49,7 +49,7 @@ namespace Kafka.Client.ZooKeeperIntegration.Listeners
 
         private readonly object syncLock;
 
-        private readonly ConsumerConfig config;
+        private readonly ConsumerConfiguration config;
 
         private readonly IZooKeeperClient zkClient;
 
@@ -60,7 +60,7 @@ namespace Kafka.Client.ZooKeeperIntegration.Listeners
         private readonly ZookeeperConsumerConnector zkConsumerConnector;
 
         internal ZKRebalancerListener(
-            ConsumerConfig config,
+            ConsumerConfiguration config,
             string consumerIdString,
             IDictionary<string, IDictionary<Partition, PartitionTopicInfo>> topicRegistry,
             IZooKeeperClient zkClient,
@@ -106,7 +106,7 @@ namespace Kafka.Client.ZooKeeperIntegration.Listeners
                     //// release all partitions, reset state and retry
                     this.ReleasePartitionOwnership();
                     this.ResetState();
-                    Thread.Sleep(config.ZkSyncTimeMs);
+                    Thread.Sleep(config.ZooKeeper.ZkSyncTimeMs);
                 }
             }
 
@@ -124,9 +124,9 @@ namespace Kafka.Client.ZooKeeperIntegration.Listeners
         /// </remarks>
         public void HandleChildChange(ZooKeeperChildChangedEventArgs args)
         {
-            Guard.Assert<ArgumentNullException>(() => args != null);
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(args.Path));
-            Guard.Assert<ArgumentNullException>(() => args.Children != null);
+            Guard.NotNull(args, "args");
+            Guard.NotNullNorEmpty(args.Path, "args.Path");
+            Guard.NotNull(args.Children, "args.Children");
 
             SyncedRebalance();
         }

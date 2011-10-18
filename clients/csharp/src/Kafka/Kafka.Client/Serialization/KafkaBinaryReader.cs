@@ -20,6 +20,7 @@ namespace Kafka.Client.Serialization
     using System.IO;
     using System.Net;
     using System.Text;
+    using System.Net.Sockets;
 
     /// <summary>
     /// Reads data from underlying stream using big endian bytes order for primitive types
@@ -47,7 +48,10 @@ namespace Kafka.Client.Serialization
         /// </param>
         protected override void Dispose(bool disposing)
         {
-            this.BaseStream.Position = 0;
+            if (this.BaseStream.CanSeek)
+            {
+                this.BaseStream.Position = 0;
+            }
         }
 
         /// <summary>
@@ -126,6 +130,19 @@ namespace Kafka.Client.Serialization
             var bytes = this.ReadBytes(length);
             Encoding encoder = Encoding.GetEncoding(encoding);
             return encoder.GetString(bytes);
+        }
+
+        public bool DataAvailabe
+        {
+            get
+            {
+                if (this.BaseStream is NetworkStream)
+                {
+                    return ((NetworkStream)this.BaseStream).DataAvailable;
+                }
+
+                return this.BaseStream.Length != this.BaseStream.Position;
+            }
         }
     }
 }

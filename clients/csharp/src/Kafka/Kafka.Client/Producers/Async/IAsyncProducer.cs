@@ -17,6 +17,7 @@
 
 namespace Kafka.Client.Producers.Async
 {
+    using System;
     using System.Collections.Generic;
     using Kafka.Client.Messages;
     using Kafka.Client.Requests;
@@ -24,7 +25,7 @@ namespace Kafka.Client.Producers.Async
     /// <summary>
     /// Sends messages encapsulated in request to Kafka server asynchronously
     /// </summary>
-    public interface IAsyncProducer
+    public interface IAsyncProducer : IDisposable
     {
         /// <summary>
         /// Sends request to Kafka server asynchronously

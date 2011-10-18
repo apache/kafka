@@ -51,7 +51,7 @@ namespace Kafka.Client.Requests
         /// <param name="requests">Requests to package up and batch.</param>
         public MultiFetchRequest(IList<FetchRequest> requests)
         {
-            Guard.Assert<ArgumentNullException>(() => requests != null);
+            Guard.NotNull(requests, "requests");
             ConsumerRequests = requests;
             int length = GetRequestLength(requests, DefaultEncoding);
             this.RequestBuffer = new BoundedBuffer(length);
@@ -79,7 +79,7 @@ namespace Kafka.Client.Requests
         /// </param>
         public void WriteTo(MemoryStream output)
         {
-            Guard.Assert<ArgumentNullException>(() => output != null);
+            Guard.NotNull(output, "output");
 
             using (var writer = new KafkaBinaryWriter(output))
             {
@@ -98,7 +98,7 @@ namespace Kafka.Client.Requests
         /// </param>
         public void WriteTo(KafkaBinaryWriter writer)
         {
-            Guard.Assert<ArgumentNullException>(() => writer != null);
+            Guard.NotNull(writer, "writer");
 
             foreach (var consumerRequest in ConsumerRequests)
             {

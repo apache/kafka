@@ -34,7 +34,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// <remarks>
         /// Used for testing purpose
         /// </remarks>
-        int IdleTime { get; }
+        int? IdleTime { get; }
 
         /// <summary>
         /// Connects to ZooKeeper server within given time period and installs watcher in ZooKeeper

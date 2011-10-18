@@ -48,7 +48,7 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public byte[] Serialize(object obj)
         {
-            Guard.Assert<ArgumentNullException>(() => obj != null);
+            Guard.NotNull(obj, "obj");
             return Encoding.UTF8.GetBytes(obj.ToString());
         }
 
@@ -63,8 +63,8 @@ namespace Kafka.Client.ZooKeeperIntegration
         /// </returns>
         public object Deserialize(byte[] bytes)
         {
-            Guard.Assert<ArgumentNullException>(() => bytes != null);
-            Guard.Assert<ArgumentException>(() => bytes.Count() > 0);
+            Guard.NotNull(bytes, "bytes");
+            Guard.Greater(bytes.Count(), 0, "bytes");
 
             return bytes == null ? null : Encoding.UTF8.GetString(bytes);
         }

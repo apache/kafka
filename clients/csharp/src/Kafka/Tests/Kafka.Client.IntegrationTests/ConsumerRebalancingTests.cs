@@ -19,8 +19,6 @@ namespace Kafka.Client.IntegrationTests
 {
     using System.Collections.Generic;
     using System.Linq;
-    using System.Threading;
-    using Kafka.Client.Cfg;
     using Kafka.Client.Cluster;
     using Kafka.Client.Consumers;
     using Kafka.Client.Utils;
@@ -30,24 +28,13 @@ namespace Kafka.Client.IntegrationTests
     [TestFixture]
     public class ConsumerRebalancingTests : IntegrationFixtureBase
     {
-        /// <summary>
-        /// Kafka Client configuration
-        /// </summary>
-        private static KafkaClientConfiguration clientConfig;
-
-        [TestFixtureSetUp]
-        public void SetUp()
-        {
-            clientConfig = KafkaClientConfiguration.GetConfiguration();
-        }
-
         [Test]
         public void ConsumerPorformsRebalancingOnStart()
         {
-            var config = new ConsumerConfig(clientConfig) { AutoCommit = false, GroupId = "group1" };
+            var config = this.ZooKeeperBasedConsumerConfig;
             using (var consumerConnector = new ZookeeperConsumerConnector(config, true))
             {
-                ZooKeeperClient client = ReflectionHelper.GetInstanceField<ZooKeeperClient>("zkClient", consumerConnector);
+                var client = ReflectionHelper.GetInstanceField<ZooKeeperClient>("zkClient", consumerConnector);
                 Assert.IsNotNull(client);
                 client.DeleteRecursive("/consumers/group1");
                 var topicCount = new Dictionary<string, int> { { "test", 1 } };
@@ -71,7 +58,7 @@ namespace Kafka.Client.IntegrationTests
                 Assert.That(children, Is.Not.Null.And.Not.Empty);
                 Assert.That(children.Count, Is.EqualTo(2));
                 string partId = children[0];
-                string data = client.ReadData<string>("/consumers/group1/owners/test/" + partId);
+                var data = client.ReadData<string>("/consumers/group1/owners/test/" + partId);
                 Assert.That(data, Is.Not.Null.And.Not.Empty);
                 Assert.That(data, Contains.Substring(consumerId));
                 data = client.ReadData<string>("/consumers/group1/ids/" + consumerId);
@@ -79,7 +66,7 @@ namespace Kafka.Client.IntegrationTests
                 Assert.That(data, Is.EqualTo("{ \"test\": 1 }"));
             }
 
-            using (var client = new ZooKeeperClient(config.ZkConnect, config.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+            using (var client = new ZooKeeperClient(config.ZooKeeper.ZkConnect, config.ZooKeeper.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
                 //// Should be created as ephemeral
@@ -94,13 +81,7 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ConsumerPorformsRebalancingWhenNewBrokerIsAddedToTopic()
         {
-            var config = new ConsumerConfig(clientConfig)
-                             {
-                                 AutoCommit = false,
-                                 GroupId = "group1",
-                                 ZkSessionTimeoutMs = 60000,
-                                 ZkConnectionTimeoutMs = 60000
-                             };
+            var config = this.ZooKeeperBasedConsumerConfig;
             string brokerPath = ZooKeeperClient.DefaultBrokerIdsPath + "/" + 2345;
             string brokerTopicPath = ZooKeeperClient.DefaultBrokerTopicsPath + "/test/" + 2345;
             using (var consumerConnector = new ZookeeperConsumerConnector(config, true))
@@ -120,7 +101,7 @@ namespace Kafka.Client.IntegrationTests
                 children = client.GetChildren("/consumers/group1/owners/test", false);
                 Assert.That(children.Count, Is.EqualTo(3));
                 Assert.That(children, Contains.Item("2345-0"));
-                string data = client.ReadData<string>("/consumers/group1/owners/test/2345-0");
+                var data = client.ReadData<string>("/consumers/group1/owners/test/2345-0");
                 Assert.That(data, Is.Not.Null);
                 Assert.That(data, Contains.Substring(consumerId));
                 var topicRegistry =
@@ -138,7 +119,7 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ConsumerPorformsRebalancingWhenBrokerIsRemovedFromTopic()
         {
-            var config = new ConsumerConfig(clientConfig) { AutoCommit = false, GroupId = "group1", ZkSessionTimeoutMs = 60000, ZkConnectionTimeoutMs = 60000 };
+            var config = this.ZooKeeperBasedConsumerConfig;
             string brokerPath = ZooKeeperClient.DefaultBrokerIdsPath + "/" + 2345;
             string brokerTopicPath = ZooKeeperClient.DefaultBrokerTopicsPath + "/test/" + 2345;
             using (var consumerConnector = new ZookeeperConsumerConnector(config, true))
@@ -170,14 +151,7 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ConsumerPerformsRebalancingWhenNewConsumerIsAddedAndTheyDividePartitions()
         {
-            var config = new ConsumerConfig(clientConfig)
-            {
-                AutoCommit = false,
-                GroupId = "group1",
-                ZkSessionTimeoutMs = 60000,
-                ZkConnectionTimeoutMs = 60000
-            };
-
+            var config = this.ZooKeeperBasedConsumerConfig;
             IList<string> ids;
             IList<string> owners;
             using (var consumerConnector = new ZookeeperConsumerConnector(config, true))
@@ -216,14 +190,8 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ConsumerPerformsRebalancingWhenConsumerIsRemovedAndTakesItsPartitions()
         {
-            var config = new ConsumerConfig(clientConfig)
-            {
-                AutoCommit = false,
-                GroupId = "group1",
-                ZkSessionTimeoutMs = 60000,
-                ZkConnectionTimeoutMs = 60000
-            };
-
+            var config = this.ZooKeeperBasedConsumerConfig;
+            string basePath = "/consumers/" + config.GroupId;
             IList<string> ids;
             IList<string> owners;
             using (var consumerConnector = new ZookeeperConsumerConnector(config, true))
