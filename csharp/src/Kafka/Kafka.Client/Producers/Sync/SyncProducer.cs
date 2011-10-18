@@ -30,15 +30,14 @@ namespace Kafka.Client.Producers.Sync
     /// </summary>
     public class SyncProducer : ISyncProducer
     {
-        private readonly SyncProducerConfig config;
+        private readonly KafkaConnection connection;
+
+        private volatile bool disposed;
 
         /// <summary>
         /// Gets producer config
         /// </summary>
-        public SyncProducerConfig Config
-        {
-            get { return config; }
-        }
+        public SyncProducerConfiguration Config { get; private set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="SyncProducer"/> class.
@@ -46,10 +45,15 @@ namespace Kafka.Client.Producers.Sync
         /// <param name="config">
         /// The producer config.
         /// </param>
-        public SyncProducer(SyncProducerConfig config)
+        public SyncProducer(SyncProducerConfiguration config)
         {
-            Guard.Assert<ArgumentNullException>(() => config != null);
-            this.config = config;
+            Guard.NotNull(config, "config");
+            this.Config = config;
+            this.connection = new KafkaConnection(
+                this.Config.Host, 
+                this.Config.Port,
+                config.BufferSize,
+                config.SocketTimeout);
         }
 
         /// <summary>
@@ -66,14 +70,13 @@ namespace Kafka.Client.Producers.Sync
         /// </param>
         public void Send(string topic, int partition, IEnumerable<Message> messages)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(topic));
-            Guard.Assert<ArgumentNullException>(() => messages != null);
-            Guard.Assert<ArgumentNullException>(
-                () => messages.All(x => x != null));
+            Guard.NotNullNorEmpty(topic, "topic");
+            Guard.NotNull(messages, "messages");
+            Guard.AllNotNull(messages, "messages.items");
             Guard.Assert<ArgumentOutOfRangeException>(
                 () => messages.All(
                     x => x.PayloadSize <= this.Config.MaxMessageSize));
-            
+            this.EnsuresNotDisposed();
             this.Send(new ProducerRequest(topic, partition, messages));
         }
 
@@ -85,11 +88,8 @@ namespace Kafka.Client.Producers.Sync
         /// </param>
         public void Send(ProducerRequest request)
         {
-            Guard.Assert<ArgumentNullException>(() => request != null);
-            using (var conn = new KafkaConnection(this.config.Host, this.config.Port))
-            {
-                conn.Write(request);
-            }
+            this.EnsuresNotDisposed();
+            this.connection.Write(request);
         }
 
         /// <summary>
@@ -100,7 +100,7 @@ namespace Kafka.Client.Producers.Sync
         /// </param>
         public void MultiSend(IEnumerable<ProducerRequest> requests)
         {
-            Guard.Assert<ArgumentNullException>(() => requests != null);
+            Guard.NotNull(requests, "requests");
             Guard.Assert<ArgumentNullException>(
                 () => requests.All(
                     x => x != null && x.MessageSet != null && x.MessageSet.Messages != null));
@@ -108,11 +108,47 @@ namespace Kafka.Client.Producers.Sync
                 () => requests.All(
                     x => x.MessageSet.Messages.All(
                         y => y != null && y.PayloadSize <= this.Config.MaxMessageSize)));
-
+            this.EnsuresNotDisposed();
             var multiRequest = new MultiProducerRequest(requests);
-            using (var conn = new KafkaConnection(this.config.Host, this.config.Port))
+            this.connection.Write(multiRequest);
+        }
+
+        /// <summary>
+        /// Releases all unmanaged and managed resources
+        /// </summary>
+        public void Dispose()
+        {
+            this.Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposing)
             {
-                conn.Write(multiRequest);
+                return;
+            }
+
+            if (this.disposed)
+            {
+                return;
+            }
+
+            this.disposed = true;
+            if (this.connection != null)
+            {
+                this.connection.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Ensures that object was not disposed
+        /// </summary>
+        private void EnsuresNotDisposed()
+        {
+            if (this.disposed)
+            {
+                throw new ObjectDisposedException(this.GetType().Name);
             }
         }
     }

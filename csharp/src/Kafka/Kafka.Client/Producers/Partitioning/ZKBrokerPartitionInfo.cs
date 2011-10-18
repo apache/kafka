@@ -18,6 +18,7 @@
 namespace Kafka.Client.Producers.Partitioning
 {
     using System;
+    using System.Collections.Concurrent;
     using System.Collections.Generic;
     using System.Globalization;
     using System.Reflection;
@@ -66,8 +67,8 @@ namespace Kafka.Client.Producers.Partitioning
         /// </summary>
         /// <param name="config">The config.</param>
         /// <param name="callback">The callback invoked when new broker is added.</param>
-        public ZKBrokerPartitionInfo(ZKConfig config, Action<int, string, int> callback)
-            : this(new ZooKeeperClient(config.ZkConnect, config.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
+        public ZKBrokerPartitionInfo(ProducerConfiguration config, Action<int, string, int> callback)
+            : this(new ZooKeeperClient(config.ZooKeeper.ZkConnect, config.ZooKeeper.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer))
         {
             this.callback = callback;
         }
@@ -93,7 +94,7 @@ namespace Kafka.Client.Producers.Partitioning
         /// </returns>
         public SortedSet<Partition> GetBrokerPartitionInfo(string topic)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(topic));
+            Guard.NotNullNorEmpty(topic, "topic");
 
             this.EnsuresNotDisposed();
             SortedSet<Partition> brokerPartitions = null;
@@ -101,11 +102,15 @@ namespace Kafka.Client.Producers.Partitioning
             {
                 brokerPartitions = this.topicBrokerPartitions[topic];
             }
+            else
+            {
+                this.topicBrokerPartitions.Add(topic, null);
+            }
 
             if (brokerPartitions == null || brokerPartitions.Count == 0)
             {
                 var numBrokerPartitions = this.BootstrapWithExistingBrokers(topic);
-                this.topicBrokerPartitions.Add(topic, numBrokerPartitions);
+                this.topicBrokerPartitions[topic] = numBrokerPartitions;
                 return numBrokerPartitions;
             }
 
@@ -168,7 +173,7 @@ namespace Kafka.Client.Producers.Partitioning
                 return;
             }
 
-            this.brokers = new Dictionary<int, Broker>();
+            this.brokers = new ConcurrentDictionary<int, Broker>();
             IList<string> brokerIds = this.zkclient.GetChildrenParentMayNotExist(ZooKeeperClient.DefaultBrokerIdsPath);
             foreach (var brokerId in brokerIds)
             {
@@ -191,7 +196,7 @@ namespace Kafka.Client.Producers.Partitioning
                 return;
             }
 
-            this.topicBrokerPartitions = new Dictionary<string, SortedSet<Partition>>();
+            this.topicBrokerPartitions = new ConcurrentDictionary<string, SortedSet<Partition>>();
             this.zkclient.MakeSurePersistentPathExists(ZooKeeperClient.DefaultBrokerTopicsPath);
             IList<string> topics = this.zkclient.GetChildrenParentMayNotExist(ZooKeeperClient.DefaultBrokerTopicsPath);
             foreach (string topic in topics)
@@ -306,7 +311,7 @@ namespace Kafka.Client.Producers.Partitioning
         /// </remarks>
         public void HandleStateChanged(ZooKeeperStateChangedEventArgs args)
         {
-            Guard.Assert<ArgumentNullException>(() => args != null);
+            Guard.NotNull(args, "args");
             Guard.Assert<ArgumentException>(() => args.State != KeeperState.Unknown);
 
             this.EnsuresNotDisposed();
@@ -322,7 +327,7 @@ namespace Kafka.Client.Producers.Partitioning
         /// </remarks>
         public void HandleSessionCreated(ZooKeeperSessionCreatedEventArgs args)
         {
-            Guard.Assert<ArgumentNullException>(() => args != null);
+            Guard.NotNull(args, "args");
 
             this.EnsuresNotDisposed();
             Logger.Debug("ZK expired; release old list of broker partitions for topics ");

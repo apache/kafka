@@ -33,7 +33,7 @@ namespace Kafka.Client.Consumers
     /// The consumer high-level API, that hides the details of brokers from the consumer. 
     /// It also maintains the state of what has been consumed. 
     /// </summary>
-    public class ZookeeperConsumerConnector : ZooKeeperAwareKafkaClientBase, IConsumerConnector
+    public class ZookeeperConsumerConnector : KafkaClientBase, IConsumerConnector
     {
         private static readonly ILog Logger = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
         
@@ -41,7 +41,7 @@ namespace Kafka.Client.Consumers
         
         internal static readonly FetchedDataChunk ShutdownCommand = new FetchedDataChunk(null, null, -1);
 
-        private readonly ConsumerConfig config;
+        private readonly ConsumerConfiguration config;
        
         private IZooKeeperClient zkClient;
        
@@ -79,8 +79,7 @@ namespace Kafka.Client.Consumers
         /// <param name="enableFetcher">
         /// Indicates whether fetchers should be enabled
         /// </param>
-        public ZookeeperConsumerConnector(ConsumerConfig config, bool enableFetcher)
-            : base(config)
+        public ZookeeperConsumerConnector(ConsumerConfiguration config, bool enableFetcher)
         {
             this.config = config;
             this.enableFetcher = enableFetcher;
@@ -89,8 +88,8 @@ namespace Kafka.Client.Consumers
 
             if (this.config.AutoCommit)
             {
-                Logger.InfoFormat(CultureInfo.CurrentCulture, "starting auto committer every {0} ms", this.config.AutoCommitIntervalMs);
-                scheduler.ScheduleWithRate(this.AutoCommit, this.config.AutoCommitIntervalMs, this.config.AutoCommitIntervalMs);
+                Logger.InfoFormat(CultureInfo.CurrentCulture, "starting auto committer every {0} ms", this.config.AutoCommitInterval);
+                scheduler.ScheduleWithRate(this.AutoCommit, this.config.AutoCommitInterval, this.config.AutoCommitInterval);
             }
         }
 
@@ -210,8 +209,8 @@ namespace Kafka.Client.Consumers
 
         private void ConnectZk()
         {
-            Logger.InfoFormat(CultureInfo.CurrentCulture, "Connecting to zookeeper instance at {0}", this.config.ZkConnect);
-            this.zkClient = new ZooKeeperClient(this.config.ZkConnect, this.config.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer);
+            Logger.InfoFormat(CultureInfo.CurrentCulture, "Connecting to zookeeper instance at {0}", this.config.ZooKeeper.ZkConnect);
+            this.zkClient = new ZooKeeperClient(this.config.ZooKeeper.ZkConnect, this.config.ZooKeeper.ZkSessionTimeoutMs, ZooKeeperStringSerializer.Serializer);
             this.zkClient.Connect();
         }
 

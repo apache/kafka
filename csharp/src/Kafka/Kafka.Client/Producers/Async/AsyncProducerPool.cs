@@ -39,6 +39,7 @@ namespace Kafka.Client.Producers.Async
     {
         private static readonly ILog Logger = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
         private readonly IDictionary<int, IAsyncProducer> asyncProducers;
+        private volatile bool disposed;
         
         /// <summary>
         /// Factory method used to instantiating asynchronous producer pool
@@ -56,7 +57,7 @@ namespace Kafka.Client.Producers.Async
         /// Instantiated asynchronous producer pool
         /// </returns>
         public static AsyncProducerPool<TData> CreateAsyncPool(
-            ProducerConfig config, 
+            ProducerConfiguration config, 
             IEncoder<TData> serializer, 
             ICallbackHandler cbkHandler)
         {
@@ -76,7 +77,7 @@ namespace Kafka.Client.Producers.Async
         /// Instantiated asynchronous producer pool
         /// </returns>
         public static AsyncProducerPool<TData> CreateAsyncPool(
-            ProducerConfig config,
+            ProducerConfiguration config,
             IEncoder<TData> serializer)
         {
             return new AsyncProducerPool<TData>(config, serializer);
@@ -101,7 +102,7 @@ namespace Kafka.Client.Producers.Async
         /// Should be used for testing purpose only
         /// </remarks>
         private AsyncProducerPool(
-            ProducerConfig config, 
+            ProducerConfiguration config, 
             IEncoder<TData> serializer, 
             IDictionary<int, IAsyncProducer> asyncProducers, 
             ICallbackHandler cbkHandler)
@@ -123,7 +124,7 @@ namespace Kafka.Client.Producers.Async
         /// The callback invoked after new broker is added.
         /// </param>
         private AsyncProducerPool(
-            ProducerConfig config, 
+            ProducerConfiguration config, 
             IEncoder<TData> serializer, 
             ICallbackHandler cbkHandler)
             : this(config, serializer, new Dictionary<int, IAsyncProducer>(), cbkHandler)
@@ -139,12 +140,12 @@ namespace Kafka.Client.Producers.Async
         /// <param name="serializer">
         /// The serializer.
         /// </param>
-        private AsyncProducerPool(ProducerConfig config, IEncoder<TData> serializer)
+        private AsyncProducerPool(ProducerConfiguration config, IEncoder<TData> serializer)
             : this(
             config,
             serializer,
             new Dictionary<int, IAsyncProducer>(),
-            ReflectionHelper.Instantiate<ICallbackHandler>(config.CallbackHandler))
+            ReflectionHelper.Instantiate<ICallbackHandler>(config.CallbackHandlerClass))
         {
         }
 
@@ -159,7 +160,8 @@ namespace Kafka.Client.Producers.Async
         /// </remarks>
         public override void Send(IEnumerable<ProducerPoolData<TData>> poolData)
         {
-            Guard.Assert<ArgumentNullException>(() => poolData != null);
+            this.EnsuresNotDisposed();
+            Guard.NotNull(poolData, "poolData");
             Dictionary<int, List<ProducerPoolData<TData>>> distinctBrokers = poolData.GroupBy(
                 x => x.BidPid.BrokerId, x => x)
                 .ToDictionary(x => x.Key, x => x.ToList());
@@ -184,14 +186,10 @@ namespace Kafka.Client.Producers.Async
         /// <param name="broker">The broker informations.</param>
         public override void AddProducer(Broker broker)
         {
-            Guard.Assert<ArgumentNullException>(() => broker != null);
-            var asyncConfig = new AsyncProducerConfig
+            this.EnsuresNotDisposed();
+            Guard.NotNull(broker, "broker");
+            var asyncConfig = new AsyncProducerConfiguration(this.Config, broker.Id, broker.Host, broker.Port)
                 {
-                    Host = broker.Host,
-                    Port = broker.Port,
-                    QueueTime = this.Config.QueueTime,
-                    QueueSize = this.Config.QueueSize,
-                    BatchSize = this.Config.BatchSize,
                     SerializerClass = this.Config.SerializerClass
                 };
             var asyncProducer = new AsyncProducer(asyncConfig, this.CallbackHandler);
@@ -202,6 +200,25 @@ namespace Kafka.Client.Producers.Async
                 broker.Host,
                 broker.Port);
             this.asyncProducers.Add(broker.Id, asyncProducer);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (!disposing)
+            {
+                return;
+            }
+
+            if (this.disposed)
+            {
+                return;
+            }
+
+            this.disposed = true;
+            foreach (var asyncProducer in this.asyncProducers.Values)
+            {
+                asyncProducer.Dispose();
+            }
         }
     }
 }

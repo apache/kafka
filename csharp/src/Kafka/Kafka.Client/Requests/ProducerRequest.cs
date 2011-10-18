@@ -35,7 +35,6 @@ namespace Kafka.Client.Requests
         public const byte DefaultPartitionSize = 4;
         public const byte DefaultSetSizeSize = 4;
         public const byte DefaultHeaderSize = DefaultRequestSizeSize + DefaultTopicSizeSize + DefaultPartitionSize + DefaultRequestIdSize + DefaultSetSizeSize;
-        public const short DefaultTopicLengthIfNonePresent = 2;
 
         public static int GetRequestLength(string topic, int messegesSize, string encoding = DefaultEncoding)
         {
@@ -45,7 +44,8 @@ namespace Kafka.Client.Requests
 
         public ProducerRequest(string topic, int partition, BufferedMessageSet messages)
         {
-            Guard.Assert<ArgumentNullException>(() => messages != null);
+            Guard.NotNull(messages, "messages");
+
             int length = GetRequestLength(topic, messages.SetSize);
             this.RequestBuffer = new BoundedBuffer(length);
             this.Topic = topic;
@@ -91,7 +91,8 @@ namespace Kafka.Client.Requests
         /// </param>
         public void WriteTo(MemoryStream output)
         {
-            Guard.Assert<ArgumentNullException>(() => output != null);
+            Guard.NotNull(output, "output");
+
             using (var writer = new KafkaBinaryWriter(output))
             {
                 writer.Write(this.RequestBuffer.Capacity - DefaultRequestSizeSize);
@@ -108,7 +109,8 @@ namespace Kafka.Client.Requests
         /// </param>
         public void WriteTo(KafkaBinaryWriter writer)
         {
-            Guard.Assert<ArgumentNullException>(() => writer != null);
+            Guard.NotNull(writer, "writer");
+
             writer.WriteTopic(this.Topic, DefaultEncoding);
             writer.Write(this.Partition);
             writer.Write(this.MessageSet.SetSize);
@@ -117,39 +119,22 @@ namespace Kafka.Client.Requests
 
         public override string ToString()
         {
-            using (var reader = new KafkaBinaryReader(this.RequestBuffer))
-            {
-                return ParseFrom(reader, this.TotalSize);
-            }
-        }
-
-        public static string ParseFrom(KafkaBinaryReader reader, int count, bool skipReqInfo = false)
-        {
-            Guard.Assert<ArgumentNullException>(() => reader != null);
             var sb = new StringBuilder();
-
-            if (!skipReqInfo)
-            {
-                sb.Append("Request size: ");
-                sb.Append(reader.ReadInt32());
-                sb.Append(", RequestId: ");
-                short reqId = reader.ReadInt16();
-                sb.Append(reqId);
-                sb.Append("(");
-                sb.Append((RequestTypes)reqId);
-                sb.Append(")");
-            }
-
+            sb.Append("Request size: ");
+            sb.Append(this.TotalSize);
+            sb.Append(", RequestId: ");
+            sb.Append(this.RequestTypeId);
+            sb.Append("(");
+            sb.Append((RequestTypes)this.RequestTypeId);
+            sb.Append(")");
             sb.Append(", Topic: ");
-            string topic = reader.ReadTopic(DefaultEncoding);
-            sb.Append(topic);
+            sb.Append(this.Topic);
             sb.Append(", Partition: ");
-            sb.Append(reader.ReadInt32());
+            sb.Append(this.Partition);
             sb.Append(", Set size: ");
-            sb.Append(reader.ReadInt32());
-            int size = count - DefaultHeaderSize - GetTopicLength(topic);
+            sb.Append(this.MessageSet.SetSize);
             sb.Append(", Set {");
-            sb.Append(BufferedMessageSet.ParseFrom(reader, size));
+            sb.Append(this.MessageSet.ToString());
             sb.Append("}");
             return sb.ToString();
         }

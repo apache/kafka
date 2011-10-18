@@ -20,7 +20,6 @@ namespace Kafka.Client.Consumers
     using System;
     using System.Collections.Generic;
     using System.Globalization;
-    using System.Linq;
     using System.Reflection;
     using Kafka.Client.Cfg;
     using Kafka.Client.Exceptions;
@@ -33,25 +32,17 @@ namespace Kafka.Client.Consumers
     /// The low-level API of consumer of Kafka messages
     /// </summary>
     /// <remarks>
-    /// Maintains a connection to a single broker and has a close correspondence 
+    /// Maintains a connection to a single broker and has a close correspondence
     /// to the network requests sent to the server.
     /// Also, is completely stateless.
     /// </remarks>
     public class Consumer : IConsumer
     {
-        private static readonly ILog Logger = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);  
+        private static readonly ILog Logger = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
 
-        private readonly ConsumerConfig config;
-
-        /// <summary>
-        /// Gets the server to which the connection is to be established.
-        /// </summary>
-        public string Host { get; private set; }
-
-        /// <summary>
-        /// Gets the port to which the connection is to be established.
-        /// </summary>
-        public int Port { get; private set; }
+        private readonly ConsumerConfiguration config;
+        private readonly string host;
+        private readonly int port;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="Consumer"/> class.
@@ -59,13 +50,30 @@ namespace Kafka.Client.Consumers
         /// <param name="config">
         /// The consumer configuration.
         /// </param>
-        public Consumer(ConsumerConfig config)
+        public Consumer(ConsumerConfiguration config)
         {
-            Guard.Assert<ArgumentNullException>(() => config != null);
+            Guard.NotNull(config, "config");
 
             this.config = config;
-            this.Host = config.Host;
-            this.Port = config.Port;
+            this.host = config.Broker.Host;
+            this.port = config.Broker.Port;
+        }
+
+        /// <summary>
+        /// Initializes a new instance of the <see cref="Consumer"/> class.
+        /// </summary>
+        /// <param name="config">
+        /// The consumer configuration.
+        /// </param>
+        /// <param name="host"></param>
+        /// <param name="port"></param>
+        public Consumer(ConsumerConfiguration config, string host, int port)
+        {
+            Guard.NotNull(config, "config");
+
+            this.config = config;
+            this.host = host;
+            this.port = port;
         }
 
         /// <summary>
@@ -78,38 +86,41 @@ namespace Kafka.Client.Consumers
         /// A set of fetched messages.
         /// </returns>
         /// <remarks>
-        /// Offset is passed in on every request, allowing the user to maintain this metadata 
+        /// Offset is passed in on every request, allowing the user to maintain this metadata
         /// however they choose.
         /// </remarks>
         public BufferedMessageSet Fetch(FetchRequest request)
         {
-            BufferedMessageSet result = null;
-            using (var conn = new KafkaConnection(this.Host, this.Port))
+            short tryCounter = 1;
+            while (tryCounter <= this.config.NumberOfTries)
             {
-                short tryCounter = 1;
-                bool success = false;
-                while (!success && tryCounter <= this.config.NumberOfTries)
+                try
                 {
-                    try
+                    using (var conn = new KafkaConnection(
+                        this.host,
+                        this.port,
+                        this.config.BufferSize,
+                        this.config.SocketTimeout))
                     {
-                        result = Fetch(conn, request);
-                        success = true;
+                        conn.Write(request);
+                        int size = conn.Reader.ReadInt32();
+                        return BufferedMessageSet.ParseFrom(conn.Reader, size);
                     }
-                    catch (Exception ex)
+                }
+                catch (Exception ex)
+                {
+                    //// if maximum number of tries reached
+                    if (tryCounter == this.config.NumberOfTries)
                     {
-                        //// if maximum number of tries reached
-                        if (tryCounter == this.config.NumberOfTries)
-                        {
-                            throw;
-                        }
+                        throw;
+                    }
 
-                        tryCounter++;
-                        Logger.InfoFormat(CultureInfo.CurrentCulture, "Fetch reconnect due to {0}", ex);
-                    }
+                    tryCounter++;
+                    Logger.InfoFormat(CultureInfo.CurrentCulture, "Fetch reconnect due to {0}", ex);
                 }
             }
 
-            return result;
+            return null;
         }
 
         /// <summary>
@@ -128,28 +139,32 @@ namespace Kafka.Client.Consumers
         public IList<BufferedMessageSet> MultiFetch(MultiFetchRequest request)
         {
             var result = new List<BufferedMessageSet>();
-            using (var conn = new KafkaConnection(this.Host, this.Port))
+            short tryCounter = 1;
+            while (tryCounter <= this.config.NumberOfTries)
             {
-                short tryCounter = 1;
-                bool success = false;
-                while (!success && tryCounter <= this.config.NumberOfTries)
+                try
                 {
-                    try
+                    using (var conn = new KafkaConnection(
+                        this.host,
+                        this.port,
+                        this.config.BufferSize,
+                        this.config.SocketTimeout))
                     {
-                        MultiFetch(conn, request, result);
-                        success = true;
+                        conn.Write(request);
+                        int size = conn.Reader.ReadInt32();
+                        return BufferedMessageSet.ParseMultiFrom(conn.Reader, size, request.ConsumerRequests.Count);
                     }
-                    catch (Exception ex)
+                }
+                catch (Exception ex)
+                {
+                    // if maximum number of tries reached
+                    if (tryCounter == this.config.NumberOfTries)
                     {
-                        // if maximum number of tries reached
-                        if (tryCounter == this.config.NumberOfTries)
-                        {
-                            throw;
-                        }
+                        throw;
+                    }
 
-                        tryCounter++;
-                        Logger.InfoFormat(CultureInfo.CurrentCulture, "MultiFetch reconnect due to {0}", ex);
-                    }
+                    tryCounter++;
+                    Logger.InfoFormat(CultureInfo.CurrentCulture, "MultiFetch reconnect due to {0}", ex);
                 }
             }
 
@@ -167,122 +182,54 @@ namespace Kafka.Client.Consumers
         /// </returns>
         public IList<long> GetOffsetsBefore(OffsetRequest request)
         {
-            var offsets = new List<long>();
-            using (var conn = new KafkaConnection(this.Host, this.Port))
+            var result = new List<long>();
+            short tryCounter = 1;
+            while (tryCounter <= this.config.NumberOfTries)
             {
-                short tryCounter = 1;
-                bool success = false;
-                while (!success && tryCounter <= this.config.NumberOfTries)
+                try
                 {
-                    try
+                    using (var conn = new KafkaConnection(
+                        this.host,
+                        this.port,
+                        this.config.BufferSize,
+                        this.config.SocketTimeout))
                     {
-                        GetOffsetsBefore(conn, request, offsets);
-                        success = true;
-                    }
-                    catch (Exception ex)
-                    {
-                        // if maximum number of tries reached
-                        if (tryCounter == this.config.NumberOfTries)
+                        conn.Write(request);
+                        int size = conn.Reader.ReadInt32();
+                        if (size == 0)
                         {
-                            throw;
+                            return result;
                         }
 
-                        tryCounter++;
-                        Logger.InfoFormat(CultureInfo.CurrentCulture, "GetOffsetsBefore reconnect due to {0}", ex);
+                        short errorCode = conn.Reader.ReadInt16();
+                        if (errorCode != KafkaException.NoError)
+                        {
+                            throw new KafkaException(errorCode);
+                        }
+
+                        int count = conn.Reader.ReadInt32();
+                        for (int i = 0; i < count; i++)
+                        {
+                            result.Add(conn.Reader.ReadInt64());
+                        }
+
+                        return result;
                     }
                 }
-            }
-
-            return offsets;
-        }
-
-        private static BufferedMessageSet Fetch(KafkaConnection conn, FetchRequest request)
-        {
-            conn.Write(request);
-            int dataLength = BitConverter.ToInt32(BitWorks.ReverseBytes(conn.Read(4)), 0);
-            if (dataLength > 0)
-            {
-                byte[] data = conn.Read(dataLength);
-
-                int errorCode = BitConverter.ToInt16(BitWorks.ReverseBytes(data.Take(2).ToArray()), 0);
-                if (errorCode != KafkaException.NoError)
+                catch (Exception ex)
                 {
-                    throw new KafkaException(errorCode);
-                }
+                    //// if maximum number of tries reached
+                    if (tryCounter == this.config.NumberOfTries)
+                    {
+                        throw;
+                    }
 
-                // skip the error code
-                byte[] unbufferedData = data.Skip(2).ToArray();
-                return BufferedMessageSet.ParseFrom(unbufferedData);
-            }
-
-            return null;
-        }
-
-        private static void MultiFetch(KafkaConnection conn, MultiFetchRequest request, IList<BufferedMessageSet> result)
-        {
-            result.Clear();
-            conn.Write(request);
-            int dataLength = BitConverter.ToInt32(BitWorks.ReverseBytes(conn.Read(4)), 0);
-            if (dataLength <= 0)
-            {
-                return;
-            }
-
-            byte[] data = conn.Read(dataLength);
-
-            int errorCode = BitConverter.ToInt16(BitWorks.ReverseBytes(data.Take(2).ToArray()), 0);
-            if (errorCode != KafkaException.NoError)
-            {
-                throw new KafkaException(errorCode);
-            }
-
-            // skip the error code
-            byte[] unbufferedData = data.Skip(2).ToArray();
-            for (int i = 0; i < request.ConsumerRequests.Count; i++)
-            {
-                int partLength = BitConverter.ToInt32(BitWorks.ReverseBytes(unbufferedData.Take(4).ToArray()), 0);
-                errorCode = BitConverter.ToInt16(BitWorks.ReverseBytes(unbufferedData.Skip(4).Take(2).ToArray()), 0);
-                if (errorCode != KafkaException.NoError)
-                {
-                    throw new KafkaException(errorCode);
-                }
-
-                result.Add(BufferedMessageSet.ParseFrom(unbufferedData.Skip(6).Take(partLength - 2).ToArray()));
-                unbufferedData = unbufferedData.Skip(partLength + 4).ToArray();
-            }
-        }
-
-        private static void GetOffsetsBefore(KafkaConnection conn, OffsetRequest request, IList<long> offsets)
-        {
-            offsets.Clear(); // to make sure the list is clean after some previous attampts to get data
-            conn.Write(request);
-            int dataLength = BitConverter.ToInt32(BitWorks.ReverseBytes(conn.Read(4)), 0);
-
-            if (dataLength > 0)
-            {
-                byte[] data = conn.Read(dataLength);
-
-                int errorCode = BitConverter.ToInt16(BitWorks.ReverseBytes(data.Take(2).ToArray()), 0);
-                if (errorCode != KafkaException.NoError)
-                {
-                    throw new KafkaException(errorCode);
-                }
-
-                // skip the error code and process the rest
-                byte[] unbufferedData = data.Skip(2).ToArray();
-
-                // first four bytes are the number of offsets
-                int numOfOffsets =
-                    BitConverter.ToInt32(BitWorks.ReverseBytes(unbufferedData.Take(4).ToArray()), 0);
-
-                for (int ix = 0; ix < numOfOffsets; ix++)
-                {
-                    int position = (ix * 8) + 4;
-                    offsets.Add(
-                        BitConverter.ToInt64(
-                            BitWorks.ReverseBytes(unbufferedData.Skip(position).Take(8).ToArray()), 0));
+                    tryCounter++;
+                    Logger.InfoFormat(CultureInfo.CurrentCulture, "GetOffsetsBefore reconnect due to {0}", ex);
                 }
             }
+
+            return result;
         }
     }
 }

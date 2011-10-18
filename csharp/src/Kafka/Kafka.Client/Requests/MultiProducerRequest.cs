@@ -35,7 +35,7 @@ namespace Kafka.Client.Requests
 
         public static int GetBufferLength(IEnumerable<ProducerRequest> requests)
         {
-            Guard.Assert<ArgumentNullException>(() => requests != null);
+            Guard.NotNull(requests, "requests");
 
             return DefaultRequestSizeSize 
                 + DefaultRequestIdSize 
@@ -51,7 +51,8 @@ namespace Kafka.Client.Requests
         /// </param>
         public MultiProducerRequest(IEnumerable<ProducerRequest> requests)
         {
-            Guard.Assert<ArgumentNullException>(() => requests != null);
+            Guard.NotNull(requests, "requests");
+
             int length = GetBufferLength(requests);
             ProducerRequests = requests;
             this.RequestBuffer = new BoundedBuffer(length);
@@ -79,7 +80,7 @@ namespace Kafka.Client.Requests
         /// </param>
         public void WriteTo(MemoryStream output)
         {
-            Guard.Assert<ArgumentNullException>(() => output != null);
+            Guard.NotNull(output, "output");
 
             using (var writer = new KafkaBinaryWriter(output))
             {
@@ -97,7 +98,7 @@ namespace Kafka.Client.Requests
         /// </param>
         public void WriteTo(KafkaBinaryWriter writer)
         {
-            Guard.Assert<ArgumentNullException>(() => writer != null);
+            Guard.NotNull(writer, "writer");
 
             writer.Write((short)this.ProducerRequests.Count());
             foreach (var request in ProducerRequests)
@@ -108,33 +109,21 @@ namespace Kafka.Client.Requests
 
         public override string ToString()
         {
-            using (var reader = new KafkaBinaryReader(this.RequestBuffer))
-            {
-                return ParseFrom(reader, (int)this.RequestBuffer.Length);
-            }
-        }
-
-        public static string ParseFrom(KafkaBinaryReader reader, int count)
-        {
-            Guard.Assert<ArgumentNullException>(() => reader != null);
-
             var sb = new StringBuilder();
             sb.Append("Request size: ");
-            sb.Append(reader.ReadInt32());
+            sb.Append(this.RequestBuffer.Capacity - DefaultRequestSizeSize);
             sb.Append(", RequestId: ");
-            short reqId = reader.ReadInt16();
-            sb.Append(reqId);
+            sb.Append(this.RequestTypeId);
             sb.Append("(");
-            sb.Append((RequestTypes)reqId);
+            sb.Append((RequestTypes)this.RequestTypeId);
             sb.Append("), Single Requests: {");
             int i = 1;
-            while (reader.BaseStream.Position != reader.BaseStream.Length)
+            foreach (var request in ProducerRequests)
             {
                 sb.Append("Request ");
                 sb.Append(i);
                 sb.Append(" {");
-                int msgSize = 0;
-                sb.Append(ProducerRequest.ParseFrom(reader, msgSize));
+                sb.Append(request.ToString());
                 sb.AppendLine("} ");
                 i++;
             }

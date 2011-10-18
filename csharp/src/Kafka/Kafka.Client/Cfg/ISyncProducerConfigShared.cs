@@ -25,8 +25,6 @@ namespace Kafka.Client.Cfg
 
         int SocketTimeout { get; set; }
 
-        int ReconnectInterval { get; set; }
-
         int MaxMessageSize { get; set; }
     }
 }

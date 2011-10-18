@@ -33,44 +33,34 @@ namespace Kafka.Client.IntegrationTests
     public class ZooKeeperAwareProducerTests : IntegrationFixtureBase
     {
         /// <summary>
-        /// Kafka Client configuration
-        /// </summary>
-        private KafkaClientConfiguration clientConfig;
-
-        /// <summary>
         /// Maximum amount of time to wait trying to get a specific test message from Kafka server (in miliseconds)
         /// </summary>
-        private readonly int MaxTestWaitTimeInMiliseconds = 5000;
-
-        [TestFixtureSetUp]
-        public void SetUp()
-        {
-            clientConfig = KafkaClientConfiguration.GetConfiguration();
-        }
+        private readonly int maxTestWaitTimeInMiliseconds = 5000;
 
         [Test]
-        public void ZKAwareProducerSends1Message()
+        public void ZkAwareProducerSends1Message()
         {
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             int totalWaitTimeInMiliseconds = 0;
             int waitSingle = 100;
             var originalMessage = new Message(Encoding.UTF8.GetBytes("TestData"));
 
             var multipleBrokersHelper = new TestMultipleBrokersHelper(CurrentTestTopic);
-            multipleBrokersHelper.GetCurrentOffsets();
+            multipleBrokersHelper.GetCurrentOffsets(new[] { this.SyncProducerConfig1, this.SyncProducerConfig2, this.SyncProducerConfig3 });
 
-            var producerConfig = new ProducerConfig(clientConfig);
             var mockPartitioner = new MockAlwaysZeroPartitioner();
-            using (var producer = new Producer<string, Message>(producerConfig, mockPartitioner, new DefaultEncoder()))
+            using (var producer = new Producer<string, Message>(prodConfig, mockPartitioner, new DefaultEncoder()))
             {
                 var producerData = new ProducerData<string, Message>(
-                    CurrentTestTopic, "somekey", new List<Message>() { originalMessage });
+                    CurrentTestTopic, "somekey", new List<Message> { originalMessage });
                 producer.Send(producerData);
 
-                while (!multipleBrokersHelper.CheckIfAnyBrokerHasChanged())
+                while (!multipleBrokersHelper.CheckIfAnyBrokerHasChanged(new[] { this.SyncProducerConfig1, this.SyncProducerConfig2, this.SyncProducerConfig3 }))
                 {
                     totalWaitTimeInMiliseconds += waitSingle;
                     Thread.Sleep(waitSingle);
-                    if (totalWaitTimeInMiliseconds > MaxTestWaitTimeInMiliseconds)
+                    if (totalWaitTimeInMiliseconds > this.maxTestWaitTimeInMiliseconds)
                     {
                         Assert.Fail("None of the brokers changed their offset after sending a message");
                     }
@@ -78,13 +68,11 @@ namespace Kafka.Client.IntegrationTests
 
                 totalWaitTimeInMiliseconds = 0;
 
-                var consumerConfig = new ConsumerConfig(clientConfig)
-                    {
-                        Host = multipleBrokersHelper.BrokerThatHasChanged.Address,
-                        Port = multipleBrokersHelper.BrokerThatHasChanged.Port
-                    };
-                IConsumer consumer = new Consumers.Consumer(consumerConfig);
-                var request = new FetchRequest(CurrentTestTopic, 0, multipleBrokersHelper.OffsetFromBeforeTheChange);
+                var consumerConfig = new ConsumerConfiguration(
+                    multipleBrokersHelper.BrokerThatHasChanged.Host,
+                    multipleBrokersHelper.BrokerThatHasChanged.Port);
+                IConsumer consumer = new Consumer(consumerConfig);
+                var request = new FetchRequest(CurrentTestTopic, multipleBrokersHelper.PartitionThatHasChanged, multipleBrokersHelper.OffsetFromBeforeTheChange);
 
                 BufferedMessageSet response;
 
@@ -98,7 +86,7 @@ namespace Kafka.Client.IntegrationTests
                     }
 
                     totalWaitTimeInMiliseconds += waitSingle;
-                    if (totalWaitTimeInMiliseconds >= MaxTestWaitTimeInMiliseconds)
+                    if (totalWaitTimeInMiliseconds >= this.maxTestWaitTimeInMiliseconds)
                     {
                         break;
                     }
@@ -113,6 +101,7 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ZkAwareProducerSends3Messages()
         {
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
             int totalWaitTimeInMiliseconds = 0;
             int waitSingle = 100;
             var originalMessage1 = new Message(Encoding.UTF8.GetBytes("TestData1"));
@@ -121,20 +110,19 @@ namespace Kafka.Client.IntegrationTests
             var originalMessageList = new List<Message> { originalMessage1, originalMessage2, originalMessage3 };
 
             var multipleBrokersHelper = new TestMultipleBrokersHelper(CurrentTestTopic);
-            multipleBrokersHelper.GetCurrentOffsets();
+            multipleBrokersHelper.GetCurrentOffsets(new[] { this.SyncProducerConfig1, this.SyncProducerConfig2, this.SyncProducerConfig3 });
 
-            var producerConfig = new ProducerConfig(clientConfig);
             var mockPartitioner = new MockAlwaysZeroPartitioner();
-            using (var producer = new Producer<string, Message>(producerConfig, mockPartitioner, new DefaultEncoder()))
+            using (var producer = new Producer<string, Message>(prodConfig, mockPartitioner, new DefaultEncoder()))
             {
                 var producerData = new ProducerData<string, Message>(CurrentTestTopic, "somekey", originalMessageList);
                 producer.Send(producerData);
 
-                while (!multipleBrokersHelper.CheckIfAnyBrokerHasChanged())
+                while (!multipleBrokersHelper.CheckIfAnyBrokerHasChanged(new[] { this.SyncProducerConfig1, this.SyncProducerConfig2, this.SyncProducerConfig3 }))
                 {
                     totalWaitTimeInMiliseconds += waitSingle;
                     Thread.Sleep(waitSingle);
-                    if (totalWaitTimeInMiliseconds > MaxTestWaitTimeInMiliseconds)
+                    if (totalWaitTimeInMiliseconds > this.maxTestWaitTimeInMiliseconds)
                     {
                         Assert.Fail("None of the brokers changed their offset after sending a message");
                     }
@@ -142,12 +130,10 @@ namespace Kafka.Client.IntegrationTests
 
                 totalWaitTimeInMiliseconds = 0;
 
-                var consumerConfig = new ConsumerConfig(clientConfig)
-                    {
-                        Host = multipleBrokersHelper.BrokerThatHasChanged.Address,
-                        Port = multipleBrokersHelper.BrokerThatHasChanged.Port
-                    };
-                IConsumer consumer = new Consumers.Consumer(consumerConfig);
+                var consumerConfig = new ConsumerConfiguration(
+                    multipleBrokersHelper.BrokerThatHasChanged.Host,
+                    multipleBrokersHelper.BrokerThatHasChanged.Port);
+                IConsumer consumer = new Consumer(consumerConfig);
                 var request = new FetchRequest(CurrentTestTopic, 0, multipleBrokersHelper.OffsetFromBeforeTheChange);
                 BufferedMessageSet response;
 
@@ -161,7 +147,7 @@ namespace Kafka.Client.IntegrationTests
                     }
 
                     totalWaitTimeInMiliseconds += waitSingle;
-                    if (totalWaitTimeInMiliseconds >= MaxTestWaitTimeInMiliseconds)
+                    if (totalWaitTimeInMiliseconds >= this.maxTestWaitTimeInMiliseconds)
                     {
                         break;
                     }
@@ -178,26 +164,27 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ZkAwareProducerSends1MessageUsingNotDefaultEncoder()
         {
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             int totalWaitTimeInMiliseconds = 0;
             int waitSingle = 100;
             string originalMessage = "TestData";
 
             var multipleBrokersHelper = new TestMultipleBrokersHelper(CurrentTestTopic);
-            multipleBrokersHelper.GetCurrentOffsets();
+            multipleBrokersHelper.GetCurrentOffsets(new[] { this.SyncProducerConfig1, this.SyncProducerConfig2, this.SyncProducerConfig3 });
 
-            var producerConfig = new ProducerConfig(clientConfig);
             var mockPartitioner = new MockAlwaysZeroPartitioner();
-            using (var producer = new Producer<string, string>(producerConfig, mockPartitioner, new StringEncoder(), null))
+            using (var producer = new Producer<string, string>(prodConfig, mockPartitioner, new StringEncoder(), null))
             {
                 var producerData = new ProducerData<string, string>(
                     CurrentTestTopic, "somekey", new List<string> { originalMessage });
                 producer.Send(producerData);
 
-                while (!multipleBrokersHelper.CheckIfAnyBrokerHasChanged())
+                while (!multipleBrokersHelper.CheckIfAnyBrokerHasChanged(new[] { this.SyncProducerConfig1, this.SyncProducerConfig2, this.SyncProducerConfig3 }))
                 {
                     totalWaitTimeInMiliseconds += waitSingle;
                     Thread.Sleep(waitSingle);
-                    if (totalWaitTimeInMiliseconds > MaxTestWaitTimeInMiliseconds)
+                    if (totalWaitTimeInMiliseconds > this.maxTestWaitTimeInMiliseconds)
                     {
                         Assert.Fail("None of the brokers changed their offset after sending a message");
                     }
@@ -205,12 +192,10 @@ namespace Kafka.Client.IntegrationTests
 
                 totalWaitTimeInMiliseconds = 0;
 
-                var consumerConfig = new ConsumerConfig(clientConfig)
-                    {
-                        Host = multipleBrokersHelper.BrokerThatHasChanged.Address,
-                        Port = multipleBrokersHelper.BrokerThatHasChanged.Port
-                    };
-                IConsumer consumer = new Consumers.Consumer(consumerConfig);
+                var consumerConfig = new ConsumerConfiguration(
+                    multipleBrokersHelper.BrokerThatHasChanged.Host,
+                    multipleBrokersHelper.BrokerThatHasChanged.Port);
+                IConsumer consumer = new Consumer(consumerConfig);
                 var request = new FetchRequest(CurrentTestTopic, 0, multipleBrokersHelper.OffsetFromBeforeTheChange);
                 BufferedMessageSet response;
 
@@ -224,7 +209,7 @@ namespace Kafka.Client.IntegrationTests
                     }
 
                     totalWaitTimeInMiliseconds += waitSingle;
-                    if (totalWaitTimeInMiliseconds >= MaxTestWaitTimeInMiliseconds)
+                    if (totalWaitTimeInMiliseconds >= this.maxTestWaitTimeInMiliseconds)
                     {
                         break;
                     }

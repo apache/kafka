@@ -42,7 +42,7 @@ namespace Kafka.Client.Consumers
 
         private readonly IZooKeeperClient zkClient;
 
-        private readonly ConsumerConfig config;
+        private readonly ConsumerConfiguration config;
 
         private readonly Broker broker;
 
@@ -52,14 +52,15 @@ namespace Kafka.Client.Consumers
 
         private bool shouldStop;
 
-        internal FetcherRunnable(string name, IZooKeeperClient zkClient, ConsumerConfig config, Broker broker, List<PartitionTopicInfo> partitionTopicInfos)
+        internal FetcherRunnable(string name, IZooKeeperClient zkClient, ConsumerConfiguration config, Broker broker, List<PartitionTopicInfo> partitionTopicInfos)
         {
             this.name = name;
             this.zkClient = zkClient;
             this.config = config;
             this.broker = broker;
             this.partitionTopicInfos = partitionTopicInfos;
-            this.simpleConsumer = new Consumer(this.config);
+
+            this.simpleConsumer = new Consumer(this.config, broker.Host, broker.Port);
         }
 
         /// <summary>
@@ -87,7 +88,7 @@ namespace Kafka.Client.Consumers
                     var requestList = new List<FetchRequest>();
                     foreach (var partitionTopicInfo in this.partitionTopicInfos)
                     {
-                        var singleRequest = new FetchRequest(partitionTopicInfo.Topic, partitionTopicInfo.Partition.PartId, partitionTopicInfo.GetFetchOffset(), this.config.FetchSize);
+                        var singleRequest = new FetchRequest(partitionTopicInfo.Topic, partitionTopicInfo.Partition.PartId, partitionTopicInfo.GetFetchOffset(), this.config.MaxFetchSize);
                         requestList.Add(singleRequest);
                     }
 
@@ -138,8 +139,8 @@ namespace Kafka.Client.Consumers
                     Logger.Info("Fetched bytes: " + read);
                     if (read == 0)
                     {
-                        Logger.DebugFormat(CultureInfo.CurrentCulture, "backing off {0} ms", this.config.BackOffIncrementMs);
-                        Thread.Sleep(this.config.BackOffIncrementMs);
+                        Logger.DebugFormat(CultureInfo.CurrentCulture, "backing off {0} ms", this.config.BackOffIncrement);
+                        Thread.Sleep(this.config.BackOffIncrement);
                     }
                 }
             }

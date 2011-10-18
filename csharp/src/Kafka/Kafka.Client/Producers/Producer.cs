@@ -41,13 +41,13 @@ namespace Kafka.Client.Producers
     /// Provides serialization of data through a user-specified encoder, zookeeper based automatic broker discovery
     /// and software load balancing through an optionally user-specified partitioner
     /// </remarks>
-    public class Producer<TKey, TData> : ZooKeeperAwareKafkaClientBase, IProducer<TKey, TData>
+    public class Producer<TKey, TData> : KafkaClientBase, IProducer<TKey, TData>
         where TKey : class 
         where TData : class 
     {
         private static readonly ILog Logger = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);       
         private static readonly Random Randomizer = new Random();
-        private readonly ProducerConfig config;
+        private readonly ProducerConfiguration config;
         private readonly IProducerPool<TData> producerPool;
         private readonly IPartitioner<TKey> partitioner;
         private readonly bool populateProducerPool;
@@ -67,19 +67,19 @@ namespace Kafka.Client.Producers
         /// Should be used for testing purpose only.
         /// </remarks>
         internal Producer(
-            ProducerConfig config,
+            ProducerConfiguration config,
             IPartitioner<TKey> partitioner,
             IProducerPool<TData> producerPool,
             bool populateProducerPool = true)
-            : base(config)
         {
-            Guard.Assert<ArgumentNullException>(() => config != null);
-            Guard.Assert<ArgumentNullException>(() => producerPool != null);
+            Guard.NotNull(config, "config");
+            Guard.NotNull(producerPool, "producerPool");
+
             this.config = config;
             this.partitioner = partitioner ?? new DefaultPartitioner<TKey>();
             this.populateProducerPool = populateProducerPool;
             this.producerPool = producerPool;
-            if (this.IsZooKeeperEnabled)
+            if (this.config.IsZooKeeperEnabled)
             {
                 this.brokerPartitionInfo = new ZKBrokerPartitionInfo(this.config, this.Callback);
             }
@@ -107,13 +107,13 @@ namespace Kafka.Client.Producers
         /// Can be used when all config parameters will be specified through the config object
         /// and will be instantiated via reflection
         /// </remarks>
-        public Producer(ProducerConfig config)
+        public Producer(ProducerConfiguration config)
             : this(
                 config, 
                 ReflectionHelper.Instantiate<IPartitioner<TKey>>(config.PartitionerClass),
                 ProducerPool<TData>.CreatePool(config, ReflectionHelper.Instantiate<IEncoder<TData>>(config.SerializerClass)))
         {
-            Guard.Assert<ArgumentNullException>(() => config != null);
+            Guard.NotNull(config, "config");
         }
 
         /// <summary>
@@ -131,7 +131,7 @@ namespace Kafka.Client.Producers
         /// that would otherwise be instantiated via reflection.
         /// </remarks>
         public Producer(
-            ProducerConfig config,
+            ProducerConfiguration config,
             IPartitioner<TKey> partitioner,
             IEncoder<TData> encoder,
             ICallbackHandler callbackHandler)
@@ -140,8 +140,8 @@ namespace Kafka.Client.Producers
                 partitioner,
                 ProducerPool<TData>.CreatePool(config, encoder, callbackHandler))
         {
-            Guard.Assert<ArgumentNullException>(() => config != null);
-            Guard.Assert<ArgumentNullException>(() => encoder != null);
+            Guard.NotNull(config, "config");
+            Guard.NotNull(encoder, "encoder");
         }
 
         /// <summary>
@@ -157,7 +157,7 @@ namespace Kafka.Client.Producers
         /// that would otherwise be instantiated via reflection.
         /// </remarks>
         public Producer(
-            ProducerConfig config,
+            ProducerConfiguration config,
             IPartitioner<TKey> partitioner,
             IEncoder<TData> encoder)
             : this(
@@ -165,8 +165,8 @@ namespace Kafka.Client.Producers
                 partitioner,
                 ProducerPool<TData>.CreatePool(config, encoder, null))
         {
-            Guard.Assert<ArgumentNullException>(() => config != null);
-            Guard.Assert<ArgumentNullException>(() => encoder != null);
+            Guard.NotNull(config, "config");
+            Guard.NotNull(encoder, "encoder");
         }
 
         /// <summary>
@@ -176,8 +176,9 @@ namespace Kafka.Client.Producers
         /// <param name="data">The producer data objects that encapsulate the topic, key and message data.</param>
         public void Send(IEnumerable<ProducerData<TKey, TData>> data)
         {
-            Guard.Assert<ArgumentNullException>(() => data != null);
-            Guard.Assert<ArgumentException>(() => data.Count() > 0);
+            Guard.NotNull(data, "data");
+            Guard.Greater(data.Count(), 0, "data");
+
             this.EnsuresNotDisposed();
             var poolRequests = new List<ProducerPoolData<TData>>();
             foreach (var dataItem in data)
@@ -197,10 +198,11 @@ namespace Kafka.Client.Producers
         /// <param name="data">The producer data object that encapsulates the topic, key and message data.</param>
         public void Send(ProducerData<TKey, TData> data)
         {
-            Guard.Assert<ArgumentNullException>(() => data != null);
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(data.Topic));
-            Guard.Assert<ArgumentNullException>(() => data.Data != null);
-            Guard.Assert<ArgumentException>(() => data.Data.Count() > 0);
+            Guard.NotNull(data, "data");
+            Guard.NotNullNorEmpty(data.Topic, "data.Topic");
+            Guard.NotNull(data.Data, "data.Data");
+            Guard.Greater(data.Data.Count(), 0, "data.Data");
+
             this.EnsuresNotDisposed();
             this.Send(new[] { data });
         }
@@ -233,6 +235,11 @@ namespace Kafka.Client.Producers
                 {
                     this.brokerPartitionInfo.Dispose();
                 }
+
+                if (this.producerPool != null)
+                {
+                    this.producerPool.Dispose();
+                }
             }
             catch (Exception exc)
             {
@@ -249,8 +256,8 @@ namespace Kafka.Client.Producers
         /// <param name="port">The broker port.</param>
         private void Callback(int bid, string host, int port)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(host));
-            Guard.Assert<ArgumentOutOfRangeException>(() => port > 0);
+            Guard.NotNullNorEmpty(host, "host");
+            Guard.Greater(port, 0, "port");
 
             if (this.populateProducerPool)
             {
@@ -270,7 +277,7 @@ namespace Kafka.Client.Producers
         /// <returns>Partition Id</returns>
         private int GetPartitionId(TKey key, int numPartitions)
         {
-            Guard.Assert<ArgumentOutOfRangeException>(() => numPartitions > 0);
+            Guard.Greater(numPartitions, 0, "numPartitions");
             return key == null 
                 ? Randomizer.Next(numPartitions) 
                 : this.partitioner.Partition(key, numPartitions);
@@ -297,7 +304,7 @@ namespace Kafka.Client.Producers
             int partitionId = this.GetPartitionId(dataItem.Key, totalNumPartitions);
             Partition brokerIdPartition = brokerPartitions.ToList()[partitionId];
             Broker brokerInfo = this.brokerPartitionInfo.GetBrokerInfo(brokerIdPartition.BrokerId);
-            if (this.IsZooKeeperEnabled)
+            if (this.config.IsZooKeeperEnabled)
             {
                 Logger.DebugFormat(
                     CultureInfo.CurrentCulture,

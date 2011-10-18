@@ -54,10 +54,10 @@ namespace Kafka.Client.Tests.Request
             request.WriteTo(ms);
             byte[] bytes = ms.ToArray();
             Assert.IsNotNull(bytes);
-            Assert.AreEqual(152, bytes.Length);
+            Assert.AreEqual(156, bytes.Length);
 
             // first 4 bytes = the length of the request
-            Assert.AreEqual(148, BitConverter.ToInt32(BitWorks.ReverseBytes(bytes.Take(4).ToArray<byte>()), 0));
+            Assert.AreEqual(152, BitConverter.ToInt32(BitWorks.ReverseBytes(bytes.Take(4).ToArray<byte>()), 0));
 
             // next 2 bytes = the RequestType which in this case should be Produce
             Assert.AreEqual((short)RequestTypes.MultiProduce, BitConverter.ToInt16(BitWorks.ReverseBytes(bytes.Skip(4).Take(2).ToArray<byte>()), 0));

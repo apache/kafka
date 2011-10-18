@@ -41,7 +41,7 @@ namespace Kafka.Client.Producers.Partitioning
         /// </remarks>
         public int Partition(TKey key, int numPartitions)
         {
-            Guard.Assert<ArgumentOutOfRangeException>(() => numPartitions > 0);
+            Guard.Greater(numPartitions, 0, "numPartitions");
             return key == null 
                 ? Randomizer.Next(numPartitions) 
                 : key.GetHashCode() % numPartitions;

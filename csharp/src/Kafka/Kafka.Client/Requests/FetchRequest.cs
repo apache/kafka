@@ -116,7 +116,7 @@ namespace Kafka.Client.Requests
         /// </param>
         public void WriteTo(MemoryStream output)
         {
-            Guard.Assert<ArgumentNullException>(() => output != null);
+            Guard.NotNull(output, "output");
 
             using (var writer = new KafkaBinaryWriter(output))
             {
@@ -134,7 +134,7 @@ namespace Kafka.Client.Requests
         /// </param>
         public void WriteTo(KafkaBinaryWriter writer)
         {
-            Guard.Assert<ArgumentNullException>(() => writer != null);
+            Guard.NotNull(writer, "writer");
 
             writer.WriteTopic(this.Topic, DefaultEncoding);
             writer.Write(this.Partition);

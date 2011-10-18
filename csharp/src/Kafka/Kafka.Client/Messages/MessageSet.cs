@@ -48,7 +48,7 @@ namespace Kafka.Client.Messages
         /// </returns>
         public static int GetEntrySize(Message message)
         {
-            Guard.Assert<ArgumentNullException>(() => message != null);
+            Guard.NotNull(message, "message");
 
             return message.Size + DefaultMessageLengthSize;
         }

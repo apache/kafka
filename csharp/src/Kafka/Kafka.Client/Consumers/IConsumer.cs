@@ -31,16 +31,6 @@ namespace Kafka.Client.Consumers
     public interface IConsumer
     {
         /// <summary>
-        /// Gets the server to which the connection is to be established.
-        /// </summary>
-        string Host { get; }
-
-        /// <summary>
-        /// Gets the port to which the connection is to be established.
-        /// </summary>
-        int Port { get; }
-
-        /// <summary>
         /// Fetch a set of messages from a topic.
         /// </summary>
         /// <param name="request">

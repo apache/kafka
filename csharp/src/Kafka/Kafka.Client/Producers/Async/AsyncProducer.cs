@@ -28,19 +28,16 @@ namespace Kafka.Client.Producers.Async
     /// <summary>
     /// Sends messages encapsulated in request to Kafka server asynchronously
     /// </summary>
-    public class AsyncProducer : IAsyncProducer, IDisposable
+    public class AsyncProducer : IAsyncProducer
     {
-        private readonly AsyncProducerConfig config;
         private readonly ICallbackHandler callbackHandler;
-        private KafkaConnection connection = null;
+        private readonly KafkaConnection connection;
+        private volatile bool disposed;
 
         /// <summary>
         /// Gets producer config
         /// </summary>
-        public AsyncProducerConfig Config
-        {
-            get { return config; }
-        }
+        public AsyncProducerConfiguration Config { get; private set; }
 
         /// <summary>
         /// Initializes a new instance of the <see cref="AsyncProducer"/> class.
@@ -48,10 +45,10 @@ namespace Kafka.Client.Producers.Async
         /// <param name="config">
         /// The producer config.
         /// </param>
-        public AsyncProducer(AsyncProducerConfig config)
+        public AsyncProducer(AsyncProducerConfiguration config)
             : this(
                 config,
-                ReflectionHelper.Instantiate<ICallbackHandler>(config.CallbackHandler))
+                ReflectionHelper.Instantiate<ICallbackHandler>(config.CallbackHandlerClass))
         {
         }
 
@@ -65,14 +62,18 @@ namespace Kafka.Client.Producers.Async
         /// The callback invoked when a request is finished being sent.
         /// </param>
         public AsyncProducer(
-            AsyncProducerConfig config,
+            AsyncProducerConfiguration config,
             ICallbackHandler callbackHandler)
         {
-            Guard.Assert<ArgumentNullException>(() => config != null);
+            Guard.NotNull(config, "config");
 
-            this.config = config;
+            this.Config = config;
             this.callbackHandler = callbackHandler;
-            this.connection = new KafkaConnection(this.config.Host, this.config.Port);
+            this.connection = new KafkaConnection(
+                this.Config.Host,
+                this.Config.Port,
+                this.Config.BufferSize,
+                this.Config.SocketTimeout);
         }
 
         /// <summary>
@@ -83,7 +84,8 @@ namespace Kafka.Client.Producers.Async
         /// </param>
         public void Send(ProducerRequest request)
         {
-            Guard.Assert<ArgumentNullException>(() => request != null);
+            this.EnsuresNotDisposed();
+            Guard.NotNull(request, "request");
             Guard.Assert<ArgumentException>(() => request.MessageSet.Messages.All(x => x.PayloadSize <= this.Config.MaxMessageSize));
             if (this.callbackHandler != null)
             {
@@ -91,7 +93,7 @@ namespace Kafka.Client.Producers.Async
             }
             else
             {
-                connection.BeginWrite(request);
+                this.connection.BeginWrite(request);
             }
         }
 
@@ -106,12 +108,13 @@ namespace Kafka.Client.Producers.Async
         /// </param>
         public void Send(ProducerRequest request, MessageSent<ProducerRequest> callback)
         {
-            Guard.Assert<ArgumentNullException>(() => request != null);
-            Guard.Assert<ArgumentNullException>(() => request.MessageSet != null);
-            Guard.Assert<ArgumentNullException>(() => request.MessageSet.Messages != null);
+            this.EnsuresNotDisposed();
+            Guard.NotNull(request, "request");
+            Guard.NotNull(request.MessageSet, "request.MessageSet");
+            Guard.NotNull(request.MessageSet.Messages, "request.MessageSet.Messages");
             Guard.Assert<ArgumentException>(
                 () => request.MessageSet.Messages.All(x => x.PayloadSize <= this.Config.MaxMessageSize));
-            
+
             connection.BeginWrite(request, callback);
         }
 
@@ -129,10 +132,11 @@ namespace Kafka.Client.Producers.Async
         /// </param>
         public void Send(string topic, int partition, IEnumerable<Message> messages)
         {
-            Guard.Assert<ArgumentNullException>(() => !string.IsNullOrEmpty(topic));
-            Guard.Assert<ArgumentNullException>(() => messages != null);
+            this.EnsuresNotDisposed();
+            Guard.NotNullNorEmpty(topic, "topic");
+            Guard.NotNull(messages, "messages");
             Guard.Assert<ArgumentException>(() => messages.All(x => x.PayloadSize <= this.Config.MaxMessageSize));
-            
+
             this.Send(new ProducerRequest(topic, partition, messages));
         }
 
@@ -153,18 +157,50 @@ namespace Kafka.Client.Producers.Async
         /// </param>
         public void Send(string topic, int partition, IEnumerable<Message> messages, MessageSent<ProducerRequest> callback)
         {
-            Guard.Assert<ArgumentNullException>(() => !string.IsNullOrEmpty(topic));
-            Guard.Assert<ArgumentNullException>(() => messages != null);
+            this.EnsuresNotDisposed();
+            Guard.NotNullNorEmpty(topic, "topic");
+            Guard.NotNull(messages, "messages");
             Guard.Assert<ArgumentException>(() => messages.All(x => x.PayloadSize <= this.Config.MaxMessageSize));
-            
+
             this.Send(new ProducerRequest(topic, partition, messages), callback);
         }
 
+        /// <summary>
+        /// Releases all unmanaged and managed resources
+        /// </summary>
         public void Dispose()
         {
-            if (connection != null)
+            this.Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposing)
             {
-                connection.Dispose();
+                return;
+            }
+
+            if (this.disposed)
+            {
+                return;
+            }
+
+            this.disposed = true;
+            if (this.connection != null)
+            {
+                this.connection.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Ensures that object was not disposed
+        /// </summary>
+        private void EnsuresNotDisposed()
+        {
+            if (this.disposed)
+            {
+                throw new ObjectDisposedException(this.GetType().Name);
             }
         }
     }

@@ -79,10 +79,12 @@
       <HintPath>..\..\..\..\lib\nunit\2.5.9\nunit.framework.dll</HintPath>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.configuration" />
     <Reference Include="System.Core" />
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CompressionTests.cs" />
     <Compile Include="MessageSetTests.cs" />
     <Compile Include="MessageTests.cs" />
     <Compile Include="Producers\PartitioningTests.cs" />
@@ -102,6 +104,14 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="ZooKeeper\" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\..\..\..\Settings.StyleCop">
+      <Link>Settings.StyleCop</Link>
+    </None>
+    <None Include="App.config">
+      <SubType>Designer</SubType>
+    </None>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="..\..\..\..\lib\StyleCop\Microsoft.StyleCop.Targets" />

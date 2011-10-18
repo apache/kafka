@@ -40,6 +40,7 @@ namespace Kafka.Client.Producers.Sync
     {
         private static readonly ILog Logger = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
         private readonly IDictionary<int, ISyncProducer> syncProducers;
+        private volatile bool disposed;
 
         /// <summary>
         /// Factory method used to instantiating synchronous producer pool
@@ -53,7 +54,7 @@ namespace Kafka.Client.Producers.Sync
         /// <returns>
         /// Instantiated synchronous producer pool
         /// </returns>
-        public static SyncProducerPool<TData> CreateSyncPool(ProducerConfig config, IEncoder<TData> serializer)
+        public static SyncProducerPool<TData> CreateSyncPool(ProducerConfiguration config, IEncoder<TData> serializer)
         {
             return new SyncProducerPool<TData>(config, serializer);
         }
@@ -73,7 +74,7 @@ namespace Kafka.Client.Producers.Sync
         /// <returns>
         /// Instantiated synchronous producer pool
         /// </returns>
-        public static SyncProducerPool<TData> CreateSyncPool(ProducerConfig config, IEncoder<TData> serializer, ICallbackHandler callbackHandler)
+        public static SyncProducerPool<TData> CreateSyncPool(ProducerConfiguration config, IEncoder<TData> serializer, ICallbackHandler callbackHandler)
         {
             return new SyncProducerPool<TData>(config, serializer, callbackHandler);
         }
@@ -97,7 +98,7 @@ namespace Kafka.Client.Producers.Sync
         /// Should be used for testing purpose only
         /// </remarks>
         private SyncProducerPool(
-            ProducerConfig config, 
+            ProducerConfiguration config, 
             IEncoder<TData> serializer,
             IDictionary<int, ISyncProducer> syncProducers,
             ICallbackHandler cbkHandler)
@@ -122,7 +123,7 @@ namespace Kafka.Client.Producers.Sync
         /// Should be used for testing purpose only
         /// </remarks>
         private SyncProducerPool(
-            ProducerConfig config,
+            ProducerConfiguration config,
             IEncoder<TData> serializer,
             ICallbackHandler cbkHandler)
             : this(config, serializer, new Dictionary<int, ISyncProducer>(), cbkHandler)
@@ -138,12 +139,12 @@ namespace Kafka.Client.Producers.Sync
         /// <param name="serializer">
         /// The serializer.
         /// </param>
-        private SyncProducerPool(ProducerConfig config, IEncoder<TData> serializer)
+        private SyncProducerPool(ProducerConfiguration config, IEncoder<TData> serializer)
             : this(
                 config,
                 serializer,
                 new Dictionary<int, ISyncProducer>(),
-                ReflectionHelper.Instantiate<ICallbackHandler>(config.CallbackHandler))
+                ReflectionHelper.Instantiate<ICallbackHandler>(config.CallbackHandlerClass))
         {
         }
 
@@ -158,7 +159,8 @@ namespace Kafka.Client.Producers.Sync
         /// </remarks>
         public override void Send(IEnumerable<ProducerPoolData<TData>> poolData)
         {
-            Guard.Assert<ArgumentNullException>(() => poolData != null);
+            this.EnsuresNotDisposed();
+            Guard.NotNull(poolData, "poolData");
             Dictionary<int, List<ProducerPoolData<TData>>> distinctBrokers = poolData.GroupBy(
                 x => x.BidPid.BrokerId, x => x)
                 .ToDictionary(x => x.Key, x => x.ToList());
@@ -188,15 +190,10 @@ namespace Kafka.Client.Producers.Sync
         /// <param name="broker">The broker informations.</param>
         public override void AddProducer(Broker broker)
         {
-            Guard.Assert<ArgumentNullException>(() => broker != null);
-            var syncConfig = new SyncProducerConfig
-            {
-                Host = broker.Host,
-                Port = broker.Port,
-                BufferSize = this.Config.BufferSize,
-                ConnectTimeout = this.Config.ConnectTimeout,
-                ReconnectInterval = this.Config.ReconnectInterval
-            };
+            this.EnsuresNotDisposed();
+            Guard.NotNull(broker, "broker");
+
+            var syncConfig = new SyncProducerConfiguration(this.Config, broker.Id, broker.Host, broker.Port);
             var syncProducer = new SyncProducer(syncConfig);
             Logger.InfoFormat(
                 CultureInfo.CurrentCulture,
@@ -205,6 +202,25 @@ namespace Kafka.Client.Producers.Sync
                 broker.Host,
                 broker.Port);
             this.syncProducers.Add(broker.Id, syncProducer);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (!disposing)
+            {
+                return;
+            }
+
+            if (this.disposed)
+            {
+                return;
+            }
+
+            this.disposed = true;
+            foreach (var syncProducer in this.syncProducers.Values)
+            {
+                syncProducer.Dispose();
+            }
         }
     }
 }

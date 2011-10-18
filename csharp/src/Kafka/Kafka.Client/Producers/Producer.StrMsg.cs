@@ -40,7 +40,7 @@ namespace Kafka.Client.Producers
         /// <remarks>
         /// Should be used for testing purpose only.
         /// </remarks>
-        internal Producer(ProducerConfig config, IPartitioner<string> partitioner, IProducerPool<Message> producerPool, bool populateProducerPool)
+        internal Producer(ProducerConfiguration config, IPartitioner<string> partitioner, IProducerPool<Message> producerPool, bool populateProducerPool)
             : base(config, partitioner, producerPool, populateProducerPool)
         {
         }
@@ -53,7 +53,7 @@ namespace Kafka.Client.Producers
         /// Can be used when all config parameters will be specified through the config object
         /// and will be instantiated via reflection
         /// </remarks>
-        public Producer(ProducerConfig config)
+        public Producer(ProducerConfiguration config)
             : base(config)
         {
         }
@@ -71,7 +71,7 @@ namespace Kafka.Client.Producers
         /// Can be used to provide pre-instantiated objects for all config parameters
         /// that would otherwise be instantiated via reflection.
         /// </remarks>
-        public Producer(ProducerConfig config, IPartitioner<string> partitioner, IEncoder<Message> encoder, ICallbackHandler callbackHandler)
+        public Producer(ProducerConfiguration config, IPartitioner<string> partitioner, IEncoder<Message> encoder, ICallbackHandler callbackHandler)
             : base(config, partitioner, encoder, callbackHandler)
         {
         }
@@ -88,7 +88,7 @@ namespace Kafka.Client.Producers
         /// Can be used to provide pre-instantiated objects for all config parameters
         /// that would otherwise be instantiated via reflection.
         /// </remarks>
-        public Producer(ProducerConfig config, IPartitioner<string> partitioner, IEncoder<Message> encoder)
+        public Producer(ProducerConfiguration config, IPartitioner<string> partitioner, IEncoder<Message> encoder)
             : base(config, partitioner, encoder)
         {
         }

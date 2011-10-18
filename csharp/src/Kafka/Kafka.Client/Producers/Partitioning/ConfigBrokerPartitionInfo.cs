@@ -32,16 +32,16 @@ namespace Kafka.Client.Producers.Partitioning
     /// </remarks>
     internal class ConfigBrokerPartitionInfo : IBrokerPartitionInfo
     {
-        private readonly ProducerConfig config;
+        private readonly ProducerConfiguration config;
         private IDictionary<int, Broker> brokers;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="ConfigBrokerPartitionInfo"/> class.
         /// </summary>
         /// <param name="config">The config.</param>
-        public ConfigBrokerPartitionInfo(ProducerConfig config)
+        public ConfigBrokerPartitionInfo(ProducerConfiguration config)
         {
-            Guard.Assert<ArgumentNullException>(() => config != null);
+            Guard.NotNull(config, "config");
             this.config = config;
             this.InitializeBrokers();
         }
@@ -67,7 +67,7 @@ namespace Kafka.Client.Producers.Partitioning
         /// <remarks>Partition ID would be allways 0</remarks>
         public SortedSet<Partition> GetBrokerPartitionInfo(string topic)
         {
-            Guard.Assert<ArgumentException>(() => !string.IsNullOrEmpty(topic));
+            Guard.NotNullNorEmpty(topic, "topic");
             var partitions = new SortedSet<Partition>();
             foreach (var item in this.brokers)
             {
@@ -108,13 +108,11 @@ namespace Kafka.Client.Producers.Partitioning
             }
 
             this.brokers = new Dictionary<int, Broker>();
-            string[] brokersInfoList = this.config.BrokerPartitionInfo.Split(',');
-            foreach (string item in brokersInfoList)
+            foreach (var item in this.config.Brokers)
             {
-                var parts = item.Split(':');
-                int id = int.Parse(parts[0], CultureInfo.InvariantCulture);
-                int port = int.Parse(parts[2], CultureInfo.InvariantCulture);
-                this.brokers.Add(id, new Broker(id, parts[1], parts[1], port));
+                this.brokers.Add(
+                    item.BrokerId, 
+                    new Broker(item.BrokerId, item.Host, item.Host, item.Port));
             }
         }
     }

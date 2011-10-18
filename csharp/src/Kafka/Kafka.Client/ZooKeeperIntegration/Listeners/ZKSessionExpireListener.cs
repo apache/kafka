@@ -58,7 +58,7 @@ namespace Kafka.Client.ZooKeeperIntegration.Listeners
         /// </remarks>
         public void HandleStateChanged(ZooKeeperStateChangedEventArgs args)
         {
-            Guard.Assert<ArgumentNullException>(() => args != null);
+            Guard.NotNull(args, "args");
             Guard.Assert<ArgumentException>(() => args.State != KeeperState.Unknown);
         }
 
@@ -72,7 +72,7 @@ namespace Kafka.Client.ZooKeeperIntegration.Listeners
         /// </remarks>
         public void HandleSessionCreated(ZooKeeperSessionCreatedEventArgs args)
         {
-            Guard.Assert<ArgumentNullException>(() => args != null);
+            Guard.NotNull(args, "args");
 
             Logger.InfoFormat(
                 CultureInfo.CurrentCulture,

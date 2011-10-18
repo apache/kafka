@@ -29,12 +29,14 @@ namespace Kafka.Client.Tests
     {
         private const int MessageLengthPartLength = 4;
         private const int MagicNumberPartLength = 1;
+        private const int AttributesPartLength = 1;
         private const int ChecksumPartLength = 4;
-
+        
         private const int MessageLengthPartOffset = 0;
         private const int MagicNumberPartOffset = 4;
-        private const int ChecksumPartOffset = 5;
-        private const int DataPartOffset = 9;
+        private const int AttributesPartOffset = 5;
+        private const int ChecksumPartOffset = 6;
+        private const int DataPartOffset = 10;
 
         [Test]
         public void BufferedMessageSetWriteToValidSequence()
@@ -55,9 +57,9 @@ namespace Kafka.Client.Tests
                 Array.Reverse(messageLength);
             }
 
-            Assert.AreEqual(MagicNumberPartLength + ChecksumPartLength + messageBytes.Length, BitConverter.ToInt32(messageLength, 0));
+            Assert.AreEqual(MagicNumberPartLength + AttributesPartLength + ChecksumPartLength + messageBytes.Length, BitConverter.ToInt32(messageLength, 0));
 
-            Assert.AreEqual(0, ms.ToArray()[MagicNumberPartOffset]);    // default magic number should be 0
+            Assert.AreEqual(1, ms.ToArray()[MagicNumberPartOffset]);    // default magic number should be 1
 
             byte[] checksumPart = new byte[ChecksumPartLength];
             Array.Copy(ms.ToArray(), ChecksumPartOffset, checksumPart, 0, ChecksumPartLength);
@@ -68,7 +70,7 @@ namespace Kafka.Client.Tests
             Assert.AreEqual(messageBytes, dataPart);
 
             ////second message
-            int secondMessageOffset = MessageLengthPartLength + MagicNumberPartLength + ChecksumPartLength +
+            int secondMessageOffset = MessageLengthPartLength + MagicNumberPartLength + AttributesPartLength + ChecksumPartLength +
                                       messageBytes.Length;
 
             messageLength = new byte[MessageLengthPartLength];
@@ -78,9 +80,9 @@ namespace Kafka.Client.Tests
                 Array.Reverse(messageLength);
             }
 
-            Assert.AreEqual(MagicNumberPartLength + ChecksumPartLength + messageBytes.Length, BitConverter.ToInt32(messageLength, 0));
+            Assert.AreEqual(MagicNumberPartLength + AttributesPartLength + ChecksumPartLength + messageBytes.Length, BitConverter.ToInt32(messageLength, 0));
 
-            Assert.AreEqual(0, ms.ToArray()[secondMessageOffset + MagicNumberPartOffset]);    // default magic number should be 0
+            Assert.AreEqual(1, ms.ToArray()[secondMessageOffset + MagicNumberPartOffset]);    // default magic number should be 1
 
             checksumPart = new byte[ChecksumPartLength];
             Array.Copy(ms.ToArray(), secondMessageOffset + ChecksumPartOffset, checksumPart, 0, ChecksumPartLength);
@@ -99,7 +101,7 @@ namespace Kafka.Client.Tests
             Message msg2 = new Message(messageBytes);
             MessageSet messageSet = new BufferedMessageSet(new List<Message>() { msg1, msg2 });
             Assert.AreEqual(
-                2 * (MessageLengthPartLength + MagicNumberPartLength + ChecksumPartLength + messageBytes.Length),
+                2 * (MessageLengthPartLength + MagicNumberPartLength + AttributesPartLength + ChecksumPartLength + messageBytes.Length),
                 messageSet.SetSize);
         }
     }

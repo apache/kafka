@@ -109,17 +109,19 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Cfg\AsyncProducerConfig.cs" />
-    <Compile Include="Cfg\BrokerPartitionInfo.cs" />
-    <Compile Include="Cfg\BrokerPartitionInfoCollection.cs" />
-    <Compile Include="Cfg\Consumer.cs" />
-    <Compile Include="Cfg\ConsumerConfig.cs" />
+    <Compile Include="Cfg\AsyncProducerConfiguration.cs" />
+    <Compile Include="Cfg\BrokerConfiguration.cs" />
+    <Compile Include="Cfg\BrokerConfigurationElement.cs" />
+    <Compile Include="Cfg\BrokerConfigurationElementCollection.cs" />
+    <Compile Include="Cfg\ConsumerConfigurationSection.cs" />
+    <Compile Include="Cfg\ConsumerConfiguration.cs" />
     <Compile Include="Cfg\IAsyncProducerConfigShared.cs" />
     <Compile Include="Cfg\ISyncProducerConfigShared.cs" />
-    <Compile Include="Cfg\KafkaClientConfiguration.cs" />
-    <Compile Include="Cfg\KafkaServer.cs" />
-    <Compile Include="Cfg\ProducerConfig.cs" />
-    <Compile Include="Cfg\ZooKeeperServers.cs" />
+    <Compile Include="Cfg\ProducerConfiguration.cs" />
+    <Compile Include="Cfg\ProducerConfigurationSection.cs" />
+    <Compile Include="Cfg\ZooKeeperConfigurationElement.cs" />
+    <Compile Include="Cfg\ZooKeeperServerConfigurationElement.cs" />
+    <Compile Include="Cfg\ZooKeeperServerConfigurationElementCollection.cs" />
     <Compile Include="Cluster\Cluster.cs" />
     <Compile Include="Cluster\Partition.cs" />
     <Compile Include="Consumers\Consumer.cs" />
@@ -135,7 +137,11 @@
     <Compile Include="Consumers\TopicCount.cs" />
     <Compile Include="Consumers\ZookeeperConsumerConnector.cs" />
     <Compile Include="Exceptions\ConsumerTimeoutException.cs" />
+    <Compile Include="Exceptions\IllegalStateException.cs" />
+    <Compile Include="Exceptions\InvalidMessageSizeException.cs" />
     <Compile Include="Exceptions\MessageSizeTooLargeException.cs" />
+    <Compile Include="Exceptions\NoSuchElementException.cs" />
+    <Compile Include="Exceptions\UnknownCodecException.cs" />
     <Compile Include="Exceptions\ZKRebalancerException.cs" />
     <Compile Include="Exceptions\ZooKeeperException.cs" />
     <Compile Include="Exceptions\ZooKeeperTimeoutException.cs" />
@@ -145,7 +151,12 @@
     <Compile Include="Exceptions\KafkaException.cs">
       <SubType>Code</SubType>
     </Compile>
+    <Compile Include="KafkaStopWatch.cs" />
     <Compile Include="Messages\BoundedBuffer.cs" />
+    <Compile Include="Messages\CompressionCodec.cs" />
+    <Compile Include="Messages\CompressionCodecs.cs" />
+    <Compile Include="Messages\CompressionUtils.cs" />
+    <Compile Include="Messages\MessageAndOffset.cs" />
     <Compile Include="Producers\Async\AsyncProducerPool.cs" />
     <Compile Include="Producers\Async\MessageSent.cs" />
     <Compile Include="Producers\Producer.StrMsg.cs" />
@@ -153,8 +164,8 @@
     <Compile Include="Serialization\StringEncoder.cs" />
     <Compile Include="Serialization\IWritable.cs" />
     <Compile Include="Producers\ProducerTypes.cs" />
-    <Compile Include="Cfg\SyncProducerConfig.cs" />
-    <Compile Include="Cfg\ZKConfig.cs" />
+    <Compile Include="Cfg\SyncProducerConfiguration.cs" />
+    <Compile Include="Cfg\ZooKeeperConfiguration.cs" />
     <Compile Include="Cluster\Broker.cs" />
     <Compile Include="Producers\Partitioning\ConfigBrokerPartitionInfo.cs" />
     <Compile Include="Producers\Partitioning\DefaultPartitioner.cs" />
@@ -224,7 +235,11 @@
     <Compile Include="ZooKeeperIntegration\IZooKeeperSerializer.cs" />
     <Compile Include="ZooKeeperIntegration\ZooKeeperStringSerializer.cs" />
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <None Include="..\..\..\Settings.StyleCop">
+      <Link>Settings.StyleCop</Link>
+    </None>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <Import Project="..\..\..\lib\StyleCop\Microsoft.StyleCop.Targets" />
 </Project>

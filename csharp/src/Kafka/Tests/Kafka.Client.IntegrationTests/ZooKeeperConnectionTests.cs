@@ -25,21 +25,14 @@ namespace Kafka.Client.IntegrationTests
     using ZooKeeperNet;
 
     [TestFixture]
-    public class ZooKeeperConnectionTests
+    public class ZooKeeperConnectionTests : IntegrationFixtureBase
     {
-        private KafkaClientConfiguration clientConfig;
-
-        [TestFixtureSetUp]
-        public void SetUp()
-        {
-            clientConfig = KafkaClientConfiguration.GetConfiguration();
-        }
-
         [Test]
         public void ZooKeeperConnectionCreatesAndDeletesPath()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperConnection connection = new ZooKeeperConnection(producerConfig.ZkConnect))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
+            using (IZooKeeperConnection connection = new ZooKeeperConnection(prodConfig.ZooKeeper.ZkConnect))
             {
                 connection.Connect(null);
                 string pathName = "/" + Guid.NewGuid();
@@ -53,9 +46,10 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ZooKeeperConnectionConnectsAndDisposes()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             IZooKeeperConnection connection;
-            using (connection = new ZooKeeperConnection(producerConfig.ZkConnect))
+            using (connection = new ZooKeeperConnection(prodConfig.ZooKeeper.ZkConnect))
             {
                 Assert.IsNull(connection.ClientState);
                 connection.Connect(null);
@@ -69,8 +63,9 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ZooKeeperConnectionCreatesAndGetsCreateTime()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperConnection connection = new ZooKeeperConnection(producerConfig.ZkConnect))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
+            using (IZooKeeperConnection connection = new ZooKeeperConnection(prodConfig.ZooKeeper.ZkConnect))
             {
                 connection.Connect(null);
                 string pathName = "/" + Guid.NewGuid();
@@ -84,8 +79,9 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ZooKeeperConnectionCreatesAndGetsChildren()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperConnection connection = new ZooKeeperConnection(producerConfig.ZkConnect))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
+            using (IZooKeeperConnection connection = new ZooKeeperConnection(prodConfig.ZooKeeper.ZkConnect))
             {
                 connection.Connect(null);
                 string child = Guid.NewGuid().ToString();
@@ -101,14 +97,15 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void ZooKeeperConnectionWritesAndReadsData()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
-            using (IZooKeeperConnection connection = new ZooKeeperConnection(producerConfig.ZkConnect))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
+            using (IZooKeeperConnection connection = new ZooKeeperConnection(prodConfig.ZooKeeper.ZkConnect))
             {
                 connection.Connect(null);
                 string child = Guid.NewGuid().ToString();
                 string pathName = "/" + child;
                 connection.Create(pathName, null, CreateMode.Persistent);
-                var sourceData = new byte[2] { 1, 2 };
+                var sourceData = new byte[] { 1, 2 };
                 connection.WriteData(pathName, sourceData);
                 byte[] resultData = connection.ReadData(pathName, null, false);
                 Assert.IsNotNull(resultData);

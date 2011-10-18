@@ -19,7 +19,6 @@ namespace Kafka.Client.IntegrationTests
 {
     using System.Collections.Generic;
     using System.Linq;
-    using Kafka.Client.Cfg;
     using Kafka.Client.Cluster;
     using Kafka.Client.Producers.Partitioning;
     using Kafka.Client.Utils;
@@ -29,60 +28,53 @@ namespace Kafka.Client.IntegrationTests
     using ZooKeeperNet;
 
     [TestFixture]
-    public class ZKBrokerPartitionInfoTests : IntegrationFixtureBase
+    public class ZkBrokerPartitionInfoTests : IntegrationFixtureBase
     {
-        private KafkaClientConfiguration clientConfig;
-        private ZKConfig zkConfig;
-
-        [TestFixtureSetUp]
-        public void SetUp()
-        {
-            clientConfig = KafkaClientConfiguration.GetConfiguration();
-            zkConfig = new ProducerConfig(clientConfig);
-        }
-
         [Test]
-        public void ZKBrokerPartitionInfoGetsAllBrokerInfo()
+        public void ZkBrokerPartitionInfoGetsAllBrokerInfo()
         {
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+            var prodConfigNotZk = this.ConfigBasedSyncProdConfig;
+
             IDictionary<int, Broker> allBrokerInfo;
-            using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(zkConfig, null))
+            using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(prodConfig, null))
             {
                 allBrokerInfo = brokerPartitionInfo.GetAllBrokerInfo();
             }
 
-            Assert.AreEqual(clientConfig.BrokerPartitionInfos.Count, allBrokerInfo.Count);
-            foreach (BrokerPartitionInfo cfgBrPartInfo in clientConfig.BrokerPartitionInfos)
-            {
-                Assert.IsTrue(allBrokerInfo.ContainsKey(cfgBrPartInfo.Id));
-                Assert.AreEqual(cfgBrPartInfo.Address, allBrokerInfo[cfgBrPartInfo.Id].Host);
-                Assert.AreEqual(cfgBrPartInfo.Port, allBrokerInfo[cfgBrPartInfo.Id].Port);
-            }
+            Assert.AreEqual(prodConfigNotZk.Brokers.Count, allBrokerInfo.Count);
+            allBrokerInfo.Values.All(x => prodConfigNotZk.Brokers.Any(
+                y => x.Id == y.BrokerId
+                && x.Host == y.Host
+                && x.Port == y.Port));
         }
 
         [Test]
-        public void ZKBrokerPartitionInfoGetsBrokerPartitionInfo()
+        public void ZkBrokerPartitionInfoGetsBrokerPartitionInfo()
         {
+            var prodconfig = this.ZooKeeperBasedSyncProdConfig;
             SortedSet<Partition> partitions;
-            using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(zkConfig, null))
+            using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(prodconfig, null))
             {
                 partitions = brokerPartitionInfo.GetBrokerPartitionInfo("test");
             }
 
             Assert.NotNull(partitions);
             Assert.GreaterOrEqual(partitions.Count, 2);
-            var partition = partitions.ToList()[0];
-            Assert.AreEqual(0, partition.BrokerId);
         }
 
         [Test]
         public void ZkBrokerPartitionInfoGetsBrokerInfo()
         {
-            using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(zkConfig, null))
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+            var prodConfigNotZk = this.ConfigBasedSyncProdConfig;
+
+            using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(prodConfig, null))
             {
-                var testBroker = clientConfig.BrokerPartitionInfos[0];
-                Broker broker = brokerPartitionInfo.GetBrokerInfo(testBroker.Id);
+                var testBroker = prodConfigNotZk.Brokers[0];
+                Broker broker = brokerPartitionInfo.GetBrokerInfo(testBroker.BrokerId);
                 Assert.NotNull(broker);
-                Assert.AreEqual(testBroker.Address, broker.Host);
+                Assert.AreEqual(testBroker.Host, broker.Host);
                 Assert.AreEqual(testBroker.Port, broker.Port);
             }
         }
@@ -90,14 +82,15 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenNewTopicIsAddedBrokerTopicsListenerCreatesNewMapping()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             IDictionary<string, SortedSet<Partition>> mappings;
             IDictionary<int, Broker> brokers;
             string topicPath = ZooKeeperClient.DefaultBrokerTopicsPath + "/" + CurrentTestTopic;
 
             using (IZooKeeperClient client = new ZooKeeperClient(
-                producerConfig.ZkConnect,
-                producerConfig.ZkSessionTimeoutMs,
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs,
                 ZooKeeperStringSerializer.Serializer))
             {
                 using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(client))
@@ -114,8 +107,8 @@ namespace Kafka.Client.IntegrationTests
             Assert.NotNull(mappings);
             Assert.Greater(mappings.Count, 0);
             using (IZooKeeperClient client = new ZooKeeperClient(
-                producerConfig.ZkConnect,
-                producerConfig.ZkSessionTimeoutMs,
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs,
                 ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
@@ -125,6 +118,7 @@ namespace Kafka.Client.IntegrationTests
                 client.CreatePersistent(topicPath, true);
                 WaitUntillIdle(client, 500);
                 client.UnsubscribeAll();
+                WaitUntillIdle(client, 500);
                 client.DeleteRecursive(topicPath);
             }
 
@@ -134,13 +128,14 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenNewBrokerIsAddedBrokerTopicsListenerUpdatesBrokersList()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             IDictionary<string, SortedSet<Partition>> mappings;
             IDictionary<int, Broker> brokers;
             string brokerPath = ZooKeeperClient.DefaultBrokerIdsPath + "/" + 2345;
             using (IZooKeeperClient client = new ZooKeeperClient(
-                producerConfig.ZkConnect,
-                producerConfig.ZkSessionTimeoutMs,
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs,
                 ZooKeeperStringSerializer.Serializer))
             {
                 using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(client))
@@ -157,18 +152,20 @@ namespace Kafka.Client.IntegrationTests
             Assert.NotNull(mappings);
             Assert.Greater(mappings.Count, 0);
             using (IZooKeeperClient client = new ZooKeeperClient(
-                producerConfig.ZkConnect,
-                producerConfig.ZkSessionTimeoutMs,
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs,
                 ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
                 WaitUntillIdle(client, 500);
                 var brokerTopicsListener = new BrokerTopicsListener(client, mappings, brokers, null);
                 client.Subscribe(ZooKeeperClient.DefaultBrokerIdsPath, brokerTopicsListener);
+                WaitUntillIdle(client, 500);
                 client.CreatePersistent(brokerPath, true);
                 client.WriteData(brokerPath, "192.168.1.39-1310449279123:192.168.1.39:9102");
                 WaitUntillIdle(client, 500);
                 client.UnsubscribeAll();
+                WaitUntillIdle(client, 500);
                 client.DeleteRecursive(brokerPath);
             }
 
@@ -181,13 +178,14 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenBrokerIsRemovedBrokerTopicsListenerUpdatesBrokersList()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             IDictionary<string, SortedSet<Partition>> mappings;
             IDictionary<int, Broker> brokers;
             string brokerPath = ZooKeeperClient.DefaultBrokerIdsPath + "/" + 2345;
             using (IZooKeeperClient client = new ZooKeeperClient(
-                producerConfig.ZkConnect,
-                producerConfig.ZkSessionTimeoutMs,
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs,
                 ZooKeeperStringSerializer.Serializer))
             {
                 using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(client))
@@ -204,8 +202,8 @@ namespace Kafka.Client.IntegrationTests
             Assert.NotNull(mappings);
             Assert.Greater(mappings.Count, 0);
             using (IZooKeeperClient client = new ZooKeeperClient(
-                producerConfig.ZkConnect,
-                producerConfig.ZkSessionTimeoutMs,
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs,
                 ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
@@ -225,15 +223,16 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenNewBrokerInTopicIsAddedBrokerTopicsListenerUpdatesMappings()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             IDictionary<string, SortedSet<Partition>> mappings;
             IDictionary<int, Broker> brokers;
             string brokerPath = ZooKeeperClient.DefaultBrokerIdsPath + "/" + 2345;
             string topicPath = ZooKeeperClient.DefaultBrokerTopicsPath + "/" + CurrentTestTopic;
             string topicBrokerPath = topicPath + "/" + 2345;
             using (IZooKeeperClient client = new ZooKeeperClient(
-                producerConfig.ZkConnect,
-                producerConfig.ZkSessionTimeoutMs,
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs,
                 ZooKeeperStringSerializer.Serializer))
             {
                 using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(client))
@@ -250,8 +249,8 @@ namespace Kafka.Client.IntegrationTests
             Assert.NotNull(mappings);
             Assert.Greater(mappings.Count, 0);
             using (IZooKeeperClient client = new ZooKeeperClient(
-                producerConfig.ZkConnect,
-                producerConfig.ZkSessionTimeoutMs,
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs,
                 ZooKeeperStringSerializer.Serializer))
             {
                 client.Connect();
@@ -269,6 +268,7 @@ namespace Kafka.Client.IntegrationTests
                 client.WriteData(topicBrokerPath, 5);
                 WaitUntillIdle(client, 500);
                 client.UnsubscribeAll();
+                WaitUntillIdle(client, 500);
                 client.DeleteRecursive(brokerPath);
                 client.DeleteRecursive(topicPath);
             }
@@ -281,55 +281,56 @@ namespace Kafka.Client.IntegrationTests
         [Test]
         public void WhenSessionIsExpiredListenerRecreatesEphemeralNodes()
         {
-            {
-                var producerConfig = new ProducerConfig(clientConfig);
-                IDictionary<string, SortedSet<Partition>> mappings;
-                IDictionary<int, Broker> brokers;
-                IDictionary<string, SortedSet<Partition>> mappings2;
-                IDictionary<int, Broker> brokers2;
-                using (IZooKeeperClient client = new ZooKeeperClient(
-                    producerConfig.ZkConnect,
-                    producerConfig.ZkSessionTimeoutMs,
-                    ZooKeeperStringSerializer.Serializer))
-                {
-                    using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(client))
-                    {
-                        brokers = brokerPartitionInfo.GetAllBrokerInfo();
-                        mappings =
-                            ReflectionHelper.GetInstanceField<IDictionary<string, SortedSet<Partition>>>(
-                                "topicBrokerPartitions", brokerPartitionInfo);
-                        Assert.NotNull(brokers);
-                        Assert.Greater(brokers.Count, 0);
-                        Assert.NotNull(mappings);
-                        Assert.Greater(mappings.Count, 0);
-                        client.Process(new WatchedEvent(KeeperState.Expired, EventType.None, null));
-                        WaitUntillIdle(client, 3000);
-                        brokers2 = brokerPartitionInfo.GetAllBrokerInfo();
-                        mappings2 =
-                            ReflectionHelper.GetInstanceField<IDictionary<string, SortedSet<Partition>>>(
-                                "topicBrokerPartitions", brokerPartitionInfo);
-                    }
-                }
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
 
-                Assert.NotNull(brokers2);
-                Assert.Greater(brokers2.Count, 0);
-                Assert.NotNull(mappings2);
-                Assert.Greater(mappings2.Count, 0);
-                Assert.AreEqual(brokers.Count, brokers2.Count);
-                Assert.AreEqual(mappings.Count, mappings2.Count);
+            IDictionary<string, SortedSet<Partition>> mappings;
+            IDictionary<int, Broker> brokers;
+            IDictionary<string, SortedSet<Partition>> mappings2;
+            IDictionary<int, Broker> brokers2;
+            using (
+                IZooKeeperClient client = new ZooKeeperClient(
+                    prodConfig.ZooKeeper.ZkConnect,
+                    prodConfig.ZooKeeper.ZkSessionTimeoutMs,
+                    ZooKeeperStringSerializer.Serializer))
+            {
+                using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(client))
+                {
+                    brokers = brokerPartitionInfo.GetAllBrokerInfo();
+                    mappings =
+                        ReflectionHelper.GetInstanceField<IDictionary<string, SortedSet<Partition>>>(
+                            "topicBrokerPartitions", brokerPartitionInfo);
+                    Assert.NotNull(brokers);
+                    Assert.Greater(brokers.Count, 0);
+                    Assert.NotNull(mappings);
+                    Assert.Greater(mappings.Count, 0);
+                    client.Process(new WatchedEvent(KeeperState.Expired, EventType.None, null));
+                    WaitUntillIdle(client, 3000);
+                    brokers2 = brokerPartitionInfo.GetAllBrokerInfo();
+                    mappings2 =
+                        ReflectionHelper.GetInstanceField<IDictionary<string, SortedSet<Partition>>>(
+                            "topicBrokerPartitions", brokerPartitionInfo);
+                }
             }
+
+            Assert.NotNull(brokers2);
+            Assert.Greater(brokers2.Count, 0);
+            Assert.NotNull(mappings2);
+            Assert.Greater(mappings2.Count, 0);
+            Assert.AreEqual(brokers.Count, brokers2.Count);
+            Assert.AreEqual(mappings.Count, mappings2.Count);
         }
 
         [Test]
-        public void WhenNewTopicIsAddedZKBrokerPartitionInfoUpdatesMappings()
+        public void WhenNewTopicIsAddedZkBrokerPartitionInfoUpdatesMappings()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             IDictionary<string, SortedSet<Partition>> mappings;
             string topicPath = ZooKeeperClient.DefaultBrokerTopicsPath + "/" + CurrentTestTopic;
 
             using (IZooKeeperClient client = new ZooKeeperClient(
-                producerConfig.ZkConnect,
-                producerConfig.ZkSessionTimeoutMs,
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs,
                 ZooKeeperStringSerializer.Serializer))
             {
                 using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(client))
@@ -340,6 +341,7 @@ namespace Kafka.Client.IntegrationTests
                     client.CreatePersistent(topicPath, true);
                     WaitUntillIdle(client, 500);
                     client.UnsubscribeAll();
+                    WaitUntillIdle(client, 500);
                     client.DeleteRecursive(topicPath);
                 }
             }
@@ -350,14 +352,15 @@ namespace Kafka.Client.IntegrationTests
         }
 
         [Test]
-        public void WhenNewBrokerIsAddedZKBrokerPartitionInfoUpdatesBrokersList()
+        public void WhenNewBrokerIsAddedZkBrokerPartitionInfoUpdatesBrokersList()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             IDictionary<int, Broker> brokers;
             string brokerPath = ZooKeeperClient.DefaultBrokerIdsPath + "/" + 2345;
             using (IZooKeeperClient client = new ZooKeeperClient(
-                producerConfig.ZkConnect,
-                producerConfig.ZkSessionTimeoutMs,
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs,
                 ZooKeeperStringSerializer.Serializer))
             {
                 using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(client))
@@ -367,6 +370,7 @@ namespace Kafka.Client.IntegrationTests
                     client.WriteData(brokerPath, "192.168.1.39-1310449279123:192.168.1.39:9102");
                     WaitUntillIdle(client, 500);
                     client.UnsubscribeAll();
+                    WaitUntillIdle(client, 500);
                     client.DeleteRecursive(brokerPath);
                 }
             }
@@ -380,18 +384,20 @@ namespace Kafka.Client.IntegrationTests
         }
 
         [Test]
-        public void WhenBrokerIsRemovedZKBrokerPartitionInfoUpdatesBrokersList()
+        public void WhenBrokerIsRemovedZkBrokerPartitionInfoUpdatesBrokersList()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             IDictionary<int, Broker> brokers;
             string brokerPath = ZooKeeperClient.DefaultBrokerIdsPath + "/" + 2345;
             using (IZooKeeperClient client = new ZooKeeperClient(
-                producerConfig.ZkConnect,
-                producerConfig.ZkSessionTimeoutMs,
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs,
                 ZooKeeperStringSerializer.Serializer))
             {
                 using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(client))
                 {
+                    WaitUntillIdle(client, 500);
                     brokers = brokerPartitionInfo.GetAllBrokerInfo();
                     client.CreatePersistent(brokerPath, true);
                     client.WriteData(brokerPath, "192.168.1.39-1310449279123:192.168.1.39:9102");
@@ -410,17 +416,18 @@ namespace Kafka.Client.IntegrationTests
         }
 
         [Test]
-        public void WhenNewBrokerInTopicIsAddedZKBrokerPartitionInfoUpdatesMappings()
+        public void WhenNewBrokerInTopicIsAddedZkBrokerPartitionInfoUpdatesMappings()
         {
-            var producerConfig = new ProducerConfig(clientConfig);
+            var prodConfig = this.ZooKeeperBasedSyncProdConfig;
+
             IDictionary<string, SortedSet<Partition>> mappings;
             IDictionary<int, Broker> brokers;
             string brokerPath = ZooKeeperClient.DefaultBrokerIdsPath + "/" + 2345;
             string topicPath = ZooKeeperClient.DefaultBrokerTopicsPath + "/" + CurrentTestTopic;
             string topicBrokerPath = topicPath + "/" + 2345;
             using (IZooKeeperClient client = new ZooKeeperClient(
-                producerConfig.ZkConnect,
-                producerConfig.ZkSessionTimeoutMs,
+                prodConfig.ZooKeeper.ZkConnect,
+                prodConfig.ZooKeeper.ZkSessionTimeoutMs,
                 ZooKeeperStringSerializer.Serializer))
             {
                 using (var brokerPartitionInfo = new ZKBrokerPartitionInfo(client))
@@ -439,6 +446,7 @@ namespace Kafka.Client.IntegrationTests
                     client.WriteData(topicBrokerPath, 5);
                     WaitUntillIdle(client, 500);
                     client.UnsubscribeAll();
+                    WaitUntillIdle(client, 500);
                     client.DeleteRecursive(brokerPath);
                     client.DeleteRecursive(topicPath);
                 }

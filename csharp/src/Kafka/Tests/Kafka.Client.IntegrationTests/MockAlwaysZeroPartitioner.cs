@@ -19,6 +19,8 @@ using Kafka.Client.Producers.Partitioning;
 
 namespace Kafka.Client.IntegrationTests
 {
+    using Kafka.Client.Producers.Partitioning;
+
     /// <summary>
     /// This mock partitioner will always point to the first partition (the one of index = 0)
     /// </summary>

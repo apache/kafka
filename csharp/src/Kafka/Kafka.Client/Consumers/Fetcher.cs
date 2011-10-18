@@ -33,7 +33,7 @@ namespace Kafka.Client.Consumers
     internal class Fetcher : IDisposable
     {
         private static readonly ILog Logger = LogManager.GetLogger(MethodBase.GetCurrentMethod().DeclaringType);
-        private readonly ConsumerConfig config;
+        private readonly ConsumerConfiguration config;
         private readonly IZooKeeperClient zkClient;
         private FetcherRunnable[] fetcherWorkerObjects;
         private volatile bool disposed;
@@ -48,7 +48,7 @@ namespace Kafka.Client.Consumers
         /// <param name="zkClient">
         /// The wrapper above ZooKeeper client.
         /// </param>
-        public Fetcher(ConsumerConfig config, IZooKeeperClient zkClient)
+        public Fetcher(ConsumerConfiguration config, IZooKeeperClient zkClient)
         {
             this.config = config;
             this.zkClient = zkClient;

@@ -88,6 +88,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CompressionTests.cs" />
     <Compile Include="ConsumerRebalancingTests.cs" />
     <Compile Include="ConsumerTests.cs" />
     <Compile Include="IntegrationFixtureBase.cs" />
@@ -110,6 +111,9 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\..\..\Settings.StyleCop">
+      <Link>Settings.StyleCop</Link>
+    </None>
     <None Include="App.config">
       <SubType>Designer</SubType>
     </None>
