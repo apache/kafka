@@ -43,6 +43,11 @@ class Kafka_Producer
 	protected $port;
 
 	/**
+	 * @var integer
+	 */
+	protected $compression;
+
+	/**
 	 * Constructor
 	 * 
 	 * @param integer $host Host 
@@ -52,6 +57,7 @@ class Kafka_Producer
 		$this->request_key = 0;
 		$this->host = $host;
 		$this->port = $port;
+		$this->compression = 0;
 	}
 	
 	/**
@@ -91,7 +97,7 @@ class Kafka_Producer
 	 */
 	public function send(array $messages, $topic, $partition = 0xFFFFFFFF) {
 		$this->connect();
-		return fwrite($this->conn, Kafka_Encoder::encode_produce_request($topic, $partition, $messages));
+		return fwrite($this->conn, Kafka_Encoder::encode_produce_request($topic, $partition, $messages, $this->compression));
 	}
 
 	/**

@@ -14,6 +14,7 @@
 /**
  * A message. The format of an N byte message is the following:
  * 1 byte "magic" identifier to allow format changes
+ * 1 byte compression-attribute
  * 4 byte CRC32 of the payload
  * N - 5 byte payload
  *
@@ -25,15 +26,6 @@
  */
 class Kafka_Message
 {
-	/*
-	private $currentMagicValue = Kafka_Encoder::CURRENT_MAGIC_VALUE;
-	private $magicOffset   = 0;
-	private $magicLength   = 1;
-	private $crcOffset     = 1; // MagicOffset + MagicLength
-	private $crcLength     = 4;
-	private $payloadOffset = 5; // CrcOffset + CrcLength
-	private $headerSize    = 5; // PayloadOffset
-	*/
 	
 	/**
 	 * @var string
@@ -46,6 +38,11 @@ class Kafka_Message
 	private $size    = 0;
 	
 	/**
+	 * @var integer
+	 */
+	private $compression    = 0;
+	
+	/**
 	 * @var string
 	 */
 	private $crc     = false;
@@ -56,10 +53,12 @@ class Kafka_Message
 	 * @param string $data Message payload
 	 */
 	public function __construct($data) {
-		$this->payload = substr($data, 5);
+		$this->payload = substr($data, 6);
+		$this->compression    = substr($data,1,1);
 		$this->crc     = crc32($this->payload);
 		$this->size    = strlen($this->payload);
 	}
+
 	
 	/**
 	 * Encode a message
@@ -121,7 +120,7 @@ class Kafka_Message
 	 * @return string
 	 */
 	public function __toString() {
-		return 'message(magic = ' . Kafka_Encoder::CURRENT_MAGIC_VALUE . ', crc = ' . $this->crc .
-			', payload = ' . $this->payload . ')';
+		return 'message(magic = ' . Kafka_Encoder::CURRENT_MAGIC_VALUE . ', compression = ' . $this->compression .
+		  ', crc = ' . $this->crc . ', payload = ' . $this->payload . ')';
 	}
 }

@@ -27,11 +27,12 @@ class Kafka_Encoder
 	 * 
 	 * @var integer
 	 */
-	const CURRENT_MAGIC_VALUE = 0;
+	const CURRENT_MAGIC_VALUE = 1;
 	
 	/**
 	 * Encode a message. The format of an N byte message is the following:
      *  - 1 byte: "magic" identifier to allow format changes
+     *  - 1 byte:  "compression-attributes" for compression alogrithm
      *  - 4 bytes: CRC32 of the payload
      *  - (N - 5) bytes: payload
 	 * 
@@ -39,9 +40,9 @@ class Kafka_Encoder
 	 *
 	 * @return string
 	 */
-	static public function encode_message($msg) {
-		// <MAGIC_BYTE: 1 byte> <CRC32: 4 bytes bigendian> <PAYLOAD: N bytes>
-		return pack('CN', self::CURRENT_MAGIC_VALUE, crc32($msg)) 
+	static public function encode_message($msg, $compression) {
+		// <MAGIC_BYTE: 1 byte> <COMPRESSION: 1 byte> <CRC32: 4 bytes bigendian> <PAYLOAD: N bytes>
+		return pack('CCN', self::CURRENT_MAGIC_VALUE, $compression, crc32($msg)) 
 			 . $msg;
 	}
 
@@ -51,14 +52,15 @@ class Kafka_Encoder
 	 * @param string  $topic     Topic
 	 * @param integer $partition Partition number
 	 * @param array   $messages  Array of messages to send
+	 * @param compression $compression flag for type of compression 
 	 *
 	 * @return string
 	 */
-	static public function encode_produce_request($topic, $partition, array $messages) {
+	static public function encode_produce_request($topic, $partition, array $messages, $compression) {
 		// encode messages as <LEN: int><MESSAGE_BYTES>
 		$message_set = '';
 		foreach ($messages as $message) {
-			$encoded = self::encode_message($message);
+			$encoded = self::encode_message($message, $compression);
 			$message_set .= pack('N', strlen($encoded)) . $encoded;
 		}
 		// create the request as <REQUEST_SIZE: int> <REQUEST_ID: short> <TOPIC: bytes> <PARTITION: int> <BUFFER_SIZE: int> <BUFFER: bytes>
