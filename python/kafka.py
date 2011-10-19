@@ -24,8 +24,9 @@ import sys
 PRODUCE_REQUEST_ID = 0
 
 def encode_message(message):
-    # <MAGIC_BYTE: char> <CRC32: int> <PAYLOAD: bytes>
-    return struct.pack('>B', 0) + \
+    # <MAGIC_BYTE: char> <COMPRESSION_ALGO: char> <CRC32: int> <PAYLOAD: bytes>
+    return struct.pack('>B', 1) + \
+           struct.pack('>B', 0) + \
            struct.pack('>i', binascii.crc32(message)) + \
            message
 
