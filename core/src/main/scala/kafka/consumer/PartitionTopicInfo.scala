@@ -76,7 +76,8 @@ private[consumer] class PartitionTopicInfo(val topic: String,
    *  add an empty message with the exception to the queue so that client can see the error
    */
   def enqueueError(e: Throwable, fetchOffset: Long) = {
-    val messages = new ByteBufferMessageSet(ErrorMapping.EmptyByteBuffer, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+    val messages = new ByteBufferMessageSet(buffer = ErrorMapping.EmptyByteBuffer, initialOffset = 0,
+      errorCode = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
     chunkQueue.put(new FetchedDataChunk(messages, this, fetchOffset))
   }
 

@@ -21,12 +21,31 @@ import java.nio._
 import junit.framework.Assert._
 import org.junit.Test
 import kafka.utils.TestUtils
+import kafka.common.InvalidMessageSizeException
 
 class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
   override def createMessageSet(messages: Seq[Message]): ByteBufferMessageSet = 
     new ByteBufferMessageSet(NoCompressionCodec, messages: _*)
   
+  @Test
+  def testSmallFetchSize() {
+    // create a ByteBufferMessageSet that doesn't contain a full message
+    // iterating it should get an InvalidMessageSizeException
+    val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("01234567890123456789".getBytes()))
+    val buffer = messages.serialized.slice
+    buffer.limit(10)
+    val messageSetWithNoFullMessage = new ByteBufferMessageSet(buffer = buffer, initialOffset = 1000)
+    try {
+      for (message <- messageSetWithNoFullMessage)
+        fail("shouldn't see any message")
+    }
+    catch {
+      case e: InvalidMessageSizeException => //this is expected
+      case e2 => fail("shouldn't see any other exceptions")
+    }
+  }
+
   @Test
   def testValidBytes() {
     {

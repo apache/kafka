@@ -98,7 +98,7 @@ class ZKConsumerThread(stream: KafkaMessageStream[String]) extends Thread {
       }
     }catch {
       case e:ConsumerTimeoutException => // this is ok
-      case oe: Exception => logger.error(oe)
+      case oe: Exception => logger.error("error in ZKConsumerThread", oe)
     }
     shutdownLatch.countDown
     println("Received " + count + " messages")

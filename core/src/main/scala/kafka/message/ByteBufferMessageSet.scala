@@ -99,7 +99,7 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
           logger.trace("size of data = " + size)
         }
         if(size < 0 || topIter.remaining < size) {
-          if (currValidBytes == 0 || size < 0)
+          if (currValidBytes == initialOffset || size < 0)
             throw new InvalidMessageSizeException("invalid message size: " + size + " only received bytes: " +
               topIter.remaining + " at " + currValidBytes + "( possible causes (1) a single message larger than " +
               "the fetch size; (2) log corruption )")
