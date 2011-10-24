@@ -24,6 +24,7 @@ import java.util.Properties
 import kafka.cluster.{Partition, Broker}
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.common.{NoBrokersForPartitionException, InvalidConfigException, InvalidPartitionException}
+import kafka.api.ProducerRequest
 
 class Producer[K,V](config: ProducerConfig,
                     partitioner: Partitioner[K],
@@ -118,11 +119,11 @@ class Producer[K,V](config: ProducerConfig,
           brokerPartitionInfo.updateInfo
         }
 
-        val numBrokerPartitions = getNumPartitionsForTopic(pd)
-        val totalNumPartitions = numBrokerPartitions.length
+        val topicPartitionsList = getPartitionListForTopic(pd)
+        val totalNumPartitions = topicPartitionsList.length
 
         val partitionId = getPartition(pd.getKey, totalNumPartitions)
-        brokerIdPartition = Some(numBrokerPartitions(partitionId))
+        brokerIdPartition = Some(topicPartitionsList(partitionId))
         brokerInfoOpt = brokerPartitionInfo.getBrokerInfo(brokerIdPartition.get.brokerId)
         numRetries += 1
       }
@@ -145,32 +146,36 @@ class Producer[K,V](config: ProducerConfig,
   private def configSend(producerData: ProducerData[K,V]*) {
     val producerPoolRequests = producerData.map { pd =>
     // find the broker partitions registered for this topic
-      val numBrokerPartitions = getNumPartitionsForTopic(pd)
-      val totalNumPartitions = numBrokerPartitions.length
+      val topicPartitionsList = getPartitionListForTopic(pd)
+      val totalNumPartitions = topicPartitionsList.length
 
-      val partitionId = getPartition(pd.getKey, totalNumPartitions)
-      val brokerIdPartition = numBrokerPartitions(partitionId)
+      val randomBrokerId = random.nextInt(totalNumPartitions)
+      val brokerIdPartition = topicPartitionsList(randomBrokerId)
       val brokerInfo = brokerPartitionInfo.getBrokerInfo(brokerIdPartition.brokerId).get
 
+      if(logger.isDebugEnabled)
+        logger.debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port +
+                " on a randomly chosen partition")
+      val partition = ProducerRequest.RandomPartition
       if(logger.isDebugEnabled)
         logger.debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port + " on a partition " +
           brokerIdPartition.partId)
       producerPool.getProducerPoolData(pd.getTopic,
-        new Partition(brokerIdPartition.brokerId, brokerIdPartition.partId),
+        new Partition(brokerIdPartition.brokerId, partition),
         pd.getData)
     }
     producerPool.send(producerPoolRequests: _*)
   }
 
-  private def getNumPartitionsForTopic(pd: ProducerData[K,V]): Seq[Partition] = {
+  private def getPartitionListForTopic(pd: ProducerData[K,V]): Seq[Partition] = {
     if(logger.isDebugEnabled)
       logger.debug("Getting the number of broker partitions registered for topic: " + pd.getTopic)
-    val numBrokerPartitions = brokerPartitionInfo.getBrokerPartitionInfo(pd.getTopic).toSeq
+    val topicPartitionsList = brokerPartitionInfo.getBrokerPartitionInfo(pd.getTopic).toSeq
     if(logger.isDebugEnabled)
-      logger.debug("Broker partitions registered for topic: " + pd.getTopic + " = " + numBrokerPartitions)
-    val totalNumPartitions = numBrokerPartitions.length
+      logger.debug("Broker partitions registered for topic: " + pd.getTopic + " = " + topicPartitionsList)
+    val totalNumPartitions = topicPartitionsList.length
     if(totalNumPartitions == 0) throw new NoBrokersForPartitionException("Partition = " + pd.getKey)
-    numBrokerPartitions
+    topicPartitionsList
   }
 
   /**

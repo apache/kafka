@@ -155,8 +155,8 @@ class ProducerTest extends JUnitSuite {
     // 2 sync producers
     val syncProducers = new ConcurrentHashMap[Int, kafka.producer.SyncProducer]()
     val syncProducer1 = EasyMock.createMock(classOf[kafka.producer.SyncProducer])
-    // it should send to partition 0 due to the StaticPartitioner
-    syncProducer1.send(topic, 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message("t".getBytes())))
+    // it should send to a random partition due to use of broker.list
+    syncProducer1.send(topic, -1, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message("t".getBytes())))
     EasyMock.expectLastCall
     syncProducer1.close
     EasyMock.expectLastCall
@@ -373,8 +373,8 @@ class ProducerTest extends JUnitSuite {
     // 2 async producers
     val asyncProducers = new ConcurrentHashMap[Int, AsyncProducer[String]]()
     val asyncProducer1 = EasyMock.createMock(classOf[AsyncProducer[String]])
-    // it should send to partition 0 (first partition) on second broker i.e broker2
-    asyncProducer1.send(topic, "test1", 0)
+    // it should send to a random partition due to use of broker.list
+    asyncProducer1.send(topic, "test1", -1)
     EasyMock.expectLastCall
     asyncProducer1.close
     EasyMock.expectLastCall
@@ -646,8 +646,8 @@ class ProducerTest extends JUnitSuite {
     // 2 async producers
     val asyncProducers = new ConcurrentHashMap[Int, AsyncProducer[String]]()
     val asyncProducer1 = EasyMock.createMock(classOf[AsyncProducer[String]])
-    // it should send to partition 0 (first partition) on second broker i.e broker2
-    asyncProducer1.send(topic, "test1", 0)
+    // it should send to a random partition due to use of broker.list
+    asyncProducer1.send(topic, "test1", -1)
     EasyMock.expectLastCall
     asyncProducer1.close
     EasyMock.expectLastCall
