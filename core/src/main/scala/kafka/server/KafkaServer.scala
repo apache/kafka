@@ -82,8 +82,7 @@ class KafkaServer(val config: KafkaConfig) {
     }
     catch {
       case e =>
-        logger.fatal(e)
-        logger.fatal(Utils.stackTrace(e))
+        logger.fatal("Fatal error during startup.", e)
         shutdown
     }
   }
