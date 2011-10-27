@@ -25,21 +25,18 @@ package kafka
 import (
   "encoding/binary"
   "bytes"
-  "container/list"
 )
-
 
 type RequestType uint16
 
 // Request Types
 const (
   REQUEST_PRODUCE      RequestType = 0
-  REQUEST_FETCH        = 1
-  REQUEST_MULTIFETCH   = 2
-  REQUEST_MULTIPRODUCE = 3
-  REQUEST_OFFSETS      = 4
+  REQUEST_FETCH                    = 1
+  REQUEST_MULTIFETCH               = 2
+  REQUEST_MULTIPRODUCE             = 3
+  REQUEST_OFFSETS                  = 4
 )
-
 
 // Request Header: <REQUEST_SIZE: uint32><REQUEST_TYPE: uint16><TOPIC SIZE: uint16><TOPIC: bytes><PARTITION: uint32>
 func (b *Broker) EncodeRequestHeader(requestType RequestType) *bytes.Buffer {
@@ -70,7 +67,6 @@ func (b *Broker) EncodeOffsetRequest(time int64, maxNumOffsets uint32) []byte {
   return request.Bytes()
 }
 
-
 // <Request Header><OFFSET: uint64><MAX SIZE: uint32>
 func (b *Broker) EncodeConsumeRequest(offset uint64, maxSize uint32) []byte {
   request := b.EncodeRequestHeader(REQUEST_FETCH)
@@ -83,9 +79,8 @@ func (b *Broker) EncodeConsumeRequest(offset uint64, maxSize uint32) []byte {
   return request.Bytes()
 }
 
-
 // <Request Header><MESSAGE SET SIZE: uint32><MESSAGE SETS>
-func (b *Broker) EncodePublishRequest(messages *list.List) []byte {
+func (b *Broker) EncodePublishRequest(messages ...*Message) []byte {
   // 4 + 2 + 2 + topicLength + 4 + 4
   request := b.EncodeRequestHeader(REQUEST_PRODUCE)
 
@@ -93,8 +88,7 @@ func (b *Broker) EncodePublishRequest(messages *list.List) []byte {
   request.Write(uint32bytes(0)) // placeholder message len
 
   written := 0
-  for element := messages.Front(); element != nil; element = element.Next() {
-    message := element.Value.(*Message)
+  for _, message := range messages {
     wrote, _ := request.Write(message.Encode())
     written += wrote
   }
@@ -103,6 +97,5 @@ func (b *Broker) EncodePublishRequest(messages *list.List) []byte {
   binary.BigEndian.PutUint32(request.Bytes()[messageSetSizePos:], uint32(written))
   // now add the size of the whole to the first uint32
   encodeRequestSize(request)
-
   return request.Bytes()
 }

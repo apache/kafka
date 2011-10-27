@@ -23,10 +23,8 @@
 package kafka
 
 import (
-  "container/list"
   "os"
 )
-
 
 type BrokerPublisher struct {
   broker *Broker
@@ -36,21 +34,19 @@ func NewBrokerPublisher(hostname string, topic string, partition int) *BrokerPub
   return &BrokerPublisher{broker: newBroker(hostname, topic, partition)}
 }
 
-
 func (b *BrokerPublisher) Publish(message *Message) (int, os.Error) {
-  messages := list.New()
-  messages.PushBack(message)
-  return b.BatchPublish(messages)
+  return b.BatchPublish(message)
 }
 
-func (b *BrokerPublisher) BatchPublish(messages *list.List) (int, os.Error) {
+func (b *BrokerPublisher) BatchPublish(messages ...*Message) (int, os.Error) {
   conn, err := b.broker.connect()
   if err != nil {
     return -1, err
   }
   defer conn.Close()
   // TODO: MULTIPRODUCE
-  num, err := conn.Write(b.broker.EncodePublishRequest(messages))
+  request := b.broker.EncodePublishRequest(messages...)
+  num, err := conn.Write(request)
   if err != nil {
     return -1, err
   }

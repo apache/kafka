@@ -28,16 +28,13 @@ import (
   "os"
   "fmt"
   "encoding/binary"
-  "strconv"
   "io"
   "bufio"
 )
 
 const (
-  MAGIC_DEFAULT = 0
-  NETWORK       = "tcp"
+  NETWORK = "tcp"
 )
-
 
 type Broker struct {
   topic     string
@@ -50,7 +47,6 @@ func newBroker(hostname string, topic string, partition int) *Broker {
     partition: partition,
     hostname:  hostname}
 }
-
 
 func (b *Broker) connect() (conn *net.TCPConn, error os.Error) {
   raddr, err := net.ResolveTCPAddr(NETWORK, b.hostname)
@@ -91,7 +87,9 @@ func (b *Broker) readResponse(conn *net.TCPConn) (uint32, []byte, os.Error) {
 
   errorCode := binary.BigEndian.Uint16(messages[0:2])
   if errorCode != 0 {
-    return 0, []byte{}, os.NewError(strconv.Uitoa(uint(errorCode)))
+    log.Println("errorCode: ", errorCode)
+    return 0, []byte{}, os.NewError(
+      fmt.Sprintf("Broker Response Error: %d", errorCode))
   }
   return expectedLength, messages[2:], nil
 }

@@ -20,7 +20,6 @@
  *  of their respective owners.
  */
 
-
 package kafka
 
 import (

@@ -22,11 +22,9 @@
 
 package kafka
 
-
 import (
   "encoding/binary"
 )
-
 
 func uint16bytes(value int) []byte {
   result := make([]byte, 2)
