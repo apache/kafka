@@ -20,7 +20,6 @@
  *  of their respective owners.
  */
 
-
 package main
 
 import (
@@ -52,7 +51,6 @@ func init() {
   flag.BoolVar(&consumerForever, "consumeforever", false, "loop forever consuming")
   flag.BoolVar(&printmessage, "printmessage", true, "print the message details to stdout")
 }
-
 
 func main() {
   flag.Parse()
@@ -87,7 +85,7 @@ func main() {
     go func() {
       for {
         sig := <-signal.Incoming
-        if sig.(signal.UnixSignal) == syscall.SIGINT {
+        if sig.(os.UnixSignal) == syscall.SIGINT {
           quit <- true
         }
       }

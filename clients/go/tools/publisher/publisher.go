@@ -34,6 +34,7 @@ var topic string
 var partition int
 var message string
 var messageFile string
+var compress bool
 
 func init() {
   flag.StringVar(&hostname, "hostname", "localhost:9092", "host:port string for the kafka server")
@@ -41,6 +42,7 @@ func init() {
   flag.IntVar(&partition, "partition", 0, "partition to publish to")
   flag.StringVar(&message, "message", "", "message to publish")
   flag.StringVar(&messageFile, "messagefile", "", "read message from this file")
+  flag.BoolVar(&compress, "compress", false, "compress the messages published")
 }
 
 func main() {
@@ -64,12 +66,24 @@ func main() {
     payload := make([]byte, stat.Size)
     file.Read(payload)
     timing := kafka.StartTiming("Sending")
-    broker.Publish(kafka.NewMessage(payload))
+
+    if compress {
+      broker.Publish(kafka.NewCompressedMessage(payload))
+    } else {
+      broker.Publish(kafka.NewMessage(payload))
+    }
+
     timing.Print()
     file.Close()
   } else {
     timing := kafka.StartTiming("Sending")
-    broker.Publish(kafka.NewMessage([]byte(message)))
+
+    if compress {
+      broker.Publish(kafka.NewCompressedMessage([]byte(message)))
+    } else {
+      broker.Publish(kafka.NewMessage([]byte(message)))
+    }
+
     timing.Print()
   }
 }

@@ -6,6 +6,7 @@ GOFILES=\
 	src/message.go\
 	src/converts.go\
 	src/consumer.go\
+	src/payload_codec.go\
 	src/publisher.go\
 	src/timing.go\
 	src/request.go\
