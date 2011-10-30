@@ -16,6 +16,8 @@
  */
 
 import sbt._
+import scala.xml.{Node, Elem, NodeSeq}
+import scala.xml.transform.{RewriteRule, RuleTransformer}
 
 class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProject {
   lazy val core = project("core", "core-kafka", new CoreKafkaProject(_))
@@ -57,6 +59,27 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
         <exclude module="jline"/>
       </dependency>
     </dependencies>
+
+    def zkClientDep =
+      <dependency>
+       <groupId>zkclient</groupId>
+       <artifactId>zkclient</artifactId>
+       <version>20110412</version>
+       <scope>compile</scope>
+       </dependency>
+
+  object ZkClientDepAdder extends RuleTransformer(new RewriteRule() {
+      override def transform(node: Node): Seq[Node] = node match {
+        case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
+          Elem(prefix, "dependencies", attribs, scope, deps ++ zkClientDep :_*)
+        }
+        case other => other
+      }
+    })
+
+    override def pomPostProcess(pom: Node): Node = {
+      ZkClientDepAdder(pom)
+    }
 
     override def repositories = Set(ScalaToolsSnapshots, "JBoss Maven 2 Repository" at "http://repository.jboss.com/maven2",
       "Oracle Maven 2 Repository" at "http://download.oracle.com/maven", "maven.org" at "http://repo2.maven.org/maven2/")
