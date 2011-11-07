@@ -17,13 +17,14 @@
 
 package kafka.message
 
-import junit.framework.TestCase
 import kafka.utils.TestUtils
+import org.scalatest.junit.JUnitSuite
+import org.junit.Test
 
-class CompressionUtilTest extends TestCase {
+class CompressionUtilTest extends JUnitSuite {
 
   
-
+  @Test
   def testSimpleCompressDecompress() {
 
     val messages = List[Message](new Message("hi there".getBytes), new Message("I am fine".getBytes), new Message("I am not so well today".getBytes))
@@ -34,9 +35,10 @@ class CompressionUtilTest extends TestCase {
 
     TestUtils.checkLength(decompressedMessages.iterator,3)
 
-    TestUtils.checkEquals(messages.iterator, decompressedMessages.iterator)
+    TestUtils.checkEquals(messages.iterator, TestUtils.getMessageIterator(decompressedMessages.iterator))
   }
 
+  @Test
   def testComplexCompressDecompress() {
 
     val messages = List[Message](new Message("hi there".getBytes), new Message("I am fine".getBytes), new Message("I am not so well today".getBytes))
@@ -49,10 +51,8 @@ class CompressionUtilTest extends TestCase {
 
     val decompressedMessages = CompressionUtils.decompress(complexMessage)
 
-    TestUtils.checkLength(decompressedMessages.iterator,2)
+    TestUtils.checkLength(TestUtils.getMessageIterator(decompressedMessages.iterator),3)
 
-    TestUtils.checkLength(decompressedMessages.iterator,3)
-
-    TestUtils.checkEquals(messages.iterator, decompressedMessages.iterator)
+    TestUtils.checkEquals(messages.iterator, TestUtils.getMessageIterator(decompressedMessages.iterator))
   }
 }
