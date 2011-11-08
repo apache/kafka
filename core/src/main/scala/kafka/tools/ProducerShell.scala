@@ -23,6 +23,7 @@ import joptsimple._
 import kafka.message._
 import kafka.producer._
 import java.util.Properties
+import kafka.utils.Utils
 
 /**
  * Interactive shell for producing messages from the command line
@@ -32,9 +33,9 @@ object ProducerShell {
   def main(args: Array[String]) {
     
     val parser = new OptionParser
-    val urlOpt = parser.accepts("server", "REQUIRED: The hostname of the server to connect to.")
+    val producerPropsOpt = parser.accepts("props", "REQUIRED: Properties file with the producer properties.")
                            .withRequiredArg
-                           .describedAs("kafka://hostname:port")
+                           .describedAs("properties")
                            .ofType(classOf[String])
     val topicOpt = parser.accepts("topic", "REQUIRED: The topic to produce to.")
                            .withRequiredArg
@@ -43,7 +44,7 @@ object ProducerShell {
     
     val options = parser.parse(args : _*)
     
-    for(arg <- List(urlOpt, topicOpt)) {
+    for(arg <- List(producerPropsOpt, topicOpt)) {
       if(!options.has(arg)) {
         System.err.println("Missing required argument \"" + arg + "\"") 
         parser.printHelpOn(System.err)
@@ -51,15 +52,10 @@ object ProducerShell {
       }
     }
     
-    val url = new URI(options.valueOf(urlOpt))
+    val propsFile = options.valueOf(producerPropsOpt)
+    val producerConfig = new ProducerConfig(Utils.loadProps(propsFile))
     val topic = options.valueOf(topicOpt)
-    val props = new Properties()
-    props.put("host", url.getHost)
-    props.put("port", url.getPort.toString)
-    props.put("buffer.size", "65536")
-    props.put("connect.timeout.ms", "10000")
-    props.put("reconnect.interval", "100")
-    val producer = new SyncProducer(new SyncProducerConfig(props))
+    val producer = new Producer[String, String](producerConfig)
 
     val input = new BufferedReader(new InputStreamReader(System.in))
     var done = false
@@ -68,10 +64,9 @@ object ProducerShell {
       if(line == null) {
         done = true
       } else {
-        val lineBytes = line.trim.getBytes()
-        val messageList = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(lineBytes))
-        producer.send(topic, messageList)
-        println("Sent: %s (%d bytes)".format(line, messageList.sizeInBytes))
+        val message = line.trim
+        producer.send(new ProducerData[String, String](topic, message))
+        println("Sent: %s (%d bytes)".format(line, message.getBytes.length))
       }
     }
     producer.close()
