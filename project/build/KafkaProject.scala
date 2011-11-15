@@ -42,7 +42,7 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
 
 
   class CoreKafkaProject(info: ProjectInfo) extends DefaultProject(info)
-     with IdeaProject with CoreDependencies with TestDependencies {
+     with IdeaProject with CoreDependencies with TestDependencies with CompressionDependencies {
    val corePackageAction = packageAllAction
 
   //The issue is going from log4j 1.2.14 to 1.2.15, the developers added some features which required
@@ -224,6 +224,10 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
   trait CoreDependencies {
     val log4j = "log4j" % "log4j" % "1.2.15"
     val jopt = "net.sf.jopt-simple" % "jopt-simple" % "3.2"
+  }
+  
+  trait CompressionDependencies {
+    val snappy = "org.xerial.snappy" % "snappy-java" % "1.0.4.1"	
   }
 
 }

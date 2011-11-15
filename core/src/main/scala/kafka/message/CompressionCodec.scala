@@ -20,8 +20,9 @@ package kafka.message
 object CompressionCodec {
   def getCompressionCodec(codec: Int): CompressionCodec = {
     codec match {
-      case 0 => NoCompressionCodec
-      case 1 => GZIPCompressionCodec
+      case NoCompressionCodec.codec => NoCompressionCodec
+      case GZIPCompressionCodec.codec => GZIPCompressionCodec
+      case SnappyCompressionCodec.codec => SnappyCompressionCodec
       case _ => throw new kafka.common.UnknownCodecException("%d is an unknown compression codec".format(codec))
     }
   }
@@ -29,8 +30,10 @@ object CompressionCodec {
 
 sealed trait CompressionCodec { def codec: Int }
 
-case object DefaultCompressionCodec extends CompressionCodec { val codec = 1 }
+case object DefaultCompressionCodec extends CompressionCodec { val codec = GZIPCompressionCodec.codec }
 
 case object GZIPCompressionCodec extends CompressionCodec { val codec = 1 }
+
+case object SnappyCompressionCodec extends CompressionCodec { val codec = 2 }
 
 case object NoCompressionCodec extends CompressionCodec { val codec = 0 }

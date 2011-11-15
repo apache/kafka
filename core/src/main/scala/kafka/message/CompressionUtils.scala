@@ -20,125 +20,143 @@ package kafka.message
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.util.zip.GZIPInputStream
-import java.util.zip.GZIPOutputStream
 import java.nio.ByteBuffer
 import org.apache.log4j.Logger
+
+abstract sealed class CompressionFacade(inputStream: InputStream, outputStream: ByteArrayOutputStream) {
+  def close() = {
+    if (inputStream != null) inputStream.close()
+    if (outputStream != null) outputStream.close()
+  }	
+  def read(a: Array[Byte]): Int
+  def write(a: Array[Byte])
+}
+
+class GZIPCompression(inputStream: InputStream, outputStream: ByteArrayOutputStream)  extends CompressionFacade(inputStream,outputStream) {
+  import java.util.zip.GZIPInputStream
+  import java.util.zip.GZIPOutputStream
+  val gzipIn:GZIPInputStream = if (inputStream == null) null else new  GZIPInputStream(inputStream)
+  val gzipOut:GZIPOutputStream = if (outputStream == null) null else new  GZIPOutputStream(outputStream)
+
+  override def close() {
+    if (gzipIn != null) gzipIn.close()
+    if (gzipOut != null) gzipOut.close()
+    super.close()	
+  }
+
+  override def write(a: Array[Byte]) = {
+    gzipOut.write(a)
+  }
+
+  override def read(a: Array[Byte]): Int = {
+    gzipIn.read(a)	
+  }
+}
+
+class SnappyCompression(inputStream: InputStream,outputStream: ByteArrayOutputStream)  extends CompressionFacade(inputStream,outputStream) {
+  import org.xerial.snappy.{SnappyInputStream}
+  import org.xerial.snappy.{SnappyOutputStream}
+  
+  val snappyIn:SnappyInputStream = if (inputStream == null) null else new SnappyInputStream(inputStream)
+  val snappyOut:SnappyOutputStream = if (outputStream == null) null else new  SnappyOutputStream(outputStream)
+
+  override def close() = {
+    if (snappyIn != null) snappyIn.close()
+    if (snappyOut != null) snappyOut.close()
+    super.close()	
+  }
+
+  override def write(a: Array[Byte]) = {
+    snappyOut.write(a)
+  }
+
+  override def read(a: Array[Byte]): Int = {
+    snappyIn.read(a)	
+  }
+
+}
+
+object CompressionFactory {
+  def apply(compressionCodec: CompressionCodec, stream: ByteArrayOutputStream): CompressionFacade = compressionCodec match {
+    case GZIPCompressionCodec => new GZIPCompression(null,stream)
+    case SnappyCompressionCodec => new SnappyCompression(null,stream)
+    case _ =>
+      throw new kafka.common.UnknownCodecException("Unknown Codec: " + compressionCodec)
+  }
+  def apply(compressionCodec: CompressionCodec, stream: InputStream): CompressionFacade = compressionCodec match {
+    case GZIPCompressionCodec => new GZIPCompression(stream,null)
+    case SnappyCompressionCodec => new SnappyCompression(stream,null)
+    case _ =>
+      throw new kafka.common.UnknownCodecException("Unknown Codec: " + compressionCodec)
+  }
+}
 
 object CompressionUtils {
   private val logger = Logger.getLogger(getClass)
 
-  def compress(messages: Iterable[Message]): Message = compress(messages, DefaultCompressionCodec)
+  //specify the codec which is the default when DefaultCompressionCodec is used
+  private var defaultCodec: CompressionCodec = GZIPCompressionCodec
 
-  def compress(messages: Iterable[Message], compressionCodec: CompressionCodec):Message = compressionCodec match {
-    case DefaultCompressionCodec =>
-      val outputStream:ByteArrayOutputStream = new ByteArrayOutputStream()
-      val gzipOutput:GZIPOutputStream = new GZIPOutputStream(outputStream)
-      if(logger.isDebugEnabled)
-        logger.debug("Allocating message byte buffer of size = " + MessageSet.messageSetSize(messages))
+  def compress(messages: Iterable[Message], compressionCodec: CompressionCodec = DefaultCompressionCodec):Message = {
+	val outputStream:ByteArrayOutputStream = new ByteArrayOutputStream()
+	
+	if(logger.isDebugEnabled)
+	  logger.debug("Allocating message byte buffer of size = " + MessageSet.messageSetSize(messages))
 
-      val messageByteBuffer = ByteBuffer.allocate(MessageSet.messageSetSize(messages))
-      messages.foreach(m => m.serializeTo(messageByteBuffer))
-      messageByteBuffer.rewind
+    var cf: CompressionFacade = null
+		
+	if (compressionCodec == DefaultCompressionCodec)
+      cf = CompressionFactory(defaultCodec,outputStream)
+    else 
+      cf = CompressionFactory(compressionCodec,outputStream) 
 
-      try {
-        gzipOutput.write(messageByteBuffer.array)
-      } catch {
-        case e: IOException => logger.error("Error while writing to the GZIP output stream", e)
-        if(gzipOutput != null) gzipOutput.close();
-        if(outputStream != null) outputStream.close()
-        throw e
-      } finally {
-        if(gzipOutput != null) gzipOutput.close()
-        if(outputStream != null) outputStream.close()
+    val messageByteBuffer = ByteBuffer.allocate(MessageSet.messageSetSize(messages))
+    messages.foreach(m => m.serializeTo(messageByteBuffer))
+    messageByteBuffer.rewind
+
+    try {
+      cf.write(messageByteBuffer.array)
+    } catch {
+      case e: IOException => logger.error("Error while writing to the GZIP output stream", e)
+      cf.close()
+      throw e
+    } finally {
+      cf.close()
+    }
+
+    val oneCompressedMessage:Message = new Message(outputStream.toByteArray, compressionCodec)
+    oneCompressedMessage
+   }
+
+  def decompress(message: Message): ByteBufferMessageSet = {
+    val outputStream:ByteArrayOutputStream = new ByteArrayOutputStream
+    val inputStream:InputStream = new ByteBufferBackedInputStream(message.payload)
+
+    val intermediateBuffer = new Array[Byte](1024)
+
+    var cf: CompressionFacade = null
+		
+	if (message.compressionCodec == DefaultCompressionCodec) 
+      cf = CompressionFactory(defaultCodec,inputStream)
+    else 
+      cf = CompressionFactory(message.compressionCodec,inputStream)
+
+    try {
+      Stream.continually(cf.read(intermediateBuffer)).takeWhile(_ > 0).foreach { dataRead =>
+        outputStream.write(intermediateBuffer, 0, dataRead)
       }
+    }catch {
+      case e: IOException => logger.error("Error while reading from the GZIP input stream", e)
+      cf.close()
+      throw e
+    } finally {
+      cf.close()
+    }
 
-      val oneCompressedMessage:Message = new Message(outputStream.toByteArray, compressionCodec)
-      oneCompressedMessage
-    case GZIPCompressionCodec =>
-      val outputStream:ByteArrayOutputStream = new ByteArrayOutputStream()
-      val gzipOutput:GZIPOutputStream = new GZIPOutputStream(outputStream)
-      if(logger.isDebugEnabled)
-        logger.debug("Allocating message byte buffer of size = " + MessageSet.messageSetSize(messages))
-
-      val messageByteBuffer = ByteBuffer.allocate(MessageSet.messageSetSize(messages))
-      messages.foreach(m => m.serializeTo(messageByteBuffer))
-      messageByteBuffer.rewind
-
-      try {
-        gzipOutput.write(messageByteBuffer.array)
-      } catch {
-        case e: IOException => logger.error("Error while writing to the GZIP output stream", e)
-        if(gzipOutput != null)
-          gzipOutput.close()
-        if(outputStream != null)
-          outputStream.close()
-        throw e
-      } finally {
-        if(gzipOutput != null)
-          gzipOutput.close()
-        if(outputStream != null)
-          outputStream.close()
-      }
-
-      val oneCompressedMessage:Message = new Message(outputStream.toByteArray, compressionCodec)
-      oneCompressedMessage
-    case _ =>
-      throw new kafka.common.UnknownCodecException("Unknown Codec: " + compressionCodec)
-  }
-
-  def decompress(message: Message): ByteBufferMessageSet = message.compressionCodec match {
-    case DefaultCompressionCodec =>
-      val outputStream:ByteArrayOutputStream = new ByteArrayOutputStream
-      val inputStream:InputStream = new ByteBufferBackedInputStream(message.payload)
-      val gzipIn:GZIPInputStream = new GZIPInputStream(inputStream)
-      val intermediateBuffer = new Array[Byte](1024)
-
-      try {
-        Stream.continually(gzipIn.read(intermediateBuffer)).takeWhile(_ > 0).foreach { dataRead =>
-          outputStream.write(intermediateBuffer, 0, dataRead)
-        }
-      }catch {
-        case e: IOException => logger.error("Error while reading from the GZIP input stream", e)
-        if(gzipIn != null) gzipIn.close
-        if(outputStream != null) outputStream.close
-        throw e
-      } finally {
-        if(gzipIn != null) gzipIn.close
-        if(outputStream != null) outputStream.close
-      }
-
-      val outputBuffer = ByteBuffer.allocate(outputStream.size)
-      outputBuffer.put(outputStream.toByteArray)
-      outputBuffer.rewind
-      val outputByteArray = outputStream.toByteArray
-      new ByteBufferMessageSet(outputBuffer)
-    case GZIPCompressionCodec =>
-      val outputStream:ByteArrayOutputStream = new ByteArrayOutputStream
-      val inputStream:InputStream = new ByteBufferBackedInputStream(message.payload)
-      val gzipIn:GZIPInputStream = new GZIPInputStream(inputStream)
-      val intermediateBuffer = new Array[Byte](1024)
-
-      try {
-        Stream.continually(gzipIn.read(intermediateBuffer)).takeWhile(_ > 0).foreach { dataRead =>
-          outputStream.write(intermediateBuffer, 0, dataRead)
-        }
-      }catch {
-        case e: IOException => logger.error("Error while reading from the GZIP input stream", e)
-        if(gzipIn != null) gzipIn.close
-        if(outputStream != null) outputStream.close
-        throw e
-      } finally {
-        if(gzipIn != null) gzipIn.close
-        if(outputStream != null) outputStream.close
-      }
-
-      val outputBuffer = ByteBuffer.allocate(outputStream.size)
-      outputBuffer.put(outputStream.toByteArray)
-      outputBuffer.rewind
-      val outputByteArray = outputStream.toByteArray
-      new ByteBufferMessageSet(outputBuffer)
-    case _ =>
-      throw new kafka.common.UnknownCodecException("Unknown Codec: " + message.compressionCodec)
+    val outputBuffer = ByteBuffer.allocate(outputStream.size)
+    outputBuffer.put(outputStream.toByteArray)
+    outputBuffer.rewind
+    val outputByteArray = outputStream.toByteArray
+    new ByteBufferMessageSet(outputBuffer)
   }
 }

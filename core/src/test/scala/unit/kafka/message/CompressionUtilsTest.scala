@@ -20,6 +20,7 @@ package kafka.message
 import kafka.utils.TestUtils
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
+import junit.framework.Assert._
 
 class CompressionUtilTest extends JUnitSuite {
 
@@ -52,6 +53,22 @@ class CompressionUtilTest extends JUnitSuite {
     val decompressedMessages = CompressionUtils.decompress(complexMessage)
 
     TestUtils.checkLength(TestUtils.getMessageIterator(decompressedMessages.iterator),3)
+
+    TestUtils.checkEquals(messages.iterator, TestUtils.getMessageIterator(decompressedMessages.iterator))
+  }
+
+  @Test
+  def testSnappyCompressDecompressExplicit() {
+
+    val messages = List[Message](new Message("hi there".getBytes), new Message("I am fine".getBytes), new Message("I am not so well today".getBytes))
+
+    val message = CompressionUtils.compress(messages,SnappyCompressionCodec)
+
+    assertEquals(message.compressionCodec,SnappyCompressionCodec)
+
+    val decompressedMessages = CompressionUtils.decompress(message)
+
+    TestUtils.checkLength(decompressedMessages.iterator,3)
 
     TestUtils.checkEquals(messages.iterator, TestUtils.getMessageIterator(decompressedMessages.iterator))
   }
