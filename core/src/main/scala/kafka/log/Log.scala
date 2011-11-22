@@ -17,11 +17,9 @@
 
 package kafka.log
 
-import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic._
 import java.text.NumberFormat
 import java.io._
-import java.nio.channels.FileChannel
 import org.apache.log4j._
 import kafka.message._
 import kafka.utils._
@@ -79,6 +77,13 @@ private[log] object Log {
     nf.setMaximumFractionDigits(0)
     nf.setGroupingUsed(false)
     nf.format(offset) + Log.FileSuffix
+  }
+  
+  def getEmptyOffsets(request: OffsetRequest): Array[Long] = {
+    if (request.time == OffsetRequest.LatestTime || request.time == OffsetRequest.EarliestTime)
+      return Array(0L)
+    else
+      return Array()
   }
 }
 
@@ -352,7 +357,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int,
     }
     ret
   }
-
+ 
   def getTopicName():String = {
     name.substring(0, name.lastIndexOf("-"))
   }

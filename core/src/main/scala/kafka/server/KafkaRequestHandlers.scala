@@ -17,17 +17,13 @@
 
 package kafka.server
 
-import java.nio.channels._
 import org.apache.log4j.Logger
-import kafka.producer._
-import kafka.consumer._
 import kafka.log._
 import kafka.network._
 import kafka.message._
-import kafka.server._
 import kafka.api._
 import kafka.common.ErrorMapping
-import kafka.utils.{Utils, SystemTime}
+import kafka.utils.SystemTime
 import java.io.IOException
 
 /**
@@ -112,8 +108,11 @@ private[kafka] class KafkaRequestHandlers(val logManager: LogManager) {
     var  response: MessageSetSend = null
     try {
       logger.trace("Fetching log segment for topic = " + fetchRequest.topic + " and partition = " + fetchRequest.partition)
-      val log = logManager.getOrCreateLog(fetchRequest.topic, fetchRequest.partition)
-      response = new MessageSetSend(log.read(fetchRequest.offset, fetchRequest.maxSize))
+      val log = logManager.getLog(fetchRequest.topic, fetchRequest.partition)
+      if (log != null)
+        response = new MessageSetSend(log.read(fetchRequest.offset, fetchRequest.maxSize))
+      else
+        response = new MessageSetSend()
     }
     catch {
       case e =>
@@ -127,8 +126,7 @@ private[kafka] class KafkaRequestHandlers(val logManager: LogManager) {
     val offsetRequest = OffsetRequest.readFrom(request.buffer)
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Offset request " + offsetRequest.toString)
-    val log = logManager.getOrCreateLog(offsetRequest.topic, offsetRequest.partition)
-    val offsets = log.getOffsetsBefore(offsetRequest)
+    val offsets = logManager.getOffsets(offsetRequest)
     val response = new OffsetArraySend(offsets)
     Some(response)
   }

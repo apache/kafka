@@ -29,6 +29,7 @@ import kafka.producer.{ProducerData, Producer, ProducerConfig}
 import kafka.serializer.StringDecoder
 import kafka.utils.TestUtils
 import kafka.message.{DefaultCompressionCodec, NoCompressionCodec, Message, ByteBufferMessageSet}
+import java.io.File
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -258,5 +259,13 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val response = consumer.multifetch(fetches: _*)
     for((topic, resp) <- topics.zip(response.toList))
       TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+  }
+
+  def testConsumerNotExistTopic() {
+    val newTopic = "new-topic"
+    val messageSetIter = consumer.fetch(new FetchRequest(newTopic, 0, 0, 10000)).iterator
+    assertTrue(messageSetIter.hasNext == false)
+    val logFile = new File(config.logDir, newTopic + "-0")
+    assertTrue(!logFile.exists)
   }
 }

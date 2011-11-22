@@ -25,6 +25,7 @@ import scala.collection._
 import java.util.concurrent.CountDownLatch
 import kafka.server.{KafkaConfig, KafkaZooKeeper}
 import kafka.common.{InvalidTopicException, InvalidPartitionException}
+import kafka.api.OffsetRequest
 
 /**
  * The guy who creates and hands out logs
@@ -135,7 +136,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
       startupLatch.await
   }
 
-  def registerNewTopicInZK(topic: String) {
+  private def registerNewTopicInZK(topic: String) {
     if (config.enableZookeeper)
       zkActor ! topic 
   }
@@ -151,15 +152,10 @@ private[kafka] class LogManager(val config: KafkaConfig,
     }
   }
   
-
-  def chooseRandomPartition(topic: String): Int = {
-    random.nextInt(topicPartitionsMap.getOrElse(topic, numPartitions))
-  }
-
   /**
-   * Create the log if it does not exist, if it exists just return it
+   * Return the Pool (partitions) for a specific log
    */
-  def getOrCreateLog(topic: String, partition: Int): Log = {
+  private def getLogPool(topic: String, partition: Int): Pool[Int, Log] = {
     awaitStartup
     if (topic.length <= 0)
       throw new InvalidTopicException("topic name can't be empty")
@@ -168,8 +164,37 @@ private[kafka] class LogManager(val config: KafkaConfig,
               (topicPartitionsMap.getOrElse(topic, numPartitions) - 1) + ")")
       throw new InvalidPartitionException("wrong partition " + partition)
     }
+    logs.get(topic)
+  }
+
+  /**
+   * Pick a random partition from the given topic
+   */
+  def chooseRandomPartition(topic: String): Int = {
+    random.nextInt(topicPartitionsMap.getOrElse(topic, numPartitions))
+  }
+
+  def getOffsets(offsetRequest: OffsetRequest): Array[Long] = {
+    val log = getLog(offsetRequest.topic, offsetRequest.partition)
+    if (log != null) return log.getOffsetsBefore(offsetRequest)
+    Log.getEmptyOffsets(offsetRequest)
+  }
+
+  /**
+   * Get the log if exists
+   */
+  def getLog(topic: String, partition: Int): Log = {
+    val parts = getLogPool(topic, partition)
+    if (parts == null) return null
+    parts.get(partition)
+  }
+
+  /**
+   * Create the log if it does not exist, if it exists just return it
+   */
+  def getOrCreateLog(topic: String, partition: Int): Log = {
     var hasNewTopic = false
-    var parts = logs.get(topic)
+    var parts = getLogPool(topic, partition)
     if (parts == null) {
       val found = logs.putIfNotExists(topic, new Pool[Int, Log])
       if (found == null)

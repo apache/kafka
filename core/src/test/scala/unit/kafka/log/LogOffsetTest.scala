@@ -17,10 +17,8 @@
 
 package kafka.log
 
-import junit.framework.TestCase
 import java.io.File
-import kafka.utils.TestUtils
-import kafka.utils.Utils
+import kafka.utils._
 import kafka.server.{KafkaConfig, KafkaServer}
 import junit.framework.Assert._
 import java.util.{Random, Properties}
@@ -30,6 +28,7 @@ import kafka.consumer.SimpleConsumer
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
+import org.apache.log4j._
 
 object LogOffsetTest {
   val random = new Random()  
@@ -43,6 +42,8 @@ class LogOffsetTest extends JUnitSuite {
   val brokerPort: Int = 9099
   var simpleConsumer: SimpleConsumer = null
 
+  private val logger = Logger.getLogger(classOf[LogOffsetTest])
+  
   @Before
   def setUp() {
     val config: Properties = createBrokerConfig(1, brokerPort)
@@ -66,21 +67,26 @@ class LogOffsetTest extends JUnitSuite {
       new FetchRequest("test", 0, 0, 300 * 1024))
     assertFalse(messageSet.iterator.hasNext)
 
+    val name = "test"
+    val logFile = new File(logDir, name + "-0")
+    
     {
-      val offsets = simpleConsumer.getOffsetsBefore("test", 0, OffsetRequest.LatestTime, 10)
+      val offsets = simpleConsumer.getOffsetsBefore(name, 0, OffsetRequest.LatestTime, 10)
       assertTrue( (Array(0L): WrappedArray[Long]) == (offsets: WrappedArray[Long]) )
+      assertTrue(!logFile.exists())
     }
 
     {
-      val offsets = simpleConsumer.getOffsetsBefore("test", 0, OffsetRequest.EarliestTime, 10)
+      val offsets = simpleConsumer.getOffsetsBefore(name, 0, OffsetRequest.EarliestTime, 10)
       assertTrue( (Array(0L): WrappedArray[Long]) == (offsets: WrappedArray[Long]) )
+      assertTrue(!logFile.exists())
     }
 
     {
-      val offsets = simpleConsumer.getOffsetsBefore("test", 0, 1295978400000L, 10)
-      assertTrue( 0 == offsets.length )
+      val offsets = simpleConsumer.getOffsetsBefore(name, 0, SystemTime.milliseconds, 10)
+      assertEquals( 0, offsets.length )
+      assertTrue(!logFile.exists())
     }
-
   }
 
   @Test

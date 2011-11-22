@@ -53,10 +53,20 @@ class LogManagerTest extends JUnitSuite {
   
   @Test
   def testCreateLog() {
-    val log = logManager.getOrCreateLog("kafka", 0)
+    val name = "kafka"
+    val log = logManager.getOrCreateLog(name, 0)
+    val logFile = new File(config.logDir, name + "-0")
+    assertTrue(logFile.exists)
     log.append(TestUtils.singleMessageSet("test".getBytes()))
   }
 
+  @Test
+  def testGetLog() {
+    val name = "kafka"
+    val log = logManager.getLog(name, 0)
+    val logFile = new File(config.logDir, name + "-0")
+    assertTrue(!logFile.exists)
+  }
 
   @Test
   def testCleanupExpiredSegments() {

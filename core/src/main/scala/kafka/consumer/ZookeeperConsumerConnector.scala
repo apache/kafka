@@ -194,7 +194,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
       // register on broker partition path changes
       val partitionPath = ZkUtils.BrokerTopicsPath + "/" + topic
-      ZkUtils.makeSurePersistentPathExists(zkClient, partitionPath)
       zkClient.subscribeChildChanges(partitionPath, loadBalancerListener)
     }
 
