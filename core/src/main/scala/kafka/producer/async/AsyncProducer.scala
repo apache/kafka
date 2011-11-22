@@ -23,8 +23,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.log4j.{Level, Logger}
 import kafka.api.ProducerRequest
 import kafka.serializer.Encoder
-import java.lang.management.ManagementFactory
-import javax.management.ObjectName
 import java.util.{Random, Properties}
 import kafka.producer.{ProducerConfig, SyncProducer}
 
@@ -32,6 +30,7 @@ object AsyncProducer {
   val Shutdown = new Object
   val Random = new Random
   val ProducerMBeanName = "kafka.producer.Producer:type=AsyncProducerStats"
+  val ProducerQueueSizeMBeanName = "kafka.producer.Producer:type=AsyncProducerQueueSizeStats"
 }
 
 private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
@@ -49,22 +48,14 @@ private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
     eventHandler.init(eventHandlerProps)
   if(cbkHandler != null)
     cbkHandler.init(cbkHandlerProps)
-  private val sendThread = new ProducerSendThread("ProducerSendThread-" + AsyncProducer.Random.nextInt, queue,
+  private val asyncProducerID = AsyncProducer.Random.nextInt
+  private val sendThread = new ProducerSendThread("ProducerSendThread-" + asyncProducerID, queue,
     serializer, producer,
     if(eventHandler != null) eventHandler else new DefaultEventHandler[T](new ProducerConfig(config.props), cbkHandler),
     cbkHandler, config.queueTime, config.batchSize, AsyncProducer.Shutdown)
   sendThread.setDaemon(false)
-
-  val asyncProducerStats = new AsyncProducerStats[T](queue)
-  val mbs = ManagementFactory.getPlatformMBeanServer
-  try {
-    val objName = new ObjectName(AsyncProducer.ProducerMBeanName)
-    if(mbs.isRegistered(objName))
-      mbs.unregisterMBean(objName)
-    mbs.registerMBean(asyncProducerStats, objName)
-  }catch {
-    case e: Exception => logger.warn("can't register AsyncProducerStats")
-  }
+  Utils.swallow(logger.warn, Utils.registerMBean(
+    new AsyncProducerQueueSizeStats[T](queue), AsyncProducer.ProducerQueueSizeMBeanName + "-" + asyncProducerID))
 
   def this(config: AsyncProducerConfig) {
     this(config,
@@ -81,7 +72,7 @@ private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
   def send(topic: String, event: T) { send(topic, event, ProducerRequest.RandomPartition) }
 
   def send(topic: String, event: T, partition:Int) {
-    asyncProducerStats.recordEvent
+    AsyncProducerStats.recordEvent
 
     if(closed.get)
       throw new QueueClosedException("Attempt to add event to a closed queue.")
@@ -116,7 +107,7 @@ private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
       cbkHandler.afterEnqueue(data, added)
 
     if(!added) {
-      asyncProducerStats.recordDroppedEvents
+      AsyncProducerStats.recordDroppedEvents
       logger.error("Event queue is full of unsent messages, could not send event: " + event.toString)
       throw new QueueFullException("Event queue is full of unsent messages, could not send event: " + event.toString)
     }else {

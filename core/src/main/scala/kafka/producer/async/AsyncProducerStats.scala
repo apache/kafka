@@ -18,17 +18,33 @@
 package kafka.producer.async
 
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.{TimeUnit, ScheduledThreadPoolExecutor, ScheduledExecutorService, BlockingQueue}
+import java.util.concurrent.BlockingQueue
+import org.apache.log4j.Logger
+import kafka.utils.Utils
 
-class AsyncProducerStats[T](queue: BlockingQueue[QueueItem[T]]) extends AsyncProducerStatsMBean {
+class AsyncProducerStats extends AsyncProducerStatsMBean {
   val droppedEvents = new AtomicInteger(0)
   val numEvents = new AtomicInteger(0)
 
-  def getAsyncProducerQueueSize: Int = queue.size
+  def getAsyncProducerEvents: Int = numEvents.get
 
   def getAsyncProducerDroppedEvents: Int = droppedEvents.get
 
   def recordDroppedEvents = droppedEvents.getAndAdd(1)
 
   def recordEvent = numEvents.getAndAdd(1)
+}
+
+class AsyncProducerQueueSizeStats[T](private val queue: BlockingQueue[QueueItem[T]]) extends AsyncProducerQueueSizeStatsMBean {
+  def getAsyncProducerQueueSize: Int = queue.size
+}
+
+object AsyncProducerStats {
+  private val logger = Logger.getLogger(getClass())
+  private val stats = new AsyncProducerStats
+  Utils.swallow(logger.warn, Utils.registerMBean(stats, AsyncProducer.ProducerMBeanName))
+
+  def recordDroppedEvents = stats.recordDroppedEvents
+
+  def recordEvent = stats.recordEvent
 }
