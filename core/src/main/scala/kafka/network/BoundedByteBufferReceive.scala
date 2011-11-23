@@ -80,10 +80,8 @@ private[kafka] class BoundedByteBufferReceive(val maxSize: Int) extends Receive 
       buffer = ByteBuffer.allocate(size)
     }
     catch {
-      case e: OutOfMemoryError => {
-        logger.error("OOME with size " + size, e)
-        throw e
-      }
+      case e: OutOfMemoryError =>
+        throw new RuntimeException("OOME with size " + size, e)
       case e2 =>
         throw e2
     }
