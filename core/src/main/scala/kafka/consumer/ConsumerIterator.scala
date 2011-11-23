@@ -17,8 +17,7 @@
 
 package kafka.consumer
 
-import kafka.utils.IteratorTemplate
-import org.apache.log4j.Logger
+import kafka.utils.{IteratorTemplate, Logging}
 import java.util.concurrent.{TimeUnit, BlockingQueue}
 import kafka.cluster.Partition
 import kafka.message.{MessageAndOffset, MessageSet, Message}
@@ -33,9 +32,8 @@ class ConsumerIterator[T](private val topic: String,
                           private val channel: BlockingQueue[FetchedDataChunk],
                           consumerTimeoutMs: Int,
                           private val decoder: Decoder[T])
-        extends IteratorTemplate[T] {
+        extends IteratorTemplate[T] with Logging {
   
-  private val logger = Logger.getLogger(classOf[ConsumerIterator[T]])
   private var current: Iterator[MessageAndOffset] = null
   private var currentDataChunk: FetchedDataChunk = null
   private var currentTopicInfo: PartitionTopicInfo = null
@@ -46,8 +44,7 @@ class ConsumerIterator[T](private val topic: String,
     if(consumedOffset < 0)
       throw new IllegalStateException("Offset returned by the message set is invalid %d".format(consumedOffset))
     currentTopicInfo.resetConsumeOffset(consumedOffset)
-    if(logger.isTraceEnabled)
-      logger.trace("Setting consumed offset to %d".format(consumedOffset))
+    trace("Setting consumed offset to %d".format(consumedOffset))
     ConsumerTopicStat.getConsumerTopicStat(topic).recordMessagesPerTopic(1)
     decodedMessage
   }
@@ -64,14 +61,13 @@ class ConsumerIterator[T](private val topic: String,
         }
       }
       if(currentDataChunk eq ZookeeperConsumerConnector.shutdownCommand) {
-        if(logger.isDebugEnabled)
-          logger.debug("Received the shutdown command")
+        debug("Received the shutdown command")
         channel.offer(currentDataChunk)
         return allDone
       } else {
         currentTopicInfo = currentDataChunk.topicInfo
         if (currentTopicInfo.getConsumeOffset != currentDataChunk.fetchOffset) {
-          logger.error("consumed offset: %d doesn't match fetch offset: %d for %s;\n Consumer may lose data"
+          error("consumed offset: %d doesn't match fetch offset: %d for %s;\n Consumer may lose data"
                         .format(currentTopicInfo.getConsumeOffset, currentDataChunk.fetchOffset, currentTopicInfo))
           currentTopicInfo.resetConsumeOffset(currentDataChunk.fetchOffset)
         }

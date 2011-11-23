@@ -20,7 +20,6 @@ package kafka.utils
 
 import java.lang.management.ManagementFactory
 import javax.management.ObjectName
-import org.apache.log4j.Logger
 
 /**
  * If mx4j-tools is in the classpath call maybeLoad to load the HTTP interface of mx4j.
@@ -31,8 +30,7 @@ import org.apache.log4j.Logger
  *
  * This is a Scala port of org.apache.cassandra.utils.Mx4jTool written by Ran Tavory for CASSANDRA-1068
  * */
-object Mx4jLoader {
-  private val logger = Logger.getLogger(getClass())
+object Mx4jLoader extends Logging {
 
   def maybeLoad(): Boolean = {
     if (!Utils.getBoolean(System.getProperties(), "kafka_mx4jenable", false))
@@ -40,7 +38,7 @@ object Mx4jLoader {
     val address = System.getProperty("mx4jaddress", "0.0.0.0")
     val port = Utils.getInt(System.getProperties(), "mx4jport", 8082)
     try {
-      logger.debug("Will try to load MX4j now, if it's in the classpath");
+      debug("Will try to load MX4j now, if it's in the classpath");
 
       val mbs = ManagementFactory.getPlatformMBeanServer()
       val processorName = new ObjectName("Server:name=XSLTProcessor")
@@ -58,15 +56,15 @@ object Mx4jLoader {
       httpAdaptorClass.getMethod("setProcessor", Class.forName("mx4j.tools.adaptor.http.ProcessorMBean")).invoke(httpAdaptor, xsltProcessor.asInstanceOf[AnyRef])
       mbs.registerMBean(xsltProcessor, processorName)
       httpAdaptorClass.getMethod("start").invoke(httpAdaptor)
-      logger.info("mx4j successfuly loaded")
+      info("mx4j successfuly loaded")
       true
     }
     catch {
 	  case e: ClassNotFoundException => {
-        logger.info("Will not load MX4J, mx4j-tools.jar is not in the classpath");
+        info("Will not load MX4J, mx4j-tools.jar is not in the classpath");
       }
       case e => {
-        logger.warn("Could not start register mbean in JMX", e);
+        warn("Could not start register mbean in JMX", e);
       }
     }
     false

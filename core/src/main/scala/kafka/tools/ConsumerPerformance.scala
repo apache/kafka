@@ -22,8 +22,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
 import joptsimple._
-import org.apache.log4j.Logger
-import kafka.utils.Utils
+import kafka.utils.{Utils, Logging}
 import kafka.consumer.{ConsumerConfig, ConsumerConnector, Consumer}
 
 abstract class ShutdownableThread(name: String) extends Thread(name) {
@@ -33,8 +32,7 @@ abstract class ShutdownableThread(name: String) extends Thread(name) {
 /**
  * Performance test for the full zookeeper consumer
  */
-object ConsumerPerformance {
-  private val logger = Logger.getLogger(getClass())
+object ConsumerPerformance extends Logging {
 
   def main(args: Array[String]): Unit = {
     
@@ -127,7 +125,7 @@ object ConsumerPerformance {
           }
 
           private def printMessage(totalBytesRead: Long, nMessages: Long, elapsedSecs: Double) = {
-            logger.info("thread[" + i + "], nMsgs:" + nMessages + " bytes:" + totalBytesRead +
+            info("thread[" + i + "], nMsgs:" + nMessages + " bytes:" + totalBytesRead +
               " nMsgs/sec:" + (nMessages / elapsedSecs).formatted("%.2f") +
               " MB/sec:" + (totalBytesRead / elapsedSecs / (1024.0*1024.0)).formatted("%.2f"))
 
@@ -135,9 +133,9 @@ object ConsumerPerformance {
           private def shutdownComplete() = shutdownLatch.countDown
         }
 
-    logger.info("Sleeping for " + initialSleep / 1000 + " seconds.")
+    info("Sleeping for " + initialSleep / 1000 + " seconds.")
     Thread.sleep(initialSleep)
-    logger.info("starting threads")
+    info("starting threads")
     for (thread <- threadList)
       thread.start
 

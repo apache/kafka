@@ -18,7 +18,6 @@
 package kafka.log
 
 import java.io._
-import org.apache.log4j.Logger
 import kafka.utils._
 import scala.actors.Actor
 import scala.collection._
@@ -36,14 +35,13 @@ private[kafka] class LogManager(val config: KafkaConfig,
                                 private val time: Time,
                                 val logCleanupIntervalMs: Long,
                                 val logCleanupDefaultAgeMs: Long,
-                                needRecovery: Boolean) {
+                                needRecovery: Boolean) extends Logging {
   
   val logDir: File = new File(config.logDir)
   private val numPartitions = config.numPartitions
   private val maxSize: Long = config.logFileSize
   private val flushInterval = config.flushInterval
   private val topicPartitionsMap = config.topicPartitionsMap
-  private val logger = Logger.getLogger(classOf[LogManager])
   private val logCreationLock = new Object
   private val random = new java.util.Random
   private var kafkaZookeeper: KafkaZooKeeper = null
@@ -57,7 +55,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   /* Initialize a log for each subdirectory of the main log directory */
   private val logs = new Pool[String, Pool[Int, Log]]()
   if(!logDir.exists()) {
-    logger.info("No log directory found, creating '" + logDir.getAbsolutePath() + "'")
+    info("No log directory found, creating '" + logDir.getAbsolutePath() + "'")
     logDir.mkdirs()
   }
   if(!logDir.isDirectory() || !logDir.canRead())
@@ -66,9 +64,9 @@ private[kafka] class LogManager(val config: KafkaConfig,
   if(subDirs != null) {
     for(dir <- subDirs) {
       if(!dir.isDirectory()) {
-        logger.warn("Skipping unexplainable file '" + dir.getAbsolutePath() + "'--should it be there?")
+        warn("Skipping unexplainable file '" + dir.getAbsolutePath() + "'--should it be there?")
       } else {
-        logger.info("Loading log '" + dir.getName() + "'")
+        info("Loading log '" + dir.getName() + "'")
         val log = new Log(dir, maxSize, flushInterval, needRecovery)
         val topicPartion = Utils.getTopicPartition(dir.getName)
         logs.putIfNotExists(topicPartion._1, new Pool[Int, Log]())
@@ -80,7 +78,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   
   /* Schedule the cleanup task to delete old logs */
   if(scheduler != null) {
-    logger.info("starting log cleaner every " + logCleanupIntervalMs + " ms")    
+    info("starting log cleaner every " + logCleanupIntervalMs + " ms")    
     scheduler.scheduleWithRate(cleanupLogs, 60 * 1000, logCleanupIntervalMs)
   }
 
@@ -96,10 +94,10 @@ private[kafka] class LogManager(val config: KafkaConfig,
                 kafkaZookeeper.registerTopicInZk(topic)
               }
               catch {
-                case e => logger.error(e) // log it and let it go
+                case e => error(e) // log it and let it go
               }
             case StopActor =>
-              logger.info("zkActor stopped")
+              info("zkActor stopped")
               exit
           }
         }
@@ -127,7 +125,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
         kafkaZookeeper.registerTopicInZk(topic)
       startupLatch.countDown
     }
-    logger.info("Starting log flusher every " + config.flushSchedulerThreadRate + " ms with the following overrides " + logFlushIntervalMap)
+    info("Starting log flusher every " + config.flushSchedulerThreadRate + " ms with the following overrides " + logFlushIntervalMap)
     logFlusherScheduler.scheduleWithRate(flushAllLogs, config.flushSchedulerThreadRate, config.flushSchedulerThreadRate)
   }
 
@@ -160,7 +158,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
     if (topic.length <= 0)
       throw new InvalidTopicException("topic name can't be empty")
     if (partition < 0 || partition >= topicPartitionsMap.getOrElse(topic, numPartitions)) {
-      logger.warn("Wrong partition " + partition + " valid partitions (0," +
+      warn("Wrong partition " + partition + " valid partitions (0," +
               (topicPartitionsMap.getOrElse(topic, numPartitions) - 1) + ")")
       throw new InvalidPartitionException("wrong partition " + partition)
     }
@@ -211,7 +209,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
         log = found
       }
       else
-        logger.info("Created log for '" + topic + "'-" + partition)
+        info("Created log for '" + topic + "'-" + partition)
     }
 
     if (hasNewTopic)
@@ -223,10 +221,10 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private def deleteSegments(log: Log, segments: Seq[LogSegment]): Int = {
     var total = 0
     for(segment <- segments) {
-      logger.info("Deleting log segment " + segment.file.getName() + " from " + log.name)
+      info("Deleting log segment " + segment.file.getName() + " from " + log.name)
       Utils.swallow(logger.warn, segment.messageSet.close())
       if(!segment.file.delete()) {
-        logger.warn("Delete failed.")
+        warn("Delete failed.")
       } else {
         total += 1
       }
@@ -268,16 +266,16 @@ private[kafka] class LogManager(val config: KafkaConfig,
    * Delete any eligible logs. Return the number of segments deleted.
    */
   def cleanupLogs() {
-    logger.debug("Beginning log cleanup...")
+    debug("Beginning log cleanup...")
     val iter = getLogIterator
     var total = 0
     val startMs = time.milliseconds
     while(iter.hasNext) {
       val log = iter.next
-      logger.debug("Garbage collecting '" + log.name + "'")
+      debug("Garbage collecting '" + log.name + "'")
       total += cleanupExpiredSegments(log) + cleanupSegmentsToMaintainSize(log)
     }
-    logger.debug("Log cleanup completed. " + total + " files deleted in " + 
+    debug("Log cleanup completed. " + total + " files deleted in " + 
                  (time.milliseconds - startMs) / 1000 + " seconds")
   }
   
@@ -316,8 +314,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   }
 
   private def flushAllLogs() = {
-    if (logger.isDebugEnabled)
-      logger.debug("flushing the high watermark of all logs")
+    debug("flushing the high watermark of all logs")
 
     for (log <- getLogIterator)
     {
@@ -326,18 +323,17 @@ private[kafka] class LogManager(val config: KafkaConfig,
         var logFlushInterval = config.defaultFlushIntervalMs
         if(logFlushIntervalMap.contains(log.getTopicName))
           logFlushInterval = logFlushIntervalMap(log.getTopicName)
-        if (logger.isDebugEnabled)
-          logger.debug(log.getTopicName + " flush interval  " + logFlushInterval +
+        debug(log.getTopicName + " flush interval  " + logFlushInterval +
             " last flushed " + log.getLastFlushedTime + " timesincelastFlush: " + timeSinceLastFlush)
         if(timeSinceLastFlush >= logFlushInterval)
           log.flush
       }
       catch {
         case e =>
-          logger.error("Error flushing topic " + log.getTopicName, e)
+          error("Error flushing topic " + log.getTopicName, e)
           e match {
             case _: IOException =>
-              logger.fatal("Halting due to unrecoverable I/O error while flushing logs: " + e.getMessage, e)
+              fatal("Halting due to unrecoverable I/O error while flushing logs: " + e.getMessage, e)
               Runtime.getRuntime.halt(1)
             case _ =>
           }

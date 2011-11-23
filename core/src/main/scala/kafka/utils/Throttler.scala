@@ -17,11 +17,9 @@
 
 package kafka.utils;
 
-import org.apache.log4j.Logger
 import scala.math._
 
-object Throttler {
-  val logger = Logger.getLogger(classOf[Throttler])
+object Throttler extends Logging {
   val DefaultCheckIntervalMs = 100L
 }
 
@@ -67,8 +65,7 @@ class Throttler(val desiredRatePerSec: Double,
           val ellapsedMs = ellapsedNs / Time.NsPerMs
           val sleepTime = round(observedSoFar / desiredRateMs - ellapsedMs)
           if(sleepTime > 0) {
-            if(Throttler.logger.isDebugEnabled)
-              Throttler.logger.debug("Natural rate is " + rateInSecs + " per second but desired rate is " + desiredRatePerSec + 
+            Throttler.debug("Natural rate is " + rateInSecs + " per second but desired rate is " + desiredRatePerSec + 
                                      ", sleeping for " + sleepTime + " ms to compensate.")
             time.sleep(sleepTime)
           }

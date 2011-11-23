@@ -18,7 +18,6 @@
 package kafka.consumer
 
 import java.util.concurrent.BlockingQueue
-import org.apache.log4j.Logger
 import kafka.message.Message
 import kafka.serializer.{DefaultDecoder, Decoder}
 
@@ -32,7 +31,6 @@ class KafkaMessageStream[T](val topic: String,
                             private val decoder: Decoder[T])
    extends Iterable[T] with java.lang.Iterable[T]{
 
-  private val logger = Logger.getLogger(getClass())
   private val iter: ConsumerIterator[T] =
     new ConsumerIterator[T](topic, queue, consumerTimeoutMs, decoder)
     

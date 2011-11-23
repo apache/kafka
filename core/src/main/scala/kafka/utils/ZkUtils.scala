@@ -23,13 +23,11 @@ import kafka.cluster.{Broker, Cluster}
 import scala.collection._
 import java.util.Properties
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException, ZkMarshallingError}
-import org.apache.log4j.Logger
 
-object ZkUtils {
+object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
   val BrokerIdsPath = "/brokers/ids"
   val BrokerTopicsPath = "/brokers/topics"
-  private val logger = Logger.getLogger(getClass())  
 
   /**
    *  make sure a persistent path exists in ZK. Create the path if not exist.
@@ -83,12 +81,12 @@ object ZkUtils {
           case e2 => throw e2
         }
         if (storedData == null || storedData != data) {
-          logger.info("conflict in " + path + " data: " + data + " stored data: " + storedData)
+          info("conflict in " + path + " data: " + data + " stored data: " + storedData)
           throw e
         }
         else {
           // otherwise, the creation succeeded, return normally
-          logger.info(path + " exists with value " + data + " during connection loss; this is ok")
+          info(path + " exists with value " + data + " during connection loss; this is ok")
         }
       }
       case e2 => throw e2
@@ -142,7 +140,7 @@ object ZkUtils {
     catch {
       case e: ZkNoNodeException =>
         // this can happen during a connection loss event, return normally
-        logger.info(path + " deleted during connection loss; this is ok")
+        info(path + " deleted during connection loss; this is ok")
       case e2 => throw e2
     }
   }
@@ -154,7 +152,7 @@ object ZkUtils {
     catch {
       case e: ZkNoNodeException =>
         // this can happen during a connection loss event, return normally
-        logger.info(path + " deleted during connection loss; this is ok")
+        info(path + " deleted during connection loss; this is ok")
       case e2 => throw e2
     }
   }

@@ -20,19 +20,18 @@ package kafka.producer
 import async.MissingConfigException
 import org.apache.log4j.spi.LoggingEvent
 import org.apache.log4j.{Logger, AppenderSkeleton}
-import kafka.utils.Utils
+import kafka.utils.{Utils, Logging}
 import kafka.serializer.Encoder
 import java.util.{Properties, Date}
 import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
 
-class KafkaLog4jAppender extends AppenderSkeleton {
+class KafkaLog4jAppender extends AppenderSkeleton with Logging {
   var port:Int = 0
   var host:String = null
   var topic:String = null
   var encoderClass:String = null
   
   private var producer:SyncProducer = null
-  private val logger = Logger.getLogger(classOf[KafkaLog4jAppender])
   private var encoder: Encoder[AnyRef] = null
   
   def getPort:Int = port
@@ -56,7 +55,7 @@ class KafkaLog4jAppender extends AppenderSkeleton {
     if(topic == null)
       throw new MissingConfigException("topic must be specified by the Kafka log4j appender")
     if(encoderClass == null) {
-      logger.info("Using default encoder - kafka.producer.DefaultStringEncoder")
+      info("Using default encoder - kafka.producer.DefaultStringEncoder")
       encoder = Utils.getObject("kafka.producer.DefaultStringEncoder")
     }else // instantiate the encoder, if present
       encoder = Utils.getObject(encoderClass)
@@ -64,15 +63,13 @@ class KafkaLog4jAppender extends AppenderSkeleton {
     props.put("host", host)
     props.put("port", port.toString)
     producer = new SyncProducer(new SyncProducerConfig(props))
-    logger.info("Kafka producer connected to " + host + "," + port)
-    logger.info("Logging for topic: " + topic)
+    info("Kafka producer connected to " + host + "," + port)
+    info("Logging for topic: " + topic)
   }
   
   override def append(event: LoggingEvent) = {
-    if (logger.isDebugEnabled){
-      logger.debug("[" + new Date(event.getTimeStamp).toString + "]" + event.getRenderedMessage +
+    debug("[" + new Date(event.getTimeStamp).toString + "]" + event.getRenderedMessage +
             " for " + host + "," + port)
-    }
     val message = encoder.toMessage(event)
     producer.send(topic, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message))
   }

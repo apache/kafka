@@ -18,8 +18,7 @@
 package kafka.consumer
 
 import scala.collection._
-import kafka.utils.Utils
-import org.apache.log4j.Logger
+import kafka.utils.{Utils, Logging}
 import kafka.serializer.{DefaultDecoder, Decoder}
 
 /**
@@ -48,8 +47,7 @@ trait ConsumerConnector {
   def shutdown()
 }
 
-object Consumer {
-  private val logger = Logger.getLogger(getClass())  
+object Consumer extends Logging {
   private val consumerStatsMBeanName = "kafka:type=kafka.ConsumerStats"
 
   /**
@@ -60,7 +58,7 @@ object Consumer {
    */
   def create(config: ConsumerConfig): ConsumerConnector = {
     val consumerConnect = new ZookeeperConsumerConnector(config)
-    Utils.swallow(logger.warn, Utils.registerMBean(consumerConnect, consumerStatsMBeanName))
+    Utils.registerMBean(consumerConnect, consumerStatsMBeanName)
     consumerConnect
   }
 
@@ -72,7 +70,7 @@ object Consumer {
    */
   def createJavaConsumerConnector(config: ConsumerConfig): kafka.javaapi.consumer.ConsumerConnector = {
     val consumerConnect = new kafka.javaapi.consumer.ZookeeperConsumerConnector(config)
-    Utils.swallow(logger.warn, Utils.registerMBean(consumerConnect.underlying, consumerStatsMBeanName))
+    Utils.registerMBean(consumerConnect.underlying, consumerStatsMBeanName)
     consumerConnect
   }
 }

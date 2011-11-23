@@ -24,14 +24,14 @@ import kafka.message._
 import kafka.api._
 import kafka.common.ErrorMapping
 import kafka.utils.SystemTime
+import kafka.utils.Logging
 import java.io.IOException
 
 /**
  * Logic to handle the various Kafka requests
  */
-private[kafka] class KafkaRequestHandlers(val logManager: LogManager) {
+private[kafka] class KafkaRequestHandlers(val logManager: LogManager) extends Logging {
   
-  private val logger = Logger.getLogger(classOf[KafkaRequestHandlers])
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
   def handlerFor(requestTypeId: Short, request: Receive): Handler.Handler = {
@@ -52,8 +52,7 @@ private[kafka] class KafkaRequestHandlers(val logManager: LogManager) {
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Producer request " + request.toString)
     handleProducerRequest(request, "ProduceRequest")
-    if (logger.isDebugEnabled)
-      logger.debug("kafka produce time " + (SystemTime.milliseconds - sTime) + " ms")
+    debug("kafka produce time " + (SystemTime.milliseconds - sTime) + " ms")
     None
   }
 
@@ -69,15 +68,14 @@ private[kafka] class KafkaRequestHandlers(val logManager: LogManager) {
     val partition = request.getTranslatedPartition(logManager.chooseRandomPartition)
     try {
       logManager.getOrCreateLog(request.topic, partition).append(request.messages)
-      if(logger.isTraceEnabled)
-        logger.trace(request.messages.sizeInBytes + " bytes written to logs.")
+      trace(request.messages.sizeInBytes + " bytes written to logs.")
     }
     catch {
       case e =>
-        logger.error("Error processing " + requestHandlerName + " on " + request.topic + ":" + partition, e)
+        error("Error processing " + requestHandlerName + " on " + request.topic + ":" + partition, e)
         e match {
           case _: IOException =>
-            logger.fatal("Halting due to unrecoverable I/O error while handling producer request: " + e.getMessage, e)
+            fatal("Halting due to unrecoverable I/O error while handling producer request: " + e.getMessage, e)
             Runtime.getRuntime.halt(1)
           case _ =>
         }
@@ -107,7 +105,7 @@ private[kafka] class KafkaRequestHandlers(val logManager: LogManager) {
   private def readMessageSet(fetchRequest: FetchRequest): MessageSetSend = {
     var  response: MessageSetSend = null
     try {
-      logger.trace("Fetching log segment for topic = " + fetchRequest.topic + " and partition = " + fetchRequest.partition)
+      trace("Fetching log segment for topic = " + fetchRequest.topic + " and partition = " + fetchRequest.partition)
       val log = logManager.getLog(fetchRequest.topic, fetchRequest.partition)
       if (log != null)
         response = new MessageSetSend(log.read(fetchRequest.offset, fetchRequest.maxSize))
@@ -116,7 +114,7 @@ private[kafka] class KafkaRequestHandlers(val logManager: LogManager) {
     }
     catch {
       case e =>
-        logger.error("error when processing request " + fetchRequest, e)
+        error("error when processing request " + fetchRequest, e)
         response=new MessageSetSend(MessageSet.Empty, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
     }
     response

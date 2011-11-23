@@ -19,10 +19,9 @@ package kafka.consumer
 
 import scala.collection._
 import scala.util.parsing.json.JSON
-import org.apache.log4j.Logger
+import kafka.utils.Logging
 
-private[consumer] object TopicCount {
-  private val logger = Logger.getLogger(getClass())
+private[consumer] object TopicCount extends Logging {
   val myConversionFunc = {input : String => input.toInt}
   JSON.globalNumberParser = myConversionFunc
 
@@ -36,7 +35,7 @@ private[consumer] object TopicCount {
     }
     catch {
       case e =>
-        logger.error("error parsing consumer json string " + jsonString, e)
+        error("error parsing consumer json string " + jsonString, e)
         throw e
     }
 

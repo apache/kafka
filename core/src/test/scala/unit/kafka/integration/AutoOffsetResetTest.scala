@@ -21,14 +21,14 @@ import junit.framework.Assert._
 import kafka.zk.ZooKeeperTestHarness
 import java.nio.channels.ClosedByInterruptException
 import java.util.concurrent.atomic.AtomicInteger
-import kafka.utils.ZKGroupTopicDirs
+import kafka.utils.{ZKGroupTopicDirs, Logging}
 import kafka.consumer.{ConsumerTimeoutException, ConsumerConfig, ConsumerConnector, Consumer}
 import kafka.server.{KafkaRequestHandlers, KafkaServer, KafkaConfig}
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
 import kafka.utils.{TestUtils, TestZKUtils}
 
-class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness {
+class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
 
   val zkConnect = TestZKUtils.zookeeperConnect
   val topic = "test_topic"
@@ -41,7 +41,6 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness {
   val largeOffset = 10000
   val smallOffset = -1
   
-  private val logger = Logger.getLogger(getClass())
   val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandlers])
 
   override def setUp() {
@@ -74,7 +73,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val consumerConfig = new ConsumerConfig(consumerProps)
     
     TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0-0", largeOffset)
-    logger.info("Updated consumer offset to " + largeOffset)
+    info("Updated consumer offset to " + largeOffset)
 
     Thread.sleep(500)
     val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
@@ -93,7 +92,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness {
               }
             }
             catch {
-              case te: ConsumerTimeoutException => logger.info("Consumer thread timing out..")
+              case te: ConsumerTimeoutException => info("Consumer thread timing out..")
               case _: InterruptedException => 
               case _: ClosedByInterruptException =>
               case e => throw e
@@ -108,7 +107,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     threadList(0).join(2000)
 
-    logger.info("Asserting...")
+    info("Asserting...")
     assertEquals(numMessages, nMessages.get)
     consumerConnector.shutdown
   }
@@ -128,7 +127,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val consumerConfig = new ConsumerConfig(consumerProps)
 
     TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0-0", smallOffset)
-    logger.info("Updated consumer offset to " + smallOffset)
+    info("Updated consumer offset to " + smallOffset)
 
 
     val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
@@ -161,7 +160,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     threadList(0).join(2000)
 
-    logger.info("Asserting...")
+    info("Asserting...")
     assertEquals(numMessages, nMessages.get)
     consumerConnector.shutdown
   }
@@ -181,7 +180,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val consumerConfig = new ConsumerConfig(consumerProps)
 
     TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0-0", largeOffset)
-    logger.info("Updated consumer offset to " + largeOffset)
+    info("Updated consumer offset to " + largeOffset)
 
 
     val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
@@ -214,7 +213,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     threadList(0).join(2000)
 
-    logger.info("Asserting...")
+    info("Asserting...")
 
     assertEquals(0, nMessages.get)
     consumerConnector.shutdown

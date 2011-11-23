@@ -17,7 +17,6 @@
 package kafka.producer
 
 import async.{CallbackHandler, EventHandler}
-import org.apache.log4j.Logger
 import kafka.serializer.Encoder
 import kafka.utils._
 import java.util.Properties
@@ -32,13 +31,12 @@ class Producer[K,V](config: ProducerConfig,
                     populateProducerPool: Boolean,
                     private var brokerPartitionInfo: BrokerPartitionInfo) /* for testing purpose only. Applications should ideally */
                                                           /* use the other constructor*/
-{
-  private val logger = Logger.getLogger(classOf[Producer[K, V]])
+extends Logging {
   private val hasShutdown = new AtomicBoolean(false)
   if(!Utils.propertyExists(config.zkConnect) && !Utils.propertyExists(config.brokerList))
     throw new InvalidConfigException("At least one of zk.connect or broker.list must be specified")
   if (Utils.propertyExists(config.zkConnect) && Utils.propertyExists(config.brokerList))
-    logger.warn("Both zk.connect and broker.list provided (zk.connect takes precedence).")
+    warn("Both zk.connect and broker.list provided (zk.connect takes precedence).")
   private val random = new java.util.Random
   // check if zookeeper based auto partition discovery is enabled
   private val zkEnabled = Utils.propertyExists(config.zkConnect)
@@ -115,7 +113,7 @@ class Producer[K,V](config: ProducerConfig,
       var numRetries: Int = 0
       while(numRetries <= config.zkReadRetries && brokerInfoOpt.isEmpty) {
         if(numRetries > 0) {
-          logger.info("Try #" + numRetries + " ZK producer cache is stale. Refreshing it by reading from ZK again")
+          info("Try #" + numRetries + " ZK producer cache is stale. Refreshing it by reading from ZK again")
           brokerPartitionInfo.updateInfo
         }
 
@@ -130,7 +128,7 @@ class Producer[K,V](config: ProducerConfig,
 
       brokerInfoOpt match {
         case Some(brokerInfo) =>
-          if(logger.isDebugEnabled) logger.debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port +
+          debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port +
                   " on partition " + brokerIdPartition.get.partId)
         case None =>
           throw new NoBrokersForPartitionException("Invalid Zookeeper state. Failed to get partition for topic: " +
@@ -153,12 +151,10 @@ class Producer[K,V](config: ProducerConfig,
       val brokerIdPartition = topicPartitionsList(randomBrokerId)
       val brokerInfo = brokerPartitionInfo.getBrokerInfo(brokerIdPartition.brokerId).get
 
-      if(logger.isDebugEnabled)
-        logger.debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port +
+      debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port +
                 " on a randomly chosen partition")
       val partition = ProducerRequest.RandomPartition
-      if(logger.isDebugEnabled)
-        logger.debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port + " on a partition " +
+      debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port + " on a partition " +
           brokerIdPartition.partId)
       producerPool.getProducerPoolData(pd.getTopic,
         new Partition(brokerIdPartition.brokerId, partition),
@@ -168,11 +164,9 @@ class Producer[K,V](config: ProducerConfig,
   }
 
   private def getPartitionListForTopic(pd: ProducerData[K,V]): Seq[Partition] = {
-    if(logger.isDebugEnabled)
-      logger.debug("Getting the number of broker partitions registered for topic: " + pd.getTopic)
+    debug("Getting the number of broker partitions registered for topic: " + pd.getTopic)
     val topicPartitionsList = brokerPartitionInfo.getBrokerPartitionInfo(pd.getTopic).toSeq
-    if(logger.isDebugEnabled)
-      logger.debug("Broker partitions registered for topic: " + pd.getTopic + " = " + topicPartitionsList)
+    debug("Broker partitions registered for topic: " + pd.getTopic + " = " + topicPartitionsList)
     val totalNumPartitions = topicPartitionsList.length
     if(totalNumPartitions == 0) throw new NoBrokersForPartitionException("Partition = " + pd.getKey)
     topicPartitionsList
@@ -206,7 +200,7 @@ class Producer[K,V](config: ProducerConfig,
    */
   private def producerCbk(bid: Int, host: String, port: Int) =  {
     if(populateProducerPool) producerPool.addProducer(new Broker(bid, host, host, port))
-    else logger.debug("Skipping the callback since populateProducerPool = false")
+    else debug("Skipping the callback since populateProducerPool = false")
   }
 
   /**

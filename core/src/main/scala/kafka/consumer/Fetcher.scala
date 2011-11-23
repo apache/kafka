@@ -18,7 +18,6 @@
 package kafka.consumer
 
 import scala.collection._
-import org.apache.log4j.Logger
 import kafka.cluster._
 import org.I0Itec.zkclient.ZkClient
 import java.util.concurrent.BlockingQueue
@@ -27,7 +26,6 @@ import java.util.concurrent.BlockingQueue
  * The fetcher is a background thread that fetches data from a set of servers
  */
 private[consumer] class Fetcher(val config: ConsumerConfig, val zkClient : ZkClient) {
-  private val logger = Logger.getLogger(getClass())
   private val EMPTY_FETCHER_THREADS = new Array[FetcherRunnable](0)
   @volatile
   private var fetcherThreads : Array[FetcherRunnable] = EMPTY_FETCHER_THREADS

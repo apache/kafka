@@ -17,16 +17,13 @@
 
 package kafka.consumer
 
-import org.apache.log4j.Logger
 import scala.collection.JavaConversions._
-import kafka.utils.{Utils, ZkUtils, ZKStringSerializer}
+import kafka.utils.{Utils, ZkUtils, ZKStringSerializer, Logging}
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 
 class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
-    val eventHandler: TopicEventHandler[String]) {
-
-  private val logger = Logger.getLogger(getClass)
+    val eventHandler: TopicEventHandler[String]) extends Logging {
 
   val lock = new Object()
 
@@ -60,12 +57,12 @@ class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
           zkClient = null
         }
         else
-          logger.warn("Cannot shutdown already shutdown topic event watcher.")
+          warn("Cannot shutdown already shutdown topic event watcher.")
       }
       catch {
         case e =>
-          logger.fatal(e)
-          logger.fatal(Utils.stackTrace(e))
+          fatal(e)
+          fatal(Utils.stackTrace(e))
       }
     }
   }
@@ -78,15 +75,15 @@ class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
         try {
           if (zkClient != null) {
             val latestTopics = zkClient.getChildren(ZkUtils.BrokerTopicsPath).toList
-            logger.debug("all topics: %s".format(latestTopics))
+            debug("all topics: %s".format(latestTopics))
 
             eventHandler.handleTopicEvent(latestTopics)
           }
         }
         catch {
           case e =>
-            logger.fatal(e)
-            logger.fatal(Utils.stackTrace(e))
+            fatal(e)
+            fatal(Utils.stackTrace(e))
         }
       }
     }
@@ -103,7 +100,7 @@ class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
     def handleNewSession() {
       lock.synchronized {
         if (zkClient != null) {
-          logger.info(
+          info(
             "ZK expired: resubscribing topic event listener to topic registry")
           zkClient.subscribeChildChanges(
             ZkUtils.BrokerTopicsPath, topicEventListener)

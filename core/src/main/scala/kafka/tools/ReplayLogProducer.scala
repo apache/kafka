@@ -26,15 +26,14 @@ import kafka.producer.async.DefaultEventHandler
 import kafka.serializer.{DefaultEncoder, StringEncoder}
 import kafka.producer.{ProducerData, DefaultPartitioner, ProducerConfig, Producer}
 import kafka.consumer._
-import kafka.utils.{ZKStringSerializer, Utils}
+import kafka.utils.{ZKStringSerializer, Utils, Logging}
 import kafka.api.OffsetRequest
 import org.I0Itec.zkclient._
 import kafka.message.{CompressionCodec, Message, MessageSet, FileMessageSet}
 
-object ReplayLogProducer {
+object ReplayLogProducer extends Logging {
 
   private val GROUPID: String = "replay-log-producer"
-  private val logger = Logger.getLogger(getClass)
 
   def main(args: Array[String]) {
     var isNoPrint = false;
@@ -147,7 +146,7 @@ object ReplayLogProducer {
   def tryCleanupZookeeper(zkUrl: String, groupId: String) {
     try {
       val dir = "/consumers/" + groupId
-      logger.info("Cleaning up temporary zookeeper data under " + dir + ".")
+      info("Cleaning up temporary zookeeper data under " + dir + ".")
       val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)
       zk.deleteRecursive(dir)
       zk.close()
@@ -156,9 +155,8 @@ object ReplayLogProducer {
     }
   }
 
-  class ZKConsumerThread(config: Config, stream: KafkaMessageStream[Message]) extends Thread {
+  class ZKConsumerThread(config: Config, stream: KafkaMessageStream[Message]) extends Thread with Logging {
     val shutdownLatch = new CountDownLatch(1)
-    val logger = Logger.getLogger(getClass)
     val props = new Properties()
     val brokerInfoList = config.brokerInfo.split("=")
     if (brokerInfoList(0) == "zk.connect")
@@ -179,7 +177,7 @@ object ReplayLogProducer {
                                                   null, new DefaultPartitioner[Message])
 
     override def run() {
-      logger.info("Starting consumer thread..")
+      info("Starting consumer thread..")
       var messageCount: Int = 0
       try {
         val iter =
@@ -194,15 +192,15 @@ object ReplayLogProducer {
               Thread.sleep(config.delayedMSBtwSend)
             messageCount += 1
           }catch {
-            case ie: Exception => logger.error("Skipping this message", ie)
+            case ie: Exception => error("Skipping this message", ie)
           }
         }
       }catch {
-        case e: ConsumerTimeoutException => logger.error("consumer thread timing out", e)
+        case e: ConsumerTimeoutException => error("consumer thread timing out", e)
       }
-      logger.info("Sent " + messageCount + " messages")
+      info("Sent " + messageCount + " messages")
       shutdownLatch.countDown
-      logger.info("thread finished execution !" )
+      info("thread finished execution !" )
     }
 
     def shutdown() {

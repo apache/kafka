@@ -18,13 +18,11 @@ package kafka.producer
 
 import collection.mutable.HashMap
 import collection.mutable.Map
-import org.apache.log4j.Logger
 import collection.SortedSet
 import kafka.cluster.{Broker, Partition}
 import kafka.common.InvalidConfigException
 
 private[producer] class ConfigBrokerPartitionInfo(config: ProducerConfig) extends BrokerPartitionInfo {
-  private val logger = Logger.getLogger(classOf[ConfigBrokerPartitionInfo])
   private val brokerPartitions: SortedSet[Partition] = getConfigTopicPartitionInfo
   private val allBrokers = getConfigBrokerInfo
 

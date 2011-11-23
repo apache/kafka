@@ -21,13 +21,12 @@ import scala.collection.mutable._
 import scala.collection.JavaConversions._
 import org.I0Itec.zkclient._
 import joptsimple._
-import org.apache.log4j.Logger
 import java.util.Arrays.asList
 import java.util.Properties
 import java.util.Random
 import java.io.PrintStream
 import kafka.message._
-import kafka.utils.Utils
+import kafka.utils.{Utils, Logging}
 import kafka.utils.ZkUtils
 import kafka.utils.ZKStringSerializer
 
@@ -35,9 +34,7 @@ import kafka.utils.ZKStringSerializer
  * Consumer that dumps messages out to standard out.
  *
  */
-object ConsoleConsumer {
-  
-  private val logger = Logger.getLogger(getClass())
+object ConsoleConsumer extends Logging {
 
   def main(args: Array[String]) {
     val parser = new OptionParser
@@ -136,7 +133,7 @@ object ConsoleConsumer {
         } catch {
           case e =>
             if (skipMessageOnError)
-              logger.error("Error processing message, skipping this message: ", e)
+              error("Error processing message, skipping this message: ", e)
             else
               throw e
         }
@@ -149,7 +146,7 @@ object ConsoleConsumer {
         }
       }
     } catch {
-      case e => logger.error("Error processing message, stopping consumer: ", e)
+      case e => error("Error processing message, stopping consumer: ", e)
     }
       
     System.out.flush()
@@ -171,7 +168,7 @@ object ConsoleConsumer {
   def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
     for(arg <- required) {
       if(!options.has(arg)) {
-        logger.error("Missing required argument \"" + arg + "\"")
+        error("Missing required argument \"" + arg + "\"")
         parser.printHelpOn(System.err)
         System.exit(1)
       }
@@ -207,7 +204,7 @@ object ConsoleConsumer {
   def tryCleanupZookeeper(zkUrl: String, groupId: String) {
     try {
       val dir = "/consumers/" + groupId
-      logger.info("Cleaning up temporary zookeeper data under " + dir + ".")
+      info("Cleaning up temporary zookeeper data under " + dir + ".")
       val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)
       zk.deleteRecursive(dir)
       zk.close()

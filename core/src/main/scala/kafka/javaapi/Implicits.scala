@@ -17,14 +17,12 @@
 package kafka.javaapi
 
 import java.nio.ByteBuffer
-import org.apache.log4j.Logger
 import kafka.serializer.Encoder
 import kafka.producer.{ProducerConfig, ProducerPool}
 import kafka.producer.async.{AsyncProducerConfig, QueueItem}
+import kafka.utils.Logging
 
-private[javaapi] object Implicits {
-  private val logger = Logger.getLogger(getClass())
-
+private[javaapi] object Implicits extends Logging {
   implicit def javaMessageSetToScalaMessageSet(messageSet: kafka.javaapi.message.ByteBufferMessageSet):
      kafka.message.ByteBufferMessageSet = messageSet.underlying
 
@@ -35,14 +33,12 @@ private[javaapi] object Implicits {
   }
 
   implicit def toJavaSyncProducer(producer: kafka.producer.SyncProducer): kafka.javaapi.producer.SyncProducer = {
-    if(logger.isDebugEnabled)
-      logger.debug("Implicit instantiation of Java Sync Producer")
+    debug("Implicit instantiation of Java Sync Producer")
     new kafka.javaapi.producer.SyncProducer(producer)
   }
 
   implicit def toSyncProducer(producer: kafka.javaapi.producer.SyncProducer): kafka.producer.SyncProducer = {
-    if(logger.isDebugEnabled)
-      logger.debug("Implicit instantiation of Sync Producer")
+    debug("Implicit instantiation of Sync Producer")
     producer.underlying
   }
 

@@ -20,14 +20,12 @@ package kafka.utils
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import kafka.utils._
-import org.apache.log4j.Logger
 
 /**
  * A scheduler for running jobs in the background
  * TODO: ScheduledThreadPoolExecutor notriously swallows exceptions
  */
-class KafkaScheduler(val numThreads: Int, val baseThreadName: String, isDaemon: Boolean) {
-  private val logger = Logger.getLogger(getClass())
+class KafkaScheduler(val numThreads: Int, val baseThreadName: String, isDaemon: Boolean) extends Logging {
   private val threadId = new AtomicLong(0)
   private val executor = new ScheduledThreadPoolExecutor(numThreads, new ThreadFactory() {
     def newThread(runnable: Runnable): Thread = {
@@ -44,11 +42,11 @@ class KafkaScheduler(val numThreads: Int, val baseThreadName: String, isDaemon: 
 
   def shutdownNow() {
     executor.shutdownNow()
-    logger.info("force shutdown scheduler " + baseThreadName)
+    info("force shutdown scheduler " + baseThreadName)
   }
 
   def shutdown() {
     executor.shutdown()
-    logger.info("shutdown scheduler " + baseThreadName)
+    info("shutdown scheduler " + baseThreadName)
   }
 }

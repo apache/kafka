@@ -22,15 +22,14 @@ import kafka.zk.ZooKeeperTestHarness
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import scala.collection._
-import kafka.utils.Utils
+import kafka.utils.{Utils, Logging}
 import kafka.utils.{TestZKUtils, TestUtils}
 import org.scalatest.junit.JUnit3Suite
 import org.apache.log4j.{Level, Logger}
 import kafka.message._
 import kafka.serializer.StringDecoder
 
-class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with ZooKeeperTestHarness {
-  private val logger = Logger.getLogger(getClass())
+class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with ZooKeeperTestHarness with Logging {
 
   val zookeeperConnect = TestZKUtils.zookeeperConnect
   val zkConnect = zookeeperConnect
@@ -117,7 +116,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     zkConsumerConnector1.shutdown
     zkConsumerConnector2.shutdown
     zkConsumerConnector3.shutdown
-    logger.info("all consumer connectors stopped")
+    info("all consumer connectors stopped")
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
@@ -170,7 +169,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     zkConsumerConnector1.shutdown
     zkConsumerConnector2.shutdown
     zkConsumerConnector3.shutdown
-    logger.info("all consumer connectors stopped")
+    info("all consumer connectors stopped")
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
@@ -232,7 +231,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
           assertTrue(iterator.hasNext())
           val message = iterator.next()
           receivedMessages ::= message
-          logger.debug("received message: " + message)
+          debug("received message: " + message)
         }
       }
     }
@@ -275,7 +274,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
           assertTrue(iterator.hasNext)
           val message = iterator.next
           messages ::= message
-          logger.debug("received message: " + Utils.toString(message.payload, "UTF-8"))
+          debug("received message: " + Utils.toString(message.payload, "UTF-8"))
         }
       }
     }

@@ -19,14 +19,12 @@ package kafka.network
 
 import java.nio._
 import java.nio.channels._
-import org.apache.log4j.Logger
+import kafka.utils.Logging
 
 /**
  * Represents a stateful transfer of data to or from the network
  */
-private[network] trait Transmission {
-  
-  protected val logger: Logger = Logger.getLogger(getClass())
+private[network] trait Transmission extends Logging {
   
   def complete: Boolean
   
@@ -55,8 +53,7 @@ private[kafka] trait Receive extends Transmission {
     var read = 0
     while(!complete) {
       read = readFrom(channel)
-      if(logger.isTraceEnabled)
-        logger.trace(read + " bytes read.")
+      trace(read + " bytes read.")
     }
     read
   }
@@ -74,8 +71,7 @@ private[kafka] trait Send extends Transmission {
     var written = 0
     while(!complete) {
       written = writeTo(channel)
-      if(logger.isTraceEnabled)
-        logger.trace(written + " bytes written.")
+      trace(written + " bytes written.")
     }
     written
   }
@@ -102,7 +98,7 @@ abstract class MultiSend[S <: Send](val sends: List[S]) extends Send {
   def complete: Boolean = {
     if (current == Nil) {
       if (totalWritten != expectedBytesToWrite)
-        logger.error("mismatch in sending bytes over socket; expected: " + expectedBytesToWrite + " actual: " + totalWritten)
+        error("mismatch in sending bytes over socket; expected: " + expectedBytesToWrite + " actual: " + totalWritten)
       return true
     }
     else

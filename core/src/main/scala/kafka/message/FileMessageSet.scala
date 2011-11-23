@@ -21,7 +21,6 @@ import java.io._
 import java.nio._
 import java.nio.channels._
 import java.util.concurrent.atomic._
-import org.apache.log4j.Logger
 
 import kafka._
 import kafka.message._
@@ -38,11 +37,10 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
                                     private[message] val offset: Long,
                                     private[message] val limit: Long,
                                     val mutable: Boolean,
-                                    val needRecover: AtomicBoolean) extends MessageSet {
+                                    val needRecover: AtomicBoolean) extends MessageSet with Logging {
   
   private val setSize = new AtomicLong()
   private val setHighWaterMark = new AtomicLong()
-  private val logger = Logger.getLogger(classOf[FileMessageSet])
   
   if(mutable) {
     if(limit < Long.MaxValue || offset > 0)
@@ -52,7 +50,7 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
       // set the file position to the end of the file for appending messages
       val startMs = System.currentTimeMillis
       val truncated = recover()
-      logger.info("Recovery succeeded in " + (System.currentTimeMillis - startMs) / 1000 +
+      info("Recovery succeeded in " + (System.currentTimeMillis - startMs) / 1000 +
                 " seconds. " + truncated + " bytes truncated.")
     }
     else {
@@ -63,8 +61,7 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
   } else {
     setSize.set(scala.math.min(channel.size(), limit) - offset)
     setHighWaterMark.set(sizeInBytes)
-    if(logger.isDebugEnabled)
-      logger.debug("initializing high water mark in immutable mode: " + highWaterMark)
+    debug("initializing high water mark in immutable mode: " + highWaterMark)
   }
   
   /**
@@ -174,11 +171,9 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
     channel.force(true)
     val elapsedTime = SystemTime.milliseconds - startTime
     LogFlushStats.recordFlushRequest(elapsedTime)
-    if (logger.isDebugEnabled)
-      logger.debug("flush time " + elapsedTime)
+    debug("flush time " + elapsedTime)
     setHighWaterMark.set(sizeInBytes)
-    if(logger.isDebugEnabled)
-      logger.debug("flush high water mark:" + highWaterMark)
+    debug("flush high water mark:" + highWaterMark)
   }
   
   /**
@@ -207,8 +202,7 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
     channel.truncate(validUpTo)
     setSize.set(validUpTo)
     setHighWaterMark.set(validUpTo)
-    if(logger.isDebugEnabled)
-      logger.info("recover high water mark:" + highWaterMark)
+    info("recover high water mark:" + highWaterMark)
     /* This should not be necessary, but fixes bug 6191269 on some OSs. */
     channel.position(validUpTo)
     needRecover.set(false)    
@@ -279,11 +273,10 @@ class LogFlushStats extends LogFlushStatsMBean {
   def getNumFlushes: Long = flushRequestStats.getNumRequests
 }
 
-object LogFlushStats {
-  private val logger = Logger.getLogger(getClass())
+object LogFlushStats extends Logging {
   private val LogFlushStatsMBeanName = "kafka:type=kafka.LogFlushStats"
   private val stats = new LogFlushStats
-  Utils.swallow(logger.warn, Utils.registerMBean(stats, LogFlushStatsMBeanName))
+  Utils.registerMBean(stats, LogFlushStatsMBeanName)
 
   def recordFlushRequest(requestMs: Long) = stats.recordFlushRequest(requestMs)
 }

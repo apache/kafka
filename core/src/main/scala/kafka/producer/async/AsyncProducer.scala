@@ -18,9 +18,8 @@
 package kafka.producer.async
 
 import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
-import kafka.utils.Utils
+import kafka.utils.{Utils, Logging}
 import java.util.concurrent.atomic.AtomicBoolean
-import org.apache.log4j.{Level, Logger}
 import kafka.api.ProducerRequest
 import kafka.serializer.Encoder
 import java.util.{Random, Properties}
@@ -39,8 +38,7 @@ private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
                                       eventHandler: EventHandler[T] = null,
                                       eventHandlerProps: Properties = null,
                                       cbkHandler: CallbackHandler[T] = null,
-                                      cbkHandlerProps: Properties = null) {
-  private val logger = Logger.getLogger(classOf[AsyncProducer[T]])
+                                      cbkHandlerProps: Properties = null) extends Logging {
   private val closed = new AtomicBoolean(false)
   private val queue = new LinkedBlockingQueue[QueueItem[T]](config.queueSize)
   // initialize the callback handlers
@@ -98,7 +96,7 @@ private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
           case e: InterruptedException =>
             val msg = "%s interrupted during enqueue of event %s.".format(
               getClass.getSimpleName, event.toString)
-            logger.error(msg)
+            error(msg)
             throw new AsyncProducerInterruptedException(msg)
         }
     }
@@ -134,6 +132,7 @@ private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
   }
 
   // for testing only
+  import org.apache.log4j.Level
   def setLoggerLevel(level: Level) = logger.setLevel(level)
 }
 

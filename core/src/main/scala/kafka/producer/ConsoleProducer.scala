@@ -20,7 +20,6 @@ package kafka.producer
 import scala.collection.JavaConversions._
 import org.I0Itec.zkclient._
 import joptsimple._
-import org.apache.log4j.Logger
 import java.util.Arrays.asList
 import java.util.Properties
 import java.util.Random
@@ -30,8 +29,6 @@ import kafka.utils._
 import kafka.serializer._
 
 object ConsoleProducer { 
-
-  private val logger = Logger.getLogger(getClass())
 
   def main(args: Array[String]) { 
     val parser = new OptionParser

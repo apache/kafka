@@ -40,7 +40,6 @@ class SocketServer(val port: Int,
                    private val handlerFactory: Handler.HandlerMapping,
                    val maxRequestSize: Int = Int.MaxValue) {
 
-  private val logger = Logger.getLogger(classOf[SocketServer])
   private val time = SystemTime
   private val processors = new Array[Processor](numProcessorThreads)
   private var acceptor: Acceptor = new Acceptor(port, processors)

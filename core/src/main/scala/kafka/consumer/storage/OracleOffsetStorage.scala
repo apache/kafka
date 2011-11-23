@@ -18,7 +18,6 @@
 package kafka.consumer.storage.sql
 
 import java.sql._
-import org.apache.log4j._
 import kafka.utils._
 import kafka.consumer.storage.OffsetStorage
 
@@ -26,9 +25,8 @@ import kafka.consumer.storage.OffsetStorage
  * An offset storage implementation that uses an oracle database to save offsets
  */
 @nonthreadsafe
-class OracleOffsetStorage(val connection: Connection) extends OffsetStorage {
+class OracleOffsetStorage(val connection: Connection) extends OffsetStorage with Logging {
   
-  private val logger: Logger = Logger.getLogger(classOf[OracleOffsetStorage])
   private val lock = new Object
   connection.setAutoCommit(false)
   
@@ -43,8 +41,7 @@ class OracleOffsetStorage(val connection: Connection) extends OffsetStorage {
       }
     }
     
-    if(logger.isDebugEnabled)
-      logger.debug("Reserved node " + node + " for topic '" + topic + " offset " + offset)
+    debug("Reserved node " + node + " for topic '" + topic + " offset " + offset)
     
     offset
   }

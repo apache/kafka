@@ -17,11 +17,10 @@
 
 package kafka.server
 
-import kafka.utils.Utils
+import kafka.utils.{Utils, Logging}
 import kafka.consumer._
 import kafka.producer.{ProducerData, ProducerConfig, Producer}
 import kafka.message.Message
-import org.apache.log4j.Logger
 import java.util.concurrent.CountDownLatch
 
 import scala.collection.Map
@@ -62,9 +61,7 @@ class KafkaServerStartable(val serverConfig: KafkaConfig,
 
 class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
                        private val producerConfig: ProducerConfig,
-                       private val kafkaServer: KafkaServer) extends TopicEventHandler[String] {
-
-  private val logger = Logger.getLogger(getClass)
+                       private val kafkaServer: KafkaServer) extends TopicEventHandler[String] with Logging {
 
   private val whiteListTopics =
     consumerConfig.mirrorTopicsWhitelist.split(",").toList.map(_.trim)
@@ -96,16 +93,16 @@ class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
 
     val addedTopics = newMirrorTopics filterNot (mirrorTopics contains)
     if (addedTopics.nonEmpty)
-      logger.info("topic event: added topics = %s".format(addedTopics))
+      info("topic event: added topics = %s".format(addedTopics))
 
     val deletedTopics = mirrorTopics filterNot (newMirrorTopics contains)
     if (deletedTopics.nonEmpty)
-      logger.info("topic event: deleted topics = %s".format(deletedTopics))
+      info("topic event: deleted topics = %s".format(deletedTopics))
 
     mirrorTopics = newMirrorTopics
 
     if (addedTopics.nonEmpty || deletedTopics.nonEmpty) {
-      logger.info("mirror topics = %s".format(mirrorTopics))
+      info("mirror topics = %s".format(mirrorTopics))
       startNewConsumerThreads(makeTopicMap(mirrorTopics))
     }
   }
@@ -142,7 +139,7 @@ class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
       threadList.foreach(_.start)
     }
     else
-      logger.info("Not starting mirroring threads (mirror topic list is empty)")
+      info("Not starting mirroring threads (mirror topic list is empty)")
   }
 
   def startup() {
@@ -157,29 +154,28 @@ class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
     // first shutdown the topic watcher to prevent creating new consumer streams
     if (topicEventWatcher != null)
       topicEventWatcher.shutdown()
-    logger.info("Stopped the ZK watcher for new topics, now stopping the Kafka consumers")
+    info("Stopped the ZK watcher for new topics, now stopping the Kafka consumers")
     // stop pulling more data for mirroring
     if (consumerConnector != null)
       consumerConnector.shutdown()
-    logger.info("Stopped the kafka consumer threads for existing topics, now stopping the existing mirroring threads")
+    info("Stopped the kafka consumer threads for existing topics, now stopping the existing mirroring threads")
     // wait for all mirroring threads to stop
     threadList.foreach(_.shutdown)
-    logger.info("Stopped all existing mirroring threads, now stopping the producer")
+    info("Stopped all existing mirroring threads, now stopping the producer")
     // only then, shutdown the producer
     producer.close()
-    logger.info("Successfully shutdown this Kafka mirror")
+    info("Successfully shutdown this Kafka mirror")
   }
 
-  class MirroringThread(val stream: KafkaMessageStream[Message], val topic: String, val threadId: Int) extends Thread {
+  class MirroringThread(val stream: KafkaMessageStream[Message], val topic: String, val threadId: Int) extends Thread with Logging {
     val shutdownComplete = new CountDownLatch(1)
     val name = "kafka-embedded-consumer-%s-%d".format(topic, threadId)
     this.setDaemon(false)
     this.setName(name)
 
-    private val logger = Logger.getLogger(name)
 
     override def run = {
-      logger.info("Starting mirroring thread %s for topic %s and stream %d".format(name, topic, threadId))
+      info("Starting mirroring thread %s for topic %s and stream %d".format(name, topic, threadId))
 
       try {
         for (message <- stream) {
@@ -189,11 +185,11 @@ class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
       }
       catch {
         case e =>
-          logger.fatal(e + Utils.stackTrace(e))
-          logger.fatal(topic + " stream " + threadId + " unexpectedly exited")
+          fatal(e + Utils.stackTrace(e))
+          fatal(topic + " stream " + threadId + " unexpectedly exited")
       }finally {
         shutdownComplete.countDown
-        logger.info("Stopped mirroring thread %s for topic %s and stream %d".format(name, topic, threadId))
+        info("Stopped mirroring thread %s for topic %s and stream %d".format(name, topic, threadId))
       }
     }
 
@@ -201,7 +197,7 @@ class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
       try {
         shutdownComplete.await
       }catch {
-        case e: InterruptedException => logger.fatal("Shutdown of thread " + name + " interrupted. " +
+        case e: InterruptedException => fatal("Shutdown of thread " + name + " interrupted. " +
           "Mirroring thread might leak data!")
       }
     }

@@ -19,18 +19,16 @@ package kafka.producer.async
 
 import collection.mutable.HashMap
 import collection.mutable.Map
-import org.apache.log4j.Logger
 import kafka.api.ProducerRequest
 import kafka.serializer.Encoder
 import java.util.Properties
+import kafka.utils.Logging
 import kafka.producer.{ProducerConfig, SyncProducer}
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet}
 
 
 private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
-                                            val cbkHandler: CallbackHandler[T]) extends EventHandler[T] {
-
-  private val logger = Logger.getLogger(classOf[DefaultEventHandler[T]])
+                                            val cbkHandler: CallbackHandler[T]) extends EventHandler[T] with Logging {
 
   override def init(props: Properties) { }
 
@@ -40,7 +38,7 @@ private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
       processedEvents = cbkHandler.beforeSendingData(events)
 
     if(logger.isTraceEnabled)
-      processedEvents.foreach(event => logger.trace("Handling event for Topic: %s, Partition: %d"
+      processedEvents.foreach(event => trace("Handling event for Topic: %s, Partition: %d"
         .format(event.getTopic, event.getPartition)))
 
     send(serialize(collate(processedEvents), serializer), syncProducer)
@@ -50,8 +48,7 @@ private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
     if(messagesPerTopic.size > 0) {
       val requests = messagesPerTopic.map(f => new ProducerRequest(f._1._1, f._1._2, f._2)).toArray
       syncProducer.multiSend(requests)
-      if(logger.isTraceEnabled)
-        logger.trace("kafka producer sent messages for topics " + messagesPerTopic)
+      trace("kafka producer sent messages for topics " + messagesPerTopic)
     }
   }
 
@@ -69,27 +66,23 @@ private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
       ((topicAndEvents._1._1, topicAndEvents._1._2),
         config.compressionCodec match {
           case NoCompressionCodec =>
-            if(logger.isTraceEnabled)
-              logger.trace("Sending %d messages with no compression to topic %s on partition %d"
+            trace("Sending %d messages with no compression to topic %s on partition %d"
                 .format(topicAndEvents._2.size, topicAndEvents._1._1, topicAndEvents._1._2))
             new ByteBufferMessageSet(NoCompressionCodec, topicAndEvents._2: _*)
           case _ =>
             config.compressedTopics.size match {
               case 0 =>
-                if(logger.isTraceEnabled)
-                  logger.trace("Sending %d messages with compression codec %d to topic %s on partition %d"
+                trace("Sending %d messages with compression codec %d to topic %s on partition %d"
                     .format(topicAndEvents._2.size, config.compressionCodec.codec, topicAndEvents._1._1, topicAndEvents._1._2))
                 new ByteBufferMessageSet(config.compressionCodec, topicAndEvents._2: _*)
               case _ =>
                 if(config.compressedTopics.contains(topicAndEvents._1._1)) {
-                  if(logger.isTraceEnabled)
-                    logger.trace("Sending %d messages with compression codec %d to topic %s on partition %d"
+                  trace("Sending %d messages with compression codec %d to topic %s on partition %d"
                       .format(topicAndEvents._2.size, config.compressionCodec.codec, topicAndEvents._1._1, topicAndEvents._1._2))
                   new ByteBufferMessageSet(config.compressionCodec, topicAndEvents._2: _*)
                 }
                 else {
-                  if(logger.isTraceEnabled)
-                    logger.trace("Sending %d messages to topic %s and partition %d with no compression as %s is not in compressed.topics - %s"
+                  trace("Sending %d messages to topic %s and partition %d with no compression as %s is not in compressed.topics - %s"
                       .format(topicAndEvents._2.size, topicAndEvents._1._1, topicAndEvents._1._2, topicAndEvents._1._1,
                       config.compressedTopics.toString))
                   new ByteBufferMessageSet(NoCompressionCodec, topicAndEvents._2: _*)

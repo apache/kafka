@@ -21,7 +21,7 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.nio.ByteBuffer
-import org.apache.log4j.Logger
+import kafka.utils._
 
 abstract sealed class CompressionFacade(inputStream: InputStream, outputStream: ByteArrayOutputStream) {
   def close() = {
@@ -91,8 +91,7 @@ object CompressionFactory {
   }
 }
 
-object CompressionUtils {
-  private val logger = Logger.getLogger(getClass)
+object CompressionUtils extends Logging{
 
   //specify the codec which is the default when DefaultCompressionCodec is used
   private var defaultCodec: CompressionCodec = GZIPCompressionCodec
@@ -100,8 +99,7 @@ object CompressionUtils {
   def compress(messages: Iterable[Message], compressionCodec: CompressionCodec = DefaultCompressionCodec):Message = {
 	val outputStream:ByteArrayOutputStream = new ByteArrayOutputStream()
 	
-	if(logger.isDebugEnabled)
-	  logger.debug("Allocating message byte buffer of size = " + MessageSet.messageSetSize(messages))
+	debug("Allocating message byte buffer of size = " + MessageSet.messageSetSize(messages))
 
     var cf: CompressionFacade = null
 		
@@ -117,7 +115,7 @@ object CompressionUtils {
     try {
       cf.write(messageByteBuffer.array)
     } catch {
-      case e: IOException => logger.error("Error while writing to the GZIP output stream", e)
+      case e: IOException => error("Error while writing to the GZIP output stream", e)
       cf.close()
       throw e
     } finally {
@@ -146,7 +144,7 @@ object CompressionUtils {
         outputStream.write(intermediateBuffer, 0, dataRead)
       }
     }catch {
-      case e: IOException => logger.error("Error while reading from the GZIP input stream", e)
+      case e: IOException => error("Error while reading from the GZIP input stream", e)
       cf.close()
       throw e
     } finally {

@@ -33,8 +33,7 @@ import kafka.message.{NoCompressionCodec, CompressionCodec}
 /**
  * Helper functions!
  */
-object Utils {
-  private val logger = Logger.getLogger(getClass())
+object Utils extends Logging {
   
   /**
    * Wrap the given function in a java.lang.Runnable
@@ -60,8 +59,8 @@ object Utils {
         catch {
           case t =>
             // log any error and the stack trace
-            logger.error(t, t)
-            logger.error(stackTrace(t), t)
+            error(t)
+            error(stackTrace(t), t)
         }
       }
     }
@@ -362,17 +361,29 @@ object Utils {
   
   /**
    * Register the given mbean with the platform mbean server,
-   * unregistering any mbean that was there before
+   * unregistering any mbean that was there before. Note,
+   * this method will not throw an exception if the registration
+   * fails (since there is nothing you can do and it isn't fatal),
+   * instead it just returns false indicating the registration failed.
    * @param mbean The object to register as an mbean
    * @param name The name to register this mbean with
+   * @returns true if the registration succeeded
    */
-  def registerMBean(mbean: Object, name: String) {
-    val mbs = ManagementFactory.getPlatformMBeanServer()
-    mbs synchronized {
-      val objName = new ObjectName(name)
-      if(mbs.isRegistered(objName))
-        mbs.unregisterMBean(objName)
-      mbs.registerMBean(mbean, objName)
+  def registerMBean(mbean: Object, name: String): Boolean = {
+    try {
+      val mbs = ManagementFactory.getPlatformMBeanServer()
+      mbs synchronized {
+        val objName = new ObjectName(name)
+        if(mbs.isRegistered(objName))
+          mbs.unregisterMBean(objName)
+        mbs.registerMBean(mbean, objName)
+        true
+      }
+    } catch {
+      case e: Exception => {
+        error("Failed to register Mbean " + name, e)
+        false
+      }
     }
   }
   
@@ -525,10 +536,10 @@ object Utils {
     {
      try{
       val tempSplit = csVals(i).split(":")
-      logger.info(successMsg + tempSplit(0) + " : " + Integer.parseInt(tempSplit(1).trim))
+      info(successMsg + tempSplit(0) + " : " + Integer.parseInt(tempSplit(1).trim))
       map += tempSplit(0).asInstanceOf[K] -> Integer.parseInt(tempSplit(1).trim).asInstanceOf[V]
       } catch {
-          case _ =>  logger.error(exceptionMsg + ": " + csVals(i))
+          case _ =>  error(exceptionMsg + ": " + csVals(i))
         }
     }
     map

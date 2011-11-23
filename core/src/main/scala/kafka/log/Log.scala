@@ -20,7 +20,6 @@ package kafka.log
 import java.util.concurrent.atomic._
 import java.text.NumberFormat
 import java.io._
-import org.apache.log4j._
 import kafka.message._
 import kafka.utils._
 import kafka.common._
@@ -101,9 +100,7 @@ private[log] class LogSegment(val file: File, val messageSet: FileMessageSet, va
  * An append-only log for storing messages. 
  */
 @threadsafe
-private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean) {
-
-  private val logger = Logger.getLogger(classOf[Log])
+private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean) extends Logging {
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
@@ -160,7 +157,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int,
       //make the final section mutable and run recovery on it if necessary
       val last = accum.remove(accum.size - 1)
       last.messageSet.close()
-      logger.info("Loading the last segment " + last.file.getAbsolutePath() + " in mutable mode, recovery " + needRecovery)
+      info("Loading the last segment " + last.file.getAbsolutePath() + " in mutable mode, recovery " + needRecovery)
       val mutable = new LogSegment(last.file, new FileMessageSet(last.file, true, new AtomicBoolean(needRecovery)), last.start)
       accum.add(mutable)
     }
@@ -285,8 +282,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int,
       val last = segments.view.last
       val newOffset = nextAppendOffset
       val newFile = new File(dir, Log.nameFromOffset(newOffset))
-      if(logger.isDebugEnabled)
-        logger.debug("Rolling log '" + name + "' to " + newFile.getName())
+      debug("Rolling log '" + name + "' to " + newFile.getName())
       segments.append(new LogSegment(newFile, new FileMessageSet(newFile, true), newOffset))
     }
   }
@@ -307,8 +303,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int,
     if (unflushed.get == 0) return
 
     lock synchronized {
-      if(logger.isDebugEnabled)
-        logger.debug("Flushing log '" + name + "' last flushed: " + getLastFlushedTime + " current time: " +
+      debug("Flushing log '" + name + "' last flushed: " + getLastFlushedTime + " current time: " +
           System.currentTimeMillis)
       segments.view.last.messageSet.flush()
       unflushed.set(0)
@@ -337,9 +332,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int,
         startIndex = 0
       case _ =>
           var isFound = false
-          if(logger.isDebugEnabled) {
-            logger.debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
-          }
+          debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
           startIndex = offsetTimeArray.length - 1
           while (startIndex >= 0 && !isFound) {
             if (offsetTimeArray(startIndex)._2 <= request.time)

@@ -21,7 +21,6 @@ import java.net._
 import java.nio._
 import java.nio.channels._
 import java.util.concurrent.atomic._
-import org.apache.log4j.Logger
 import kafka.api._
 import kafka.common._
 import kafka.message._
@@ -35,8 +34,7 @@ import kafka.utils._
 class SimpleConsumer(val host: String,
                      val port: Int,
                      val soTimeout: Int,
-                     val bufferSize: Int) {
-  private val logger = Logger.getLogger(getClass())
+                     val bufferSize: Int) extends Logging {
   private var channel : SocketChannel = null
   private val lock = new Object()
 
@@ -45,23 +43,20 @@ class SimpleConsumer(val host: String,
     val address = new InetSocketAddress(host, port)
 
     val channel = SocketChannel.open
-    if(logger.isDebugEnabled)
-      logger.debug("Connected to " + address + " for fetching.")
+    debug("Connected to " + address + " for fetching.")
     channel.configureBlocking(true)
     channel.socket.setReceiveBufferSize(bufferSize)
     channel.socket.setSoTimeout(soTimeout)
     channel.socket.setKeepAlive(true)
     channel.connect(address)
-    if(logger.isTraceEnabled) {
-      logger.trace("requested receive buffer size=" + bufferSize + " actual receive buffer size= " + channel.socket.getReceiveBufferSize)
-      logger.trace("soTimeout=" + soTimeout + " actual soTimeout= " + channel.socket.getSoTimeout)
-    }
+    trace("requested receive buffer size=" + bufferSize + " actual receive buffer size= " + channel.socket.getReceiveBufferSize)
+    trace("soTimeout=" + soTimeout + " actual soTimeout= " + channel.socket.getSoTimeout)
+    
     channel
   }
 
   private def close(channel: SocketChannel) = {
-    if(logger.isDebugEnabled)
-      logger.debug("Disconnecting from " + channel.socket.getRemoteSocketAddress())
+    debug("Disconnecting from " + channel.socket.getRemoteSocketAddress())
     Utils.swallow(logger.warn, channel.close())
     Utils.swallow(logger.warn, channel.socket.close())
   }
@@ -90,7 +85,7 @@ class SimpleConsumer(val host: String,
         response = getResponse
       } catch {
         case e : java.io.IOException =>
-          logger.info("fetch reconnect due to " + e)
+          info("fetch reconnect due to " + e)
           // retry once
           try {
             channel = connect
@@ -124,7 +119,7 @@ class SimpleConsumer(val host: String,
         response = getResponse
       } catch {
         case e : java.io.IOException =>
-          logger.info("multifetch reconnect due to " + e)
+          info("multifetch reconnect due to " + e)
           // retry once
           try {
             channel = connect
@@ -160,7 +155,7 @@ class SimpleConsumer(val host: String,
         response = getResponse
       } catch {
         case e : java.io.IOException =>
-          logger.info("getOffsetsBefore reconnect due to " + e)
+          info("getOffsetsBefore reconnect due to " + e)
           // retry once
           try {
             channel = connect
@@ -222,11 +217,10 @@ class SimpleConsumerStats extends SimpleConsumerStatsMBean {
   def getConsumerThroughput: Double = fetchRequestStats.getThroughput
 }
 
-object SimpleConsumerStats {
-  private val logger = Logger.getLogger(getClass())
+object SimpleConsumerStats extends Logging {
   private val simpleConsumerstatsMBeanName = "kafka:type=kafka.SimpleConsumerStats"
   private val stats = new SimpleConsumerStats
-  Utils.swallow(logger.warn, Utils.registerMBean(stats, simpleConsumerstatsMBeanName))
+  Utils.registerMBean(stats, simpleConsumerstatsMBeanName)
 
   def recordFetchRequest(requestMs: Long) = stats.recordFetchRequest(requestMs)
   def recordConsumptionThroughput(data: Long) = stats.recordConsumptionThroughput(data)

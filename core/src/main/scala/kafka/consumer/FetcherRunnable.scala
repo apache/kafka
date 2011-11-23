@@ -18,7 +18,6 @@
 package kafka.consumer
 
 import java.util.concurrent.CountDownLatch
-import org.apache.log4j.Logger
 import java.nio.channels.{ClosedChannelException, ClosedByInterruptException}
 import kafka.common.{OffsetOutOfRangeException, ErrorMapping}
 import kafka.cluster.{Partition, Broker}
@@ -32,8 +31,7 @@ class FetcherRunnable(val name: String,
                       val config: ConsumerConfig,
                       val broker: Broker,
                       val partitionTopicInfos: List[PartitionTopicInfo])
-  extends Thread(name) {
-  private val logger = Logger.getLogger(getClass())
+  extends Thread(name) with Logging {
   private val shutdownLatch = new CountDownLatch(1)
   private val simpleConsumer = new SimpleConsumer(broker.host, broker.port, config.socketTimeoutMs,
     config.socketBufferSize)
@@ -43,43 +41,42 @@ class FetcherRunnable(val name: String,
   def shutdown(): Unit = {
     stopped = true
     interrupt
-    logger.debug("awaiting shutdown on fetcher " + name)
+    debug("awaiting shutdown on fetcher " + name)
     shutdownLatch.await
-    logger.debug("shutdown of fetcher " + name + " thread complete")
+    debug("shutdown of fetcher " + name + " thread complete")
   }
 
   override def run() {
-    for (info <- partitionTopicInfos)
-      logger.info(name + " start fetching topic: " + info.topic + " part: " + info.partition.partId + " offset: "
-        + info.getFetchOffset + " from " + broker.host + ":" + broker.port)
+    for (infopti <- partitionTopicInfos)
+      info(name + " start fetching topic: " + infopti.topic + " part: " + infopti.partition.partId + " offset: "
+        + infopti.getFetchOffset + " from " + broker.host + ":" + broker.port)
 
     try {
       while (!stopped) {
         val fetches = partitionTopicInfos.map(info =>
           new FetchRequest(info.topic, info.partition.partId, info.getFetchOffset, config.fetchSize))
 
-        if (logger.isTraceEnabled)
-          logger.trace("fetch request: " + fetches.toString)
+        trace("fetch request: " + fetches.toString)
 
         val response = simpleConsumer.multifetch(fetches : _*)
 
         var read = 0L
 
-        for((messages, info) <- response.zip(partitionTopicInfos)) {
+        for((messages, infopti) <- response.zip(partitionTopicInfos)) {
           try {
             var done = false
             if(messages.getErrorCode == ErrorMapping.OffsetOutOfRangeCode) {
-              logger.info("offset for " + info + " out of range")
+              info("offset for " + infopti + " out of range")
               // see if we can fix this error
-              val resetOffset = resetConsumerOffsets(info.topic, info.partition)
+              val resetOffset = resetConsumerOffsets(infopti.topic, infopti.partition)
               if(resetOffset >= 0) {
-                info.resetFetchOffset(resetOffset)
-                info.resetConsumeOffset(resetOffset)
+                infopti.resetFetchOffset(resetOffset)
+                infopti.resetConsumeOffset(resetOffset)
                 done = true
               }
             }
             if (!done)
-              read += info.enqueue(messages, info.getFetchOffset)
+              read += infopti.enqueue(messages, infopti.getFetchOffset)
           }
           catch {
             case e1: IOException =>
@@ -88,18 +85,17 @@ class FetcherRunnable(val name: String,
             case e2 =>
               if (!stopped) {
                 // this is likely a repeatable error, log it and trigger an exception in the consumer
-                logger.error("error in FetcherRunnable for " + info, e2)
-                info.enqueueError(e2, info.getFetchOffset)
+                error("error in FetcherRunnable for " + infopti, e2)
+                infopti.enqueueError(e2, infopti.getFetchOffset)
               }
               // re-throw the exception to stop the fetcher
               throw e2
           }
         }
 
-        if (logger.isTraceEnabled)
-          logger.trace("fetched bytes: " + read)
+        trace("fetched bytes: " + read)
         if(read == 0) {
-          logger.debug("backing off " + config.backoffIncrementMs + " ms")
+          debug("backing off " + config.backoffIncrementMs + " ms")
           Thread.sleep(config.backoffIncrementMs)
         }
       }
@@ -107,12 +103,12 @@ class FetcherRunnable(val name: String,
     catch {
       case e =>
         if (stopped)
-          logger.info("FecherRunnable " + this + " interrupted")
+          info("FecherRunnable " + this + " interrupted")
         else
-          logger.error("error in FetcherRunnable ", e)
+          error("error in FetcherRunnable ", e)
     }
 
-    logger.info("stopping fetcher " + name + " to host " + broker.host)
+    info("stopping fetcher " + name + " to host " + broker.host)
     Utils.swallow(logger.info, simpleConsumer.close)
     shutdownComplete()
   }
@@ -136,7 +132,7 @@ class FetcherRunnable(val name: String,
     val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
 
     // reset manually in zookeeper
-    logger.info("updating partition " + partition.name + " for topic " + topic + " with " +
+    info("updating partition " + partition.name + " for topic " + topic + " with " +
             (if(offset == OffsetRequest.EarliestTime) "earliest " else " latest ") + "offset " + offsets(0))
     ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + partition.name, offsets(0).toString)
 

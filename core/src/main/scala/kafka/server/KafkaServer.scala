@@ -18,11 +18,10 @@
 package kafka.server
 
 import scala.reflect.BeanProperty
-import org.apache.log4j.Logger
 import kafka.log.LogManager
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.utils.{Mx4jLoader, Utils, SystemTime, KafkaScheduler}
+import kafka.utils.{Mx4jLoader, Utils, SystemTime, KafkaScheduler, Logging}
 import kafka.network.{SocketServerStats, SocketServer}
 import java.io.File
 
@@ -30,11 +29,10 @@ import java.io.File
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.
  */
-class KafkaServer(val config: KafkaConfig) {
+class KafkaServer(val config: KafkaConfig) extends Logging {
   val CLEAN_SHUTDOWN_FILE = ".kafka_cleanshutdown"
   private val isShuttingDown = new AtomicBoolean(false)
   
-  private val logger = Logger.getLogger(classOf[KafkaServer])
   private val shutdownLatch = new CountDownLatch(1)
   private val statsMBeanName = "kafka:type=kafka.SocketServerStats"
   
@@ -50,7 +48,7 @@ class KafkaServer(val config: KafkaConfig) {
    */
   def startup() {
     try {
-      logger.info("Starting Kafka server...")
+      info("Starting Kafka server...")
       var needRecovery = true
       val cleanShutDownFile = new File(new File(config.logDir), CLEAN_SHUTDOWN_FILE)
       if (cleanShutDownFile.exists) {
@@ -70,7 +68,7 @@ class KafkaServer(val config: KafkaConfig) {
                                       config.monitoringPeriodSecs,
                                       handlers.handlerFor,
                                       config.maxSocketRequestSize)
-      Utils.swallow(logger.warn, Utils.registerMBean(socketServer.stats, statsMBeanName))
+      Utils.registerMBean(socketServer.stats, statsMBeanName)
       socketServer.startup
       Mx4jLoader.maybeLoad
       /**
@@ -78,11 +76,11 @@ class KafkaServer(val config: KafkaConfig) {
        *  So this should happen after socket server start.
        */
       logManager.startup
-      logger.info("Server started.")
+      info("Server started.")
     }
     catch {
       case e =>
-        logger.fatal("Fatal error during startup.", e)
+        fatal("Fatal error during startup.", e)
         shutdown
     }
   }
@@ -94,12 +92,12 @@ class KafkaServer(val config: KafkaConfig) {
   def shutdown() {
     val canShutdown = isShuttingDown.compareAndSet(false, true);
     if (canShutdown) {
-      logger.info("Shutting down...")
+      info("Shutting down...")
       try {
         scheduler.shutdown()
         if (socketServer != null)
           socketServer.shutdown()
-        Utils.swallow(logger.warn, Utils.unregisterMBean(statsMBeanName))
+        Utils.unregisterMBean(statsMBeanName)
         if (logManager != null)
           logManager.close()
 
@@ -108,11 +106,11 @@ class KafkaServer(val config: KafkaConfig) {
       }
       catch {
         case e =>
-          logger.fatal(e)
-          logger.fatal(Utils.stackTrace(e))
+          fatal(e)
+          fatal(Utils.stackTrace(e))
       }
       shutdownLatch.countDown()
-      logger.info("shut down completed")
+      info("shut down completed")
     }
   }
   

@@ -17,13 +17,12 @@
 
 package kafka.tools
 
-import kafka.utils.Utils
+import kafka.utils.{Utils, Logging}
 import java.util.concurrent.{CountDownLatch, Executors}
 import java.util.concurrent.atomic.AtomicLong
 import kafka.producer._
 import async.DefaultEventHandler
 import kafka.serializer.StringEncoder
-import org.apache.log4j.Logger
 import joptsimple.{OptionSet, OptionParser}
 import java.util.{Random, Properties}
 import kafka.message.{CompressionCodec, Message, ByteBufferMessageSet}
@@ -31,14 +30,13 @@ import kafka.message.{CompressionCodec, Message, ByteBufferMessageSet}
 /**
  * Load test for the producer
  */
-object ProducerPerformance {
+object ProducerPerformance extends Logging {
 
   def main(args: Array[String]) {
 
-    val logger = Logger.getLogger(getClass)
     val config = new PerfConfig(args)
     if(!config.isFixSize)
-      logger.info("WARN: Throughput will be slower due to changing message size per request")
+      info("WARN: Throughput will be slower due to changing message size per request")
 
     val totalBytesSent = new AtomicLong(0)
     val totalMessagesSent = new AtomicLong(0)
@@ -56,9 +54,9 @@ object ProducerPerformance {
 
     allDone.await()
     val elapsedSecs = (System.currentTimeMillis - startMs) / 1000.0
-    logger.info("Total Num Messages: " + totalMessagesSent.get + " bytes: " + totalBytesSent.get + " in " + elapsedSecs + " secs")
-    logger.info("Messages/sec: " + (1.0 * totalMessagesSent.get / elapsedSecs).formatted("%.4f"))
-    logger.info("MB/sec: " + (totalBytesSent.get / elapsedSecs / (1024.0*1024.0)).formatted("%.4f"))
+    info("Total Num Messages: " + totalMessagesSent.get + " bytes: " + totalBytesSent.get + " in " + elapsedSecs + " secs")
+    info("Messages/sec: " + (1.0 * totalMessagesSent.get / elapsedSecs).formatted("%.4f"))
+    info("MB/sec: " + (totalBytesSent.get / elapsedSecs / (1024.0*1024.0)).formatted("%.4f"))
     System.exit(0)
   }
 
@@ -136,8 +134,7 @@ object ProducerPerformance {
                             val totalBytesSent: AtomicLong,
                             val totalMessagesSent: AtomicLong,
                             val allDone: CountDownLatch,
-                            val rand: Random) extends Runnable {
-    val logger = Logger.getLogger(getClass)
+                            val rand: Random) extends Runnable with Logging {
     val brokerInfoList = config.brokerInfo.split("=")
     val props = new Properties()
     if (brokerInfoList(0) == "zk.connect")
@@ -151,7 +148,7 @@ object ProducerPerformance {
     props.put("reconnect.interval", Integer.MAX_VALUE.toString)
     props.put("buffer.size", (64*1024).toString)
     props.put("queue.enqueueTimeout.ms", "-1")
-    logger.info("Producer properties = " + props.toString)
+    info("Producer properties = " + props.toString)
 
     val producerConfig = new ProducerConfig(props)
     val producer = new Producer[String, String](producerConfig, new StringEncoder,
@@ -166,7 +163,7 @@ object ProducerPerformance {
       var reportTime = System.currentTimeMillis()
       var lastReportTime = reportTime
       val messagesPerThread = config.numMessages / config.numThreads
-      logger.info("Messages per thread = " + messagesPerThread)
+      info("Messages per thread = " + messagesPerThread)
       for(j <- 0 until messagesPerThread) {
         var strLength = config.messageSize
         if (!config.isFixSize) {
@@ -183,7 +180,7 @@ object ProducerPerformance {
         }
         if(nSends % config.reportingInterval == 0) {
           reportTime = System.currentTimeMillis()
-          logger.info("thread " + threadId + ": " + nSends + " messages sent "
+          info("thread " + threadId + ": " + nSends + " messages sent "
             + (1000.0 * (nSends - lastNSends) / (reportTime - lastReportTime)).formatted("%.4f") + " nMsg/sec "
             + (1000.0 * (bytesSent - lastBytesSent) / (reportTime - lastReportTime) / (1024 * 1024)).formatted("%.4f") + " MBs/sec")
           lastReportTime = reportTime
@@ -203,8 +200,7 @@ object ProducerPerformance {
                            val totalBytesSent: AtomicLong,
                            val totalMessagesSent: AtomicLong,
                            val allDone: CountDownLatch,
-                           val rand: Random) extends Runnable {
-    val logger = Logger.getLogger(getClass)
+                           val rand: Random) extends Runnable with Logging {
     val props = new Properties()
     val brokerInfoList = config.brokerInfo.split("=")
     if (brokerInfoList(0) == "zk.connect")
@@ -228,7 +224,7 @@ object ProducerPerformance {
       var reportTime = System.currentTimeMillis()
       var lastReportTime = reportTime
       val messagesPerThread = config.numMessages / config.numThreads / config.batchSize
-      logger.info("Messages per thread = " + messagesPerThread)
+      info("Messages per thread = " + messagesPerThread)
       var messageSet: List[String] = Nil
       for(k <- 0 until config.batchSize) {
         messageSet ::= message
@@ -251,7 +247,7 @@ object ProducerPerformance {
         }
         if(nSends % config.reportingInterval == 0) {
           reportTime = System.currentTimeMillis()
-          logger.info("thread " + threadId + ": " + nSends + " messages sent "
+          info("thread " + threadId + ": " + nSends + " messages sent "
             + (1000.0 * (nSends - lastNSends) * config.batchSize / (reportTime - lastReportTime)).formatted("%.4f") + " nMsg/sec "
             + (1000.0 * (bytesSent - lastBytesSent) / (reportTime - lastReportTime) / (1024 * 1024)).formatted("%.4f") + " MBs/sec")
           lastReportTime = reportTime

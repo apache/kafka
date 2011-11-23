@@ -18,8 +18,7 @@
 package kafka.consumer
 
 import java.util.concurrent.atomic.AtomicLong
-import org.apache.log4j.Logger
-import kafka.utils.{Pool, Utils, threadsafe}
+import kafka.utils.{Pool, Utils, threadsafe, Logging}
 
 trait ConsumerTopicStatMBean {
   def getMessagesPerTopic: Long
@@ -34,8 +33,7 @@ class ConsumerTopicStat extends ConsumerTopicStatMBean {
   def recordMessagesPerTopic(nMessages: Int) = numCumulatedMessagesPerTopic.getAndAdd(nMessages)
 }
 
-object ConsumerTopicStat {
-  private val logger = Logger.getLogger(getClass())
+object ConsumerTopicStat extends Logging {
   private val stats = new Pool[String, ConsumerTopicStat]
 
   def getConsumerTopicStat(topic: String): ConsumerTopicStat = {
@@ -43,7 +41,7 @@ object ConsumerTopicStat {
     if (stat == null) {
       stat = new ConsumerTopicStat
       if (stats.putIfNotExists(topic, stat) == null)
-        Utils.swallow(logger.warn, Utils.registerMBean(stat, "kafka:type=kafka.ConsumerTopicStat." + topic))
+        Utils.registerMBean(stat, "kafka:type=kafka.ConsumerTopicStat." + topic)
       else
         stat = stats.get(topic)
     }

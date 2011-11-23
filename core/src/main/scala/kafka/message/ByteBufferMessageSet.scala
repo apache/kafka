@@ -18,7 +18,7 @@
 package kafka.message
 
 import scala.collection.mutable
-import org.apache.log4j.Logger
+import kafka.utils.Logging
 import kafka.common.{InvalidMessageSizeException, ErrorMapping}
 import java.nio.ByteBuffer
 import java.nio.channels.WritableByteChannel
@@ -36,8 +36,7 @@ import kafka.utils.IteratorTemplate
  */
 class ByteBufferMessageSet(private val buffer: ByteBuffer,
                            private val initialOffset: Long = 0L,
-                           private val errorCode: Int = ErrorMapping.NoError) extends MessageSet {
-  private val logger = Logger.getLogger(getClass())  
+                           private val errorCode: Int = ErrorMapping.NoError) extends MessageSet with Logging {
   private var validByteCount = -1L
   private var shallowValidByteCount = -1L
 
@@ -94,10 +93,9 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
         val size = topIter.getInt()
         lastMessageSize = size
 
-        if(logger.isTraceEnabled) {
-          logger.trace("Remaining bytes in iterator = " + topIter.remaining)
-          logger.trace("size of data = " + size)
-        }
+        trace("Remaining bytes in iterator = " + topIter.remaining)
+        trace("size of data = " + size)
+
         if(size < 0 || topIter.remaining < size) {
           if (currValidBytes == initialOffset || size < 0)
             throw new InvalidMessageSizeException("invalid message size: " + size + " only received bytes: " +
@@ -111,16 +109,13 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
         val newMessage = new Message(message)
         newMessage.compressionCodec match {
           case NoCompressionCodec =>
-            if(logger.isDebugEnabled)
-              logger.debug("Message is uncompressed. Valid byte count = %d".format(currValidBytes))
+            debug("Message is uncompressed. Valid byte count = %d".format(currValidBytes))
             innerIter = null
             currValidBytes += 4 + size
-            if(logger.isTraceEnabled)
-              logger.trace("currValidBytes = " + currValidBytes)
+            trace("currValidBytes = " + currValidBytes)
             new MessageAndOffset(newMessage, currValidBytes)
           case _ =>
-            if(logger.isDebugEnabled)
-              logger.debug("Message is compressed. Valid byte count = %d".format(currValidBytes))
+            debug("Message is compressed. Valid byte count = %d".format(currValidBytes))
             innerIter = CompressionUtils.decompress(newMessage).deepIterator
             if (!innerIter.hasNext) {
               currValidBytes += 4 + lastMessageSize
@@ -132,8 +127,7 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
 
       override def makeNext(): MessageAndOffset = {
         val isInnerDone = innerDone()
-        if(logger.isDebugEnabled)
-          logger.debug("makeNext() in deepIterator: innerDone = " + isInnerDone)
+        debug("makeNext() in deepIterator: innerDone = " + isInnerDone)
         isInnerDone match {
           case true => makeNextOuter
           case false => {

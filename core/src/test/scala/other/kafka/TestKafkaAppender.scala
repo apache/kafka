@@ -19,11 +19,10 @@ package kafka
 
 import message.Message
 import org.apache.log4j.{Logger, PropertyConfigurator}
+import kafka.utils.Logging
 import serializer.Encoder
 
-object TestKafkaAppender {
-
-  private val logger = Logger.getLogger(TestKafkaAppender.getClass)
+object TestKafkaAppender extends Logging {
   
   def main(args:Array[String]) {
     
@@ -41,7 +40,7 @@ object TestKafkaAppender {
     }
 
     for(i <- 1 to 10)
-      logger.info("test")    
+      info("test")    
   }
 }
 

@@ -42,7 +42,7 @@ class AsyncProducerQueueSizeStats[T](private val queue: BlockingQueue[QueueItem[
 object AsyncProducerStats {
   private val logger = Logger.getLogger(getClass())
   private val stats = new AsyncProducerStats
-  Utils.swallow(logger.warn, Utils.registerMBean(stats, AsyncProducer.ProducerMBeanName))
+  Utils.registerMBean(stats, AsyncProducer.ProducerMBeanName)
 
   def recordDroppedEvents = stats.recordDroppedEvents
 

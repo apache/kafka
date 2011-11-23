@@ -23,16 +23,13 @@ import kafka.api.FetchRequest
 import kafka.utils._
 import kafka.consumer._
 import kafka.server._
-import org.apache.log4j.Logger
 
 /**
  * Command line program to dump out messages to standard out using the simple consumer
  */
-object SimpleConsumerShell {
+object SimpleConsumerShell extends Logging {
 
   def main(args: Array[String]): Unit = {
-
-    val logger = Logger.getLogger(getClass)
 
     val parser = new OptionParser
     val urlOpt = parser.accepts("server", "REQUIRED: The hostname of the server to connect to.")
@@ -73,7 +70,7 @@ object SimpleConsumerShell {
     
     for(arg <- List(urlOpt, topicOpt)) {
       if(!options.has(arg)) {
-        logger.error("Missing required argument \"" + arg + "\"")
+        error("Missing required argument \"" + arg + "\"")
         parser.printHelpOn(System.err)
         System.exit(1)
       }
@@ -87,7 +84,7 @@ object SimpleConsumerShell {
     val printOffsets = if(options.has(printOffsetOpt)) true else false
     val printMessages = if(options.has(printMessageOpt)) true else false
 
-    logger.info("Starting consumer...")
+    info("Starting consumer...")
     val consumer = new SimpleConsumer(url.getHost, url.getPort, 10000, 64*1024)
     val thread = Utils.newThread("kafka-consumer", new Runnable() {
       def run() {
@@ -96,15 +93,14 @@ object SimpleConsumerShell {
           val fetchRequest = new FetchRequest(topic, partition, offset, fetchsize)
           val messageSets = consumer.multifetch(fetchRequest)
           for (messages <- messageSets) {
-            if(logger.isDebugEnabled)
-            	logger.debug("multi fetched " + messages.sizeInBytes + " bytes from offset " + offset)
+            debug("multi fetched " + messages.sizeInBytes + " bytes from offset " + offset)
             var consumed = 0
             for(messageAndOffset <- messages) {
               if(printMessages)
-                logger.info("consumed: " + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
+                info("consumed: " + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
               offset = messageAndOffset.offset
               if(printOffsets)
-                logger.info("next offset = " + offset)
+                info("next offset = " + offset)
               consumed += 1
             }
           }

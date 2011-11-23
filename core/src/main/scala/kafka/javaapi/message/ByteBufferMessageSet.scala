@@ -18,13 +18,11 @@ package kafka.javaapi.message
 
 import java.nio.ByteBuffer
 import kafka.common.ErrorMapping
-import org.apache.log4j.Logger
 import kafka.message._
 
 class ByteBufferMessageSet(private val buffer: ByteBuffer,
                            private val initialOffset: Long = 0L,
                            private val errorCode: Int = ErrorMapping.NoError) extends MessageSet {
-  private val logger = Logger.getLogger(getClass())
   val underlying: kafka.message.ByteBufferMessageSet = new kafka.message.ByteBufferMessageSet(buffer,
                                                                                               initialOffset,
                                                                                               errorCode)

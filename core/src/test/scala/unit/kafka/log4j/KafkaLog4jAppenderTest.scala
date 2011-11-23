@@ -24,7 +24,7 @@ import java.io.File
 import kafka.consumer.SimpleConsumer
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
-import kafka.utils.Utils
+import kafka.utils.{Utils, Logging}
 import junit.framework.Assert._
 import kafka.api.FetchRequest
 import kafka.serializer.Encoder
@@ -33,7 +33,7 @@ import kafka.producer.async.MissingConfigException
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 
-class KafkaLog4jAppenderTest extends JUnitSuite {
+class KafkaLog4jAppenderTest extends JUnitSuite with Logging {
 
   var logDir: File = null
   //  var topicLogDir: File = null
@@ -130,10 +130,9 @@ class KafkaLog4jAppenderTest extends JUnitSuite {
   @Test
   def testLog4jAppends() {
     PropertyConfigurator.configure(getLog4jConfig)
-    val logger = Logger.getLogger(classOf[KafkaLog4jAppenderTest])
 
     for(i <- 1 to 5)
-      logger.info("test")
+      info("test")
 
     Thread.sleep(500)
 

@@ -22,8 +22,8 @@ import java.util.concurrent._
 import java.util.concurrent.atomic._
 import kafka.message._
 import kafka.cluster._
+import kafka.utils.Logging
 import kafka.common.ErrorMapping
-import org.apache.log4j.Logger
 
 private[consumer] class PartitionTopicInfo(val topic: String,
                                            val brokerId: Int,
@@ -31,12 +31,10 @@ private[consumer] class PartitionTopicInfo(val topic: String,
                                            private val chunkQueue: BlockingQueue[FetchedDataChunk],
                                            private val consumedOffset: AtomicLong,
                                            private val fetchedOffset: AtomicLong,
-                                           private val fetchSize: AtomicInteger) {
-  private val logger = Logger.getLogger(getClass())
-  if (logger.isDebugEnabled) {
-    logger.debug("initial consumer offset of " + this + " is " + consumedOffset.get)
-    logger.debug("initial fetch offset of " + this + " is " + fetchedOffset.get)
-  }
+                                           private val fetchSize: AtomicInteger) extends Logging {
+
+  debug("initial consumer offset of " + this + " is " + consumedOffset.get)
+  debug("initial fetch offset of " + this + " is " + fetchedOffset.get)
 
   def getConsumeOffset() = consumedOffset.get
 
@@ -44,14 +42,12 @@ private[consumer] class PartitionTopicInfo(val topic: String,
 
   def resetConsumeOffset(newConsumeOffset: Long) = {
     consumedOffset.set(newConsumeOffset)
-    if (logger.isDebugEnabled)
-      logger.debug("reset consume offset of " + this + " to " + newConsumeOffset)
+    debug("reset consume offset of " + this + " to " + newConsumeOffset)
   }
 
   def resetFetchOffset(newFetchOffset: Long) = {
     fetchedOffset.set(newFetchOffset)
-    if (logger.isDebugEnabled)
-      logger.debug("reset fetch offset of ( %s ) to %d".format(this, newFetchOffset))
+    debug("reset fetch offset of ( %s ) to %d".format(this, newFetchOffset))
   }
 
   /**
@@ -62,12 +58,10 @@ private[consumer] class PartitionTopicInfo(val topic: String,
     val size = messages.validBytes
     if(size > 0) {
       // update fetched offset to the compressed data chunk size, not the decompressed message set size
-      if(logger.isTraceEnabled)
-        logger.trace("Updating fetch offset = " + fetchedOffset.get + " with size = " + size)
+      trace("Updating fetch offset = " + fetchedOffset.get + " with size = " + size)
       chunkQueue.put(new FetchedDataChunk(messages, this, fetchOffset))
       val newOffset = fetchedOffset.addAndGet(size)
-      if (logger.isDebugEnabled)
-        logger.debug("updated fetch offset of ( %s ) to %d".format(this, newOffset))
+      debug("updated fetch offset of ( %s ) to %d".format(this, newOffset))
     }
     size
   }

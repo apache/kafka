@@ -20,12 +20,11 @@ package kafka.producer
 import async._
 import java.util.Properties
 import kafka.serializer.Encoder
-import org.apache.log4j.Logger
 import java.util.concurrent.{ConcurrentMap, ConcurrentHashMap}
 import kafka.cluster.{Partition, Broker}
 import kafka.api.ProducerRequest
 import kafka.common.{UnavailableProducerException, InvalidConfigException}
-import kafka.utils.Utils
+import kafka.utils.{Utils, Logging}
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet}
 
 class ProducerPool[V](private val config: ProducerConfig,
@@ -33,9 +32,8 @@ class ProducerPool[V](private val config: ProducerConfig,
                       private val syncProducers: ConcurrentMap[Int, SyncProducer],
                       private val asyncProducers: ConcurrentMap[Int, AsyncProducer[V]],
                       private val inputEventHandler: EventHandler[V] = null,
-                      private val cbkHandler: CallbackHandler[V] = null) {
+                      private val cbkHandler: CallbackHandler[V] = null) extends Logging {
 
-  private val logger = Logger.getLogger(classOf[ProducerPool[V]])
   private var eventHandler = inputEventHandler
   if(eventHandler == null)
     eventHandler = new DefaultEventHandler(config, cbkHandler)
@@ -76,7 +74,7 @@ class ProducerPool[V](private val config: ProducerConfig,
     props.putAll(config.props)
     if(sync) {
         val producer = new SyncProducer(new SyncProducerConfig(props))
-        logger.info("Creating sync producer for broker id = " + broker.id + " at " + broker.host + ":" + broker.port)
+        info("Creating sync producer for broker id = " + broker.id + " at " + broker.host + ":" + broker.port)
         syncProducers.put(broker.id, producer)
     } else {
         val producer = new AsyncProducer[V](new AsyncProducerConfig(props),
@@ -85,7 +83,7 @@ class ProducerPool[V](private val config: ProducerConfig,
                                             eventHandler, config.eventHandlerProps,
                                             cbkHandler, config.cbkHandlerProps)
         producer.start
-        logger.info("Creating async producer for broker id = " + broker.id + " at " + broker.host + ":" + broker.port)
+        info("Creating async producer for broker id = " + broker.id + " at " + broker.host + ":" + broker.port)
         asyncProducers.put(broker.id, producer)
     }
   }
@@ -107,7 +105,7 @@ class ProducerPool[V](private val config: ProducerConfig,
         val producerRequests = requestsForThisBid._1.map(req => new ProducerRequest(req.getTopic, req.getBidPid.partId,
           new ByteBufferMessageSet(compressionCodec = config.compressionCodec,
                                    messages = req.getData.map(d => serializer.toMessage(d)): _*)))
-        logger.debug("Fetching sync producer for broker id: " + bid)
+        debug("Fetching sync producer for broker id: " + bid)
         val producer = syncProducers.get(bid)
         if(producer != null) {
           if(producerRequests.size > 1)
@@ -117,14 +115,14 @@ class ProducerPool[V](private val config: ProducerConfig,
                           partition = producerRequests(0).partition,
                           messages = producerRequests(0).messages)
           config.compressionCodec match {
-            case NoCompressionCodec => logger.debug("Sending message to broker " + bid)
-            case _ => logger.debug("Sending compressed messages to broker " + bid)
+            case NoCompressionCodec => debug("Sending message to broker " + bid)
+            case _ => debug("Sending compressed messages to broker " + bid)
           }
         }else
           throw new UnavailableProducerException("Producer pool has not been initialized correctly. " +
             "Sync Producer for broker " + bid + " does not exist in the pool")
       }else {
-        logger.debug("Fetching async producer for broker id: " + bid)
+        debug("Fetching async producer for broker id: " + bid)
         val producer = asyncProducers.get(bid)
         if(producer != null) {
           requestsForThisBid._1.foreach { req =>
@@ -132,8 +130,8 @@ class ProducerPool[V](private val config: ProducerConfig,
           }
           if(logger.isDebugEnabled)
             config.compressionCodec match {
-              case NoCompressionCodec => logger.debug("Sending message")
-              case _ => logger.debug("Sending compressed messages")
+              case NoCompressionCodec => debug("Sending message")
+              case _ => debug("Sending compressed messages")
             }
         }
         else
@@ -149,12 +147,12 @@ class ProducerPool[V](private val config: ProducerConfig,
   def close() = {
     config.producerType match {
       case "sync" =>
-        logger.info("Closing all sync producers")
+        info("Closing all sync producers")
         val iter = syncProducers.values.iterator
         while(iter.hasNext)
           iter.next.close
       case "async" =>
-        logger.info("Closing all async producers")
+        info("Closing all async producers")
         val iter = asyncProducers.values.iterator
         while(iter.hasNext)
           iter.next.close

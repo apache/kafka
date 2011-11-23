@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.utils._
-import org.apache.log4j.Logger
 import kafka.cluster.Broker
 import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
@@ -32,9 +31,7 @@ import java.net.InetAddress
  *   /brokers/[0...N] --> host:port
  * 
  */
-class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) {
-  
-  private val logger = Logger.getLogger(classOf[KafkaZooKeeper])
+class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Logging {
   
   val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + config.brokerId
   var zkClient: ZkClient = null
@@ -43,13 +40,13 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) {
   
   def startup() {
     /* start client */
-    logger.info("connecting to ZK: " + config.zkConnect)
+    info("connecting to ZK: " + config.zkConnect)
     zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
     zkClient.subscribeStateChanges(new SessionExpireListener)
   }
 
   def registerBrokerInZk() {
-    logger.info("Registering broker " + brokerIdPath)
+    info("Registering broker " + brokerIdPath)
     val hostName = if (config.hostName == null) InetAddress.getLocalHost.getHostAddress else config.hostName
     val creatorId = hostName + "-" + System.currentTimeMillis
     val broker = new Broker(config.brokerId, creatorId, hostName, config.port)
@@ -62,7 +59,7 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) {
                                    "else you have shutdown this broker and restarted it faster than the zookeeper " + 
                                    "timeout so it appears to be re-registering.")
     }
-    logger.info("Registering broker " + brokerIdPath + " succeeded with " + broker)
+    info("Registering broker " + brokerIdPath + " succeeded with " + broker)
   }
 
   def registerTopicInZk(topic: String) {
@@ -75,9 +72,9 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) {
   def registerTopicInZkInternal(topic: String) {
     val brokerTopicPath = ZkUtils.BrokerTopicsPath + "/" + topic + "/" + config.brokerId
     val numParts = logManager.getTopicPartitionsMap.getOrElse(topic, config.numPartitions)
-    logger.info("Begin registering broker topic " + brokerTopicPath + " with " + numParts.toString + " partitions")
+    info("Begin registering broker topic " + brokerTopicPath + " with " + numParts.toString + " partitions")
     ZkUtils.createEphemeralPathExpectConflict(zkClient, brokerTopicPath, numParts.toString)
-    logger.info("End registering broker topic " + brokerTopicPath)
+    info("End registering broker topic " + brokerTopicPath)
   }
 
   /**
@@ -99,20 +96,20 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) {
      */
     @throws(classOf[Exception])
     def handleNewSession() {
-      logger.info("re-registering broker info in ZK for broker " + config.brokerId)
+      info("re-registering broker info in ZK for broker " + config.brokerId)
       registerBrokerInZk()
       lock synchronized {
-        logger.info("re-registering broker topics in ZK for broker " + config.brokerId)
+        info("re-registering broker topics in ZK for broker " + config.brokerId)
         for (topic <- topics)
           registerTopicInZkInternal(topic)
       }
-      logger.info("done re-registering broker")
+      info("done re-registering broker")
     }
   }
 
   def close() {
     if (zkClient != null) {
-      logger.info("Closing zookeeper client...")
+      info("Closing zookeeper client...")
       zkClient.close()
     }
   } 
