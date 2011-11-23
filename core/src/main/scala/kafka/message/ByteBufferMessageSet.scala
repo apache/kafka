@@ -21,7 +21,7 @@ import scala.collection.mutable
 import kafka.utils.Logging
 import kafka.common.{InvalidMessageSizeException, ErrorMapping}
 import java.nio.ByteBuffer
-import java.nio.channels.WritableByteChannel
+import java.nio.channels._
 import kafka.utils.IteratorTemplate
 
 /**
@@ -71,7 +71,7 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
   }
   
   /** Write the messages in this set to the given channel */
-  def writeTo(channel: WritableByteChannel, offset: Long, size: Long): Long =
+  def writeTo(channel: GatheringByteChannel, offset: Long, size: Long): Long =
     channel.write(buffer.duplicate)
   
   override def iterator: Iterator[MessageAndOffset] = deepIterator

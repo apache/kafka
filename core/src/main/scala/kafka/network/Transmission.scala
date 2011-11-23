@@ -65,9 +65,9 @@ private[kafka] trait Receive extends Transmission {
  */
 private[kafka] trait Send extends Transmission {
     
-  def writeTo(channel: WritableByteChannel): Int
+  def writeTo(channel: GatheringByteChannel): Int
   
-  def writeCompletely(channel: WritableByteChannel): Int = {
+  def writeCompletely(channel: GatheringByteChannel): Int = {
     var written = 0
     while(!complete) {
       written = writeTo(channel)
@@ -86,7 +86,7 @@ abstract class MultiSend[S <: Send](val sends: List[S]) extends Send {
   private var current = sends
   var totalWritten = 0
 
-  def writeTo(channel: WritableByteChannel): Int = {
+  def writeTo(channel: GatheringByteChannel): Int = {
     expectIncomplete
     val written = current.head.writeTo(channel)
     totalWritten += written

@@ -20,7 +20,7 @@ package kafka.api
 import java.nio.ByteBuffer
 import kafka.utils.{nonthreadsafe, Utils}
 import kafka.network.{Send, Request}
-import java.nio.channels.WritableByteChannel
+import java.nio.channels.GatheringByteChannel
 import kafka.common.ErrorMapping
 
 object OffsetRequest {
@@ -85,7 +85,7 @@ private[kafka] class OffsetArraySend(offsets: Array[Long]) extends Send {
 
   var complete: Boolean = false
 
-  def writeTo(channel: WritableByteChannel): Int = {
+  def writeTo(channel: GatheringByteChannel): Int = {
     expectIncomplete()
     var written = 0
     if(header.hasRemaining)

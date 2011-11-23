@@ -25,10 +25,14 @@ import kafka.utils._
 private[kafka] class BoundedByteBufferSend(val buffer: ByteBuffer) extends Send {
   
   private var sizeBuffer = ByteBuffer.allocate(4)
-  
+
+  // Avoid possibility of overflow for 2GB-4 byte buffer
+  if(buffer.remaining > Int.MaxValue - sizeBuffer.limit)
+    throw new IllegalArgumentException("Attempt to create a bounded buffer of " + buffer.remaining + " bytes, but the maximum " +
+                                       "allowable size for a bounded buffer is " + (Int.MaxValue - sizeBuffer.limit) + ".")    
   sizeBuffer.putInt(buffer.limit)
   sizeBuffer.rewind()
-  
+
   var complete: Boolean = false
 
   def this(size: Int) = this(ByteBuffer.allocate(size))
@@ -40,20 +44,13 @@ private[kafka] class BoundedByteBufferSend(val buffer: ByteBuffer) extends Send 
     buffer.rewind()
   }
   
-  def writeTo(channel: WritableByteChannel): Int = {
+  def writeTo(channel: GatheringByteChannel): Int = {
     expectIncomplete()
-    var written = 0
-    // try to write the size if we haven't already
-    if(sizeBuffer.hasRemaining)
-      written += channel.write(sizeBuffer)
-    // try to write the actual buffer itself
-    if(!sizeBuffer.hasRemaining && buffer.hasRemaining)
-      written += channel.write(buffer)
+    var written = channel.write(Array(sizeBuffer, buffer))
     // if we are done, mark it off
     if(!buffer.hasRemaining)
-      complete = true
-    
-    written
+      complete = true    
+    written.asInstanceOf[Int]
   }
     
 }

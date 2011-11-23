@@ -100,7 +100,7 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
   /**
    * Write some of this set to the given channel, return the ammount written
    */
-  def writeTo(destChannel: WritableByteChannel, writeOffset: Long, size: Long): Long = 
+  def writeTo(destChannel: GatheringByteChannel, writeOffset: Long, size: Long): Long = 
     channel.transferTo(offset + writeOffset, scala.math.min(size, sizeInBytes), destChannel)
   
   /**

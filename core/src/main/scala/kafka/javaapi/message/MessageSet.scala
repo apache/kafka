@@ -17,7 +17,7 @@
 
 package kafka.javaapi.message
 
-import java.nio.channels.WritableByteChannel
+import java.nio.channels._
 import kafka.message.{MessageAndOffset, InvalidMessageException, Message}
 
 /**

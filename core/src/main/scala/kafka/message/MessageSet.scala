@@ -89,7 +89,7 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
   /** Write the messages in this set to the given channel starting at the given offset byte. 
     * Less than the complete amount may be written, but no more than maxSize can be. The number
     * of bytes written is returned */
-  def writeTo(channel: WritableByteChannel, offset: Long, maxSize: Long): Long
+  def writeTo(channel: GatheringByteChannel, offset: Long, maxSize: Long): Long
   
   /**
    * Provides an iterator over the messages in this set
