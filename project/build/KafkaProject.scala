@@ -23,6 +23,7 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
   lazy val core = project("core", "core-kafka", new CoreKafkaProject(_))
   lazy val examples = project("examples", "java-examples", new KafkaExamplesProject(_), core)
   lazy val contrib = project("contrib", "contrib", new ContribProject(_))
+  lazy val perf = project("perf", "perf", new KafkaPerfProject(_))
 
   lazy val releaseZipTask = core.packageDistTask
 
@@ -80,9 +81,6 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
     override def pomPostProcess(pom: Node): Node = {
       ZkClientDepAdder(pom)
     }
-
-    override def repositories = Set(ScalaToolsSnapshots, "JBoss Maven 2 Repository" at "http://repository.jboss.com/maven2",
-      "Oracle Maven 2 Repository" at "http://download.oracle.com/maven", "maven.org" at "http://repo2.maven.org/maven2/")
 
     override def artifactID = "kafka"
     override def filterScalaJars = false
@@ -144,6 +142,29 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
 
     override def packageAction = super.packageAction dependsOn (testCompileAction)
 
+  }
+
+  class KafkaPerfProject(info: ProjectInfo) extends DefaultProject(info)
+     with IdeaProject
+     with CoreDependencies {
+    val perfPackageAction = packageAllAction
+    val dependsOnCore = core
+
+  //The issue is going from log4j 1.2.14 to 1.2.15, the developers added some features which required
+  // some dependencies on various sun and javax packages.
+   override def ivyXML =
+    <dependencies>
+      <exclude module="javax"/>
+      <exclude module="jmxri"/>
+      <exclude module="jmxtools"/>
+      <exclude module="mail"/>
+      <exclude module="jms"/>
+    </dependencies>
+
+    override def artifactID = "kafka-perf"
+    override def filterScalaJars = false
+    override def javaCompileOptions = super.javaCompileOptions ++
+      List(JavaCompileOption("-Xlint:unchecked"))
   }
 
   class KafkaExamplesProject(info: ProjectInfo) extends DefaultProject(info)

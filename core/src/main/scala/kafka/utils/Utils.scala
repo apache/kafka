@@ -29,6 +29,7 @@ import java.util.Properties
 import scala.collection._
 import scala.collection.mutable
 import kafka.message.{NoCompressionCodec, CompressionCodec}
+import org.I0Itec.zkclient.ZkClient
 
 /**
  * Helper functions!
@@ -603,6 +604,18 @@ object Utils extends Logging {
       NoCompressionCodec
     else
       CompressionCodec.getCompressionCodec(codecValueString.toInt)
+  }
+
+  def tryCleanupZookeeper(zkUrl: String, groupId: String) {
+    try {
+      val dir = "/consumers/" + groupId
+      logger.info("Cleaning up temporary zookeeper data under " + dir + ".")
+      val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)
+      zk.deleteRecursive(dir)
+      zk.close()
+    } catch {
+      case _ => // swallow
+    }
   }
 }
 
