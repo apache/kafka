@@ -67,7 +67,6 @@ import kafka.common.InvalidConfigException
  *
  */
 private[kafka] object ZookeeperConsumerConnector {
-  val MAX_N_RETRIES = 4
   val shutdownCommand: FetchedDataChunk = new FetchedDataChunk(null, null, -1L)
 }
 
@@ -424,7 +423,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     def syncedRebalance() {
       rebalanceLock synchronized {
-        for (i <- 0 until ZookeeperConsumerConnector.MAX_N_RETRIES) {
+        for (i <- 0 until config.maxRebalanceRetries) {
           info("begin rebalancing consumer " + consumerIdString + " try #" + i)
           var done = false
           try {
@@ -447,7 +446,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         }
       }
 
-      throw new RuntimeException(consumerIdString + " can't rebalance after " + ZookeeperConsumerConnector.MAX_N_RETRIES +" retires")
+      throw new RuntimeException(consumerIdString + " can't rebalance after " + config.maxRebalanceRetries +" retries")
     }
 
     private def rebalance(): Boolean = {

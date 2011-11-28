@@ -30,6 +30,7 @@ object ConsumerConfig {
   val AutoCommit = true
   val AutoCommitInterval = 10 * 1000
   val MaxQueuedChunks = 100
+  val MaxRebalanceRetries = 4
   val AutoOffsetReset = OffsetRequest.SmallestTimeString
   val ConsumerTimeoutMs = -1
   val MirrorTopicsWhitelist = ""
@@ -76,6 +77,9 @@ class ConsumerConfig(props: Properties) extends ZKConfig(props) {
 
   /** max number of messages buffered for consumption */
   val maxQueuedChunks = Utils.getInt(props, "queuedchunks.max", MaxQueuedChunks)
+
+  /** max number of retries during rebalance */
+  val maxRebalanceRetries = Utils.getInt(props, "rebalance.retries.max", MaxRebalanceRetries)
 
   /* what to do if an offset is out of range.
      smallest : automatically reset the offset to the smallest offset
