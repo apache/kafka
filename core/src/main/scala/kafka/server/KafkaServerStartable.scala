@@ -130,6 +130,9 @@ class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
        */
       threadList.foreach(_.shutdown)
 
+      // KAFKA: 212: clear the thread list to remove the older thread references that are already shutdown
+      threadList = Nil
+
       consumerConnector = Consumer.create(consumerConfig)
       val topicMessageStreams =  consumerConnector.createMessageStreams(topicMap)
       for ((topic, streamList) <- topicMessageStreams)

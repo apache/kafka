@@ -497,7 +497,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             for (i <- startPart until startPart + nParts) {
               val partition = curPartitions(i)
               info(consumerThreadId + " attempting to claim partition " + partition)
-              if (!processPartition(topicDirs, partition, topic, consumerThreadId))
+              val ownPartition = processPartition(topicDirs, partition, topic, consumerThreadId)
+              if (ownPartition)
+                info(consumerThreadId + " successfully owned partition " + partition)
+              else
                 return false
             }
             queuesToBeCleared += queues.get((topic, consumerThreadId))
