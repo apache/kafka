@@ -31,16 +31,13 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
   lazy val releaseZip = releaseZipTask dependsOn(core.corePackageAction, core.test, examples.examplesPackageAction,
     contrib.producerPackageAction, contrib.consumerPackageAction) describedAs releaseZipDescription
 
-  // Not sure why rat does not get pulled from a Maven repo automatically.
-  val rat = "org.apache.rat" % "apache-rat-project" % "0.7"
-
   val runRatDescription = "Runs Apache rat on Kafka"
   lazy val runRatTask = task {
-    val rat = "org.apache.rat" % "apache-rat-project" % "0.7"
     Runtime.getRuntime().exec("bin/run-rat.sh")
     None
   } describedAs runRatDescription
 
+  val rat = "org.apache.rat" % "apache-rat" % "0.8"
 
   class CoreKafkaProject(info: ProjectInfo) extends DefaultProject(info)
      with IdeaProject with CoreDependencies with TestDependencies with CompressionDependencies {
@@ -200,7 +197,7 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
 
     class HadoopProducerProject(info: ProjectInfo) extends DefaultProject(info)
       with IdeaProject
-      with CoreDependencies {
+      with CoreDependencies with HadoopDependencies {
       val producerPackageAction = packageAllAction
       override def ivyXML =
        <dependencies>
@@ -210,11 +207,11 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
            <exclude module="jmxtools"/>
            <exclude module="mail"/>
            <exclude module="jms"/>
+         <dependency org="org.apache.hadoop" name="hadoop-core" rev="0.20.2">
+           <exclude module="junit"/>
+         </dependency>
        </dependencies>
 
-      val avro = "org.apache.avro" % "avro" % "1.4.1"
-      val jacksonCore = "org.codehaus.jackson" % "jackson-core-asl" % "1.5.5"
-      val jacksonMapper = "org.codehaus.jackson" % "jackson-mapper-asl" % "1.5.5"
     }
 
     class HadoopConsumerProject(info: ProjectInfo) extends DefaultProject(info)
@@ -229,10 +226,13 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
            <exclude module="jmxtools"/>
            <exclude module="mail"/>
            <exclude module="jms"/>
+           <exclude module=""/>
+         <dependency org="org.apache.hadoop" name="hadoop-core" rev="0.20.2">
+           <exclude module="junit"/>
+         </dependency>
        </dependencies>
 
       val jodaTime = "joda-time" % "joda-time" % "1.6"
-      val httpclient = "commons-httpclient" % "commons-httpclient" % "3.1"
     }
   }
 
@@ -247,6 +247,14 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
     val jopt = "net.sf.jopt-simple" % "jopt-simple" % "3.2"
   }
   
+  trait HadoopDependencies {
+    val avro = "org.apache.avro" % "avro" % "1.4.0"
+    val commonsLogging = "commons-logging" % "commons-logging" % "1.0.4"
+    val jacksonCore = "org.codehaus.jackson" % "jackson-core-asl" % "1.5.5"
+    val jacksonMapper = "org.codehaus.jackson" % "jackson-mapper-asl" % "1.5.5"
+    val hadoop = "org.apache.hadoop" % "hadoop-core" % "0.20.2"
+  }
+
   trait CompressionDependencies {
     val snappy = "org.xerial.snappy" % "snappy-java" % "1.0.4.1"	
   }
