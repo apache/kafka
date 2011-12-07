@@ -23,7 +23,7 @@ else
   JAVA="$JAVA_HOME/bin/java"
 fi
 
-rat_command="$JAVA -jar $base_dir/lib/apache-rat-0.8-SNAPSHOT.jar --dir $base_dir "
+rat_command="$JAVA -jar $base_dir/lib_managed/scala_2.8.0/compile/apache-rat-0.8.jar --dir $base_dir "
 
 for f in $(cat $rat_excludes_file);
 do
