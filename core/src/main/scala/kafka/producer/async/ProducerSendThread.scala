@@ -47,7 +47,7 @@ private[async] class ProducerSendThread[T](val threadName: String,
         tryToHandle(remainingEvents)
       }
     }catch {
-      case e: Exception => error("Error in sending events: ", e)
+      case e => error("Error in sending events: ", e)
     }finally {
       shutdownLatch.countDown
     }
