@@ -27,7 +27,7 @@ import scala.collection.Map
 
 class KafkaServerStartable(val serverConfig: KafkaConfig,
                            val consumerConfig: ConsumerConfig,
-                           val producerConfig: ProducerConfig) {
+                           val producerConfig: ProducerConfig) extends Logging {
   private var server : KafkaServer = null
   private var embeddedConsumer : EmbeddedConsumer = null
 
@@ -43,15 +43,29 @@ class KafkaServerStartable(val serverConfig: KafkaConfig,
   }
 
   def startup() {
-    server.startup
-    if (embeddedConsumer != null)
-      embeddedConsumer.startup
+    try {
+      server.startup()
+      if (embeddedConsumer != null)
+        embeddedConsumer.startup()
+    }
+    catch {
+      case e =>
+        fatal("Fatal error during KafkaServerStable startup. Prepare to shutdown", e)
+        shutdown()
+    }
   }
 
   def shutdown() {
-    if (embeddedConsumer != null)
-      embeddedConsumer.shutdown
-    server.shutdown
+    try {
+      if (embeddedConsumer != null)
+        embeddedConsumer.shutdown()
+      server.shutdown()
+    }
+    catch {
+      case e =>
+        fatal("Fatal error during KafkaServerStable shutdown. Prepare to halt", e)
+        Runtime.getRuntime.halt(1)
+    }
   }
 
   def awaitShutdown() {

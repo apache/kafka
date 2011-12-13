@@ -47,42 +47,35 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
    */
   def startup() {
-    try {
-      info("Starting Kafka server...")
-      var needRecovery = true
-      val cleanShutDownFile = new File(new File(config.logDir), CLEAN_SHUTDOWN_FILE)
-      if (cleanShutDownFile.exists) {
-        needRecovery = false
-        cleanShutDownFile.delete
-      }
-      logManager = new LogManager(config,
-                                  scheduler,
-                                  SystemTime,
-                                  1000L * 60 * config.logCleanupIntervalMinutes,
-                                  1000L * 60 * 60 * config.logRetentionHours,
-                                  needRecovery)
+    info("Starting Kafka server...")
+    var needRecovery = true
+    val cleanShutDownFile = new File(new File(config.logDir), CLEAN_SHUTDOWN_FILE)
+    if (cleanShutDownFile.exists) {
+      needRecovery = false
+      cleanShutDownFile.delete
+    }
+    logManager = new LogManager(config,
+                                scheduler,
+                                SystemTime,
+                                1000L * 60 * config.logCleanupIntervalMinutes,
+                                1000L * 60 * 60 * config.logRetentionHours,
+                                needRecovery)
                                                     
-      val handlers = new KafkaRequestHandlers(logManager)
-      socketServer = new SocketServer(config.port,
-                                      config.numThreads,
-                                      config.monitoringPeriodSecs,
-                                      handlers.handlerFor,
-                                      config.maxSocketRequestSize)
-      Utils.registerMBean(socketServer.stats, statsMBeanName)
-      socketServer.startup
-      Mx4jLoader.maybeLoad
-      /**
-       *  Registers this broker in ZK. After this, consumers can connect to broker.
-       *  So this should happen after socket server start.
-       */
-      logManager.startup
-      info("Server started.")
-    }
-    catch {
-      case e =>
-        fatal("Fatal error during startup.", e)
-        shutdown
-    }
+    val handlers = new KafkaRequestHandlers(logManager)
+    socketServer = new SocketServer(config.port,
+                                    config.numThreads,
+                                    config.monitoringPeriodSecs,
+                                    handlers.handlerFor,
+                                    config.maxSocketRequestSize)
+    Utils.registerMBean(socketServer.stats, statsMBeanName)
+    socketServer.startup()
+    Mx4jLoader.maybeLoad
+    /**
+     *  Registers this broker in ZK. After this, consumers can connect to broker.
+     *  So this should happen after socket server start.
+     */
+    logManager.startup()
+    info("Kafka server started.")
   }
   
   /**
@@ -92,25 +85,19 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
   def shutdown() {
     val canShutdown = isShuttingDown.compareAndSet(false, true);
     if (canShutdown) {
-      info("Shutting down...")
-      try {
-        scheduler.shutdown()
-        if (socketServer != null)
-          socketServer.shutdown()
-        Utils.unregisterMBean(statsMBeanName)
-        if (logManager != null)
-          logManager.close()
+      info("Shutting down Kafka server")
+      scheduler.shutdown()
+      if (socketServer != null)
+        socketServer.shutdown()
+      Utils.unregisterMBean(statsMBeanName)
+      if (logManager != null)
+        logManager.close()
 
-        val cleanShutDownFile = new File(new File(config.logDir), CLEAN_SHUTDOWN_FILE)
-        cleanShutDownFile.createNewFile
-      }
-      catch {
-        case e =>
-          fatal(e)
-          fatal(Utils.stackTrace(e))
-      }
+      val cleanShutDownFile = new File(new File(config.logDir), CLEAN_SHUTDOWN_FILE)
+      cleanShutDownFile.createNewFile
+
       shutdownLatch.countDown()
-      info("shut down completed")
+      info("Kafka server shut down completed")
     }
   }
   
