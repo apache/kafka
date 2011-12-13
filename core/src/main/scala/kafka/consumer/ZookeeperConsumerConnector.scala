@@ -29,7 +29,7 @@ import org.apache.zookeeper.Watcher.Event.KeeperState
 import kafka.api.OffsetRequest
 import java.util.UUID
 import kafka.serializer.Decoder
-import kafka.common.InvalidConfigException
+import kafka.common.{ConsumerRebalanceFailedException, InvalidConfigException}
 
 /**
  * This class handles the consumers interaction with zookeeper
@@ -446,7 +446,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         }
       }
 
-      throw new RuntimeException(consumerIdString + " can't rebalance after " + config.maxRebalanceRetries +" retries")
+      throw new ConsumerRebalanceFailedException(consumerIdString + " can't rebalance after " + config.maxRebalanceRetries +" retries")
     }
 
     private def rebalance(): Boolean = {

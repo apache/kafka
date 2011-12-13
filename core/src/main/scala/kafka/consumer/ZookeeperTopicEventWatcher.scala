@@ -21,9 +21,11 @@ import scala.collection.JavaConversions._
 import kafka.utils.{Utils, ZkUtils, ZKStringSerializer, Logging}
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
+import kafka.server.KafkaServerStartable
+import kafka.common.ConsumerRebalanceFailedException
 
 class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
-    val eventHandler: TopicEventHandler[String]) extends Logging {
+    val eventHandler: TopicEventHandler[String], kafkaServerStartable: KafkaServerStartable) extends Logging {
 
   val lock = new Object()
 
@@ -33,7 +35,7 @@ class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
   startWatchingTopicEvents()
 
   private def startWatchingTopicEvents() {
-    val topicEventListener = new ZkTopicEventListener
+    val topicEventListener = new ZkTopicEventListener(kafkaServerStartable)
     ZkUtils.makeSurePersistentPathExists(zkClient, ZkUtils.BrokerTopicsPath)
 
     zkClient.subscribeStateChanges(
@@ -50,24 +52,17 @@ class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
 
   def shutdown() {
     lock.synchronized {
-      try {
-        if (zkClient != null) {
-          stopWatchingTopicEvents()
-          zkClient.close()
-          zkClient = null
-        }
-        else
-          warn("Cannot shutdown already shutdown topic event watcher.")
+      if (zkClient != null) {
+        stopWatchingTopicEvents()
+        zkClient.close()
+        zkClient = null
       }
-      catch {
-        case e =>
-          fatal(e)
-          fatal(Utils.stackTrace(e))
-      }
+      else
+        warn("Cannot shutdown already shutdown topic event watcher.")
     }
   }
 
-  class ZkTopicEventListener() extends IZkChildListener {
+  class ZkTopicEventListener(val kafkaServerStartable: KafkaServerStartable) extends IZkChildListener {
 
     @throws(classOf[Exception])
     def handleChildChange(parent: String, children: java.util.List[String]) {
@@ -81,9 +76,11 @@ class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
           }
         }
         catch {
+          case e: ConsumerRebalanceFailedException =>
+            fatal("can't rebalance in embedded consumer; proceed to shutdown", e)
+            kafkaServerStartable.shutdown()
           case e =>
-            fatal(e)
-            fatal(Utils.stackTrace(e))
+            error("error in handling child changes in embedded consumer", e)
         }
       }
     }

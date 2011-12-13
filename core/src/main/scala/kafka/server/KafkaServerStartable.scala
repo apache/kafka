@@ -39,7 +39,7 @@ class KafkaServerStartable(val serverConfig: KafkaConfig,
     server = new KafkaServer(serverConfig)
     if (consumerConfig != null)
       embeddedConsumer =
-        new EmbeddedConsumer(consumerConfig, producerConfig, server)
+        new EmbeddedConsumer(consumerConfig, producerConfig, this)
   }
 
   def startup() {
@@ -75,7 +75,7 @@ class KafkaServerStartable(val serverConfig: KafkaConfig,
 
 class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
                        private val producerConfig: ProducerConfig,
-                       private val kafkaServer: KafkaServer) extends TopicEventHandler[String] with Logging {
+                       private val kafkaServerStartable: KafkaServerStartable) extends TopicEventHandler[String] with Logging {
 
   private val whiteListTopics =
     consumerConfig.mirrorTopicsWhitelist.split(",").toList.map(_.trim)
@@ -160,7 +160,8 @@ class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
   }
 
   def startup() {
-    topicEventWatcher = new ZookeeperTopicEventWatcher(consumerConfig, this)
+    info("staring up embedded consumer")
+    topicEventWatcher = new ZookeeperTopicEventWatcher(consumerConfig, this, kafkaServerStartable)
     /*
     * consumer threads are (re-)started upon topic events (which includes an
     * initial startup event which lists the current topics)
