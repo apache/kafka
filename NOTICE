@@ -1,40 +1,8 @@
-===
 Apache Kafka
 Copyright 2011 The Apache Software Foundation.
 
 This product includes software developed at
 The Apache Software Foundation (http://www.apache.org/).
-===
-
-This product includes jopt-simple, a library for parsing command line
-options (http://jopt-simple.sourceforge.net/).
-
-This product includes junit, developed by junit.org.
-
-This product includes zkclient, developed by Stefan Groschupf,
-http://github.com/sgroschupf/zkclient
-
-This produce includes joda-time, developed by joda.org
-(joda-time.sourceforge.net)
-
-This product includes the scala runtime and compiler
-(www.scala-lang.org) developed by EPFL, which includes the following
-license:
-
-This product includes easymock, developed by easymock.org
-(http://easymock.org)
-
-This product includes objenesis, developed by Joe Walnes, Henri
-Tremblay, Leonardo Mesquita (http://code.google.com/p/objenesis)
-
-This product includes cglib, developed by sourceforge.net
-(http://cglib.sourceforge.net)
-
-This product includes asm, developed by OW2 consortium
-(http://asm.ow2.org)
-
-This product includes sbt, developed by Mark Harrah
-(https://github.com/harrah/xsbt/wiki)
 
 This product includes Nunit, developed by Charlie Pool, James W.
 Newkirk, Michael C. Two, Alexei A. Vorontsov and Philip A. Craig.
