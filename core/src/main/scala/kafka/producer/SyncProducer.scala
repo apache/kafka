@@ -155,7 +155,6 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   }
     
   private def connect(): SocketChannel = {
-    var channel: SocketChannel = null
     var connectBackoffMs = 1
     val beginTimeMs = SystemTime.milliseconds
     while(channel == null && !shutdown) {
