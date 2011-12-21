@@ -8,7 +8,7 @@ This product includes Nunit, developed by Charlie Pool, James W.
 Newkirk, Michael C. Two, Alexei A. Vorontsov and Philip A. Craig.
 (www.nunit.org)
 
-Simple Build Tool (SBT)
-Copyright 2008, 2009, 2010 Mark Harrah, Jason Zaugg
+Simple Build Tool Launcher
+Copyright 2008, 2009, 2010 Mark Harrah, David MacIver 
 Licensed under BSD-style license (see LICENSE)
 
