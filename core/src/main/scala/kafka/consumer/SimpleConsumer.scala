@@ -85,7 +85,7 @@ class SimpleConsumer(val host: String,
         response = getResponse
       } catch {
         case e : java.io.IOException =>
-          info("fetch reconnect due to " + e)
+          info("Reconnect in fetch request due to socket error: ", e)
           // retry once
           try {
             channel = connect
@@ -119,7 +119,7 @@ class SimpleConsumer(val host: String,
         response = getResponse
       } catch {
         case e : java.io.IOException =>
-          info("multifetch reconnect due to " + e)
+          info("Reconnect in multifetch due to socket error: ", e)
           // retry once
           try {
             channel = connect
@@ -155,7 +155,7 @@ class SimpleConsumer(val host: String,
         response = getResponse
       } catch {
         case e : java.io.IOException =>
-          info("getOffsetsBefore reconnect due to " + e)
+          info("Reconnect in get offetset request due to socket error: ", e)
           // retry once
           try {
             channel = connect
