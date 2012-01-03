@@ -60,8 +60,7 @@ object Utils extends Logging {
         catch {
           case t =>
             // log any error and the stack trace
-            error(t)
-            error(stackTrace(t), t)
+            error("error in loggedRunnable", t)
         }
       }
     }

@@ -203,8 +203,7 @@ class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
       }
       catch {
         case e =>
-          fatal(e + Utils.stackTrace(e))
-          fatal(topic + " stream " + threadId + " unexpectedly exited")
+          fatal(topic + " stream " + threadId + " unexpectedly exited", e)
       }finally {
         shutdownComplete.countDown
         info("Stopped mirroring thread %s for topic %s and stream %d".format(name, topic, threadId))

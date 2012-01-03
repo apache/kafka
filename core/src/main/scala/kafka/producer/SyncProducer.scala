@@ -61,13 +61,13 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
             }
             catch {
               case e: Throwable =>
-              trace("error iterating messages " + e + Utils.stackTrace(e))
+                trace("error iterating messages ", e)
             }
           }
         }
         catch {
           case e: Throwable =>
-            trace("error verifying sendbuffer " + e + Utils.stackTrace(e))
+            trace("error verifying sendbuffer ", e)
         }
       }
     }
