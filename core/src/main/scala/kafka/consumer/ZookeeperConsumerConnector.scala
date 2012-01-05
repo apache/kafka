@@ -442,7 +442,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           // release all partitions, reset state and retry
           releasePartitionOwnership()
           resetState()
-          Thread.sleep(config.zkSyncTimeMs)
+          Thread.sleep(config.rebalanceBackoffMs)
         }
       }
 

@@ -26,7 +26,7 @@ object ConsumerConfig {
   val SocketBufferSize = 64*1024
   val FetchSize = 300 * 1024
   val MaxFetchSize = 10*FetchSize
-  val BackoffIncrementMs = 1000
+  val DefaultFetcherBackoffMs = 1000
   val AutoCommit = true
   val AutoCommitInterval = 10 * 1000
   val MaxQueuedChunks = 100
@@ -67,7 +67,7 @@ class ConsumerConfig(props: Properties) extends ZKConfig(props) {
   
   /** to avoid repeatedly polling a broker node which has no new data
       we will backoff every time we get an empty set from the broker*/
-  val backoffIncrementMs: Long = Utils.getInt(props, "backoff.increment.ms", BackoffIncrementMs)
+  val fetcherBackoffMs: Long = Utils.getInt(props, "fetcher.backoff.ms", DefaultFetcherBackoffMs)
   
   /** if true, periodically commit to zookeeper the offset of messages already fetched by the consumer */
   val autoCommit = Utils.getBoolean(props, "autocommit.enable", AutoCommit)
@@ -80,6 +80,9 @@ class ConsumerConfig(props: Properties) extends ZKConfig(props) {
 
   /** max number of retries during rebalance */
   val maxRebalanceRetries = Utils.getInt(props, "rebalance.retries.max", MaxRebalanceRetries)
+
+  /** backoff time between retries during rebalance */
+  val rebalanceBackoffMs = Utils.getInt(props, "rebalance.backoff.ms", zkSyncTimeMs)
 
   /* what to do if an offset is out of range.
      smallest : automatically reset the offset to the smallest offset

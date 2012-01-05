@@ -95,8 +95,8 @@ class FetcherRunnable(val name: String,
 
         trace("fetched bytes: " + read)
         if(read == 0) {
-          debug("backing off " + config.backoffIncrementMs + " ms")
-          Thread.sleep(config.backoffIncrementMs)
+          debug("backing off " + config.fetcherBackoffMs + " ms")
+          Thread.sleep(config.fetcherBackoffMs)
         }
       }
     }
