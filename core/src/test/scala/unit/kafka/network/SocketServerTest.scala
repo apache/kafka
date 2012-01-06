@@ -42,6 +42,8 @@ class SocketServerTest extends JUnitSuite {
                                 numProcessorThreads = 1, 
                                 monitoringPeriodSecs = 30, 
                                 handlerFactory = (requestId: Short, receive: Receive) => echo, 
+                                sendBufferSize = 300000,
+                                receiveBufferSize = 300000,
                                 maxRequestSize = 50)
   server.startup()
 

@@ -66,6 +66,8 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
                                     config.numThreads,
                                     config.monitoringPeriodSecs,
                                     handlers.handlerFor,
+                                    config.socketSendBuffer,
+                                    config.socketReceiveBuffer,                                    
                                     config.maxSocketRequestSize)
     Utils.registerMBean(socketServer.stats, statsMBeanName)
     socketServer.startup()

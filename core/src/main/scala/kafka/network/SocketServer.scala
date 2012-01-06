@@ -38,11 +38,13 @@ class SocketServer(val port: Int,
                    val numProcessorThreads: Int,
                    monitoringPeriodSecs: Int,
                    private val handlerFactory: Handler.HandlerMapping,
+                   val sendBufferSize: Int,
+                   val receiveBufferSize: Int,
                    val maxRequestSize: Int = Int.MaxValue) {
 
   private val time = SystemTime
   private val processors = new Array[Processor](numProcessorThreads)
-  private var acceptor: Acceptor = new Acceptor(port, processors)
+  private var acceptor: Acceptor = new Acceptor(port, processors, sendBufferSize, receiveBufferSize)
   val stats: SocketServerStats = new SocketServerStats(1000L * 1000L * 1000L * monitoringPeriodSecs)
 
   /**
@@ -116,7 +118,7 @@ private[kafka] abstract class AbstractServerThread extends Runnable {
 /**
  * Thread that accepts and configures new connections. There is only need for one of these
  */
-private[kafka] class Acceptor(val port: Int, private val processors: Array[Processor]) extends AbstractServerThread {
+private[kafka] class Acceptor(val port: Int, private val processors: Array[Processor], val sendBufferSize: Int, val receiveBufferSize: Int) extends AbstractServerThread {
 
   /**
    * Accept loop that checks for new connection attempts
@@ -164,14 +166,21 @@ private[kafka] class Acceptor(val port: Int, private val processors: Array[Proce
    * Accept a new connection
    */
   def accept(key: SelectionKey, processor: Processor) {
-    val socketChannel = key.channel().asInstanceOf[ServerSocketChannel].accept()
-    if(logger.isDebugEnabled)
-      logger.info("Accepted connection from " + socketChannel.socket.getInetAddress() + " on " + socketChannel.socket.getLocalSocketAddress)
+    val serverSocketChannel = key.channel().asInstanceOf[ServerSocketChannel]
+    serverSocketChannel.socket().setReceiveBufferSize(receiveBufferSize)
+    
+    val socketChannel = serverSocketChannel.accept()
     socketChannel.configureBlocking(false)
     socketChannel.socket().setTcpNoDelay(true)
+    socketChannel.socket().setSendBufferSize(sendBufferSize)
+
+    if (logger.isDebugEnabled()) {
+      logger.debug("sendBufferSize: [" + socketChannel.socket().getSendBufferSize() 
+          + "] receiveBufferSize: [" + socketChannel.socket().getReceiveBufferSize() + "]")
+    }
+
     processor.accept(socketChannel)
   }
-
 }
 
 /**

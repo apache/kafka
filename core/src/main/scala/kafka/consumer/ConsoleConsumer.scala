@@ -96,7 +96,7 @@ object ConsoleConsumer extends Logging {
     
     val props = new Properties()
     props.put("groupid", options.valueOf(groupIdOpt))
-    props.put("socket.buffer.size", options.valueOf(socketBufferSizeOpt).toString)
+    props.put("socket.buffersize", options.valueOf(socketBufferSizeOpt).toString)
     props.put("fetch.size", options.valueOf(fetchSizeOpt).toString)
     props.put("auto.commit", "true")
     props.put("autocommit.interval.ms", options.valueOf(autoCommitIntervalOpt).toString)
