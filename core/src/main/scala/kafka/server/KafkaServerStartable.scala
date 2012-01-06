@@ -197,6 +197,7 @@ class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,
 
       try {
         for (message <- stream) {
+          trace("Mirroring thread received message " + message.checksum)
           val pd = new ProducerData[Null, Message](topic, message)
           producer.send(pd)
         }

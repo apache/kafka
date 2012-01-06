@@ -62,6 +62,12 @@ object ConsoleConsumer extends Logging {
                            .describedAs("size")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(2 * 1024 * 1024)
+    val consumerTimeoutMsOpt = parser.accepts("consumer-timeout-ms", "consumer throws timeout exception after waiting this much " +
+                                              "of time without incoming messages")
+                           .withRequiredArg
+                           .describedAs("prop")
+                           .ofType(classOf[java.lang.Integer])
+                           .defaultsTo(-1)
     val messageFormatterOpt = parser.accepts("formatter", "The name of a class to use for formatting kafka messages for display.")
                            .withRequiredArg
                            .describedAs("class")
@@ -96,6 +102,7 @@ object ConsoleConsumer extends Logging {
     props.put("autocommit.interval.ms", options.valueOf(autoCommitIntervalOpt).toString)
     props.put("autooffset.reset", if(options.has(resetBeginningOpt)) "smallest" else "largest")
     props.put("zk.connect", options.valueOf(zkConnectOpt))
+    props.put("consumer.timeout.ms", options.valueOf(consumerTimeoutMsOpt).toString)
     val config = new ConsumerConfig(props)
     val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
     
@@ -106,7 +113,10 @@ object ConsoleConsumer extends Logging {
     val maxMessages = if(options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
 
     val connector = Consumer.create(config)
-    
+
+    if(options.has(resetBeginningOpt))
+      tryCleanupZookeeper(options.valueOf(zkConnectOpt), options.valueOf(groupIdOpt))
+
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run() {
         connector.shutdown()
@@ -198,6 +208,13 @@ object ConsoleConsumer extends Logging {
       val payload = message.payload
       output.write(payload.array, payload.arrayOffset, payload.limit)
       output.write('\n')
+    }
+  }
+
+  class ChecksumMessageFormatter extends MessageFormatter {
+    def writeTo(message: Message, output: PrintStream) {
+      val chksum = message.checksum
+      output.println("checksum:" + chksum)
     }
   }
   

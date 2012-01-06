@@ -130,12 +130,17 @@ object ProducerPerformance {
     return new String(strArray)
   }
 
+  private def getByteArrayOfLength(len: Int): Array[Byte] = {
+    //new Array[Byte](len)
+    new Array[Byte]( if (len == 0) 5 else len )
+  }
+
   class ProducerThread(val threadId: Int,
-                           val config: ProducerPerfConfig,
-                           val totalBytesSent: AtomicLong,
-                           val totalMessagesSent: AtomicLong,
-                           val allDone: CountDownLatch,
-                           val rand: Random) extends Runnable {
+                       val config: ProducerPerfConfig,
+                       val totalBytesSent: AtomicLong,
+                       val totalMessagesSent: AtomicLong,
+                       val allDone: CountDownLatch,
+                       val rand: Random) extends Runnable {
     val logger = Logger.getLogger(getClass)
     val props = new Properties()
     val brokerInfoList = config.brokerInfo.split("=")
@@ -168,17 +173,18 @@ object ProducerPerformance {
                               else config.numMessages / config.numThreads
       if(logger.isDebugEnabled) logger.debug("Messages per thread = " + messagesPerThread)
       var messageSet: List[Message] = Nil
-      for(k <- 0 until config.batchSize) {
-        messageSet ::= message
+      if(config.isFixSize) {
+        for(k <- 0 until config.batchSize) {
+          messageSet ::= message
+        }
       }
-
       var j: Long = 0L
       while(j < messagesPerThread) {
         var strLength = config.messageSize
         if (!config.isFixSize) {
           for(k <- 0 until config.batchSize) {
             strLength = rand.nextInt(config.messageSize)
-            val message = new Message(getStringOfLength(strLength).getBytes)
+            val message = new Message(getByteArrayOfLength(strLength))
             messageSet ::= message
             bytesSent += message.payloadSize
           }
@@ -188,15 +194,20 @@ object ProducerPerformance {
         try  {
           if(!config.isAsync) {
             producer.send(new ProducerData[Message,Message](config.topic, null, messageSet))
+            if(!config.isFixSize) messageSet = Nil
             nSends += config.batchSize
           }else {
             if(!config.isFixSize) {
               strLength = rand.nextInt(config.messageSize)
-              val message = new Message(getStringOfLength(strLength).getBytes)
+              val messageBytes = getByteArrayOfLength(strLength)
+              rand.nextBytes(messageBytes)
+              val message = new Message(messageBytes)
               producer.send(new ProducerData[Message,Message](config.topic, message))
+              if(logger.isDebugEnabled) println("checksum:" + message.checksum)
               bytesSent += message.payloadSize
             }else {
               producer.send(new ProducerData[Message,Message](config.topic, message))
+              if(logger.isDebugEnabled) println("checksum:" + message.checksum)
               bytesSent += message.payloadSize
             }
             nSends += 1

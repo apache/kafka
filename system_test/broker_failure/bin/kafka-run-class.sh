@@ -21,28 +21,29 @@ then
 fi
 
 base_dir=$(dirname $0)/..
+kafka_inst_dir=${base_dir}/../..
 
-for file in $base_dir/project/boot/scala-2.8.0/lib/*.jar;
+for file in $kafka_inst_dir/project/boot/scala-2.8.0/lib/*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/core/target/scala_2.8.0/*.jar;
+for file in $kafka_inst_dir/core/target/scala_2.8.0/*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/core/lib/*.jar;
+for file in $kafka_inst_dir/core/lib/*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/perf/target/scala_2.8.0/kafka*.jar;
+for file in $kafka_inst_dir/perf/target/scala_2.8.0/kafka*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/core/lib_managed/scala_2.8.0/compile/*.jar;
+for file in $kafka_inst_dir/core/lib_managed/scala_2.8.0/compile/*.jar;
 do
   if [ ${file##*/} != "sbt-launch.jar" ]; then
     CLASSPATH=$CLASSPATH:$file

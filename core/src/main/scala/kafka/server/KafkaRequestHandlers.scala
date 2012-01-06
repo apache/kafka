@@ -69,6 +69,7 @@ private[kafka] class KafkaRequestHandlers(val logManager: LogManager) extends Lo
     try {
       logManager.getOrCreateLog(request.topic, partition).append(request.messages)
       trace(request.messages.sizeInBytes + " bytes written to logs.")
+      request.messages.foreach(m => trace("wrote message %s to disk".format(m.message.checksum)))
     }
     catch {
       case e =>

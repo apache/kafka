@@ -1,0 +1,42 @@
+This script performs broker failure tests with the following
+setup in a single local machine:
+
+1. A cluster of Kafka source brokers
+2. A cluster of Kafka mirror brokers with embedded consumers in 
+   point-to-point mode
+3. An independent ConsoleConsumer in publish/subcribe mode to
+   consume messages from the SOURCE brokers cluster
+4. An independent ConsoleConsumer in publish/subcribe mode to
+   consume messages from the MIRROR brokers cluster
+5. A producer produces batches of messages to the SOURCE brokers
+6. One of the Kafka SOURCE or MIRROR brokers in the cluster will
+   be randomly terminated and waiting for the consumer to catch up.
+7. Repeat Step 4 & 5 as many times as specified in the script
+
+Expected results:
+==================
+There should not be any discrepancies by comparing the unique 
+message checksums from the source ConsoleConsumer and the 
+mirror ConsoleConsumer.
+
+Notes:
+==================
+The number of Kafka SOURCE brokers can be increased as follows:
+1. Update the value of $num_kafka_source_server in this script
+2. Make sure that there are corresponding number of prop files:
+   $base_dir/config/server_source{1..4}.properties
+
+The number of Kafka MIRROR brokers can be increased as follows:
+1. Update the value of $num_kafka_target_server in this script
+2. Make sure that there are corresponding number of prop files:
+   $base_dir/config/server_target{1..3}.properties
+
+Quick Start:
+==================
+Execute this script as follows:
+  <kafka home>/system_test/broker_failure $ bin/run-test.sh
+
+In the event of failure, by default the brokers and zookeepers
+remain running to make it easier to debug the issue - hit Ctrl-C
+to shut them down. 
+
