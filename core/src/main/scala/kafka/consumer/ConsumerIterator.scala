@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,24 +19,23 @@ package kafka.consumer
 
 import kafka.utils.{IteratorTemplate, Logging}
 import java.util.concurrent.{TimeUnit, BlockingQueue}
-import kafka.cluster.Partition
-import kafka.message.{MessageAndOffset, MessageSet, Message}
+import kafka.message.MessageAndOffset
 import kafka.serializer.Decoder
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * An iterator that blocks until a value can be read from the supplied queue.
  * The iterator takes a shutdownCommand object which can be added to the queue to trigger a shutdown
- * 
+ *
  */
 class ConsumerIterator[T](private val topic: String,
                           private val channel: BlockingQueue[FetchedDataChunk],
                           consumerTimeoutMs: Int,
                           private val decoder: Decoder[T])
-        extends IteratorTemplate[T] with Logging {
-  
-  private var current: Iterator[MessageAndOffset] = null
-  private var currentDataChunk: FetchedDataChunk = null
-  private var currentTopicInfo: PartitionTopicInfo = null
+  extends IteratorTemplate[T] with Logging {
+
+  private var current: AtomicReference[Iterator[MessageAndOffset]] = new AtomicReference(null)
+  private var currentTopicInfo:PartitionTopicInfo = null
   private var consumedOffset: Long = -1L
 
   override def next(): T = {
@@ -50,8 +49,10 @@ class ConsumerIterator[T](private val topic: String,
   }
 
   protected def makeNext(): T = {
+    var currentDataChunk: FetchedDataChunk = null
     // if we don't have an iterator, get one
-    if(current == null || !current.hasNext) {
+    var localCurrent = current.get()
+    if(localCurrent == null || !localCurrent.hasNext) {
       if (consumerTimeoutMs < 0)
         currentDataChunk = channel.take
       else {
@@ -71,14 +72,21 @@ class ConsumerIterator[T](private val topic: String,
                         .format(currentTopicInfo.getConsumeOffset, currentDataChunk.fetchOffset, currentTopicInfo))
           currentTopicInfo.resetConsumeOffset(currentDataChunk.fetchOffset)
         }
-        current = currentDataChunk.messages.iterator
+        localCurrent = currentDataChunk.messages.iterator
+        current.set(localCurrent)
       }
     }
-    val item = current.next()
+    val item = localCurrent.next()
     consumedOffset = item.offset
     decoder.toEvent(item.message)
   }
-  
+
+  def clearCurrentChunk() = {
+    try {
+      info("Clearing the current data chunk for this consumer iterator")
+      current.set(null)
+    }
+  }
 }
 
 class ConsumerTimeoutException() extends RuntimeException()

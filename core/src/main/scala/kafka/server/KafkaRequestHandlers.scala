@@ -106,7 +106,7 @@ private[kafka] class KafkaRequestHandlers(val logManager: LogManager) extends Lo
   private def readMessageSet(fetchRequest: FetchRequest): MessageSetSend = {
     var  response: MessageSetSend = null
     try {
-      trace("Fetching log segment for topic = " + fetchRequest.topic + " and partition = " + fetchRequest.partition)
+      trace("Fetching log segment for topic, partition, offset, maxSize = " + fetchRequest)
       val log = logManager.getLog(fetchRequest.topic, fetchRequest.partition)
       if (log != null)
         response = new MessageSetSend(log.read(fetchRequest.offset, fetchRequest.maxSize))

@@ -18,11 +18,8 @@
 package kafka.consumer
 
 import java.net._
-import java.nio._
 import java.nio.channels._
-import java.util.concurrent.atomic._
 import kafka.api._
-import kafka.common._
 import kafka.message._
 import kafka.network._
 import kafka.utils._

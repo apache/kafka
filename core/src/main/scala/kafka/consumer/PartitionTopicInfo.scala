@@ -17,7 +17,6 @@
 
 package kafka.consumer
 
-import java.nio.channels._
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import kafka.message._

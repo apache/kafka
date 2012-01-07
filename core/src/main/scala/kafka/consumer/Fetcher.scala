@@ -21,36 +21,46 @@ import scala.collection._
 import kafka.cluster._
 import org.I0Itec.zkclient.ZkClient
 import java.util.concurrent.BlockingQueue
+import kafka.utils._
 
 /**
  * The fetcher is a background thread that fetches data from a set of servers
  */
-private[consumer] class Fetcher(val config: ConsumerConfig, val zkClient : ZkClient) {
+private [consumer] class Fetcher(val config: ConsumerConfig, val zkClient : ZkClient) extends Logging {
   private val EMPTY_FETCHER_THREADS = new Array[FetcherRunnable](0)
   @volatile
   private var fetcherThreads : Array[FetcherRunnable] = EMPTY_FETCHER_THREADS
 
   /**
-   *  shutdown all fetch threads
+   *  shutdown all fetcher threads
    */
-  def shutdown() {
+  def stopConnectionsToAllBrokers = {
     // shutdown the old fetcher threads, if any
     for (fetcherThread <- fetcherThreads)
       fetcherThread.shutdown
     fetcherThreads = EMPTY_FETCHER_THREADS
   }
 
-  /**
-   *  Open connections.
-   */
-  def initConnections(topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster,
-                      queuesTobeCleared: Iterable[BlockingQueue[FetchedDataChunk]]) {
-    shutdown
+  def clearFetcherQueues[T](topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster,
+                            queuesTobeCleared: Iterable[BlockingQueue[FetchedDataChunk]],
+                            kafkaMessageStreams: Map[String,List[KafkaMessageStream[T]]]) {
 
+    // Clear all but the currently iterated upon chunk in the consumer thread's queue
+    queuesTobeCleared.foreach(_.clear)
+    info("Cleared all relevant queues for this fetcher")
+
+    // Also clear the currently iterated upon chunk in the consumer threads
+    if(kafkaMessageStreams != null)
+       kafkaMessageStreams.foreach(_._2.foreach(s => s.clear()))
+
+    info("Cleared the data chunks in all the consumer message iterators")
+
+  }
+
+  def startConnections[T](topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster,
+                            kafkaMessageStreams: Map[String,List[KafkaMessageStream[T]]]) {
     if (topicInfos == null)
       return
-
-    queuesTobeCleared.foreach(_.clear)
 
     // re-arrange by broker id
     val m = new mutable.HashMap[Int, List[PartitionTopicInfo]]

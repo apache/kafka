@@ -494,6 +494,8 @@ cmp_checksum() {
 
     total_msg_published=`cat $producer_performance_crc_log | wc -l | tr -d ' '`
 
+    duplicate_msg_in_producer=$(( $total_msg_published - $uniq_msg_count_from_producer ))
+
     crc_only_in_mirror_consumer=`comm -23 $console_consumer_mirror_crc_sorted_uniq_log $console_consumer_source_crc_sorted_uniq_log`
     crc_only_in_source_consumer=`comm -13 $console_consumer_mirror_crc_sorted_uniq_log $console_consumer_source_crc_sorted_uniq_log`
     crc_common_in_both_consumer=`comm -12 $console_consumer_mirror_crc_sorted_uniq_log $console_consumer_source_crc_sorted_uniq_log`
@@ -502,7 +504,8 @@ cmp_checksum() {
 
     duplicate_mirror_crc=`comm -23 $console_consumer_mirror_crc_sorted_log $console_consumer_mirror_crc_sorted_uniq_log` 
     no_of_duplicate_msg=$(( $msg_count_from_mirror_consumer - $uniq_msg_count_from_mirror_consumer \
-                          + $msg_count_from_source_consumer - $uniq_msg_count_from_source_consumer ))
+                          + $msg_count_from_source_consumer - $uniq_msg_count_from_source_consumer - \
+                          2*$duplicate_msg_in_producer ))
 
     echo ""
     echo "========================================================"
@@ -649,15 +652,15 @@ cleanup
 sleep 5
 
 # Ctrl-c trap. Catches INT signal
-trap "shutdown_producer; shutdown_servers; exit 0" INT
+trap "shutdown_producer; shutdown_servers, cmp_checksum; exit 0" INT
 
 start_test
 
 start_console_consumer_for_source_producer
 start_console_consumer_for_mirror_producer
 
-wait_for_zero_mirror_console_consumer_lags
 wait_for_zero_source_console_consumer_lags
+wait_for_zero_mirror_console_consumer_lags
 
 shutdown_servers
 

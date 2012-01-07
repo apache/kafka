@@ -18,10 +18,9 @@
 package kafka.consumer
 
 import java.util.concurrent.CountDownLatch
-import java.nio.channels.{ClosedChannelException, ClosedByInterruptException}
-import kafka.common.{OffsetOutOfRangeException, ErrorMapping}
+import kafka.common.ErrorMapping
 import kafka.cluster.{Partition, Broker}
-import kafka.api.{MultiFetchResponse, OffsetRequest, FetchRequest}
+import kafka.api.{OffsetRequest, FetchRequest}
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils._
 import java.io.IOException

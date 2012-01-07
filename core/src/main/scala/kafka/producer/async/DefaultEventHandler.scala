@@ -48,7 +48,8 @@ private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
     if(messagesPerTopic.size > 0) {
       val requests = messagesPerTopic.map(f => new ProducerRequest(f._1._1, f._1._2, f._2)).toArray
       syncProducer.multiSend(requests)
-      trace("kafka producer sent messages for topics " + messagesPerTopic)
+      trace("kafka producer sent messages for topics %s to broker %s:%d"
+        .format(messagesPerTopic, syncProducer.config.host, syncProducer.config.port))
     }
   }
 

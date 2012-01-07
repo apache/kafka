@@ -18,11 +18,10 @@
 package kafka.consumer
 
 import java.util.concurrent.BlockingQueue
-import kafka.message.Message
-import kafka.serializer.{DefaultDecoder, Decoder}
+import kafka.serializer.Decoder
 
 /**
- * All calls to elements should produce the same thread-safe iterator? Should have a seperate thread
+ * All calls to elements should produce the same thread-safe iterator? Should have a separate thread
  * that feeds messages into a blocking queue for processing.
  */
 class KafkaMessageStream[T](val topic: String,
@@ -38,4 +37,13 @@ class KafkaMessageStream[T](val topic: String,
    *  Create an iterator over messages in the stream.
    */
   def iterator(): ConsumerIterator[T] = iter
+
+  /**
+   * This method clears the queue being iterated during the consumer rebalancing. This is mainly
+   * to reduce the number of duplicates received by the consumer
+   */
+  def clear() {
+    iter.clearCurrentChunk()
+  }
+
 }

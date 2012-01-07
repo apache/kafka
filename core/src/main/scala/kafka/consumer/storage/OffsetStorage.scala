@@ -17,7 +17,6 @@
 
 package kafka.consumer.storage
 
-import kafka.utils.Range
 
 /**
  * A method for storing offsets for the consumer. 
