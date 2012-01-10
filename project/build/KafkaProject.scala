@@ -52,7 +52,7 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
       <exclude module="jmxtools"/>
       <exclude module="mail"/>
       <exclude module="jms"/>
-      <dependency org="org.apache.zookeeper" name="zookeeper" rev="3.3.3">
+      <dependency org="org.apache.zookeeper" name="zookeeper" rev="3.3.4">
         <exclude module="log4j"/>
         <exclude module="jline"/>
       </dependency>
