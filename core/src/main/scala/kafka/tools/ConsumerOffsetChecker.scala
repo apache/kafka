@@ -80,7 +80,7 @@ object ConsumerOffsetChecker extends Logging {
   private def processTopic(zkClient: ZkClient, group: String, topic: String) {
     val bidsPids = ZkUtils.getChildrenParentMayNotExist(
       zkClient, "/consumers/%s/offsets/%s".format(group, topic)).toList
-    bidsPids.foreach {
+    bidsPids.sorted.foreach {
       bidPid => processPartition(zkClient, group, topic, bidPid)
     }
   }
@@ -140,7 +140,7 @@ object ConsumerOffsetChecker extends Logging {
       debug("zkConnect = %s; topics = %s; group = %s".format(
         zkConnect, topicList.toString(), group))
 
-      topicList.foreach {
+      topicList.sorted.foreach {
         topic => processTopic(zkClient, group, topic)
       }
 
