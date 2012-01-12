@@ -652,7 +652,7 @@ cleanup
 sleep 5
 
 # Ctrl-c trap. Catches INT signal
-trap "shutdown_producer; shutdown_servers, cmp_checksum; exit 0" INT
+trap "shutdown_producer; shutdown_servers; cmp_checksum; exit 0" INT
 
 start_test
 
