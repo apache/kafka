@@ -553,6 +553,16 @@ object Utils extends Logging {
     }
   }
 
+  def seqToCSV(seq: Seq[String]): String = {
+    var csvString = ""
+    for (i <- 0 until seq.size) {
+      if (i > 0)
+        csvString = csvString + ','
+      csvString = csvString + seq(i)
+    }
+    csvString
+  }
+
   def getTopicRentionHours(retentionHours: String) : Map[String, Int] = {
     val exceptionMsg = "Malformed token for topic.log.retention.hours in server.properties: "
     val successMsg =  "The retention hour for "

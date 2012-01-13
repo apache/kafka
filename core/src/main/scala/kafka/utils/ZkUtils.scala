@@ -29,6 +29,38 @@ object ZkUtils extends Logging {
   val BrokerIdsPath = "/brokers/ids"
   val BrokerTopicsPath = "/brokers/topics"
 
+  def getTopicPath(topic: String): String ={
+    BrokerTopicsPath + "/" + topic
+  }
+
+  def getTopicPartsPath(topic: String): String ={
+    getTopicPath(topic) + "/" + "partitions"
+  }
+
+  def getTopicPartPath(topic: String, partitionId: String): String ={
+    getTopicPartsPath(topic) + "/" + partitionId
+  }
+
+  def getTopicVersion(zkClient: ZkClient, topic: String): String ={
+    readDataMaybeNull(zkClient, getTopicPath(topic))
+  }
+
+  def getTopicPartReplicasPath(topic: String, partitionId: String): String ={
+    getTopicPartPath(topic, partitionId) + "/" + "replicas"
+  }
+
+  def getTopicPartInSyncPath(topic: String, partitionId: String): String ={
+    getTopicPartPath(topic, partitionId) + "/" + "isr"
+  }
+
+  def getTopicPartLeaderPath(topic: String, partitionId: String): String ={
+    getTopicPartPath(topic, partitionId) + "/" + "leader"
+  }
+
+  def getSortedBrokerList(zkClient: ZkClient): Seq[String] ={
+      ZkUtils.getChildren(zkClient, ZkUtils.BrokerIdsPath).sorted
+  }
+
   /**
    *  make sure a persistent path exists in ZK. Create the path if not exist.
    */
@@ -90,6 +122,21 @@ object ZkUtils extends Logging {
         }
       }
       case e2 => throw e2
+    }
+  }
+
+  /**
+   * Create an persistent node with the given path and data. Create parents if necessary.
+   */
+  def createPersistentPath(client: ZkClient, path: String, data: String): Unit = {
+    try {
+      client.createPersistent(path, data)
+    }
+    catch {
+      case e: ZkNoNodeException => {
+        createParentPath(client, path)
+        client.createPersistent(path, data)
+      }
     }
   }
 
