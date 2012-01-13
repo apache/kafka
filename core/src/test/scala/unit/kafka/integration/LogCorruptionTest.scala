@@ -45,7 +45,7 @@ class LogCorruptionTest extends JUnit3Suite with ProducerConsumerTestHarness wit
   val partition = 0
 
   def testMessageSizeTooLarge() {
-    val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandlers])
+    val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
     val fetcherLogger = Logger.getLogger(classOf[kafka.consumer.FetcherRunnable])
 
     requestHandlerLogger.setLevel(Level.FATAL)

@@ -32,7 +32,6 @@ import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
 class SyncProducerTest extends JUnitSuite {
   private var messageBytes =  new Array[Byte](2);
   private var server: KafkaServer = null
-  val simpleProducerLogger = Logger.getLogger(classOf[SyncProducer])
 
   @Before
   def setUp() {
@@ -44,7 +43,8 @@ class SyncProducerTest extends JUnitSuite {
 
   @After
   def tearDown() {
-    server.shutdown
+    if(server != null)
+      server.shutdown
   }
 
   @Test

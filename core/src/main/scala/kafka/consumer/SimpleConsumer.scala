@@ -54,8 +54,8 @@ class SimpleConsumer(val host: String,
 
   private def close(channel: SocketChannel) = {
     debug("Disconnecting from " + channel.socket.getRemoteSocketAddress())
-    Utils.swallow(logger.warn, channel.close())
-    Utils.swallow(logger.warn, channel.socket.close())
+    swallow(channel.close())
+    swallow(channel.socket.close())
   }
 
   def close() {

@@ -127,7 +127,6 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
 
       override def makeNext(): MessageAndOffset = {
         val isInnerDone = innerDone()
-        debug("makeNext() in deepIterator: innerDone = " + isInnerDone)
         isInnerDone match {
           case true => makeNextOuter
           case false => {

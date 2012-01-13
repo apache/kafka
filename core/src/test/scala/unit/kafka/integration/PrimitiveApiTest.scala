@@ -21,7 +21,7 @@ import scala.collection._
 import junit.framework.Assert._
 import kafka.api.{ProducerRequest, FetchRequest}
 import kafka.common.{OffsetOutOfRangeException, InvalidPartitionException}
-import kafka.server.{KafkaRequestHandlers, KafkaConfig}
+import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
 import java.util.Properties
@@ -40,9 +40,10 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   val props = TestUtils.createBrokerConfig(0, port)
   val config = new KafkaConfig(props) {
                  override val enableZookeeper = false
+                 override val flushInterval = 1
                }
   val configs = List(config)
-  val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandlers])
+  val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 
   def testDefaultEncoderProducerAndFetch() {
     val topic = "test-topic"

@@ -188,6 +188,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int,
    * Close this log
    */
   def close() {
+    debug("Closing log " + name)
     lock synchronized {
       for(seg <- segments.view)
         seg.messageSet.close()

@@ -145,8 +145,8 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     try {
       if(channel != null) {
         info("Disconnecting from " + config.host + ":" + config.port)
-        Utils.swallow(logger.warn, channel.close())
-        Utils.swallow(logger.warn, channel.socket.close())
+        swallow(channel.close())
+        swallow(channel.socket.close())
         channel = null
       }
     } catch {
@@ -217,7 +217,7 @@ class SyncProducerStats extends SyncProducerStatsMBean {
 object SyncProducerStats extends Logging {
   private val kafkaProducerstatsMBeanName = "kafka:type=kafka.KafkaProducerStats"
   private val stats = new SyncProducerStats
-  Utils.swallow(logger.warn, Utils.registerMBean(stats, kafkaProducerstatsMBeanName))
+  swallow(Utils.registerMBean(stats, kafkaProducerstatsMBeanName))
 
   def recordProduceRequest(requestMs: Long) = stats.recordProduceRequest(requestMs)
 }

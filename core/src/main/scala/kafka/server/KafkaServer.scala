@@ -18,28 +18,27 @@
 package kafka.server
 
 import scala.reflect.BeanProperty
-import kafka.log.LogManager
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.atomic.AtomicBoolean
-import kafka.utils.{Mx4jLoader, Utils, SystemTime, KafkaScheduler, Logging}
-import kafka.network.{SocketServerStats, SocketServer}
+import java.util.concurrent._
+import java.util.concurrent.atomic._
 import java.io.File
+import org.apache.log4j.Logger
+import kafka.utils.{Mx4jLoader, Utils, SystemTime, KafkaScheduler, Logging}
+import kafka.network.{SocketServerStats, SocketServer, RequestChannel}
+import kafka.log.LogManager
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.
  */
 class KafkaServer(val config: KafkaConfig) extends Logging {
-  val CLEAN_SHUTDOWN_FILE = ".kafka_cleanshutdown"
-  private val isShuttingDown = new AtomicBoolean(false)
-  
+
+  val CleanShutdownFile = ".kafka_cleanshutdown"
+  private val isShuttingDown = new AtomicBoolean(false)  
   private val shutdownLatch = new CountDownLatch(1)
   private val statsMBeanName = "kafka:type=kafka.SocketServerStats"
-  
   var socketServer: SocketServer = null
-  
+  var requestHandlerPool: KafkaRequestHandlerPool = null
   val scheduler = new KafkaScheduler(1, "kafka-logcleaner-", false)
-  
   private var logManager: LogManager = null
 
   /**
@@ -49,7 +48,7 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
   def startup() {
     info("Starting Kafka server...")
     var needRecovery = true
-    val cleanShutDownFile = new File(new File(config.logDir), CLEAN_SHUTDOWN_FILE)
+    val cleanShutDownFile = new File(new File(config.logDir), CleanShutdownFile)
     if (cleanShutDownFile.exists) {
       needRecovery = false
       cleanShutDownFile.delete
@@ -60,24 +59,24 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
                                 1000L * 60 * config.logCleanupIntervalMinutes,
                                 1000L * 60 * 60 * config.logRetentionHours,
                                 needRecovery)
-                                                    
-    val handlers = new KafkaRequestHandlers(logManager)
+                                                
     socketServer = new SocketServer(config.port,
-                                    config.numThreads,
+                                    config.numNetworkThreads,
                                     config.monitoringPeriodSecs,
-                                    handlers.handlerFor,
-                                    config.socketSendBuffer,
-                                    config.socketReceiveBuffer,                                    
+                                    config.numQueuedRequests,
                                     config.maxSocketRequestSize)
     Utils.registerMBean(socketServer.stats, statsMBeanName)
-    socketServer.startup()
+    requestHandlerPool = new KafkaRequestHandlerPool(socketServer.requestChannel, new KafkaApis(logManager).handle, config.numIoThreads)
+    socketServer.startup
+
     Mx4jLoader.maybeLoad
+
     /**
      *  Registers this broker in ZK. After this, consumers can connect to broker.
      *  So this should happen after socket server start.
      */
-    logManager.startup()
-    info("Kafka server started.")
+    logManager.startup
+    info("Server started.")
   }
   
   /**
@@ -91,13 +90,15 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
       scheduler.shutdown()
       if (socketServer != null)
         socketServer.shutdown()
+      if(requestHandlerPool != null)
+        requestHandlerPool.shutdown()
       Utils.unregisterMBean(statsMBeanName)
-      if (logManager != null)
+      if(logManager != null)
         logManager.close()
 
-      val cleanShutDownFile = new File(new File(config.logDir), CLEAN_SHUTDOWN_FILE)
+      val cleanShutDownFile = new File(new File(config.logDir), CleanShutdownFile)
+      debug("Creating clean shutdown file " + cleanShutDownFile.getAbsolutePath())
       cleanShutDownFile.createNewFile
-
       shutdownLatch.countDown()
       info("Kafka server shut down completed")
     }

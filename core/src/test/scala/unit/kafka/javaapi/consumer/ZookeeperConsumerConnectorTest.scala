@@ -20,7 +20,7 @@ package kafka.javaapi.consumer
 import junit.framework.Assert._
 import kafka.zk.ZooKeeperTestHarness
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
+import kafka.server._
 import kafka.utils.{Utils, Logging}
 import kafka.utils.{TestZKUtils, TestUtils}
 import org.scalatest.junit.JUnit3Suite
@@ -28,7 +28,7 @@ import scala.collection.JavaConversions._
 import kafka.javaapi.message.ByteBufferMessageSet
 import kafka.consumer.{ConsumerConfig, KafkaMessageStream}
 import org.apache.log4j.{Level, Logger}
-import kafka.message.{NoCompressionCodec, CompressionCodec, Message}
+import kafka.message._
 
 class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with ZooKeeperTestHarness with Logging {
 
@@ -49,7 +49,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   val nMessages = 2
 
   def testBasic() {
-    val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandlers])
+    val requestHandlerLogger = Logger.getLogger(classOf[KafkaApis])
     requestHandlerLogger.setLevel(Level.FATAL)
     var actualMessages: List[Message] = Nil
 

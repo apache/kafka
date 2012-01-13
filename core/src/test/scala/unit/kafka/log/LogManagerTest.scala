@@ -47,7 +47,8 @@ class LogManagerTest extends JUnitSuite {
 
   @After
   def tearDown() {
-    logManager.close()
+    if(logManager != null)
+      logManager.close()
     Utils.rm(logDir)
   }
   

@@ -20,7 +20,7 @@ package kafka.javaapi.integration
 import scala.collection._
 import kafka.api.FetchRequest
 import kafka.common.{InvalidPartitionException, OffsetOutOfRangeException}
-import kafka.server.{KafkaRequestHandlers, KafkaConfig}
+import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
 import kafka.javaapi.message.ByteBufferMessageSet
@@ -39,7 +39,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
                  override val enableZookeeper = false
                }
   val configs = List(config)
-  val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandlers])
+  val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 
   def testProduceAndFetch() {
     // send some messages

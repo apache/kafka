@@ -20,7 +20,7 @@ package kafka.producer
 import async.{AsyncProducerConfig, AsyncProducer}
 import java.util.Properties
 import org.apache.log4j.{Logger, Level}
-import kafka.server.{KafkaRequestHandlers, KafkaServer, KafkaConfig}
+import kafka.server.{KafkaRequestHandler, KafkaServer, KafkaConfig}
 import kafka.zk.EmbeddedZookeeper
 import org.junit.{After, Before, Test}
 import junit.framework.Assert
@@ -49,7 +49,7 @@ class ProducerTest extends JUnitSuite {
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null
   private var zkServer:EmbeddedZookeeper = null
-  private val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandlers])
+  private val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 
   @Before
   def setUp() {

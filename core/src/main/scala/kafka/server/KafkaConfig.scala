@@ -43,9 +43,15 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
   /* the maximum number of bytes in a socket request */
   val maxSocketRequestSize: Int = Utils.getIntInRange(props, "max.socket.request.bytes", 100*1024*1024, (1, Int.MaxValue))
   
-  /* the number of worker threads that the server uses for handling all client requests*/
-  val numThreads = Utils.getIntInRange(props, "num.threads", Runtime.getRuntime().availableProcessors, (1, Int.MaxValue))
+  /* the number of network threads that the server uses for handling network requests */
+  val numNetworkThreads = Utils.getIntInRange(props, "network.threads", 3, (1, Int.MaxValue))
+
+  /* the number of io threads that the server uses for carrying out network requests */
+  val numIoThreads = Utils.getIntInRange(props, "io.threads", 8, (1, Int.MaxValue))
   
+  /* the number of queued requests allowed before blocking the network threads */
+  val numQueuedRequests = Utils.getIntInRange(props, "max.queued.requests", 500, (1, Int.MaxValue))
+
   /* the interval in which to measure performance statistics */
   val monitoringPeriodSecs = Utils.getIntInRange(props, "monitoring.period.secs", 600, (1, Int.MaxValue))
   

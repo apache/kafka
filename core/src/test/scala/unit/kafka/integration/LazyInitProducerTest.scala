@@ -21,7 +21,7 @@ import scala.collection._
 import junit.framework.Assert._
 import kafka.common.OffsetOutOfRangeException
 import kafka.api.{ProducerRequest, FetchRequest}
-import kafka.server.{KafkaRequestHandlers, KafkaServer, KafkaConfig}
+import kafka.server.{KafkaRequestHandler, KafkaServer, KafkaConfig}
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
 import kafka.utils.{TestUtils, Utils}
@@ -39,7 +39,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
                }
   val configs = List(config)
   var servers: List[KafkaServer] = null
-  val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandlers])
+  val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 
   override def setUp() {
     super.setUp
@@ -73,16 +73,14 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
     TestUtils.checkEquals(sent.iterator, fetched.iterator)
 
     // send an invalid offset
-    var exceptionThrown = false
     try {
       val fetchedWithError = consumer.fetch(new FetchRequest(topic, 0, -1, 10000))
       fetchedWithError.iterator
+      fail("Expected an OffsetOutOfRangeException exception to be thrown")
     }
     catch {
-      case e: OffsetOutOfRangeException => exceptionThrown = true
-      case e2 => throw e2
+      case e: OffsetOutOfRangeException => 
     }
-    assertTrue(exceptionThrown)
   }
 
   def testProduceAndMultiFetch() {
@@ -113,17 +111,15 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       for(topic <- topics)
         fetches += new FetchRequest(topic, 0, -1, 10000)
 
-      var exceptionThrown = false
-      try {
-        val responses = consumer.multifetch(fetches: _*)
-        for(resp <- responses)
+      val responses = consumer.multifetch(fetches: _*)
+      for(resp <- responses) {
+        try {
           resp.iterator
+          fail("Expected an OffsetOutOfRangeException exception to be thrown")
+        } catch {
+          case e: OffsetOutOfRangeException => 
+        }
       }
-      catch {
-        case e: OffsetOutOfRangeException => exceptionThrown = true
-        case e2 => throw e2
-      }
-      assertTrue(exceptionThrown)
     }
   }
 

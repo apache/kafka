@@ -23,7 +23,7 @@ import java.nio.channels.ClosedByInterruptException
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.utils.{ZKGroupTopicDirs, Logging}
 import kafka.consumer.{ConsumerTimeoutException, ConsumerConfig, ConsumerConnector, Consumer}
-import kafka.server.{KafkaRequestHandlers, KafkaServer, KafkaConfig}
+import kafka.server._
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
 import kafka.utils.{TestUtils, TestZKUtils}
@@ -41,7 +41,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Log
   val largeOffset = 10000
   val smallOffset = -1
   
-  val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandlers])
+  val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
 
   override def setUp() {
     super.setUp()

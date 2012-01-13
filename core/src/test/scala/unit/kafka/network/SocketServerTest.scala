@@ -31,36 +31,38 @@ import org.apache.log4j._
 
 class SocketServerTest extends JUnitSuite {
 
-  Logger.getLogger("kafka").setLevel(Level.INFO)
-
-  def echo(receive: Receive): Option[Send] = {
-    val id = receive.buffer.getShort
-    Some(new BoundedByteBufferSend(receive.buffer.slice))
-  }
-  
-  val server = new SocketServer(port = TestUtils.choosePort, 
-                                numProcessorThreads = 1, 
-                                monitoringPeriodSecs = 30, 
-                                handlerFactory = (requestId: Short, receive: Receive) => echo, 
-                                sendBufferSize = 300000,
-                                receiveBufferSize = 300000,
-                                maxRequestSize = 50)
+  val server: SocketServer = new SocketServer(port = TestUtils.choosePort, 
+                                              numProcessorThreads = 1, 
+                                              monitoringPeriodSecs = 30, 
+                                              maxQueuedRequests = 50,
+                                              maxRequestSize = 50)
   server.startup()
 
-  def sendRequest(id: Short, request: Array[Byte]): Array[Byte] = {
-    val socket = new Socket("localhost", server.port)
+  def sendRequest(socket: Socket, id: Short, request: Array[Byte]) {
     val outgoing = new DataOutputStream(socket.getOutputStream)
     outgoing.writeInt(request.length + 2)
     outgoing.writeShort(id)
     outgoing.write(request)
     outgoing.flush()
+  }
+
+  def receiveResponse(socket: Socket): Array[Byte] = { 
     val incoming = new DataInputStream(socket.getInputStream)
     val len = incoming.readInt()
     val response = new Array[Byte](len)
     incoming.readFully(response)
-    socket.close()
     response
   }
+
+  /* A simple request handler that just echos back the response */
+  def processRequest(channel: RequestChannel) {
+    val request = channel.receiveRequest
+    val id = request.request.buffer.getShort
+    val send = new BoundedByteBufferSend(request.request.buffer.slice)
+    channel.sendResponse(new RequestChannel.Response(request.processor, request.requestKey, send, request.start, 15))
+  }
+
+  def connect() = new Socket("localhost", server.port)
 
   @After
   def cleanup() {
@@ -69,15 +71,20 @@ class SocketServerTest extends JUnitSuite {
 
   @Test
   def simpleRequest() {
-    val response = new String(sendRequest(0, "hello".getBytes))
-    
+    val socket = connect()
+    sendRequest(socket, 0, "hello".getBytes)
+    processRequest(server.requestChannel)
+    val response = new String(receiveResponse(socket))
+    assertEquals("hello", response)
   }
 
   @Test(expected=classOf[IOException])
   def tooBigRequestIsRejected() {
     val tooManyBytes = new Array[Byte](server.maxRequestSize + 1)
     new Random().nextBytes(tooManyBytes)
-    sendRequest(0, tooManyBytes)
+    val socket = connect()
+    sendRequest(socket, 0, tooManyBytes)
+    receiveResponse(socket)
   }
 
 }

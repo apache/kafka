@@ -64,13 +64,13 @@ class KafkaServerStartable(val serverConfig: KafkaConfig,
     catch {
       case e =>
         fatal("Fatal error during KafkaServerStable shutdown. Prepare to halt", e)
-        Runtime.getRuntime.halt(1)
+        System.exit(1)
     }
   }
 
-  def awaitShutdown() {
+  def awaitShutdown() = 
     server.awaitShutdown
-  }
+
 }
 
 class EmbeddedConsumer(private val consumerConfig: ConsumerConfig,

@@ -19,14 +19,14 @@ package kafka.javaapi.producer
 
 import java.util.Properties
 import org.apache.log4j.{Logger, Level}
-import kafka.server.{KafkaRequestHandlers, KafkaServer, KafkaConfig}
+import kafka.server.{KafkaRequestHandler, KafkaServer, KafkaConfig}
 import kafka.zk.EmbeddedZookeeper
 import kafka.utils.{TestZKUtils, TestUtils}
 import org.junit.{After, Before, Test}
 import junit.framework.Assert
 import collection.mutable.HashMap
 import org.easymock.EasyMock
-import kafka.utils.Utils
+import kafka.utils._
 import java.util.concurrent.ConcurrentHashMap
 import kafka.cluster.Partition
 import kafka.common.{UnavailableProducerException, InvalidPartitionException, InvalidConfigException}
@@ -42,6 +42,7 @@ import kafka.api.FetchRequest
 import kafka.message.{NoCompressionCodec, Message}
 
 class ProducerTest extends JUnitSuite {
+  
   private val topic = "test-topic"
   private val brokerId1 = 0
   private val brokerId2 = 1  
@@ -54,7 +55,7 @@ class ProducerTest extends JUnitSuite {
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null
   private var zkServer:EmbeddedZookeeper = null
-  private val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandlers])
+  private val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 
   @Before
   def setUp() {
@@ -96,7 +97,7 @@ class ProducerTest extends JUnitSuite {
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)
 
-    Thread.sleep(500)
+    Thread.sleep(300)
   }
 
   @After
@@ -107,7 +108,7 @@ class ProducerTest extends JUnitSuite {
     server2.shutdown
     Utils.rm(server1.config.logDir)
     Utils.rm(server2.config.logDir)    
-    Thread.sleep(500)
+    Thread.sleep(300)
     zkServer.shutdown
   }
 

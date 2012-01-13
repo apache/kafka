@@ -43,7 +43,7 @@ private[network] trait Transmission extends Logging {
 /**
  * A transmission that is being received from a channel
  */
-private[kafka] trait Receive extends Transmission {
+trait Receive extends Transmission {
   
   def buffer: ByteBuffer
   
@@ -63,7 +63,7 @@ private[kafka] trait Receive extends Transmission {
 /**
  * A transmission that is being sent out to the channel
  */
-private[kafka] trait Send extends Transmission {
+trait Send extends Transmission {
     
   def writeTo(channel: GatheringByteChannel): Int
   

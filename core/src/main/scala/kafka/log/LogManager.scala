@@ -222,7 +222,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
     var total = 0
     for(segment <- segments) {
       info("Deleting log segment " + segment.file.getName() + " from " + log.name)
-      Utils.swallow(logger.warn, segment.messageSet.close())
+      swallow(segment.messageSet.close())
       if(!segment.file.delete()) {
         warn("Delete failed.")
       } else {
@@ -283,6 +283,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
    * Close all the logs
    */
   def close() {
+    info("Closing log manager")
     logFlusherScheduler.shutdown()
     val iter = getLogIterator
     while(iter.hasNext)
@@ -334,7 +335,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
           e match {
             case _: IOException =>
               fatal("Halting due to unrecoverable I/O error while flushing logs: " + e.getMessage, e)
-              Runtime.getRuntime.halt(1)
+              System.exit(1)
             case _ =>
           }
       }

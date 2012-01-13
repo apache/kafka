@@ -66,7 +66,7 @@ class ServerShutdownTest extends JUnitSuite {
       Thread.sleep(200)
       // do a clean shutdown
       server.shutdown()
-      val cleanShutDownFile = new File(new File(config.logDir), server.CLEAN_SHUTDOWN_FILE)
+      val cleanShutDownFile = new File(new File(config.logDir), server.CleanShutdownFile)
       assertTrue(cleanShutDownFile.exists)
     }
 

@@ -52,7 +52,7 @@ private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
     if(eventHandler != null) eventHandler else new DefaultEventHandler[T](new ProducerConfig(config.props), cbkHandler),
     cbkHandler, config.queueTime, config.batchSize, AsyncProducer.Shutdown)
   sendThread.setDaemon(false)
-  Utils.swallow(logger.warn, Utils.registerMBean(
+  swallowWarn(Utils.registerMBean(
     new AsyncProducerQueueSizeStats[T](queue), AsyncProducer.ProducerQueueSizeMBeanName + "-" + asyncProducerID))
 
   def this(config: AsyncProducerConfig) {
