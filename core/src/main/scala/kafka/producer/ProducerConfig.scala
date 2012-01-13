@@ -32,6 +32,10 @@ class ProducerConfig(val props: Properties) extends ZKConfig(props)
   if(brokerList != null && Utils.getString(props, "partitioner.class", null) != null)
     throw new InvalidConfigException("partitioner.class cannot be used when broker.list is set")
 
+  /** If both broker.list and zk.connect options are specified, throw an exception */
+  if(brokerList != null && zkConnect != null)
+    throw new InvalidConfigException("only one of broker.list and zk.connect can be specified")
+
   /** the partitioner class for partitioning events amongst sub-topics */
   val partitionerClass = Utils.getString(props, "partitioner.class", "kafka.producer.DefaultPartitioner")
 

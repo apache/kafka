@@ -24,7 +24,8 @@ import java.io.File
 import kafka.consumer.SimpleConsumer
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils
-import kafka.utils.{Utils, Logging}
+import kafka.utils.{TestUtils, TestZKUtils,Utils, Logging}
+import kafka.zk.EmbeddedZookeeper
 import junit.framework.Assert._
 import kafka.api.FetchRequest
 import kafka.serializer.Encoder
@@ -35,30 +36,58 @@ import org.junit.{After, Before, Test}
 
 class KafkaLog4jAppenderTest extends JUnitSuite with Logging {
 
-  var logDir: File = null
+  var logDirZk: File = null
+  var logDirBl: File = null
   //  var topicLogDir: File = null
-  var server: KafkaServer = null
-  val brokerPort: Int = 9092
-  var simpleConsumer: SimpleConsumer = null
+  var serverBl: KafkaServer = null
+  var serverZk: KafkaServer = null
+
+  var simpleConsumerZk: SimpleConsumer = null
+  var simpleConsumerBl: SimpleConsumer = null
+
   val tLogger = Logger.getLogger(getClass())
+
+  private val brokerZk = 0
+  private val brokerBl = 1
+
+  private val ports = TestUtils.choosePorts(2)
+  private val (portZk, portBl) = (ports(0), ports(1))
+
+  private var zkServer:EmbeddedZookeeper = null
 
   @Before
   def setUp() {
-    val config: Properties = createBrokerConfig(1, brokerPort)
-    val logDirPath = config.getProperty("log.dir")
-    logDir = new File(logDirPath)
+    zkServer = new EmbeddedZookeeper(TestZKUtils.zookeeperConnect)
 
-    server = TestUtils.createServer(new KafkaConfig(config))
+    val propsZk = TestUtils.createBrokerConfig(brokerZk, portZk)
+    val logDirZkPath = propsZk.getProperty("log.dir")
+    logDirZk = new File(logDirZkPath)
+    serverZk = TestUtils.createServer(new KafkaConfig(propsZk));
+
+    val propsBl: Properties = createBrokerConfig(brokerBl, portBl)
+    val logDirBlPath = propsBl.getProperty("log.dir")
+    logDirBl = new File(logDirBlPath)
+    serverBl = TestUtils.createServer(new KafkaConfig(propsBl))
+
     Thread.sleep(100)
-    simpleConsumer = new SimpleConsumer("localhost", brokerPort, 1000000, 64*1024)
+
+    simpleConsumerZk = new SimpleConsumer("localhost", portZk, 1000000, 64*1024)
+    simpleConsumerBl = new SimpleConsumer("localhost", portBl, 1000000, 64*1024)
   }
 
   @After
   def tearDown() {
-    simpleConsumer.close
-    server.shutdown
-    Thread.sleep(100)
-    Utils.rm(logDir)
+    simpleConsumerZk.close
+    simpleConsumerBl.close
+
+    serverZk.shutdown
+    serverBl.shutdown
+    Utils.rm(logDirZk)
+    Utils.rm(logDirBl)
+
+    Thread.sleep(500)
+    zkServer.shutdown
+    Thread.sleep(500)
   }
 
   @Test
@@ -66,9 +95,10 @@ class KafkaLog4jAppenderTest extends JUnitSuite with Logging {
     var props = new Properties()
     props.put("log4j.rootLogger", "INFO")
     props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
-    props.put("log4j.appender.KAFKA.Host", "localhost")
+    props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
+    props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
     props.put("log4j.appender.KAFKA.Topic", "test-topic")
-    props.put("log4j.appender.KAFKA.encoder", "kafka.log4j.AppenderStringEncoder")
+    props.put("log4j.appender.KAFKA.SerializerClass", "kafka.log4j.AppenderStringEncoder")
     props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
 
     // port missing
@@ -82,9 +112,10 @@ class KafkaLog4jAppenderTest extends JUnitSuite with Logging {
     props = new Properties()
     props.put("log4j.rootLogger", "INFO")
     props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
+    props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
+    props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
     props.put("log4j.appender.KAFKA.Topic", "test-topic")
-    props.put("log4j.appender.KAFKA.Encoder", "kafka.log4j.AppenderStringEncoder")
-    props.put("log4j.appender.KAFKA.Port", "9092")
+    props.put("log4j.appender.KAFKA.SerializerClass", "kafka.log4j.AppenderStringEncoder")
     props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
 
     // host missing
@@ -98,9 +129,10 @@ class KafkaLog4jAppenderTest extends JUnitSuite with Logging {
     props = new Properties()
     props.put("log4j.rootLogger", "INFO")
     props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
-    props.put("log4j.appender.KAFKA.Host", "localhost")
-    props.put("log4j.appender.KAFKA.Port", "9092")
-    props.put("log4j.appender.KAFKA.Encoder", "kafka.log4j.AppenderStringEncoder")
+    props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
+    props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
+    props.put("log4j.appender.KAFKA.SerializerClass", "kafka.log4j.AppenderStringEncoder")
+    props.put("log4j.appender.KAFKA.BrokerList", "0:localhost:"+portBl.toString)
     props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
 
     // topic missing
@@ -114,22 +146,23 @@ class KafkaLog4jAppenderTest extends JUnitSuite with Logging {
     props = new Properties()
     props.put("log4j.rootLogger", "INFO")
     props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
-    props.put("log4j.appender.KAFKA.Host", "localhost")
+    props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
+    props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
+    props.put("log4j.appender.KAFKA.BrokerList", "0:localhost:"+portBl.toString)
     props.put("log4j.appender.KAFKA.Topic", "test-topic")
-    props.put("log4j.appender.KAFKA.Port", "9092")
     props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
 
     // serializer missing
     try {
       PropertyConfigurator.configure(props)
     }catch {
-      case e: MissingConfigException => fail("should default to kafka.producer.DefaultStringEncoder")
+      case e: MissingConfigException => fail("should default to kafka.serializer.StringEncoder")
     }
   }
 
   @Test
-  def testLog4jAppends() {
-    PropertyConfigurator.configure(getLog4jConfig)
+  def testBrokerListLog4jAppends() {
+    PropertyConfigurator.configure(getLog4jConfigWithBrokerList)
 
     for(i <- 1 to 5)
       info("test")
@@ -137,7 +170,7 @@ class KafkaLog4jAppenderTest extends JUnitSuite with Logging {
     Thread.sleep(500)
 
     var offset = 0L
-    val messages = simpleConsumer.fetch(new FetchRequest("test-topic", 0, offset, 1024*1024))
+    val messages = simpleConsumerBl.fetch(new FetchRequest("test-topic", 0, offset, 1024*1024))
 
     var count = 0
     for(message <- messages) {
@@ -148,15 +181,48 @@ class KafkaLog4jAppenderTest extends JUnitSuite with Logging {
     assertEquals(5, count)
   }
 
+  @Test
+  def testZkConnectLog4jAppends() {
+    PropertyConfigurator.configure(getLog4jConfigWithZkConnect)
 
-  private def getLog4jConfig: Properties = {
+    for(i <- 1 to 5)
+      info("test")
+
+    Thread.sleep(500)
+
+    var offset = 0L
+    val messages = simpleConsumerZk.fetch(new FetchRequest("test-topic", 0, offset, 1024*1024))
+
+    var count = 0
+    for(message <- messages) {
+      count = count + 1
+      offset += message.offset
+    }
+
+    assertEquals(5, count)
+  }
+
+  private def getLog4jConfigWithBrokerList: Properties = {
     var props = new Properties()
     props.put("log4j.rootLogger", "INFO")
     props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
-    props.put("log4j.appender.KAFKA.Port", "9092")
-    props.put("log4j.appender.KAFKA.Host", "localhost")
+    props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
+    props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
+    props.put("log4j.appender.KAFKA.BrokerList", "0:localhost:"+portBl.toString)
     props.put("log4j.appender.KAFKA.Topic", "test-topic")
-    props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
+    props.put("log4j.logger.kafka.log4j", "INFO,KAFKA")
+    props
+  }
+
+  private def getLog4jConfigWithZkConnect: Properties = {
+    var props = new Properties()
+    props.put("log4j.rootLogger", "INFO")
+    props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
+    props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
+    props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
+    props.put("log4j.appender.KAFKA.ZkConnect", TestZKUtils.zookeeperConnect)
+    props.put("log4j.appender.KAFKA.Topic", "test-topic")
+    props.put("log4j.logger.kafka.log4j", "INFO,KAFKA")
     props
   }
 
