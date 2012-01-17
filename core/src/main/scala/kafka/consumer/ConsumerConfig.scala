@@ -24,7 +24,7 @@ import kafka.common.InvalidConfigException
 object ConsumerConfig {
   val SocketTimeout = 30 * 1000
   val SocketBufferSize = 64*1024
-  val FetchSize = 300 * 1024
+  val FetchSize = 1024 * 1024
   val MaxFetchSize = 10*FetchSize
   val DefaultFetcherBackoffMs = 1000
   val AutoCommit = true
@@ -61,9 +61,6 @@ class ConsumerConfig(props: Properties) extends ZKConfig(props) {
   
   /** the number of byes of messages to attempt to fetch */
   val fetchSize = Utils.getInt(props, "fetch.size", FetchSize)
-  
-  /** the maximum allowable fetch size for a very large message */
-  val maxFetchSize: Int = fetchSize * 10
   
   /** to avoid repeatedly polling a broker node which has no new data
       we will backoff every time we get an empty set from the broker*/
