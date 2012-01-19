@@ -58,6 +58,8 @@ class ConsumerIterator[T](private val topic: String,
       else {
         currentDataChunk = channel.poll(consumerTimeoutMs, TimeUnit.MILLISECONDS)
         if (currentDataChunk == null) {
+          // reset state to make the iterator re-iterable
+          resetState()
           throw new ConsumerTimeoutException
         }
       }
