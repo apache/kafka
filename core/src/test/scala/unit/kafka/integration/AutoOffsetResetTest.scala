@@ -26,11 +26,10 @@ import kafka.consumer.{ConsumerTimeoutException, ConsumerConfig, ConsumerConnect
 import kafka.server._
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
-import kafka.utils.{TestUtils, TestZKUtils}
+import kafka.utils.TestUtils
 
 class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
 
-  val zkConnect = TestZKUtils.zookeeperConnect
   val topic = "test_topic"
   val group = "default_group"
   val testConsumer = "consumer"

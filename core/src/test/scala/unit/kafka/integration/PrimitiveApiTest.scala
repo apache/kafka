@@ -27,9 +27,9 @@ import org.scalatest.junit.JUnit3Suite
 import java.util.Properties
 import kafka.producer.{ProducerData, Producer, ProducerConfig}
 import kafka.serializer.StringDecoder
-import kafka.utils.TestUtils
 import kafka.message.{DefaultCompressionCodec, NoCompressionCodec, Message, ByteBufferMessageSet}
 import java.io.File
+import kafka.utils.TestUtils
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -39,7 +39,6 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   val port = TestUtils.choosePort
   val props = TestUtils.createBrokerConfig(0, port)
   val config = new KafkaConfig(props) {
-                 override val enableZookeeper = false
                  override val flushInterval = 1
                }
   val configs = List(config)

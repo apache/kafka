@@ -25,8 +25,8 @@ import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
 import kafka.javaapi.message.ByteBufferMessageSet
 import kafka.javaapi.ProducerRequest
-import kafka.utils.TestUtils
 import kafka.message.{DefaultCompressionCodec, NoCompressionCodec, Message}
+import kafka.utils.TestUtils
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -35,9 +35,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   
   val port = 9999
   val props = TestUtils.createBrokerConfig(0, port)
-  val config = new KafkaConfig(props) {
-                 override val enableZookeeper = false
-               }
+  val config = new KafkaConfig(props)
   val configs = List(config)
   val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 

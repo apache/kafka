@@ -19,7 +19,6 @@ package kafka.utils
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import kafka.utils._
 
 /**
  * A scheduler for running jobs in the background

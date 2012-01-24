@@ -29,6 +29,7 @@ import kafka.producer._
 import kafka.message._
 import org.I0Itec.zkclient.ZkClient
 import kafka.consumer.ConsumerConfig
+import kafka.cluster.Broker
 
 /**
  * Utility functions to help with testing
@@ -299,6 +300,12 @@ object TestUtils {
           return allDone()
       }
     }
+  }
+
+  def createBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
+    val brokers = ids.map(id => new Broker(id, "localhost" + System.currentTimeMillis(), "localhost", 6667))
+    brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, b.id, b.host, b.creatorId, b.port))
+    brokers
   }
 
 }

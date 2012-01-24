@@ -25,16 +25,17 @@ import java.util.{Random, Properties}
 import kafka.api.{FetchRequest, OffsetRequest}
 import collection.mutable.WrappedArray
 import kafka.consumer.SimpleConsumer
-import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import org.apache.log4j._
+import kafka.zk.ZooKeeperTestHarness
+import org.scalatest.junit.JUnit3Suite
 
 object LogOffsetTest {
   val random = new Random()  
 }
 
-class LogOffsetTest extends JUnitSuite {
+class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
   var logDir: File = null
   var topicLogDir: File = null
   var server: KafkaServer = null
@@ -45,7 +46,8 @@ class LogOffsetTest extends JUnitSuite {
   private val logger = Logger.getLogger(classOf[LogOffsetTest])
   
   @Before
-  def setUp() {
+  override def setUp() {
+    super.setUp()
     val config: Properties = createBrokerConfig(1, brokerPort)
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
@@ -55,10 +57,11 @@ class LogOffsetTest extends JUnitSuite {
   }
 
   @After
-  def tearDown() {
+  override def tearDown() {
     simpleConsumer.close
     server.shutdown
     Utils.rm(logDir)
+    super.tearDown()
   }
 
   @Test
@@ -206,6 +209,7 @@ class LogOffsetTest extends JUnitSuite {
     props.put("log.retention.hours", "10")
     props.put("log.cleanup.interval.mins", "5")
     props.put("log.file.size", logSize.toString)
+    props.put("zk.connect", zkConnect.toString)
     props
   }
 

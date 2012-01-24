@@ -17,7 +17,6 @@
 
 package kafka.network
 
-import java.util.ArrayList
 import java.util.concurrent._
 
 object RequestChannel { 

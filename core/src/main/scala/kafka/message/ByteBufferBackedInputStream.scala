@@ -19,7 +19,6 @@ package kafka.message
 
 import java.io.InputStream
 import java.nio.ByteBuffer
-import scala.Math
 
 class ByteBufferBackedInputStream(buffer:ByteBuffer) extends InputStream {
   override def read():Int  = {

@@ -18,9 +18,10 @@
 package kafka.zk
 
 import org.scalatest.junit.JUnit3Suite
+import kafka.utils.TestZKUtils
 
 trait ZooKeeperTestHarness extends JUnit3Suite {
-  val zkConnect: String
+  val zkConnect: String = TestZKUtils.zookeeperConnect
   var zookeeper: EmbeddedZookeeper = null
 
   override def setUp() {

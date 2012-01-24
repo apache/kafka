@@ -17,9 +17,6 @@
 
 package kafka.server
 
-import java.util.concurrent._
-import java.util.concurrent.atomic._
-import org.apache.log4j.Logger
 import kafka.network._
 import kafka.utils._
 

@@ -38,7 +38,7 @@ class FetchRequest(val topic: String,
                    val maxSize: Int) extends Request(RequestKeys.Fetch) {
   
   def writeTo(buffer: ByteBuffer) {
-    Utils.writeShortString(buffer, topic, "UTF-8")
+    Utils.writeShortString(buffer, topic)
     buffer.putInt(partition)
     buffer.putLong(offset)
     buffer.putInt(maxSize)

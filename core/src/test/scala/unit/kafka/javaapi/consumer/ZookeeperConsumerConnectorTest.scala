@@ -18,11 +18,10 @@
 package kafka.javaapi.consumer
 
 import junit.framework.Assert._
-import kafka.zk.ZooKeeperTestHarness
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
 import kafka.utils.{Utils, Logging}
-import kafka.utils.{TestZKUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.scalatest.junit.JUnit3Suite
 import scala.collection.JavaConversions._
 import kafka.javaapi.message.ByteBufferMessageSet
@@ -30,17 +29,15 @@ import kafka.consumer.{ConsumerConfig, KafkaMessageStream}
 import org.apache.log4j.{Level, Logger}
 import kafka.message._
 
-class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with ZooKeeperTestHarness with Logging {
+class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
-  val zookeeperConnect = TestZKUtils.zookeeperConnect
-  val zkConnect = zookeeperConnect
+  val zookeeperConnect = zkConnect
   val numNodes = 2
   val numParts = 2
   val topic = "topic1"
   val configs =
     for(props <- TestUtils.createBrokerConfigs(numNodes))
     yield new KafkaConfig(props) {
-      override val enableZookeeper = true
       override val numPartitions = numParts
       override val zkConnect = zookeeperConnect
     }
@@ -57,7 +54,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val sentMessages1 = sendMessages(nMessages, "batch1")
     // create a consumer
     val consumerConfig1 = new ConsumerConfig(
-      TestUtils.createConsumerProperties(zkConnect, group, consumer1))
+      TestUtils.createConsumerProperties(zookeeperConnect, group, consumer1))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(toJavaMap(Predef.Map(topic -> numNodes*numParts/2)))
     val receivedMessages1 = getMessages(nMessages*2, topicMessageStreams1)

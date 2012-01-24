@@ -62,7 +62,7 @@ class OffsetRequest(val topic: String,
                     val maxNumOffsets: Int) extends Request(RequestKeys.Offsets) {
 
   def writeTo(buffer: ByteBuffer) {
-    Utils.writeShortString(buffer, topic, "UTF-8")
+    Utils.writeShortString(buffer, topic)
     buffer.putInt(partition)
     buffer.putLong(time)
     buffer.putInt(maxNumOffsets)

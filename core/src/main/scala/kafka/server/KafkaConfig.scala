@@ -79,9 +79,6 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
   /* the frequency in minutes that the log cleaner checks whether any log is eligible for deletion */
   val logCleanupIntervalMinutes = Utils.getIntInRange(props, "log.cleanup.interval.mins", 10, (1, Int.MaxValue))
   
-  /* enable zookeeper registration in the server */
-  val enableZookeeper = Utils.getBoolean(props, "enable.zookeeper", true)
-
   /* the maximum time in ms that a message in selected topics is kept in memory before flushed to disk, e.g., topic1:3000,topic2: 6000  */
   val flushIntervalMap = Utils.getTopicFlushIntervals(Utils.getString(props, "topic.flush.intervals.ms", ""))
 
@@ -93,4 +90,10 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
 
    /* the number of partitions for selected topics, e.g., topic1:8,topic2:16 */
   val topicPartitionsMap = Utils.getTopicPartitions(Utils.getString(props, "topic.partition.count.map", ""))
+
+  /* enable auto creation of topic on the server */
+  val autoCreateTopics = Utils.getBoolean(props, "auto.create.topics", true)
+
+  /* default replication factors for automatically created topics */
+  val defaultReplicationFactor = Utils.getInt(props, "default.replication.factor", 1)
 }

@@ -13,21 +13,23 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-package kafka.admin
+*/
 
-class PartitionMetaData(val partitionId: String,
-                        val replicaList: Seq[String],
-                        val inSyncList: Seq[String],
-                        val leaderId: Option[String]) {
+package kafka.common
 
-  override def toString(): String = {
-    val builder = new StringBuilder
-    builder.append("partition id: " + partitionId)
-    builder.append(" replica list: " + replicaList.mkString(","))
-    builder.append(" in-sync list: " + inSyncList.mkString(","))
-    builder.append(" leader: " + leaderId)
-    builder.toString
+import org.I0Itec.zkclient.ZkClient
+import kafka.utils.{ZKStringSerializer, ZKConfig}
+import java.util.concurrent.atomic.AtomicReference
+
+object KafkaZookeeperClient {
+  private val INSTANCE = new AtomicReference[ZkClient](null)
+
+  def getZookeeperClient(config: ZKConfig): ZkClient = {
+    // TODO: This cannot be a singleton since unit tests break if we do that
+//    INSTANCE.compareAndSet(null, new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
+//                                              ZKStringSerializer))
+    INSTANCE.set(new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
+                                              ZKStringSerializer))
+    INSTANCE.get()
   }
-
 }

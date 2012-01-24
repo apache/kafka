@@ -17,7 +17,6 @@
 
 package kafka.message
 
-import java.util.Arrays
 import junit.framework.Assert._
 import kafka.utils.TestUtils._
 import org.scalatest.junit.JUnitSuite

@@ -44,9 +44,10 @@ object CreateTopicCommand {
                            .describedAs("replication factor")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1)
-    val replicaAssignmentOpt = parser.accepts("replica-assignment-list", "for manuallly assigning replicas to brokers")
+    val replicaAssignmentOpt = parser.accepts("replica-assignment-list", "for manually assigning replicas to brokers")
                            .withRequiredArg
-                           .describedAs("broker_id_for_part1_replica1:broker_id_for_part1_replica2,broker_id_for_part2_replica1:broker_id_for_part2_replica2, ...")
+                           .describedAs("broker_id_for_part1_replica1 : broker_id_for_part1_replica2 , " +
+                                        "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
                            .ofType(classOf[String])
                            .defaultsTo("")
 
@@ -68,14 +69,7 @@ object CreateTopicCommand {
     var zkClient: ZkClient = null
     try {
       zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
-      val brokerList = ZkUtils.getSortedBrokerList(zkClient)
-      var replicaAssignment: Seq[List[String]] = null
-
-      if (replicaAssignmentStr == "")
-        replicaAssignment = AdminUtils.assginReplicasToBrokers(brokerList, nPartitions, replicationFactor)
-      else
-        replicaAssignment = getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet)
-      AdminUtils.createReplicaAssignmentPathInZK(topic, replicaAssignment, zkClient)
+      createTopic(zkClient, topic, nPartitions, replicationFactor, replicaAssignmentStr)
       println("creation succeeded!")
     }
     catch {
@@ -89,11 +83,22 @@ object CreateTopicCommand {
     }
   }
 
+  def createTopic(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicationFactor: Int = 1, replicaAssignmentStr: String = "") {
+    val brokerList = ZkUtils.getSortedBrokerList(zkClient)
+    var replicaAssignment: Seq[List[String]] = null
+
+    if (replicaAssignmentStr == "")
+      replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, numPartitions, replicationFactor)
+    else
+      replicaAssignment = getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet)
+    AdminUtils.createReplicaAssignmentPathInZK(topic, replicaAssignment, zkClient)
+  }
+
   def getManualReplicaAssignment(replicaAssignmentList: String, availableBrokerList: Set[String]): Array[List[String]] = {
     val partitionList = replicaAssignmentList.split(",")
     val ret = new Array[List[String]](partitionList.size)
     for (i <- 0 until partitionList.size) {
-      val brokerList = partitionList(i).split(":")
+      val brokerList = partitionList(i).split(":").map(s => s.trim())
       if (brokerList.size <= 0)
         throw new AdministrationException("replication factor must be larger than 0")
       if (brokerList.size != brokerList.toSet.size)

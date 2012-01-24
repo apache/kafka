@@ -16,29 +16,25 @@
  */
 package kafka.server
 
-import kafka.utils.TestUtils
 import java.io.File
-import kafka.utils.Utils
 import kafka.api.FetchRequest
-import kafka.integration.ProducerConsumerTestHarness
 import kafka.producer.{SyncProducer, SyncProducerConfig}
 import kafka.consumer.SimpleConsumer
 import java.util.Properties
-import org.scalatest.junit.JUnitSuite
-import junit.framework.{Assert, TestCase}
-import org.junit.{After, Before, Test}
+import org.junit.Test
 import junit.framework.Assert._
 import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
+import org.scalatest.junit.JUnit3Suite
+import kafka.zk.ZooKeeperTestHarness
+import kafka.utils.{TestUtils, Utils}
 
-class ServerShutdownTest extends JUnitSuite {
+class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
   val port = TestUtils.choosePort
 
   @Test
   def testCleanShutdown() {
     val props = TestUtils.createBrokerConfig(0, port)
-    val config = new KafkaConfig(props) {
-      override val enableZookeeper = false
-    }
+    val config = new KafkaConfig(props)
 
     val host = "localhost"
     val topic = "test"

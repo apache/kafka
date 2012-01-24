@@ -17,13 +17,11 @@
 
 package kafka.server
 
-import scala.reflect.BeanProperty
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.io.File
-import org.apache.log4j.Logger
 import kafka.utils.{Mx4jLoader, Utils, SystemTime, KafkaScheduler, Logging}
-import kafka.network.{SocketServerStats, SocketServer, RequestChannel}
+import kafka.network.{SocketServerStats, SocketServer}
 import kafka.log.LogManager
 
 /**

@@ -76,13 +76,13 @@ object ListTopicCommand {
   }
 
   def showTopic(topic: String, zkClient: ZkClient) {
-    val topicMetaData = AdminUtils.getTopicMetaDataFromZK(topic, zkClient)
+    val topicMetaData = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
     topicMetaData match {
       case None =>
         println("topic " + topic + " doesn't exist!")
       case Some(tmd) =>
         println("topic: " + topic)
-        for (part <- tmd)
+        for (part <- tmd.partitionsMetadata)
           println(part.toString)
     }
   }

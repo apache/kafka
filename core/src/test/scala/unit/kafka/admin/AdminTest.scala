@@ -20,18 +20,17 @@ import junit.framework.Assert._
 import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.TestZKUtils
+import kafka.utils.TestUtils
 
 class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
-  val zkConnect = TestZKUtils.zookeeperConnect
- 
+
   @Test
   def testReplicaAssignment() {
     val brokerList = List("0", "1", "2", "3", "4")
 
     // test 0 replication factor
     try {
-      AdminUtils.assginReplicasToBrokers(brokerList, 10, 0)
+      AdminUtils.assignReplicasToBrokers(brokerList, 10, 0)
       fail("shouldn't allow replication factor 0")
     }
     catch {
@@ -41,7 +40,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // test wrong replication factor
     try {
-      AdminUtils.assginReplicasToBrokers(brokerList, 10, 6)
+      AdminUtils.assignReplicasToBrokers(brokerList, 10, 6)
       fail("shouldn't allow replication factor larger than # of brokers")
     }
     catch {
@@ -64,7 +63,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
         List("4", "1", "2")
         )
 
-      val actualAssignment = AdminUtils.assginReplicasToBrokers(brokerList, 10, 3, 0)
+      val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerList, 10, 3, 0)
       val e = (expectedAssignment.toList == actualAssignment.toList)
       assertTrue(expectedAssignment.toList == actualAssignment.toList)
     }
@@ -121,7 +120,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testTopicCreationInZK() {
-    val expectedReplicationAssignment = Array(
+    val expectedReplicaAssignment = Array(
       List("0", "1", "2"),
       List("1", "2", "3"),
       List("2", "3", "4"),
@@ -135,18 +134,46 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
       List("1", "2", "3"),
       List("1", "3", "4")      
       )
+    TestUtils.createBrokersInZk(zookeeper.client, List(0, 1, 2, 3, 4))
+
     val topic = "test"
-    AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicationAssignment, zookeeper.client)
-    val actualReplicationAssignment = AdminUtils.getTopicMetaDataFromZK(topic, zookeeper.client).get.map(p => p.replicaList)
-    assertTrue(expectedReplicationAssignment.toList == actualReplicationAssignment.toList)
+    // create the topic
+    AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicaAssignment, zookeeper.client)
+    val actualReplicaAssignment = AdminUtils.getTopicMetaDataFromZK(List(topic), zookeeper.client).head
+                                  .get.partitionsMetadata.map(p => p.replicas)
+    val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id.toString).toList).toList
+    expectedReplicaAssignment.toList.zip(actualReplicaList).foreach(l => assertEquals(l._1, l._2))
 
     try {
-      AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicationAssignment, zookeeper.client)
-      fail("shouldn't be able to create a topic already exist")
+      AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicaAssignment, zookeeper.client)
+      fail("shouldn't be able to create a topic already exists")
     }
     catch {
       case e: AdministrationException => // this is good
       case e2 => throw e2
+    }
+  }
+
+  @Test
+  def testGetTopicMetadata() {
+    val expectedReplicaAssignment = Array(
+      List("0", "1", "2"),
+      List("1", "2", "3")
+    )
+    val topic = "auto-topic"
+    TestUtils.createBrokersInZk(zookeeper.client, List(0, 1, 2, 3))
+    AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicaAssignment, zookeeper.client)
+
+    val newTopicMetadata = AdminUtils.getTopicMetaDataFromZK(List(topic), zookeeper.client).head
+    newTopicMetadata match {
+      case Some(metadata) => assertEquals(topic, metadata.topic)
+        assertNotNull("partition metadata list cannot be null", metadata.partitionsMetadata)
+        assertEquals("partition metadata list length should be 2", 2, metadata.partitionsMetadata.size)
+        assertNull("leader should not be assigned for now", metadata.partitionsMetadata.head.leader.getOrElse(null))
+        val actualReplicaAssignment = metadata.partitionsMetadata.map(p => p.replicas)
+        val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id.toString).toList).toList
+        assertEquals(expectedReplicaAssignment.toList, actualReplicaList)
+      case None => fail("Topic " + topic + " should've been automatically created")
     }
   }
 }

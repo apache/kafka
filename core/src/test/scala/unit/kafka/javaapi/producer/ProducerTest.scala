@@ -21,10 +21,8 @@ import java.util.Properties
 import org.apache.log4j.{Logger, Level}
 import kafka.server.{KafkaRequestHandler, KafkaServer, KafkaConfig}
 import kafka.zk.EmbeddedZookeeper
-import kafka.utils.{TestZKUtils, TestUtils}
 import org.junit.{After, Before, Test}
 import junit.framework.Assert
-import collection.mutable.HashMap
 import org.easymock.EasyMock
 import kafka.utils._
 import java.util.concurrent.ConcurrentHashMap
@@ -34,7 +32,7 @@ import org.scalatest.junit.JUnitSuite
 import kafka.producer.{SyncProducerConfig, Partitioner, ProducerConfig, DefaultPartitioner}
 import kafka.producer.ProducerPool
 import kafka.javaapi.message.ByteBufferMessageSet
-import kafka.producer.async.{AsyncProducer, AsyncProducerConfig}
+import kafka.producer.async.AsyncProducer
 import kafka.javaapi.Implicits._
 import kafka.serializer.{StringEncoder, Encoder}
 import kafka.javaapi.consumer.SimpleConsumer

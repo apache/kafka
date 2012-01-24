@@ -17,7 +17,6 @@
 
 package kafka.cluster
 
-import kafka.utils._
 import scala.collection._
 
 /**

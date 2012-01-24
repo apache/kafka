@@ -23,7 +23,6 @@ import java.nio.channels._
 import java.util.concurrent.atomic._
 import java.lang.management._
 import java.util.zip.CRC32
-import org.apache.log4j.Logger
 import javax.management._
 import java.util.Properties
 import scala.collection._
@@ -115,7 +114,7 @@ object Utils extends Logging {
    * @param buffer The buffer to read from
    * @param encoding The encoding in which to read the string
    */
-  def readShortString(buffer: ByteBuffer, encoding: String): String = {
+  def readShortString(buffer: ByteBuffer, encoding: String = "UTF-8"): String = {
     val size: Int = buffer.getShort()
     if(size < 0)
       return null
@@ -130,7 +129,7 @@ object Utils extends Logging {
    * @param string The string to write
    * @param encoding The encoding in which to write the string
    */
-  def writeShortString(buffer: ByteBuffer, string: String, encoding: String): Unit = {
+  def writeShortString(buffer: ByteBuffer, string: String, encoding: String = "UTF-8"): Unit = {
     if(string == null) {
       buffer.putShort(-1)
     } else if(string.length > Short.MaxValue) {
@@ -141,6 +140,24 @@ object Utils extends Logging {
     }
   }
   
+  /**
+   * Return size of a size prefixed string where the size is stored as a 2 byte short
+   * @param string The string to write
+   * @param encoding The encoding in which to write the string
+   */
+  def shortStringLength(string: String, encoding: String = "UTF-8"): Int = {
+    if(string == null) {
+      2
+    } else {
+      val encodedString = string.getBytes(encoding)
+      if(encodedString.length > Short.MaxValue) {
+        throw new IllegalArgumentException("String exceeds the maximum size of " + Short.MaxValue + ".")
+      } else {
+        2 + encodedString.length
+      }
+    }
+  }
+
   /**
    * Read a properties file from the given path
    * @param filename The path of the file to read
@@ -193,7 +210,28 @@ object Utils extends Logging {
     else
       v
   }
-  
+
+  def getIntInRange(buffer: ByteBuffer, name: String, range: (Int, Int)): Int = {
+    val value = buffer.getInt
+    if(value < range._1 || value > range._2)
+      throw new IllegalArgumentException(name + " has value " + value + " which is not in the range " + range + ".")
+    else value
+  }
+
+  def getShortInRange(buffer: ByteBuffer, name: String, range: (Short, Short)): Short = {
+    val value = buffer.getShort
+    if(value < range._1 || value > range._2)
+      throw new IllegalArgumentException(name + " has value " + value + " which is not in the range " + range + ".")
+    else value
+  }
+
+  def getLongInRange(buffer: ByteBuffer, name: String, range: (Long, Long)): Long = {
+    val value = buffer.getLong
+    if(value < range._1 || value > range._2)
+      throw new IllegalArgumentException(name + " has value " + value + " which is not in the range " + range + ".")
+    else value
+  }
+
   /**
    * Read a boolean value from the properties instance
    * @param props The properties to read from
@@ -618,7 +656,7 @@ object Utils extends Logging {
   def tryCleanupZookeeper(zkUrl: String, groupId: String) {
     try {
       val dir = "/consumers/" + groupId
-      logger.info("Cleaning up temporary zookeeper data under " + dir + ".")
+      info("Cleaning up temporary zookeeper data under " + dir + ".")
       val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)
       zk.deleteRecursive(dir)
       zk.close()

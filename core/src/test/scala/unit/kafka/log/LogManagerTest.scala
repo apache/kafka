@@ -20,36 +20,37 @@ package kafka.log
 import java.io._
 import junit.framework.Assert._
 import kafka.server.KafkaConfig
-import org.scalatest.junit.JUnitSuite
-import org.junit.{After, Before, Test}
-import kafka.utils.{Utils, MockTime, TestUtils}
+import org.junit.Test
 import kafka.common.OffsetOutOfRangeException
+import kafka.zk.ZooKeeperTestHarness
+import kafka.utils.{TestZKUtils, Utils, MockTime, TestUtils}
+import org.scalatest.junit.JUnit3Suite
 
-class LogManagerTest extends JUnitSuite {
+class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   val time: MockTime = new MockTime()
   val maxLogAge = 1000
   var logDir: File = null
   var logManager: LogManager = null
   var config:KafkaConfig = null
+  val zookeeperConnect = TestZKUtils.zookeeperConnect
 
-  @Before
-  def setUp() {
+  override def setUp() {
+    super.setUp()
     val props = TestUtils.createBrokerConfig(0, -1)
     config = new KafkaConfig(props) {
                    override val logFileSize = 1024
-                   override val enableZookeeper = false
                  }
     logManager = new LogManager(config, null, time, -1, maxLogAge, false)
     logManager.startup
     logDir = logManager.logDir
   }
 
-  @After
-  def tearDown() {
+  override def tearDown() {
     if(logManager != null)
       logManager.close()
     Utils.rm(logDir)
+    super.tearDown()
   }
   
   @Test
@@ -107,7 +108,6 @@ class LogManagerTest extends JUnitSuite {
     Thread.sleep(100)
     config = new KafkaConfig(props) {
       override val logFileSize = (10 * (setSize - 1)).asInstanceOf[Int] // each segment will be 10 messages
-      override val enableZookeeper = false
       override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Int] // keep exactly 6 segments + 1 roll over
       override val logRetentionHours = retentionHours
     }
@@ -152,7 +152,6 @@ class LogManagerTest extends JUnitSuite {
     Thread.sleep(100)
     config = new KafkaConfig(props) {
                    override val logFileSize = 1024 *1024 *1024 
-                   override val enableZookeeper = false
                    override val flushSchedulerThreadRate = 50
                    override val flushInterval = Int.MaxValue
                    override val flushIntervalMap = Utils.getTopicFlushIntervals("timebasedflush:100")
@@ -176,7 +175,6 @@ class LogManagerTest extends JUnitSuite {
     Thread.sleep(100)
     config = new KafkaConfig(props) {
                    override val logFileSize = 256
-                   override val enableZookeeper = false
                    override val topicPartitionsMap = Utils.getTopicPartitions("testPartition:2")
                  }
     

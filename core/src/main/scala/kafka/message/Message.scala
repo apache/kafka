@@ -18,9 +18,6 @@
 package kafka.message
 
 import java.nio._
-import java.nio.channels._
-import java.util.zip.CRC32
-import java.util.UUID
 import kafka.utils._
 import kafka.common.UnknownMagicByteException
 

@@ -17,38 +17,23 @@
 
 package kafka.producer
 
-import junit.framework.{Assert, TestCase}
-import kafka.utils.SystemTime
-import kafka.utils.TestUtils
-import kafka.server.{KafkaServer, KafkaConfig}
-import org.apache.log4j.{Logger, Level}
-import org.scalatest.junit.JUnitSuite
-import org.junit.{After, Before, Test}
+import junit.framework.Assert
+import kafka.server.KafkaConfig
 import kafka.common.MessageSizeTooLargeException
 import java.util.Properties
 import kafka.api.ProducerRequest
 import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
+import kafka.integration.KafkaServerTestHarness
+import kafka.utils.{TestZKUtils, SystemTime, TestUtils}
+import org.scalatest.junit.JUnit3Suite
 
-class SyncProducerTest extends JUnitSuite {
+class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   private var messageBytes =  new Array[Byte](2);
-  private var server: KafkaServer = null
+  val configs = List(new KafkaConfig(TestUtils.createBrokerConfigs(1).head))
+  val zookeeperConnect = TestZKUtils.zookeeperConnect
 
-  @Before
-  def setUp() {
-    server = TestUtils.createServer(new KafkaConfig(TestUtils.createBrokerConfig(0, TestUtils.choosePort))
-    {
-      override val enableZookeeper = false
-    })
-  }
-
-  @After
-  def tearDown() {
-    if(server != null)
-      server.shutdown
-  }
-
-  @Test
   def testReachableServer() {
+    val server = servers.head
     val props = new Properties()
     props.put("host", "localhost")
     props.put("port", server.socketServer.port.toString)
@@ -85,8 +70,8 @@ class SyncProducerTest extends JUnitSuite {
     Assert.assertFalse(failed)
   }
 
-  @Test
   def testMessageSizeTooLarge() {
+    val server = servers.head
     val props = new Properties()
     props.put("host", "localhost")
     props.put("port", server.socketServer.port.toString)

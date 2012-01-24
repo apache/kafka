@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import kafka.log._
 import kafka.message._
 import kafka.utils.{TestUtils, Utils}
 

@@ -18,12 +18,11 @@
 package kafka.server
 
 import kafka.utils._
-import kafka.cluster.Broker
 import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
-import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import kafka.log.LogManager
 import java.net.InetAddress
+import kafka.common.KafkaZookeeperClient
 
 /**
  * Handles the server's interaction with zookeeper. The server needs to register the following paths:
@@ -41,7 +40,7 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Loggin
   def startup() {
     /* start client */
     info("connecting to ZK: " + config.zkConnect)
-    zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
+    zkClient = KafkaZookeeperClient.getZookeeperClient(config)
     zkClient.subscribeStateChanges(new SessionExpireListener)
   }
 
@@ -49,17 +48,7 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Loggin
     info("Registering broker " + brokerIdPath)
     val hostName = if (config.hostName == null) InetAddress.getLocalHost.getHostAddress else config.hostName
     val creatorId = hostName + "-" + System.currentTimeMillis
-    val broker = new Broker(config.brokerId, creatorId, hostName, config.port)
-    try {
-      ZkUtils.createEphemeralPathExpectConflict(zkClient, brokerIdPath, broker.getZKString)
-    } catch {
-      case e: ZkNodeExistsException =>
-        throw new RuntimeException("A broker is already registered on the path " + brokerIdPath + ". This probably " + 
-                                   "indicates that you either have configured a brokerid that is already in use, or " + 
-                                   "else you have shutdown this broker and restarted it faster than the zookeeper " + 
-                                   "timeout so it appears to be re-registering.")
-    }
-    info("Registering broker " + brokerIdPath + " succeeded with " + broker)
+    ZkUtils.registerBrokerInZk(zkClient, config.brokerId, hostName, creatorId, config.port)
   }
 
   def registerTopicInZk(topic: String) {

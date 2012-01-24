@@ -19,7 +19,6 @@ package kafka.producer
 
 import kafka.utils.Utils
 import java.util.Properties
-import kafka.message.{CompressionUtils, CompressionCodec}
 
 class SyncProducerConfig(val props: Properties) extends SyncProducerConfigShared {
   /** the broker to which the producer sends events */

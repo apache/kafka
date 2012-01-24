@@ -17,7 +17,7 @@
 package kafka.producer
 
 import collection.mutable.HashMap
-import collection.mutable.Map
+import collection.immutable.Map
 import collection.SortedSet
 import kafka.cluster.{Broker, Partition}
 import kafka.common.InvalidConfigException
@@ -90,7 +90,7 @@ private[producer] class ConfigBrokerPartitionInfo(config: ProducerConfig) extend
       brokerInfo += (brokerIdHostPort(0).toInt -> new Broker(brokerIdHostPort(0).toInt, brokerIdHostPort(1),
         brokerIdHostPort(1), brokerIdHostPort(2).toInt))
     }
-    brokerInfo
+    brokerInfo.toMap
   }
 
 }

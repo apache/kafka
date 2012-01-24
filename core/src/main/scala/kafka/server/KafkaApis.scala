@@ -23,9 +23,11 @@ import kafka.network._
 import kafka.message._
 import kafka.api._
 import kafka.common.ErrorMapping
-import kafka.utils.SystemTime
-import kafka.utils.Logging
 import java.io.IOException
+import kafka.utils.{SystemTime, Logging}
+import collection.mutable.ListBuffer
+import kafka.admin.{CreateTopicCommand, AdminUtils}
+import java.lang.IllegalStateException
 
 /**
  * Logic to handle the various Kafka requests
@@ -42,6 +44,7 @@ class KafkaApis(val logManager: LogManager) extends Logging {
         case RequestKeys.MultiFetch => handleMultiFetchRequest(receive)
         case RequestKeys.MultiProduce => handleMultiProducerRequest(receive)
         case RequestKeys.Offsets => handleOffsetRequest(receive)
+        case RequestKeys.TopicMetadata => handleTopicMetadataRequest(receive)
         case _ => throw new IllegalStateException("No mapping found for handler id " + apiId)
     }
   }
@@ -128,5 +131,39 @@ class KafkaApis(val logManager: LogManager) extends Logging {
     val offsets = logManager.getOffsets(offsetRequest)
     val response = new OffsetArraySend(offsets)
     Some(response)
+  }
+
+  def handleTopicMetadataRequest(request: Receive): Option[Send] = {
+    val metadataRequest = TopicMetadataRequest.readFrom(request.buffer)
+
+    if(requestLogger.isTraceEnabled)
+      requestLogger.trace("Topic metadata request " + metadataRequest.toString())
+
+    val topicsMetadata = new ListBuffer[TopicMetadata]()
+    val config = logManager.getServerConfig
+    val zkClient = logManager.getZookeeperClient
+    val topicMetadataList = AdminUtils.getTopicMetaDataFromZK(metadataRequest.topics, zkClient)
+
+    metadataRequest.topics.zip(topicMetadataList).foreach { topicAndMetadata =>
+      val topic = topicAndMetadata._1
+      topicAndMetadata._2 match {
+        case Some(metadata) => topicsMetadata += metadata
+        case None =>
+          /* check if auto creation of topics is turned on */
+          if(config.autoCreateTopics) {
+            CreateTopicCommand.createTopic(zkClient, topic, config.numPartitions,
+              config.defaultReplicationFactor)
+            info("Auto creation of topic %s with partitions %d and replication factor %d is successful!"
+              .format(topic, config.numPartitions, config.defaultReplicationFactor))
+            val newTopicMetadata = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
+            newTopicMetadata match {
+              case Some(topicMetadata) => topicsMetadata += topicMetadata
+              case None =>
+                throw new IllegalStateException("Topic metadata for automatically created topic %s does not exist".format(topic))
+            }
+          }
+      }
+    }
+    Some(new TopicMetadataSend(topicsMetadata))
   }
 }

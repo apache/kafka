@@ -23,27 +23,27 @@ import java.util.Properties
 import java.io.File
 import kafka.consumer.SimpleConsumer
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.TestUtils
-import kafka.utils.{Utils, Logging}
 import junit.framework.Assert._
 import kafka.api.FetchRequest
 import kafka.serializer.Encoder
-import kafka.message.{MessageSet, Message}
+import kafka.message.Message
 import kafka.producer.async.MissingConfigException
-import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
+import org.scalatest.junit.JUnit3Suite
+import kafka.zk.ZooKeeperTestHarness
+import kafka.utils.{TestUtils, Utils, Logging}
 
-class KafkaLog4jAppenderTest extends JUnitSuite with Logging {
+class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
 
   var logDir: File = null
-  //  var topicLogDir: File = null
   var server: KafkaServer = null
   val brokerPort: Int = 9092
   var simpleConsumer: SimpleConsumer = null
   val tLogger = Logger.getLogger(getClass())
 
   @Before
-  def setUp() {
+  override def setUp() {
+    super.setUp()
     val config: Properties = createBrokerConfig(1, brokerPort)
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
@@ -54,11 +54,12 @@ class KafkaLog4jAppenderTest extends JUnitSuite with Logging {
   }
 
   @After
-  def tearDown() {
+  override def tearDown() {
     simpleConsumer.close
     server.shutdown
     Thread.sleep(100)
     Utils.rm(logDir)
+    super.tearDown()
   }
 
   @Test
@@ -171,6 +172,7 @@ class KafkaLog4jAppenderTest extends JUnitSuite with Logging {
     props.put("log.retention.hours", "10")
     props.put("log.cleanup.interval.mins", "5")
     props.put("log.file.size", "1000")
+    props.put("zk.connect", zkConnect.toString)
     props
   }
 

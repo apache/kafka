@@ -17,28 +17,49 @@
 
 package kafka.cluster
 
-import java.util.Arrays
-import kafka.utils._
-import java.net.InetAddress
-import kafka.server.KafkaConfig
-import util.parsing.json.JSON
+import kafka.utils.Utils._
+import java.nio.ByteBuffer
 
 /**
  * A Kafka broker
  */
 private[kafka] object Broker {
+
   def createBroker(id: Int, brokerInfoString: String): Broker = {
+    if(brokerInfoString == null)
+      throw new IllegalArgumentException("Broker id %s does not exist".format(id))
     val brokerInfo = brokerInfoString.split(":")
     new Broker(id, brokerInfo(0), brokerInfo(1), brokerInfo(2).toInt)
   }
+
+  def readFrom(buffer: ByteBuffer): Broker = {
+    val id = buffer.getInt
+    val creatorId = readShortString(buffer)
+    val host = readShortString(buffer)
+    val port = buffer.getInt
+    new Broker(id, creatorId, host, port)
+  }
 }
 
-private[kafka] class Broker(val id: Int, val creatorId: String, val host: String, val port: Int) {
+private[kafka] case class Broker(val id: Int, val creatorId: String, val host: String, val port: Int) {
   
   override def toString(): String = new String("id:" + id + ",creatorId:" + creatorId + ",host:" + host + ",port:" + port)
 
   def getZKString(): String = new String(creatorId + ":" + host + ":" + port)
-  
+
+  def writeTo(buffer: ByteBuffer) {
+    buffer.putInt(id)
+    writeShortString(buffer, creatorId)
+    writeShortString(buffer, host)
+    buffer.putInt(port)
+  }
+
+  def sizeInBytes: Int = {
+    val size = shortStringLength(creatorId) + shortStringLength(host) /* host name */ + 4 /* port */ + 4 /* broker id*/
+    debug("Size of broker info = " + size)
+    size
+  }
+
   override def equals(obj: Any): Boolean = {
     obj match {
       case null => false
@@ -47,6 +68,6 @@ private[kafka] class Broker(val id: Int, val creatorId: String, val host: String
     }
   }
   
-  override def hashCode(): Int = Utils.hashcode(id, host, port)
+  override def hashCode(): Int = hashcode(id, host, port)
   
 }

@@ -17,10 +17,7 @@
 
 package kafka.server
 
-import java.nio._
-import java.nio.channels._
 import kafka.network._
-import kafka.message._
 import kafka.utils._
 
 /**

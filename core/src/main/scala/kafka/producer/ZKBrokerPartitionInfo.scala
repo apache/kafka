@@ -18,7 +18,7 @@ package kafka.producer
 
 import kafka.utils.{ZKStringSerializer, ZkUtils, ZKConfig}
 import collection.mutable.HashMap
-import collection.mutable.Map
+import collection.immutable.Map
 import kafka.utils.Logging
 import collection.immutable.TreeSet
 import kafka.cluster.{Broker, Partition}
@@ -188,13 +188,9 @@ private[producer] class ZKBrokerPartitionInfo(config: ZKConfig, producerCbk: (In
    * @return a mapping from brokerId to (host, port)
    */
   private def getZKBrokerInfo(): Map[Int, Broker] = {
-    val brokers = new HashMap[Int, Broker]()
     val allBrokerIds = ZkUtils.getChildrenParentMayNotExist(zkClient, ZkUtils.BrokerIdsPath).map(bid => bid.toInt)
-    allBrokerIds.foreach { bid =>
-      val brokerInfo = ZkUtils.readData(zkClient, ZkUtils.BrokerIdsPath + "/" + bid)
-      brokers += (bid -> Broker.createBroker(bid, brokerInfo))
-    }
-    brokers
+    val brokers = ZkUtils.getBrokerInfoFromIds(zkClient, allBrokerIds)
+    allBrokerIds.zip(brokers).toMap
   }
 
   /**

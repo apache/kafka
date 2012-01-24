@@ -23,4 +23,5 @@ object RequestKeys {
   val MultiFetch: Short = 2
   val MultiProduce: Short = 3
   val Offsets: Short = 4
+  val TopicMetadata: Short = 5
 }

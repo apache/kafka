@@ -25,6 +25,7 @@ import java.util.concurrent.CountDownLatch
 import kafka.server.{KafkaConfig, KafkaZooKeeper}
 import kafka.common.{InvalidTopicException, InvalidPartitionException}
 import kafka.api.OffsetRequest
+import org.I0Itec.zkclient.ZkClient
 
 /**
  * The guy who creates and hands out logs
@@ -38,15 +39,16 @@ private[kafka] class LogManager(val config: KafkaConfig,
                                 needRecovery: Boolean) extends Logging {
   
   val logDir: File = new File(config.logDir)
+  var kafkaZookeeper = new KafkaZooKeeper(config, this)
+
   private val numPartitions = config.numPartitions
   private val maxSize: Long = config.logFileSize
   private val flushInterval = config.flushInterval
   private val topicPartitionsMap = config.topicPartitionsMap
   private val logCreationLock = new Object
   private val random = new java.util.Random
-  private var kafkaZookeeper: KafkaZooKeeper = null
   private var zkActor: Actor = null
-  private val startupLatch: CountDownLatch = if (config.enableZookeeper) new CountDownLatch(1) else null
+  private val startupLatch: CountDownLatch = new CountDownLatch(1)
   private val logFlusherScheduler = new KafkaScheduler(1, "kafka-logflusher-", false)
   private val logFlushIntervalMap = config.flushIntervalMap
   private val logRetentionMSMap = getLogRetentionMSMap(config.logRetentionHoursMap)
@@ -82,29 +84,26 @@ private[kafka] class LogManager(val config: KafkaConfig,
     scheduler.scheduleWithRate(cleanupLogs, 60 * 1000, logCleanupIntervalMs)
   }
 
-  if(config.enableZookeeper) {
-    kafkaZookeeper = new KafkaZooKeeper(config, this)
-    kafkaZookeeper.startup
-    zkActor = new Actor {
-      def act() {
-        loop {
-          receive {
-            case topic: String =>
-              try {
-                kafkaZookeeper.registerTopicInZk(topic)
-              }
-              catch {
-                case e => error(e) // log it and let it go
-              }
-            case StopActor =>
-              info("zkActor stopped")
-              exit
-          }
+  kafkaZookeeper.startup
+  zkActor = new Actor {
+    def act() {
+      loop {
+        receive {
+          case topic: String =>
+            try {
+              kafkaZookeeper.registerTopicInZk(topic)
+            }
+            catch {
+              case e => error(e) // log it and let it go
+            }
+          case StopActor =>
+            info("zkActor stopped")
+            exit
         }
       }
     }
-    zkActor.start
   }
+  zkActor.start
 
   case object StopActor
 
@@ -119,24 +118,20 @@ private[kafka] class LogManager(val config: KafkaConfig,
    *  Register this broker in ZK for the first time.
    */
   def startup() {
-    if(config.enableZookeeper) {
-      kafkaZookeeper.registerBrokerInZk()
-      for (topic <- getAllTopics)
-        kafkaZookeeper.registerTopicInZk(topic)
-      startupLatch.countDown
-    }
+    kafkaZookeeper.registerBrokerInZk()
+    for (topic <- getAllTopics)
+      kafkaZookeeper.registerTopicInZk(topic)
+    startupLatch.countDown
     info("Starting log flusher every " + config.flushSchedulerThreadRate + " ms with the following overrides " + logFlushIntervalMap)
     logFlusherScheduler.scheduleWithRate(flushAllLogs, config.flushSchedulerThreadRate, config.flushSchedulerThreadRate)
   }
 
   private def awaitStartup() {
-    if (config.enableZookeeper)
-      startupLatch.await
+    startupLatch.await
   }
 
   private def registerNewTopicInZK(topic: String) {
-    if (config.enableZookeeper)
-      zkActor ! topic 
+    zkActor ! topic
   }
 
   /**
@@ -288,10 +283,8 @@ private[kafka] class LogManager(val config: KafkaConfig,
     val iter = getLogIterator
     while(iter.hasNext)
       iter.next.close()
-    if (config.enableZookeeper) {
-      zkActor ! StopActor
-      kafkaZookeeper.close
-    }
+    zkActor ! StopActor
+    kafkaZookeeper.close
   }
   
   private def getLogIterator(): Iterator[Log] = {
@@ -345,4 +338,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
 
   def getAllTopics(): Iterator[String] = logs.keys.iterator
   def getTopicPartitionsMap() = topicPartitionsMap
+
+  def getServerConfig: KafkaConfig = config
+  def getZookeeperClient: ZkClient = kafkaZookeeper.zkClient
 }

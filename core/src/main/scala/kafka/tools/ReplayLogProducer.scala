@@ -17,19 +17,17 @@
 
 package kafka.tools
 
-import java.io.File
 import joptsimple.OptionParser
-import org.apache.log4j.Logger
 import java.util.concurrent.{Executors, CountDownLatch}
 import java.util.Properties
 import kafka.producer.async.DefaultEventHandler
-import kafka.serializer.{DefaultEncoder, StringEncoder}
+import kafka.serializer.DefaultEncoder
 import kafka.producer.{ProducerData, DefaultPartitioner, ProducerConfig, Producer}
 import kafka.consumer._
-import kafka.utils.{ZKStringSerializer, Utils, Logging}
+import kafka.utils.{ZKStringSerializer, Logging}
 import kafka.api.OffsetRequest
 import org.I0Itec.zkclient._
-import kafka.message.{CompressionCodec, Message, MessageSet, FileMessageSet}
+import kafka.message.{CompressionCodec, Message}
 
 object ReplayLogProducer extends Logging {
 

@@ -54,7 +54,6 @@ class Producer[K,V](config: ProducerConfig,
    * partitioning strategy on the message key (of type K) that is specified through the ProducerData[K, T]
    * object in the  send API
    */
-  import kafka.javaapi.Implicits._
   def this(config: ProducerConfig,
            encoder: Encoder[V],
            eventHandler: kafka.javaapi.producer.async.EventHandler[V],

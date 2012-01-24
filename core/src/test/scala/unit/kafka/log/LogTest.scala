@@ -18,14 +18,13 @@
 package kafka.log
 
 import java.io._
-import java.nio._
 import java.util.ArrayList
 import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 import kafka.utils.{Utils, TestUtils, Range}
 import kafka.common.OffsetOutOfRangeException
-import kafka.message.{NoCompressionCodec, MessageSet, ByteBufferMessageSet, Message}
+import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 
 class LogTest extends JUnitSuite {
   

@@ -18,25 +18,23 @@
 package kafka.integration
 
 import scala.collection._
-import junit.framework.Assert._
 import kafka.common.OffsetOutOfRangeException
 import kafka.api.{ProducerRequest, FetchRequest}
 import kafka.server.{KafkaRequestHandler, KafkaServer, KafkaConfig}
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
-import kafka.utils.{TestUtils, Utils}
 import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
+import kafka.zk.ZooKeeperTestHarness
+import kafka.utils.{TestUtils, Utils}
 
 /**
  * End to end tests of the primitive apis against a local server
  */
-class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness   {
+class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness with ZooKeeperTestHarness  {
 
   val port = TestUtils.choosePort
   val props = TestUtils.createBrokerConfig(0, port)
-  val config = new KafkaConfig(props) {
-                 override val enableZookeeper = false
-               }
+  val config = new KafkaConfig(props)
   val configs = List(config)
   var servers: List[KafkaServer] = null
   val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])

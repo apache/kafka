@@ -106,29 +106,26 @@ private[kafka] class AsyncProducer[T](config: AsyncProducerConfig,
 
     if(!added) {
       AsyncProducerStats.recordDroppedEvents
-      logger.error("Event queue is full of unsent messages, could not send event: " + event.toString)
+      error("Event queue is full of unsent messages, could not send event: " + event.toString)
       throw new QueueFullException("Event queue is full of unsent messages, could not send event: " + event.toString)
     }else {
-      if(logger.isTraceEnabled) {
-        logger.trace("Added event to send queue for topic: " + topic + ", partition: " + partition + ":" + event.toString)
-        logger.trace("Remaining queue size: " + queue.remainingCapacity)
-      }
+      trace("Added event to send queue for topic: " + topic + ", partition: " + partition + ":" + event.toString)
+      trace("Remaining queue size: " + queue.remainingCapacity)
     }
   }
 
   def close = {
     if(cbkHandler != null) {
       cbkHandler.close
-      logger.info("Closed the callback handler")
+      info("Closed the callback handler")
     }
     closed.set(true)
     queue.put(new QueueItem(AsyncProducer.Shutdown.asInstanceOf[T], null, -1))
-    if(logger.isDebugEnabled)
-      logger.debug("Added shutdown command to the queue")
+    debug("Added shutdown command to the queue")
     sendThread.shutdown
     sendThread.awaitShutdown
     producer.close
-    logger.info("Closed AsyncProducer")
+   info("Closed AsyncProducer")
   }
 
   // for testing only

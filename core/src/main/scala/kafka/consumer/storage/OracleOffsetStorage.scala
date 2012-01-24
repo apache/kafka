@@ -54,8 +54,7 @@ class OracleOffsetStorage(val connection: Connection) extends OffsetStorage with
     } finally {
       commitOrRollback(connection, success)
     }
-    if(logger.isDebugEnabled)
-      logger.debug("Updated node " + node + " for topic '" + topic + "' to " + offset)
+    debug("Updated node " + node + " for topic '" + topic + "' to " + offset)
   }
   
   def close() {

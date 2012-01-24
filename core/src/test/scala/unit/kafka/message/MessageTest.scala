@@ -19,9 +19,6 @@ package kafka.message
 
 import java.util._
 import java.nio._
-import java.nio.channels._
-import java.io._
-import junit.framework.TestCase
 import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{Before, Test}

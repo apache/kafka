@@ -17,17 +17,16 @@
 
 package kafka.integration
 
-import kafka.server.{KafkaServer, KafkaConfig}
+import kafka.server.KafkaConfig
 import org.scalatest.junit.JUnit3Suite
 import org.apache.log4j.Logger
 import java.util.Properties
 import kafka.consumer.SimpleConsumer
-import kafka.utils.{Utils, TestUtils}
 import kafka.api.{OffsetRequest, FetchRequest}
 import junit.framework.Assert._
-import java.io.File
+import kafka.utils.TestUtils
 
-class BackwardsCompatibilityTest extends JUnit3Suite {
+class BackwardsCompatibilityTest extends JUnit3Suite with KafkaServerTestHarness {
 
   val topic = "MagicByte0"
   val group = "default_group"
@@ -40,24 +39,19 @@ class BackwardsCompatibilityTest extends JUnit3Suite {
   kafkaProps.put("brokerid", "12")
   kafkaProps.put("port", port.toString)
   kafkaProps.put("log.dir", kafkaLogDir.getPath)
-  val kafkaConfig =
-    new KafkaConfig(kafkaProps) {
-      override val enableZookeeper = false
-    }
-  var kafkaServer : KafkaServer = null
+  kafkaProps.put("zk.connect", zkConnect.toString)
+  val configs = List(new KafkaConfig(kafkaProps))
   var simpleConsumer: SimpleConsumer = null
 
   private val logger = Logger.getLogger(getClass())
 
   override def setUp() {
     super.setUp()
-    kafkaServer = TestUtils.createServer(kafkaConfig)
     simpleConsumer = new SimpleConsumer(host, port, 1000000, 64*1024)
   }
 
   override def tearDown() {
     simpleConsumer.close
-    kafkaServer.shutdown
     super.tearDown
   }
 

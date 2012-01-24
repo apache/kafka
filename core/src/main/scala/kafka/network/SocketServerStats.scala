@@ -17,8 +17,6 @@
 
 package kafka.network
 
-import java.util.concurrent.atomic._
-import javax.management._
 import kafka.utils._
 import kafka.api.RequestKeys
 

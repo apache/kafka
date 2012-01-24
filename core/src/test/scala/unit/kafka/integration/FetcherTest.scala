@@ -34,9 +34,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
   val numNodes = 2
   val configs = 
     for(props <- TestUtils.createBrokerConfigs(numNodes))
-      yield new KafkaConfig(props) {
-        override val enableZookeeper = false
-      }
+      yield new KafkaConfig(props)
   val messages = new mutable.HashMap[Int, ByteBufferMessageSet]
   val topic = "topic"
   val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, c.brokerId.toString, "localhost", c.port)))

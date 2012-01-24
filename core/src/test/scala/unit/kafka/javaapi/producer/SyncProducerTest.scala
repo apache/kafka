@@ -17,42 +17,28 @@
 
 package kafka.javaapi.producer
 
-import junit.framework.{Assert, TestCase}
-import kafka.utils.SystemTime
-import kafka.utils.TestUtils
-import kafka.server.{KafkaServer, KafkaConfig}
-import org.apache.log4j.{Logger, Level}
-import org.scalatest.junit.JUnitSuite
-import org.junit.{After, Before, Test}
+import junit.framework.Assert
+import kafka.server.KafkaConfig
+import org.apache.log4j.Logger
 import java.util.Properties
 import kafka.producer.SyncProducerConfig
 import kafka.javaapi.message.ByteBufferMessageSet
 import kafka.javaapi.ProducerRequest
 import kafka.message.{NoCompressionCodec, Message}
+import kafka.integration.KafkaServerTestHarness
+import org.scalatest.junit.JUnit3Suite
+import kafka.utils.{SystemTime, TestUtils}
 
-class SyncProducerTest extends JUnitSuite {
+class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   private var messageBytes =  new Array[Byte](2);
-  private var server: KafkaServer = null
   val simpleProducerLogger = Logger.getLogger(classOf[kafka.producer.SyncProducer])
+  val configs = List(new KafkaConfig(TestUtils.createBrokerConfigs(1).head))
+  val zookeeperConnect = zkConnect
 
-  @Before
-  def setUp() {
-    server = TestUtils.createServer(new KafkaConfig(TestUtils.createBrokerConfig(0, 9092))
-    {
-      override val enableZookeeper = false
-    })
-  }
-
-  @After
-  def tearDown() {
-    server.shutdown
-  }
-
-  @Test
   def testReachableServer() {
     val props = new Properties()
     props.put("host", "localhost")
-    props.put("port", "9092")
+    props.put("port", servers.head.socketServer.port.toString)
     props.put("buffer.size", "102400")
     props.put("connect.timeout.ms", "500")
     props.put("reconnect.interval", "1000")

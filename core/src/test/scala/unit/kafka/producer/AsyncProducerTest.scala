@@ -17,7 +17,7 @@
 
 package kafka.producer
 
-import junit.framework.{Assert, TestCase}
+import junit.framework.Assert
 import java.util.Properties
 import org.easymock.EasyMock
 import kafka.api.ProducerRequest

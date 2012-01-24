@@ -17,8 +17,7 @@
 
 package kafka.javaapi.message
 
-import java.nio.channels._
-import kafka.message.{MessageAndOffset, InvalidMessageException, Message}
+import kafka.message.{MessageAndOffset, InvalidMessageException}
 
 /**
  * A set of messages. A message set has a fixed serialized form, though the container

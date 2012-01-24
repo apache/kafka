@@ -23,8 +23,7 @@ import java.nio.ByteBuffer
 import kafka.utils.Utils
 import kafka.api.FetchRequest
 import kafka.common.InvalidMessageSizeException
-import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.{TestZKUtils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.consumer.{ZookeeperConsumerConnector, ConsumerConfig}
 import org.scalatest.junit.JUnit3Suite
 import kafka.integration.ProducerConsumerTestHarness
@@ -32,13 +31,11 @@ import kafka.integration.KafkaServerTestHarness
 import org.apache.log4j.{Logger, Level}
 import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
 
-class LogCorruptionTest extends JUnit3Suite with ProducerConsumerTestHarness with KafkaServerTestHarness with ZooKeeperTestHarness {
-  val zkConnect = TestZKUtils.zookeeperConnect  
+class LogCorruptionTest extends JUnit3Suite with ProducerConsumerTestHarness with KafkaServerTestHarness {
   val port = TestUtils.choosePort
   val props = TestUtils.createBrokerConfig(0, port)
   val config = new KafkaConfig(props) {
                  override val hostName = "localhost"
-                 override val enableZookeeper = true
                }
   val configs = List(config)
   val topic = "test"

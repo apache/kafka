@@ -17,8 +17,6 @@
 
 package kafka
 
-import java.net.URI
-import java.util.Arrays.asList
 import java.io._
 import java.nio._
 import java.nio.channels._

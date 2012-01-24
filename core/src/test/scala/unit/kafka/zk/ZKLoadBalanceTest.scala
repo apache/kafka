@@ -22,10 +22,9 @@ import java.util.Collections
 import kafka.consumer.{ConsumerConfig, ZookeeperConsumerConnector}
 import java.lang.Thread
 import org.scalatest.junit.JUnit3Suite
-import kafka.utils.{TestUtils, ZkUtils, ZKGroupTopicDirs, TestZKUtils}
+import kafka.utils.{TestUtils, ZkUtils, ZKGroupTopicDirs}
 
 class ZKLoadBalanceTest extends JUnit3Suite with ZooKeeperTestHarness {
-  val zkConnect = TestZKUtils.zookeeperConnect
   var dirs : ZKGroupTopicDirs = null
   val topic = "topic1"
   val group = "group1"

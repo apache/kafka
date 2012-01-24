@@ -33,32 +33,47 @@ object ZkUtils extends Logging {
     BrokerTopicsPath + "/" + topic
   }
 
-  def getTopicPartsPath(topic: String): String ={
+  def getTopicPartitionsPath(topic: String): String ={
     getTopicPath(topic) + "/" + "partitions"
   }
 
-  def getTopicPartPath(topic: String, partitionId: String): String ={
-    getTopicPartsPath(topic) + "/" + partitionId
+  def getTopicPartitionPath(topic: String, partitionId: String): String ={
+    getTopicPartitionsPath(topic) + "/" + partitionId
   }
 
   def getTopicVersion(zkClient: ZkClient, topic: String): String ={
     readDataMaybeNull(zkClient, getTopicPath(topic))
   }
 
-  def getTopicPartReplicasPath(topic: String, partitionId: String): String ={
-    getTopicPartPath(topic, partitionId) + "/" + "replicas"
+  def getTopicPartitionReplicasPath(topic: String, partitionId: String): String ={
+    getTopicPartitionPath(topic, partitionId) + "/" + "replicas"
   }
 
-  def getTopicPartInSyncPath(topic: String, partitionId: String): String ={
-    getTopicPartPath(topic, partitionId) + "/" + "isr"
+  def getTopicPartitionInSyncPath(topic: String, partitionId: String): String ={
+    getTopicPartitionPath(topic, partitionId) + "/" + "isr"
   }
 
-  def getTopicPartLeaderPath(topic: String, partitionId: String): String ={
-    getTopicPartPath(topic, partitionId) + "/" + "leader"
+  def getTopicPartitionLeaderPath(topic: String, partitionId: String): String ={
+    getTopicPartitionPath(topic, partitionId) + "/" + "leader"
   }
 
   def getSortedBrokerList(zkClient: ZkClient): Seq[String] ={
       ZkUtils.getChildren(zkClient, ZkUtils.BrokerIdsPath).sorted
+  }
+
+  def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, creator: String, port: Int) {
+    val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
+    val broker = new Broker(id, creator, host, port)
+    try {
+      createEphemeralPathExpectConflict(zkClient, brokerIdPath, broker.getZKString)
+    } catch {
+      case e: ZkNodeExistsException =>
+        throw new RuntimeException("A broker is already registered on the path " + brokerIdPath + ". This probably " +
+                                   "indicates that you either have configured a brokerid that is already in use, or " +
+                                   "else you have shutdown this broker and restarted it faster than the zookeeper " +
+                                   "timeout so it appears to be re-registering.")
+    }
+    info("Registering broker " + brokerIdPath + " succeeded with " + broker)
   }
 
   /**
@@ -283,6 +298,17 @@ object ZkUtils extends Logging {
     val brokerPartTopicPath = BrokerTopicsPath + "/" + topic + "/" + brokerId
     zkClient.delete(brokerPartTopicPath)
   }
+
+  /**
+   * For a given topic, this returns the sorted list of partition ids registered for this topic
+   */
+  def getSortedPartitionIdsForTopic(zkClient: ZkClient, topic: String): Seq[Int] = {
+    val topicPartitionsPath = ZkUtils.getTopicPartitionsPath(topic)
+    ZkUtils.getChildrenParentMayNotExist(zkClient, topicPartitionsPath).map(pid => pid.toInt).sortWith((s,t) => s < t)
+  }
+
+  def getBrokerInfoFromIds(zkClient: ZkClient, brokerIds: Seq[Int]): Seq[Broker] =
+    brokerIds.map( bid => Broker.createBroker(bid, ZkUtils.readData(zkClient, ZkUtils.BrokerIdsPath + "/" + bid)) )
 }
 
 object ZKStringSerializer extends ZkSerializer {

@@ -20,12 +20,11 @@ package kafka.zk
 import kafka.consumer.ConsumerConfig
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils.{ZkUtils, ZKStringSerializer}
-import kafka.utils.{TestZKUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.junit.Assert
 import org.scalatest.junit.JUnit3Suite
 
 class ZKEphemeralTest extends JUnit3Suite with ZooKeeperTestHarness {
-  val zkConnect = TestZKUtils.zookeeperConnect
   var zkSessionTimeoutMs = 1000
 
   def testEphemeralNodeCleanup = {

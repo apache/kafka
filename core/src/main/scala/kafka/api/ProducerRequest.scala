@@ -41,7 +41,7 @@ class ProducerRequest(val topic: String,
                       val messages: ByteBufferMessageSet) extends Request(RequestKeys.Produce) {
 
   def writeTo(buffer: ByteBuffer) {
-    Utils.writeShortString(buffer, topic, "UTF-8")
+    Utils.writeShortString(buffer, topic)
     buffer.putInt(partition)
     buffer.putInt(messages.serialized.limit)
     buffer.put(messages.serialized)

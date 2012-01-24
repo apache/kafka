@@ -19,7 +19,6 @@
 package kafka.consumer
 
 import junit.framework.Assert._
-import kafka.zk.ZooKeeperTestHarness
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
 import scala.collection._
@@ -30,19 +29,17 @@ import org.apache.log4j.{Level, Logger}
 import kafka.message._
 import kafka.serializer.StringDecoder
 
-class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with ZooKeeperTestHarness with Logging {
+class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
   val zookeeperConnect = TestZKUtils.zookeeperConnect
-  val zkConnect = zookeeperConnect
   val numNodes = 2
   val numParts = 2
   val topic = "topic1"
   val configs =
     for(props <- TestUtils.createBrokerConfigs(numNodes))
     yield new KafkaConfig(props) {
-      override val enableZookeeper = true
-      override val numPartitions = numParts
       override val zkConnect = zookeeperConnect
+      override val numPartitions = numParts
     }
   val group = "group1"
   val consumer0 = "consumer0"

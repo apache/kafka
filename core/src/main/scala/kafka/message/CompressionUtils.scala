@@ -54,8 +54,8 @@ class GZIPCompression(inputStream: InputStream, outputStream: ByteArrayOutputStr
 }
 
 class SnappyCompression(inputStream: InputStream,outputStream: ByteArrayOutputStream)  extends CompressionFacade(inputStream,outputStream) {
-  import org.xerial.snappy.{SnappyInputStream}
-  import org.xerial.snappy.{SnappyOutputStream}
+  import org.xerial.snappy.SnappyInputStream
+  import org.xerial.snappy.SnappyOutputStream
   
   val snappyIn:SnappyInputStream = if (inputStream == null) null else new SnappyInputStream(inputStream)
   val snappyOut:SnappyOutputStream = if (outputStream == null) null else new  SnappyOutputStream(outputStream)
