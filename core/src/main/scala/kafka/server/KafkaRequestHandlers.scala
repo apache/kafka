@@ -25,7 +25,6 @@ import kafka.api._
 import kafka.common.ErrorMapping
 import kafka.utils.SystemTime
 import kafka.utils.Logging
-import java.io.IOException
 
 /**
  * Logic to handle the various Kafka requests
@@ -74,15 +73,8 @@ private[kafka] class KafkaRequestHandlers(val logManager: LogManager) extends Lo
     catch {
       case e =>
         error("Error processing " + requestHandlerName + " on " + request.topic + ":" + partition, e)
-        e match {
-          case _: IOException =>
-            fatal("Halting due to unrecoverable I/O error while handling producer request: " + e.getMessage, e)
-            Runtime.getRuntime.halt(1)
-          case _ =>
-        }
         throw e
     }
-    None
   }
 
   def handleFetchRequest(request: Receive): Option[Send] = {

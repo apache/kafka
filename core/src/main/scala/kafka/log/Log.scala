@@ -211,10 +211,18 @@ private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int,
     
     // they are valid, insert them in the log
     lock synchronized {
-      val segment = segments.view.last
-      segment.messageSet.append(messages)
-      maybeFlush(numberOfMessages)
-      maybeRoll(segment)
+      try {
+        val segment = segments.view.last
+        segment.messageSet.append(messages)
+        maybeFlush(numberOfMessages)
+        maybeRoll(segment)
+      }
+      catch {
+        case e: IOException =>
+          fatal("Halting due to unrecoverable I/O error while handling producer request", e)
+          Runtime.getRuntime.halt(1)
+        case e2 => throw e2
+      }
     }
   }
 
