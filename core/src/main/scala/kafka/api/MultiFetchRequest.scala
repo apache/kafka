@@ -19,8 +19,6 @@ package kafka.api
 
 import java.nio._
 import kafka.network._
-import kafka.utils._
-import kafka.api._
 
 object MultiFetchRequest {
   def readFrom(buffer: ByteBuffer): MultiFetchRequest = {

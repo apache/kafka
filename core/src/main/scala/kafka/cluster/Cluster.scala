@@ -17,7 +17,6 @@
 
 package kafka.cluster
 
-import kafka.utils._
 import scala.collection._
 
 /**
@@ -33,7 +32,7 @@ private[kafka] class Cluster {
       brokers.put(broker.id, broker)
   }
 
-  def getBroker(id: Int) = brokers.get(id).get
+  def getBroker(id: Int): Option[Broker] = brokers.get(id)
   
   def add(broker: Broker) = brokers.put(broker.id, broker)
   

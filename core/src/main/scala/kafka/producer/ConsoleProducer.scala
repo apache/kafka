@@ -18,14 +18,10 @@
 package kafka.producer
 
 import scala.collection.JavaConversions._
-import org.I0Itec.zkclient._
 import joptsimple._
-import java.util.Arrays.asList
 import java.util.Properties
-import java.util.Random
 import java.io._
 import kafka.message._
-import kafka.utils._
 import kafka.serializer._
 
 object ConsoleProducer { 

@@ -16,10 +16,8 @@
 */
 package kafka.javaapi
 
-import java.nio.ByteBuffer
 import kafka.serializer.Encoder
-import kafka.producer.{ProducerConfig, ProducerPool}
-import kafka.producer.async.{AsyncProducerConfig, QueueItem}
+import kafka.producer.async.QueueItem
 import kafka.utils.Logging
 
 private[javaapi] object Implicits extends Logging {

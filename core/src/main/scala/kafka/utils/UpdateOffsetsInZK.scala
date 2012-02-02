@@ -21,6 +21,7 @@ import org.I0Itec.zkclient.ZkClient
 import kafka.consumer.{SimpleConsumer, ConsumerConfig}
 import kafka.cluster.Partition
 import kafka.api.OffsetRequest
+import java.lang.IllegalStateException
 
 /**
  *  A utility that updates the offset of every broker partition to the offset of latest log segment file, in ZK.
@@ -55,7 +56,11 @@ object UpdateOffsetsInZK {
     var numParts = 0
     for (partString <- partitions) {
       val part = Partition.parse(partString)
-      val broker = cluster.getBroker(part.brokerId)
+      val broker = cluster.getBroker(part.brokerId) match {
+        case Some(b) => b
+        case None => throw new IllegalStateException("Broker " + part.brokerId + " is unavailable. Cannot issue " +
+          "getOffsetsBefore request")
+      }
       val consumer = new SimpleConsumer(broker.host, broker.port, 10000, 100 * 1024)
       val offsets = consumer.getOffsetsBefore(topic, part.partId, offsetOption, 1)
       val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)

@@ -22,8 +22,6 @@ import java.nio._
 import java.nio.channels._
 import java.util.concurrent.atomic._
 
-import kafka._
-import kafka.message._
 import kafka.utils._
 
 /**

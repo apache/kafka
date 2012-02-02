@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import scala.reflect.BeanProperty
 import kafka.log.LogManager
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean

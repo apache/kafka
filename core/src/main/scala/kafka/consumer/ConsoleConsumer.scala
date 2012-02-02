@@ -21,13 +21,11 @@ import scala.collection.mutable._
 import scala.collection.JavaConversions._
 import org.I0Itec.zkclient._
 import joptsimple._
-import java.util.Arrays.asList
 import java.util.Properties
 import java.util.Random
 import java.io.PrintStream
 import kafka.message._
 import kafka.utils.{Utils, Logging}
-import kafka.utils.ZkUtils
 import kafka.utils.ZKStringSerializer
 
 /**

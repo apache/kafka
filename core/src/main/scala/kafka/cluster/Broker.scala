@@ -17,11 +17,7 @@
 
 package kafka.cluster
 
-import java.util.Arrays
 import kafka.utils._
-import java.net.InetAddress
-import kafka.server.KafkaConfig
-import util.parsing.json.JSON
 
 /**
  * A Kafka broker

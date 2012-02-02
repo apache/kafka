@@ -21,7 +21,6 @@ import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.net._
 import java.io._
-import java.nio._
 import java.nio.channels._
 
 import kafka.utils._

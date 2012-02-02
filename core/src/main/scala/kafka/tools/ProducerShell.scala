@@ -17,12 +17,9 @@
 
 package kafka.tools
 
-import java.net.URI
 import java.io._
 import joptsimple._
-import kafka.message._
 import kafka.producer._
-import java.util.Properties
 import kafka.utils.Utils
 
 /**

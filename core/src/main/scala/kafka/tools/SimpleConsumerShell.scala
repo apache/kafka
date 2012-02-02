@@ -22,7 +22,6 @@ import joptsimple._
 import kafka.api.FetchRequest
 import kafka.utils._
 import kafka.consumer._
-import kafka.server._
 
 /**
  * Command line program to dump out messages to standard out using the simple consumer

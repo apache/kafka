@@ -17,9 +17,8 @@
 
 package kafka.utils
 
-import scala.math._
 
-/** 
+/**
  * A generic range value with a start and end 
  */
 trait Range {

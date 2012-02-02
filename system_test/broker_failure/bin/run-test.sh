@@ -68,7 +68,7 @@ readonly test_start_time="$(date +%s)"
 
 readonly num_msg_per_batch=500
 readonly batches_per_iteration=5
-readonly num_iterations=10
+readonly num_iterations=12
 
 readonly zk_source_port=2181
 readonly zk_mirror_port=2182
@@ -132,6 +132,8 @@ producer_performance_crc_log=$base_dir/producer_performance_crc.log
 producer_performance_crc_sorted_log=$base_dir/producer_performance_crc_sorted.log
 producer_performance_crc_sorted_uniq_log=$base_dir/producer_performance_crc_sorted_uniq.log
 
+consumer_rebalancing_log=$base_dir/consumer_rebalancing_verification.log
+
 consumer_prop_file=$base_dir/config/whitelisttest.consumer.properties
 checksum_diff_log=$base_dir/checksum_diff.log
 
@@ -171,6 +173,17 @@ get_random_range() {
     range=$(($up - $lo + 1))
 
     return $(($(($RANDOM % range)) + $lo))
+}
+
+verify_consumer_rebalancing() {
+
+   info "Verifying consumer rebalancing operation"
+
+    $base_dir/bin/kafka-run-class.sh \
+        kafka.tools.VerifyConsumerRebalance \
+        --zk.connect=localhost:2181 \
+        --group $consumer_grp \
+     2>&1 >> $consumer_rebalancing_log
 }
 
 wait_for_zero_consumer_lags() {
@@ -618,6 +631,7 @@ start_test() {
                     sleep $wait_time_after_restarting_broker
                 fi
             fi
+            verify_consumer_rebalancing
         else
             info "No bouncing performed"
         fi
@@ -661,6 +675,8 @@ start_console_consumer_for_mirror_producer
 
 wait_for_zero_source_console_consumer_lags
 wait_for_zero_mirror_console_consumer_lags
+
+verify_consumer_rebalancing
 
 shutdown_servers
 

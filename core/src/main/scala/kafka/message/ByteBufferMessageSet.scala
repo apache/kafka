@@ -17,7 +17,6 @@
 
 package kafka.message
 
-import scala.collection.mutable
 import kafka.utils.Logging
 import kafka.common.{InvalidMessageSizeException, ErrorMapping}
 import java.nio.ByteBuffer
