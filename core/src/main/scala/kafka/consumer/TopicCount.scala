@@ -21,7 +21,7 @@ import scala.collection._
 import scala.util.parsing.json.JSON
 import kafka.utils.Logging
 
-private[consumer] object TopicCount extends Logging {
+private[kafka] object TopicCount extends Logging {
   val myConversionFunc = {input : String => input.toInt}
   JSON.globalNumberParser = myConversionFunc
 
@@ -44,7 +44,7 @@ private[consumer] object TopicCount extends Logging {
 
 }
 
-private[consumer] class TopicCount(val consumerIdString: String, val topicCountMap: Map[String, Int]) {
+private[kafka] class TopicCount(val consumerIdString: String, val topicCountMap: Map[String, Int]) {
 
   def getConsumerThreadIdsPerTopic()
     : Map[String, Set[String]] = {

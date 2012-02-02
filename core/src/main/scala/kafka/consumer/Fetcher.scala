@@ -22,6 +22,7 @@ import kafka.cluster._
 import org.I0Itec.zkclient.ZkClient
 import java.util.concurrent.BlockingQueue
 import kafka.utils._
+import java.lang.IllegalStateException
 
 /**
  * The fetcher is a background thread that fetches data from a set of servers
@@ -73,7 +74,13 @@ private [consumer] class Fetcher(val config: ConsumerConfig, val zkClient : ZkCl
 
     // open a new fetcher thread for each broker
     val ids = Set() ++ topicInfos.map(_.brokerId)
-    val brokers = ids.map(cluster.getBroker(_))
+    val brokers = ids.map { id =>
+      cluster.getBroker(id) match {
+        case Some(broker) => broker
+        case None => throw new IllegalStateException("Broker " + id + " is unavailable, fetchers could not be started")
+      }
+    }
+
     fetcherThreads = new Array[FetcherRunnable](brokers.size)
     var i = 0
     for(broker <- brokers) {

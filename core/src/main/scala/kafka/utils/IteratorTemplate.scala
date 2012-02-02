@@ -72,6 +72,9 @@ abstract class IteratorTemplate[T] extends Iterator[T] with java.util.Iterator[T
   
   def remove = 
     throw new UnsupportedOperationException("Removal not supported")
-  
+
+  protected def resetState() {
+    state = NOT_READY
+  }
 }
 

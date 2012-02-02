@@ -18,66 +18,77 @@
 package kafka.producer
 
 import async.MissingConfigException
-import org.apache.log4j.spi.LoggingEvent
+import org.apache.log4j.spi.{LoggingEvent, ErrorCode}
 import org.apache.log4j.AppenderSkeleton
-import kafka.utils.{Utils, Logging}
+import org.apache.log4j.helpers.LogLog
+import kafka.utils.Logging
 import kafka.serializer.Encoder
 import java.util.{Properties, Date}
-import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
+import kafka.message.Message
+import scala.collection._
 
 class KafkaLog4jAppender extends AppenderSkeleton with Logging {
   var port:Int = 0
   var host:String = null
   var topic:String = null
-  var encoderClass:String = null
+  var serializerClass:String = null
+  var zkConnect:String = null
+  var brokerList:String = null
   
-  private var producer:SyncProducer = null
-  private var encoder: Encoder[AnyRef] = null
-  
-  def getPort:Int = port
-  def setPort(port: Int) = { this.port = port }
-
-  def getHost:String = host
-  def setHost(host: String) = { this.host = host }
+  private var producer: Producer[String, String] = null
 
   def getTopic:String = topic
-  def setTopic(topic: String) = { this.topic = topic }
+  def setTopic(topic: String) { this.topic = topic }
 
-  def getEncoder:String = encoderClass
-  def setEncoder(encoder: String) = { this.encoderClass = encoder }
+  def getZkConnect:String = zkConnect
+  def setZkConnect(zkConnect: String) { this.zkConnect = zkConnect }
   
-  override def activateOptions = {
+  def getBrokerList:String = brokerList
+  def setBrokerList(brokerList: String) { this.brokerList = brokerList }
+  
+  def getSerializerClass:String = serializerClass
+  def setSerializerClass(serializerClass:String) { this.serializerClass = serializerClass }
+
+  override def activateOptions() {
+    val connectDiagnostic : mutable.ListBuffer[String] = mutable.ListBuffer();
     // check for config parameter validity
-    if(host == null)
-      throw new MissingConfigException("Broker Host must be specified by the Kafka log4j appender")
-    if(port == 0)
-      throw new MissingConfigException("Broker Port must be specified by the Kafka log4j appender") 
+    val props = new Properties()
+    if( zkConnect == null) connectDiagnostic += "zkConnect"
+    else props.put("zk.connect", zkConnect);
+    if( brokerList == null) connectDiagnostic += "brokerList"
+    else if( props.isEmpty) props.put("broker.list", brokerList)
+    if(props.isEmpty )
+      throw new MissingConfigException(
+        connectDiagnostic mkString ("One of these connection properties must be specified: ", ", ", ".")
+      )
     if(topic == null)
       throw new MissingConfigException("topic must be specified by the Kafka log4j appender")
-    if(encoderClass == null) {
-      info("Using default encoder - kafka.producer.DefaultStringEncoder")
-      encoder = Utils.getObject("kafka.producer.DefaultStringEncoder")
-    }else // instantiate the encoder, if present
-      encoder = Utils.getObject(encoderClass)
-    val props = new Properties()
-    props.put("host", host)
-    props.put("port", port.toString)
-    producer = new SyncProducer(new SyncProducerConfig(props))
-    info("Kafka producer connected to " + host + "," + port)
-    info("Logging for topic: " + topic)
+    if(serializerClass == null) {
+      serializerClass = "kafka.serializer.StringEncoder"
+      LogLog.warn("Using default encoder - kafka.serializer.StringEncoder")
+    }
+    props.put("serializer.class", serializerClass)
+    val config : ProducerConfig = new ProducerConfig(props)
+    producer = new Producer[String, String](config)
+    LogLog.debug("Kafka producer connected to " + (if(config.zkConnect == null) config.brokerList else config.zkConnect))
+    LogLog.debug("Logging for topic: " + topic)
   }
   
-  override def append(event: LoggingEvent) = {
-    debug("[" + new Date(event.getTimeStamp).toString + "]" + event.getRenderedMessage +
-            " for " + host + "," + port)
-    val message = encoder.toMessage(event)
-    producer.send(topic, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message))
+  override def append(event: LoggingEvent)  {
+    val message : String = if( this.layout == null) {
+      event.getRenderedMessage
+    }
+    else this.layout.format(event)
+    LogLog.debug("[" + new Date(event.getTimeStamp).toString + "]" + message)
+    val messageData : ProducerData[String, String] =
+      new ProducerData[String, String](topic, message)
+    producer.send(messageData);
   }
 
-  override def close = {
+  override def close() {
     if(!this.closed) {
       this.closed = true
-      producer.close
+      producer.close()
     }
   }
 

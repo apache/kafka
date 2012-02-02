@@ -23,6 +23,7 @@ import kafka.cluster.{Broker, Cluster}
 import scala.collection._
 import java.util.Properties
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException, ZkMarshallingError}
+import kafka.consumer.TopicCount
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -297,6 +298,44 @@ object ZkUtils extends Logging {
     zkClient.delete(brokerIdPath)
     val brokerPartTopicPath = BrokerTopicsPath + "/" + topic + "/" + brokerId
     zkClient.delete(brokerPartTopicPath)
+  }
+
+  def getConsumersInGroup(zkClient: ZkClient, group: String): Seq[String] = {
+    val dirs = new ZKGroupDirs(group)
+    getChildren(zkClient, dirs.consumerRegistryDir)
+  }
+
+  def getTopicCount(zkClient: ZkClient, group: String, consumerId: String) : TopicCount = {
+    val dirs = new ZKGroupDirs(group)
+    val topicCountJson = ZkUtils.readData(zkClient, dirs.consumerRegistryDir + "/" + consumerId)
+    TopicCount.constructTopicCount(consumerId, topicCountJson)
+  }
+
+  def getConsumerTopicMaps(zkClient: ZkClient, group: String): Map[String, TopicCount] = {
+    val dirs = new ZKGroupDirs(group)
+    val consumersInGroup = getConsumersInGroup(zkClient, group)
+    val topicCountMaps = consumersInGroup.map(consumerId => TopicCount.constructTopicCount(consumerId,
+      ZkUtils.readData(zkClient, dirs.consumerRegistryDir + "/" + consumerId)))
+    consumersInGroup.zip(topicCountMaps).toMap
+  }
+
+  def getConsumersPerTopic(zkClient: ZkClient, group: String) : mutable.Map[String, List[String]] = {
+    val dirs = new ZKGroupDirs(group)
+    val consumers = getChildrenParentMayNotExist(zkClient, dirs.consumerRegistryDir)
+    val consumersPerTopicMap = new mutable.HashMap[String, List[String]]
+    for (consumer <- consumers) {
+      val topicCount = getTopicCount(zkClient, group, consumer)
+      for ((topic, consumerThreadIdSet) <- topicCount.getConsumerThreadIdsPerTopic()) {
+        for (consumerThreadId <- consumerThreadIdSet)
+          consumersPerTopicMap.get(topic) match {
+            case Some(curConsumers) => consumersPerTopicMap.put(topic, consumerThreadId :: curConsumers)
+            case _ => consumersPerTopicMap.put(topic, List(consumerThreadId))
+          }
+      }
+    }
+    for ( (topic, consumerList) <- consumersPerTopicMap )
+      consumersPerTopicMap.put(topic, consumerList.sortWith((s,t) => s < t))
+    consumersPerTopicMap
   }
 
   /**

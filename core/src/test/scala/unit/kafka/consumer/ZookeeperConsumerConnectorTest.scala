@@ -61,15 +61,20 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     }
     val zkConsumerConnector0 = new ZookeeperConsumerConnector(consumerConfig0, true)
     val topicMessageStreams0 = zkConsumerConnector0.createMessageStreams(Predef.Map(topic -> numNodes*numParts/2))
-    try {
-      getMessages(nMessages*2, topicMessageStreams0)
-      fail("should get an exception")
+
+    // no messages to consume, we should hit timeout;
+    // also the iterator should support re-entrant, so loop it twice
+    for (i <- 0 until  2) {
+      try {
+        getMessages(nMessages*2, topicMessageStreams0)
+        fail("should get an exception")
+      }
+      catch {
+        case e: ConsumerTimeoutException => // this is ok
+        case e => throw e
+      }
     }
-    catch {
-      case e: ConsumerTimeoutException => // this is ok
-        println("This is ok")
-      case e => throw e
-    }
+
     zkConsumerConnector0.shutdown
 
     // send some messages to each broker
