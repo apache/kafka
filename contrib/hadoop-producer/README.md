@@ -1,6 +1,14 @@
 Hadoop to Kafka Bridge
 ======================
 
+What's new?
+-----------
+
+* Now supports Kafka's software load balancer (Kafka URIs are specified with
+  kafka+zk as the scheme, as described below)
+* Supports Kafka 0.7. Now uses the new Producer API, rather than the legacy
+  SyncProducer.
+
 What is it?
 -----------
 
@@ -17,8 +25,10 @@ multiple times in the same push.
 How do I use it?
 ----------------
 
-With this bridge, Kafka topics are URIs and are specified as
-`kafka://<kafka-server>/<kafka-topic>`.
+With this bridge, Kafka topics are URIs and are specified in one of two
+formats: `kafka+zk://<zk-path>#<kafka-topic>`, which uses the software load
+balancer, or the legacy `kafka://<kafka-server>/<kafka-topic>` to connect to a
+specific Kafka broker.
 
 ### Pig ###
 
@@ -27,17 +37,19 @@ row. To push data via Kafka, store to the Kafka URI using `AvroKafkaStorage`
 with the Avro schema as its first argument. You'll need to register the
 appropriate Kafka JARs. Here is what an example Pig script looks like:
 
-    REGISTER hadoop-kafka-bridge-0.5.2.jar;
+    REGISTER hadoop-producer_2.8.0-0.7.0.jar;
     REGISTER avro-1.4.0.jar;
     REGISTER piggybank.jar;
-    REGISTER kafka-0.5.2.jar;
+    REGISTER kafka-0.7.0.jar;
     REGISTER jackson-core-asl-1.5.5.jar;
     REGISTER jackson-mapper-asl-1.5.5.jar;
+    REGISTER zkclient-20110412.jar;
+    REGISTER zookeeper-3.3.4.jar;
     REGISTER scala-library.jar;
 
     member_info = LOAD 'member_info.tsv' as (member_id : int, name : chararray);
     names = FOREACH member_info GENERATE name;
-    STORE member_info INTO 'kafka://my-broker:9092/member_info' USING kafka.bridge.AvroKafkaStorage('"string"');
+    STORE member_info INTO 'kafka+zk://my-zookeeper:2181/kafka#member_info' USING kafka.bridge.AvroKafkaStorage('"string"');
 
 That's it! The Pig StoreFunc makes use of AvroStorage in Piggybank to convert
 from Pig's data model to the specified Avro schema.
@@ -46,8 +58,8 @@ Further, multi-store is possible with KafkaStorage, so you can easily write to
 multiple topics and brokers in the same job:
 
     SPLIT member_info INTO early_adopters IF member_id < 1000, others IF member_id >= 1000;
-    STORE early_adopters INTO 'kafka://my-broker:9092/early_adopters' USING AvroKafkaStorage('$schema');
-    STORE others INTO 'kafka://my-broker:9092/others' USING AvroKafkaStorage('$schema');
+    STORE early_adopters INTO 'kafka+zk://my-zookeeper:2181/kafka#early_adopters' USING AvroKafkaStorage('$schema');
+    STORE others INTO 'kafka://my-broker:9092,my-broker2:9092/others' USING AvroKafkaStorage('$schema');
 
 ### KafkaOutputFormat ###
 
@@ -126,9 +138,10 @@ Normally, you needn't change any of these parameters:
   docs). Default is 64*1024 (64KB). 
 * kafka.output.max_msgsize: Maximum message size in bytes (see Kafka producer
   docs). Default is 1024*1024 (1MB).
+* kafka.output.compression_codec: The compression codec to use (see Kafka producer
+  docs). Default is 0 (no compression).
 
-For easier debugging, the above values as well as the Kafka URI
-(kafka.output.url), the output server (kafka.output.server), the topic
-(kafka.output.topic), and the schema (kafka.output.schema) are injected into
-the job's configuration.
+For easier debugging, the above values as well as the Kafka broker information
+(either kafka.zk.connect or kafka.broker.list), the topic (kafka.output.topic),
+and the schema (kafka.output.schema) are injected into the job's configuration.
 
