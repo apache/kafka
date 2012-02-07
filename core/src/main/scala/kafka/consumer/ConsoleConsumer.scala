@@ -210,9 +210,19 @@ object ConsoleConsumer extends Logging {
   }
 
   class ChecksumMessageFormatter extends MessageFormatter {
+    private var topicStr: String = _
+    
+    override def init(props: Properties) {
+      topicStr = props.getProperty("topic")
+      if (topicStr != null) 
+        topicStr = topicStr + "-"
+      else
+        topicStr = ""
+    }
+    
     def writeTo(message: Message, output: PrintStream) {
       val chksum = message.checksum
-      output.println("checksum:" + chksum)
+      output.println(topicStr + "checksum:" + chksum)
     }
   }
   

@@ -20,18 +20,16 @@ package kafka.perf
 import java.util.concurrent.{CountDownLatch, Executors}
 import java.util.concurrent.atomic.AtomicLong
 import kafka.producer._
-import async.DefaultEventHandler
 import org.apache.log4j.Logger
-import joptsimple.OptionParser
 import kafka.message.{CompressionCodec, Message}
-import kafka.serializer.DefaultEncoder
 import java.text.SimpleDateFormat
-import java.util.{Date, Random, Properties}
+import java.util.{Random, Properties}
+import kafka.utils.Logging
 
 /**
  * Load test for the producer
  */
-object ProducerPerformance {
+object ProducerPerformance extends Logging {
 
   def main(args: Array[String]) {
 
@@ -141,7 +139,6 @@ object ProducerPerformance {
                        val totalMessagesSent: AtomicLong,
                        val allDone: CountDownLatch,
                        val rand: Random) extends Runnable {
-    val logger = Logger.getLogger(getClass)
     val props = new Properties()
     val brokerInfoList = config.brokerInfo.split("=")
     if (brokerInfoList(0) == "zk.connect") {
@@ -171,7 +168,7 @@ object ProducerPerformance {
       var lastReportTime = reportTime
       val messagesPerThread = if(!config.isAsync) config.numMessages / config.numThreads / config.batchSize
                               else config.numMessages / config.numThreads
-      if(logger.isDebugEnabled) logger.debug("Messages per thread = " + messagesPerThread)
+      debug("Messages per thread = " + messagesPerThread)
       var messageSet: List[Message] = Nil
       if(config.isFixSize) {
         for(k <- 0 until config.batchSize) {
@@ -203,11 +200,11 @@ object ProducerPerformance {
               rand.nextBytes(messageBytes)
               val message = new Message(messageBytes)
               producer.send(new ProducerData[Message,Message](config.topic, message))
-              if(logger.isDebugEnabled) println("checksum:" + message.checksum)
+              debug(config.topic + "-checksum:" + message.checksum)
               bytesSent += message.payloadSize
             }else {
               producer.send(new ProducerData[Message,Message](config.topic, message))
-              if(logger.isDebugEnabled) println("checksum:" + message.checksum)
+              debug(config.topic + "-checksum:" + message.checksum)
               bytesSent += message.payloadSize
             }
             nSends += 1
