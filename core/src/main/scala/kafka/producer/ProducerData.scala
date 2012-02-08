@@ -23,13 +23,15 @@ package kafka.producer
  * @param key the key used by the partitioner to pick a broker partition
  * @param data variable length data to be published as Kafka messages under topic
  */
-class ProducerData[K, V](private val topic: String,
-                         private val key: K,
-                         private val data: Seq[V]) {
+case class ProducerData[K,V](topic: String,
+                             key: K,
+                             data: Seq[V]) {
 
   def this(t: String, d: Seq[V]) = this(topic = t, key = null.asInstanceOf[K], data = d)
 
   def this(t: String, d: V) = this(topic = t, key = null.asInstanceOf[K], data = List(d))
+
+  def this(t: String, k: K, d: V) = this(topic = t, key = k, data = List(d))
 
   def getTopic: String = topic
 

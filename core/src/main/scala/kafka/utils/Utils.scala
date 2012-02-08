@@ -24,17 +24,22 @@ import java.util.concurrent.atomic._
 import java.lang.management._
 import java.util.zip.CRC32
 import javax.management._
-import java.util.Properties
 import scala.collection._
 import scala.collection.mutable
 import kafka.message.{NoCompressionCodec, CompressionCodec}
 import org.I0Itec.zkclient.ZkClient
+import java.util.{Random, Properties}
 
 /**
  * Helper functions!
  */
 object Utils extends Logging {
+  val random = new Random
+
+  def getNextRandomInt(): Int = random.nextInt
   
+  def getNextRandomInt(upper: Int): Int = random.nextInt(upper)
+
   /**
    * Wrap the given function in a java.lang.Runnable
    * @param fun A function

@@ -20,9 +20,7 @@ package kafka.tools
 import joptsimple.OptionParser
 import java.util.concurrent.{Executors, CountDownLatch}
 import java.util.Properties
-import kafka.producer.async.DefaultEventHandler
-import kafka.serializer.DefaultEncoder
-import kafka.producer.{ProducerData, DefaultPartitioner, ProducerConfig, Producer}
+import kafka.producer.{ProducerData, ProducerConfig, Producer}
 import kafka.consumer._
 import kafka.utils.{ZKStringSerializer, Logging}
 import kafka.api.OffsetRequest
@@ -171,9 +169,7 @@ object ReplayLogProducer extends Logging {
       props.put("producer.type", "async")
 
     val producerConfig = new ProducerConfig(props)
-    val producer = new Producer[Message, Message](producerConfig, new DefaultEncoder,
-                                                  new DefaultEventHandler[Message](producerConfig, null),
-                                                  null, new DefaultPartitioner[Message])
+    val producer = new Producer[Message, Message](producerConfig)
 
     override def run() {
       info("Starting consumer thread..")

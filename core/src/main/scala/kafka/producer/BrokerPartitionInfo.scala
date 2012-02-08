@@ -16,7 +16,7 @@
 */
 package kafka.producer
 
-import collection.immutable.Map
+import collection.Map
 import collection.SortedSet
 import kafka.cluster.{Broker, Partition}
 

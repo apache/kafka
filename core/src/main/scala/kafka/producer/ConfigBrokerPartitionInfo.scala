@@ -17,10 +17,11 @@
 package kafka.producer
 
 import collection.mutable.HashMap
-import collection.immutable.Map
+import collection.Map
 import collection.SortedSet
 import kafka.cluster.{Broker, Partition}
 import kafka.common.InvalidConfigException
+import kafka.api.ProducerRequest
 
 private[producer] class ConfigBrokerPartitionInfo(config: ProducerConfig) extends BrokerPartitionInfo {
   private val brokerPartitions: SortedSet[Partition] = getConfigTopicPartitionInfo
@@ -66,13 +67,11 @@ private[producer] class ConfigBrokerPartitionInfo(config: ProducerConfig) extend
       val brokerInfo = bInfo.split(":")
       if(brokerInfo.size < 3) throw new InvalidConfigException("broker.list has invalid value")
     }
-    val brokerPartitions = brokerInfoList.map(bInfo => (bInfo.split(":").head.toInt, 1))
+    val brokerIds = brokerInfoList.map(bInfo => bInfo.split(":").head.toInt)
     var brokerParts = SortedSet.empty[Partition]
-    brokerPartitions.foreach { bp =>
-      for(i <- 0 until bp._2) {
-        val bidPid = new Partition(bp._1, i)
-        brokerParts = brokerParts + bidPid
-      }
+    brokerIds.foreach { bid =>
+        val bidPid = new Partition(bid, ProducerRequest.RandomPartition)
+        brokerParts += bidPid
     }
     brokerParts
   }
@@ -90,7 +89,7 @@ private[producer] class ConfigBrokerPartitionInfo(config: ProducerConfig) extend
       brokerInfo += (brokerIdHostPort(0).toInt -> new Broker(brokerIdHostPort(0).toInt, brokerIdHostPort(1),
         brokerIdHostPort(1), brokerIdHostPort(2).toInt))
     }
-    brokerInfo.toMap
+    brokerInfo
   }
 
 }

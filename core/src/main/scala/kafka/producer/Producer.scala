@@ -16,82 +16,51 @@
  */
 package kafka.producer
 
-import async.{CallbackHandler, EventHandler}
-import kafka.serializer.Encoder
+import async._
 import kafka.utils._
-import java.util.Properties
-import kafka.cluster.{Partition, Broker}
-import java.util.concurrent.atomic.AtomicBoolean
-import kafka.common.{NoBrokersForPartitionException, InvalidConfigException, InvalidPartitionException}
-import kafka.api.ProducerRequest
+import kafka.common.InvalidConfigException
+import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
+import kafka.serializer.Encoder
+import java.util.concurrent.atomic.{AtomicLong, AtomicBoolean}
 
 class Producer[K,V](config: ProducerConfig,
-                    partitioner: Partitioner[K],
-                    producerPool: ProducerPool[V],
-                    populateProducerPool: Boolean,
-                    private var brokerPartitionInfo: BrokerPartitionInfo) /* for testing purpose only. Applications should ideally */
-                                                          /* use the other constructor*/
+                    private val eventHandler: EventHandler[K,V]) // for testing only
 extends Logging {
   private val hasShutdown = new AtomicBoolean(false)
   if(!Utils.propertyExists(config.zkConnect) && !Utils.propertyExists(config.brokerList))
     throw new InvalidConfigException("At least one of zk.connect or broker.list must be specified")
   if (Utils.propertyExists(config.zkConnect) && Utils.propertyExists(config.brokerList))
-    warn("Both zk.connect and broker.list provided (zk.connect takes precedence).")
-  private val random = new java.util.Random
-  // check if zookeeper based auto partition discovery is enabled
-  private val zkEnabled = Utils.propertyExists(config.zkConnect)
-  if(brokerPartitionInfo == null) {
-    zkEnabled match {
-      case true =>
-        val zkProps = new Properties()
-        zkProps.put("zk.connect", config.zkConnect)
-        zkProps.put("zk.sessiontimeout.ms", config.zkSessionTimeoutMs.toString)
-        zkProps.put("zk.connectiontimeout.ms", config.zkConnectionTimeoutMs.toString)
-        zkProps.put("zk.synctime.ms", config.zkSyncTimeMs.toString)
-        brokerPartitionInfo = new ZKBrokerPartitionInfo(new ZKConfig(zkProps), producerCbk)
-      case false =>
-        brokerPartitionInfo = new ConfigBrokerPartitionInfo(config)
-    }
-  }
-  // pool of producers, one per broker
-  if(populateProducerPool) {
-    val allBrokers = brokerPartitionInfo.getAllBrokerInfo
-    allBrokers.foreach(b => producerPool.addProducer(new Broker(b._1, b._2.host, b._2.host, b._2.port)))
-  }
+    throw new InvalidConfigException("Only one of zk.connect and broker.list should be provided")
+  if (config.batchSize > config.queueSize)
+    throw new InvalidConfigException("Batch size can't be larger than queue size.")
 
-/**
- * This constructor can be used when all config parameters will be specified through the
- * ProducerConfig object
- * @param config Producer Configuration object
- */
-  def this(config: ProducerConfig) =  this(config, Utils.getObject(config.partitionerClass),
-    new ProducerPool[V](config, Utils.getObject(config.serializerClass)), true, null)
+  private val queue = new LinkedBlockingQueue[ProducerData[K,V]](config.queueSize)
+  private var sync: Boolean = true
+  private var producerSendThread: ProducerSendThread[K,V] = null
+  config.producerType match {
+    case "sync" =>
+    case "async" =>
+      sync = false
+      val asyncProducerID = Utils.getNextRandomInt
+      producerSendThread = new ProducerSendThread[K,V]("ProducerSendThread-" + asyncProducerID, queue,
+        eventHandler, config.queueTime, config.batchSize)
+      producerSendThread.start
+    case _ => throw new InvalidConfigException("Valid values for producer.type are sync/async")
+  }
 
   /**
-   * This constructor can be used to provide pre-instantiated objects for all config parameters
-   * that would otherwise be instantiated via reflection. i.e. encoder, partitioner, event handler and
-   * callback handler. If you use this constructor, encoder, eventHandler, callback handler and partitioner
-   * will not be picked up from the config.
+   * This constructor can be used when all config parameters will be specified through the
+   * ProducerConfig object
    * @param config Producer Configuration object
-   * @param encoder Encoder used to convert an object of type V to a kafka.message.Message. If this is null it
-   * throws an InvalidConfigException
-   * @param eventHandler the class that implements kafka.producer.async.IEventHandler[T] used to
-   * dispatch a batch of produce requests, using an instance of kafka.producer.SyncProducer. If this is null, it
-   * uses the DefaultEventHandler
-   * @param cbkHandler the class that implements kafka.producer.async.CallbackHandler[T] used to inject
-   * callbacks at various stages of the kafka.producer.AsyncProducer pipeline. If this is null, the producer does
-   * not use the callback handler and hence does not invoke any callbacks
-   * @param partitioner class that implements the kafka.producer.Partitioner[K], used to supply a custom
-   * partitioning strategy on the message key (of type K) that is specified through the ProducerData[K, T]
-   * object in the  send API. If this is null, producer uses DefaultPartitioner
    */
-  def this(config: ProducerConfig,
-           encoder: Encoder[V],
-           eventHandler: EventHandler[V],
-           cbkHandler: CallbackHandler[V],
-           partitioner: Partitioner[K]) =
-    this(config, if(partitioner == null) new DefaultPartitioner[K] else partitioner,
-         new ProducerPool[V](config, encoder, eventHandler, cbkHandler), true, null)
+  def this(config: ProducerConfig) =
+    this(config,
+         new DefaultEventHandler[K,V](config,
+                                      Utils.getObject[Partitioner[K]](config.partitionerClass),
+                                      Utils.getObject[Encoder[V]](config.serializerClass),
+                                      new ProducerPool(config),
+                                      populateProducerPool= true,
+                                      brokerPartitionInfo= null))
 
   /**
    * Sends the data, partitioned by key to the topic using either the
@@ -99,108 +68,49 @@ extends Logging {
    * @param producerData the producer data object that encapsulates the topic, key and message data
    */
   def send(producerData: ProducerData[K,V]*) {
-    zkEnabled match {
-      case true => zkSend(producerData: _*)
-      case false => configSend(producerData: _*)
+    if (hasShutdown.get)
+      throw new ProducerClosedException
+    recordStats(producerData: _*)
+    sync match {
+      case true => eventHandler.handle(producerData)
+      case false => asyncSend(producerData: _*)
     }
   }
 
-  private def zkSend(producerData: ProducerData[K,V]*) {
-    val producerPoolRequests = producerData.map { pd =>
-      var brokerIdPartition: Option[Partition] = None
-      var brokerInfoOpt: Option[Broker] = None
+  private def recordStats(producerData: ProducerData[K,V]*) {
+    for (data <- producerData)
+      ProducerTopicStat.getProducerTopicStat(data.getTopic).recordMessagesPerTopic(data.getData.size)
+  }
 
-      var numRetries: Int = 0
-      while(numRetries <= config.zkReadRetries && brokerInfoOpt.isEmpty) {
-        if(numRetries > 0) {
-          info("Try #" + numRetries + " ZK producer cache is stale. Refreshing it by reading from ZK again")
-          brokerPartitionInfo.updateInfo
-        }
-
-        val topicPartitionsList = getPartitionListForTopic(pd)
-        val totalNumPartitions = topicPartitionsList.length
-
-        val partitionId = getPartition(pd.getKey, totalNumPartitions)
-        brokerIdPartition = Some(topicPartitionsList(partitionId))
-        brokerInfoOpt = brokerPartitionInfo.getBrokerInfo(brokerIdPartition.get.brokerId)
-        numRetries += 1
+  private def asyncSend(producerData: ProducerData[K,V]*) {
+    for (data <- producerData) {
+      val added = config.enqueueTimeoutMs match {
+        case 0  =>
+          queue.offer(data)
+        case _  =>
+          try {
+            config.enqueueTimeoutMs < 0 match {
+            case true =>
+              queue.put(data)
+              true
+            case _ =>
+              queue.offer(data, config.enqueueTimeoutMs, TimeUnit.MILLISECONDS)
+            }
+          }
+          catch {
+            case e: InterruptedException =>
+              false
+          }
       }
-
-      brokerInfoOpt match {
-        case Some(brokerInfo) =>
-          debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port +
-                  " on partition " + brokerIdPartition.get.partId)
-        case None =>
-          throw new NoBrokersForPartitionException("Invalid Zookeeper state. Failed to get partition for topic: " +
-            pd.getTopic + " and key: " + pd.getKey)
+      if(!added) {
+        AsyncProducerStats.recordDroppedEvents
+        error("Event queue is full of unsent messages, could not send event: " + data.toString)
+        throw new QueueFullException("Event queue is full of unsent messages, could not send event: " + data.toString)
+      }else {
+        trace("Added to send queue an event: " + data.toString)
+        trace("Remaining queue size: " + queue.remainingCapacity)
       }
-      producerPool.getProducerPoolData(pd.getTopic,
-        new Partition(brokerIdPartition.get.brokerId, brokerIdPartition.get.partId),
-        pd.getData)
     }
-    producerPool.send(producerPoolRequests: _*)
-  }
-
-  private def configSend(producerData: ProducerData[K,V]*) {
-    val producerPoolRequests = producerData.map { pd =>
-    // find the broker partitions registered for this topic
-      val topicPartitionsList = getPartitionListForTopic(pd)
-      val totalNumPartitions = topicPartitionsList.length
-
-      val randomBrokerId = random.nextInt(totalNumPartitions)
-      val brokerIdPartition = topicPartitionsList(randomBrokerId)
-      val brokerInfo = brokerPartitionInfo.getBrokerInfo(brokerIdPartition.brokerId).get
-
-      debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port +
-                " on a randomly chosen partition")
-      val partition = ProducerRequest.RandomPartition
-      debug("Sending message to broker " + brokerInfo.host + ":" + brokerInfo.port + " on a partition " +
-          brokerIdPartition.partId)
-      producerPool.getProducerPoolData(pd.getTopic,
-        new Partition(brokerIdPartition.brokerId, partition),
-        pd.getData)
-    }
-    producerPool.send(producerPoolRequests: _*)
-  }
-
-  private def getPartitionListForTopic(pd: ProducerData[K,V]): Seq[Partition] = {
-    debug("Getting the number of broker partitions registered for topic: " + pd.getTopic)
-    val topicPartitionsList = brokerPartitionInfo.getBrokerPartitionInfo(pd.getTopic).toSeq
-    debug("Broker partitions registered for topic: " + pd.getTopic + " = " + topicPartitionsList)
-    val totalNumPartitions = topicPartitionsList.length
-    if(totalNumPartitions == 0) throw new NoBrokersForPartitionException("Partition = " + pd.getKey)
-    topicPartitionsList
-  }
-
-  /**
-   * Retrieves the partition id and throws an InvalidPartitionException if
-   * the value of partition is not between 0 and numPartitions-1
-   * @param key the partition key
-   * @param numPartitions the total number of available partitions
-   * @returns the partition id
-   */
-  private def getPartition(key: K, numPartitions: Int): Int = {
-    if(numPartitions <= 0)
-      throw new InvalidPartitionException("Invalid number of partitions: " + numPartitions +
-              "\n Valid values are > 0")
-    val partition = if(key == null) random.nextInt(numPartitions)
-                    else partitioner.partition(key , numPartitions)
-    if(partition < 0 || partition >= numPartitions)
-      throw new InvalidPartitionException("Invalid partition id : " + partition +
-              "\n Valid values are in the range inclusive [0, " + (numPartitions-1) + "]")
-    partition
-  }
-  
-  /**
-   * Callback to add a new producer to the producer pool. Used by ZKBrokerPartitionInfo
-   * on registration of new broker in zookeeper
-   * @param bid the id of the broker
-   * @param host the hostname of the broker
-   * @param port the port of the broker
-   */
-  private def producerCbk(bid: Int, host: String, port: Int) =  {
-    if(populateProducerPool) producerPool.addProducer(new Broker(bid, host, host, port))
-    else debug("Skipping the callback since populateProducerPool = false")
   }
 
   /**
@@ -210,8 +120,38 @@ extends Logging {
   def close() = {
     val canShutdown = hasShutdown.compareAndSet(false, true)
     if(canShutdown) {
-      producerPool.close
-      brokerPartitionInfo.close
+      if (producerSendThread != null)
+        producerSendThread.shutdown
+      eventHandler.close
     }
+  }
+}
+
+trait ProducerTopicStatMBean {
+  def getMessagesPerTopic: Long
+}
+
+@threadsafe
+class ProducerTopicStat extends ProducerTopicStatMBean {
+  private val numCumulatedMessagesPerTopic = new AtomicLong(0)
+
+  def getMessagesPerTopic: Long = numCumulatedMessagesPerTopic.get
+
+  def recordMessagesPerTopic(nMessages: Int) = numCumulatedMessagesPerTopic.getAndAdd(nMessages)
+}
+
+object ProducerTopicStat extends Logging {
+  private val stats = new Pool[String, ProducerTopicStat]
+
+  def getProducerTopicStat(topic: String): ProducerTopicStat = {
+    var stat = stats.get(topic)
+    if (stat == null) {
+      stat = new ProducerTopicStat
+      if (stats.putIfNotExists(topic, stat) == null)
+        Utils.registerMBean(stat, "kafka.producer.Producer:type=kafka.ProducerTopicStat." + topic)
+      else
+        stat = stats.get(topic)
+    }
+    return stat
   }
 }

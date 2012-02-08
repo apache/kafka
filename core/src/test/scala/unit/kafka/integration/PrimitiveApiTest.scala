@@ -52,7 +52,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val config = new ProducerConfig(props)
 
     val stringProducer1 = new Producer[String, String](config)
-    stringProducer1.send(new ProducerData[String, String](topic, "test", Array("test-message")))
+    stringProducer1.send(new ProducerData[String, String](topic, Array("test-message")))
     Thread.sleep(200)
 
     var fetched = consumer.fetch(new FetchRequest(topic, 0, 0, 10000))
@@ -73,7 +73,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val config = new ProducerConfig(props)
 
     val stringProducer1 = new Producer[String, String](config)
-    stringProducer1.send(new ProducerData[String, String](topic, "test", Array("test-message")))
+    stringProducer1.send(new ProducerData[String, String](topic, Array("test-message")))
     Thread.sleep(200)
 
     var fetched = consumer.fetch(new FetchRequest(topic, 0, 0, 10000))

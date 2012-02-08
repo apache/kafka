@@ -15,9 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.producer.async
+package kafka.producer
 
-class AsyncProducerInterruptedException(message: String) extends RuntimeException(message) {
-  def this() = this(null)
+class ProducerClosedException() extends RuntimeException("producer already closed") {
 }
-

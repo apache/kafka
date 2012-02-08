@@ -17,287 +17,385 @@
 
 package kafka.producer
 
-import junit.framework.Assert
-import java.util.Properties
 import org.easymock.EasyMock
 import kafka.api.ProducerRequest
-import org.apache.log4j.{Logger, Level}
 import org.junit.Test
 import org.scalatest.junit.JUnitSuite
 import kafka.producer.async._
-import kafka.serializer.Encoder
+import java.util.concurrent.LinkedBlockingQueue
+import junit.framework.Assert._
+import collection.SortedSet
+import kafka.cluster.{Broker, Partition}
+import collection.mutable.{HashMap, ListBuffer}
+import collection.Map
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
+import kafka.serializer.{StringEncoder, StringDecoder, Encoder}
+import java.util.{LinkedList, Properties}
+import kafka.utils.{TestZKUtils, TestUtils}
+import kafka.common.{InvalidConfigException, NoBrokersForPartitionException, InvalidPartitionException}
 
 class AsyncProducerTest extends JUnitSuite {
 
-  private val messageContent1 = "test"
-  private val topic1 = "test-topic"
-  private val message1: Message = new Message(messageContent1.getBytes)
-
-  private val messageContent2 = "test1"
-  private val topic2 = "test1$topic"
-  private val message2: Message = new Message(messageContent2.getBytes)
-  val asyncProducerLogger = Logger.getLogger(classOf[AsyncProducer[String]])
-
   @Test
   def testProducerQueueSize() {
-    val basicProducer = EasyMock.createMock(classOf[SyncProducer])
-    basicProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic1, ProducerRequest.RandomPartition,
-      getMessageSetOfSize(List(message1), 10)))))
-    EasyMock.expectLastCall
-    basicProducer.close
-    EasyMock.expectLastCall
-    EasyMock.replay(basicProducer)
+    // a mock event handler that blocks
+    val mockEventHandler = new EventHandler[String,String] {
+
+      def handle(events: Seq[ProducerData[String,String]]) {
+        Thread.sleep(1000000)
+      }
+
+      def close {}
+    }
 
     val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", "9092")
+    props.put("serializer.class", "kafka.serializer.StringEncoder")
+    props.put("broker.list", "0:localhost:9092")
+    props.put("producer.type", "async")
     props.put("queue.size", "10")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    val config = new AsyncProducerConfig(props)
+    props.put("batch.size", "1")
 
-    val producer = new AsyncProducer[String](config, basicProducer, new StringSerializer)
-
-    //temporarily set log4j to a higher level to avoid error in the output
-    producer.setLoggerLevel(Level.FATAL)
-
+    val config = new ProducerConfig(props)
+    val produceData = getProduceData(12)
+    val producer = new Producer[String, String](config, mockEventHandler)
     try {
-      for(i <- 0 until 11) {
-        producer.send(messageContent1 + "-topic", messageContent1)
-      }
-      Assert.fail("Queue should be full")
+      // send all 10 messages, should hit the batch size and then reach broker
+      producer.send(produceData: _*)
+      fail("Queue should be full")
     }
     catch {
-      case e: QueueFullException => println("Queue is full..")
+      case e: QueueFullException => //expected
     }
-    producer.start
-    producer.close
-    Thread.sleep(2000)
-    EasyMock.verify(basicProducer)
-    producer.setLoggerLevel(Level.ERROR)
   }
 
   @Test
-  def testAddAfterQueueClosed() {
-    val basicProducer = EasyMock.createMock(classOf[SyncProducer])
-    basicProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic1, ProducerRequest.RandomPartition,
-      getMessageSetOfSize(List(message1), 10)))))
-    EasyMock.expectLastCall
-    basicProducer.close
-    EasyMock.expectLastCall
-    EasyMock.replay(basicProducer)
-
+  def testProduceAfterClosed() {
     val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", "9092")
-    props.put("queue.size", "10")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    val config = new AsyncProducerConfig(props)
+    props.put("serializer.class", "kafka.serializer.StringEncoder")
+    props.put("broker.list", "0:localhost:9092")
+    props.put("producer.type", "async")
+    props.put("batch.size", "1")
 
-    val producer = new AsyncProducer[String](config, basicProducer, new StringSerializer)
-
-    producer.start
-    for(i <- 0 until 10) {
-      producer.send(messageContent1 + "-topic", messageContent1)
-    }
+    val config = new ProducerConfig(props)
+    val produceData = getProduceData(10)
+    val producer = new Producer[String, String](config)
     producer.close
 
     try {
-      producer.send(messageContent1 + "-topic", messageContent1)
-      Assert.fail("Queue should be closed")
-    } catch {
-      case e: QueueClosedException =>
+      producer.send(produceData: _*)
+      fail("should complain that producer is already closed")
     }
-    EasyMock.verify(basicProducer)
+    catch {
+      case e: ProducerClosedException => //expected
+    }
+  }
+
+  def getProduceData(nEvents: Int): Seq[ProducerData[String,String]] = {
+    val producerDataList = new ListBuffer[ProducerData[String,String]]
+    for (i <- 0 until nEvents)
+      producerDataList.append(new ProducerData[String,String]("topic1", null, List("msg" + i)))
+    producerDataList
   }
 
   @Test
   def testBatchSize() {
-    val basicProducer = EasyMock.createStrictMock(classOf[SyncProducer])
-    basicProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic1, ProducerRequest.RandomPartition,
-      getMessageSetOfSize(List(message1), 5)))))
-    EasyMock.expectLastCall.times(2)
-    basicProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic1, ProducerRequest.RandomPartition,
-      getMessageSetOfSize(List(message1), 1)))))
+    /**
+     *  Send a total of 10 messages with batch size of 5. Expect 2 calls to the handler, one for each batch.
+     */
+    val producerDataList = getProduceData(10)
+    val mockHandler = EasyMock.createStrictMock(classOf[DefaultEventHandler[String,String]])
+    mockHandler.handle(producerDataList.take(5))
     EasyMock.expectLastCall
-    basicProducer.close
+    mockHandler.handle(producerDataList.takeRight(5))
     EasyMock.expectLastCall
-    EasyMock.replay(basicProducer)
+    EasyMock.replay(mockHandler)
 
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", "9092")
-    props.put("queue.size", "10")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("batch.size", "5")
+    val queue = new LinkedBlockingQueue[ProducerData[String,String]](10)
+    val producerSendThread =
+      new ProducerSendThread[String,String]("thread1", queue, mockHandler, Integer.MAX_VALUE, 5)
+    producerSendThread.start()
 
-    val config = new AsyncProducerConfig(props)
+    for (producerData <- producerDataList)
+      queue.put(producerData)
 
-    val producer = new AsyncProducer[String](config, basicProducer, new StringSerializer)
-
-    producer.start
-    for(i <- 0 until 10) {
-      producer.send(messageContent1 + "-topic", messageContent1)
-    }
-
-    Thread.sleep(100)
-    try {
-      producer.send(messageContent1 + "-topic", messageContent1)
-    } catch {
-      case e: QueueFullException =>
-        Assert.fail("Queue should not be full")
-    }
-
-    producer.close
-    EasyMock.verify(basicProducer)
+    producerSendThread.shutdown
+    EasyMock.verify(mockHandler)
   }
 
   @Test
   def testQueueTimeExpired() {
-    val basicProducer = EasyMock.createMock(classOf[SyncProducer])
-    basicProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic1, ProducerRequest.RandomPartition,
-      getMessageSetOfSize(List(message1), 3)))))
+    /**
+     *  Send a total of 2 messages with batch size of 5 and queue time of 200ms.
+     *  Expect 1 calls to the handler after 200ms.
+     */
+    val producerDataList = getProduceData(2)
+    val mockHandler = EasyMock.createStrictMock(classOf[DefaultEventHandler[String,String]])
+    mockHandler.handle(producerDataList)
     EasyMock.expectLastCall
-    basicProducer.close
-    EasyMock.expectLastCall
-    EasyMock.replay(basicProducer)
+    EasyMock.replay(mockHandler)
 
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", "9092")
-    props.put("queue.size", "10")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("queue.time", "200")
+    val queue = new LinkedBlockingQueue[ProducerData[String,String]](10)
+    val producerSendThread =
+      new ProducerSendThread[String,String]("thread1", queue, mockHandler, 200, 5)
+    producerSendThread.start()
 
-    val config = new AsyncProducerConfig(props)
-
-    val producer = new AsyncProducer[String](config, basicProducer, new StringSerializer)
-    val serializer = new StringSerializer
-
-    producer.start
-    for(i <- 0 until 3) {
-      producer.send(serializer.getTopic(messageContent1), messageContent1, ProducerRequest.RandomPartition)
-    }
+    for (producerData <- producerDataList)
+      queue.put(producerData)
 
     Thread.sleep(300)
-    producer.close
-    EasyMock.verify(basicProducer)
+    producerSendThread.shutdown
+    EasyMock.verify(mockHandler)
   }
 
   @Test
-  def testSenderThreadShutdown() {
-    val syncProducerProps = new Properties()
-    syncProducerProps.put("host", "localhost")
-    syncProducerProps.put("port", "9092")
-    syncProducerProps.put("buffer.size", "1000")
-    syncProducerProps.put("connect.timeout.ms", "1000")
-    syncProducerProps.put("reconnect.interval", "1000")
-    val basicProducer = new MockProducer(new SyncProducerConfig(syncProducerProps))
-
-    val asyncProducerProps = new Properties()
-    asyncProducerProps.put("host", "localhost")
-    asyncProducerProps.put("port", "9092")
-    asyncProducerProps.put("queue.size", "10")
-    asyncProducerProps.put("serializer.class", "kafka.producer.StringSerializer")
-    asyncProducerProps.put("queue.time", "100")
-
-    val config = new AsyncProducerConfig(asyncProducerProps)
-    val producer = new AsyncProducer[String](config, basicProducer, new StringSerializer)
-    producer.start
-    producer.send(messageContent1 + "-topic", messageContent1)
-    producer.close
-  }
-
-  @Test
-  def testCollateEvents() {
-    val basicProducer = EasyMock.createMock(classOf[SyncProducer])
-    basicProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic2, ProducerRequest.RandomPartition,
-                                                                     getMessageSetOfSize(List(message2), 5)),
-                                                 new ProducerRequest(topic1, ProducerRequest.RandomPartition,
-                                                                     getMessageSetOfSize(List(message1), 5)))))
-    EasyMock.expectLastCall
-    basicProducer.close
-    EasyMock.expectLastCall
-    EasyMock.replay(basicProducer)
+  def testPartitionAndCollateEvents() {
+    val producerDataList = new ListBuffer[ProducerData[Int,Message]]
+    producerDataList.append(new ProducerData[Int,Message]("topic1", 0, new Message("msg1".getBytes)))
+    producerDataList.append(new ProducerData[Int,Message]("topic2", 1, new Message("msg2".getBytes)))
+    producerDataList.append(new ProducerData[Int,Message]("topic1", 2, new Message("msg3".getBytes)))
+    producerDataList.append(new ProducerData[Int,Message]("topic1", 3, new Message("msg4".getBytes)))
+    producerDataList.append(new ProducerData[Int,Message]("topic2", 4, new Message("msg5".getBytes)))
 
     val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", "9092")
-    props.put("queue.size", "50")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("batch.size", "10")
+    props.put("broker.list", "0:localhost:9092,1:localhost:9092")
 
-    val config = new AsyncProducerConfig(props)
-
-    val producer = new AsyncProducer[String](config, basicProducer, new StringSerializer)
-
-    producer.start
-    val serializer = new StringSerializer
-    for(i <- 0 until 5) {
-      producer.send(messageContent1 + "-topic", messageContent1)
-      producer.send(messageContent2 + "$topic", messageContent2, ProducerRequest.RandomPartition)
+    val intPartitioner = new Partitioner[Int] {
+      def partition(key: Int, numPartitions: Int): Int = key % numPartitions
     }
+    val config = new ProducerConfig(props)
+    val handler = new DefaultEventHandler[Int,String](config,
+                                                      partitioner = intPartitioner,
+                                                      encoder = null.asInstanceOf[Encoder[String]],
+                                                      producerPool = null,
+                                                      populateProducerPool = false,
+                                                      brokerPartitionInfo = null)
 
-    producer.close
-    EasyMock.verify(basicProducer)
+    val topic1Broker1Data = new ListBuffer[ProducerData[Int,Message]]
+    topic1Broker1Data.appendAll(List(new ProducerData[Int,Message]("topic1", 0, new Message("msg1".getBytes)),
+                                     new ProducerData[Int,Message]("topic1", 2, new Message("msg3".getBytes))))
+    val topic1Broker2Data = new ListBuffer[ProducerData[Int,Message]]
+    topic1Broker2Data.appendAll(List(new ProducerData[Int,Message]("topic1", 3, new Message("msg4".getBytes))))
+    val topic2Broker1Data = new ListBuffer[ProducerData[Int,Message]]
+    topic2Broker1Data.appendAll(List(new ProducerData[Int,Message]("topic2", 4, new Message("msg5".getBytes))))
+    val topic2Broker2Data = new ListBuffer[ProducerData[Int,Message]]
+    topic2Broker2Data.appendAll(List(new ProducerData[Int,Message]("topic2", 1, new Message("msg2".getBytes))))
+    val expectedResult = Map(
+        0 -> Map(
+              ("topic1", -1) -> topic1Broker1Data,
+              ("topic2", -1) -> topic2Broker1Data),
+        1 -> Map(
+              ("topic1", -1) -> topic1Broker2Data,
+              ("topic2", -1) -> topic2Broker2Data)
+      )
 
+    val actualResult = handler.partitionAndCollate(producerDataList)
+    assertEquals(expectedResult, actualResult)
   }
 
   @Test
-  def testCollateAndSerializeEvents() {
-    val basicProducer = EasyMock.createMock(classOf[SyncProducer])
-    basicProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic2, 1,
-                                                                     getMessageSetOfSize(List(message2), 5)),
-                                                 new ProducerRequest(topic1, 0,
-                                                                     getMessageSetOfSize(List(message1), 5)),
-                                                 new ProducerRequest(topic1, 1,
-                                                                     getMessageSetOfSize(List(message1), 5)),
-                                                 new ProducerRequest(topic2, 0,
-                                                                     getMessageSetOfSize(List(message2), 5)))))
+  def testSerializeEvents() {
+    val produceData = TestUtils.getMsgStrings(5).map(m => new ProducerData[String,String]("topic1",m))
+    val props = new Properties()
+    props.put("broker.list", "0:localhost:9092,1:localhost:9092")
+    val config = new ProducerConfig(props)
+    val handler = new DefaultEventHandler[String,String](config,
+                                                         partitioner = null.asInstanceOf[Partitioner[String]],
+                                                         encoder = new StringEncoder,
+                                                         producerPool = null,
+                                                         populateProducerPool = false,
+                                                         brokerPartitionInfo = null)
 
+    val serializedData = handler.serialize(produceData)
+    val decoder = new StringDecoder
+    val deserializedData = serializedData.map(d => new ProducerData[String,String](d.getTopic, d.getData.map(m => decoder.toEvent(m))))
+    TestUtils.checkEquals(produceData.iterator, deserializedData.iterator)
+  }
+
+  @Test
+  def testInvalidPartition() {
+    val producerDataList = new ListBuffer[ProducerData[String,Message]]
+    producerDataList.append(new ProducerData[String,Message]("topic1", "key1", new Message("msg1".getBytes)))
+    val props = new Properties()
+    props.put("broker.list", "0:localhost:9092,1:localhost:9092")
+    val config = new ProducerConfig(props)
+    val handler = new DefaultEventHandler[String,String](config,
+                                                         partitioner = new NegativePartitioner,
+                                                         encoder = null.asInstanceOf[Encoder[String]],
+                                                         producerPool = null,
+                                                         populateProducerPool = false,
+                                                         brokerPartitionInfo = null)
+    try {
+      handler.partitionAndCollate(producerDataList)
+      fail("Should fail with InvalidPartitionException")
+    }
+    catch {
+      case e: InvalidPartitionException => // expected, do nothing
+    }
+  }
+
+  private def getMockBrokerPartitionInfo(): BrokerPartitionInfo ={
+    new BrokerPartitionInfo {
+      def getBrokerPartitionInfo(topic: String = null): SortedSet[Partition] = SortedSet.empty[Partition]
+
+      def getBrokerInfo(brokerId: Int): Option[Broker] = None
+
+      def getAllBrokerInfo: Map[Int, Broker] = new HashMap[Int, Broker]
+
+      def updateInfo = {}
+
+      def close = {}
+    }
+  }
+
+  @Test
+  def testNoBroker() {
+    val producerDataList = new ListBuffer[ProducerData[String,String]]
+    producerDataList.append(new ProducerData[String,String]("topic1", "msg1"))
+    val props = new Properties()
+    val config = new ProducerConfig(props)
+    val handler = new DefaultEventHandler[String,String](config,
+                                                         partitioner = null.asInstanceOf[Partitioner[String]],
+                                                         encoder = new StringEncoder,
+                                                         producerPool = null,
+                                                         populateProducerPool = false,
+                                                         brokerPartitionInfo = getMockBrokerPartitionInfo)
+    try {
+      handler.handle(producerDataList)
+      fail("Should fail with NoBrokersForPartitionException")
+    }
+    catch {
+      case e: NoBrokersForPartitionException => // expected, do nothing
+    }
+  }
+
+  @Test
+  def testIncompatibleEncoder() {
+    val props = new Properties()
+    props.put("broker.list", "0:localhost:9092,1:localhost:9092")
+    val config = new ProducerConfig(props)
+
+    val producer=new Producer[String, String](config)
+    try {
+      producer.send(getProduceData(1): _*)
+      fail("Should fail with ClassCastException due to incompatible Encoder")
+    } catch {
+      case e: ClassCastException =>
+    }
+  }
+
+  @Test
+  def testRandomPartitioner() {
+    val props = new Properties()
+    props.put("broker.list", "0:localhost:9092,1:localhost:9092")
+    val config = new ProducerConfig(props)
+    val handler = new DefaultEventHandler[String,String](config,
+                                                         partitioner = null.asInstanceOf[Partitioner[String]],
+                                                         encoder = null.asInstanceOf[Encoder[String]],
+                                                         producerPool = null,
+                                                         populateProducerPool = false,
+                                                         brokerPartitionInfo = null)
+    val producerDataList = new ListBuffer[ProducerData[String,Message]]
+    producerDataList.append(new ProducerData[String,Message]("topic1", new Message("msg1".getBytes)))
+    producerDataList.append(new ProducerData[String,Message]("topic2", new Message("msg2".getBytes)))
+    producerDataList.append(new ProducerData[String,Message]("topic1", new Message("msg3".getBytes)))
+
+    val partitionedData = handler.partitionAndCollate(producerDataList)
+    for ((brokerId, dataPerBroker) <- partitionedData) {
+      for ( ((topic, partitionId), dataPerTopic) <- dataPerBroker)
+        assertTrue(partitionId == ProducerRequest.RandomPartition)
+    }
+  }
+
+  @Test
+  def testBrokerListAndAsync() {
+    val topic = "topic1"
+    val msgs = TestUtils.getMsgStrings(10)
+    val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
+    mockSyncProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic, ProducerRequest.RandomPartition,
+      messagesToSet(msgs.take(5))))))
     EasyMock.expectLastCall
-    basicProducer.close
+    mockSyncProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic, ProducerRequest.RandomPartition,
+      messagesToSet(msgs.takeRight(5))))))
     EasyMock.expectLastCall
-    EasyMock.replay(basicProducer)
+    mockSyncProducer.close
+    EasyMock.expectLastCall
+    EasyMock.replay(mockSyncProducer)
 
     val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", "9092")
-    props.put("queue.size", "50")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("batch.size", "20")
+    props.put("serializer.class", "kafka.serializer.StringEncoder")
+    props.put("producer.type", "async")
+    props.put("batch.size", "5")
+    props.put("broker.list", "0:localhost:9092")
 
-    val config = new AsyncProducerConfig(props)
+    val config = new ProducerConfig(props)
+    val producerPool = new ProducerPool(config)
+    producerPool.addProducer(0, mockSyncProducer)
 
-    val producer = new AsyncProducer[String](config, basicProducer, new StringSerializer)
+    val handler = new DefaultEventHandler[String,String](config,
+                                                      partitioner = null.asInstanceOf[Partitioner[String]],
+                                                      encoder = new StringEncoder,
+                                                      producerPool = producerPool,
+                                                      populateProducerPool = false,
+                                                      brokerPartitionInfo = null)
 
-    producer.start
-    val serializer = new StringSerializer
-    for(i <- 0 until 5) {
-      producer.send(topic2, messageContent2, 0)
-      producer.send(topic2, messageContent2, 1)
-      producer.send(topic1, messageContent1, 0)
-      producer.send(topic1, messageContent1, 1)
+    val producer = new Producer[String, String](config, handler)
+    try {
+      // send all 10 messages, should create 2 batches and 2 syncproducer calls
+      producer.send(msgs.map(m => new ProducerData[String,String](topic, List(m))): _*)
+      producer.close
+
+    } catch {
+      case e: Exception => fail("Not expected", e)
     }
 
-    producer.close
-    EasyMock.verify(basicProducer)
-
+    EasyMock.verify(mockSyncProducer)
   }
 
-  private def getMessageSetOfSize(messages: List[Message], counts: Int): ByteBufferMessageSet = {
-    var messageList = new Array[Message](counts)
-    for(message <- messages) {
-      for(i <- 0 until counts) {
-        messageList(i) = message
-      }
+  @Test
+  def testJavaProducer() {
+    val topic = "topic1"
+    val msgs = TestUtils.getMsgStrings(5)
+    val scalaProducerData = msgs.map(m => new ProducerData[String, String](topic, List(m)))
+    val javaProducerData = scala.collection.JavaConversions.asList(msgs.map(m => {
+        val javaList = new LinkedList[String]()
+        javaList.add(m)
+        new kafka.javaapi.producer.ProducerData[String, String](topic, javaList)
+      }))
+
+    val mockScalaProducer = EasyMock.createMock(classOf[kafka.producer.Producer[String, String]])
+    mockScalaProducer.send(scalaProducerData.head)
+    EasyMock.expectLastCall()
+    mockScalaProducer.send(scalaProducerData: _*)
+    EasyMock.expectLastCall()
+    EasyMock.replay(mockScalaProducer)
+
+    val javaProducer = new kafka.javaapi.producer.Producer[String, String](mockScalaProducer)
+    javaProducer.send(javaProducerData.get(0))
+    javaProducer.send(javaProducerData)
+
+    EasyMock.verify(mockScalaProducer)
+  }
+
+  @Test
+  def testInvalidConfiguration() {
+    val props = new Properties()
+    props.put("serializer.class", "kafka.serializer.StringEncoder")
+    props.put("broker.list", "0:localhost:9092")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("producer.type", "async")
+
+    try {
+      new ProducerConfig(props)
+      fail("should complain about wrong config")
     }
-    new ByteBufferMessageSet(NoCompressionCodec, messageList: _*)
+    catch {
+      case e: InvalidConfigException => //expected
+    }
   }
 
-  class StringSerializer extends Encoder[String] {
-    def toMessage(event: String):Message = new Message(event.getBytes)
-    def getTopic(event: String): String = event.concat("-topic")
+  private def messagesToSet(messages: Seq[String]): ByteBufferMessageSet = {
+    val encoder = new StringEncoder
+    new ByteBufferMessageSet(NoCompressionCodec, messages.map(m => encoder.toMessage(m)): _*)
   }
 
   class MockProducer(override val config: SyncProducerConfig) extends SyncProducer(config) {

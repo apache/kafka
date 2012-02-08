@@ -66,7 +66,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     // also the iterator should support re-entrant, so loop it twice
     for (i <- 0 until  2) {
       try {
-        getMessages(nMessages*2, topicMessageStreams0)
+        getMessagesSortedByChecksum(nMessages*2, topicMessageStreams0)
         fail("should get an exception")
       }
       catch {
@@ -84,7 +84,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
       TestUtils.createConsumerProperties(zkConnect, group, consumer1))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Predef.Map(topic -> numNodes*numParts/2))
-    val receivedMessages1 = getMessages(nMessages*2, topicMessageStreams1)
+    val receivedMessages1 = getMessagesSortedByChecksum(nMessages*2, topicMessageStreams1)
     assertEquals(sentMessages1, receivedMessages1)
     // commit consumed offsets
     zkConsumerConnector1.commitOffsets
@@ -97,8 +97,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     // send some messages to each broker
     val sentMessages2 = sendMessages(nMessages, "batch2")
     Thread.sleep(200)
-    val receivedMessages2_1 = getMessages(nMessages, topicMessageStreams1)
-    val receivedMessages2_2 = getMessages(nMessages, topicMessageStreams2)
+    val receivedMessages2_1 = getMessagesSortedByChecksum(nMessages, topicMessageStreams1)
+    val receivedMessages2_2 = getMessagesSortedByChecksum(nMessages, topicMessageStreams2)
     val receivedMessages2 = (receivedMessages2_1 ::: receivedMessages2_2).sortWith((s,t) => s.checksum < t.checksum)
     assertEquals(sentMessages2, receivedMessages2)
 
@@ -111,8 +111,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     Thread.sleep(200)
     val sentMessages3 = sendMessages(nMessages, "batch3")
     Thread.sleep(200)
-    val receivedMessages3_1 = getMessages(nMessages, topicMessageStreams1)
-    val receivedMessages3_2 = getMessages(nMessages, topicMessageStreams2)
+    val receivedMessages3_1 = getMessagesSortedByChecksum(nMessages, topicMessageStreams1)
+    val receivedMessages3_2 = getMessagesSortedByChecksum(nMessages, topicMessageStreams2)
     val receivedMessages3 = (receivedMessages3_1 ::: receivedMessages3_2).sortWith((s,t) => s.checksum < t.checksum)
     assertEquals(sentMessages3, receivedMessages3)
 
@@ -135,7 +135,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
       TestUtils.createConsumerProperties(zkConnect, group, consumer1))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Predef.Map(topic -> numNodes*numParts/2))
-    val receivedMessages1 = getMessages(nMessages*2, topicMessageStreams1)
+    val receivedMessages1 = getMessagesSortedByChecksum(nMessages*2, topicMessageStreams1)
     assertEquals(sentMessages1, receivedMessages1)
     // commit consumed offsets
     zkConsumerConnector1.commitOffsets
@@ -149,8 +149,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     // send some messages to each broker
     val sentMessages2 = sendMessages(nMessages, "batch2", DefaultCompressionCodec)
     Thread.sleep(200)
-    val receivedMessages2_1 = getMessages(nMessages, topicMessageStreams1)
-    val receivedMessages2_2 = getMessages(nMessages, topicMessageStreams2)
+    val receivedMessages2_1 = getMessagesSortedByChecksum(nMessages, topicMessageStreams1)
+    val receivedMessages2_2 = getMessagesSortedByChecksum(nMessages, topicMessageStreams2)
     val receivedMessages2 = (receivedMessages2_1 ::: receivedMessages2_2).sortWith((s,t) => s.checksum < t.checksum)
     assertEquals(sentMessages2, receivedMessages2)
 
@@ -164,8 +164,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     Thread.sleep(200)
     val sentMessages3 = sendMessages(nMessages, "batch3", DefaultCompressionCodec)
     Thread.sleep(200)
-    val receivedMessages3_1 = getMessages(nMessages, topicMessageStreams1)
-    val receivedMessages3_2 = getMessages(nMessages, topicMessageStreams2)
+    val receivedMessages3_1 = getMessagesSortedByChecksum(nMessages, topicMessageStreams1)
+    val receivedMessages3_2 = getMessagesSortedByChecksum(nMessages, topicMessageStreams2)
     val receivedMessages3 = (receivedMessages3_1 ::: receivedMessages3_2).sortWith((s,t) => s.checksum < t.checksum)
     assertEquals(sentMessages3, receivedMessages3)
 
@@ -195,13 +195,13 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     }
     val zkConsumerConnector0 = new ZookeeperConsumerConnector(consumerConfig0, true)
     val topicMessageStreams0 = zkConsumerConnector0.createMessageStreams(Predef.Map(topic -> 1))
-    getMessages(100, topicMessageStreams0)
+    getMessagesSortedByChecksum(100, topicMessageStreams0)
     zkConsumerConnector0.shutdown
     // at this point, only some part of the message set was consumed. So consumed offset should still be 0
     // also fetched offset should be 0
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig0, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Predef.Map(topic -> 1))
-    val receivedMessages = getMessages(400, topicMessageStreams1)
+    val receivedMessages = getMessagesSortedByChecksum(400, topicMessageStreams1)
     val sortedReceivedMessages = receivedMessages.sortWith((s,t) => s.checksum < t.checksum)
     val sortedSentMessages = sentMessages.sortWith((s,t) => s.checksum < t.checksum)
     assertEquals(sortedSentMessages, sortedReceivedMessages)
@@ -268,19 +268,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     messages.sortWith((s,t) => s.checksum < t.checksum)
   }
 
-  def getMessages(nMessagesPerThread: Int, topicMessageStreams: Map[String,List[KafkaMessageStream[Message]]]): List[Message]= {
-    var messages: List[Message] = Nil
-    for ((topic, messageStreams) <- topicMessageStreams) {
-      for (messageStream <- messageStreams) {
-        val iterator = messageStream.iterator
-        for (i <- 0 until nMessagesPerThread) {
-          assertTrue(iterator.hasNext)
-          val message = iterator.next
-          messages ::= message
-          debug("received message: " + Utils.toString(message.payload, "UTF-8"))
-        }
-      }
-    }
+  def getMessagesSortedByChecksum(nMessagesPerThread: Int, topicMessageStreams: Map[String,List[KafkaMessageStream[Message]]]): List[Message]= {
+    val messages = TestUtils.getConsumedMessages(nMessagesPerThread, topicMessageStreams)
     messages.sortWith((s,t) => s.checksum < t.checksum)
   }
 }

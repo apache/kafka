@@ -16,8 +16,6 @@
 */
 package kafka.javaapi
 
-import kafka.serializer.Encoder
-import kafka.producer.async.QueueItem
 import kafka.utils.Logging
 
 private[javaapi] object Implicits extends Logging {
@@ -28,91 +26,6 @@ private[javaapi] object Implicits extends Logging {
      kafka.javaapi.message.ByteBufferMessageSet = {
     new kafka.javaapi.message.ByteBufferMessageSet(messageSet.getBuffer, messageSet.getInitialOffset,
                                                    messageSet.getErrorCode)
-  }
-
-  implicit def toJavaSyncProducer(producer: kafka.producer.SyncProducer): kafka.javaapi.producer.SyncProducer = {
-    debug("Implicit instantiation of Java Sync Producer")
-    new kafka.javaapi.producer.SyncProducer(producer)
-  }
-
-  implicit def toSyncProducer(producer: kafka.javaapi.producer.SyncProducer): kafka.producer.SyncProducer = {
-    debug("Implicit instantiation of Sync Producer")
-    producer.underlying
-  }
-
-  implicit def toScalaEventHandler[T](eventHandler: kafka.javaapi.producer.async.EventHandler[T])
-       : kafka.producer.async.EventHandler[T] = {
-    new kafka.producer.async.EventHandler[T] {
-      override def init(props: java.util.Properties) { eventHandler.init(props) }
-      override def handle(events: Seq[QueueItem[T]], producer: kafka.producer.SyncProducer, encoder: Encoder[T]) {
-        import collection.JavaConversions._
-        eventHandler.handle(asList(events), producer, encoder)
-      }
-      override def close { eventHandler.close }
-    }
-  }
-
-  implicit def toJavaEventHandler[T](eventHandler: kafka.producer.async.EventHandler[T])
-    : kafka.javaapi.producer.async.EventHandler[T] = {
-    new kafka.javaapi.producer.async.EventHandler[T] {
-      override def init(props: java.util.Properties) { eventHandler.init(props) }
-      override def handle(events: java.util.List[QueueItem[T]], producer: kafka.javaapi.producer.SyncProducer,
-                          encoder: Encoder[T]) {
-        import collection.JavaConversions._
-        eventHandler.handle(asBuffer(events), producer, encoder)
-      }
-      override def close { eventHandler.close }
-    }
-  }
-
-  implicit def toScalaCbkHandler[T](cbkHandler: kafka.javaapi.producer.async.CallbackHandler[T])
-      : kafka.producer.async.CallbackHandler[T] = {
-    new kafka.producer.async.CallbackHandler[T] {
-      import collection.JavaConversions._
-      override def init(props: java.util.Properties) { cbkHandler.init(props)}
-      override def beforeEnqueue(data: QueueItem[T] = null.asInstanceOf[QueueItem[T]]): QueueItem[T] = {
-        cbkHandler.beforeEnqueue(data)
-      }
-      override def afterEnqueue(data: QueueItem[T] = null.asInstanceOf[QueueItem[T]], added: Boolean) {
-        cbkHandler.afterEnqueue(data, added)
-      }
-      override def afterDequeuingExistingData(data: QueueItem[T] = null): scala.collection.mutable.Seq[QueueItem[T]] = {
-        cbkHandler.afterDequeuingExistingData(data)
-      }
-      override def beforeSendingData(data: Seq[QueueItem[T]] = null): scala.collection.mutable.Seq[QueueItem[T]] = {
-        asList(cbkHandler.beforeSendingData(asList(data)))
-      }
-      override def lastBatchBeforeClose: scala.collection.mutable.Seq[QueueItem[T]] = {
-        asBuffer(cbkHandler.lastBatchBeforeClose)
-      }
-      override def close { cbkHandler.close }
-    }
-  }
-
-  implicit def toJavaCbkHandler[T](cbkHandler: kafka.producer.async.CallbackHandler[T])
-      : kafka.javaapi.producer.async.CallbackHandler[T] = {
-    new kafka.javaapi.producer.async.CallbackHandler[T] {
-      import collection.JavaConversions._
-      override def init(props: java.util.Properties) { cbkHandler.init(props)}
-      override def beforeEnqueue(data: QueueItem[T] = null.asInstanceOf[QueueItem[T]]): QueueItem[T] = {
-        cbkHandler.beforeEnqueue(data)
-      }
-      override def afterEnqueue(data: QueueItem[T] = null.asInstanceOf[QueueItem[T]], added: Boolean) {
-        cbkHandler.afterEnqueue(data, added)
-      }
-      override def afterDequeuingExistingData(data: QueueItem[T] = null)
-      : java.util.List[QueueItem[T]] = {
-        asList(cbkHandler.afterDequeuingExistingData(data))
-      }
-      override def beforeSendingData(data: java.util.List[QueueItem[T]] = null)
-      : java.util.List[QueueItem[T]] = {
-        asBuffer(cbkHandler.beforeSendingData(asBuffer(data)))
-      }
-      override def lastBatchBeforeClose: java.util.List[QueueItem[T]] = {
-        asList(cbkHandler.lastBatchBeforeClose)
-      }
-      override def close { cbkHandler.close }
-    }
   }
 
   implicit def toMultiFetchResponse(response: kafka.javaapi.MultiFetchResponse): kafka.api.MultiFetchResponse =

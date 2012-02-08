@@ -17,13 +17,13 @@
 
 package kafka.producer
 
-import async.AsyncProducerConfigShared
+import async.AsyncProducerConfig
 import java.util.Properties
 import kafka.utils.{ZKConfig, Utils}
 import kafka.common.InvalidConfigException
 
 class ProducerConfig(val props: Properties) extends ZKConfig(props)
-        with AsyncProducerConfigShared with SyncProducerConfigShared{
+        with AsyncProducerConfig with SyncProducerConfigShared{
 
   /** For bypassing zookeeper based auto partition discovery, use this config   *
    *  to pass in static broker and per-broker partition information. Format-    *
@@ -37,7 +37,7 @@ class ProducerConfig(val props: Properties) extends ZKConfig(props)
     throw new InvalidConfigException("only one of broker.list and zk.connect can be specified")
 
   /** the partitioner class for partitioning events amongst sub-topics */
-  val partitionerClass = Utils.getString(props, "partitioner.class", "kafka.producer.DefaultPartitioner")
+  val partitionerClass = Utils.getString(props, "partitioner.class", null)
 
   /** this parameter specifies whether the messages are sent asynchronously *
    * or not. Valid values are - async for asynchronous send                 *
@@ -71,5 +71,7 @@ class ProducerConfig(val props: Properties) extends ZKConfig(props)
    * ZK cache needs to be updated.
    * This parameter specifies the number of times the producer attempts to refresh this ZK cache.
    */
-  val zkReadRetries = Utils.getInt(props, "zk.read.num.retries", 3)
+  val producerRetries = Utils.getInt(props, "producer.num.retries", 3)
+
+  val producerRetryBackoffMs = Utils.getInt(props, "producer.retry.backoff.ms", 5)
 }

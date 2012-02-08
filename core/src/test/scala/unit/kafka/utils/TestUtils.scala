@@ -28,8 +28,10 @@ import kafka.server._
 import kafka.producer._
 import kafka.message._
 import org.I0Itec.zkclient.ZkClient
-import kafka.consumer.ConsumerConfig
 import kafka.cluster.Broker
+import collection.mutable.ListBuffer
+import kafka.consumer.{KafkaMessageStream, ConsumerConfig}
+import scala.collection.Map
 
 /**
  * Utility functions to help with testing
@@ -306,6 +308,28 @@ object TestUtils {
     val brokers = ids.map(id => new Broker(id, "localhost" + System.currentTimeMillis(), "localhost", 6667))
     brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, b.id, b.host, b.creatorId, b.port))
     brokers
+  }
+
+  def getConsumedMessages[T](nMessagesPerThread: Int, topicMessageStreams: Map[String,List[KafkaMessageStream[T]]]): List[T]= {
+    var messages: List[T] = Nil
+    for ((topic, messageStreams) <- topicMessageStreams) {
+      for (messageStream <- messageStreams) {
+        val iterator = messageStream.iterator
+        for (i <- 0 until nMessagesPerThread) {
+          assertTrue(iterator.hasNext)
+          val message = iterator.next
+          messages ::= message
+        }
+      }
+    }
+    messages
+  }
+
+  def getMsgStrings(n: Int): Seq[String] = {
+    val buffer = new ListBuffer[String]
+    for (i <- 0 until  n)
+      buffer += ("msg" + i)
+    buffer
   }
 
 }

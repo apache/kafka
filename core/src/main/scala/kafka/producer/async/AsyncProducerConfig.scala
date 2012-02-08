@@ -18,13 +18,8 @@ package kafka.producer.async
 
 import java.util.Properties
 import kafka.utils.Utils
-import kafka.producer.SyncProducerConfig
 
-class AsyncProducerConfig(override val props: Properties) extends SyncProducerConfig(props)
-        with AsyncProducerConfigShared {
-}
-
-trait AsyncProducerConfigShared {
+trait AsyncProducerConfig {
   val props: Properties
 
   /* maximum time, in milliseconds, for buffering data on the producer queue */
@@ -46,16 +41,4 @@ trait AsyncProducerConfigShared {
 
   /** the serializer class for events */
   val serializerClass = Utils.getString(props, "serializer.class", "kafka.serializer.DefaultEncoder")
-
-  /** the callback handler for one or multiple events */
-  val cbkHandler = Utils.getString(props, "callback.handler", null)
-
-  /** properties required to initialize the callback handler */
-  val cbkHandlerProps = Utils.getProps(props, "callback.handler.props", null)
-
-  /** the handler for events */
-  val eventHandler = Utils.getString(props, "event.handler", null)
-
-  /** properties required to initialize the callback handler */
-  val eventHandlerProps = Utils.getProps(props, "event.handler.props", null)
 }
