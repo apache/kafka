@@ -22,10 +22,9 @@ import org.scalatest.junit.JUnit3Suite
 import org.apache.log4j.Logger
 import java.util.Properties
 import kafka.consumer.SimpleConsumer
-import kafka.utils.{Utils, TestUtils}
+import kafka.utils.TestUtils
 import kafka.api.{OffsetRequest, FetchRequest}
 import junit.framework.Assert._
-import java.io.File
 
 class BackwardsCompatibilityTest extends JUnit3Suite {
 

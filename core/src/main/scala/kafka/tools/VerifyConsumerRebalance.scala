@@ -57,9 +57,9 @@ object VerifyConsumerRebalance extends Logging {
       // check if the rebalancing operation succeeded.
       try {
         if(validateRebalancingOperation(zkClient, group))
-          info("Rebalance operation successful !")
+          println("Rebalance operation successful !")
         else
-          error("Rebalance operation failed !")
+          println("Rebalance operation failed !")
       } catch {
         case e2: Throwable => error("Error while verifying current rebalancing operation", e2)
       }
@@ -132,6 +132,4 @@ object VerifyConsumerRebalance extends Logging {
 
     rebalanceSucceeded
   }
-
-
 }

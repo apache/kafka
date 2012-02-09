@@ -17,14 +17,13 @@
 
 package kafka.producer
 
-import async.{AsyncProducerConfig, AsyncProducer}
+import async.AsyncProducer
 import java.util.Properties
 import org.apache.log4j.{Logger, Level}
 import kafka.server.{KafkaRequestHandlers, KafkaServer, KafkaConfig}
 import kafka.zk.EmbeddedZookeeper
 import org.junit.{After, Before, Test}
 import junit.framework.Assert
-import collection.mutable.HashMap
 import org.easymock.EasyMock
 import java.util.concurrent.ConcurrentHashMap
 import kafka.cluster.Partition

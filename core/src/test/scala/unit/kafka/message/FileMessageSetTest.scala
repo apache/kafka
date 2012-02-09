@@ -18,12 +18,9 @@
 package kafka.message
 
 import java.nio._
-import java.util.Arrays
-import junit.framework.TestCase
 import junit.framework.Assert._
 import kafka.utils.TestUtils._
 import org.junit.Test
-import kafka.message._
 
 class FileMessageSetTest extends BaseMessageSetTestCases {
   

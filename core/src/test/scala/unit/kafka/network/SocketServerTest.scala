@@ -19,13 +19,9 @@ package kafka.network;
 
 import java.net._
 import java.io._
-import java.nio._
-import java.nio.channels._
 import org.junit._
-import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import kafka.utils.TestUtils
-import kafka.network._
 import java.util.Random
 import org.apache.log4j._
 

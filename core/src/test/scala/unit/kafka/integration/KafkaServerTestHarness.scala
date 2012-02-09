@@ -17,11 +17,6 @@
 
 package kafka.integration
 
-import java.util.Properties
-import junit.framework.Assert._
-import kafka.producer._
-import kafka.consumer._
-import kafka.message._
 import kafka.server._
 import kafka.utils.{Utils, TestUtils}
 import org.scalatest.junit.JUnit3Suite

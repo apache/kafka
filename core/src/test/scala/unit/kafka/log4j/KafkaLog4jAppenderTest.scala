@@ -23,13 +23,12 @@ import java.util.Properties
 import java.io.File
 import kafka.consumer.SimpleConsumer
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.TestUtils
 import kafka.utils.{TestUtils, TestZKUtils,Utils, Logging}
 import kafka.zk.EmbeddedZookeeper
 import junit.framework.Assert._
 import kafka.api.FetchRequest
 import kafka.serializer.Encoder
-import kafka.message.{MessageSet, Message}
+import kafka.message.Message
 import kafka.producer.async.MissingConfigException
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}

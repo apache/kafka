@@ -49,7 +49,7 @@ class GZIPCompression(inputStream: InputStream, outputStream: ByteArrayOutputStr
   }
 
   override def read(a: Array[Byte]): Int = {
-    gzipIn.read(a)	
+    gzipIn.read(a)
   }
 }
 

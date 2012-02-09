@@ -17,11 +17,11 @@
 
 package kafka.javaapi.producer
 
-import junit.framework.{Assert, TestCase}
+import junit.framework.Assert
 import kafka.utils.SystemTime
 import kafka.utils.TestUtils
 import kafka.server.{KafkaServer, KafkaConfig}
-import org.apache.log4j.{Logger, Level}
+import org.apache.log4j.Logger
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 import java.util.Properties
