@@ -50,7 +50,7 @@ class SocketServerStats(val monitorDurationNs: Long, val time: Time) extends Soc
     requestTypeId match {
       case r if r == RequestKeys.Produce || r == RequestKeys.MultiProduce =>
         produceTimeStats.recordRequestMetric(durationNs)
-      case r if r == RequestKeys.Fetch || r == RequestKeys.MultiFetch =>
+      case r if r == RequestKeys.Fetch =>
         fetchTimeStats.recordRequestMetric(durationNs)
       case _ => /* not collecting; let go */
     }

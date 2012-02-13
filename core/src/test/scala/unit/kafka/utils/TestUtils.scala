@@ -186,23 +186,21 @@ object TestUtils {
       length += 1
       assertEquals(expected.next, actual.next)
     }
-    
-    if (expected.hasNext)
-    {
+
+    // check if the expected iterator is longer
+    if (expected.hasNext) {
      var length1 = length;
-     while (expected.hasNext)
-     {
+     while (expected.hasNext) {
        expected.next
        length1 += 1
      }
      assertFalse("Iterators have uneven length-- first has more: "+length1 + " > " + length, true);
     }
-    
-    if (actual.hasNext)
-    {
+
+    // check if the actual iterator was longer
+    if (actual.hasNext) {
      var length2 = length;
-     while (actual.hasNext)
-     {
+     while (actual.hasNext) {
        actual.next
        length2 += 1
      }

@@ -17,10 +17,9 @@
 
 package kafka.javaapi.consumer
 
-import kafka.utils.threadsafe
-import kafka.javaapi.message.ByteBufferMessageSet
-import kafka.javaapi.MultiFetchResponse
 import kafka.api.FetchRequest
+import kafka.javaapi.FetchResponse
+import kafka.utils.threadsafe
 
 /**
  * A consumer of kafka messages
@@ -38,21 +37,9 @@ class SimpleConsumer(val host: String,
    *  @param request  specifies the topic name, topic partition, starting byte offset, maximum bytes to be fetched.
    *  @return a set of fetched messages
    */
-  def fetch(request: FetchRequest): ByteBufferMessageSet = {
+  def fetch(request: FetchRequest): FetchResponse = {
     import kafka.javaapi.Implicits._
     underlying.fetch(request)
-  }
-
-  /**
-   *  Combine multiple fetch requests in one call.
-   *
-   *  @param fetches  a sequence of fetch requests.
-   *  @return a sequence of fetch responses
-   */
-  def multifetch(fetches: java.util.List[FetchRequest]): MultiFetchResponse = {
-    import scala.collection.JavaConversions._
-    import kafka.javaapi.Implicits._
-    underlying.multifetch(asBuffer(fetches): _*)
   }
 
   /**

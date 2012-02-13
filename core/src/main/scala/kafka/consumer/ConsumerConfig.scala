@@ -50,8 +50,7 @@ class ConsumerConfig(props: Properties) extends ZKConfig(props) {
 
   /** consumer id: generated automatically if not set.
    *  Set this explicitly for only testing purpose. */
-  val consumerId: Option[String] = /** TODO: can be written better in scala 2.8 */
-    if (Utils.getString(props, "consumerid", null) != null) Some(Utils.getString(props, "consumerid")) else None
+  val consumerId: Option[String] = Option(Utils.getString(props, "consumerid", null))
 
   /** the socket timeout for network requests */
   val socketTimeoutMs = Utils.getInt(props, "socket.timeout.ms", SocketTimeout)

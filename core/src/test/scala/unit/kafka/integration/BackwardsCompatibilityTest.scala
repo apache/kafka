@@ -17,14 +17,16 @@
 
 package kafka.integration
 
-import kafka.server.KafkaConfig
-import org.scalatest.junit.JUnit3Suite
-import org.apache.log4j.Logger
-import java.util.Properties
-import kafka.consumer.SimpleConsumer
-import kafka.api.{OffsetRequest, FetchRequest}
 import junit.framework.Assert._
+import java.util.Properties
+
+import kafka.api.{FetchRequestBuilder, OffsetRequest}
+import kafka.consumer.SimpleConsumer
+import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+
+import org.apache.log4j.Logger
+import org.scalatest.junit.JUnit3Suite
 
 class BackwardsCompatibilityTest extends JUnit3Suite with KafkaServerTestHarness {
 
@@ -62,9 +64,10 @@ class BackwardsCompatibilityTest extends JUnit3Suite with KafkaServerTestHarness
     var messageCount: Int = 0
 
     while(fetchOffset < lastOffset(0)) {
-      val fetched = simpleConsumer.fetch(new FetchRequest(topic, 0, fetchOffset, 10000))
-      fetched.foreach(m => fetchOffset = m.offset)
-      messageCount += fetched.size
+      val fetched = simpleConsumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, fetchOffset, 10000).build())
+      val fetchedMessages = fetched.messageSet(topic, 0)
+      fetchedMessages.foreach(m => fetchOffset = m.offset)
+      messageCount += fetchedMessages.size
     }
     assertEquals(100, messageCount)
   }

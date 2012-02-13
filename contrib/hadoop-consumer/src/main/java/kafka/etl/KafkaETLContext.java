@@ -16,27 +16,26 @@
  */
 package kafka.etl;
 
-import java.io.IOException;
-import java.net.URI;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.zip.CRC32;
 import kafka.api.FetchRequest;
-import kafka.javaapi.MultiFetchResponse;
+import kafka.api.FetchRequestBuilder;
 import kafka.api.OffsetRequest;
 import kafka.common.ErrorMapping;
+import kafka.javaapi.FetchResponse;
 import kafka.javaapi.consumer.SimpleConsumer;
 import kafka.javaapi.message.ByteBufferMessageSet;
-import kafka.message.Message;
+import kafka.javaapi.message.MessageSet;
 import kafka.message.MessageAndOffset;
-import kafka.message.MessageSet;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.OutputCollector;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapred.lib.MultipleOutputs;
+
+import java.io.IOException;
+import java.net.URI;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Iterator;
 
 @SuppressWarnings({ "deprecation"})
 public class KafkaETLContext {
@@ -59,7 +58,8 @@ public class KafkaETLContext {
     protected long _offset = Long.MAX_VALUE; /*current offset*/
     protected long _count; /*current count*/
 
-    protected MultiFetchResponse _response = null;  /*fetch response*/
+    protected int requestId = 0; /* the id of the next fetch request */
+    protected FetchResponse _response = null;  /*fetch response*/
     protected Iterator<MessageAndOffset> _messageIt = null; /*message iterator*/
     protected Iterator<ByteBufferMessageSet> _respIterator = null;
     protected int _retry = 0;
@@ -149,15 +149,19 @@ public class KafkaETLContext {
     public boolean fetchMore () throws IOException {
         if (!hasMore()) return false;
         
-        FetchRequest fetchRequest = 
-            new FetchRequest(_request.getTopic(), _request.getPartition(), _offset, _bufferSize);
-        List<FetchRequest> array = new ArrayList<FetchRequest>();
-        array.add(fetchRequest);
+        FetchRequest fetchRequest = new FetchRequestBuilder()
+                .correlationId(requestId)
+                .clientId(_request.clientId())
+                .addFetch(_request.getTopic(), _request.getPartition(), _offset, _bufferSize)
+                .build();
 
         long tempTime = System.currentTimeMillis();
-        _response = _consumer.multifetch(array);
-        if(_response != null)
-            _respIterator = _response.iterator();
+        _response = _consumer.fetch(fetchRequest);
+        if(_response != null) {
+            _respIterator = new ArrayList<ByteBufferMessageSet>(){{
+                add((ByteBufferMessageSet) _response.messageSet(_request.getTopic(), _request.getPartition()));
+            }}.iterator();
+        }
         _requestTime += (System.currentTimeMillis() - tempTime);
         
         return true;

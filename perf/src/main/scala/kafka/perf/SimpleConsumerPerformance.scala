@@ -18,13 +18,12 @@
 package kafka.perf
 
 import java.net.URI
-import joptsimple._
-import kafka.utils._
-import kafka.server._
-import kafka.consumer.SimpleConsumer
-import org.apache.log4j.Logger
-import kafka.api.{OffsetRequest, FetchRequest}
 import java.text.SimpleDateFormat
+import kafka.api.{FetchRequestBuilder, OffsetRequest}
+import kafka.consumer.SimpleConsumer
+import kafka.utils._
+import org.apache.log4j.Logger
+import kafka.message.ByteBufferMessageSet
 
 /**
  * Performance test for the simple consumer
@@ -56,12 +55,20 @@ object SimpleConsumerPerformance {
     var lastReportTime: Long = startMs
     var lastBytesRead = 0L
     var lastMessagesRead = 0L
+    var reqId = 0
     while(!done) {
-      val messages = consumer.fetch(new FetchRequest(config.topic, config.partition, offset, config.fetchSize))
+      // TODO: add in the maxWait and minBytes for performance
+      val request = new FetchRequestBuilder()
+        .correlationId(reqId)
+        .clientId(config.clientId)
+        .addFetch(config.topic, config.partition, offset, config.fetchSize)
+        .build()
+      val fetchResponse = consumer.fetch(request)
+
       var messagesRead = 0
       var bytesRead = 0
-
-      for(message <- messages) {
+      val messageSet = fetchResponse.messageSet(config.topic, config.partition)
+      for (message <- messageSet) {
         messagesRead += 1
         bytesRead += message.message.payloadSize
       }
@@ -69,7 +76,8 @@ object SimpleConsumerPerformance {
       if(messagesRead == 0 || totalMessagesRead > config.numMessages)
         done = true
       else
-        offset += messages.validBytes
+        // we only did one fetch so we find the offset for the first (head) messageset
+        offset += messageSet.validBytes
       
       totalBytesRead += bytesRead
       totalMessagesRead += messagesRead
@@ -89,6 +97,7 @@ object SimpleConsumerPerformance {
         lastMessagesRead = totalMessagesRead
         consumedInterval = 0
       }
+      reqId += 1
     }
     val reportTime = System.currentTimeMillis
     val elapsed = (reportTime - startMs) / 1000.0
@@ -119,6 +128,11 @@ object SimpleConsumerPerformance {
                            .describedAs("bytes")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1024*1024)
+    val clientIdOpt = parser.accepts("clientId", "The ID of this client.")
+                           .withOptionalArg
+                           .describedAs("clientId")
+                           .ofType(classOf[String])
+                           .defaultsTo("SimpleConsumerPerformanceClient")
 
     val options = parser.parse(args : _*)
 
@@ -139,5 +153,6 @@ object SimpleConsumerPerformance {
     val showDetailedStats = options.has(showDetailedStatsOpt)
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
+    val clientId = options.valueOf(clientIdOpt).toString
   }
 }

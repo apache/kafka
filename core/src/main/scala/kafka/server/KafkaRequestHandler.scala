@@ -35,9 +35,9 @@ class KafkaRequestHandler(val requestChannel: RequestChannel, val handle: (Recei
         case Some(send) => { 
           val resp = new RequestChannel.Response(processor = req.processor, 
                                                  requestKey = req.requestKey, 
-						 response = send, 
-						 start = req.start, 
-						 ellapsed = -1)
+                                                 response = send,
+                                                 start = req.start,
+                                                 elapsed = -1)
           requestChannel.sendResponse(resp)
           trace("Processor " + Thread.currentThread.getName + " sent response " + resp)
         }

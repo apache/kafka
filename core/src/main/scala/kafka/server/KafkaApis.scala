@@ -17,17 +17,17 @@
 
 package kafka.server
 
-import org.apache.log4j.Logger
-import kafka.log._
-import kafka.network._
-import kafka.message._
+import java.io.IOException
+import java.lang.IllegalStateException
+import kafka.admin.{CreateTopicCommand, AdminUtils}
 import kafka.api._
 import kafka.common.ErrorMapping
-import java.io.IOException
+import kafka.log._
+import kafka.message._
+import kafka.network._
 import kafka.utils.{SystemTime, Logging}
-import collection.mutable.ListBuffer
-import kafka.admin.{CreateTopicCommand, AdminUtils}
-import java.lang.IllegalStateException
+import org.apache.log4j.Logger
+import scala.collection.mutable.ListBuffer
 
 /**
  * Logic to handle the various Kafka requests
@@ -39,13 +39,12 @@ class KafkaApis(val logManager: LogManager) extends Logging {
   def handle(receive: Receive): Option[Send] = { 
     val apiId = receive.buffer.getShort() 
     apiId match {
-        case RequestKeys.Produce => handleProducerRequest(receive)
-        case RequestKeys.Fetch => handleFetchRequest(receive)
-        case RequestKeys.MultiFetch => handleMultiFetchRequest(receive)
-        case RequestKeys.MultiProduce => handleMultiProducerRequest(receive)
-        case RequestKeys.Offsets => handleOffsetRequest(receive)
-        case RequestKeys.TopicMetadata => handleTopicMetadataRequest(receive)
-        case _ => throw new IllegalStateException("No mapping found for handler id " + apiId)
+      case RequestKeys.Produce => handleProducerRequest(receive)
+      case RequestKeys.Fetch => handleFetchRequest(receive)
+      case RequestKeys.MultiProduce => handleMultiProducerRequest(receive)
+      case RequestKeys.Offsets => handleOffsetRequest(receive)
+      case RequestKeys.TopicMetadata => handleTopicMetadataRequest(receive)
+      case _ => throw new IllegalStateException("No mapping found for handler id " + apiId)
     }
   }
 
@@ -92,34 +91,37 @@ class KafkaApis(val logManager: LogManager) extends Logging {
     val fetchRequest = FetchRequest.readFrom(request.buffer)
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Fetch request " + fetchRequest.toString)
-    Some(readMessageSet(fetchRequest))
-  }
-  
-  def handleMultiFetchRequest(request: Receive): Option[Send] = {
-    val multiFetchRequest = MultiFetchRequest.readFrom(request.buffer)
-    if(requestLogger.isTraceEnabled)
-      requestLogger.trace("Multifetch request")
-    multiFetchRequest.fetches.foreach(req => requestLogger.trace(req.toString))
-    var responses = multiFetchRequest.fetches.map(fetch =>
-        readMessageSet(fetch)).toList
-    
-    Some(new MultiMessageSetSend(responses))
+
+    val fetchedData = new ListBuffer[TopicData]()
+    var error: Int = ErrorMapping.NoError
+
+    for(offsetDetail <- fetchRequest.offsetInfo) {
+      val info = new ListBuffer[PartitionData]()
+      val topic = offsetDetail.topic
+      val (partitions, offsets, fetchSizes) = (offsetDetail.partitions, offsetDetail.offsets, offsetDetail.fetchSizes)
+      for( (partition, offset, fetchSize) <- (partitions, offsets, fetchSizes).zipped.map((_,_,_)) ) {
+        val partitionInfo = readMessageSet(topic, partition, offset, fetchSize) match {
+          case Left(err) => error = err; new PartitionData(partition, err, offset, MessageSet.Empty)
+          case Right(messages) => new PartitionData(partition, ErrorMapping.NoError, offset, messages)
+        }
+        info.append(partitionInfo)
+      }
+      fetchedData.append(new TopicData(topic, info.toArray))
+    }
+    val response = new FetchResponse(FetchRequest.CurrentVersion, fetchRequest.correlationId, fetchedData.toArray )
+    Some(new FetchResponseSend(response, error))
   }
 
-  private def readMessageSet(fetchRequest: FetchRequest): MessageSetSend = {
-    var  response: MessageSetSend = null
+  private def readMessageSet(topic: String, partition: Int, offset: Long, maxSize: Int): Either[Int, MessageSet] = {
+    var response: Either[Int, MessageSet] = null
     try {
-      trace("Fetching log segment for topic = " + fetchRequest.topic + " and partition = " + fetchRequest.partition)
-      val log = logManager.getLog(fetchRequest.topic, fetchRequest.partition)
-      if (log != null)
-        response = new MessageSetSend(log.read(fetchRequest.offset, fetchRequest.maxSize))
-      else
-        response = new MessageSetSend()
-    }
-    catch {
+      trace("Fetching log segment for topic, partition, offset, size = " + (topic, partition, offset, maxSize))
+      val log = logManager.getLog(topic, partition)
+      response = Right(if(log != null) log.read(offset, maxSize) else MessageSet.Empty)
+    } catch {
       case e =>
-        error("error when processing request " + fetchRequest, e)
-        response=new MessageSetSend(MessageSet.Empty, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+        error("error when processing request " + (topic, partition, offset, maxSize), e)
+        response = Left(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
     }
     response
   }

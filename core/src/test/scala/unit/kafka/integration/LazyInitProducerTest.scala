@@ -17,15 +17,15 @@
 
 package kafka.integration
 
-import scala.collection._
+import kafka.api.{FetchRequestBuilder, ProducerRequest}
 import kafka.common.OffsetOutOfRangeException
-import kafka.api.{ProducerRequest, FetchRequest}
+import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
 import kafka.server.{KafkaRequestHandler, KafkaServer, KafkaConfig}
+import kafka.utils.{TestUtils, Utils}
+import kafka.zk.ZooKeeperTestHarness
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
-import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
-import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.{TestUtils, Utils}
+import scala.collection._
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -65,54 +65,60 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
                                         new Message("hello".getBytes()), new Message("there".getBytes()))
     producer.send(topic, sent)
     sent.getBuffer.rewind
-    var fetched: ByteBufferMessageSet = null
-    while(fetched == null || fetched.validBytes == 0)
-      fetched = consumer.fetch(new FetchRequest(topic, 0, 0, 10000))
-    TestUtils.checkEquals(sent.iterator, fetched.iterator)
+
+    var fetchedMessage: ByteBufferMessageSet = null
+    while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
+      val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+      fetchedMessage = fetched.messageSet(topic, 0)
+    }
+    TestUtils.checkEquals(sent.iterator, fetchedMessage.iterator)
 
     // send an invalid offset
     try {
-      val fetchedWithError = consumer.fetch(new FetchRequest(topic, 0, -1, 10000))
-      fetchedWithError.iterator
+      val fetchedWithError = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, -1, 10000).build())
+      fetchedWithError.messageSet(topic, 0).iterator
       fail("Expected an OffsetOutOfRangeException exception to be thrown")
-    }
-    catch {
+    } catch {
       case e: OffsetOutOfRangeException => 
     }
   }
 
   def testProduceAndMultiFetch() {
-    // send some messages
-    val topics = List("test1", "test2", "test3");
+    // send some messages, with non-ordered topics
+    val topicOffsets = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
     {
       val messages = new mutable.HashMap[String, ByteBufferMessageSet]
-      val fetches = new mutable.ArrayBuffer[FetchRequest]
-      for(topic <- topics) {
+      val builder = new FetchRequestBuilder()
+      for( (topic, offset) <- topicOffsets) {
         val set = new ByteBufferMessageSet(NoCompressionCodec,
                                            new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-        messages += topic -> set
         producer.send(topic, set)
         set.getBuffer.rewind
-        fetches += new FetchRequest(topic, 0, 0, 10000)
+        messages += topic -> set
+        builder.addFetch(topic, offset, 0, 10000)
       }
 
       // wait a bit for produced message to be available
       Thread.sleep(200)
-      val response = consumer.multifetch(fetches: _*)
-      for((topic, resp) <- topics.zip(response.toList))
-        TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+      val request = builder.build()
+      val response = consumer.fetch(request)
+      for( (topic, offset) <- topicOffsets) {
+        val fetched = response.messageSet(topic, offset)
+        TestUtils.checkEquals(messages(topic).iterator, fetched.iterator)
+      }
     }
 
     {
       // send some invalid offsets
-      val fetches = new mutable.ArrayBuffer[FetchRequest]
-      for(topic <- topics)
-        fetches += new FetchRequest(topic, 0, -1, 10000)
+      val builder = new FetchRequestBuilder()
+      for( (topic, offset) <- topicOffsets )
+        builder.addFetch(topic, offset, -1, 10000)
 
-      val responses = consumer.multifetch(fetches: _*)
-      for(resp <- responses) {
+      val request = builder.build()
+      val responses = consumer.fetch(request)
+      for( (topic, offset) <- topicOffsets ) {
         try {
-          resp.iterator
+          responses.messageSet(topic, offset).iterator
           fail("Expected an OffsetOutOfRangeException exception to be thrown")
         } catch {
           case e: OffsetOutOfRangeException => 
@@ -125,14 +131,14 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
     // send some messages
     val topics = List("test1", "test2", "test3");
     val messages = new mutable.HashMap[String, ByteBufferMessageSet]
-    val fetches = new mutable.ArrayBuffer[FetchRequest]
+    val builder = new FetchRequestBuilder()
     var produceList: List[ProducerRequest] = Nil
     for(topic <- topics) {
       val set = new ByteBufferMessageSet(NoCompressionCodec,
                                          new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
       messages += topic -> set
       produceList ::= new ProducerRequest(topic, 0, set)
-      fetches += new FetchRequest(topic, 0, 0, 10000)
+      builder.addFetch(topic, 0, 0, 10000)
     }
     producer.multiSend(produceList.toArray)
 
@@ -141,23 +147,26 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
 
     // wait a bit for produced message to be available
     Thread.sleep(200)
-    val response = consumer.multifetch(fetches: _*)
-    for((topic, resp) <- topics.zip(response.toList))
-      TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+    val request = builder.build()
+    val response = consumer.fetch(request)
+    for(topic <- topics) {
+      val fetched = response.messageSet(topic, 0)
+      TestUtils.checkEquals(messages(topic).iterator, fetched.iterator)
+    }
   }
 
   def testMultiProduceResend() {
     // send some messages
     val topics = List("test1", "test2", "test3");
     val messages = new mutable.HashMap[String, ByteBufferMessageSet]
-    val fetches = new mutable.ArrayBuffer[FetchRequest]
+    val builder = new FetchRequestBuilder()
     var produceList: List[ProducerRequest] = Nil
     for(topic <- topics) {
       val set = new ByteBufferMessageSet(NoCompressionCodec,
                                          new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
       messages += topic -> set
       produceList ::= new ProducerRequest(topic, 0, set)
-      fetches += new FetchRequest(topic, 0, 0, 10000)
+      builder.addFetch(topic, 0, 0, 10000)
     }
     producer.multiSend(produceList.toArray)
 
@@ -169,11 +178,13 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
 
     // wait a bit for produced message to be available
     Thread.sleep(750)
-    val response = consumer.multifetch(fetches: _*)
-    for((topic, resp) <- topics.zip(response.toList))
+    val request = builder.build()
+    val response = consumer.fetch(request)
+    for(topic <- topics) {
+      val topicMessages = response.messageSet(topic, 0)
       TestUtils.checkEquals(TestUtils.stackedIterator(messages(topic).map(m => m.message).iterator,
                                                       messages(topic).map(m => m.message).iterator),
-                            resp.map(m => m.message).iterator)
-//      TestUtils.checkEquals(TestUtils.stackedIterator(messages(topic).iterator, messages(topic).iterator), resp.iterator)
+                            topicMessages.iterator.map(_.message))
+    }
   }
 }

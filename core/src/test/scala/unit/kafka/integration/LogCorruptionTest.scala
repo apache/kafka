@@ -20,16 +20,14 @@ package kafka.log
 import kafka.server.KafkaConfig
 import java.io.File
 import java.nio.ByteBuffer
-import kafka.utils.Utils
-import kafka.api.FetchRequest
+import kafka.api.FetchRequestBuilder
 import kafka.common.InvalidMessageSizeException
-import kafka.utils.TestUtils
 import kafka.consumer.{ZookeeperConsumerConnector, ConsumerConfig}
-import org.scalatest.junit.JUnit3Suite
-import kafka.integration.ProducerConsumerTestHarness
-import kafka.integration.KafkaServerTestHarness
-import org.apache.log4j.{Logger, Level}
+import kafka.integration.{KafkaServerTestHarness, ProducerConsumerTestHarness}
 import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
+import kafka.utils.{Utils, TestUtils}
+import org.scalatest.junit.JUnit3Suite
+import org.apache.log4j.{Logger, Level}
 
 class LogCorruptionTest extends JUnit3Suite with ProducerConsumerTestHarness with KafkaServerTestHarness {
   val port = TestUtils.choosePort
@@ -65,23 +63,21 @@ class LogCorruptionTest extends JUnit3Suite with ProducerConsumerTestHarness wit
 
     Thread.sleep(500)
     // test SimpleConsumer
-    val messageSet = consumer.fetch(new FetchRequest(topic, partition, 0, 10000))
+    val response = consumer.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, 10000).build())
     try {
-      for (msg <- messageSet)
+      for (msg <- response.messageSet(topic, partition))
         fail("shouldn't reach here in SimpleConsumer since log file is corrupted.")
       fail("shouldn't reach here in SimpleConsumer since log file is corrupted.")
-    }
-    catch {
+    } catch {
       case e: InvalidMessageSizeException => "This is good"
     }
 
-    val messageSet2 = consumer.fetch(new FetchRequest(topic, partition, 0, 10000))
+    val response2 = consumer.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, 10000).build())
     try {
-      for (msg <- messageSet2)
+      for (msg <- response2.messageSet(topic, partition))
         fail("shouldn't reach here in SimpleConsumer since log file is corrupted.")
       fail("shouldn't reach here in SimpleConsumer since log file is corrupted.")
-    }
-    catch {
+    } catch {
       case e: InvalidMessageSizeException => println("This is good")
     }
 
@@ -95,8 +91,7 @@ class LogCorruptionTest extends JUnit3Suite with ProducerConsumerTestHarness wit
       for (message <- messageStreams(0))
         fail("shouldn't reach here in ZookeeperConsumer since log file is corrupted.")
       fail("shouldn't reach here in ZookeeperConsumer since log file is corrupted.")
-    }
-    catch {
+    } catch {
       case e: InvalidMessageSizeException => "This is good"
       case e: Exception => "This is not bad too !"
     }

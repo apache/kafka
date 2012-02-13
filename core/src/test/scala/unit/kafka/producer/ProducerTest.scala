@@ -17,18 +17,18 @@
 
 package kafka.producer
 
-import org.apache.log4j.{Logger, Level}
-import kafka.zk.EmbeddedZookeeper
-import org.junit.{After, Before, Test}
 import junit.framework.Assert._
-import org.scalatest.junit.JUnitSuite
-import kafka.utils.{TestUtils, TestZKUtils, Utils}
-import kafka.api.FetchRequest
+import java.util.Properties
+import kafka.api.FetchRequestBuilder
+import kafka.consumer.SimpleConsumer
 import kafka.message.Message
 import kafka.serializer.Encoder
-import kafka.consumer.SimpleConsumer
-import java.util.Properties
 import kafka.server.{KafkaRequestHandler, KafkaServer, KafkaConfig}
+import kafka.utils.{TestUtils, TestZKUtils, Utils}
+import kafka.zk.EmbeddedZookeeper
+import org.apache.log4j.{Logger, Level}
+import org.junit.{After, Before, Test}
+import org.scalatest.junit.JUnitSuite
 
 class ProducerTest extends JUnitSuite {
   private val topic = "test-topic"
@@ -106,12 +106,14 @@ class ProducerTest extends JUnitSuite {
       producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
       Thread.sleep(100)
       // cross check if brokers got the messages
-      val messageSet1 = consumer1.fetch(new FetchRequest("new-topic", 0, 0, 10000)).iterator
-      assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      assertEquals(new Message("test1".getBytes), messageSet1.next.message)
-      val messageSet2 = consumer2.fetch(new FetchRequest("new-topic", 0, 0, 10000)).iterator
-      assertTrue("Message set should have 1 message", messageSet2.hasNext)
-      assertEquals(new Message("test1".getBytes), messageSet2.next.message)
+      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      val messageSet1 = response1.messageSet("new-topic", 0)
+      assertTrue("Message set should have 1 message", messageSet1.iterator.hasNext)
+      assertEquals(new Message("test1".getBytes), messageSet1.head.message)
+      val response2 = consumer2.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      val messageSet2 = response2.messageSet("new-topic", 0)
+      assertTrue("Message set should have 1 message", messageSet2.iterator.hasNext)
+      assertEquals(new Message("test1".getBytes), messageSet2.head.message)
     } catch {
       case e: Exception => fail("Not expected", e)
     }
@@ -142,11 +144,12 @@ class ProducerTest extends JUnitSuite {
       producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
       Thread.sleep(100)
       // cross check if brokers got the messages
-      val messageSet1 = consumer1.fetch(new FetchRequest("new-topic", 0, 0, 10000)).iterator
-      assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      assertEquals(new Message("test1".getBytes), messageSet1.next.message)
-      assertTrue("Message set should have another message", messageSet1.hasNext)
-      assertEquals(new Message("test1".getBytes), messageSet1.next.message)
+      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      val messageSet1Iter = response1.messageSet("new-topic", 0).iterator
+      assertTrue("Message set should have 1 message", messageSet1Iter.hasNext)
+      assertEquals(new Message("test1".getBytes), messageSet1Iter.next.message)
+      assertTrue("Message set should have another message", messageSet1Iter.hasNext)
+      assertEquals(new Message("test1".getBytes), messageSet1Iter.next.message)
     } catch {
       case e: Exception => fail("Not expected")
     }
@@ -174,9 +177,10 @@ class ProducerTest extends JUnitSuite {
       producer.send(new ProducerData[String, String]("new-topic", "test", Array("test")))
       Thread.sleep(100)
       // cross check if brokers got the messages
-      val messageSet1 = consumer2.fetch(new FetchRequest("new-topic", 0, 0, 10000)).iterator
-      assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      assertEquals(new Message("test".getBytes), messageSet1.next.message)
+      val response1 = consumer2.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      val messageSet1 = response1.messageSet("new-topic", 0)
+      assertTrue("Message set should have 1 message", messageSet1.iterator.hasNext)
+      assertEquals(new Message("test".getBytes), messageSet1.head.message)
 
       // shutdown server2
       server2.shutdown
@@ -197,9 +201,10 @@ class ProducerTest extends JUnitSuite {
       Thread.sleep(100)
 
       // cross check if brokers got the messages
-      val messageSet2 = consumer1.fetch(new FetchRequest("new-topic", 0, 0, 10000)).iterator
-      assertTrue("Message set should have 1 message", messageSet2.hasNext)
-      assertEquals(new Message("test".getBytes), messageSet2.next.message)
+      val response2 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      val messageSet2 = response2.messageSet("new-topic", 0)
+      assertTrue("Message set should have 1 message", messageSet2.iterator.hasNext)
+      assertEquals(new Message("test".getBytes), messageSet2.head.message)
 
     } catch {
       case e: Exception => fail("Not expected", e)

@@ -32,8 +32,7 @@ private[kafka] object TopicCount extends Logging {
         case Some(m) => topMap = m.asInstanceOf[Map[String,Int]]
         case None => throw new RuntimeException("error constructing TopicCount : " + jsonString)
       }
-    }
-    catch {
+    } catch {
       case e =>
         error("error parsing consumer json string " + jsonString, e)
         throw e
@@ -46,8 +45,7 @@ private[kafka] object TopicCount extends Logging {
 
 private[kafka] class TopicCount(val consumerIdString: String, val topicCountMap: Map[String, Int]) {
 
-  def getConsumerThreadIdsPerTopic()
-    : Map[String, Set[String]] = {
+  def getConsumerThreadIdsPerTopic(): Map[String, Set[String]] = {
     val consumerThreadIdsPerTopicMap = new mutable.HashMap[String, Set[String]]()
     for ((topic, nConsumers) <- topicCountMap) {
       val consumerSet = new mutable.HashSet[String]

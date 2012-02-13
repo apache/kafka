@@ -105,8 +105,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   def this(config: ConsumerConfig) = this(config, true)
 
-  def createMessageStreams[T](topicCountMap: Map[String,Int],
-                              decoder: Decoder[T])
+  def createMessageStreams[T](topicCountMap: Map[String,Int], decoder: Decoder[T])
       : Map[String,List[KafkaMessageStream[T]]] = {
     consume(topicCountMap, decoder)
   }
@@ -138,8 +137,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           zkClient.close()
           zkClient = null
         }
-      }
-      catch {
+      } catch {
         case e =>
           fatal("error during consumer connector shutdown", e)
       }
@@ -147,8 +145,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     }
   }
 
-  def consume[T](topicCountMap: scala.collection.Map[String,Int],
-                 decoder: Decoder[T])
+  def consume[T](topicCountMap: scala.collection.Map[String,Int], decoder: Decoder[T])
       : Map[String,List[KafkaMessageStream[T]]] = {
     debug("entering consume ")
     if (topicCountMap == null)
@@ -159,13 +156,13 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     var consumerUuid : String = null
     config.consumerId match {
-      case Some(consumerId) // for testing only
-      => consumerUuid = consumerId
-      case None // generate unique consumerId automatically
-      => val uuid = UUID.randomUUID()
-        consumerUuid = "%s-%d-%s".format(
-          InetAddress.getLocalHost.getHostName, System.currentTimeMillis,
-          uuid.getMostSignificantBits().toHexString.substring(0,8))
+      case Some(consumerId) => // for testing only
+        consumerUuid = consumerId
+      case None => // generate unique consumerId automatically
+        val uuid = UUID.randomUUID()
+        consumerUuid = "%s-%d-%s".format( InetAddress.getLocalHost.getHostName,
+                                          System.currentTimeMillis,
+                                          uuid.getMostSignificantBits().toHexString.substring(0,8) )
     }
     val consumerIdString = config.groupId + "_" + consumerUuid
     val topicCount = new TopicCount(consumerIdString, topicCountMap)
@@ -243,8 +240,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         try {
           updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + info.partition.name,
             newOffset.toString)
-        }
-        catch {
+        } catch {
           case t: Throwable =>
           // log it and let it go
             warn("exception during commitOffsets",  t)
@@ -321,8 +317,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                             ConsumerConfig.SocketBufferSize)
       val offsets = simpleConsumer.getOffsetsBefore(topic, partitionId, earliestOrLatest, 1)
       producedOffset = offsets(0)
-    }
-    catch {
+    } catch {
       case e =>
         error("error in earliestOrLatestOffset() ", e)
     }
@@ -419,8 +414,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           val cluster = getCluster(zkClient)
           try {
             done = rebalance(cluster)
-          }
-          catch {
+          } catch {
             case e =>
               /** occasionally, we may hit a ZK exception because the ZK state is changing while we are iterating.
                * For example, a ZK node can disappear between the time we get all children and the time we try to get
@@ -433,7 +427,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           info("end rebalancing consumer " + consumerIdString + " try #" + i)
           if (done) {
             return
-          }else {
+          } else {
               /* Here the cache is at a risk of being stale. To take future rebalancing decisions correctly, we should
                * clear the cache */
               info("Rebalancing attempt failed. Clearing the cache before the next rebalancing operation is triggered")
@@ -529,7 +523,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         oldConsumersPerTopicMap = consumersPerTopicMap
         updateFetcher(cluster, kafkaMessageStreams)
         true
-      }else
+      } else
         false
     }
 
@@ -611,8 +605,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           createEphemeralPathExpectConflict(zkClient, partitionOwnerPath, consumerThreadId)
           info(consumerThreadId + " successfully owned partition " + partition + " for topic " + topic)
           true
-        }
-        catch {
+        } catch {
           case e: ZkNodeExistsException =>
             // The node hasn't been deleted by the original owner. So wait a bit and retry.
             info("waiting for the partition ownership to be deleted: " + partition)

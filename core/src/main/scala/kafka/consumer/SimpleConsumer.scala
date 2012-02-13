@@ -20,7 +20,6 @@ package kafka.consumer
 import java.net._
 import java.nio.channels._
 import kafka.api._
-import kafka.message._
 import kafka.network._
 import kafka.utils._
 
@@ -72,7 +71,7 @@ class SimpleConsumer(val host: String,
    *  @param request  specifies the topic name, topic partition, starting byte offset, maximum bytes to be fetched.
    *  @return a set of fetched messages
    */
-  def fetch(request: FetchRequest): ByteBufferMessageSet = {
+  def fetch(request: FetchRequest): FetchResponse = {
     lock synchronized {
       val startTime = SystemTime.nanoseconds
       getOrMakeConnection()
@@ -88,51 +87,19 @@ class SimpleConsumer(val host: String,
             channel = connect
             sendRequest(request)
             response = getResponse
-          }catch {
+          } catch {
             case ioe: java.io.IOException => channel = null; throw ioe;
           }
         case e => throw e
       }
+      val fetchResponse = FetchResponse.readFrom(response._1.buffer)
+      val fetchedSize = fetchResponse.sizeInBytes
+
       val endTime = SystemTime.nanoseconds
       SimpleConsumerStats.recordFetchRequest(endTime - startTime)
-      SimpleConsumerStats.recordConsumptionThroughput(response._1.buffer.limit)
-      new ByteBufferMessageSet(response._1.buffer, request.offset, response._2)
-    }
-  }
+      SimpleConsumerStats.recordConsumptionThroughput(fetchedSize)
 
-  /**
-   *  Combine multiple fetch requests in one call.
-   *
-   *  @param fetches  a sequence of fetch requests.
-   *  @return a sequence of fetch responses
-   */
-  def multifetch(fetches: FetchRequest*): MultiFetchResponse = {
-    lock synchronized {
-      val startTime = SystemTime.nanoseconds
-      getOrMakeConnection()
-      var response: Tuple2[Receive,Int] = null
-      try {
-        sendRequest(new MultiFetchRequest(fetches.toArray))
-        response = getResponse
-      } catch {
-        case e : java.io.IOException =>
-          info("Reconnect in multifetch due to socket error: ", e)
-          // retry once
-          try {
-            channel = connect
-            sendRequest(new MultiFetchRequest(fetches.toArray))
-            response = getResponse
-          }catch {
-            case ioe: java.io.IOException => channel = null; throw ioe;
-          }
-        case e => throw e        
-      }
-      val endTime = SystemTime.nanoseconds
-      SimpleConsumerStats.recordFetchRequest(endTime - startTime)
-      SimpleConsumerStats.recordConsumptionThroughput(response._1.buffer.limit)
-
-      // error code will be set on individual messageset inside MultiFetchResponse
-      new MultiFetchResponse(response._1.buffer, fetches.length, fetches.toArray.map(f => f.offset))
+      fetchResponse
     }
   }
 
@@ -158,7 +125,7 @@ class SimpleConsumer(val host: String,
             channel = connect
             sendRequest(new OffsetRequest(topic, partition, time, maxNumOffsets))
             response = getResponse
-          }catch {
+          } catch {
             case ioe: java.io.IOException => channel = null; throw ioe;
           }
       }

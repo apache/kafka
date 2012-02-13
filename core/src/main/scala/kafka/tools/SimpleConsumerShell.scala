@@ -19,7 +19,7 @@ package kafka.tools
 
 import java.net.URI
 import joptsimple._
-import kafka.api.FetchRequest
+import kafka.api.FetchRequestBuilder
 import kafka.utils._
 import kafka.consumer._
 
@@ -54,6 +54,11 @@ object SimpleConsumerShell extends Logging {
                            .describedAs("fetchsize")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1000000)
+    val clientIdOpt = parser.accepts("clientId", "The ID of this client.")
+                           .withOptionalArg
+                           .describedAs("clientId")
+                           .ofType(classOf[String])
+                           .defaultsTo("SimpleConsumerShell")
     val printOffsetOpt = parser.accepts("print-offsets", "Print the offsets returned by the iterator")
                            .withOptionalArg
                            .describedAs("print offsets")
@@ -79,7 +84,8 @@ object SimpleConsumerShell extends Logging {
     val topic = options.valueOf(topicOpt)
     val partition = options.valueOf(partitionOpt).intValue
     val startingOffset = options.valueOf(offsetOpt).longValue
-    val fetchsize = options.valueOf(fetchsizeOpt).intValue
+    val fetchSize = options.valueOf(fetchsizeOpt).intValue
+    val clientId = options.valueOf(clientIdOpt).toString
     val printOffsets = if(options.has(printOffsetOpt)) true else false
     val printMessages = if(options.has(printMessageOpt)) true else false
 
@@ -87,22 +93,27 @@ object SimpleConsumerShell extends Logging {
     val consumer = new SimpleConsumer(url.getHost, url.getPort, 10000, 64*1024)
     val thread = Utils.newThread("kafka-consumer", new Runnable() {
       def run() {
+        var reqId = 0
         var offset = startingOffset
         while(true) {
-          val fetchRequest = new FetchRequest(topic, partition, offset, fetchsize)
-          val messageSets = consumer.multifetch(fetchRequest)
-          for (messages <- messageSets) {
-            debug("multi fetched " + messages.sizeInBytes + " bytes from offset " + offset)
-            var consumed = 0
-            for(messageAndOffset <- messages) {
-              if(printMessages)
-                info("consumed: " + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
-              offset = messageAndOffset.offset
-              if(printOffsets)
-                info("next offset = " + offset)
-              consumed += 1
-            }
+          val fetchRequest = new FetchRequestBuilder()
+            .correlationId(reqId)
+            .clientId(clientId)
+            .addFetch(topic, partition, offset, fetchSize)
+            .build()
+          val fetchResponse = consumer.fetch(fetchRequest)
+          val messageSet = fetchResponse.messageSet(topic, partition)
+          debug("multi fetched " + messageSet.sizeInBytes + " bytes from offset " + offset)
+          var consumed = 0
+          for(messageAndOffset <- messageSet) {
+            if(printMessages)
+              info("consumed: " + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
+            offset = messageAndOffset.offset
+            if(printOffsets)
+              info("next offset = " + offset)
+            consumed += 1
           }
+          reqId += 1
         }
       }
     }, false);

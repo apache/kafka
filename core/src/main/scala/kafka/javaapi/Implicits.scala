@@ -28,9 +28,6 @@ private[javaapi] object Implicits extends Logging {
                                                    messageSet.getErrorCode)
   }
 
-  implicit def toMultiFetchResponse(response: kafka.javaapi.MultiFetchResponse): kafka.api.MultiFetchResponse =
-    response.underlying
-
-  implicit def toJavaMultiFetchResponse(response: kafka.api.MultiFetchResponse): kafka.javaapi.MultiFetchResponse =
-    new kafka.javaapi.MultiFetchResponse(response.buffer, response.numSets, response.offsets)
+  implicit def toJavaFetchResponse(response: kafka.api.FetchResponse): kafka.javaapi.FetchResponse =
+    new kafka.javaapi.FetchResponse(response.versionId, response.correlationId, response.data)
 }

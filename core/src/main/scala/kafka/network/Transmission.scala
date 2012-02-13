@@ -66,14 +66,15 @@ trait Receive extends Transmission {
 trait Send extends Transmission {
     
   def writeTo(channel: GatheringByteChannel): Int
-  
+
   def writeCompletely(channel: GatheringByteChannel): Int = {
-    var written = 0
+    var totalWritten = 0
     while(!complete) {
-      written = writeTo(channel)
+      val written = writeTo(channel)
       trace(written + " bytes written.")
+      totalWritten += written
     }
-    written
+    totalWritten
   }
     
 }
@@ -99,9 +100,9 @@ abstract class MultiSend[S <: Send](val sends: List[S]) extends Send {
     if (current == Nil) {
       if (totalWritten != expectedBytesToWrite)
         error("mismatch in sending bytes over socket; expected: " + expectedBytesToWrite + " actual: " + totalWritten)
-      return true
+      true
+    } else {
+      false
     }
-    else
-      return false
   }
 }

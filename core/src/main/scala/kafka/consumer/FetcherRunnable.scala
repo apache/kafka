@@ -17,13 +17,14 @@
 
 package kafka.consumer
 
-import java.util.concurrent.CountDownLatch
-import kafka.common.ErrorMapping
-import kafka.cluster.{Partition, Broker}
-import kafka.api.{OffsetRequest, FetchRequest}
-import org.I0Itec.zkclient.ZkClient
-import kafka.utils._
 import java.io.IOException
+import java.util.concurrent.CountDownLatch
+import kafka.api.{FetchRequestBuilder, OffsetRequest}
+import kafka.cluster.{Partition, Broker}
+import kafka.common.ErrorMapping
+import kafka.message.ByteBufferMessageSet
+import kafka.utils._
+import org.I0Itec.zkclient.ZkClient
 
 class FetcherRunnable(val name: String,
                       val zkClient : ZkClient,
@@ -50,18 +51,26 @@ class FetcherRunnable(val name: String,
       info(name + " start fetching topic: " + infopti.topic + " part: " + infopti.partition.partId + " offset: "
         + infopti.getFetchOffset + " from " + broker.host + ":" + broker.port)
 
+    var reqId = 0
     try {
       while (!stopped) {
-        val fetches = partitionTopicInfos.map(info =>
-          new FetchRequest(info.topic, info.partition.partId, info.getFetchOffset, config.fetchSize))
+        // TODO: fix up the max wait and min bytes
+        val builder = new FetchRequestBuilder().
+          correlationId(reqId).
+          clientId(config.consumerId.getOrElse(name)).
+          maxWait(0).
+          minBytes(0)
+        partitionTopicInfos.foreach(pti =>
+          builder.addFetch(pti.topic, pti.partition.partId, pti.getFetchOffset(), config.fetchSize)
+        )
 
-        trace("fetch request: " + fetches.toString)
-
-        val response = simpleConsumer.multifetch(fetches : _*)
+        val fetchRequest = builder.build()
+        trace("fetch request: " + fetchRequest)
+        val response = simpleConsumer.fetch(fetchRequest)
 
         var read = 0L
-
-        for((messages, infopti) <- response.zip(partitionTopicInfos)) {
+        for(infopti <- partitionTopicInfos) {
+          val messages = response.messageSet(infopti.topic, infopti.partition.partId).asInstanceOf[ByteBufferMessageSet]
           try {
             var done = false
             if(messages.getErrorCode == ErrorMapping.OffsetOutOfRangeCode) {
@@ -76,8 +85,7 @@ class FetcherRunnable(val name: String,
             }
             if (!done)
               read += infopti.enqueue(messages, infopti.getFetchOffset)
-          }
-          catch {
+          } catch {
             case e1: IOException =>
               // something is wrong with the socket, re-throw the exception to stop the fetcher
               throw e1
@@ -91,6 +99,7 @@ class FetcherRunnable(val name: String,
               throw e2
           }
         }
+        reqId = if(reqId == Int.MaxValue) 0 else reqId + 1
 
         trace("fetched bytes: " + read)
         if(read == 0) {
@@ -98,8 +107,7 @@ class FetcherRunnable(val name: String,
           Thread.sleep(config.fetcherBackoffMs)
         }
       }
-    }
-    catch {
+    } catch {
       case e =>
         if (stopped)
           info("FecherRunnable " + this + " interrupted")

@@ -17,23 +17,21 @@
 
 package kafka.log4j
 
-import org.apache.log4j.spi.LoggingEvent
-import org.apache.log4j.{PropertyConfigurator, Logger}
 import java.util.Properties
 import java.io.File
-import kafka.consumer.SimpleConsumer
-import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.TestZKUtils
-import kafka.zk.EmbeddedZookeeper
 import junit.framework.Assert._
-import kafka.api.FetchRequest
-import kafka.serializer.Encoder
+import kafka.api.FetchRequestBuilder
+import kafka.consumer.SimpleConsumer
 import kafka.message.Message
 import kafka.producer.async.MissingConfigException
+import kafka.serializer.Encoder
+import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.utils.{TestUtils, TestZKUtils, Utils, Logging}
+import kafka.zk.{EmbeddedZookeeper, ZooKeeperTestHarness}
+import org.apache.log4j.spi.LoggingEvent
+import org.apache.log4j.{PropertyConfigurator, Logger}
 import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnit3Suite
-import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.{TestUtils, Utils, Logging}
 
 class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
 
@@ -172,10 +170,10 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     Thread.sleep(2500)
 
     var offset = 0L
-    val messages = simpleConsumerBl.fetch(new FetchRequest("test-topic", 0, offset, 1024*1024))
-
+    val response = simpleConsumerBl.fetch(new FetchRequestBuilder().addFetch("test-topic", 0, offset, 1024*1024).build())
+    val fetchedMessage = response.messageSet("test-topic", 0)
     var count = 0
-    for(message <- messages) {
+    for(message <- fetchedMessage) {
       count = count + 1
       offset += message.offset
     }
@@ -192,14 +190,16 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
 
     Thread.sleep(500)
 
-    val messages = simpleConsumerZk.fetch(new FetchRequest("test-topic", 0, 0L, 1024*1024))
+    val response = simpleConsumerZk.fetch(new FetchRequestBuilder().addFetch("test-topic", 0, 0L, 1024*1024).build())
+    val fetchMessage = response.messageSet("test-topic", 0)
 
     var count = 0
-    for(message <- messages) {
+    for(message <- fetchMessage) {
       count = count + 1
     }
 
-    val messagesFromOtherBroker = simpleConsumerBl.fetch(new FetchRequest("test-topic", 0, 0L, 1024*1024))
+    val response2 = simpleConsumerBl.fetch(new FetchRequestBuilder().addFetch("test-topic", 0, 0L, 1024*1024).build())
+    val messagesFromOtherBroker = response2.messageSet("test-topic", 0)
 
     for(message <- messagesFromOtherBroker) {
       count = count + 1

@@ -77,7 +77,7 @@ class ZKLoadBalanceTest extends JUnit3Suite with ZooKeeperTestHarness {
 
 
       // wait a bit to make sure rebalancing logic is triggered
-      Thread.sleep(1000)
+      Thread.sleep(1500)
       // check Partition Owner Registry
       val actual_3 = getZKChildrenValues(dirs.consumerOwnerDir)
       val expected_3 = List( ("200-0", "group1_consumer1-0"),

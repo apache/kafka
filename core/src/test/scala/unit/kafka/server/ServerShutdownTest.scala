@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.io.File
-import kafka.api.FetchRequest
 import kafka.producer.{SyncProducer, SyncProducerConfig}
 import kafka.consumer.SimpleConsumer
 import java.util.Properties
@@ -27,6 +26,7 @@ import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{TestUtils, Utils}
+import kafka.api.{FetchResponse, FetchRequestBuilder, FetchRequest}
 
 class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
   val port = TestUtils.choosePort
@@ -82,11 +82,13 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       server.startup()
 
       // bring the server back again and read the messages
-      var fetched: ByteBufferMessageSet = null
-      while(fetched == null || fetched.validBytes == 0)
-        fetched = consumer.fetch(new FetchRequest(topic, 0, 0, 10000))
-      TestUtils.checkEquals(sent1.iterator, fetched.iterator)
-      val newOffset = fetched.validBytes
+      var fetchedMessage: ByteBufferMessageSet = null
+      while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
+        val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+        fetchedMessage = fetched.messageSet(topic, 0)
+      }
+      TestUtils.checkEquals(sent1.iterator, fetchedMessage.iterator)
+      val newOffset = fetchedMessage.validBytes
 
       // send some more messages
       producer.send(topic, sent2)
@@ -94,10 +96,12 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
 
       Thread.sleep(200)
 
-      fetched = null
-      while(fetched == null || fetched.validBytes == 0)
-        fetched = consumer.fetch(new FetchRequest(topic, 0, newOffset, 10000))
-      TestUtils.checkEquals(sent2.map(m => m.message).iterator, fetched.map(m => m.message).iterator)
+      fetchedMessage = null
+      while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
+        val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, newOffset, 10000).build())
+        fetchedMessage = fetched.messageSet(topic, 0)
+      }
+      TestUtils.checkEquals(sent2.map(m => m.message).iterator, fetchedMessage.map(m => m.message).iterator)
 
       server.shutdown()
       Utils.rm(server.config.logDir)

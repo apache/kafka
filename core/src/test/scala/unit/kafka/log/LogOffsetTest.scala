@@ -22,7 +22,6 @@ import kafka.utils._
 import kafka.server.{KafkaConfig, KafkaServer}
 import junit.framework.Assert._
 import java.util.{Random, Properties}
-import kafka.api.{FetchRequest, OffsetRequest}
 import collection.mutable.WrappedArray
 import kafka.consumer.SimpleConsumer
 import org.junit.{After, Before, Test}
@@ -30,6 +29,7 @@ import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import org.apache.log4j._
 import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
+import kafka.api.{FetchRequestBuilder, OffsetRequest}
 
 object LogOffsetTest {
   val random = new Random()  
@@ -66,9 +66,8 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testEmptyLogs() {
-    val messageSet: ByteBufferMessageSet = simpleConsumer.fetch(
-      new FetchRequest("test", 0, 0, 300 * 1024))
-    assertFalse(messageSet.iterator.hasNext)
+    val fetchResponse = simpleConsumer.fetch(new FetchRequestBuilder().addFetch("test", 0, 0, 300 * 1024).build())
+    assertFalse(fetchResponse.messageSet("test", 0).iterator.hasNext)
 
     val name = "test"
     val logFile = new File(logDir, name + "-0")
@@ -119,9 +118,9 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue((Array(240L, 216L, 108L, 0L): WrappedArray[Long]) == (consumerOffsets: WrappedArray[Long]))
 
     // try to fetch using latest offset
-    val messageSet: ByteBufferMessageSet = simpleConsumer.fetch(
-      new FetchRequest(topic, 0, consumerOffsets.head, 300 * 1024))
-    assertFalse(messageSet.iterator.hasNext)
+    val fetchResponse = simpleConsumer.fetch(
+      new FetchRequestBuilder().addFetch(topic, 0, consumerOffsets.head, 300 * 1024).build())
+    assertFalse(fetchResponse.messageSet(topic, 0).iterator.hasNext)
   }
 
   @Test
