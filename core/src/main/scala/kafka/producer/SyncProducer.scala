@@ -40,6 +40,8 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   private val MaxConnectBackoffMs = 60000
   private var channel : SocketChannel = null
   private var sentOnConnection = 0
+  private var lastConnectionTime = System.currentTimeMillis
+
   private val lock = new Object()
   @volatile
   private var shutdown: Boolean = false
@@ -94,10 +96,12 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
       }
       // TODO: do we still need this?
       sentOnConnection += 1
-      if(sentOnConnection >= config.reconnectInterval) {
+
+      if(sentOnConnection >= config.reconnectInterval || (config.reconnectTimeInterval >= 0 && System.currentTimeMillis - lastConnectionTime >= config.reconnectTimeInterval)) {
         disconnect()
         channel = connect()
         sentOnConnection = 0
+        lastConnectionTime = System.currentTimeMillis
       }
       val endTime = SystemTime.nanoseconds
       SyncProducerStats.recordProduceRequest(endTime - startTime)
