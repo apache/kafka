@@ -25,6 +25,7 @@ import kafka.utils._
 import kafka.common._
 import kafka.api.OffsetRequest
 import java.util._
+import kafka.server.BrokerTopicStat
 
 private[log] object Log {
   val FileSuffix = ".kafka"
@@ -207,6 +208,8 @@ private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int,
       numberOfMessages += 1;
     }
 
+    BrokerTopicStat.getBrokerTopicStat(getTopicName).recordMessagesIn(numberOfMessages)
+    BrokerTopicStat.getBrokerAllTopicStat.recordMessagesIn(numberOfMessages)
     logStats.recordAppendedMessages(numberOfMessages)
     
     // they are valid, insert them in the log
