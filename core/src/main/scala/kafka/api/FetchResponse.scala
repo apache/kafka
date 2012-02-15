@@ -76,6 +76,8 @@ case class TopicData(topic: String, partitionData: Array[PartitionData]) {
 }
 
 object FetchResponse {
+  val CurrentVersion = 1.shortValue()
+
   def readFrom(buffer: ByteBuffer): FetchResponse = {
     val versionId = buffer.getShort
     val correlationId = buffer.getInt

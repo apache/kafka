@@ -21,13 +21,13 @@ import java.io.IOException
 import java.lang.IllegalStateException
 import kafka.admin.{CreateTopicCommand, AdminUtils}
 import kafka.api._
-import kafka.common.ErrorMapping
 import kafka.log._
 import kafka.message._
 import kafka.network._
 import kafka.utils.{SystemTime, Logging}
 import org.apache.log4j.Logger
 import scala.collection.mutable.ListBuffer
+import kafka.common.{FetchRequestFormatException, ErrorMapping}
 
 /**
  * Logic to handle the various Kafka requests
@@ -72,8 +72,7 @@ class KafkaApis(val logManager: LogManager) extends Logging {
     try {
       logManager.getOrCreateLog(request.topic, partition).append(request.messages)
       trace(request.messages.sizeInBytes + " bytes written to logs.")
-    }
-    catch {
+    } catch {
       case e =>
         error("Error processing " + requestHandlerName + " on " + request.topic + ":" + partition, e)
         e match {
@@ -92,8 +91,16 @@ class KafkaApis(val logManager: LogManager) extends Logging {
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Fetch request " + fetchRequest.toString)
 
+    // validate the request
+    try {
+      fetchRequest.validate()  
+    } catch {
+      case e:FetchRequestFormatException =>
+        val response = new FetchResponse(FetchResponse.CurrentVersion, fetchRequest.correlationId, Array.empty)
+        return Some(new FetchResponseSend(response, ErrorMapping.InvalidFetchRequestFormatCode))
+    }
+
     val fetchedData = new ListBuffer[TopicData]()
-    var error: Int = ErrorMapping.NoError
 
     for(offsetDetail <- fetchRequest.offsetInfo) {
       val info = new ListBuffer[PartitionData]()
@@ -101,7 +108,7 @@ class KafkaApis(val logManager: LogManager) extends Logging {
       val (partitions, offsets, fetchSizes) = (offsetDetail.partitions, offsetDetail.offsets, offsetDetail.fetchSizes)
       for( (partition, offset, fetchSize) <- (partitions, offsets, fetchSizes).zipped.map((_,_,_)) ) {
         val partitionInfo = readMessageSet(topic, partition, offset, fetchSize) match {
-          case Left(err) => error = err; new PartitionData(partition, err, offset, MessageSet.Empty)
+          case Left(err) => new PartitionData(partition, err, offset, MessageSet.Empty)
           case Right(messages) => new PartitionData(partition, ErrorMapping.NoError, offset, messages)
         }
         info.append(partitionInfo)
@@ -109,7 +116,7 @@ class KafkaApis(val logManager: LogManager) extends Logging {
       fetchedData.append(new TopicData(topic, info.toArray))
     }
     val response = new FetchResponse(FetchRequest.CurrentVersion, fetchRequest.correlationId, fetchedData.toArray )
-    Some(new FetchResponseSend(response, error))
+    Some(new FetchResponseSend(response, ErrorMapping.NoError))
   }
 
   private def readMessageSet(topic: String, partition: Int, offset: Long, maxSize: Int): Either[Int, MessageSet] = {

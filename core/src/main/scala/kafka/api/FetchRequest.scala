@@ -17,9 +17,10 @@
 
 package kafka.api
 
-import java.nio._
-import kafka.network._
-import kafka.utils._
+import java.nio.ByteBuffer
+import kafka.common.FetchRequestFormatException
+import kafka.network.Request
+import kafka.utils.Utils
 import scala.collection.mutable.{HashMap, Buffer, ListBuffer}
 
 object OffsetDetail {
@@ -101,7 +102,27 @@ case class FetchRequest( versionId: Short,
                          minBytes: Int,
                          offsetInfo: Seq[OffsetDetail] ) extends Request(RequestKeys.Fetch) {
 
+  // ensure that a topic "X" appears in at most one OffsetDetail
+  def validate() {
+    if(offsetInfo == null)
+      throw new FetchRequestFormatException("FetchRequest has null offsetInfo")
+
+    // We don't want to get fancy with groupBy's and filter's since we just want the first occurrence
+    var topics = Set[String]()
+    val iter = offsetInfo.iterator
+    while(iter.hasNext) {
+      val topic = iter.next.topic
+      if(topics.contains(topic))
+        throw new FetchRequestFormatException("FetchRequest has multiple OffsetDetails for topic: " + topic)
+      else
+        topics += topic
+    }
+  }
+
   def writeTo(buffer: ByteBuffer) {
+    // validate first
+    validate()
+
     buffer.putShort(versionId)
     buffer.putInt(correlationId)
     Utils.writeShortString(buffer, clientId, "UTF-8")

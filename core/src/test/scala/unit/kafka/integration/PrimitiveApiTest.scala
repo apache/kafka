@@ -17,11 +17,12 @@
 
 package kafka.integration
 
-import scala.collection._
 import java.io.File
+import java.nio.ByteBuffer
 import java.util.Properties
 import junit.framework.Assert._
-import kafka.common.{ErrorMapping, OffsetOutOfRangeException, InvalidPartitionException}
+import kafka.api.{OffsetDetail, FetchRequest, FetchRequestBuilder, ProducerRequest}
+import kafka.common.{FetchRequestFormatException, OffsetOutOfRangeException, InvalidPartitionException}
 import kafka.message.{DefaultCompressionCodec, NoCompressionCodec, Message, ByteBufferMessageSet}
 import kafka.producer.{ProducerData, Producer, ProducerConfig}
 import kafka.serializer.StringDecoder
@@ -29,8 +30,7 @@ import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
-import java.nio.ByteBuffer
-import kafka.api.{FetchRequest, FetchRequestBuilder, ProducerRequest}
+import scala.collection._
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -60,6 +60,23 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     serializedBuffer.rewind()
     val deserializedRequest = FetchRequest.readFrom(serializedBuffer)
     assertEquals(request, deserializedRequest)
+  }
+
+  def testFetchRequestEnforcesUniqueTopicsForOffsetDetails() {
+    val offsets = Array(
+      new OffsetDetail("topic1", Array(0, 1, 2), Array(0L, 0L, 0L), Array(1000, 1000, 1000)),
+      new OffsetDetail("topic2", Array(0, 1, 2), Array(0L, 0L, 0L), Array(1000, 1000, 1000)),
+      new OffsetDetail("topic1", Array(3, 4, 5), Array(0L, 0L, 0L), Array(1000, 1000, 1000)),
+      new OffsetDetail("topic2", Array(3, 4, 5), Array(0L, 0L, 0L), Array(1000, 1000, 1000))
+    )
+    val request = new FetchRequest( versionId = FetchRequest.CurrentVersion, correlationId = 0, clientId = "",
+                                    replicaId = -1, maxWait = -1, minBytes = -1, offsetInfo = offsets)
+    try {
+      consumer.fetch(request)
+      fail("FetchRequest should throw FetchRequestFormatException due to duplicate topics")
+    } catch {
+      case e: FetchRequestFormatException => "success"
+    }
   }
   
   def testDefaultEncoderProducerAndFetch() {

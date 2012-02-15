@@ -33,13 +33,15 @@ object ErrorMapping {
   val InvalidMessageCode = 2
   val WrongPartitionCode = 3
   val InvalidFetchSizeCode = 4
+  val InvalidFetchRequestFormatCode = 5
 
   private val exceptionToCode = 
     Map[Class[Throwable], Int](
       classOf[OffsetOutOfRangeException].asInstanceOf[Class[Throwable]] -> OffsetOutOfRangeCode,
       classOf[InvalidMessageException].asInstanceOf[Class[Throwable]] -> InvalidMessageCode,
       classOf[InvalidPartitionException].asInstanceOf[Class[Throwable]] -> WrongPartitionCode,
-      classOf[InvalidMessageSizeException].asInstanceOf[Class[Throwable]] -> InvalidFetchSizeCode
+      classOf[InvalidMessageSizeException].asInstanceOf[Class[Throwable]] -> InvalidFetchSizeCode,
+      classOf[FetchRequestFormatException].asInstanceOf[Class[Throwable]] -> InvalidFetchRequestFormatCode
     ).withDefaultValue(UnknownCode)
   
   /* invert the mapping */
