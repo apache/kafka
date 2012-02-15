@@ -384,7 +384,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             lock.lock()
             try {
               if (!isWatcherTriggered)
-                cond.wait()
+                cond.await()
             } finally {
               isWatcherTriggered = false
               lock.unlock()
