@@ -58,6 +58,7 @@ class FetcherRunnable(val name: String,
         trace("fetch request: " + fetches.toString)
 
         val response = simpleConsumer.multifetch(fetches : _*)
+        trace("recevied response from fetch request: " + fetches.toString)
 
         var read = 0L
 
