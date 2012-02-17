@@ -72,7 +72,7 @@ trait Logging {
     logger.warn(msg,e)
   }	
 
-  def error(msg: => String):Unit = {
+  def error(msg: => String): Unit = {
     logger.error(msg)
   }		
   def error(e: => Throwable): Any = {
