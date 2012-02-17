@@ -38,6 +38,8 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
                            private val errorCode: Int = ErrorMapping.NoError) extends MessageSet with Logging {
   private var validByteCount = -1L
   private var shallowValidByteCount = -1L
+  if(sizeInBytes > Int.MaxValue)
+    throw new InvalidMessageSizeException("Message set cannot be larger than " + Int.MaxValue)
 
   def this(compressionCodec: CompressionCodec, messages: Message*) {
     this(MessageSet.createByteBuffer(compressionCodec, messages:_*), 0L, ErrorMapping.NoError)
@@ -108,12 +110,16 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
         val newMessage = new Message(message)
         newMessage.compressionCodec match {
           case NoCompressionCodec =>
+            if(!newMessage.isValid)
+              throw new InvalidMessageException("Uncompressed essage is invalid")
             debug("Message is uncompressed. Valid byte count = %d".format(currValidBytes))
             innerIter = null
             currValidBytes += 4 + size
             trace("currValidBytes = " + currValidBytes)
             new MessageAndOffset(newMessage, currValidBytes)
           case _ =>
+            if(!newMessage.isValid)
+              throw new InvalidMessageException("Compressed message is invalid")
             debug("Message is compressed. Valid byte count = %d".format(currValidBytes))
             innerIter = CompressionUtils.decompress(newMessage).deepIterator
             if (!innerIter.hasNext) {

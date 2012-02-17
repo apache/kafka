@@ -46,10 +46,15 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   @volatile
   private var shutdown: Boolean = false
 
-  debug("Instantiating Scala Sync Producer")
+  trace("Instantiating Scala Sync Producer")
 
   private def verifySendBuffer(buffer : ByteBuffer) = {
-    if (logger.isTraceEnabled) {
+    /**
+     * This seems a little convoluted, but the idea is to turn on verification simply changing log4j settings
+     * Also, when verification is turned on, care should be taken to see that the logs don't fill up with unnecessary
+     * data. So, leaving the rest of the logging at TRACE, while errors should be logged at ERROR level
+     */
+    if (logger.isDebugEnabled) {
       trace("verifying sendbuffer of size " + buffer.limit)
       val requestTypeId = buffer.getShort()
       if (requestTypeId == RequestKeys.MultiProduce) {
@@ -59,17 +64,17 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
             try {
               for (messageAndOffset <- produce.messages)
                 if (!messageAndOffset.message.isValid)
-                  trace("topic " + produce.topic + " is invalid")
+                  throw new InvalidMessageException("Message for topic " + produce.topic + " is invalid")
             }
             catch {
               case e: Throwable =>
-                trace("error iterating messages ", e)
+                error("error iterating messages ", e)
             }
           }
         }
         catch {
           case e: Throwable =>
-            trace("error verifying sendbuffer ", e)
+            error("error verifying sendbuffer ", e)
         }
       }
     }
