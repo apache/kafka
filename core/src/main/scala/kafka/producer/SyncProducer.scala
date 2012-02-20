@@ -26,9 +26,11 @@ import kafka.api._
 import scala.math._
 import kafka.common.MessageSizeTooLargeException
 import java.nio.ByteBuffer
+import java.util.Random
 
 object SyncProducer {
   val RequestKey: Short = 0
+  val randomGenerator = new Random
 }
 
 /*
@@ -40,7 +42,8 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   private val MaxConnectBackoffMs = 60000
   private var channel : SocketChannel = null
   private var sentOnConnection = 0
-  private var lastConnectionTime = System.currentTimeMillis
+  /** make time-based reconnect starting at a random time **/
+  private var lastConnectionTime = System.currentTimeMillis - SyncProducer.randomGenerator.nextDouble() * config.reconnectInterval
 
   private val lock = new Object()
   @volatile
