@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -27,7 +27,7 @@ import org.junit.{After, Before, Test}
 import kafka.common.MessageSizeTooLargeException
 import java.util.Properties
 import kafka.api.ProducerRequest
-import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
+import kafka.message.{NoCompressionCodec, DefaultCompressionCodec, Message, ByteBufferMessageSet}
 
 class SyncProducerTest extends JUnitSuite {
   private var messageBytes =  new Array[Byte](2);
@@ -86,7 +86,7 @@ class SyncProducerTest extends JUnitSuite {
   }
 
   @Test
-  def testMessageSizeTooLarge() {
+  def testSingleMessageSizeTooLarge() {
     val props = new Properties()
     props.put("host", "localhost")
     props.put("port", server.socketServer.port.toString)
@@ -99,6 +99,33 @@ class SyncProducerTest extends JUnitSuite {
     var failed = false
     try {
       producer.send("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(bytes)))
+    }catch {
+      case e: MessageSizeTooLargeException => failed = true
+    }
+    Assert.assertTrue(failed)
+  }
+
+  @Test
+  def testCompressedMessageSizeTooLarge() {
+    val props = new Properties()
+    props.put("host", "localhost")
+    props.put("port", server.socketServer.port.toString)
+    props.put("buffer.size", "102400")
+    props.put("connect.timeout.ms", "300")
+    props.put("reconnect.interval", "500")
+    props.put("max.message.size", "100")
+    val producer = new SyncProducer(new SyncProducerConfig(props))
+    val messages = new Array[Message](10)
+    import Array.fill
+    var a = 0
+    for( a <- 0 to  9){
+      val bytes = fill(20){a.asInstanceOf[Byte]}
+      messages(a) = new Message(bytes)
+    }
+    var failed = false
+    /** After compression, the compressed message has size 118 **/
+    try {
+      producer.send("test", 0, new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec, messages = messages: _*))
     }catch {
       case e: MessageSizeTooLargeException => failed = true
     }

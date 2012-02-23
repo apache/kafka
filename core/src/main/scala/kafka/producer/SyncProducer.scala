@@ -24,7 +24,6 @@ import kafka.network._
 import kafka.utils._
 import kafka.api._
 import scala.math._
-import kafka.common.MessageSizeTooLargeException
 import java.nio.ByteBuffer
 import java.util.Random
 
@@ -120,7 +119,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
    * Send a message
    */
   def send(topic: String, partition: Int, messages: ByteBufferMessageSet) {
-    verifyMessageSize(messages)
+    messages.verifyMessageSize(config.maxMessageSize)
     val setSize = messages.sizeInBytes.asInstanceOf[Int]
     trace("Got message set with " + setSize + " bytes to send")
     send(new BoundedByteBufferSend(new ProducerRequest(topic, partition, messages)))
@@ -130,7 +129,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
 
   def multiSend(produces: Array[ProducerRequest]) {
     for (request <- produces)
-      verifyMessageSize(request.messages)
+      request.messages.verifyMessageSize(config.maxMessageSize)
     val setSize = produces.foldLeft(0L)(_ + _.messages.sizeInBytes)
     trace("Got multi message sets with " + setSize + " bytes to send")
     send(new BoundedByteBufferSend(new MultiProducerRequest(produces)))
@@ -143,11 +142,6 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     }
   }
 
-  private def verifyMessageSize(messages: ByteBufferMessageSet) {
-    for (messageAndOffset <- messages)
-      if (messageAndOffset.message.payloadSize > config.maxMessageSize)
-        throw new MessageSizeTooLargeException
-  }
 
   /**
    * Disconnect from current channel, closing connection.
