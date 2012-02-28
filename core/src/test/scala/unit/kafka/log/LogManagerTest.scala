@@ -107,7 +107,7 @@ class LogManagerTest extends JUnitSuite {
     config = new KafkaConfig(props) {
       override val logFileSize = (10 * (setSize - 1)).asInstanceOf[Int] // each segment will be 10 messages
       override val enableZookeeper = false
-      override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Int] // keep exactly 6 segments + 1 roll over
+      override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Long] // keep exactly 6 segments + 1 roll over
       override val logRetentionHours = retentionHours
     }
     logManager = new LogManager(config, null, time, -1, retentionMs, false)

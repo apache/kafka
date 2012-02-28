@@ -194,6 +194,48 @@ object Utils extends Logging {
   }
   
   /**
+   * Read a required long property value or throw an exception if no such property is found
+   */
+  def getLong(props: Properties, name: String): Long = {
+    if(props.containsKey(name))
+      return getLong(props, name, -1)
+    else
+      throw new IllegalArgumentException("Missing required property '" + name + "'")
+  }
+
+  /**
+   * Read an long from the properties instance
+   * @param props The properties to read from
+   * @param name The property name
+   * @param default The default value to use if the property is not found
+   * @return the long value
+   */
+  def getLong(props: Properties, name: String, default: Long): Long = 
+    getLongInRange(props, name, default, (Long.MinValue, Long.MaxValue))
+
+  /**
+   * Read an long from the properties instance. Throw an exception 
+   * if the value is not in the given range (inclusive)
+   * @param props The properties to read from
+   * @param name The property name
+   * @param default The default value to use if the property is not found
+   * @param range The range in which the value must fall (inclusive)
+   * @throws IllegalArgumentException If the value is not in the given range
+   * @return the long value
+   */
+  def getLongInRange(props: Properties, name: String, default: Long, range: (Long, Long)): Long = {
+    val v = 
+      if(props.containsKey(name))
+        props.getProperty(name).toLong
+      else
+        default
+    if(v < range._1 || v > range._2)
+      throw new IllegalArgumentException(name + " has value " + v + " which is not in the range " + range + ".")
+    else
+      v
+  }
+
+  /**
    * Read a boolean value from the properties instance
    * @param props The properties to read from
    * @param name The property name
