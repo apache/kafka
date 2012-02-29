@@ -27,6 +27,7 @@ import org.scalatest.junit.JUnitSuite
 import kafka.producer.async._
 import kafka.serializer.Encoder
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
+import kafka.utils.TestZKUtils
 
 class AsyncProducerTest extends JUnitSuite {
 
@@ -54,6 +55,7 @@ class AsyncProducerTest extends JUnitSuite {
     props.put("port", "9092")
     props.put("queue.size", "10")
     props.put("serializer.class", "kafka.producer.StringSerializer")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     val config = new AsyncProducerConfig(props)
 
     val producer = new AsyncProducer[String](config, basicProducer, new StringSerializer)
@@ -92,6 +94,7 @@ class AsyncProducerTest extends JUnitSuite {
     props.put("port", "9092")
     props.put("queue.size", "10")
     props.put("serializer.class", "kafka.producer.StringSerializer")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     val config = new AsyncProducerConfig(props)
 
     val producer = new AsyncProducer[String](config, basicProducer, new StringSerializer)
@@ -130,6 +133,7 @@ class AsyncProducerTest extends JUnitSuite {
     props.put("queue.size", "10")
     props.put("serializer.class", "kafka.producer.StringSerializer")
     props.put("batch.size", "5")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
 
     val config = new AsyncProducerConfig(props)
 
@@ -168,6 +172,7 @@ class AsyncProducerTest extends JUnitSuite {
     props.put("queue.size", "10")
     props.put("serializer.class", "kafka.producer.StringSerializer")
     props.put("queue.time", "200")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
 
     val config = new AsyncProducerConfig(props)
 
@@ -200,6 +205,7 @@ class AsyncProducerTest extends JUnitSuite {
     asyncProducerProps.put("queue.size", "10")
     asyncProducerProps.put("serializer.class", "kafka.producer.StringSerializer")
     asyncProducerProps.put("queue.time", "100")
+    asyncProducerProps.put("zk.connect", TestZKUtils.zookeeperConnect)
 
     val config = new AsyncProducerConfig(asyncProducerProps)
     val producer = new AsyncProducer[String](config, basicProducer, new StringSerializer)
@@ -226,6 +232,7 @@ class AsyncProducerTest extends JUnitSuite {
     props.put("queue.size", "50")
     props.put("serializer.class", "kafka.producer.StringSerializer")
     props.put("batch.size", "10")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
 
     val config = new AsyncProducerConfig(props)
 
@@ -266,6 +273,7 @@ class AsyncProducerTest extends JUnitSuite {
     props.put("queue.size", "50")
     props.put("serializer.class", "kafka.producer.StringSerializer")
     props.put("batch.size", "20")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
 
     val config = new AsyncProducerConfig(props)
 

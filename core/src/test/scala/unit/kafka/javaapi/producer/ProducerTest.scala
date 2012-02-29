@@ -232,6 +232,7 @@ class ProducerTest extends JUnitSuite {
     val props = new Properties()
     props.put("partitioner.class", "kafka.producer.NegativePartitioner")
     props.put("serializer.class", "kafka.producer.StringSerializer")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     val producerPool = new ProducerPool[String](new ProducerConfig(props), new StringSerializer,
       syncProducers, new ConcurrentHashMap[Int, AsyncProducer[String]]())
     producerPool.send(producerPool.getProducerPoolData("test-topic", new Partition(brokerId1, 0), Array("test1")))
@@ -264,6 +265,7 @@ class ProducerTest extends JUnitSuite {
     props.put("partitioner.class", "kafka.producer.NegativePartitioner")
     props.put("serializer.class", "kafka.producer.StringSerializer")
     props.put("producer.type", "async")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     val producerPool = new ProducerPool[String](new ProducerConfig(props), new StringSerializer,
       new ConcurrentHashMap[Int, kafka.producer.SyncProducer](), asyncProducers)
     producerPool.send(producerPool.getProducerPoolData(topic, new Partition(brokerId1, 0), Array("test1")))
@@ -289,6 +291,7 @@ class ProducerTest extends JUnitSuite {
     val props = new Properties()
     props.put("partitioner.class", "kafka.producer.NegativePartitioner")
     props.put("serializer.class", "kafka.producer.StringSerializer")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     val producerPool = new ProducerPool[String](new ProducerConfig(props), new StringSerializer,
       syncProducers, new ConcurrentHashMap[Int, AsyncProducer[String]]())
     try {
@@ -320,6 +323,7 @@ class ProducerTest extends JUnitSuite {
     props.put("partitioner.class", "kafka.producer.NegativePartitioner")
     props.put("serializer.class", "kafka.producer.StringSerializer")
     props.put("producer.type", "async")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     val producerPool = new ProducerPool[String](new ProducerConfig(props), new StringSerializer,
       new ConcurrentHashMap[Int, kafka.producer.SyncProducer](), asyncProducers)
     try {

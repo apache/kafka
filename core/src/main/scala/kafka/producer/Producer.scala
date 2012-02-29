@@ -33,10 +33,6 @@ class Producer[K,V](config: ProducerConfig,
                                                           /* use the other constructor*/
 extends Logging {
   private val hasShutdown = new AtomicBoolean(false)
-  if(!Utils.propertyExists(config.zkConnect) && !Utils.propertyExists(config.brokerList))
-    throw new InvalidConfigException("At least one of zk.connect or broker.list must be specified")
-  if (Utils.propertyExists(config.zkConnect) && Utils.propertyExists(config.brokerList))
-    warn("Both zk.connect and broker.list provided (zk.connect takes precedence).")
   private val random = new java.util.Random
   // check if zookeeper based auto partition discovery is enabled
   private val zkEnabled = Utils.propertyExists(config.zkConnect)
