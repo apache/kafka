@@ -16,7 +16,7 @@
 */
 /*
  * encoder.hpp
- *
+ */
 
 #ifndef KAFKA_ENCODER_HPP_
 #define KAFKA_ENCODER_HPP_
