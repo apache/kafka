@@ -18,7 +18,7 @@
 package kafka.producer
 
 import async.MissingConfigException
-import org.apache.log4j.spi.{LoggingEvent, ErrorCode}
+import org.apache.log4j.spi.LoggingEvent
 import org.apache.log4j.AppenderSkeleton
 import org.apache.log4j.helpers.LogLog
 import kafka.utils.Logging

@@ -26,6 +26,7 @@ import kafka.api._
 import scala.math._
 import kafka.common.MessageSizeTooLargeException
 import java.nio.ByteBuffer
+import kafka.utils.Utils._
 
 object SyncProducer {
   val RequestKey: Short = 0
@@ -122,6 +123,21 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     val setSize = produces.foldLeft(0L)(_ + _.messages.sizeInBytes)
     trace("Got multi message sets with " + setSize + " bytes to send")
     send(new BoundedByteBufferSend(new MultiProducerRequest(produces)))
+  }
+
+  def send(request: TopicMetadataRequest): Seq[TopicMetadata] = {
+    lock synchronized {
+      getOrMakeConnection()
+      var response: Tuple2[Receive,Int] = null
+      try {
+        sendRequest(request, channel)
+        response = getResponse(channel)
+      } catch {
+        case e : java.io.IOException => error("Failed to write topic metadata request on the socket channel", e)
+      }
+      // TODO: handle any errors in the response and throw the relevant exception
+      TopicMetadataRequest.deserializeTopicsMetadataResponse(response._1.buffer)
+    }
   }
 
   def close() = {

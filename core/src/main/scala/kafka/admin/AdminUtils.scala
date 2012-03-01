@@ -80,6 +80,10 @@ object AdminUtils extends Logging {
       for (i <- 0 until replicaAssignmentList.size) {
         val zkPath = ZkUtils.getTopicPartitionReplicasPath(topic, i.toString)
         ZkUtils.updatePersistentPath(zkClient, zkPath, Utils.seqToCSV(replicaAssignmentList(i)))
+        // TODO: Remove this with leader election patch
+        // assign leader for the partition i
+//        ZkUtils.updateEphemeralPath(zkClient, ZkUtils.getTopicPartitionLeaderPath(topic, i.toString),
+//          replicaAssignmentList(i).head)
         debug("Updated path %s with %s for replica assignment".format(zkPath, Utils.seqToCSV(replicaAssignmentList(i))))
       }
     }
@@ -103,18 +107,19 @@ object AdminUtils extends Logging {
         for (i <-0 until partitionMetadata.size) {
           val replicas = ZkUtils.readData(zkClient, ZkUtils.getTopicPartitionReplicasPath(topic, partitions(i).toString))
           val inSyncReplicas = ZkUtils.readDataMaybeNull(zkClient, ZkUtils.getTopicPartitionInSyncPath(topic, partitions(i).toString))
-          val leader = ZkUtils.readDataMaybeNull(zkClient, ZkUtils.getTopicPartitionLeaderPath(topic, partitions(i).toString))
+          val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partitions(i))
           debug("replicas = " + replicas + ", in sync replicas = " + inSyncReplicas + ", leader = " + leader)
 
           partitionMetadata(i) = new PartitionMetadata(partitions(i),
-            if (leader == null) None else Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(leader.toInt)).head),
+            leader match { case None => None case Some(l) => Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l.toInt)).head) },
             getBrokerInfoFromCache(zkClient, cachedBrokerInfo, Utils.getCSVList(replicas).map(id => id.toInt)),
             getBrokerInfoFromCache(zkClient, cachedBrokerInfo, Utils.getCSVList(inSyncReplicas).map(id => id.toInt)),
             None /* Return log segment metadata when getOffsetsBefore will be replaced with this API */)
         }
         Some(new TopicMetadata(topic, partitionMetadata))
-      } else
+      } else {
         None
+      }
     }
 
     metadataList.toList

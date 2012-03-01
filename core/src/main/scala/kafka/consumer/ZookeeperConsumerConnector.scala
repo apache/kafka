@@ -29,9 +29,9 @@ import org.apache.zookeeper.Watcher.Event.KeeperState
 import kafka.api.OffsetRequest
 import java.util.UUID
 import kafka.serializer.Decoder
-import kafka.common.{ConsumerRebalanceFailedException, InvalidConfigException}
 import java.lang.IllegalStateException
 import kafka.utils.ZkUtils._
+import kafka.common.{NoBrokersForPartitionException, ConsumerRebalanceFailedException, InvalidConfigException}
 
 /**
  * This class handles the consumers interaction with zookeeper
@@ -201,6 +201,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     ret
   }
 
+  // this API is used by unit tests only
+  def getTopicRegistry: Pool[String, Pool[Partition, PartitionTopicInfo]] = topicRegistry
+
   private def registerConsumerInZK(dirs: ZKGroupDirs, consumerIdString: String, topicCount: TopicCount) = {
     info("begin registering consumer " + consumerIdString + " in ZK")
     createEphemeralPathExpectConflict(zkClient, dirs.consumerRegistryDir + "/" + consumerIdString, topicCount.toJsonString)
@@ -368,7 +371,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                 kafkaMessageStreams: Map[String,List[KafkaMessageStream[T]]])
     extends IZkChildListener {
     private val dirs = new ZKGroupDirs(group)
-    private var oldPartitionsPerTopicMap: mutable.Map[String,List[String]] = new mutable.HashMap[String,List[String]]()
+    private var oldPartitionsPerTopicMap: mutable.Map[String, Seq[String]] = new mutable.HashMap[String, Seq[String]]()
     private var oldConsumersPerTopicMap: mutable.Map[String,List[String]] = new mutable.HashMap[String,List[String]]()
 
     @throws(classOf[Exception])
@@ -379,18 +382,17 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     private def releasePartitionOwnership()= {
       info("Releasing partition ownership")
       for ((topic, infos) <- topicRegistry) {
-        val topicDirs = new ZKGroupTopicDirs(group, topic)
         for(partition <- infos.keys) {
-          val znode = topicDirs.consumerOwnerDir + "/" + partition
-          deletePath(zkClient, znode)
-          debug("Consumer " + consumerIdString + " releasing " + znode)
+          val partitionOwnerPath = getConsumerPartitionOwnerPath(group, topic, partition.partId.toString)
+          deletePath(zkClient, partitionOwnerPath)
+          debug("Consumer " + consumerIdString + " releasing " + partitionOwnerPath)
         }
       }
     }
 
     private def getRelevantTopicMap(myTopicThreadIdsMap: Map[String, Set[String]],
-                                    newPartMap: Map[String,List[String]],
-                                    oldPartMap: Map[String,List[String]],
+                                    newPartMap: Map[String, Seq[String]],
+                                    oldPartMap: Map[String, Seq[String]],
                                     newConsumerMap: Map[String,List[String]],
                                     oldConsumerMap: Map[String,List[String]]): Map[String, Set[String]] = {
       var relevantTopicThreadIdsMap = new mutable.HashMap[String, Set[String]]()
@@ -477,7 +479,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
         val topicDirs = new ZKGroupTopicDirs(group, topic)
         val curConsumers = consumersPerTopicMap.get(topic).get
-        var curPartitions: List[String] = partitionsPerTopicMap.get(topic).get
+        var curPartitions: Seq[String] = partitionsPerTopicMap.get(topic).get
 
         val nPartsPerConsumer = curPartitions.size / curConsumers.size
         val nConsumersWithExtraPart = curPartitions.size % curConsumers.size
@@ -599,8 +601,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         val topic = partitionOwner._1._1
         val partition = partitionOwner._1._2
         val consumerThreadId = partitionOwner._2
-        val topicDirs = new ZKGroupTopicDirs(group, topic)
-        val partitionOwnerPath = topicDirs.consumerOwnerDir + "/" + partition
+        val partitionOwnerPath = getConsumerPartitionOwnerPath(group, topic,partition)
         try {
           createEphemeralPathExpectConflict(zkClient, partitionOwnerPath, consumerThreadId)
           info(consumerThreadId + " successfully owned partition " + partition + " for topic " + topic)
@@ -618,37 +619,47 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       else true
     }
 
-    private def addPartitionTopicInfo(topicDirs: ZKGroupTopicDirs, partitionString: String,
+    private def addPartitionTopicInfo(topicDirs: ZKGroupTopicDirs, partition: String,
                                       topic: String, consumerThreadId: String) {
-      val partition = Partition.parse(partitionString)
       val partTopicInfoMap = topicRegistry.get(topic)
 
-      val znode = topicDirs.consumerOffsetDir + "/" + partition.name
+      // find the leader for this partition
+      val leaderOpt = getLeaderForPartition(zkClient, topic, partition.toInt)
+      leaderOpt match {
+        case None => throw new NoBrokersForPartitionException("No leader available for partition %s on topic %s".
+          format(partition, topic))
+        case Some(l) => debug("Leader for partition %s for topic %s is %d".format(partition, topic, l))
+      }
+      val leader = leaderOpt.get
+
+      val znode = topicDirs.consumerOffsetDir + "/" + partition
       val offsetString = readDataMaybeNull(zkClient, znode)
       // If first time starting a consumer, set the initial offset based on the config
       var offset : Long = 0L
       if (offsetString == null)
         offset = config.autoOffsetReset match {
               case OffsetRequest.SmallestTimeString =>
-                  earliestOrLatestOffset(topic, partition.brokerId, partition.partId, OffsetRequest.EarliestTime)
+                  earliestOrLatestOffset(topic, leader, partition.toInt, OffsetRequest.EarliestTime)
               case OffsetRequest.LargestTimeString =>
-                  earliestOrLatestOffset(topic, partition.brokerId, partition.partId, OffsetRequest.LatestTime)
+                  earliestOrLatestOffset(topic, leader, partition.toInt, OffsetRequest.LatestTime)
               case _ =>
                   throw new InvalidConfigException("Wrong value in autoOffsetReset in ConsumerConfig")
         }
       else
         offset = offsetString.toLong
+
+      val partitionObject = new Partition(leader, partition.toInt, topic)
       val queue = queues.get((topic, consumerThreadId))
       val consumedOffset = new AtomicLong(offset)
       val fetchedOffset = new AtomicLong(offset)
       val partTopicInfo = new PartitionTopicInfo(topic,
-                                                 partition.brokerId,
-                                                 partition,
+                                                 leader,
+                                                 partitionObject,
                                                  queue,
                                                  consumedOffset,
                                                  fetchedOffset,
                                                  new AtomicInteger(config.fetchSize))
-      partTopicInfoMap.put(partition, partTopicInfo)
+      partTopicInfoMap.put(partitionObject, partTopicInfo)
       debug(partTopicInfo + " selected new offset " + offset)
     }
   }

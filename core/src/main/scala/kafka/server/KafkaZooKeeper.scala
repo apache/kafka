@@ -51,21 +51,6 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Loggin
     ZkUtils.registerBrokerInZk(zkClient, config.brokerId, hostName, creatorId, config.port)
   }
 
-  def registerTopicInZk(topic: String) {
-    registerTopicInZkInternal(topic)
-    lock synchronized {
-      topics ::= topic
-    }
-  }
-
-  def registerTopicInZkInternal(topic: String) {
-    val brokerTopicPath = ZkUtils.BrokerTopicsPath + "/" + topic + "/" + config.brokerId
-    val numParts = logManager.getTopicPartitionsMap.getOrElse(topic, config.numPartitions)
-    info("Begin registering broker topic " + brokerTopicPath + " with " + numParts.toString + " partitions")
-    ZkUtils.createEphemeralPathExpectConflict(zkClient, brokerTopicPath, numParts.toString)
-    info("End registering broker topic " + brokerTopicPath)
-  }
-
   /**
    *  When we get a SessionExpired event, we lost all ephemeral nodes and zkclient has reestablished a
    *  connection for us. We need to re-register this broker in the broker registry.
@@ -87,11 +72,6 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Loggin
     def handleNewSession() {
       info("re-registering broker info in ZK for broker " + config.brokerId)
       registerBrokerInZk()
-      lock synchronized {
-        info("re-registering broker topics in ZK for broker " + config.brokerId)
-        for (topic <- topics)
-          registerTopicInZkInternal(topic)
-      }
       info("done re-registering broker")
     }
   }

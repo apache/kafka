@@ -17,25 +17,25 @@
 
 package kafka.integration
 
-import java.io.File
 import java.nio.ByteBuffer
-import java.util.Properties
 import junit.framework.Assert._
-import kafka.api.{OffsetDetail, FetchRequest, FetchRequestBuilder, ProducerRequest}
+import kafka.api.{OffsetDetail, FetchRequest, FetchRequestBuilder}
 import kafka.common.{FetchRequestFormatException, OffsetOutOfRangeException, InvalidPartitionException}
-import kafka.message.{DefaultCompressionCodec, NoCompressionCodec, Message, ByteBufferMessageSet}
-import kafka.producer.{ProducerData, Producer, ProducerConfig}
-import kafka.serializer.StringDecoder
 import kafka.server.{KafkaRequestHandler, KafkaConfig}
-import kafka.utils.TestUtils
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
+import java.util.Properties
+import kafka.producer.{ProducerData, Producer, ProducerConfig}
+import kafka.serializer.StringDecoder
+import kafka.message.Message
+import java.io.File
+import kafka.utils.{TestZKUtils, TestUtils}
 import scala.collection._
 
 /**
  * End to end tests of the primitive apis against a local server
  */
-class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with KafkaServerTestHarness {
+class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness {
   
   val port = TestUtils.choosePort
   val props = TestUtils.createBrokerConfig(0, port)
@@ -44,6 +44,20 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   }
   val configs = List(config)
   val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
+
+//<<<<<<< .mine
+  override def setUp() {
+    super.setUp
+    // temporarily set request handler logger to a higher level
+    requestHandlerLogger.setLevel(Level.FATAL)
+  }
+
+  override def tearDown() {
+    // restore set request handler logger to a higher level
+    requestHandlerLogger.setLevel(Level.ERROR)
+
+    super.tearDown
+  }
 
   def testFetchRequestCanProperlySerialize() {
     val request = new FetchRequestBuilder()
@@ -83,7 +97,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val topic = "test-topic"
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("broker.list", "0:localhost:" + port)
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     val config = new ProducerConfig(props)
 
     val stringProducer1 = new Producer[String, String](config)
@@ -111,7 +125,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val topic = "test-topic"
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("broker.list", "0:localhost:" + port)
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     props.put("compression", "true")
     val config = new ProducerConfig(props)
 
@@ -133,14 +147,13 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
     {
-      val messages = new mutable.HashMap[String, ByteBufferMessageSet]
+      val messages = new mutable.HashMap[String, Seq[Message]]
       val builder = new FetchRequestBuilder()
       for( (topic, partition) <- topics) {
-        val set = new ByteBufferMessageSet(NoCompressionCodec,
-                                           new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-        messages += topic -> set
-        producer.send(topic, set)
-        set.getBuffer.rewind
+        val messageList = List(new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
+        val producerData = new ProducerData[String, Message](topic, topic, messageList)
+        messages += topic -> messageList
+        producer.send(producerData)
         builder.addFetch(topic, partition, 0, 10000)
       }
 
@@ -150,7 +163,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       val response = consumer.fetch(request)
       for( (topic, partition) <- topics) {
         val fetched = response.messageSet(topic, partition)
-        TestUtils.checkEquals(messages(topic).iterator, fetched.iterator)
+        TestUtils.checkEquals(messages(topic).iterator, fetched.map(messageAndOffset => messageAndOffset.message).iterator)
       }
     }
 
@@ -172,7 +185,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       } catch {
         case e: OffsetOutOfRangeException => "this is good"
       }
-    }    
+    }
 
     {
       // send some invalid partitions
@@ -199,14 +212,13 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
     {
-      val messages = new mutable.HashMap[String, ByteBufferMessageSet]
+      val messages = new mutable.HashMap[String, Seq[Message]]
       val builder = new FetchRequestBuilder()
       for( (topic, partition) <- topics) {
-        val set = new ByteBufferMessageSet(DefaultCompressionCodec,
-                                           new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-        messages += topic -> set
-        producer.send(topic, set)
-        set.getBuffer.rewind
+        val messageList = List(new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
+        val producerData = new ProducerData[String, Message](topic, topic, messageList)
+        messages += topic -> messageList
+        producer.send(producerData)
         builder.addFetch(topic, partition, 0, 10000)
       }
 
@@ -216,7 +228,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       val response = consumer.fetch(request)
       for( (topic, partition) <- topics) {
         val fetched = response.messageSet(topic, partition)
-        TestUtils.checkEquals(messages(topic).iterator, fetched.iterator)
+        TestUtils.checkEquals(messages(topic).iterator, fetched.map(messageAndOffset => messageAndOffset.message).iterator)
       }
     }
 
@@ -264,48 +276,42 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   def testMultiProduce() {
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
-    val messages = new mutable.HashMap[String, ByteBufferMessageSet]
+    val messages = new mutable.HashMap[String, Seq[Message]]
     val builder = new FetchRequestBuilder()
-    var produceList: List[ProducerRequest] = Nil
+    var produceList: List[ProducerData[String, Message]] = Nil
     for( (topic, partition) <- topics) {
-      val set = new ByteBufferMessageSet(NoCompressionCodec,
-                                         new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-      messages += topic -> set
-      produceList ::= new ProducerRequest(topic, 0, set)
+      val messageList = List(new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
+      val producerData = new ProducerData[String, Message](topic, topic, messageList)
+      messages += topic -> messageList
+      producer.send(producerData)
       builder.addFetch(topic, partition, 0, 10000)
     }
-    producer.multiSend(produceList.toArray)
+    producer.send(produceList: _*)
 
-    for (messageSet <- messages.values)
-      messageSet.getBuffer.rewind
-      
     // wait a bit for produced message to be available
     Thread.sleep(200)
     val request = builder.build()
     val response = consumer.fetch(request)
     for( (topic, partition) <- topics) {
       val fetched = response.messageSet(topic, partition)
-      TestUtils.checkEquals(messages(topic).iterator, fetched.iterator)
+      TestUtils.checkEquals(messages(topic).iterator, fetched.map(messageAndOffset => messageAndOffset.message).iterator)
     }
   }
 
   def testMultiProduceWithCompression() {
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
-    val messages = new mutable.HashMap[String, ByteBufferMessageSet]
+    val messages = new mutable.HashMap[String, Seq[Message]]
     val builder = new FetchRequestBuilder()
-    var produceList: List[ProducerRequest] = Nil
+    var produceList: List[ProducerData[String, Message]] = Nil
     for( (topic, partition) <- topics) {
-      val set = new ByteBufferMessageSet(DefaultCompressionCodec,
-                                         new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-      messages += topic -> set
-      produceList ::= new ProducerRequest(topic, 0, set)
+      val messageList = List(new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
+      val producerData = new ProducerData[String, Message](topic, topic, messageList)
+      messages += topic -> messageList
+      producer.send(producerData)
       builder.addFetch(topic, partition, 0, 10000)
     }
-    producer.multiSend(produceList.toArray)
-
-    for (messageSet <- messages.values)
-      messageSet.getBuffer.rewind
+    producer.send(produceList: _*)
 
     // wait a bit for produced message to be available
     Thread.sleep(200)
@@ -313,7 +319,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val response = consumer.fetch(request)
     for( (topic, partition) <- topics) {
       val fetched = response.messageSet(topic, 0)
-      TestUtils.checkEquals(messages(topic).iterator, fetched.iterator)
+      TestUtils.checkEquals(messages(topic).iterator, fetched.map(messageAndOffset => messageAndOffset.message).iterator)
     }
   }
 

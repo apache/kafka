@@ -35,7 +35,7 @@ object ZkUtils extends Logging {
   }
 
   def getTopicPartitionsPath(topic: String): String ={
-    getTopicPath(topic) + "/" + "partitions"
+    getTopicPath(topic) + "/partitions"
   }
 
   def getTopicPartitionPath(topic: String, partitionId: String): String ={
@@ -62,6 +62,38 @@ object ZkUtils extends Logging {
       ZkUtils.getChildren(zkClient, ZkUtils.BrokerIdsPath).sorted
   }
 
+  def getAllBrokersInCluster(zkClient: ZkClient): Seq[Broker] = {
+    val brokerIds = ZkUtils.getChildren(zkClient, ZkUtils.BrokerIdsPath).sorted
+    getBrokerInfoFromIds(zkClient, brokerIds.map(b => b.toInt))
+  }
+
+  def getLeaderForPartition(zkClient: ZkClient, topic: String, partition: Int): Option[Int] = {
+    // TODO: When leader election is implemented, change this method to return the leader as follows
+    // until then, assume the first replica as the leader
+//    val leader = readDataMaybeNull(zkClient, getTopicPartitionLeaderPath(topic, partition.toString))
+    val replicaListString = readDataMaybeNull(zkClient, getTopicPartitionReplicasPath(topic, partition.toString))
+    val replicas = Utils.getCSVList(replicaListString)
+    replicas.size match {
+      case 0 => None
+      case _ => Some(replicas.head.toInt)
+    }
+  }
+
+  def getReplicasForPartition(zkClient: ZkClient, topic: String, partition: Int): Seq[String] = {
+    val replicaListString = readDataMaybeNull(zkClient, getTopicPartitionReplicasPath(topic, partition.toString))
+    if(replicaListString == null)
+      Seq.empty[String]
+    else {
+      Utils.getCSVList(replicaListString)
+    }
+  }
+
+  def isPartitionOnBroker(zkClient: ZkClient, topic: String, partition: Int, brokerId: Int): Boolean = {
+    val replicas = getReplicasForPartition(zkClient, topic, partition)
+    debug("The list of replicas for topic %s, partition %d is %s".format(topic, partition, replicas))
+    replicas.contains(brokerId.toString)
+  }
+
   def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, creator: String, port: Int) {
     val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
     val broker = new Broker(id, creator, host, port)
@@ -75,6 +107,11 @@ object ZkUtils extends Logging {
                                    "timeout so it appears to be re-registering.")
     }
     info("Registering broker " + brokerIdPath + " succeeded with " + broker)
+  }
+
+  def getConsumerPartitionOwnerPath(group: String, topic: String, partition: String): String = {
+    val topicDirs = new ZKGroupTopicDirs(group, topic)
+    topicDirs.consumerOwnerDir + "/" + partition
   }
 
   /**
@@ -269,28 +306,15 @@ object ZkUtils extends Logging {
     cluster
   }
 
-  def getPartitionsForTopics(zkClient: ZkClient, topics: Iterator[String]): mutable.Map[String, List[String]] = {
-    val ret = new mutable.HashMap[String, List[String]]()
-    for (topic <- topics) {
-      var partList: List[String] = Nil
-      val brokers = getChildrenParentMayNotExist(zkClient, BrokerTopicsPath + "/" + topic)
-      for (broker <- brokers) {
-        val nParts = readData(zkClient, BrokerTopicsPath + "/" + topic + "/" + broker).toInt
-        for (part <- 0 until nParts)
-          partList ::= broker + "-" + part
-      }
-      partList = partList.sortWith((s,t) => s < t)
-      ret += (topic -> partList)
+  def getPartitionsForTopics(zkClient: ZkClient, topics: Iterator[String]): mutable.Map[String, Seq[String]] = {
+    val ret = new mutable.HashMap[String, Seq[String]]()
+    topics.foreach { topic =>
+      // get the partitions that exist for topic
+      val partitions = getChildrenParentMayNotExist(zkClient, getTopicPartitionsPath(topic))
+      debug("children of /brokers/topics/%s are %s".format(topic, partitions))
+      ret += (topic -> partitions.sortWith((s,t) => s < t))
     }
     ret
-  }
-
-  def setupPartition(zkClient : ZkClient, brokerId: Int, host: String, port: Int, topic: String, nParts: Int) {
-    val brokerIdPath = BrokerIdsPath + "/" + brokerId
-    val broker = new Broker(brokerId, brokerId.toString, host, port)
-    createEphemeralPathExpectConflict(zkClient, brokerIdPath, broker.getZKString)
-    val brokerPartTopicPath = BrokerTopicsPath + "/" + topic + "/" + brokerId
-    createEphemeralPathExpectConflict(zkClient, brokerPartTopicPath, nParts.toString)    
   }
 
   def deletePartition(zkClient : ZkClient, brokerId: Int, topic: String) {

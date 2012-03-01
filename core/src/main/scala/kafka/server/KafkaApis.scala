@@ -173,6 +173,7 @@ class KafkaApis(val logManager: LogManager) extends Logging {
           }
       }
     }
+    info("Sending response for topic metadata request")
     Some(new TopicMetadataSend(topicsMetadata))
   }
 }

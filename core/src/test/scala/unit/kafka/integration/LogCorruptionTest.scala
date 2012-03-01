@@ -24,10 +24,11 @@ import kafka.api.FetchRequestBuilder
 import kafka.common.InvalidMessageSizeException
 import kafka.consumer.{ZookeeperConsumerConnector, ConsumerConfig}
 import kafka.integration.{KafkaServerTestHarness, ProducerConsumerTestHarness}
-import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
+import kafka.message.Message
 import kafka.utils.{Utils, TestUtils}
 import org.scalatest.junit.JUnit3Suite
 import org.apache.log4j.{Logger, Level}
+import kafka.producer.ProducerData
 
 class LogCorruptionTest extends JUnit3Suite with ProducerConsumerTestHarness with KafkaServerTestHarness {
   val port = TestUtils.choosePort
@@ -47,8 +48,9 @@ class LogCorruptionTest extends JUnit3Suite with ProducerConsumerTestHarness wit
     fetcherLogger.setLevel(Level.FATAL)
 
     // send some messages
-    val sent1 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message("hello".getBytes()))
-    producer.send(topic, sent1)
+    val producerData = new ProducerData[String, Message](topic, topic, List(new Message("hello".getBytes())))
+
+    producer.send(producerData)
     Thread.sleep(200)
 
     // corrupt the file on disk

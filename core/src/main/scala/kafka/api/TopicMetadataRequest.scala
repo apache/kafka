@@ -72,6 +72,7 @@ object TopicMetadataRequest {
   def serializeTopicMetadata(topicMetadata: Seq[TopicMetadata]): ByteBuffer = {
     val size = topicMetadata.foldLeft(4 /* num topics */)(_ + _.sizeInBytes)
     val buffer = ByteBuffer.allocate(size)
+    debug("Allocating buffer of size %d for topic metadata response".format(size))
     /* number of topics */
     buffer.putInt(topicMetadata.size)
     /* topic partition_metadata */
@@ -122,13 +123,16 @@ case class TopicMetadataRequest(val topics: Seq[String],
 }
 
 class TopicMetadataSend(topicsMetadata: Seq[TopicMetadata]) extends Send {
-  private var size: Int = topicsMetadata.foldLeft(0)(_ + _.sizeInBytes)
+  private var size: Int = topicsMetadata.foldLeft(4)(_ + _.sizeInBytes)
   private val header = ByteBuffer.allocate(6)
-  val metadata = TopicMetadataRequest.serializeTopicMetadata(topicsMetadata)
   header.putInt(size + 2)
   header.putShort(ErrorMapping.NoError.asInstanceOf[Short])
   header.rewind()
 
+  val metadata = TopicMetadataRequest.serializeTopicMetadata(topicsMetadata)
+  metadata.rewind()
+
+  trace("Wrote size %d in header".format(size + 2))
   var complete: Boolean = false
 
   def writeTo(channel: GatheringByteChannel): Int = {
@@ -136,8 +140,12 @@ class TopicMetadataSend(topicsMetadata: Seq[TopicMetadata]) extends Send {
     var written = 0
     if(header.hasRemaining)
       written += channel.write(header)
+    trace("Wrote %d bytes for header".format(written))
+
     if(!header.hasRemaining && metadata.hasRemaining)
       written += channel.write(metadata)
+
+    trace("Wrote %d bytes for header and metadata".format(written))
 
     if(!metadata.hasRemaining)
       complete = true

@@ -22,15 +22,14 @@ import kafka.common.InvalidConfigException
 import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
 import kafka.serializer.Encoder
 import java.util.concurrent.atomic.{AtomicLong, AtomicBoolean}
+import org.I0Itec.zkclient.ZkClient
 
 class Producer[K,V](config: ProducerConfig,
                     private val eventHandler: EventHandler[K,V]) // for testing only
 extends Logging {
   private val hasShutdown = new AtomicBoolean(false)
-  if(!Utils.propertyExists(config.zkConnect) && !Utils.propertyExists(config.brokerList))
-    throw new InvalidConfigException("At least one of zk.connect or broker.list must be specified")
-  if (Utils.propertyExists(config.zkConnect) && Utils.propertyExists(config.brokerList))
-    throw new InvalidConfigException("Only one of zk.connect and broker.list should be provided")
+  if(!Utils.propertyExists(config.zkConnect))
+    throw new InvalidConfigException("zk.connect property must be specified in the producer")
   if (config.batchSize > config.queueSize)
     throw new InvalidConfigException("Batch size can't be larger than queue size.")
 
@@ -52,15 +51,16 @@ extends Logging {
    * This constructor can be used when all config parameters will be specified through the
    * ProducerConfig object
    * @param config Producer Configuration object
+   * @param zkClient The ZkClient instance use by the producer to connect to zookeeper. used ONLY for testing
    */
-  def this(config: ProducerConfig) =
+  def this(config: ProducerConfig, zkClient: ZkClient = null) =
     this(config,
          new DefaultEventHandler[K,V](config,
                                       Utils.getObject[Partitioner[K]](config.partitionerClass),
                                       Utils.getObject[Encoder[V]](config.serializerClass),
-                                      new ProducerPool(config),
-                                      populateProducerPool= true,
-                                      brokerPartitionInfo= null))
+                                      new ProducerPool(config, if(zkClient == null)
+                                      new ZkClient(config.zkConnect, config.zkSessionTimeoutMs,
+                                        config.zkConnectionTimeoutMs, ZKStringSerializer) else zkClient)))
 
   /**
    * Sends the data, partitioned by key to the topic using either the

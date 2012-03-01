@@ -19,6 +19,7 @@ package kafka.utils
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
+import java.lang.IllegalStateException
 
 /**
  * A scheduler for running jobs in the background
@@ -26,25 +27,41 @@ import java.util.concurrent.atomic._
  */
 class KafkaScheduler(val numThreads: Int, val baseThreadName: String, isDaemon: Boolean) extends Logging {
   private val threadId = new AtomicLong(0)
-  private val executor = new ScheduledThreadPoolExecutor(numThreads, new ThreadFactory() {
-    def newThread(runnable: Runnable): Thread = {
-      val t = new Thread(runnable, baseThreadName + threadId.getAndIncrement)
-      t.setDaemon(isDaemon)
-      t
-    }
-  })
-  executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false)
-  executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false)
+  private var executor:ScheduledThreadPoolExecutor = null
+  startUp
 
-  def scheduleWithRate(fun: () => Unit, delayMs: Long, periodMs: Long) =
+  def startUp = {
+    executor = new ScheduledThreadPoolExecutor(numThreads, new ThreadFactory() {
+      def newThread(runnable: Runnable): Thread = {
+        val t = new Thread(runnable, baseThreadName + threadId.getAndIncrement)
+        t.setDaemon(isDaemon)
+        t
+      }
+    })
+    executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false)
+    executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false)
+  }
+
+  def hasShutdown: Boolean = executor.isShutdown
+
+  private def checkIfExecutorHasStarted = {
+    if(executor == null)
+      throw new IllegalStateException("Kafka scheduler has not been started")
+  }
+
+  def scheduleWithRate(fun: () => Unit, delayMs: Long, periodMs: Long) = {
+    checkIfExecutorHasStarted
     executor.scheduleAtFixedRate(Utils.loggedRunnable(fun), delayMs, periodMs, TimeUnit.MILLISECONDS)
+  }
 
   def shutdownNow() {
+    checkIfExecutorHasStarted
     executor.shutdownNow()
     info("force shutdown scheduler " + baseThreadName)
   }
 
   def shutdown() {
+    checkIfExecutorHasStarted
     executor.shutdown()
     info("shutdown scheduler " + baseThreadName)
   }

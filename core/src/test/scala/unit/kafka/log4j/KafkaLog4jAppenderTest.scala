@@ -26,18 +26,17 @@ import kafka.message.Message
 import kafka.producer.async.MissingConfigException
 import kafka.serializer.Encoder
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.{TestUtils, TestZKUtils, Utils, Logging}
 import kafka.zk.{EmbeddedZookeeper, ZooKeeperTestHarness}
 import org.apache.log4j.spi.LoggingEvent
 import org.apache.log4j.{PropertyConfigurator, Logger}
 import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnit3Suite
+import kafka.utils._
 
 class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
 
   var logDirZk: File = null
   var logDirBl: File = null
-  //  var topicLogDir: File = null
   var serverBl: KafkaServer = null
   var serverZk: KafkaServer = null
 
@@ -63,7 +62,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     logDirZk = new File(logDirZkPath)
     serverZk = TestUtils.createServer(new KafkaConfig(propsZk));
 
-    val propsBl: Properties = createBrokerConfig(brokerBl, portBl)
+    val propsBl: Properties = TestUtils.createBrokerConfig(brokerBl, portBl)
     val logDirBlPath = propsBl.getProperty("log.dir")
     logDirBl = new File(logDirBlPath)
     serverBl = TestUtils.createServer(new KafkaConfig(propsBl))
@@ -85,8 +84,6 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     Utils.rm(logDirBl)
 
     Thread.sleep(500)
-//    zkServer.shutdown
-//    Thread.sleep(500)
     super.tearDown()
   }
 
@@ -132,7 +129,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
     props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
     props.put("log4j.appender.KAFKA.SerializerClass", "kafka.log4j.AppenderStringEncoder")
-    props.put("log4j.appender.KAFKA.BrokerList", "0:localhost:"+portBl.toString)
+    props.put("log4j.appender.KAFKA.ZkConnect", TestZKUtils.zookeeperConnect)
     props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
 
     // topic missing
@@ -148,7 +145,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
     props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
     props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
-    props.put("log4j.appender.KAFKA.BrokerList", "0:localhost:"+portBl.toString)
+    props.put("log4j.appender.KAFKA.ZkConnect", TestZKUtils.zookeeperConnect)
     props.put("log4j.appender.KAFKA.Topic", "test-topic")
     props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
 
@@ -158,27 +155,6 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     }catch {
       case e: MissingConfigException => fail("should default to kafka.serializer.StringEncoder")
     }
-  }
-
-  @Test
-  def testBrokerListLog4jAppends() {
-    PropertyConfigurator.configure(getLog4jConfigWithBrokerList)
-
-    for(i <- 1 to 5)
-      info("test")
-
-    Thread.sleep(2500)
-
-    var offset = 0L
-    val response = simpleConsumerBl.fetch(new FetchRequestBuilder().addFetch("test-topic", 0, offset, 1024*1024).build())
-    val fetchedMessage = response.messageSet("test-topic", 0)
-    var count = 0
-    for(message <- fetchedMessage) {
-      count = count + 1
-      offset += message.offset
-    }
-
-    assertEquals(5, count)
   }
 
   @Test
@@ -208,18 +184,6 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     assertEquals(5, count)
   }
 
-  private def getLog4jConfigWithBrokerList: Properties = {
-    var props = new Properties()
-    props.put("log4j.rootLogger", "INFO")
-    props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
-    props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
-    props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
-    props.put("log4j.appender.KAFKA.BrokerList", "0:localhost:"+portBl.toString)
-    props.put("log4j.appender.KAFKA.Topic", "test-topic")
-    props.put("log4j.logger.kafka.log4j", "INFO,KAFKA")
-    props
-  }
-
   private def getLog4jConfigWithZkConnect: Properties = {
     var props = new Properties()
     props.put("log4j.rootLogger", "INFO")
@@ -229,21 +193,6 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     props.put("log4j.appender.KAFKA.ZkConnect", TestZKUtils.zookeeperConnect)
     props.put("log4j.appender.KAFKA.Topic", "test-topic")
     props.put("log4j.logger.kafka.log4j", "INFO,KAFKA")
-    props
-  }
-
-  private def createBrokerConfig(nodeId: Int, port: Int): Properties = {
-    val props = new Properties
-    props.put("brokerid", nodeId.toString)
-    props.put("port", port.toString)
-    props.put("log.dir", getLogDir.getAbsolutePath)
-    props.put("log.flush.interval", "1")
-    props.put("enable.zookeeper", "false")
-    props.put("num.partitions", "1")
-    props.put("log.retention.hours", "10")
-    props.put("log.cleanup.interval.mins", "5")
-    props.put("log.file.size", "1000")
-    props.put("zk.connect", zkConnect.toString)
     props
   }
 

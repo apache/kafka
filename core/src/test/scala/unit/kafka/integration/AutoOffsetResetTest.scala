@@ -18,7 +18,6 @@
 package kafka.integration
 
 import junit.framework.Assert._
-import kafka.zk.ZooKeeperTestHarness
 import java.nio.channels.ClosedByInterruptException
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.utils.{ZKGroupTopicDirs, Logging}
@@ -27,15 +26,16 @@ import kafka.server._
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
 import kafka.utils.TestUtils
+import kafka.message.Message
+import kafka.producer.{Producer, ProducerData}
 
-class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
+class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
   val topic = "test_topic"
   val group = "default_group"
   val testConsumer = "consumer"
   val brokerPort = 9892
-  val kafkaConfig = new KafkaConfig(TestUtils.createBrokerConfig(0, brokerPort))
-  var kafkaServer : KafkaServer = null
+  val configs = List(new KafkaConfig(TestUtils.createBrokerConfig(0, brokerPort)))
   val numMessages = 10
   val largeOffset = 10000
   val smallOffset = -1
@@ -44,7 +44,6 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Log
 
   override def setUp() {
     super.setUp()
-    kafkaServer = TestUtils.createServer(kafkaConfig)
 
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)
@@ -53,15 +52,14 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Log
   override def tearDown() {
     // restore set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.ERROR)
-    kafkaServer.shutdown
     super.tearDown
   }
   
   def testEarliestOffsetResetForward() = {
-    val producer = TestUtils.createProducer("localhost", brokerPort)
+    val producer: Producer[String, Message] = TestUtils.createProducer(zkConnect)
 
     for(i <- 0 until numMessages) {
-      producer.send(topic, TestUtils.singleMessageSet("test".getBytes()))
+      producer.send(new ProducerData[String, Message](topic, topic, new Message("test".getBytes())))
     }
 
     // update offset in zookeeper for consumer to jump "forward" in time
@@ -71,7 +69,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Log
     consumerProps.put("consumer.timeout.ms", "2000")
     val consumerConfig = new ConsumerConfig(consumerProps)
     
-    TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0-0", largeOffset)
+    TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0", largeOffset)
     info("Updated consumer offset to " + largeOffset)
 
     Thread.sleep(500)
@@ -112,10 +110,10 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Log
   }
 
   def testEarliestOffsetResetBackward() = {
-    val producer = TestUtils.createProducer("localhost", brokerPort)
+    val producer: Producer[String, Message] = TestUtils.createProducer(zkConnect)
 
     for(i <- 0 until numMessages) {
-      producer.send(topic, TestUtils.singleMessageSet("test".getBytes()))
+      producer.send(new ProducerData[String, Message](topic, topic, new Message("test".getBytes())))
     }
 
     // update offset in zookeeper for consumer to jump "forward" in time
@@ -125,7 +123,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Log
     consumerProps.put("consumer.timeout.ms", "2000")
     val consumerConfig = new ConsumerConfig(consumerProps)
 
-    TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0-0", smallOffset)
+    TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0", smallOffset)
     info("Updated consumer offset to " + smallOffset)
 
 
@@ -145,7 +143,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Log
               }
             }
             catch {
-              case _: InterruptedException => 
+              case _: InterruptedException =>
               case _: ClosedByInterruptException =>
               case e => throw e
             }
@@ -159,16 +157,15 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Log
 
     threadList(0).join(2000)
 
-    info("Asserting...")
     assertEquals(numMessages, nMessages.get)
     consumerConnector.shutdown
   }
 
   def testLatestOffsetResetForward() = {
-    val producer = TestUtils.createProducer("localhost", brokerPort)
+    val producer: Producer[String, Message] = TestUtils.createProducer(zkConnect)
 
     for(i <- 0 until numMessages) {
-      producer.send(topic, TestUtils.singleMessageSet("test".getBytes()))
+      producer.send(new ProducerData[String, Message](topic, topic, new Message("test".getBytes())))
     }
 
     // update offset in zookeeper for consumer to jump "forward" in time
@@ -178,7 +175,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Log
     consumerProps.put("consumer.timeout.ms", "2000")
     val consumerConfig = new ConsumerConfig(consumerProps)
 
-    TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0-0", largeOffset)
+    TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0", largeOffset)
     info("Updated consumer offset to " + largeOffset)
 
 
@@ -198,7 +195,7 @@ class AutoOffsetResetTest extends JUnit3Suite with ZooKeeperTestHarness with Log
               }
             }
             catch {
-              case _: InterruptedException => 
+              case _: InterruptedException =>
               case _: ClosedByInterruptException =>
               case e => throw e
             }

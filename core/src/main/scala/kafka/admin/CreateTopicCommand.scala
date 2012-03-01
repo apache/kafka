@@ -18,10 +18,10 @@
 package kafka.admin
 
 import joptsimple.OptionParser
-import kafka.utils.{Utils, ZKStringSerializer, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
+import kafka.utils.{Logging, Utils, ZKStringSerializer, ZkUtils}
 
-object CreateTopicCommand {
+object CreateTopicCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser
@@ -91,6 +91,7 @@ object CreateTopicCommand {
       replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, numPartitions, replicationFactor)
     else
       replicaAssignment = getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet)
+    debug("Replica assignment list for %s is %s".format(topic, replicaAssignment))
     AdminUtils.createReplicaAssignmentPathInZK(topic, replicaAssignment, zkClient)
   }
 
@@ -104,8 +105,8 @@ object CreateTopicCommand {
       if (brokerList.size != brokerList.toSet.size)
         throw new AdministrationException("duplicate brokers in replica assignment: " + brokerList)
       if (!brokerList.toSet.subsetOf(availableBrokerList))
-        throw new AdministrationException("some specified brokers not available. specified brokers: " + brokerList +
-                "available broker:" + availableBrokerList)
+        throw new AdministrationException("some specified brokers not available. specified brokers: " + brokerList.toString +
+                "available broker:" + availableBrokerList.toString)
       ret(i) = brokerList.toList
       if (ret(i).size != ret(0).size)
         throw new AdministrationException("partition " + i + " has different replication factor: " + brokerList)

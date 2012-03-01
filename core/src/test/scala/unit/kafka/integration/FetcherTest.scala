@@ -28,6 +28,7 @@ import kafka.server._
 import org.scalatest.junit.JUnit3Suite
 import kafka.integration.KafkaServerTestHarness
 import kafka.utils.TestUtils
+import kafka.producer.{ProducerData, Producer}
 
 class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
 
@@ -35,7 +36,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
   val configs = 
     for(props <- TestUtils.createBrokerConfigs(numNodes))
       yield new KafkaConfig(props)
-  val messages = new mutable.HashMap[Int, ByteBufferMessageSet]
+  val messages = new mutable.HashMap[Int, Seq[Message]]
   val topic = "topic"
   val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, c.brokerId.toString, "localhost", c.port)))
   val shutdown = ZookeeperConsumerConnector.shutdownCommand
@@ -79,11 +80,10 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
   def sendMessages(messagesPerNode: Int): Int = {
     var count = 0
     for(conf <- configs) {
-      val producer = TestUtils.createProducer("localhost", conf.port)
+      val producer: Producer[String, Message] = TestUtils.createProducer(zkConnect)
       val ms = 0.until(messagesPerNode).map(x => new Message((conf.brokerId * 5 + x).toString.getBytes)).toArray
-      val mSet = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = ms: _*)
-      messages += conf.brokerId -> mSet
-      producer.send(topic, mSet)
+      messages += conf.brokerId -> ms
+      producer.send(new ProducerData[String, Message](topic, topic, ms))
       producer.close()
       count += ms.size
     }

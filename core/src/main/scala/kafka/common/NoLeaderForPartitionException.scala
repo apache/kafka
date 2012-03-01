@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -15,16 +15,11 @@
  * limitations under the License.
  */
 
-package kafka.cluster
+package kafka.common
 
-case class Partition(val brokerId: Int, val partId: Int, val topic: String = "") extends Ordered[Partition] {
-
-  def name = partId
-
-  def compare(that: Partition) =
-    if (this.topic == that.topic)
-      this.partId - that.partId
-    else
-      this.topic.compareTo(that.topic)
-
+/**
+ * Thrown when a request is made for partition, but no leader exists for that partition
+ */
+class NoLeaderForPartitionException(message: String) extends RuntimeException(message) {
+  def this() = this(null)
 }

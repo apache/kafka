@@ -22,15 +22,19 @@ import junit.framework.Assert._
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
 import scala.collection._
-import kafka.utils.{Utils, Logging}
-import kafka.utils.{TestZKUtils, TestUtils}
 import org.scalatest.junit.JUnit3Suite
 import org.apache.log4j.{Level, Logger}
 import kafka.message._
 import kafka.serializer.StringDecoder
+import kafka.admin.CreateTopicCommand
+import org.I0Itec.zkclient.ZkClient
+import kafka.utils._
+import kafka.producer.{ProducerConfig, ProducerData, Producer}
+import java.util.{Collections, Properties}
 
 class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
+  var dirs : ZKGroupTopicDirs = null
   val zookeeperConnect = TestZKUtils.zookeeperConnect
   val numNodes = 2
   val numParts = 2
@@ -48,11 +52,14 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   val consumer3 = "consumer3"
   val nMessages = 2
 
+  override def setUp() {
+    super.setUp()
+    dirs = new ZKGroupTopicDirs(group, topic)
+  }
+
   def testBasic() {
     val requestHandlerLogger = Logger.getLogger(classOf[KafkaApis])
     requestHandlerLogger.setLevel(Level.FATAL)
-
-    var actualMessages: List[Message] = Nil
 
     // test consumer timeout logic
     val consumerConfig0 = new ConsumerConfig(
@@ -60,13 +67,13 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
       override val consumerTimeoutMs = 200
     }
     val zkConsumerConnector0 = new ZookeeperConsumerConnector(consumerConfig0, true)
-    val topicMessageStreams0 = zkConsumerConnector0.createMessageStreams(Predef.Map(topic -> numNodes*numParts/2))
+    val topicMessageStreams0 = zkConsumerConnector0.createMessageStreams(Predef.Map(topic -> 1))
 
     // no messages to consume, we should hit timeout;
     // also the iterator should support re-entrant, so loop it twice
-    for (i <- 0 until  2) {
+    for (i <- 0 until 2) {
       try {
-        getMessagesSortedByChecksum(nMessages*2, topicMessageStreams0)
+        getMessages(nMessages*2, topicMessageStreams0)
         fail("should get an exception")
       }
       catch {
@@ -78,14 +85,26 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     zkConsumerConnector0.shutdown
 
     // send some messages to each broker
-    val sentMessages1 = sendMessages(nMessages, "batch1")
+    val sentMessages1_1 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages)
+    val sentMessages1_2 = sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages)
+    val sentMessages1 = (sentMessages1_1 ++ sentMessages1_2).sortWith((s,t) => s.checksum < t.checksum)
+
     // create a consumer
     val consumerConfig1 = new ConsumerConfig(
       TestUtils.createConsumerProperties(zkConnect, group, consumer1))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
-    val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Predef.Map(topic -> numNodes*numParts/2))
-    val receivedMessages1 = getMessagesSortedByChecksum(nMessages*2, topicMessageStreams1)
+    val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Predef.Map(topic -> 1))
+    val receivedMessages1 = getMessages(nMessages*2, topicMessageStreams1)
+    assertEquals(sentMessages1.size, receivedMessages1.size)
     assertEquals(sentMessages1, receivedMessages1)
+
+    // also check partition ownership
+    val actual_1 = getZKChildrenValues(dirs.consumerOwnerDir)
+    val expected_1 = List( ("0", "group1_consumer1-0"),
+                           ("1", "group1_consumer1-0"))
+//   assertEquals(expected_1, actual_1)
+    assertEquals(expected_1, actual_1)
+
     // commit consumed offsets
     zkConsumerConnector1.commitOffsets
 
@@ -93,14 +112,24 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val consumerConfig2 = new ConsumerConfig(
       TestUtils.createConsumerProperties(zkConnect, group, consumer2))
     val zkConsumerConnector2 = new ZookeeperConsumerConnector(consumerConfig2, true)
-    val topicMessageStreams2 = zkConsumerConnector2.createMessageStreams(Predef.Map(topic -> numNodes*numParts/2))
+    val topicMessageStreams2 = zkConsumerConnector2.createMessageStreams(Predef.Map(topic -> 1))
     // send some messages to each broker
-    val sentMessages2 = sendMessages(nMessages, "batch2")
+    val sentMessages2_1 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages)
+    val sentMessages2_2 = sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages)
+    val sentMessages2 = (sentMessages2_1 ++ sentMessages2_2).sortWith((s,t) => s.checksum < t.checksum)
+
     Thread.sleep(200)
-    val receivedMessages2_1 = getMessagesSortedByChecksum(nMessages, topicMessageStreams1)
-    val receivedMessages2_2 = getMessagesSortedByChecksum(nMessages, topicMessageStreams2)
+
+    val receivedMessages2_1 = getMessages(nMessages, topicMessageStreams1)
+    val receivedMessages2_2 = getMessages(nMessages, topicMessageStreams2)
     val receivedMessages2 = (receivedMessages2_1 ::: receivedMessages2_2).sortWith((s,t) => s.checksum < t.checksum)
     assertEquals(sentMessages2, receivedMessages2)
+
+    // also check partition ownership
+    val actual_2 = getZKChildrenValues(dirs.consumerOwnerDir)
+    val expected_2 = List( ("0", "group1_consumer1-0"),
+                           ("1", "group1_consumer2-0"))
+   assertEquals(expected_2, actual_2)
 
     // create a consumer with empty map
     val consumerConfig3 = new ConsumerConfig(
@@ -109,12 +138,19 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val topicMessageStreams3 = zkConsumerConnector3.createMessageStreams(new mutable.HashMap[String, Int]())
     // send some messages to each broker
     Thread.sleep(200)
-    val sentMessages3 = sendMessages(nMessages, "batch3")
+    val sentMessages3_1 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages)
+    val sentMessages3_2 = sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages)
+    val sentMessages3 = (sentMessages3_1 ++ sentMessages3_2).sortWith((s,t) => s.checksum < t.checksum)
     Thread.sleep(200)
-    val receivedMessages3_1 = getMessagesSortedByChecksum(nMessages, topicMessageStreams1)
-    val receivedMessages3_2 = getMessagesSortedByChecksum(nMessages, topicMessageStreams2)
+    val receivedMessages3_1 = getMessages(nMessages, topicMessageStreams1)
+    val receivedMessages3_2 = getMessages(nMessages, topicMessageStreams2)
     val receivedMessages3 = (receivedMessages3_1 ::: receivedMessages3_2).sortWith((s,t) => s.checksum < t.checksum)
+    assertEquals(sentMessages3.size, receivedMessages3.size)
     assertEquals(sentMessages3, receivedMessages3)
+
+    // also check partition ownership
+    val actual_3 = getZKChildrenValues(dirs.consumerOwnerDir)
+   assertEquals(expected_2, actual_3)
 
     zkConsumerConnector1.shutdown
     zkConsumerConnector2.shutdown
@@ -127,47 +163,72 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
 
-    println("Sending messages for 1st consumer")
     // send some messages to each broker
-    val sentMessages1 = sendMessages(nMessages, "batch1", DefaultCompressionCodec)
+    val sentMessages1_1 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages, GZIPCompressionCodec)
+    val sentMessages1_2 = sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages, GZIPCompressionCodec)
+    val sentMessages1 = (sentMessages1_1 ++ sentMessages1_2).sortWith((s,t) => s.checksum < t.checksum)
+
     // create a consumer
     val consumerConfig1 = new ConsumerConfig(
       TestUtils.createConsumerProperties(zkConnect, group, consumer1))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
-    val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Predef.Map(topic -> numNodes*numParts/2))
-    val receivedMessages1 = getMessagesSortedByChecksum(nMessages*2, topicMessageStreams1)
+    val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Predef.Map(topic -> 1))
+    val receivedMessages1 = getMessages(nMessages*2, topicMessageStreams1)
+    assertEquals(sentMessages1.size, receivedMessages1.size)
     assertEquals(sentMessages1, receivedMessages1)
+
+    // also check partition ownership
+    val actual_1 = getZKChildrenValues(dirs.consumerOwnerDir)
+    val expected_1 = List( ("0", "group1_consumer1-0"),
+                           ("1", "group1_consumer1-0"))
+   assertEquals(expected_1, actual_1)
+
     // commit consumed offsets
     zkConsumerConnector1.commitOffsets
 
-    println("Sending more messages for 2nd consumer")
     // create a consumer
     val consumerConfig2 = new ConsumerConfig(
       TestUtils.createConsumerProperties(zkConnect, group, consumer2))
     val zkConsumerConnector2 = new ZookeeperConsumerConnector(consumerConfig2, true)
-    val topicMessageStreams2 = zkConsumerConnector2.createMessageStreams(Predef.Map(topic -> numNodes*numParts/2))
+    val topicMessageStreams2 = zkConsumerConnector2.createMessageStreams(Predef.Map(topic -> 1))
     // send some messages to each broker
-    val sentMessages2 = sendMessages(nMessages, "batch2", DefaultCompressionCodec)
+    val sentMessages2_1 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages, GZIPCompressionCodec)
+    val sentMessages2_2 = sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages, GZIPCompressionCodec)
+    val sentMessages2 = (sentMessages2_1 ++ sentMessages2_2).sortWith((s,t) => s.checksum < t.checksum)
+
     Thread.sleep(200)
-    val receivedMessages2_1 = getMessagesSortedByChecksum(nMessages, topicMessageStreams1)
-    val receivedMessages2_2 = getMessagesSortedByChecksum(nMessages, topicMessageStreams2)
+
+    val receivedMessages2_1 = getMessages(nMessages, topicMessageStreams1)
+    val receivedMessages2_2 = getMessages(nMessages, topicMessageStreams2)
     val receivedMessages2 = (receivedMessages2_1 ::: receivedMessages2_2).sortWith((s,t) => s.checksum < t.checksum)
     assertEquals(sentMessages2, receivedMessages2)
 
+    // also check partition ownership
+    val actual_2 = getZKChildrenValues(dirs.consumerOwnerDir)
+    val expected_2 = List( ("0", "group1_consumer1-0"),
+                           ("1", "group1_consumer2-0"))
+   assertEquals(expected_2, actual_2)
+
     // create a consumer with empty map
-    println("Sending more messages for 3rd consumer")
     val consumerConfig3 = new ConsumerConfig(
       TestUtils.createConsumerProperties(zkConnect, group, consumer3))
     val zkConsumerConnector3 = new ZookeeperConsumerConnector(consumerConfig3, true)
     val topicMessageStreams3 = zkConsumerConnector3.createMessageStreams(new mutable.HashMap[String, Int]())
     // send some messages to each broker
     Thread.sleep(200)
-    val sentMessages3 = sendMessages(nMessages, "batch3", DefaultCompressionCodec)
+    val sentMessages3_1 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages, GZIPCompressionCodec)
+    val sentMessages3_2 = sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages, GZIPCompressionCodec)
+    val sentMessages3 = (sentMessages3_1 ++ sentMessages3_2).sortWith((s,t) => s.checksum < t.checksum)
     Thread.sleep(200)
-    val receivedMessages3_1 = getMessagesSortedByChecksum(nMessages, topicMessageStreams1)
-    val receivedMessages3_2 = getMessagesSortedByChecksum(nMessages, topicMessageStreams2)
+    val receivedMessages3_1 = getMessages(nMessages, topicMessageStreams1)
+    val receivedMessages3_2 = getMessages(nMessages, topicMessageStreams2)
     val receivedMessages3 = (receivedMessages3_1 ::: receivedMessages3_2).sortWith((s,t) => s.checksum < t.checksum)
+    assertEquals(sentMessages3.size, receivedMessages3.size)
     assertEquals(sentMessages3, receivedMessages3)
+
+    // also check partition ownership
+    val actual_3 = getZKChildrenValues(dirs.consumerOwnerDir)
+   assertEquals(expected_2, actual_3)
 
     zkConsumerConnector1.shutdown
     zkConsumerConnector2.shutdown
@@ -187,7 +248,10 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     Thread.sleep(500)
 
     // send some messages to each broker
-    val sentMessages = sendMessages(configs.head, 200, "batch1", DefaultCompressionCodec)
+    val sentMessages1 = sendMessagesToBrokerPartition(configs.head, topic, 0, 200, DefaultCompressionCodec)
+    val sentMessages2 = sendMessagesToBrokerPartition(configs.last, topic, 1, 200, DefaultCompressionCodec)
+    val sentMessages = (sentMessages1 ++ sentMessages2).sortWith((s,t) => s.checksum < t.checksum)
+
     // test consumer timeout logic
     val consumerConfig0 = new ConsumerConfig(
       TestUtils.createConsumerProperties(zkConnect, group, consumer0)) {
@@ -195,16 +259,30 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     }
     val zkConsumerConnector0 = new ZookeeperConsumerConnector(consumerConfig0, true)
     val topicMessageStreams0 = zkConsumerConnector0.createMessageStreams(Predef.Map(topic -> 1))
-    getMessagesSortedByChecksum(100, topicMessageStreams0)
+    getMessages(100, topicMessageStreams0)
+
+    // also check partition ownership
+    val actual_1 = getZKChildrenValues(dirs.consumerOwnerDir)
+    val expected_1 = List( ("0", "group1_consumer0-0"),
+                           ("1", "group1_consumer0-0"))
+   assertEquals(expected_1, actual_1)
+
     zkConsumerConnector0.shutdown
     // at this point, only some part of the message set was consumed. So consumed offset should still be 0
     // also fetched offset should be 0
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig0, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Predef.Map(topic -> 1))
-    val receivedMessages = getMessagesSortedByChecksum(400, topicMessageStreams1)
+    val receivedMessages = getMessages(400, topicMessageStreams1)
     val sortedReceivedMessages = receivedMessages.sortWith((s,t) => s.checksum < t.checksum)
     val sortedSentMessages = sentMessages.sortWith((s,t) => s.checksum < t.checksum)
     assertEquals(sortedSentMessages, sortedReceivedMessages)
+
+    // also check partition ownership
+    val actual_2 = getZKChildrenValues(dirs.consumerOwnerDir)
+    val expected_2 = List( ("0", "group1_consumer0-0"),
+                           ("1", "group1_consumer0-0"))
+   assertEquals(expected_2, actual_2)
+
     zkConsumerConnector1.shutdown
 
     requestHandlerLogger.setLevel(Level.ERROR)
@@ -214,17 +292,18 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
 
-    val sentMessages = sendMessages(nMessages, "batch1", NoCompressionCodec).
-      map(m => Utils.toString(m.payload, "UTF-8")).
+    // send some messages to each broker
+    val sentMessages1 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages, NoCompressionCodec)
+    val sentMessages2 = sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages, NoCompressionCodec)
+    val sentMessages = (sentMessages1 ++ sentMessages2).map(m => Utils.toString(m.payload, "UTF-8")).
       sortWith((s, t) => s.compare(t) == -1)
-    val consumerConfig = new ConsumerConfig(
-      TestUtils.createConsumerProperties(zkConnect, group, consumer1))
+
+    val consumerConfig = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer1))
 
     val zkConsumerConnector =
       new ZookeeperConsumerConnector(consumerConfig, true)
     val topicMessageStreams =
-      zkConsumerConnector.createMessageStreams(
-        Predef.Map(topic -> numNodes*numParts/2), new StringDecoder)
+      zkConsumerConnector.createMessageStreams(Predef.Map(topic -> 1), new StringDecoder)
 
     var receivedMessages: List[String] = Nil
     for ((topic, messageStreams) <- topicMessageStreams) {
@@ -245,31 +324,106 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
-  def sendMessages(conf: KafkaConfig, messagesPerNode: Int, header: String, compression: CompressionCodec): List[Message]= {
+  def testLeaderSelectionForPartition() {
+    val zkClient = new ZkClient(zookeeperConnect, 6000, 30000, ZKStringSerializer)
+
+    // create topic topic1 with 1 partition on broker 0
+    CreateTopicCommand.createTopic(zkClient, topic, 1, 1, "0")
+
+    // send some messages to each broker
+    val sentMessages1 = sendMessages(configs.head, nMessages, "batch1", NoCompressionCodec, 1)
+
+    // create a consumer
+    val consumerConfig1 = new ConsumerConfig(
+      TestUtils.createConsumerProperties(zkConnect, group, consumer1))
+    val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
+    val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Predef.Map(topic -> 1))
+    val topicRegistry = zkConsumerConnector1.getTopicRegistry
+    assertEquals(1, topicRegistry.map(r => r._1).size)
+    assertEquals(topic, topicRegistry.map(r => r._1).head)
+    val topicsAndPartitionsInRegistry = topicRegistry.map(r => (r._1, r._2.map(p => p._1)))
+    val brokerPartition = topicsAndPartitionsInRegistry.head._2.head
+    assertEquals(0, brokerPartition.brokerId)
+    assertEquals(0, brokerPartition.partId)
+
+    // also check partition ownership
+    val actual_1 = getZKChildrenValues(dirs.consumerOwnerDir)
+    val expected_1 = List( ("0", "group1_consumer1-0"))
+   assertEquals(expected_1, actual_1)
+
+    val receivedMessages1 = getMessages(nMessages, topicMessageStreams1)
+    assertEquals(nMessages, receivedMessages1.size)
+    assertEquals(sentMessages1, receivedMessages1)
+  }
+
+  def sendMessagesToBrokerPartition(config: KafkaConfig, topic: String, partition: Int, numMessages: Int,
+                                    compression: CompressionCodec = NoCompressionCodec): List[Message] = {
+    val header = "test-%d-%d".format(config.brokerId, partition)
+    val props = new Properties()
+    props.put("zk.connect", zkConnect)
+    props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
+    props.put("compression.codec", compression.codec.toString)
+    val producer: Producer[Int, Message] = new Producer[Int, Message](new ProducerConfig(props))
+    val ms = 0.until(numMessages).map(x =>
+      new Message((header + config.brokerId + "-" + partition + "-" + x).getBytes)).toArray
+    producer.send(new ProducerData[Int, Message](topic, partition, ms))
+    debug("Sent %d messages to broker %d for topic %s and partition %d".format(ms.size, config.brokerId, topic, partition))
+    producer
+    ms.toList
+  }
+
+  def sendMessages(conf: KafkaConfig, messagesPerNode: Int, header: String, compression: CompressionCodec, numParts: Int): List[Message]= {
     var messages: List[Message] = Nil
-    val producer = TestUtils.createProducer("localhost", conf.port)
+    val props = new Properties()
+    props.put("zk.connect", zkConnect)
+    props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
+    val producer: Producer[Int, Message] = new Producer[Int, Message](new ProducerConfig(props))
+
     for (partition <- 0 until numParts) {
       val ms = 0.until(messagesPerNode).map(x =>
         new Message((header + conf.brokerId + "-" + partition + "-" + x).getBytes)).toArray
-      val mSet = new ByteBufferMessageSet(compressionCodec = compression, messages = ms: _*)
       for (message <- ms)
         messages ::= message
-      producer.send(topic, partition, mSet)
+      producer.send(new ProducerData[Int, Message](topic, partition, ms))
+      debug("Sent %d messages to broker %d for topic %s and partition %d".format(ms.size, conf.brokerId, topic, partition))
     }
     producer.close()
-    messages
+    messages.reverse
   }
 
   def sendMessages(messagesPerNode: Int, header: String, compression: CompressionCodec = NoCompressionCodec): List[Message]= {
     var messages: List[Message] = Nil
     for(conf <- configs) {
-      messages ++= sendMessages(conf, messagesPerNode, header, compression)
+      messages ++= sendMessages(conf, messagesPerNode, header, compression, numParts)
     }
     messages.sortWith((s,t) => s.checksum < t.checksum)
   }
 
-  def getMessagesSortedByChecksum(nMessagesPerThread: Int, topicMessageStreams: Map[String,List[KafkaMessageStream[Message]]]): List[Message]= {
-    val messages = TestUtils.getConsumedMessages(nMessagesPerThread, topicMessageStreams)
+  def getMessages(nMessagesPerThread: Int, topicMessageStreams: Map[String,List[KafkaMessageStream[Message]]]): List[Message]= {
+    var messages: List[Message] = Nil
+    for ((topic, messageStreams) <- topicMessageStreams) {
+      for (messageStream <- messageStreams) {
+        val iterator = messageStream.iterator
+        for (i <- 0 until nMessagesPerThread) {
+          assertTrue(iterator.hasNext)
+          val message = iterator.next
+          messages ::= message
+          debug("received message: " + Utils.toString(message.payload, "UTF-8"))
+        }
+      }
+    }
     messages.sortWith((s,t) => s.checksum < t.checksum)
   }
+
+  def getZKChildrenValues(path : String) : Seq[Tuple2[String,String]] = {
+    import scala.collection.JavaConversions
+    val children = zookeeper.client.getChildren(path)
+    Collections.sort(children)
+    val childrenAsSeq : Seq[java.lang.String] = JavaConversions.asBuffer(children)
+    childrenAsSeq.map(partition =>
+      (partition, zookeeper.client.readData(path + "/" + partition).asInstanceOf[String]))
+  }
+
 }
+
+

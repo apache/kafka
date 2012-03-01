@@ -17,16 +17,17 @@
 package kafka.server
 
 import java.io.File
-import kafka.producer.{SyncProducer, SyncProducerConfig}
 import kafka.consumer.SimpleConsumer
 import java.util.Properties
 import org.junit.Test
 import junit.framework.Assert._
-import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
+import kafka.message.{Message, ByteBufferMessageSet}
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{TestUtils, Utils}
-import kafka.api.{FetchResponse, FetchRequestBuilder, FetchRequest}
+import kafka.producer._
+import kafka.admin.CreateTopicCommand
+import kafka.api.FetchRequestBuilder
 
 class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
   val port = TestUtils.choosePort
@@ -38,26 +39,20 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     val host = "localhost"
     val topic = "test"
-    val sent1 = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes()), new Message("there".getBytes()))
-    val sent2 = new ByteBufferMessageSet(NoCompressionCodec, new Message("more".getBytes()), new Message("messages".getBytes()))
+    val sent1 = List(new Message("hello".getBytes()), new Message("there".getBytes()))
+    val sent2 = List( new Message("more".getBytes()), new Message("messages".getBytes()))
 
     {
-      val producer = new SyncProducer(getProducerConfig(host,
-                                                        port,
-                                                        64*1024,
-                                                        100000,
-                                                        10000))
-      val consumer = new SimpleConsumer(host,
-                                        port,
-                                        1000000,
-                                        64*1024)
-
       val server = new KafkaServer(config)
       server.startup()
 
+      // create topic
+      CreateTopicCommand.createTopic(zookeeper.client, topic, 1, 1, "0")
+
+      val producer = new Producer[Int, Message](getProducerConfig(64*1024, 100000, 10000))
+
       // send some messages
-      producer.send(topic, sent1)
-      sent1.getBuffer.rewind
+      producer.send(new ProducerData[Int, Message](topic, 0, sent1))
 
       Thread.sleep(200)
       // do a clean shutdown
@@ -68,11 +63,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
 
 
     {
-      val producer = new SyncProducer(getProducerConfig(host,
-                                                        port,
-                                                        64*1024,
-                                                        100000,
-                                                        10000))
+      val producer = new Producer[Int, Message](getProducerConfig(64*1024, 100000, 10000))
       val consumer = new SimpleConsumer(host,
                                         port,
                                         1000000,
@@ -81,18 +72,19 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       val server = new KafkaServer(config)
       server.startup()
 
-      // bring the server back again and read the messages
+      Thread.sleep(100)
+
       var fetchedMessage: ByteBufferMessageSet = null
       while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
         val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
         fetchedMessage = fetched.messageSet(topic, 0)
       }
-      TestUtils.checkEquals(sent1.iterator, fetchedMessage.iterator)
+      TestUtils.checkEquals(sent1.iterator, fetchedMessage.map(m => m.message).iterator)
       val newOffset = fetchedMessage.validBytes
 
       // send some more messages
-      producer.send(topic, sent2)
-      sent2.getBuffer.rewind
+      println("Sending messages to topic " + topic)
+      producer.send(new ProducerData[Int, Message](topic, 0, sent2))
 
       Thread.sleep(200)
 
@@ -101,7 +93,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
         val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, newOffset, 10000).build())
         fetchedMessage = fetched.messageSet(topic, 0)
       }
-      TestUtils.checkEquals(sent2.map(m => m.message).iterator, fetchedMessage.map(m => m.message).iterator)
+      TestUtils.checkEquals(sent2.iterator, fetchedMessage.map(m => m.message).iterator)
 
       server.shutdown()
       Utils.rm(server.config.logDir)
@@ -109,14 +101,14 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   }
 
-  private def getProducerConfig(host: String, port: Int, bufferSize: Int, connectTimeout: Int,
-                                reconnectInterval: Int): SyncProducerConfig = {
+  private def getProducerConfig(bufferSize: Int, connectTimeout: Int,
+                                reconnectInterval: Int): ProducerConfig = {
     val props = new Properties()
-    props.put("host", host)
-    props.put("port", port.toString)
+    props.put("zk.connect", zkConnect)
+    props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
     props.put("buffer.size", bufferSize.toString)
     props.put("connect.timeout.ms", connectTimeout.toString)
     props.put("reconnect.interval", reconnectInterval.toString)
-    new SyncProducerConfig(props)
+    new ProducerConfig(props)
   }
 }

@@ -18,23 +18,41 @@
 package kafka.producer
 
 import org.easymock.EasyMock
-import kafka.api.ProducerRequest
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
 import kafka.producer.async._
 import java.util.concurrent.LinkedBlockingQueue
 import junit.framework.Assert._
-import collection.SortedSet
-import kafka.cluster.{Broker, Partition}
-import collection.mutable.{HashMap, ListBuffer}
+import kafka.cluster.Broker
+import collection.mutable.ListBuffer
 import collection.Map
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import kafka.serializer.{StringEncoder, StringDecoder, Encoder}
 import java.util.{LinkedList, Properties}
-import kafka.utils.{TestZKUtils, TestUtils}
 import kafka.common.{InvalidConfigException, NoBrokersForPartitionException, InvalidPartitionException}
+import kafka.api.{PartitionMetadata, TopicMetadata, TopicMetadataRequest, ProducerRequest}
+import kafka.utils.{NegativePartitioner, TestZKUtils, TestUtils}
+import kafka.zk.ZooKeeperTestHarness
+import org.scalatest.junit.JUnit3Suite
+import kafka.utils.TestUtils._
+import kafka.server.KafkaConfig
+import org.I0Itec.zkclient.ZkClient
 
-class AsyncProducerTest extends JUnitSuite {
+class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
+  val props = createBrokerConfigs(1)
+  val configs = props.map(p => new KafkaConfig(p) { override val flushInterval = 1})
+  var zkClient: ZkClient = null
+  var brokers: Seq[Broker] = null
+
+  override def setUp() {
+    super.setUp()
+    zkClient = zookeeper.client
+    // create brokers in zookeeper
+    brokers = TestUtils.createBrokersInZk(zkClient, configs.map(config => config.brokerId))
+  }
+
+  override def tearDown() {
+    super.tearDown()
+  }
 
   @Test
   def testProducerQueueSize() {
@@ -50,7 +68,7 @@ class AsyncProducerTest extends JUnitSuite {
 
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("broker.list", "0:localhost:9092")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     props.put("producer.type", "async")
     props.put("queue.size", "10")
     props.put("batch.size", "1")
@@ -72,13 +90,13 @@ class AsyncProducerTest extends JUnitSuite {
   def testProduceAfterClosed() {
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("broker.list", "0:localhost:9092")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     props.put("producer.type", "async")
     props.put("batch.size", "1")
 
     val config = new ProducerConfig(props)
     val produceData = getProduceData(10)
-    val producer = new Producer[String, String](config)
+    val producer = new Producer[String, String](config, zkClient)
     producer.close
 
     try {
@@ -157,18 +175,35 @@ class AsyncProducerTest extends JUnitSuite {
     producerDataList.append(new ProducerData[Int,Message]("topic2", 4, new Message("msg5".getBytes)))
 
     val props = new Properties()
-    props.put("broker.list", "0:localhost:9092,1:localhost:9092")
+    props.put("zk.connect", zkConnect)
+    val broker1 = new Broker(0, "localhost", "localhost", 9092)
+    val broker2 = new Broker(1, "localhost", "localhost", 9093)
+    // form expected partitions metadata
+    val partition1Metadata = new PartitionMetadata(0, Some(broker1), List(broker1, broker2))
+    val partition2Metadata = new PartitionMetadata(1, Some(broker2), List(broker1, broker2))
+    val topic1Metadata = new TopicMetadata("topic1", List(partition1Metadata, partition2Metadata))
+    val topic2Metadata = new TopicMetadata("topic2", List(partition1Metadata, partition2Metadata))
 
     val intPartitioner = new Partitioner[Int] {
       def partition(key: Int, numPartitions: Int): Int = key % numPartitions
     }
     val config = new ProducerConfig(props)
+
+    val syncProducer = getSyncProducer(List("topic1", "topic2"), List(topic1Metadata, topic2Metadata))
+
+    val producerPool = EasyMock.createMock(classOf[ProducerPool])
+    producerPool.getZkClient
+    EasyMock.expectLastCall().andReturn(zkClient)
+    producerPool.addProducers(config)
+    EasyMock.expectLastCall()
+    producerPool.getAnyProducer
+    EasyMock.expectLastCall().andReturn(syncProducer).times(2)
+    EasyMock.replay(producerPool)
     val handler = new DefaultEventHandler[Int,String](config,
                                                       partitioner = intPartitioner,
                                                       encoder = null.asInstanceOf[Encoder[String]],
-                                                      producerPool = null,
-                                                      populateProducerPool = false,
-                                                      brokerPartitionInfo = null)
+                                                      producerPool)
+
 
     val topic1Broker1Data = new ListBuffer[ProducerData[Int,Message]]
     topic1Broker1Data.appendAll(List(new ProducerData[Int,Message]("topic1", 0, new Message("msg1".getBytes)),
@@ -181,29 +216,34 @@ class AsyncProducerTest extends JUnitSuite {
     topic2Broker2Data.appendAll(List(new ProducerData[Int,Message]("topic2", 1, new Message("msg2".getBytes))))
     val expectedResult = Map(
         0 -> Map(
-              ("topic1", -1) -> topic1Broker1Data,
-              ("topic2", -1) -> topic2Broker1Data),
+              ("topic1", 0) -> topic1Broker1Data,
+              ("topic2", 0) -> topic2Broker1Data),
         1 -> Map(
-              ("topic1", -1) -> topic1Broker2Data,
-              ("topic2", -1) -> topic2Broker2Data)
+              ("topic1", 1) -> topic1Broker2Data,
+              ("topic2", 1) -> topic2Broker2Data)
       )
 
     val actualResult = handler.partitionAndCollate(producerDataList)
     assertEquals(expectedResult, actualResult)
+    EasyMock.verify(syncProducer)
+    EasyMock.verify(producerPool)
   }
 
   @Test
   def testSerializeEvents() {
     val produceData = TestUtils.getMsgStrings(5).map(m => new ProducerData[String,String]("topic1",m))
     val props = new Properties()
-    props.put("broker.list", "0:localhost:9092,1:localhost:9092")
+    props.put("zk.connect", zkConnect)
     val config = new ProducerConfig(props)
+    // form expected partitions metadata
+    val topic1Metadata = getTopicMetadata("topic1", 0, "localhost", 9092)
+
+    val syncProducer = getSyncProducer(List("topic1"), List(topic1Metadata))
+    val producerPool = getMockProducerPool(config, syncProducer)
     val handler = new DefaultEventHandler[String,String](config,
                                                          partitioner = null.asInstanceOf[Partitioner[String]],
                                                          encoder = new StringEncoder,
-                                                         producerPool = null,
-                                                         populateProducerPool = false,
-                                                         brokerPartitionInfo = null)
+                                                         producerPool)
 
     val serializedData = handler.serialize(produceData)
     val decoder = new StringDecoder
@@ -216,14 +256,20 @@ class AsyncProducerTest extends JUnitSuite {
     val producerDataList = new ListBuffer[ProducerData[String,Message]]
     producerDataList.append(new ProducerData[String,Message]("topic1", "key1", new Message("msg1".getBytes)))
     val props = new Properties()
-    props.put("broker.list", "0:localhost:9092,1:localhost:9092")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     val config = new ProducerConfig(props)
+
+    // form expected partitions metadata
+    val topic1Metadata = getTopicMetadata("topic1", 0, "localhost", 9092)
+
+    val syncProducer = getSyncProducer(List("topic1"), List(topic1Metadata))
+
+    val producerPool = getMockProducerPool(config, syncProducer)
+
     val handler = new DefaultEventHandler[String,String](config,
                                                          partitioner = new NegativePartitioner,
                                                          encoder = null.asInstanceOf[Encoder[String]],
-                                                         producerPool = null,
-                                                         populateProducerPool = false,
-                                                         brokerPartitionInfo = null)
+                                                         producerPool)
     try {
       handler.partitionAndCollate(producerDataList)
       fail("Should fail with InvalidPartitionException")
@@ -231,34 +277,29 @@ class AsyncProducerTest extends JUnitSuite {
     catch {
       case e: InvalidPartitionException => // expected, do nothing
     }
-  }
-
-  private def getMockBrokerPartitionInfo(): BrokerPartitionInfo ={
-    new BrokerPartitionInfo {
-      def getBrokerPartitionInfo(topic: String = null): SortedSet[Partition] = SortedSet.empty[Partition]
-
-      def getBrokerInfo(brokerId: Int): Option[Broker] = None
-
-      def getAllBrokerInfo: Map[Int, Broker] = new HashMap[Int, Broker]
-
-      def updateInfo = {}
-
-      def close = {}
-    }
+    EasyMock.verify(syncProducer)
+    EasyMock.verify(producerPool)
   }
 
   @Test
   def testNoBroker() {
+    val props = new Properties()
+    props.put("zk.connect", zkConnect)
+
+    val config = new ProducerConfig(props)
+    // create topic metadata with 0 partitions
+    val topic1Metadata = new TopicMetadata("topic1", Seq.empty)
+
+    val syncProducer = getSyncProducer(List("topic1"), List(topic1Metadata))
+
+    val producerPool = getMockProducerPool(config, syncProducer)
+
     val producerDataList = new ListBuffer[ProducerData[String,String]]
     producerDataList.append(new ProducerData[String,String]("topic1", "msg1"))
-    val props = new Properties()
-    val config = new ProducerConfig(props)
     val handler = new DefaultEventHandler[String,String](config,
                                                          partitioner = null.asInstanceOf[Partitioner[String]],
                                                          encoder = new StringEncoder,
-                                                         producerPool = null,
-                                                         populateProducerPool = false,
-                                                         brokerPartitionInfo = getMockBrokerPartitionInfo)
+                                                         producerPool)
     try {
       handler.handle(producerDataList)
       fail("Should fail with NoBrokersForPartitionException")
@@ -266,12 +307,14 @@ class AsyncProducerTest extends JUnitSuite {
     catch {
       case e: NoBrokersForPartitionException => // expected, do nothing
     }
+    EasyMock.verify(syncProducer)
+    EasyMock.verify(producerPool)
   }
 
   @Test
   def testIncompatibleEncoder() {
     val props = new Properties()
-    props.put("broker.list", "0:localhost:9092,1:localhost:9092")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     val config = new ProducerConfig(props)
 
     val producer=new Producer[String, String](config)
@@ -286,14 +329,28 @@ class AsyncProducerTest extends JUnitSuite {
   @Test
   def testRandomPartitioner() {
     val props = new Properties()
-    props.put("broker.list", "0:localhost:9092,1:localhost:9092")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     val config = new ProducerConfig(props)
+
+    // create topic metadata with 0 partitions
+    val topic1Metadata = getTopicMetadata("topic1", 0, "localhost", 9092)
+    val topic2Metadata = getTopicMetadata("topic2", 0, "localhost", 9092)
+
+    val syncProducer = getSyncProducer(List("topic1", "topic2"), List(topic1Metadata, topic2Metadata))
+
+    val producerPool = EasyMock.createMock(classOf[ProducerPool])
+    producerPool.getZkClient
+    EasyMock.expectLastCall().andReturn(zkClient)
+    producerPool.addProducers(config)
+    EasyMock.expectLastCall()
+    producerPool.getAnyProducer
+    EasyMock.expectLastCall().andReturn(syncProducer).times(2)
+    EasyMock.replay(producerPool)
+
     val handler = new DefaultEventHandler[String,String](config,
                                                          partitioner = null.asInstanceOf[Partitioner[String]],
                                                          encoder = null.asInstanceOf[Encoder[String]],
-                                                         producerPool = null,
-                                                         populateProducerPool = false,
-                                                         brokerPartitionInfo = null)
+                                                         producerPool)
     val producerDataList = new ListBuffer[ProducerData[String,Message]]
     producerDataList.append(new ProducerData[String,Message]("topic1", new Message("msg1".getBytes)))
     producerDataList.append(new ProducerData[String,Message]("topic2", new Message("msg2".getBytes)))
@@ -302,41 +359,51 @@ class AsyncProducerTest extends JUnitSuite {
     val partitionedData = handler.partitionAndCollate(producerDataList)
     for ((brokerId, dataPerBroker) <- partitionedData) {
       for ( ((topic, partitionId), dataPerTopic) <- dataPerBroker)
-        assertTrue(partitionId == ProducerRequest.RandomPartition)
+        assertTrue(partitionId == 0)
     }
+    EasyMock.verify(producerPool)
   }
 
   @Test
   def testBrokerListAndAsync() {
-    val topic = "topic1"
-    val msgs = TestUtils.getMsgStrings(10)
-    val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
-    mockSyncProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic, ProducerRequest.RandomPartition,
-      messagesToSet(msgs.take(5))))))
-    EasyMock.expectLastCall
-    mockSyncProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic, ProducerRequest.RandomPartition,
-      messagesToSet(msgs.takeRight(5))))))
-    EasyMock.expectLastCall
-    mockSyncProducer.close
-    EasyMock.expectLastCall
-    EasyMock.replay(mockSyncProducer)
-
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("producer.type", "async")
     props.put("batch.size", "5")
-    props.put("broker.list", "0:localhost:9092")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
 
     val config = new ProducerConfig(props)
-    val producerPool = new ProducerPool(config)
-    producerPool.addProducer(0, mockSyncProducer)
+
+    val topic = "topic1"
+    val topic1Metadata = getTopicMetadata(topic, 0, "localhost", 9092)
+
+    val msgs = TestUtils.getMsgStrings(10)
+    val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
+    mockSyncProducer.send(new TopicMetadataRequest(List(topic)))
+    EasyMock.expectLastCall().andReturn(List(topic1Metadata))
+    mockSyncProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic, 0, messagesToSet(msgs.take(5))))))
+    EasyMock.expectLastCall
+    mockSyncProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic, 0, messagesToSet(msgs.takeRight(5))))))
+    EasyMock.expectLastCall
+    EasyMock.replay(mockSyncProducer)
+
+    val producerPool = EasyMock.createMock(classOf[ProducerPool])
+    producerPool.getZkClient
+    EasyMock.expectLastCall().andReturn(zkClient)
+    producerPool.addProducers(config)
+    EasyMock.expectLastCall()
+    producerPool.getAnyProducer
+    EasyMock.expectLastCall().andReturn(mockSyncProducer)
+    producerPool.getProducer(0)
+    EasyMock.expectLastCall().andReturn(mockSyncProducer).times(2)
+    producerPool.close()
+    EasyMock.expectLastCall()
+    EasyMock.replay(producerPool)
 
     val handler = new DefaultEventHandler[String,String](config,
                                                       partitioner = null.asInstanceOf[Partitioner[String]],
                                                       encoder = new StringEncoder,
-                                                      producerPool = producerPool,
-                                                      populateProducerPool = false,
-                                                      brokerPartitionInfo = null)
+                                                      producerPool = producerPool)
 
     val producer = new Producer[String, String](config, handler)
     try {
@@ -349,6 +416,7 @@ class AsyncProducerTest extends JUnitSuite {
     }
 
     EasyMock.verify(mockSyncProducer)
+    EasyMock.verify(producerPool)
   }
 
   @Test
@@ -380,7 +448,7 @@ class AsyncProducerTest extends JUnitSuite {
   def testInvalidConfiguration() {
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("broker.list", "0:localhost:9092")
+    props.put("broker.list", TestZKUtils.zookeeperConnect)
     props.put("zk.connect", TestZKUtils.zookeeperConnect)
     props.put("producer.type", "async")
 
@@ -396,6 +464,34 @@ class AsyncProducerTest extends JUnitSuite {
   private def messagesToSet(messages: Seq[String]): ByteBufferMessageSet = {
     val encoder = new StringEncoder
     new ByteBufferMessageSet(NoCompressionCodec, messages.map(m => encoder.toMessage(m)): _*)
+  }
+
+  private def getSyncProducer(topic: Seq[String], topicMetadata: Seq[TopicMetadata]): SyncProducer = {
+    val syncProducer = EasyMock.createMock(classOf[SyncProducer])
+    topic.zip(topicMetadata).foreach { topicAndMetadata =>
+      syncProducer.send(new TopicMetadataRequest(List(topicAndMetadata._1)))
+      EasyMock.expectLastCall().andReturn(List(topicAndMetadata._2))
+    }
+    EasyMock.replay(syncProducer)
+    syncProducer
+  }
+
+  private def getMockProducerPool(config: ProducerConfig, syncProducer: SyncProducer): ProducerPool = {
+    val producerPool = EasyMock.createMock(classOf[ProducerPool])
+    producerPool.getZkClient
+    EasyMock.expectLastCall().andReturn(zkClient)
+    producerPool.addProducers(config)
+    EasyMock.expectLastCall()
+    producerPool.getAnyProducer
+    EasyMock.expectLastCall().andReturn(syncProducer)
+    EasyMock.replay(producerPool)
+    producerPool
+  }
+
+  private def getTopicMetadata(topic: String, brokerId: Int, brokerHost: String, brokerPort: Int): TopicMetadata = {
+    val broker1 = new Broker(brokerId, brokerHost, brokerHost, brokerPort)
+    val partition1Metadata = new PartitionMetadata(brokerId, Some(broker1), List(broker1))
+    new TopicMetadata(topic, List(partition1Metadata))
   }
 
   class MockProducer(override val config: SyncProducerConfig) extends SyncProducer(config) {

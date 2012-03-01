@@ -29,15 +29,15 @@ class ProducerConfig(val props: Properties) extends ZKConfig(props)
    *  to pass in static broker and per-broker partition information. Format-    *
    *  brokerid1:host1:port1, brokerid2:host2:port2*/
   val brokerList = Utils.getString(props, "broker.list", null)
-  if(brokerList != null && Utils.getString(props, "partitioner.class", null) != null)
-    throw new InvalidConfigException("partitioner.class cannot be used when broker.list is set")
+  if(brokerList != null)
+    throw new InvalidConfigException("broker.list is deprecated. Use zk.connect instead")
 
   /** If both broker.list and zk.connect options are specified, throw an exception */
-  if(brokerList != null && zkConnect != null)
-    throw new InvalidConfigException("only one of broker.list and zk.connect can be specified")
+  if(zkConnect == null)
+    throw new InvalidConfigException("zk.connect property is required")
 
   /** the partitioner class for partitioning events amongst sub-topics */
-  val partitionerClass = Utils.getString(props, "partitioner.class", null)
+  val partitionerClass = Utils.getString(props, "partitioner.class", "kafka.producer.DefaultPartitioner")
 
   /** this parameter specifies whether the messages are sent asynchronously *
    * or not. Valid values are - async for asynchronous send                 *

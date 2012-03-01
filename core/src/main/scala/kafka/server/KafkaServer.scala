@@ -20,7 +20,7 @@ package kafka.server
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.io.File
-import kafka.utils.{Mx4jLoader, Utils, SystemTime, KafkaScheduler, Logging}
+import kafka.utils.{Mx4jLoader, Utils, SystemTime, Logging}
 import kafka.network.{SocketServerStats, SocketServer}
 import kafka.log.LogManager
 
@@ -36,7 +36,6 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
   private val statsMBeanName = "kafka:type=kafka.SocketServerStats"
   var socketServer: SocketServer = null
   var requestHandlerPool: KafkaRequestHandlerPool = null
-  val scheduler = new KafkaScheduler(1, "kafka-logcleaner-", false)
   private var logManager: LogManager = null
 
   /**
@@ -52,7 +51,6 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
       cleanShutDownFile.delete
     }
     logManager = new LogManager(config,
-                                scheduler,
                                 SystemTime,
                                 1000L * 60 * config.logCleanupIntervalMinutes,
                                 1000L * 60 * 60 * config.logRetentionHours,
@@ -85,7 +83,6 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
     val canShutdown = isShuttingDown.compareAndSet(false, true);
     if (canShutdown) {
       info("Shutting down Kafka server")
-      scheduler.shutdown()
       if (socketServer != null)
         socketServer.shutdown()
       if(requestHandlerPool != null)

@@ -16,44 +16,70 @@
 */
 package kafka.producer
 
-import collection.Map
-import collection.SortedSet
 import kafka.cluster.{Broker, Partition}
+import collection.mutable.HashMap
+import kafka.api.{TopicMetadataRequest, TopicMetadata}
+import java.lang.IllegalStateException
+import kafka.common.NoLeaderForPartitionException
+import kafka.utils.Logging
 
-trait BrokerPartitionInfo {
+class BrokerPartitionInfo(producerPool: ProducerPool) extends Logging {
+  val topicPartitionInfo = new HashMap[String, TopicMetadata]()
+  val zkClient = producerPool.getZkClient
+
   /**
    * Return a sequence of (brokerId, numPartitions).
    * @param topic the topic for which this information is to be returned
    * @return a sequence of (brokerId, numPartitions). Returns a zero-length
    * sequence if no brokers are available.
    */  
-  def getBrokerPartitionInfo(topic: String = null): SortedSet[Partition]
+  def getBrokerPartitionInfo(topic: String): Seq[(Partition, Broker)] = {
+    // check if the cache has metadata for this topic
+    val topicMetadata = topicPartitionInfo.get(topic)
+    val metadata: TopicMetadata =
+    topicMetadata match {
+      case Some(m) => m
+      case None =>
+        // refresh the topic metadata cache
+        info("Fetching metadata for topic %s".format(topic))
+        updateInfo(topic)
+        val topicMetadata = topicPartitionInfo.get(topic)
+        topicMetadata match {
+          case Some(m) => m
+          case None => throw new IllegalStateException("Failed to fetch topic metadata for topic: " + topic)
+        }
+    }
+    val partitionMetadata = metadata.partitionsMetadata
+    partitionMetadata.map { m =>
+      m.leader match {
+        case Some(leader) => (new Partition(leader.id, m.partitionId, topic) -> leader)
+        case None =>  throw new NoLeaderForPartitionException("No leader for topic %s, partition %d".format(topic, m.partitionId))
+      }
+    }.sortWith((s, t) => s._1.partId < t._1.partId)
+  }
 
   /**
-   * Generate the host and port information for the broker identified
-   * by the given broker id 
-   * @param brokerId the broker for which the info is to be returned
-   * @return host and port of brokerId
+   * It updates the cache by issuing a get topic metadata request to a random broker.
+   * @param topic the topic for which the metadata is to be fetched
    */
-  def getBrokerInfo(brokerId: Int): Option[Broker]
-
-  /**
-   * Generate a mapping from broker id to the host and port for all brokers
-   * @return mapping from id to host and port of all brokers
-   */
-  def getAllBrokerInfo: Map[Int, Broker]
-
-  /**
-   * This is relevant to the ZKBrokerPartitionInfo. It updates the ZK cache
-   * by reading from zookeeper and recreating the data structures. This API
-   * is invoked by the producer, when it detects that the ZK cache of
-   * ZKBrokerPartitionInfo is stale.
-   *
-   */
-  def updateInfo
-
-  /**
-   * Cleanup
-   */
-  def close
+  def updateInfo(topic: String = null) = {
+    val producer = producerPool.getAnyProducer
+    if(topic != null) {
+      val topicMetadataRequest = new TopicMetadataRequest(List(topic))
+      val topicMetadataList = producer.send(topicMetadataRequest)
+      val topicMetadata:Option[TopicMetadata] = if(topicMetadataList.size > 0) Some(topicMetadataList.head) else None
+      topicMetadata match {
+        case Some(metadata) =>
+          info("Fetched metadata for topics %s".format(topic))
+          topicPartitionInfo += (topic -> metadata)
+        case None =>
+      }
+    }else {
+      // refresh cache for all topics
+      val topics = topicPartitionInfo.keySet.toList
+      val topicMetadata = producer.send(new TopicMetadataRequest(topics))
+      info("Fetched metadata for topics %s".format(topicMetadata.mkString(",")))
+      topicMetadata.foreach(metadata => topicPartitionInfo += (metadata.topic -> metadata))
+    }
+  }
 }

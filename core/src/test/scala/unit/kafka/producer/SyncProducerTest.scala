@@ -21,11 +21,11 @@ import junit.framework.Assert
 import kafka.server.KafkaConfig
 import kafka.common.MessageSizeTooLargeException
 import java.util.Properties
-import kafka.api.ProducerRequest
 import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
 import kafka.integration.KafkaServerTestHarness
 import kafka.utils.{TestZKUtils, SystemTime, TestUtils}
 import org.scalatest.junit.JUnit3Suite
+import kafka.api.ProducerRequest
 
 class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   private var messageBytes =  new Array[Byte](2);

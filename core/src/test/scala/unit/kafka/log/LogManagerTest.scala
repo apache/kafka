@@ -25,6 +25,7 @@ import kafka.common.OffsetOutOfRangeException
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{TestZKUtils, Utils, MockTime, TestUtils}
 import org.scalatest.junit.JUnit3Suite
+import kafka.admin.CreateTopicCommand
 
 class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
@@ -34,6 +35,8 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
   var logManager: LogManager = null
   var config:KafkaConfig = null
   val zookeeperConnect = TestZKUtils.zookeeperConnect
+  val name = "kafka"
+  val veryLargeLogFlushInterval = 10000000L
 
   override def setUp() {
     super.setUp()
@@ -41,9 +44,13 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     config = new KafkaConfig(props) {
                    override val logFileSize = 1024
                  }
-    logManager = new LogManager(config, null, time, -1, maxLogAge, false)
+    logManager = new LogManager(config, time, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup
     logDir = logManager.logDir
+
+    // setup brokers in zookeeper as owners of partitions for this test
+    CreateTopicCommand.createTopic(zookeeper.client, name, 3, 1, "0,0,0")
+
   }
 
   override def tearDown() {
@@ -55,7 +62,6 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
   
   @Test
   def testCreateLog() {
-    val name = "kafka"
     val log = logManager.getOrCreateLog(name, 0)
     val logFile = new File(config.logDir, name + "-0")
     assertTrue(logFile.exists)
@@ -64,7 +70,6 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testGetLog() {
-    val name = "kafka"
     val log = logManager.getLog(name, 0)
     val logFile = new File(config.logDir, name + "-0")
     assertTrue(!logFile.exists)
@@ -72,7 +77,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testCleanupExpiredSegments() {
-    val log = logManager.getOrCreateLog("cleanup", 0)
+    val log = logManager.getOrCreateLog(name, 0)
     var offset = 0L
     for(i <- 0 until 1000) {
       var set = TestUtils.singleMessageSet("test".getBytes())
@@ -111,11 +116,11 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
       override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Int] // keep exactly 6 segments + 1 roll over
       override val logRetentionHours = retentionHours
     }
-    logManager = new LogManager(config, null, time, -1, retentionMs, false)
+    logManager = new LogManager(config, time, veryLargeLogFlushInterval, retentionMs, false)
     logManager.startup
 
     // create a log
-    val log = logManager.getOrCreateLog("cleanup", 0)
+    val log = logManager.getOrCreateLog(name, 0)
     var offset = 0L
 
     // add a bunch of messages that should be larger than the retentionSize
@@ -151,14 +156,14 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     logManager.close
     Thread.sleep(100)
     config = new KafkaConfig(props) {
-                   override val logFileSize = 1024 *1024 *1024 
+                   override val logFileSize = 1024 *1024 *1024
                    override val flushSchedulerThreadRate = 50
                    override val flushInterval = Int.MaxValue
                    override val flushIntervalMap = Utils.getTopicFlushIntervals("timebasedflush:100")
                  }
-    logManager = new LogManager(config, null, time, -1, maxLogAge, false)
+    logManager = new LogManager(config, time, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup
-    val log = logManager.getOrCreateLog("timebasedflush", 0)
+    val log = logManager.getOrCreateLog(name, 0)
     for(i <- 0 until 200) {
       var set = TestUtils.singleMessageSet("test".getBytes())
       log.append(set)
@@ -177,12 +182,12 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
                    override val logFileSize = 256
                    override val topicPartitionsMap = Utils.getTopicPartitions("testPartition:2")
                  }
-    
-    logManager = new LogManager(config, null, time, -1, maxLogAge, false)
+
+    logManager = new LogManager(config, time, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup
-    
-    for(i <- 0 until 2) {
-      val log = logManager.getOrCreateLog("testPartition", i)
+
+    for(i <- 0 until 1) {
+      val log = logManager.getOrCreateLog(name, i)
       for(i <- 0 until 250) {
         var set = TestUtils.singleMessageSet("test".getBytes())
         log.append(set)
@@ -191,7 +196,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     try
     {
-      val log = logManager.getOrCreateLog("testPartition", 2)
+      val log = logManager.getOrCreateLog(name, 2)
       assertTrue("Should not come here", log != null)
     } catch {
        case _ =>

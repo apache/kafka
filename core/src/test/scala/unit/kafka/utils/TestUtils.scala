@@ -32,6 +32,7 @@ import kafka.cluster.Broker
 import collection.mutable.ListBuffer
 import kafka.consumer.{KafkaMessageStream, ConsumerConfig}
 import scala.collection.Map
+import kafka.serializer.Encoder
 
 /**
  * Utility functions to help with testing
@@ -134,6 +135,7 @@ object TestUtils {
     props.put("zk.sessiontimeout.ms", "400")
     props.put("zk.synctime.ms", "200")
     props.put("autocommit.interval.ms", "1000")
+    props.put("rebalance.retries.max", "4")
 
     props
   }
@@ -275,14 +277,13 @@ object TestUtils {
   /**
    * Create a producer for the given host and port
    */
-  def createProducer(host: String, port: Int): SyncProducer = {
+  def createProducer[K, V](zkConnect: String): Producer[K, V] = {
     val props = new Properties()
-    props.put("host", host)
-    props.put("port", port.toString)
+    props.put("zk.connect", zkConnect)
     props.put("buffer.size", "65536")
     props.put("connect.timeout.ms", "100000")
     props.put("reconnect.interval", "10000")
-    return new SyncProducer(new SyncProducerConfig(props))
+    new Producer[K, V](new ProducerConfig(props))
   }
 
   def updateConsumerOffset(config : ConsumerConfig, path : String, offset : Long) = {
@@ -305,6 +306,12 @@ object TestUtils {
   def createBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
     val brokers = ids.map(id => new Broker(id, "localhost" + System.currentTimeMillis(), "localhost", 6667))
     brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, b.id, b.host, b.creatorId, b.port))
+    brokers
+  }
+
+  def deleteBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
+    val brokers = ids.map(id => new Broker(id, "localhost" + System.currentTimeMillis(), "localhost", 6667))
+    brokers.foreach(b => ZkUtils.deletePath(zkClient, ZkUtils.BrokerIdsPath + "/" + b))
     brokers
   }
 
@@ -334,4 +341,32 @@ object TestUtils {
 
 object TestZKUtils {
   val zookeeperConnect = "127.0.0.1:2182"  
+}
+
+class StringSerializer extends Encoder[String] {
+  def toEvent(message: Message):String = message.toString
+  def toMessage(event: String):Message = new Message(event.getBytes)
+  def getTopic(event: String): String = event.concat("-topic")
+}
+
+class NegativePartitioner extends Partitioner[String] {
+  def partition(data: String, numPartitions: Int): Int = {
+    -1
+  }
+}
+
+class StaticPartitioner extends Partitioner[String] {
+  def partition(data: String, numPartitions: Int): Int = {
+    (data.length % numPartitions)
+  }
+}
+
+class HashPartitioner extends Partitioner[String] {
+  def partition(data: String, numPartitions: Int): Int = {
+    (data.hashCode % numPartitions)
+  }
+}
+
+class FixedValuePartitioner extends Partitioner[Int] {
+  def partition(data: Int, numPartitions: Int): Int = data
 }

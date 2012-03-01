@@ -29,6 +29,7 @@ import scala.collection.mutable
 import kafka.message.{NoCompressionCodec, CompressionCodec}
 import org.I0Itec.zkclient.ZkClient
 import java.util.{Random, Properties}
+import kafka.network.{BoundedByteBufferReceive, Receive, BoundedByteBufferSend, Request}
 
 /**
  * Helper functions!
@@ -668,6 +669,20 @@ object Utils extends Logging {
     } catch {
       case _ => // swallow
     }
+  }
+
+  def sendRequest(request: Request, channel: SocketChannel) = {
+    val send = new BoundedByteBufferSend(request)
+    send.writeCompletely(channel)
+  }
+
+  def getResponse(channel: SocketChannel): Tuple2[Receive,Int] = {
+    val response = new BoundedByteBufferReceive()
+    response.readCompletely(channel)
+
+    // this has the side effect of setting the initial position of buffer correctly
+    val errorCode: Int = response.buffer.getShort
+    (response, errorCode)
   }
 }
 

@@ -19,56 +19,26 @@ package kafka.producer.async
 
 import kafka.api.ProducerRequest
 import kafka.serializer.Encoder
-import java.util.Properties
 import kafka.producer._
-import kafka.utils.{ZKConfig, Utils, Logging}
 import kafka.cluster.{Partition, Broker}
 import collection.mutable.{ListBuffer, HashMap}
 import scala.collection.Map
 import kafka.common.{FailedToSendMessageException, InvalidPartitionException, NoBrokersForPartitionException}
 import kafka.message.{Message, NoCompressionCodec, ByteBufferMessageSet}
+import kafka.utils.{Utils, Logging}
 
 class DefaultEventHandler[K,V](config: ProducerConfig,                               // this api is for testing
                                private val partitioner: Partitioner[K],              // use the other constructor
                                private val encoder: Encoder[V],
-                               private val producerPool: ProducerPool,
-                               private val populateProducerPool: Boolean,
-                               private var brokerPartitionInfo: BrokerPartitionInfo)
+                               private val producerPool: ProducerPool)
   extends EventHandler[K,V] with Logging {
 
+  val brokerPartitionInfo = new BrokerPartitionInfo(producerPool)
+
+  // add producers to the producer pool
+  producerPool.addProducers(config)
+
   private val lock = new Object()
-  private val zkEnabled = Utils.propertyExists(config.zkConnect)
-  if(brokerPartitionInfo == null) {
-    zkEnabled match {
-      case true =>
-        val zkProps = new Properties()
-        zkProps.put("zk.connect", config.zkConnect)
-        zkProps.put("zk.sessiontimeout.ms", config.zkSessionTimeoutMs.toString)
-        zkProps.put("zk.connectiontimeout.ms", config.zkConnectionTimeoutMs.toString)
-        zkProps.put("zk.synctime.ms", config.zkSyncTimeMs.toString)
-        brokerPartitionInfo = new ZKBrokerPartitionInfo(new ZKConfig(zkProps), producerCbk)
-      case false =>
-        brokerPartitionInfo = new ConfigBrokerPartitionInfo(config)
-    }
-  }
-
-  // pool of producers, one per broker
-  if(populateProducerPool) {
-    val allBrokers = brokerPartitionInfo.getAllBrokerInfo
-    allBrokers.foreach(b => producerPool.addProducer(new Broker(b._1, b._2.host, b._2.host, b._2.port)))
-  }
-
-  /**
-   * Callback to add a new producer to the producer pool. Used by ZKBrokerPartitionInfo
-   * on registration of new broker in zookeeper
-   * @param bid the id of the broker
-   * @param host the hostname of the broker
-   * @param port the port of the broker
-   */
-  private def producerCbk(bid: Int, host: String, port: Int) =  {
-    if(populateProducerPool) producerPool.addProducer(new Broker(bid, host, host, port))
-    else debug("Skipping the callback since populateProducerPool = false")
-  }
 
   def handle(events: Seq[ProducerData[K,V]]) {
     lock synchronized {
@@ -81,7 +51,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
       val partitionedData = partitionAndCollate(messages)
       for ( (brokerid, eventsPerBrokerMap) <- partitionedData) {
         if (logger.isTraceEnabled)
-          eventsPerBrokerMap.foreach(partitionAndEvent => trace("Handling event for Topic: %s, Broker: %d, Partition: %d"
+          eventsPerBrokerMap.foreach(partitionAndEvent => trace("Handling event for Topic: %s, Broker: %d, Partitions: %s"
             .format(partitionAndEvent._1, brokerid, partitionAndEvent._2)))
         val messageSetPerBroker = groupMessagesToSet(eventsPerBrokerMap)
 
@@ -98,7 +68,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
               numRetries +=1
               Thread.sleep(config.producerRetryBackoffMs)
               try {
-                brokerPartitionInfo.updateInfo
+                brokerPartitionInfo.updateInfo()
                 handleSerializedData(eventsPerBroker, 0)
                 return
               }
@@ -125,15 +95,15 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
       val brokerPartition = topicPartitionsList(partitionIndex)
 
       var dataPerBroker: HashMap[(String, Int), Seq[ProducerData[K,Message]]] = null
-      ret.get(brokerPartition.brokerId) match {
+      ret.get(brokerPartition._2.id) match {
         case Some(element) =>
           dataPerBroker = element.asInstanceOf[HashMap[(String, Int), Seq[ProducerData[K,Message]]]]
         case None =>
           dataPerBroker = new HashMap[(String, Int), Seq[ProducerData[K,Message]]]
-          ret.put(brokerPartition.brokerId, dataPerBroker)
+          ret.put(brokerPartition._2.id, dataPerBroker)
       }
 
-      val topicAndPartition = (event.getTopic, brokerPartition.partId)
+      val topicAndPartition = (event.getTopic, brokerPartition._1.partId)
       var dataPerTopicPartition: ListBuffer[ProducerData[K,Message]] = null
       dataPerBroker.get(topicAndPartition) match {
         case Some(element) =>
@@ -147,9 +117,9 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
     ret
   }
 
-  private def getPartitionListForTopic(pd: ProducerData[K,Message]): Seq[Partition] = {
+  private def getPartitionListForTopic(pd: ProducerData[K,Message]): Seq[(Partition, Broker)] = {
     debug("Getting the number of broker partitions registered for topic: " + pd.getTopic)
-    val topicPartitionsList = brokerPartitionInfo.getBrokerPartitionInfo(pd.getTopic).toSeq
+    val topicPartitionsList = brokerPartitionInfo.getBrokerPartitionInfo(pd.getTopic)
     debug("Broker partitions registered for topic: " + pd.getTopic + " = " + topicPartitionsList)
     val totalNumPartitions = topicPartitionsList.length
     if(totalNumPartitions == 0) throw new NoBrokersForPartitionException("Partition = " + pd.getKey)
@@ -168,7 +138,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
       throw new InvalidPartitionException("Invalid number of partitions: " + numPartitions +
               "\n Valid values are > 0")
     val partition = if(key == null) Utils.getNextRandomInt(numPartitions)
-                    else partitioner.partition(key , numPartitions)
+                    else partitioner.partition(key, numPartitions)
     if(partition < 0 || partition >= numPartitions)
       throw new InvalidPartitionException("Invalid partition id : " + partition +
               "\n Valid values are in the range inclusive [0, " + (numPartitions-1) + "]")
@@ -235,7 +205,5 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
   def close() {
     if (producerPool != null)
       producerPool.close    
-    if (brokerPartitionInfo != null)
-      brokerPartitionInfo.close
   }
 }

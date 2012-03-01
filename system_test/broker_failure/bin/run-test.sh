@@ -68,7 +68,7 @@ readonly test_start_time="$(date +%s)"
 
 readonly num_msg_per_batch=500
 readonly batches_per_iteration=5
-readonly num_iterations=12
+readonly num_iterations=5
 
 readonly zk_source_port=2181
 readonly zk_mirror_port=2182

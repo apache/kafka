@@ -19,12 +19,11 @@ package kafka.utils
 
 import org.I0Itec.zkclient.ZkClient
 import kafka.consumer.{SimpleConsumer, ConsumerConfig}
-import kafka.cluster.Partition
 import kafka.api.OffsetRequest
 import java.lang.IllegalStateException
 
 /**
- *  A utility that updates the offset of every broker partition to the offset of latest log segment file, in ZK.
+ *  A utility that updates the offset of every broker partition to the offset of earliest or latest log segment file, in ZK.
  */
 object UpdateOffsetsInZK {
   val Earliest = "earliest"
@@ -46,7 +45,7 @@ object UpdateOffsetsInZK {
   private def getAndSetOffsets(zkClient: ZkClient, offsetOption: Long, config: ConsumerConfig, topic: String): Unit = {
     val cluster = ZkUtils.getCluster(zkClient)
     val partitionsPerTopicMap = ZkUtils.getPartitionsForTopics(zkClient, List(topic).iterator)
-    var partitions: List[String] = Nil
+    var partitions: Seq[String] = Nil
 
     partitionsPerTopicMap.get(topic) match {
       case Some(l) =>  partitions = l.sortWith((s,t) => s < t)
@@ -54,22 +53,29 @@ object UpdateOffsetsInZK {
     }
 
     var numParts = 0
-    for (partString <- partitions) {
-      val part = Partition.parse(partString)
-      val broker = cluster.getBroker(part.brokerId) match {
+    for (partition <- partitions) {
+      val brokerHostingPartition = ZkUtils.getLeaderForPartition(zkClient, topic, partition.toInt)
+
+      val broker = brokerHostingPartition match {
         case Some(b) => b
-        case None => throw new IllegalStateException("Broker " + part.brokerId + " is unavailable. Cannot issue " +
+        case None => throw new IllegalStateException("Broker " + brokerHostingPartition + " is unavailable. Cannot issue " +
           "getOffsetsBefore request")
       }
-      val consumer = new SimpleConsumer(broker.host, broker.port, 10000, 100 * 1024)
-      val offsets = consumer.getOffsetsBefore(topic, part.partId, offsetOption, 1)
+
+      val brokerInfos = ZkUtils.getBrokerInfoFromIds(zkClient, List(broker))
+      if(brokerInfos.size == 0)
+        throw new IllegalStateException("Broker information for broker id %d does not exist in ZK".format(broker))
+
+      val brokerInfo = brokerInfos.head
+      val consumer = new SimpleConsumer(brokerInfo.host, brokerInfo.port, 10000, 100 * 1024)
+      val offsets = consumer.getOffsetsBefore(topic, partition.toInt, offsetOption, 1)
       val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
-      
-      println("updating partition " + part.name + " with new offset: " + offsets(0))
-      ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + part.name, offsets(0).toString)
+
+      println("updating partition " + partition + " with new offset: " + offsets(0))
+      ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + partition, offsets(0).toString)
       numParts += 1
     }
-    println("updated the offset for " + numParts + " partitions")    
+    println("updated the offset for " + numParts + " partitions")
   }
 
   private def usage() = {

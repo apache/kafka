@@ -29,6 +29,7 @@ import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import org.apache.log4j._
 import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
+import kafka.admin.CreateTopicCommand
 import kafka.api.{FetchRequestBuilder, OffsetRequest}
 
 object LogOffsetTest {
@@ -51,7 +52,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val config: Properties = createBrokerConfig(1, brokerPort)
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
-    
+
     server = TestUtils.createServer(new KafkaConfig(config))
     simpleConsumer = new SimpleConsumer("localhost", brokerPort, 1000000, 64*1024)
   }
@@ -94,9 +95,11 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Test
   def testGetOffsetsBeforeLatestTime() {
     val topicPartition = "kafka-" + 0
-    val topicPartitionPath = getLogDir.getAbsolutePath + "/" + topicPartition
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
+
+    // setup brokers in zookeeper as owners of partitions for this test
+    CreateTopicCommand.createTopic(zookeeper.client, topic, 1, 1, "1")
 
     val logManager = server.getLogManager
     val log = logManager.getOrCreateLog(topic, part)
@@ -133,6 +136,9 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
+    // setup brokers in zookeeper as owners of partitions for this test
+    CreateTopicCommand.createTopic(zookeeper.client, topic, 1, 1, "1")
+
     var offsetChanged = false
     for(i <- 1 to 14) {
       val consumerOffsets = simpleConsumer.getOffsetsBefore(topic, part,
@@ -147,10 +153,12 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testGetOffsetsBeforeNow() {
-    val topicPartition = "kafka-" + LogOffsetTest.random.nextInt(10)
-    val topicPartitionPath = getLogDir.getAbsolutePath + "/" + topicPartition
+    val topicPartition = "kafka-" + LogOffsetTest.random.nextInt(3)
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
+
+    // setup brokers in zookeeper as owners of partitions for this test
+    CreateTopicCommand.createTopic(zookeeper.client, topic, 3, 1, "1,1,1")
 
     val logManager = server.getLogManager
     val log = logManager.getOrCreateLog(topic, part)
@@ -172,10 +180,12 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testGetOffsetsBeforeEarliestTime() {
-    val topicPartition = "kafka-" + LogOffsetTest.random.nextInt(10)
-    val topicPartitionPath = getLogDir.getAbsolutePath + "/" + topicPartition
+    val topicPartition = "kafka-" + LogOffsetTest.random.nextInt(3)
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
+
+    // setup brokers in zookeeper as owners of partitions for this test
+    CreateTopicCommand.createTopic(zookeeper.client, topic, 3, 1, "1,1,1")
 
     val logManager = server.getLogManager
     val log = logManager.getOrCreateLog(topic, part)

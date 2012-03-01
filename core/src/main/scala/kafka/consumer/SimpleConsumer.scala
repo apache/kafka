@@ -22,6 +22,7 @@ import java.nio.channels._
 import kafka.api._
 import kafka.network._
 import kafka.utils._
+import kafka.utils.Utils._
 
 /**
  * A consumer of kafka messages
@@ -77,16 +78,16 @@ class SimpleConsumer(val host: String,
       getOrMakeConnection()
       var response: Tuple2[Receive,Int] = null
       try {
-        sendRequest(request)
-        response = getResponse
+        sendRequest(request, channel)
+        response = getResponse(channel)
       } catch {
         case e : java.io.IOException =>
           info("Reconnect in fetch request due to socket error: ", e)
           // retry once
           try {
             channel = connect
-            sendRequest(request)
-            response = getResponse
+            sendRequest(request, channel)
+            response = getResponse(channel)
           } catch {
             case ioe: java.io.IOException => channel = null; throw ioe;
           }
@@ -115,36 +116,22 @@ class SimpleConsumer(val host: String,
       getOrMakeConnection()
       var response: Tuple2[Receive,Int] = null
       try {
-        sendRequest(new OffsetRequest(topic, partition, time, maxNumOffsets))
-        response = getResponse
+        sendRequest(new OffsetRequest(topic, partition, time, maxNumOffsets), channel)
+        response = getResponse(channel)
       } catch {
         case e : java.io.IOException =>
           info("Reconnect in get offetset request due to socket error: ", e)
           // retry once
           try {
             channel = connect
-            sendRequest(new OffsetRequest(topic, partition, time, maxNumOffsets))
-            response = getResponse
+            sendRequest(new OffsetRequest(topic, partition, time, maxNumOffsets), channel)
+            response = getResponse(channel)
           } catch {
             case ioe: java.io.IOException => channel = null; throw ioe;
           }
       }
       OffsetRequest.deserializeOffsetArray(response._1.buffer)
     }
-  }
-
-  private def sendRequest(request: Request) = {
-    val send = new BoundedByteBufferSend(request)
-    send.writeCompletely(channel)
-  }
-
-  private def getResponse(): Tuple2[Receive,Int] = {
-    val response = new BoundedByteBufferReceive()
-    response.readCompletely(channel)
-
-    // this has the side effect of setting the initial position of buffer correctly
-    val errorCode: Int = response.buffer.getShort
-    (response, errorCode)
   }
 
   private def getOrMakeConnection() {

@@ -24,10 +24,10 @@ import kafka.utils.{Utils, Logging}
 import kafka.utils.TestUtils
 import org.scalatest.junit.JUnit3Suite
 import scala.collection.JavaConversions._
-import kafka.javaapi.message.ByteBufferMessageSet
 import kafka.consumer.{ConsumerConfig, KafkaMessageStream}
 import org.apache.log4j.{Level, Logger}
 import kafka.message._
+import kafka.javaapi.producer.{ProducerData, Producer}
 
 class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
@@ -67,16 +67,17 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
 
   def sendMessages(conf: KafkaConfig, messagesPerNode: Int, header: String, compressed: CompressionCodec): List[Message]= {
     var messages: List[Message] = Nil
-    val producer = new kafka.javaapi.producer.SyncProducer(TestUtils.createProducer("localhost", conf.port))
+    val producer: kafka.producer.Producer[Int, Message] = TestUtils.createProducer(zkConnect)
+    val javaProducer: Producer[Int, Message] = new kafka.javaapi.producer.Producer(producer)
     for (partition <- 0 until numParts) {
       val ms = 0.until(messagesPerNode).map(x =>
         new Message((header + conf.brokerId + "-" + partition + "-" + x).getBytes)).toArray
-      val mSet = new ByteBufferMessageSet(compressionCodec = compressed, messages = getMessageList(ms: _*))
       for (message <- ms)
         messages ::= message
-      producer.send(topic, partition, mSet)
+      import scala.collection.JavaConversions._
+      javaProducer.send(new ProducerData[Int, Message](topic, partition, asList(ms)))
     }
-    producer.close()
+    javaProducer.close
     messages
   }
 
@@ -104,12 +105,6 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
       }
     }
     messages.sortWith((s,t) => s.checksum < t.checksum)
-  }
-
-  private def getMessageList(messages: Message*): java.util.List[Message] = {
-    val messageList = new java.util.ArrayList[Message]()
-    messages.foreach(m => messageList.add(m))
-    messageList
   }
 
   private def toJavaMap(scalaMap: Map[String, Int]): java.util.Map[String, java.lang.Integer] = {

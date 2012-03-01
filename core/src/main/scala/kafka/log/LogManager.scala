@@ -19,7 +19,6 @@ package kafka.log
 
 import java.io._
 import kafka.utils._
-import scala.actors.Actor
 import scala.collection._
 import java.util.concurrent.CountDownLatch
 import kafka.server.{KafkaConfig, KafkaZooKeeper}
@@ -32,7 +31,6 @@ import org.I0Itec.zkclient.ZkClient
  */
 @threadsafe
 private[kafka] class LogManager(val config: KafkaConfig,
-                                private val scheduler: KafkaScheduler,
                                 private val time: Time,
                                 val logCleanupIntervalMs: Long,
                                 val logCleanupDefaultAgeMs: Long,
@@ -47,12 +45,12 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private val topicPartitionsMap = config.topicPartitionsMap
   private val logCreationLock = new Object
   private val random = new java.util.Random
-  private var zkActor: Actor = null
   private val startupLatch: CountDownLatch = new CountDownLatch(1)
   private val logFlusherScheduler = new KafkaScheduler(1, "kafka-logflusher-", false)
   private val logFlushIntervalMap = config.flushIntervalMap
   private val logRetentionMSMap = getLogRetentionMSMap(config.logRetentionHoursMap)
   private val logRetentionSize = config.logRetentionSize
+  private val scheduler = new KafkaScheduler(1, "kafka-logcleaner-", false)
 
   /* Initialize a log for each subdirectory of the main log directory */
   private val logs = new Pool[String, Pool[Int, Log]]()
@@ -78,35 +76,6 @@ private[kafka] class LogManager(val config: KafkaConfig,
     }
   }
   
-  /* Schedule the cleanup task to delete old logs */
-  if(scheduler != null) {
-    info("starting log cleaner every " + logCleanupIntervalMs + " ms")    
-    scheduler.scheduleWithRate(cleanupLogs, 60 * 1000, logCleanupIntervalMs)
-  }
-
-  kafkaZookeeper.startup
-  zkActor = new Actor {
-    def act() {
-      loop {
-        receive {
-          case topic: String =>
-            try {
-              kafkaZookeeper.registerTopicInZk(topic)
-            }
-            catch {
-              case e => error(e) // log it and let it go
-            }
-          case StopActor =>
-            info("zkActor stopped")
-            exit
-        }
-      }
-    }
-  }
-  zkActor.start
-
-  case object StopActor
-
   private def getLogRetentionMSMap(logRetentionHourMap: Map[String, Int]) : Map[String, Long] = {
     var ret = new mutable.HashMap[String, Long]
     for ( (topic, hour) <- logRetentionHourMap )
@@ -118,20 +87,27 @@ private[kafka] class LogManager(val config: KafkaConfig,
    *  Register this broker in ZK for the first time.
    */
   def startup() {
+    kafkaZookeeper.startup
     kafkaZookeeper.registerBrokerInZk()
-    for (topic <- getAllTopics)
-      kafkaZookeeper.registerTopicInZk(topic)
-    startupLatch.countDown
+
+    /* Schedule the cleanup task to delete old logs */
+    if(scheduler != null) {
+      if(scheduler.hasShutdown) {
+        println("Restarting log cleaner scheduler")
+        scheduler.startUp
+      }
+      info("starting log cleaner every " + logCleanupIntervalMs + " ms")
+      scheduler.scheduleWithRate(cleanupLogs, 60 * 1000, logCleanupIntervalMs)
+    }
+
+    if(logFlusherScheduler.hasShutdown) logFlusherScheduler.startUp
     info("Starting log flusher every " + config.flushSchedulerThreadRate + " ms with the following overrides " + logFlushIntervalMap)
     logFlusherScheduler.scheduleWithRate(flushAllLogs, config.flushSchedulerThreadRate, config.flushSchedulerThreadRate)
+    startupLatch.countDown
   }
 
   private def awaitStartup() {
     startupLatch.await
-  }
-
-  private def registerNewTopicInZK(topic: String) {
-    zkActor ! topic
   }
 
   /**
@@ -186,6 +162,10 @@ private[kafka] class LogManager(val config: KafkaConfig,
    * Create the log if it does not exist, if it exists just return it
    */
   def getOrCreateLog(topic: String, partition: Int): Log = {
+    // TODO: Change this later
+    if(!ZkUtils.isPartitionOnBroker(kafkaZookeeper.zkClient, topic, partition, config.brokerId))
+      throw new InvalidPartitionException("Broker %d does not host partition %d for topic %s".
+        format(config.brokerId, partition, topic))
     var hasNewTopic = false
     var parts = getLogPool(topic, partition)
     if (parts == null) {
@@ -196,6 +176,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
     }
     var log = parts.get(partition)
     if(log == null) {
+      // check if this broker hosts this partition
       log = createLog(topic, partition)
       val found = parts.putIfNotExists(partition, log)
       if(found != null) {
@@ -207,8 +188,6 @@ private[kafka] class LogManager(val config: KafkaConfig,
         info("Created log for '" + topic + "'-" + partition)
     }
 
-    if (hasNewTopic)
-      registerNewTopicInZK(topic)
     log
   }
   
@@ -279,11 +258,11 @@ private[kafka] class LogManager(val config: KafkaConfig,
    */
   def close() {
     info("Closing log manager")
+    scheduler.shutdown()
     logFlusherScheduler.shutdown()
     val iter = getLogIterator
     while(iter.hasNext)
       iter.next.close()
-    zkActor ! StopActor
     kafkaZookeeper.close
   }
   
