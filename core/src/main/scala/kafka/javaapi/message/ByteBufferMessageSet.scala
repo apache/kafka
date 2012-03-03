@@ -39,7 +39,7 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
 
   def validBytes: Long = underlying.validBytes
 
-  def serialized():ByteBuffer = underlying.serialized
+  def serialized():ByteBuffer = underlying.getSerialized()
 
   def getInitialOffset = initialOffset
 

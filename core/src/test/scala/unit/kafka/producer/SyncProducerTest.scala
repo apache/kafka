@@ -44,7 +44,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     var failed = false
     val firstStart = SystemTime.milliseconds
     try {
-      producer.send("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)))
+      producer.send(TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes))))
     }catch {
       case e: Exception => failed=true
     }
@@ -54,7 +54,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     Assert.assertTrue((firstEnd-firstStart) < 500)
     val secondStart = SystemTime.milliseconds
     try {
-      producer.send("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)))
+      producer.send(TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes))))
     }catch {
       case e: Exception => failed = true
     }
@@ -63,7 +63,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     Assert.assertTrue((secondEnd-secondStart) < 500)
 
     try {
-      producer.multiSend(Array(new ProducerRequest("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)))))
+      producer.send(TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes))))
     }catch {
       case e: Exception => failed=true
     }
@@ -83,7 +83,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val bytes = new Array[Byte](101)
     var failed = false
     try {
-      producer.send("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(bytes)))
+      producer.send(TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(bytes))))
     }catch {
       case e: MessageSizeTooLargeException => failed = true
     }

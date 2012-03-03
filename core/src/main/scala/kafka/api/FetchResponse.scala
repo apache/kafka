@@ -39,6 +39,15 @@ object PartitionData {
 
 case class PartitionData(partition: Int, error: Int = ErrorMapping.NoError, initialOffset:Long = 0L, messages: MessageSet) {
   val sizeInBytes = 4 + 4 + 8 + 4 + messages.sizeInBytes.intValue()
+
+  def this(partition: Int, messages: MessageSet) = this(partition, ErrorMapping.NoError, 0L, messages)
+
+  def getTranslatedPartition(topic: String, randomSelector: String => Int): Int = {
+    if (partition == ProducerRequest.RandomPartition)
+      return randomSelector(topic)
+    else 
+      return partition 
+  }
 }
 
 object TopicData {
@@ -73,6 +82,15 @@ object TopicData {
 
 case class TopicData(topic: String, partitionData: Array[PartitionData]) {
   val sizeInBytes = 2 + topic.length + partitionData.foldLeft(4)(_ + _.sizeInBytes)
+
+  override def equals(other: Any): Boolean = {
+    other match {
+      case that: TopicData =>
+        ( topic == that.topic &&
+          partitionData.toSeq == that.partitionData.toSeq )
+      case _ => false
+    }
+  }
 }
 
 object FetchResponse {

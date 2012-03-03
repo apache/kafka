@@ -17,7 +17,7 @@
 
 package kafka.producer.async
 
-import kafka.api.ProducerRequest
+import kafka.api.{ProducerRequest, TopicData, PartitionData}
 import kafka.serializer.Encoder
 import kafka.producer._
 import kafka.cluster.{Partition, Broker}
@@ -147,9 +147,22 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
 
   private def send(brokerId: Int, messagesPerTopic: Map[(String, Int), ByteBufferMessageSet]) {
     if(messagesPerTopic.size > 0) {
-      val requests = messagesPerTopic.map(f => new ProducerRequest(f._1._1, f._1._2, f._2)).toArray
+      val topics = new HashMap[String, ListBuffer[PartitionData]]()
+      val requests = messagesPerTopic.map(f => {
+        val topicName = f._1._1
+        val partitionId = f._1._2
+        val messagesSet= f._2
+        val topic = topics.get(topicName) // checking to see if this topics exists
+        topic match {
+          case None => topics += topicName -> new ListBuffer[PartitionData]() //create a new listbuffer for this topic
+          case Some(x) => trace("found " + topicName)
+        }
+	    topics(topicName).append(new PartitionData(partitionId, messagesSet))
+      })
+      val topicData = topics.map(kv => new TopicData(kv._1,kv._2.toArray))
+      val producerRequest = new ProducerRequest(config.correlationId, config.clientId, config.requiredAcks, config.ackTimeout, topicData.toArray) //new kafka.javaapi.ProducerRequest(correlation_id, client_id, required_acks, ack_timeout, topic_data.toArray)
       val syncProducer = producerPool.getProducer(brokerId)
-      syncProducer.multiSend(requests)
+      syncProducer.send(producerRequest)
       trace("kafka producer sent messages for topics %s to broker %s:%d"
         .format(messagesPerTopic, syncProducer.config.host, syncProducer.config.port))
     }

@@ -33,6 +33,7 @@ import collection.mutable.ListBuffer
 import kafka.consumer.{KafkaMessageStream, ConsumerConfig}
 import scala.collection.Map
 import kafka.serializer.Encoder
+import kafka.api.{ProducerRequest, TopicData, PartitionData}
 
 /**
  * Utility functions to help with testing
@@ -336,7 +337,47 @@ object TestUtils {
       buffer += ("msg" + i)
     buffer
   }
+  /**
+   * Create a wired format request based on simple basic information
+   */
+  def produceRequest(topic: String, message: ByteBufferMessageSet): kafka.api.ProducerRequest = {
+    produceRequest(SyncProducerConfig.DefaultCorrelationId,topic,ProducerRequest.RandomPartition,message)
+  }
+  def produceRequest(topic: String, partition: Int, message: ByteBufferMessageSet): kafka.api.ProducerRequest = {
+    produceRequest(SyncProducerConfig.DefaultCorrelationId,topic,partition,message)
+  }
 
+  def produceRequest(correlationId: Int, topic: String, partition: Int, message: ByteBufferMessageSet): kafka.api.ProducerRequest = {
+    val clientId = SyncProducerConfig.DefaultClientId
+    val requiredAcks: Short = SyncProducerConfig.DefaultRequiredAcks
+    val ackTimeout = SyncProducerConfig.DefaultAckTimeoutMs
+    var data = new Array[TopicData](1)
+    var partitionData = new Array[PartitionData](1)
+    partitionData(0) = new PartitionData(partition,message)
+    data(0) = new TopicData(topic,partitionData)
+    val pr = new kafka.api.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeout, data)  	
+    pr
+  }
+
+  def produceJavaRequest(topic: String, message: kafka.javaapi.message.ByteBufferMessageSet): kafka.javaapi.ProducerRequest = {
+    produceJavaRequest(-1,topic,-1,message)
+  }
+
+  def produceJavaRequest(topic: String, partition: Int, message: kafka.javaapi.message.ByteBufferMessageSet): kafka.javaapi.ProducerRequest = {
+    produceJavaRequest(-1,topic,partition,message)
+  }
+
+  def produceJavaRequest(correlationId: Int, topic: String, partition: Int, message: kafka.javaapi.message.ByteBufferMessageSet): kafka.javaapi.ProducerRequest = {
+    val clientId = "test"
+    val requiredAcks: Short = 0
+    val ackTimeout = 0
+    var data = new Array[TopicData](1)
+    var partitionData = new Array[PartitionData](1)
+    partitionData(0) = new PartitionData(partition,message.underlying)
+    data(0) = new TopicData(topic,partitionData)
+    val pr = new kafka.javaapi.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeout, data)  	
+    pr
+  }
 }
 
 object TestZKUtils {

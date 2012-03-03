@@ -41,4 +41,23 @@ trait SyncProducerConfigShared {
   val reconnectInterval = Utils.getInt(props, "reconnect.interval", 30000)
 
   val maxMessageSize = Utils.getInt(props, "max.message.size", 1000000)
+
+  /* the client application sending the producer requests */
+  val correlationId = Utils.getInt(props,"producer.request.correlation_id",-1)
+
+  /* the client application sending the producer requests */
+  val clientId = Utils.getString(props,"producer.request.client_id","")
+
+  /* the required_acks of the producer requests */
+  val requiredAcks = Utils.getShort(props,"producer.request.required_acks",0)
+
+  /* the ack_timeout of the producer requests */
+  val ackTimeout = Utils.getInt(props,"producer.request.ack_timeout",1)
+}
+
+object SyncProducerConfig {
+  val DefaultCorrelationId = -1
+  val DefaultClientId = ""
+  val DefaultRequiredAcks : Short = 0
+  val DefaultAckTimeoutMs = 1
 }

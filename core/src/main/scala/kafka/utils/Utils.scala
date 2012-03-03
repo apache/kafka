@@ -195,6 +195,9 @@ object Utils extends Logging {
   def getInt(props: Properties, name: String, default: Int): Int = 
     getIntInRange(props, name, default, (Int.MinValue, Int.MaxValue))
   
+  def getShort(props: Properties, name: String, default: Short): Short = 
+    getShortInRange(props, name, default, (Short.MinValue, Short.MaxValue))
+
   /**
    * Read an integer from the properties instance. Throw an exception 
    * if the value is not in the given range (inclusive)
@@ -209,6 +212,18 @@ object Utils extends Logging {
     val v = 
       if(props.containsKey(name))
         props.getProperty(name).toInt
+      else
+        default
+    if(v < range._1 || v > range._2)
+      throw new IllegalArgumentException(name + " has value " + v + " which is not in the range " + range + ".")
+    else
+      v
+  }
+
+ def getShortInRange(props: Properties, name: String, default: Short, range: (Short, Short)): Short = {
+    val v = 
+      if(props.containsKey(name))
+        props.getProperty(name).toShort
       else
         default
     if(v < range._1 || v > range._2)

@@ -22,7 +22,7 @@ import kafka.api.TopicData
 
 class FetchResponse( val versionId: Short,
                      val correlationId: Int,
-                     val data: Array[TopicData] ) {
+                     private val data: Array[TopicData] ) {
 
   private val underlying = new kafka.api.FetchResponse(versionId, correlationId, data)
 

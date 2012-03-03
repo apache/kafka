@@ -111,4 +111,9 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
         throw new InvalidMessageException
   }
   
+  /**
+   * Used to allow children to have serialization on implementation
+   */
+  def getSerialized(): ByteBuffer
+
 }

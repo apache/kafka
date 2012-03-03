@@ -41,7 +41,6 @@ class KafkaApis(val logManager: LogManager) extends Logging {
     apiId match {
       case RequestKeys.Produce => handleProducerRequest(receive)
       case RequestKeys.Fetch => handleFetchRequest(receive)
-      case RequestKeys.MultiProduce => handleMultiProducerRequest(receive)
       case RequestKeys.Offsets => handleOffsetRequest(receive)
       case RequestKeys.TopicMetadata => handleTopicMetadataRequest(receive)
       case _ => throw new IllegalStateException("No mapping found for handler id " + apiId)
@@ -59,31 +58,38 @@ class KafkaApis(val logManager: LogManager) extends Logging {
     None
   }
 
-  def handleMultiProducerRequest(receive: Receive): Option[Send] = {
-    val request = MultiProducerRequest.readFrom(receive.buffer)
-    if(requestLogger.isTraceEnabled)
-      requestLogger.trace("Multiproducer request " + request.toString)
-    request.produces.map(handleProducerRequest(_, "MultiProducerRequest"))
-    None
-  }
-
-  private def handleProducerRequest(request: ProducerRequest, requestHandlerName: String) = {
-    val partition = request.getTranslatedPartition(logManager.chooseRandomPartition)
-    try {
-      logManager.getOrCreateLog(request.topic, partition).append(request.messages)
-      trace(request.messages.sizeInBytes + " bytes written to logs.")
-    } catch {
-      case e =>
-        error("Error processing " + requestHandlerName + " on " + request.topic + ":" + partition, e)
-        e match {
-          case _: IOException => 
-            fatal("Halting due to unrecoverable I/O error while handling producer request: " + e.getMessage, e)
-            System.exit(1)
-          case _ =>
+  private def handleProducerRequest(request: ProducerRequest, requestHandlerName: String): Option[ProducerResponse] = {
+	val requestSize = request.data.size
+	val errors = new Array[Int](requestSize)
+	val offsets = new Array[Long](requestSize)
+	
+    request.data.foreach(d => {
+	  d.partitionData.foreach(p => {
+        val partition = p.getTranslatedPartition(d.topic, logManager.chooseRandomPartition)
+        try {
+          logManager.getOrCreateLog(d.topic, partition).append(p.messages)
+          trace(p.messages.sizeInBytes + " bytes written to logs.")
+          p.messages.foreach(m => trace("wrote message %s to disk".format(m.message.checksum)))
         }
-        throw e
-    }
-    None
+        catch {
+          case e =>
+            //TODO: handle response in ProducerResponse
+            error("Error processing " + requestHandlerName + " on " + d.topic + ":" + partition, e)
+            e match {
+              case _: IOException =>
+                fatal("Halting due to unrecoverable I/O error while handling producer request: " + e.getMessage, e)
+                Runtime.getRuntime.halt(1)
+              case _ =>
+            }
+          //throw e
+        }
+      })
+    //None
+    })
+    if (request.requiredAcks == 0)
+      None
+    else
+      None //TODO: send when KAFKA-49 can receive this Some(new ProducerResponse(request.versionId, request.correlationId, errors, offsets))
   }
 
   def handleFetchRequest(request: Receive): Option[Send] = {

@@ -51,29 +51,10 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     if (logger.isTraceEnabled) {
       trace("verifying sendbuffer of size " + buffer.limit)
       val requestTypeId = buffer.getShort()
-      if (requestTypeId == RequestKeys.MultiProduce) {
-        try {
-          val request = MultiProducerRequest.readFrom(buffer)
-          for (produce <- request.produces) {
-            try {
-              for (messageAndOffset <- produce.messages)
-                if (!messageAndOffset.message.isValid)
-                  trace("topic " + produce.topic + " is invalid")
-            }
-            catch {
-              case e: Throwable =>
-                trace("error iterating messages ", e)
-            }
-          }
-        }
-        catch {
-          case e: Throwable =>
-            trace("error verifying sendbuffer ", e)
-        }
-      }
+      val request = ProducerRequest.readFrom(buffer)
+      trace(request.toString)
     }
   }
-
   /**
    * Common functionality for the public send methods
    */
@@ -108,21 +89,15 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   /**
    * Send a message
    */
-  def send(topic: String, partition: Int, messages: ByteBufferMessageSet) {
-    verifyMessageSize(messages)
-    val setSize = messages.sizeInBytes.asInstanceOf[Int]
-    trace("Got message set with " + setSize + " bytes to send")
-    send(new BoundedByteBufferSend(new ProducerRequest(topic, partition, messages)))
-  }
- 
-  def send(topic: String, messages: ByteBufferMessageSet): Unit = send(topic, ProducerRequest.RandomPartition, messages)
-
-  def multiSend(produces: Array[ProducerRequest]) {
-    for (request <- produces)
-      verifyMessageSize(request.messages)
-    val setSize = produces.foldLeft(0L)(_ + _.messages.sizeInBytes)
-    trace("Got multi message sets with " + setSize + " bytes to send")
-    send(new BoundedByteBufferSend(new MultiProducerRequest(produces)))
+  def send(producerRequest: ProducerRequest) {
+    producerRequest.data.foreach(d => {
+      d.partitionData.foreach(p => {
+	    verifyMessageSize(new ByteBufferMessageSet(p.messages.getSerialized()))
+        val setSize = p.messages.sizeInBytes.asInstanceOf[Int]
+        trace("Got message set with " + setSize + " bytes to send")
+      })
+    })
+    send(new BoundedByteBufferSend(producerRequest))
   }
 
   def send(request: TopicMetadataRequest): Seq[TopicMetadata] = {

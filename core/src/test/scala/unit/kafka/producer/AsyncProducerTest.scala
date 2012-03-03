@@ -381,11 +381,12 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
     mockSyncProducer.send(new TopicMetadataRequest(List(topic)))
     EasyMock.expectLastCall().andReturn(List(topic1Metadata))
-    mockSyncProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic, 0, messagesToSet(msgs.take(5))))))
+    mockSyncProducer.send(TestUtils.produceRequest(topic, 0,
+    messagesToSet(msgs.take(5))))
     EasyMock.expectLastCall
-    mockSyncProducer.multiSend(EasyMock.aryEq(Array(new ProducerRequest(topic, 0, messagesToSet(msgs.takeRight(5))))))
-    EasyMock.expectLastCall
-    EasyMock.replay(mockSyncProducer)
+    mockSyncProducer.send(TestUtils.produceRequest(topic, 0,
+    messagesToSet(msgs.takeRight(5))))
+	EasyMock.replay(mockSyncProducer)
 
     val producerPool = EasyMock.createMock(classOf[ProducerPool])
     producerPool.getZkClient
@@ -495,10 +496,7 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   class MockProducer(override val config: SyncProducerConfig) extends SyncProducer(config) {
-    override def send(topic: String, messages: ByteBufferMessageSet): Unit = {
-      Thread.sleep(1000)
-    }
-    override def multiSend(produces: Array[ProducerRequest]) {
+    override def send(produceRequest: ProducerRequest): Unit = {
       Thread.sleep(1000)
     }
   }

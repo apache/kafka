@@ -33,7 +33,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     // create a ByteBufferMessageSet that doesn't contain a full message
     // iterating it should get an InvalidMessageSizeException
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("01234567890123456789".getBytes()))
-    val buffer = messages.serialized.slice
+    val buffer = messages.getSerialized().slice
     buffer.limit(10)
     val messageSetWithNoFullMessage = new ByteBufferMessageSet(buffer = buffer, initialOffset = 1000)
     try {
@@ -51,7 +51,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     {
       val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes()), new Message("there".getBytes()))
       val buffer = ByteBuffer.allocate(messages.sizeInBytes.toInt + 2)
-      buffer.put(messages.serialized)
+      buffer.put(messages.getSerialized())
       buffer.putShort(4)
       val messagesPlus = new ByteBufferMessageSet(buffer)
       assertEquals("Adding invalid bytes shouldn't change byte count", messages.validBytes, messagesPlus.validBytes)
@@ -93,7 +93,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       //make sure ByteBufferMessageSet is re-iterable.
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(messageSet.iterator))
       //make sure the last offset after iteration is correct
-      assertEquals("offset of last message not expected", messageSet.last.offset, messageSet.serialized.limit)
+      assertEquals("offset of last message not expected", messageSet.last.offset, messageSet.getSerialized().limit)
     }
 
     // test for compressed regular messages
@@ -103,7 +103,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       //make sure ByteBufferMessageSet is re-iterable.
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(messageSet.iterator))
       //make sure the last offset after iteration is correct
-      assertEquals("offset of last message not expected", messageSet.last.offset, messageSet.serialized.limit)
+      assertEquals("offset of last message not expected", messageSet.last.offset, messageSet.getSerialized().limit)
     }
 
     // test for mixed empty and non-empty messagesets uncompressed
@@ -111,16 +111,16 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       val emptyMessageList : List[Message] = Nil
       val emptyMessageSet = new ByteBufferMessageSet(NoCompressionCodec, emptyMessageList: _*)
       val regularMessgeSet = new ByteBufferMessageSet(NoCompressionCodec, messageList: _*)
-      val buffer = ByteBuffer.allocate(emptyMessageSet.serialized.limit + regularMessgeSet.serialized.limit)
-      buffer.put(emptyMessageSet.serialized)
-      buffer.put(regularMessgeSet.serialized)
+      val buffer = ByteBuffer.allocate(emptyMessageSet.getSerialized().limit + regularMessgeSet.getSerialized().limit)
+      buffer.put(emptyMessageSet.getSerialized())
+      buffer.put(regularMessgeSet.getSerialized())
       buffer.rewind
       val mixedMessageSet = new ByteBufferMessageSet(buffer, 0, 0)
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
       //make sure ByteBufferMessageSet is re-iterable.
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
       //make sure the last offset after iteration is correct
-      assertEquals("offset of last message not expected", mixedMessageSet.last.offset, mixedMessageSet.serialized.limit)
+      assertEquals("offset of last message not expected", mixedMessageSet.last.offset, mixedMessageSet.getSerialized().limit)
     }
 
     // test for mixed empty and non-empty messagesets compressed
@@ -128,16 +128,16 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       val emptyMessageList : List[Message] = Nil
       val emptyMessageSet = new ByteBufferMessageSet(DefaultCompressionCodec, emptyMessageList: _*)
       val regularMessgeSet = new ByteBufferMessageSet(DefaultCompressionCodec, messageList: _*)
-      val buffer = ByteBuffer.allocate(emptyMessageSet.serialized.limit + regularMessgeSet.serialized.limit)
-      buffer.put(emptyMessageSet.serialized)
-      buffer.put(regularMessgeSet.serialized)
+      val buffer = ByteBuffer.allocate(emptyMessageSet.getSerialized().limit + regularMessgeSet.getSerialized().limit)
+      buffer.put(emptyMessageSet.getSerialized())
+      buffer.put(regularMessgeSet.getSerialized())
       buffer.rewind
       val mixedMessageSet = new ByteBufferMessageSet(buffer, 0, 0)
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
       //make sure ByteBufferMessageSet is re-iterable.
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
       //make sure the last offset after iteration is correct
-      assertEquals("offset of last message not expected", mixedMessageSet.last.offset, mixedMessageSet.serialized.limit)
+      assertEquals("offset of last message not expected", mixedMessageSet.last.offset, mixedMessageSet.getSerialized().limit)
     }
   }
 

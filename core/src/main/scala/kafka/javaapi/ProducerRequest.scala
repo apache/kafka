@@ -17,36 +17,29 @@
 package kafka.javaapi
 
 import kafka.network.Request
-import kafka.api.RequestKeys
+import kafka.api.{RequestKeys, TopicData}
 import java.nio.ByteBuffer
 
-class ProducerRequest(val topic: String,
-                      val partition: Int,
-                      val messages: kafka.javaapi.message.ByteBufferMessageSet) extends Request(RequestKeys.Produce) {
+class ProducerRequest(val correlationId: Int,
+                      val clientId: String,
+                      val requiredAcks: Short,
+                      val ackTimeout: Int,
+                      val data: Array[TopicData]) extends Request(RequestKeys.Produce) {
+	
   import Implicits._
-  private val underlying = new kafka.api.ProducerRequest(topic, partition, messages)
+  val underlying = new kafka.api.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeout, data)
 
   def writeTo(buffer: ByteBuffer) { underlying.writeTo(buffer) }
 
   def sizeInBytes(): Int = underlying.sizeInBytes
 
-  def getTranslatedPartition(randomSelector: String => Int): Int =
-    underlying.getTranslatedPartition(randomSelector)
-
   override def toString: String =
     underlying.toString
 
-  override def equals(other: Any): Boolean = {
-    other match {
-      case that: ProducerRequest =>
-        (that canEqual this) && topic == that.topic && partition == that.partition &&
-                messages.equals(that.messages)
-      case _ => false
-    }
-  }
+  override def equals(other: Any): Boolean = underlying.equals(other)
 
   def canEqual(other: Any): Boolean = other.isInstanceOf[ProducerRequest]
 
-  override def hashCode: Int = 31 + (17 * partition) + topic.hashCode + messages.hashCode
+  override def hashCode: Int = underlying.hashCode
 
 }

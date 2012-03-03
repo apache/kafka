@@ -53,7 +53,7 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
 
   def getErrorCode = errorCode
 
-  def serialized(): ByteBuffer = buffer
+  def getSerialized(): ByteBuffer = buffer
 
   def validBytes: Long = shallowValidBytes
 
