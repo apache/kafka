@@ -82,8 +82,9 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
     var shallowIter = internalIterator(true)
     while(shallowIter.hasNext){
       var messageAndOffset = shallowIter.next
-      if (messageAndOffset.message.payloadSize > maxMessageSize)
-        throw new MessageSizeTooLargeException
+      val payloadSize = messageAndOffset.message.payloadSize
+      if ( payloadSize > maxMessageSize)
+        throw new MessageSizeTooLargeException("payload size of " + payloadSize + " larger than " + maxMessageSize)
     }
   }
 

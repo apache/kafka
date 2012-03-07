@@ -58,5 +58,4 @@ class InvalidTopicException(message: String) extends RuntimeException(message) {
 }
 
 class MessageSizeTooLargeException(message: String) extends RuntimeException(message) {
-  def this() = this(null)
 }
