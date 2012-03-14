@@ -23,9 +23,9 @@
 package main
 
 import (
-  "kafka"
   "flag"
   "fmt"
+  kafka "svn.apache.org/repos/asf/incubator/kafka.svn/trunk/clients/go/src"
   "os"
 )
 
@@ -63,7 +63,7 @@ func main() {
       fmt.Println("Error: ", err)
       return
     }
-    payload := make([]byte, stat.Size)
+    payload := make([]byte, stat.Size())
     file.Read(payload)
     timing := kafka.StartTiming("Sending")
 

@@ -23,11 +23,12 @@
 package kafka
 
 import (
+  "encoding/binary"
+  "errors"
+  "io"
   "log"
-  "os"
   "net"
   "time"
-  "encoding/binary"
 )
 
 type BrokerConsumer struct {
@@ -66,11 +67,11 @@ func NewBrokerOffsetConsumer(hostname string, topic string, partition int) *Brok
 func (consumer *BrokerConsumer) AddCodecs(payloadCodecs []PayloadCodec) {
   // merge to the default map, so one 'could' override the default codecs..
   for k, v := range codecsMap(payloadCodecs) {
-    consumer.codecs[k] = v, true
+    consumer.codecs[k] = v
   }
 }
 
-func (consumer *BrokerConsumer) ConsumeOnChannel(msgChan chan *Message, pollTimeoutMs int64, quit chan bool) (int, os.Error) {
+func (consumer *BrokerConsumer) ConsumeOnChannel(msgChan chan *Message, pollTimeoutMs int64, quit chan bool) (int, error) {
   conn, err := consumer.broker.connect()
   if err != nil {
     return -1, err
@@ -86,14 +87,14 @@ func (consumer *BrokerConsumer) ConsumeOnChannel(msgChan chan *Message, pollTime
       })
 
       if err != nil {
-        if err != os.EOF {
+        if err != io.EOF {
           log.Println("Fatal Error: ", err)
           panic(err)
         }
         quit <- true // force quit
         break
       }
-      time.Sleep(pollTimeoutMs * 1000000)
+      time.Sleep(time.Millisecond * time.Duration(pollTimeoutMs))
     }
     done <- true
   }()
@@ -107,7 +108,7 @@ func (consumer *BrokerConsumer) ConsumeOnChannel(msgChan chan *Message, pollTime
 
 type MessageHandlerFunc func(msg *Message)
 
-func (consumer *BrokerConsumer) Consume(handlerFunc MessageHandlerFunc) (int, os.Error) {
+func (consumer *BrokerConsumer) Consume(handlerFunc MessageHandlerFunc) (int, error) {
   conn, err := consumer.broker.connect()
   if err != nil {
     return -1, err
@@ -123,7 +124,7 @@ func (consumer *BrokerConsumer) Consume(handlerFunc MessageHandlerFunc) (int, os
   return num, err
 }
 
-func (consumer *BrokerConsumer) consumeWithConn(conn *net.TCPConn, handlerFunc MessageHandlerFunc) (int, os.Error) {
+func (consumer *BrokerConsumer) consumeWithConn(conn *net.TCPConn, handlerFunc MessageHandlerFunc) (int, error) {
   _, err := conn.Write(consumer.broker.EncodeConsumeRequest(consumer.offset, consumer.maxSize))
   if err != nil {
     return -1, err
@@ -142,7 +143,7 @@ func (consumer *BrokerConsumer) consumeWithConn(conn *net.TCPConn, handlerFunc M
     for currentOffset <= uint64(length-4) {
       totalLength, msgs := Decode(payload[currentOffset:], consumer.codecs)
       if msgs == nil {
-        return num, os.NewError("Error Decoding Message")
+        return num, errors.New("Error Decoding Message")
       }
       msgOffset := consumer.offset + currentOffset
       for _, msg := range msgs {
@@ -164,7 +165,7 @@ func (consumer *BrokerConsumer) consumeWithConn(conn *net.TCPConn, handlerFunc M
 // Get a list of valid offsets (up to maxNumOffsets) before the given time, where 
 // time is in milliseconds (-1, from the latest offset available, -2 from the smallest offset available)
 // The result is a list of offsets, in descending order.
-func (consumer *BrokerConsumer) GetOffsets(time int64, maxNumOffsets uint32) ([]uint64, os.Error) {
+func (consumer *BrokerConsumer) GetOffsets(time int64, maxNumOffsets uint32) ([]uint64, error) {
   offsets := make([]uint64, 0)
 
   conn, err := consumer.broker.connect()

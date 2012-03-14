@@ -23,13 +23,13 @@
 package kafka
 
 import (
+  "bufio"
+  "encoding/binary"
+  "errors"
+  "fmt"
+  "io"
   "log"
   "net"
-  "os"
-  "fmt"
-  "encoding/binary"
-  "io"
-  "bufio"
 )
 
 const (
@@ -48,7 +48,7 @@ func newBroker(hostname string, topic string, partition int) *Broker {
     hostname:  hostname}
 }
 
-func (b *Broker) connect() (conn *net.TCPConn, error os.Error) {
+func (b *Broker) connect() (conn *net.TCPConn, error error) {
   raddr, err := net.ResolveTCPAddr(NETWORK, b.hostname)
   if err != nil {
     log.Println("Fatal Error: ", err)
@@ -63,7 +63,7 @@ func (b *Broker) connect() (conn *net.TCPConn, error os.Error) {
 }
 
 // returns length of response & payload & err
-func (b *Broker) readResponse(conn *net.TCPConn) (uint32, []byte, os.Error) {
+func (b *Broker) readResponse(conn *net.TCPConn) (uint32, []byte, error) {
   reader := bufio.NewReader(conn)
   length := make([]byte, 4)
   lenRead, err := io.ReadFull(reader, length)
@@ -71,7 +71,7 @@ func (b *Broker) readResponse(conn *net.TCPConn) (uint32, []byte, os.Error) {
     return 0, []byte{}, err
   }
   if lenRead != 4 || lenRead < 0 {
-    return 0, []byte{}, os.NewError("invalid length of the packet length field")
+    return 0, []byte{}, errors.New("invalid length of the packet length field")
   }
 
   expectedLength := binary.BigEndian.Uint32(length)
@@ -82,13 +82,13 @@ func (b *Broker) readResponse(conn *net.TCPConn) (uint32, []byte, os.Error) {
   }
 
   if uint32(lenRead) != expectedLength {
-    return 0, []byte{}, os.NewError(fmt.Sprintf("Fatal Error: Unexpected Length: %d  expected:  %d", lenRead, expectedLength))
+    return 0, []byte{}, errors.New(fmt.Sprintf("Fatal Error: Unexpected Length: %d  expected:  %d", lenRead, expectedLength))
   }
 
   errorCode := binary.BigEndian.Uint16(messages[0:2])
   if errorCode != 0 {
     log.Println("errorCode: ", errorCode)
-    return 0, []byte{}, os.NewError(
+    return 0, []byte{}, errors.New(
       fmt.Sprintf("Broker Response Error: %d", errorCode))
   }
   return expectedLength, messages[2:], nil
