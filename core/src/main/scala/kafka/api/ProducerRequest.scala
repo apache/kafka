@@ -24,7 +24,7 @@ import kafka.utils._
 
 object ProducerRequest {
   val RandomPartition = -1
-  val versionId: Short = 0
+  val CurrentVersion: Short = 0
 
   def readFrom(buffer: ByteBuffer): ProducerRequest = {
     val versionId: Short = buffer.getShort
@@ -54,13 +54,15 @@ object ProducerRequest {
   }
 }
 
-case class ProducerRequest(val versionId: Short, val correlationId: Int,
-                      val clientId: String,
-                      val requiredAcks: Short,
-                      val ackTimeout: Int,
-                      val data: Array[TopicData]) extends Request(RequestKeys.Produce) {
+case class ProducerRequest( versionId: Short,
+                            correlationId: Int,
+                            clientId: String,
+                            requiredAcks: Short,
+                            ackTimeout: Int,
+                            data: Array[TopicData] ) extends Request(RequestKeys.Produce) {
 
-  def this(correlationId: Int, clientId: String, requiredAcks: Short, ackTimeout: Int, data: Array[TopicData]) = this(ProducerRequest.versionId, correlationId, clientId, requiredAcks, ackTimeout, data)
+  def this(correlationId: Int, clientId: String, requiredAcks: Short, ackTimeout: Int, data: Array[TopicData]) =
+    this(ProducerRequest.CurrentVersion, correlationId, clientId, requiredAcks, ackTimeout, data)
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
@@ -70,53 +72,32 @@ case class ProducerRequest(val versionId: Short, val correlationId: Int,
     buffer.putInt(ackTimeout)
     //save the topic structure
     buffer.putInt(data.size) //the number of topics
-    data.foreach(d =>{
-      Utils.writeShortString(buffer, d.topic, "UTF-8") //write the topic
-      buffer.putInt(d.partitionData.size) //the number of partitions
-      d.partitionData.foreach(p => {
-        buffer.putInt(p.partition)
-        buffer.putInt(p.messages.getSerialized().limit)
-        buffer.put(p.messages.getSerialized())
-        p.messages.getSerialized().rewind
-      })
-    })
+    for(topicData <- data) {
+      Utils.writeShortString(buffer, topicData.topic, "UTF-8") //write the topic
+      buffer.putInt(topicData.partitionData.size) //the number of partitions
+      for(partitionData <- topicData.partitionData) {
+        buffer.putInt(partitionData.partition)
+        buffer.putInt(partitionData.messages.getSerialized().limit)
+        buffer.put(partitionData.messages.getSerialized())
+        partitionData.messages.getSerialized().rewind
+      }
+    }
   }
 
   def sizeInBytes(): Int = {
     var size = 0 
     //size, request_type_id, version_id, correlation_id, client_id, required_acks, ack_timeout, data.size
-    size = 2 + 4 + 2 + clientId.length + 2 + 4 + 4; 
-    data.foreach(d =>{
-	  size += 2 + d.topic.length + 4
-	  d.partitionData.foreach(p => {
-	    size += 4 + 4 + p.messages.sizeInBytes.asInstanceOf[Int]
-	  })
-    })
+    size = 2 + 4 + 2 + clientId.length + 2 + 4 + 4;
+    for(topicData <- data) {
+	    size += 2 + topicData.topic.length + 4
+      for(partitionData <- topicData.partitionData) {
+        size += 4 + 4 + partitionData.messages.sizeInBytes.asInstanceOf[Int]
+      }
+    }
     size
   }
 
-  override def toString: String = {
-    val builder = new StringBuilder()
-    builder.append("ProducerRequest(")
-    builder.append(versionId + ",")
-    builder.append(correlationId + ",")
-    builder.append(clientId + ",")
-    builder.append(requiredAcks + ",")
-    builder.append(ackTimeout)
-	data.foreach(d =>{
-      builder.append(":[" + d.topic)
-      d.partitionData.foreach(p => {
-        builder.append(":[")
-        builder.append(p.partition + ",")
-        builder.append(p.messages.sizeInBytes)
-        builder.append("]")
-      })
-      builder.append("]")
-    })
-    builder.append(")")
-    builder.toString
-  }
-
+  // need to override case-class equals due to broken java-array equals()
   override def equals(other: Any): Boolean = {
    other match {
       case that: ProducerRequest =>
@@ -128,4 +109,8 @@ case class ProducerRequest(val versionId: Short, val correlationId: Int,
       case _ => false
     }
   }
+
+  def getNumTopicPartitions = data.foldLeft(0)(_ + _.partitionData.length)
+
+  def expectResponse = requiredAcks > 0
 }

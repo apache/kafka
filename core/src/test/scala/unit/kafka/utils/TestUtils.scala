@@ -337,6 +337,7 @@ object TestUtils {
       buffer += ("msg" + i)
     buffer
   }
+  
   /**
    * Create a wired format request based on simple basic information
    */
@@ -347,16 +348,22 @@ object TestUtils {
     produceRequest(SyncProducerConfig.DefaultCorrelationId,topic,partition,message)
   }
 
+  def produceRequestWithAcks(topics: Seq[String], partitions: Seq[Int], message: ByteBufferMessageSet): kafka.api.ProducerRequest = {
+    val correlationId = SyncProducerConfig.DefaultCorrelationId
+    val clientId = SyncProducerConfig.DefaultClientId
+    val requiredAcks: Short = 1.toShort
+    val ackTimeout = SyncProducerConfig.DefaultAckTimeoutMs
+    val data = topics.map(new TopicData(_, partitions.map(new PartitionData(_, message)).toArray))
+    new kafka.api.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeout, data.toArray)
+  }
+
   def produceRequest(correlationId: Int, topic: String, partition: Int, message: ByteBufferMessageSet): kafka.api.ProducerRequest = {
     val clientId = SyncProducerConfig.DefaultClientId
     val requiredAcks: Short = SyncProducerConfig.DefaultRequiredAcks
     val ackTimeout = SyncProducerConfig.DefaultAckTimeoutMs
-    var data = new Array[TopicData](1)
-    var partitionData = new Array[PartitionData](1)
-    partitionData(0) = new PartitionData(partition,message)
-    data(0) = new TopicData(topic,partitionData)
-    val pr = new kafka.api.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeout, data)  	
-    pr
+    var partitionData = Array[PartitionData]( new PartitionData(partition, message) )
+    var data = Array[TopicData]( new TopicData(topic, partitionData) )
+    new kafka.api.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeout, data)
   }
 
   def produceJavaRequest(topic: String, message: kafka.javaapi.message.ByteBufferMessageSet): kafka.javaapi.ProducerRequest = {

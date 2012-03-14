@@ -18,14 +18,14 @@
 package kafka.producer.async
 
 import kafka.api.{ProducerRequest, TopicData, PartitionData}
-import kafka.serializer.Encoder
-import kafka.producer._
-import kafka.cluster.{Partition, Broker}
-import collection.mutable.{ListBuffer, HashMap}
-import scala.collection.Map
 import kafka.common.{FailedToSendMessageException, InvalidPartitionException, NoBrokersForPartitionException}
+import kafka.cluster.{Partition, Broker}
 import kafka.message.{Message, NoCompressionCodec, ByteBufferMessageSet}
+import kafka.producer._
+import kafka.serializer.Encoder
 import kafka.utils.{Utils, Logging}
+import scala.collection.Map
+import scala.collection.mutable.{ListBuffer, HashMap}
 
 class DefaultEventHandler[K,V](config: ProducerConfig,                               // this api is for testing
                                private val partitioner: Partitioner[K],              // use the other constructor
@@ -48,37 +48,36 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
   }
 
   private def handleSerializedData(messages: Seq[ProducerData[K,Message]], requiredRetries: Int) {
-      val partitionedData = partitionAndCollate(messages)
-      for ( (brokerid, eventsPerBrokerMap) <- partitionedData) {
-        if (logger.isTraceEnabled)
-          eventsPerBrokerMap.foreach(partitionAndEvent => trace("Handling event for Topic: %s, Broker: %d, Partitions: %s"
-            .format(partitionAndEvent._1, brokerid, partitionAndEvent._2)))
-        val messageSetPerBroker = groupMessagesToSet(eventsPerBrokerMap)
+    val partitionedData = partitionAndCollate(messages)
+    for ( (brokerid, eventsPerBrokerMap) <- partitionedData ) {
+      if (logger.isTraceEnabled)
+        eventsPerBrokerMap.foreach(partitionAndEvent => trace("Handling event for Topic: %s, Broker: %d, Partitions: %s"
+          .format(partitionAndEvent._1, brokerid, partitionAndEvent._2)))
+      val messageSetPerBroker = groupMessagesToSet(eventsPerBrokerMap)
 
-        try {
-          send(brokerid, messageSetPerBroker)
-        }
-        catch {
-          case t =>
-            warn("error sending data to broker " + brokerid, t)
-            var numRetries = 0
-            val eventsPerBroker = new ListBuffer[ProducerData[K,Message]]
-            eventsPerBrokerMap.foreach(e => eventsPerBroker.appendAll(e._2))
-            while (numRetries < requiredRetries) {
-              numRetries +=1
-              Thread.sleep(config.producerRetryBackoffMs)
-              try {
-                brokerPartitionInfo.updateInfo()
-                handleSerializedData(eventsPerBroker, 0)
-                return
-              }
-              catch {
-                case t => warn("error sending data to broker " + brokerid + " in " + numRetries + " retry", t)
-              }
+      try {
+        send(brokerid, messageSetPerBroker)
+      } catch {
+        case t =>
+          warn("error sending data to broker " + brokerid, t)
+          var numRetries = 0
+          val eventsPerBroker = new ListBuffer[ProducerData[K,Message]]
+          eventsPerBrokerMap.foreach(e => eventsPerBroker.appendAll(e._2))
+          while (numRetries < requiredRetries) {
+            numRetries +=1
+            Thread.sleep(config.producerRetryBackoffMs)
+            try {
+              brokerPartitionInfo.updateInfo()
+              handleSerializedData(eventsPerBroker, 0)
+              return
             }
-            throw new FailedToSendMessageException("can't send data after " + numRetries + " retries", t)
-        }
+            catch {
+              case t => warn("error sending data to broker " + brokerid + " in " + numRetries + " retry", t)
+            }
+          }
+          throw new FailedToSendMessageException("can't send data after " + numRetries + " retries", t)
       }
+    }
   }
 
   def serialize(events: Seq[ProducerData[K,V]]): Seq[ProducerData[K,Message]] = {
@@ -131,7 +130,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
    * the value of partition is not between 0 and numPartitions-1
    * @param key the partition key
    * @param numPartitions the total number of available partitions
-   * @returns the partition id
+   * @return the partition id
    */
   private def getPartition(key: K, numPartitions: Int): Int = {
     if(numPartitions <= 0)
@@ -145,24 +144,27 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
     partition
   }
 
+  /**
+   * Constructs and sends the produce request based on a map from (topic, partition) -> messages
+   *
+   * @param brokerId the broker that will receive the request
+   * @param messagesPerTopic the messages as a map from (topic, partition) -> messages
+   */
   private def send(brokerId: Int, messagesPerTopic: Map[(String, Int), ByteBufferMessageSet]) {
     if(messagesPerTopic.size > 0) {
       val topics = new HashMap[String, ListBuffer[PartitionData]]()
-      val requests = messagesPerTopic.map(f => {
-        val topicName = f._1._1
-        val partitionId = f._1._2
-        val messagesSet= f._2
-        val topic = topics.get(topicName) // checking to see if this topics exists
-        topic match {
-          case None => topics += topicName -> new ListBuffer[PartitionData]() //create a new listbuffer for this topic
+      for( ((topicName, partitionId), messagesSet) <- messagesPerTopic ) {
+        topics.get(topicName) match {
           case Some(x) => trace("found " + topicName)
+          case None => topics += topicName -> new ListBuffer[PartitionData]() //create a new listbuffer for this topic
         }
-	    topics(topicName).append(new PartitionData(partitionId, messagesSet))
-      })
-      val topicData = topics.map(kv => new TopicData(kv._1,kv._2.toArray))
-      val producerRequest = new ProducerRequest(config.correlationId, config.clientId, config.requiredAcks, config.ackTimeout, topicData.toArray) //new kafka.javaapi.ProducerRequest(correlation_id, client_id, required_acks, ack_timeout, topic_data.toArray)
+	      topics(topicName).append(new PartitionData(partitionId, messagesSet))
+      }
+      val topicData = topics.map(kv => new TopicData(kv._1, kv._2.toArray))
+      val producerRequest = new ProducerRequest(config.correlationId, config.clientId, config.requiredAcks, config.ackTimeout, topicData.toArray)
       val syncProducer = producerPool.getProducer(brokerId)
-      syncProducer.send(producerRequest)
+      val response = syncProducer.send(producerRequest)
+      // TODO: possibly send response to response callback handler
       trace("kafka producer sent messages for topics %s to broker %s:%d"
         .format(messagesPerTopic, syncProducer.config.host, syncProducer.config.port))
     }

@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,34 +17,85 @@
 
 package kafka.api
 
-import java.nio._
-import java.nio.channels._
-import kafka.network._
-import kafka.message._
-import kafka.utils._
+import java.nio.ByteBuffer
+import java.nio.channels.GatheringByteChannel
 import kafka.common.ErrorMapping
+import kafka.network.Send
 
-@nonthreadsafe
-class ProducerResponse(val versionId: Short, val correlationId: Int, val errors: Array[Int], val offsets: Array[Long]) extends Send {
+object ProducerResponse {
+  val CurrentVersion = 1.shortValue()
 
-  val sizeInBytes = 2 + 4 + 4 + (4 * errors.size) + 4 + (8 * offsets.size)
+  def readFrom(buffer: ByteBuffer): ProducerResponse = {
+    val versionId = buffer.getShort
+    val correlationId = buffer.getInt
+    val errorsSize = buffer.getInt
+    val errors = new Array[Short](errorsSize)
+    for( i <- 0 until errorsSize) {
+      errors(i) = buffer.getShort
+    }
+    val offsetsSize = buffer.getInt
+    val offsets = new Array[Long](offsetsSize)
+    for( i <- 0 until offsetsSize) {
+      offsets(i) = buffer.getLong
+    }
+    new ProducerResponse(versionId, correlationId, errors, offsets)
+  }
 
-  private val buffer = ByteBuffer.allocate(sizeInBytes)
-  buffer.putShort(versionId)
-  buffer.putInt(correlationId)
-  buffer.putInt(errors.size)
-  errors.foreach(e => buffer.putInt(e))
-  buffer.putInt(offsets.size)
-  offsets.foreach(o => buffer.putLong(o))
+  def serializeResponse(producerResponse: ProducerResponse): ByteBuffer = {
+    val buffer = ByteBuffer.allocate(producerResponse.sizeInBytes)
+    producerResponse.writeTo(buffer)
+    buffer.rewind()
+    buffer
+  }
 
-  var complete: Boolean = false
+  def deserializeResponse(buffer: ByteBuffer): ProducerResponse = readFrom(buffer)
 
-  def writeTo(channel: GatheringByteChannel): Int = {
+}
+
+case class ProducerResponse(versionId: Short, correlationId: Int, errors: Array[Short], offsets: Array[Long]) {
+  val sizeInBytes = 2 + 4 + (4 + 2 * errors.length) + (4 + 8 * offsets.length)
+
+  def writeTo(buffer: ByteBuffer) {
+    /* version */
+    buffer.putShort(versionId)
+    /* correlation id */
+    buffer.putInt(correlationId)
+    /* errors */
+    buffer.putInt(errors.length)
+    errors.foreach(buffer.putShort(_))
+    /* offsets */
+    buffer.putInt(offsets.length)
+    offsets.foreach(buffer.putLong(_))
+  }
+}
+
+class ProducerResponseSend(val producerResponse: ProducerResponse,
+                           val error: Int = ErrorMapping.NoError) extends Send {
+  private val header = ByteBuffer.allocate(6)
+  header.putInt(producerResponse.sizeInBytes + 2)
+  header.putShort(error.toShort)
+  header.rewind()
+
+  val responseContent = ProducerResponse.serializeResponse(producerResponse)
+
+  var complete = false
+
+  def writeTo(channel: GatheringByteChannel):Int = {
     expectIncomplete()
     var written = 0
-    written += channel.write(buffer)
-    if(!buffer.hasRemaining)
+    if(header.hasRemaining)
+      written += channel.write(header)
+
+    trace("Wrote %d bytes for header".format(written))
+
+    if(!header.hasRemaining && responseContent.hasRemaining)
+        written += channel.write(responseContent)
+
+    trace("Wrote %d bytes for header, errors and offsets".format(written))
+
+    if(!header.hasRemaining && !responseContent.hasRemaining)
       complete = true
+
     written
   }
 }

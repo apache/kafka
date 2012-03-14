@@ -50,46 +50,46 @@ class KafkaApis(val logManager: LogManager) extends Logging {
   def handleProducerRequest(receive: Receive): Option[Send] = {
     val sTime = SystemTime.milliseconds
     val request = ProducerRequest.readFrom(receive.buffer)
-
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Producer request " + request.toString)
-    handleProducerRequest(request, "ProduceRequest")
+
+    val response = handleProducerRequest(request)
     debug("kafka produce time " + (SystemTime.milliseconds - sTime) + " ms")
-    None
+    Some(new ProducerResponseSend(response))
   }
 
-  private def handleProducerRequest(request: ProducerRequest, requestHandlerName: String): Option[ProducerResponse] = {
-	val requestSize = request.data.size
-	val errors = new Array[Int](requestSize)
-	val offsets = new Array[Long](requestSize)
+  private def handleProducerRequest(request: ProducerRequest): ProducerResponse = {
+    val requestSize = request.getNumTopicPartitions
+    val errors = new Array[Short](requestSize)
+    val offsets = new Array[Long](requestSize)
 	
-    request.data.foreach(d => {
-	  d.partitionData.foreach(p => {
-        val partition = p.getTranslatedPartition(d.topic, logManager.chooseRandomPartition)
+    var msgIndex = -1
+    for( topicData <- request.data ) {
+      for( partitionData <- topicData.partitionData ) {
+        msgIndex += 1
+        val partition = partitionData.getTranslatedPartition(topicData.topic, logManager.chooseRandomPartition)
         try {
-          logManager.getOrCreateLog(d.topic, partition).append(p.messages)
-          trace(p.messages.sizeInBytes + " bytes written to logs.")
-          p.messages.foreach(m => trace("wrote message %s to disk".format(m.message.checksum)))
-        }
-        catch {
+          // TODO: need to handle ack's here!  Will probably move to another method.
+          val log = logManager.getOrCreateLog(topicData.topic, partition)
+          log.append(partitionData.messages)
+          offsets(msgIndex) = log.nextAppendOffset
+          errors(msgIndex) = ErrorMapping.NoError.toShort
+          trace(partitionData.messages.sizeInBytes + " bytes written to logs.")
+        } catch {
           case e =>
-            //TODO: handle response in ProducerResponse
-            error("Error processing " + requestHandlerName + " on " + d.topic + ":" + partition, e)
+            error("Error processing ProducerRequest on " + topicData.topic + ":" + partition, e)
             e match {
               case _: IOException =>
                 fatal("Halting due to unrecoverable I/O error while handling producer request: " + e.getMessage, e)
                 Runtime.getRuntime.halt(1)
               case _ =>
+                errors(msgIndex) = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]).toShort
+                offsets(msgIndex) = -1
             }
-          //throw e
         }
-      })
-    //None
-    })
-    if (request.requiredAcks == 0)
-      None
-    else
-      None //TODO: send when KAFKA-49 can receive this Some(new ProducerResponse(request.versionId, request.correlationId, errors, offsets))
+      }
+    }
+    new ProducerResponse(ProducerResponse.CurrentVersion, request.correlationId, errors, offsets)
   }
 
   def handleFetchRequest(request: Receive): Option[Send] = {

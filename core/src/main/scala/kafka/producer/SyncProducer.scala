@@ -17,20 +17,14 @@
 
 package kafka.producer
 
-import java.net._
-import java.nio.channels._
-import kafka.message._
-import kafka.network._
-import kafka.utils._
+import java.net.InetSocketAddress
+import java.nio.channels.SocketChannel
 import kafka.api._
-import scala.math._
 import kafka.common.MessageSizeTooLargeException
-import java.nio.ByteBuffer
+import kafka.message.MessageSet
+import kafka.network.{BoundedByteBufferSend, Request, Receive}
+import kafka.utils._
 import kafka.utils.Utils._
-
-object SyncProducer {
-  val RequestKey: Short = 0
-}
 
 /*
  * Send a message set.
@@ -47,32 +41,38 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
 
   debug("Instantiating Scala Sync Producer")
 
-  private def verifySendBuffer(buffer : ByteBuffer) = {
+  private def verifyRequest(request: Request) = {
     if (logger.isTraceEnabled) {
+      val buffer = new BoundedByteBufferSend(request).buffer
       trace("verifying sendbuffer of size " + buffer.limit)
       val requestTypeId = buffer.getShort()
-      val request = ProducerRequest.readFrom(buffer)
-      trace(request.toString)
+      if(requestTypeId == RequestKeys.Produce) {
+        val request = ProducerRequest.readFrom(buffer)
+        trace(request.toString)
+      }
     }
   }
+
   /**
    * Common functionality for the public send methods
    */
-  private def send(send: BoundedByteBufferSend) {
+  private def doSend(request: Request): Tuple2[Receive, Int] = {
     lock synchronized {
-      verifySendBuffer(send.buffer.slice)
+      verifyRequest(request)
       val startTime = SystemTime.nanoseconds
       getOrMakeConnection()
 
+      var response: Tuple2[Receive, Int] = null
       try {
-        send.writeCompletely(channel)
+        sendRequest(request, channel)
+        response = getResponse(channel)
       } catch {
-        case e : java.io.IOException =>
+        case e: java.io.IOException =>
           // no way to tell if write succeeded. Disconnect and re-throw exception to let client handle retry
           disconnect()
+          println("sdfsdfsdf")
           throw e
-        case e2 =>
-          throw e2
+        case e => println("other sdfsdfsdfs"); throw e
       }
       // TODO: do we still need this?
       sentOnConnection += 1
@@ -81,38 +81,29 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
         channel = connect()
         sentOnConnection = 0
       }
-      val endTime = SystemTime.nanoseconds
-      SyncProducerStats.recordProduceRequest(endTime - startTime)
+      SyncProducerStats.recordProduceRequest(SystemTime.nanoseconds - startTime)
+      response
     }
   }
 
   /**
    * Send a message
    */
-  def send(producerRequest: ProducerRequest) {
-    producerRequest.data.foreach(d => {
-      d.partitionData.foreach(p => {
-	    verifyMessageSize(new ByteBufferMessageSet(p.messages.getSerialized()))
-        val setSize = p.messages.sizeInBytes.asInstanceOf[Int]
+  def send(producerRequest: ProducerRequest): ProducerResponse = {
+    for( topicData <- producerRequest.data ) {
+      for( partitionData <- topicData.partitionData ) {
+	      verifyMessageSize(partitionData.messages)
+        val setSize = partitionData.messages.sizeInBytes.asInstanceOf[Int]
         trace("Got message set with " + setSize + " bytes to send")
-      })
-    })
-    send(new BoundedByteBufferSend(producerRequest))
+      }
+    }
+    val response = doSend(producerRequest)
+    ProducerResponse.deserializeResponse(response._1.buffer)
   }
 
   def send(request: TopicMetadataRequest): Seq[TopicMetadata] = {
-    lock synchronized {
-      getOrMakeConnection()
-      var response: Tuple2[Receive,Int] = null
-      try {
-        sendRequest(request, channel)
-        response = getResponse(channel)
-      } catch {
-        case e : java.io.IOException => error("Failed to write topic metadata request on the socket channel", e)
-      }
-      // TODO: handle any errors in the response and throw the relevant exception
-      TopicMetadataRequest.deserializeTopicsMetadataResponse(response._1.buffer)
-    }
+    val response = doSend(request)
+    TopicMetadataRequest.deserializeTopicsMetadataResponse(response._1.buffer)
   }
 
   def close() = {
@@ -122,7 +113,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     }
   }
 
-  private def verifyMessageSize(messages: ByteBufferMessageSet) {
+  private def verifyMessageSize(messages: MessageSet) {
     for (messageAndOffset <- messages)
       if (messageAndOffset.message.payloadSize > config.maxMessageSize)
         throw new MessageSizeTooLargeException
@@ -162,14 +153,13 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
         case e: Exception => {
           disconnect()
           val endTimeMs = SystemTime.milliseconds
-          if ( (endTimeMs - beginTimeMs + connectBackoffMs) > config.connectTimeoutMs)
-          {
+          if ( (endTimeMs - beginTimeMs + connectBackoffMs) > config.connectTimeoutMs) {
             error("Producer connection to " +  config.host + ":" + config.port + " timing out after " + config.connectTimeoutMs + " ms", e)
             throw e
           }
           error("Connection attempt to " +  config.host + ":" + config.port + " failed, next attempt in " + connectBackoffMs + " ms", e)
           SystemTime.sleep(connectBackoffMs)
-          connectBackoffMs = min(10 * connectBackoffMs, MaxConnectBackoffMs)
+          connectBackoffMs = math.min(10 * connectBackoffMs, MaxConnectBackoffMs)
         }
       }
     }

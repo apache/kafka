@@ -20,7 +20,6 @@ package kafka.api
 object RequestKeys {
   val Produce: Short = 0
   val Fetch: Short = 1
-  val MultiProduce: Short = 2
-  val Offsets: Short = 3
-  val TopicMetadata: Short = 4
+  val Offsets: Short = 2
+  val TopicMetadata: Short = 3
 }

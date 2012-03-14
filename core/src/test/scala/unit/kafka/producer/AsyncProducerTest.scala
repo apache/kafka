@@ -17,25 +17,25 @@
 
 package kafka.producer
 
-import org.easymock.EasyMock
-import org.junit.Test
-import kafka.producer.async._
+import java.util.{LinkedList, Properties}
 import java.util.concurrent.LinkedBlockingQueue
 import junit.framework.Assert._
+import org.easymock.EasyMock
+import org.junit.Test
+import kafka.api._
 import kafka.cluster.Broker
-import collection.mutable.ListBuffer
-import collection.Map
-import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
-import kafka.serializer.{StringEncoder, StringDecoder, Encoder}
-import java.util.{LinkedList, Properties}
 import kafka.common.{InvalidConfigException, NoBrokersForPartitionException, InvalidPartitionException}
-import kafka.api.{PartitionMetadata, TopicMetadata, TopicMetadataRequest, ProducerRequest}
+import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
+import kafka.producer.async._
+import kafka.serializer.{StringEncoder, StringDecoder, Encoder}
+import kafka.server.KafkaConfig
+import kafka.utils.TestUtils._
 import kafka.utils.{NegativePartitioner, TestZKUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
-import org.scalatest.junit.JUnit3Suite
-import kafka.utils.TestUtils._
-import kafka.server.KafkaConfig
+import collection.Map
+import collection.mutable.ListBuffer
 import org.I0Itec.zkclient.ZkClient
+import org.scalatest.junit.JUnit3Suite
 
 class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
@@ -381,12 +381,11 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
     mockSyncProducer.send(new TopicMetadataRequest(List(topic)))
     EasyMock.expectLastCall().andReturn(List(topic1Metadata))
-    mockSyncProducer.send(TestUtils.produceRequest(topic, 0,
-    messagesToSet(msgs.take(5))))
-    EasyMock.expectLastCall
-    mockSyncProducer.send(TestUtils.produceRequest(topic, 0,
-    messagesToSet(msgs.takeRight(5))))
-	EasyMock.replay(mockSyncProducer)
+    mockSyncProducer.send(TestUtils.produceRequest(topic, 0, messagesToSet(msgs.take(5))))
+    EasyMock.expectLastCall().andReturn(null)
+    mockSyncProducer.send(TestUtils.produceRequest(topic, 0, messagesToSet(msgs.takeRight(5))))
+    EasyMock.expectLastCall().andReturn(null)
+	  EasyMock.replay(mockSyncProducer)
 
     val producerPool = EasyMock.createMock(classOf[ProducerPool])
     producerPool.getZkClient
@@ -401,10 +400,10 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     EasyMock.expectLastCall()
     EasyMock.replay(producerPool)
 
-    val handler = new DefaultEventHandler[String,String](config,
-                                                      partitioner = null.asInstanceOf[Partitioner[String]],
-                                                      encoder = new StringEncoder,
-                                                      producerPool = producerPool)
+    val handler = new DefaultEventHandler[String,String]( config,
+                                                          partitioner = null.asInstanceOf[Partitioner[String]],
+                                                          encoder = new StringEncoder,
+                                                          producerPool = producerPool)
 
     val producer = new Producer[String, String](config, handler)
     try {
@@ -496,8 +495,9 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   class MockProducer(override val config: SyncProducerConfig) extends SyncProducer(config) {
-    override def send(produceRequest: ProducerRequest): Unit = {
+    override def send(produceRequest: ProducerRequest): ProducerResponse = {
       Thread.sleep(1000)
+      null
     }
   }
 }

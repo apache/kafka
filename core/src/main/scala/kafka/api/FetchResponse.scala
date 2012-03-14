@@ -83,6 +83,7 @@ object TopicData {
 case class TopicData(topic: String, partitionData: Array[PartitionData]) {
   val sizeInBytes = 2 + topic.length + partitionData.foldLeft(4)(_ + _.sizeInBytes)
 
+  // need to override equals due to brokern java-arrays equals functionality
   override def equals(other: Any): Boolean = {
     other match {
       case that: TopicData =>

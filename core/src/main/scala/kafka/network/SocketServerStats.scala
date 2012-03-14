@@ -48,7 +48,7 @@ class SocketServerStats(val monitorDurationNs: Long, val time: Time) extends Soc
 
   def recordRequest(requestTypeId: Short, durationNs: Long) {
     requestTypeId match {
-      case r if r == RequestKeys.Produce || r == RequestKeys.MultiProduce =>
+      case r if r == RequestKeys.Produce =>
         produceTimeStats.recordRequestMetric(durationNs)
       case r if r == RequestKeys.Fetch =>
         fetchTimeStats.recordRequestMetric(durationNs)

@@ -18,8 +18,7 @@ package kafka.javaapi.producer
 
 import kafka.producer.SyncProducerConfig
 import kafka.javaapi.message.ByteBufferMessageSet
-import kafka.javaapi.ProducerRequest
-import kafka.api.{PartitionData, TopicData}
+import kafka.api.{ProducerResponse, PartitionData, TopicData}
 
 class SyncProducer(syncProducer: kafka.producer.SyncProducer) {
 
@@ -27,17 +26,15 @@ class SyncProducer(syncProducer: kafka.producer.SyncProducer) {
 
   val underlying = syncProducer
 
-  def send(producerRequest: kafka.javaapi.ProducerRequest) {
-    underlying.send(producerRequest.underlying)	
+  def send(producerRequest: kafka.javaapi.ProducerRequest): ProducerResponse = {
+    underlying.send(producerRequest.underlying)
   }
 
-  def send(topic: String, messages: ByteBufferMessageSet): Unit = {
-    var data = new Array[TopicData](1)
-    var partition_data = new Array[PartitionData](1)
-    partition_data(0) = new PartitionData(-1,messages.underlying)
-    data(0) = new TopicData(topic,partition_data)
+  def send(topic: String, messages: ByteBufferMessageSet): ProducerResponse = {
+    val partitionData = Array[PartitionData]( new PartitionData(-1, messages.underlying) )
+    val data = Array[TopicData]( new TopicData(topic, partitionData) )
     val producerRequest = new kafka.api.ProducerRequest(-1, "", 0, 0, data)
-    underlying.send(producerRequest)      	
+    underlying.send(producerRequest)
   }
 
   def close() {
