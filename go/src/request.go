@@ -23,8 +23,8 @@
 package kafka
 
 import (
-  "encoding/binary"
   "bytes"
+  "encoding/binary"
 )
 
 type RequestType uint16

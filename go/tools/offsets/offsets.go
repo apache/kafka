@@ -20,13 +20,12 @@
  *  of their respective owners.
  */
 
-
 package main
 
 import (
-  "kafka"
   "flag"
   "fmt"
+  kafka "svn.apache.org/repos/asf/incubator/kafka.svn/trunk/clients/go/src"
 )
 
 var hostname string
@@ -43,7 +42,6 @@ func init() {
   flag.Int64Var(&time, "time", -1, "timestamp of the offsets before that:  time(ms)/-1(latest)/-2(earliest)")
 }
 
-
 func main() {
   flag.Parse()
   fmt.Println("Offsets :")
@@ -56,7 +54,7 @@ func main() {
     fmt.Println("Error: ", err)
   }
   fmt.Printf("Offsets found: %d\n", len(offsets))
-  for i := 0 ; i < len(offsets); i++ {
+  for i := 0; i < len(offsets); i++ {
     fmt.Printf("Offset[%d] = %d\n", i, offsets[i])
   }
 }

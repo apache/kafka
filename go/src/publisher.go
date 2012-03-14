@@ -22,10 +22,6 @@
 
 package kafka
 
-import (
-  "os"
-)
-
 type BrokerPublisher struct {
   broker *Broker
 }
@@ -34,11 +30,11 @@ func NewBrokerPublisher(hostname string, topic string, partition int) *BrokerPub
   return &BrokerPublisher{broker: newBroker(hostname, topic, partition)}
 }
 
-func (b *BrokerPublisher) Publish(message *Message) (int, os.Error) {
+func (b *BrokerPublisher) Publish(message *Message) (int, error) {
   return b.BatchPublish(message)
 }
 
-func (b *BrokerPublisher) BatchPublish(messages ...*Message) (int, os.Error) {
+func (b *BrokerPublisher) BatchPublish(messages ...*Message) (int, error) {
   conn, err := b.broker.connect()
   if err != nil {
     return -1, err
