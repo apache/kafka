@@ -23,9 +23,9 @@
 package kafka
 
 import (
-  "bytes"
-  "encoding/binary"
   "hash/crc32"
+  "encoding/binary"
+  "bytes"
   "log"
 )
 
