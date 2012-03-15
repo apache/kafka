@@ -57,7 +57,7 @@ var DefaultCodecsMap = codecsMap(DefaultCodecs)
 func codecsMap(payloadCodecs []PayloadCodec) map[byte]PayloadCodec {
   payloadCodecsMap := make(map[byte]PayloadCodec, len(payloadCodecs))
   for _, c := range payloadCodecs {
-    payloadCodecsMap[c.Id()] = c
+    payloadCodecsMap[c.Id()] = c, true
   }
   return payloadCodecsMap
 }
@@ -65,6 +65,7 @@ func codecsMap(payloadCodecs []PayloadCodec) map[byte]PayloadCodec {
 // No compression codec, noop
 
 type NoCompressionPayloadCodec struct {
+
 }
 
 func (codec *NoCompressionPayloadCodec) Id() byte {
@@ -82,6 +83,7 @@ func (codec *NoCompressionPayloadCodec) Decode(data []byte) []byte {
 // Gzip Codec
 
 type GzipPayloadCodec struct {
+
 }
 
 func (codec *GzipPayloadCodec) Id() byte {
