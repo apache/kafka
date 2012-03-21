@@ -94,7 +94,3 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
 
   override def requiresLayout: Boolean = false
 }
-
-class DefaultStringEncoder extends Encoder[LoggingEvent] {
-  override def toMessage(event: LoggingEvent):Message = new Message(event.getMessage.asInstanceOf[String].getBytes)
-}
