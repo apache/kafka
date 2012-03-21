@@ -25,6 +25,7 @@ import kafka.server.{KafkaConfig, KafkaZooKeeper}
 import kafka.common.{InvalidTopicException, InvalidPartitionException}
 import kafka.api.OffsetRequest
 import org.I0Itec.zkclient.ZkClient
+import kafka.cluster.{Partition, Replica}
 
 /**
  * The guy who creates and hands out logs
@@ -51,6 +52,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private val logRetentionMSMap = getLogRetentionMSMap(config.logRetentionHoursMap)
   private val logRetentionSize = config.logRetentionSize
   private val scheduler = new KafkaScheduler(1, "kafka-logcleaner-", false)
+  private var replicas: Map[(String, Int), Replica] = new mutable.HashMap[(String, Int), Replica]()
 
   /* Initialize a log for each subdirectory of the main log directory */
   private val logs = new Pool[String, Pool[Int, Log]]()
@@ -120,7 +122,9 @@ private[kafka] class LogManager(val config: KafkaConfig,
       new Log(d, maxSize, flushInterval, false)
     }
   }
-  
+
+  def getReplicaForPartition(topic: String, partition: Int): Option[Replica] = replicas.get((topic, partition))
+
   /**
    * Return the Pool (partitions) for a specific log
    */
@@ -145,17 +149,23 @@ private[kafka] class LogManager(val config: KafkaConfig,
 
   def getOffsets(offsetRequest: OffsetRequest): Array[Long] = {
     val log = getLog(offsetRequest.topic, offsetRequest.partition)
-    if (log != null) return log.getOffsetsBefore(offsetRequest)
-    Log.getEmptyOffsets(offsetRequest)
+    log match {
+      case Some(l) => l.getOffsetsBefore(offsetRequest)
+      case None => Log.getEmptyOffsets(offsetRequest)
+    }
   }
 
   /**
    * Get the log if exists
    */
-  def getLog(topic: String, partition: Int): Log = {
+  def getLog(topic: String, partition: Int): Option[Log] = {
     val parts = getLogPool(topic, partition)
-    if (parts == null) return null
-    parts.get(partition)
+    if (parts == null) None
+    else {
+      val log = parts.get(partition)
+      if(log == null) None
+      else Some(log)
+    }
   }
 
   /**
@@ -188,9 +198,40 @@ private[kafka] class LogManager(val config: KafkaConfig,
         info("Created log for '" + topic + "'-" + partition)
     }
 
+    // add this log to the list of replicas hosted on this broker
+    addReplicaForPartition(topic, partition)
     log
   }
-  
+
+  def addReplicaForPartition(topic: String, partitionId: Int): Replica = {
+    val replica = replicas.get((topic, partitionId))
+    val log = getLog(topic, partitionId)
+    replica match {
+      case Some(r) =>
+        r.log match {
+          case None =>
+            val log = getLog(topic, partitionId)
+            r.log = log
+          case Some(l) => // nothing to do since log already exists
+        }
+      case None =>
+        val partition = new Partition(topic, partitionId)
+        log match {
+          case Some(l) =>
+            val replica = new Replica(config.brokerId, partition, topic, log, l.getHighwaterMark, l.maxSize, true)
+            replicas += (topic, partitionId) -> replica
+            info("Added replica for topic %s partition %s on broker %d"
+              .format(replica.topic, replica.partition.partId, replica.brokerId))
+          case None =>
+            val replica = new Replica(config.brokerId, partition, topic, None, -1, -1, false)
+            replicas += (topic, partitionId) -> replica
+            info("Added replica for topic %s partition %s on broker %d"
+              .format(replica.topic, replica.partition.partId, replica.brokerId))
+        }
+    }
+    replicas.get((topic, partitionId)).get
+  }
+
   /* Attemps to delete all provided segments from a log and returns how many it was able to */
   private def deleteSegments(log: Log, segments: Seq[LogSegment]): Int = {
     var total = 0

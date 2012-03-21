@@ -26,7 +26,7 @@ import kafka.message.Message
 import kafka.producer.async.MissingConfigException
 import kafka.serializer.Encoder
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.zk.{EmbeddedZookeeper, ZooKeeperTestHarness}
+import kafka.zk.ZooKeeperTestHarness
 import org.apache.log4j.spi.LoggingEvent
 import org.apache.log4j.{PropertyConfigurator, Logger}
 import org.junit.{After, Before, Test}
@@ -36,22 +36,16 @@ import kafka.utils._
 class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
 
   var logDirZk: File = null
-  var logDirBl: File = null
-  var serverBl: KafkaServer = null
   var serverZk: KafkaServer = null
 
   var simpleConsumerZk: SimpleConsumer = null
-  var simpleConsumerBl: SimpleConsumer = null
 
   val tLogger = Logger.getLogger(getClass())
 
   private val brokerZk = 0
-  private val brokerBl = 1
 
   private val ports = TestUtils.choosePorts(2)
-  private val (portZk, portBl) = (ports(0), ports(1))
-
-  private var zkServer:EmbeddedZookeeper = null
+  private val portZk = ports(0)
 
   @Before
   override def setUp() {
@@ -62,26 +56,17 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     logDirZk = new File(logDirZkPath)
     serverZk = TestUtils.createServer(new KafkaConfig(propsZk));
 
-    val propsBl: Properties = TestUtils.createBrokerConfig(brokerBl, portBl)
-    val logDirBlPath = propsBl.getProperty("log.dir")
-    logDirBl = new File(logDirBlPath)
-    serverBl = TestUtils.createServer(new KafkaConfig(propsBl))
-
     Thread.sleep(100)
 
     simpleConsumerZk = new SimpleConsumer("localhost", portZk, 1000000, 64*1024)
-    simpleConsumerBl = new SimpleConsumer("localhost", portBl, 1000000, 64*1024)
   }
 
   @After
   override def tearDown() {
     simpleConsumerZk.close
-    simpleConsumerBl.close
 
     serverZk.shutdown
-    serverBl.shutdown
     Utils.rm(logDirZk)
-    Utils.rm(logDirBl)
 
     Thread.sleep(500)
     super.tearDown()
@@ -174,13 +159,6 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
       count = count + 1
     }
 
-    val response2 = simpleConsumerBl.fetch(new FetchRequestBuilder().addFetch("test-topic", 0, 0L, 1024*1024).build())
-    val messagesFromOtherBroker = response2.messageSet("test-topic", 0)
-
-    for(message <- messagesFromOtherBroker) {
-      count = count + 1
-    }
-
     assertEquals(5, count)
   }
 
@@ -194,11 +172,6 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     props.put("log4j.appender.KAFKA.Topic", "test-topic")
     props.put("log4j.logger.kafka.log4j", "INFO,KAFKA")
     props
-  }
-
-  private def getLogDir(): File = {
-    val dir = TestUtils.tempDir()
-    dir
   }
 }
 

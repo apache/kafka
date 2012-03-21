@@ -124,10 +124,58 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer.close
   }
 
+//  @Test
+//  def testZKSendWithDeadBroker() {
+//    val props = new Properties()
+//    props.put("serializer.class", "kafka.serializer.StringEncoder")
+//    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
+//    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+//
+//    // create topic
+//    CreateTopicCommand.createTopic(zkClient, "new-topic", 2, 1, "0,0")
+//
+//    val config = new ProducerConfig(props)
+//
+//    val producer = new Producer[String, String](config)
+//    val message = new Message("test1".getBytes)
+//    try {
+////      // kill 2nd broker
+////      server1.shutdown
+////      Thread.sleep(100)
+//
+//      // Available partition ids should be 0, 1, 2 and 3. The data in both cases should get sent to partition 0 and
+//      // all partitions have broker 0 as the leader.
+//      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
+//      Thread.sleep(100)
+//
+//      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
+//      Thread.sleep(3000)
+//
+//      // restart server 1
+////      server1.startup()
+////      Thread.sleep(100)
+//
+//      // cross check if brokers got the messages
+//      val response = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+//      val messageSet = response.messageSet("new-topic", 0).iterator
+//      var numMessagesReceived = 0
+//      while(messageSet.hasNext) {
+//        val messageAndOffset = messageSet.next()
+//        assertEquals(message, messageSet.next.message)
+//        println("Received message at offset %d".format(messageAndOffset.offset))
+//        numMessagesReceived += 1
+//      }
+//      assertEquals("Message set should have 2 messages", 2, numMessagesReceived)
+//    } catch {
+//      case e: Exception => fail("Not expected", e)
+//    }
+//    producer.close
+//  }
+
   // TODO: Need to rewrite when SyncProducer changes to throw timeout exceptions
   //       and when leader logic is changed.
-  @Test
-  def testZKSendWithDeadBroker() {
+//  @Test
+//  def testZKSendWithDeadBroker2() {
 //    val props = new Properties()
 //    props.put("serializer.class", "kafka.serializer.StringEncoder")
 //    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
@@ -172,7 +220,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 //      case e: Exception => fail("Not expected", e)
 //    }
 //    producer.close
-  }
+//  }
 
   @Test
   def testZKSendToExistingTopicWithNoBrokers() {
@@ -227,7 +275,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     } catch {
       case e: Exception => fail("Not expected", e)
     } finally {
-      server.shutdown
+      if(server != null) server.shutdown
       producer.close
     }
   }

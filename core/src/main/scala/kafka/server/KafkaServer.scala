@@ -20,9 +20,9 @@ package kafka.server
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.io.File
-import kafka.utils.{Mx4jLoader, Utils, SystemTime, Logging}
 import kafka.network.{SocketServerStats, SocketServer}
 import kafka.log.LogManager
+import kafka.utils._
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
@@ -72,6 +72,11 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
      *  So this should happen after socket server start.
      */
     logManager.startup
+
+    // starting relevant replicas and leader election for partitions assigned to this broker
+    // TODO: Some part of the broker startup logic is hidden inside KafkaZookeeper, but some of it has to be done here
+    // since it requires the log manager to come up. Ideally log manager should not hide KafkaZookeeper inside it
+    logManager.kafkaZookeeper.startReplicasForTopics(ZkUtils.getAllTopics(logManager.getZookeeperClient))
     info("Server started.")
   }
   
@@ -82,7 +87,7 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
   def shutdown() {
     val canShutdown = isShuttingDown.compareAndSet(false, true);
     if (canShutdown) {
-      info("Shutting down Kafka server")
+      info("Shutting down Kafka server with id " + config.brokerId)
       if (socketServer != null)
         socketServer.shutdown()
       if(requestHandlerPool != null)
@@ -108,3 +113,5 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
 
   def getStats(): SocketServerStats = socketServer.stats
 }
+
+

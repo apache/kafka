@@ -13,15 +13,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
+*/
+
 package kafka.cluster
 
-/**
- * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
- * TODO: Commit queue to be added as part of KAFKA-46. Add AR, ISR, CUR, RAR state maintenance as part of KAFKA-302
- */
-case class Partition(topic: String, val partId: Int, var leader: Option[Replica] = None,
-                     assignedReplicas: Set[Replica] = Set.empty[Replica],
-                     inSyncReplicas: Set[Replica] = Set.empty[Replica],
-                     catchUpReplicas: Set[Replica] = Set.empty[Replica],
-                     reassignedReplicas: Set[Replica] = Set.empty[Replica])
+import kafka.log.Log
+
+case class Replica(brokerId: Int, partition: Partition, topic: String,
+                   var log: Option[Log] = None, var hw: Long = -1, var leo: Long = -1, isLocal: Boolean = false)

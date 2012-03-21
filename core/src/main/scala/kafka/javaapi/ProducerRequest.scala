@@ -26,7 +26,6 @@ class ProducerRequest(val correlationId: Int,
                       val ackTimeout: Int,
                       val data: Array[TopicData]) extends Request(RequestKeys.Produce) {
 	
-  import Implicits._
   val underlying = new kafka.api.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeout, data)
 
   def writeTo(buffer: ByteBuffer) { underlying.writeTo(buffer) }

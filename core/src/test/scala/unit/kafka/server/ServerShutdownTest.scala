@@ -24,10 +24,11 @@ import junit.framework.Assert._
 import kafka.message.{Message, ByteBufferMessageSet}
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.{TestUtils, Utils}
 import kafka.producer._
+import kafka.utils.TestUtils._
 import kafka.admin.CreateTopicCommand
 import kafka.api.FetchRequestBuilder
+import kafka.utils.{TestUtils, Utils}
 
 class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
   val port = TestUtils.choosePort
@@ -72,7 +73,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       val server = new KafkaServer(config)
       server.startup()
 
-      Thread.sleep(100)
+      waitUntilLeaderIsElected(zookeeper.client, topic, 0, 1000)
 
       var fetchedMessage: ByteBufferMessageSet = null
       while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
@@ -83,7 +84,6 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       val newOffset = fetchedMessage.validBytes
 
       // send some more messages
-      println("Sending messages to topic " + topic)
       producer.send(new ProducerData[Int, Message](topic, 0, sent2))
 
       Thread.sleep(200)

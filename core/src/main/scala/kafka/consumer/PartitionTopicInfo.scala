@@ -20,13 +20,12 @@ package kafka.consumer
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import kafka.message._
-import kafka.cluster._
 import kafka.utils.Logging
 import kafka.common.ErrorMapping
 
 private[consumer] class PartitionTopicInfo(val topic: String,
                                            val brokerId: Int,
-                                           val partition: Partition,
+                                           val partitionId: Int,
                                            private val chunkQueue: BlockingQueue[FetchedDataChunk],
                                            private val consumedOffset: AtomicLong,
                                            private val fetchedOffset: AtomicLong,
@@ -74,6 +73,6 @@ private[consumer] class PartitionTopicInfo(val topic: String,
     chunkQueue.put(new FetchedDataChunk(messages, this, fetchOffset))
   }
 
-  override def toString(): String = topic + ":" + partition.toString + ": fetched offset = " + fetchedOffset.get +
+  override def toString(): String = topic + ":" + partitionId.toString + ": fetched offset = " + fetchedOffset.get +
     ": consumed offset = " + consumedOffset.get
 }

@@ -94,6 +94,15 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
   /* enable auto creation of topic on the server */
   val autoCreateTopics = Utils.getBoolean(props, "auto.create.topics", true)
 
+  /**
+   * Following properties are relevant to Kafka replication
+   */
+
   /* default replication factors for automatically created topics */
   val defaultReplicationFactor = Utils.getInt(props, "default.replication.factor", 1)
-}
+
+  /* wait time in ms to allow the preferred replica for a partition to become the leader. This property is used during
+  * leader election on all replicas minus the preferred replica */
+  val preferredReplicaWaitTime = Utils.getLong(props, "preferred.replica.wait.time", 300)
+
+ }

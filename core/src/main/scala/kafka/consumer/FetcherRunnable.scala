@@ -20,7 +20,7 @@ package kafka.consumer
 import java.io.IOException
 import java.util.concurrent.CountDownLatch
 import kafka.api.{FetchRequestBuilder, OffsetRequest}
-import kafka.cluster.{Partition, Broker}
+import kafka.cluster.Broker
 import kafka.common.ErrorMapping
 import kafka.message.ByteBufferMessageSet
 import kafka.utils._
@@ -48,7 +48,7 @@ class FetcherRunnable(val name: String,
 
   override def run() {
     for (infopti <- partitionTopicInfos)
-      info(name + " start fetching topic: " + infopti.topic + " part: " + infopti.partition.partId + " offset: "
+      info(name + " start fetching topic: " + infopti.topic + " part: " + infopti.partitionId + " offset: "
         + infopti.getFetchOffset + " from " + broker.host + ":" + broker.port)
 
     var reqId = 0
@@ -61,7 +61,7 @@ class FetcherRunnable(val name: String,
           maxWait(0).
           minBytes(0)
         partitionTopicInfos.foreach(pti =>
-          builder.addFetch(pti.topic, pti.partition.partId, pti.getFetchOffset(), config.fetchSize)
+          builder.addFetch(pti.topic, pti.partitionId, pti.getFetchOffset(), config.fetchSize)
         )
 
         val fetchRequest = builder.build()
@@ -70,13 +70,13 @@ class FetcherRunnable(val name: String,
 
         var read = 0L
         for(infopti <- partitionTopicInfos) {
-          val messages = response.messageSet(infopti.topic, infopti.partition.partId).asInstanceOf[ByteBufferMessageSet]
+          val messages = response.messageSet(infopti.topic, infopti.partitionId).asInstanceOf[ByteBufferMessageSet]
           try {
             var done = false
             if(messages.getErrorCode == ErrorMapping.OffsetOutOfRangeCode) {
               info("offset for " + infopti + " out of range")
               // see if we can fix this error
-              val resetOffset = resetConsumerOffsets(infopti.topic, infopti.partition)
+              val resetOffset = resetConsumerOffsets(infopti.topic, infopti.partitionId)
               if(resetOffset >= 0) {
                 infopti.resetFetchOffset(resetOffset)
                 infopti.resetConsumeOffset(resetOffset)
@@ -126,7 +126,7 @@ class FetcherRunnable(val name: String,
   private def shutdownComplete() = shutdownLatch.countDown
 
   private def resetConsumerOffsets(topic : String,
-                                   partition: Partition) : Long = {
+                                   partitionId: Int) : Long = {
     var offset : Long = 0
     config.autoOffsetReset match {
       case OffsetRequest.SmallestTimeString => offset = OffsetRequest.EarliestTime
@@ -135,13 +135,13 @@ class FetcherRunnable(val name: String,
     }
 
     // get mentioned offset from the broker
-    val offsets = simpleConsumer.getOffsetsBefore(topic, partition.partId, offset, 1)
+    val offsets = simpleConsumer.getOffsetsBefore(topic, partitionId, offset, 1)
     val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
 
     // reset manually in zookeeper
-    info("updating partition " + partition.name + " for topic " + topic + " with " +
+    info("updating partition " + partitionId + " for topic " + topic + " with " +
             (if(offset == OffsetRequest.EarliestTime) "earliest " else " latest ") + "offset " + offsets(0))
-    ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + partition.name, offsets(0).toString)
+    ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + partitionId, offsets(0).toString)
 
     offsets(0)
   }

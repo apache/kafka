@@ -26,7 +26,7 @@ import kafka.common._
 import kafka.api.OffsetRequest
 import java.util._
 
-private[log] object Log {
+private[kafka] object Log {
   val FileSuffix = ".kafka"
 
   /**
@@ -100,7 +100,7 @@ private[log] class LogSegment(val file: File, val messageSet: FileMessageSet, va
  * An append-only log for storing messages. 
  */
 @threadsafe
-private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean) extends Logging {
+private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean) extends Logging {
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object

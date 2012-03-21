@@ -130,7 +130,7 @@ class KafkaApis(val logManager: LogManager) extends Logging {
     try {
       trace("Fetching log segment for topic, partition, offset, size = " + (topic, partition, offset, maxSize))
       val log = logManager.getLog(topic, partition)
-      response = Right(if(log != null) log.read(offset, maxSize) else MessageSet.Empty)
+      response = Right(log match { case Some(l) => l.read(offset, maxSize) case None => MessageSet.Empty })
     } catch {
       case e =>
         error("error when processing request " + (topic, partition, offset, maxSize), e)
@@ -168,7 +168,7 @@ class KafkaApis(val logManager: LogManager) extends Logging {
           if(config.autoCreateTopics) {
             CreateTopicCommand.createTopic(zkClient, topic, config.numPartitions,
               config.defaultReplicationFactor)
-            info("Auto creation of topic %s with partitions %d and replication factor %d is successful!"
+            info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
               .format(topic, config.numPartitions, config.defaultReplicationFactor))
             val newTopicMetadata = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
             newTopicMetadata match {

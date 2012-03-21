@@ -27,8 +27,9 @@ import kafka.message._
 import kafka.server._
 import org.scalatest.junit.JUnit3Suite
 import kafka.integration.KafkaServerTestHarness
-import kafka.utils.TestUtils
 import kafka.producer.{ProducerData, Producer}
+import kafka.utils.TestUtils
+import kafka.utils.TestUtils._
 
 class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
 
@@ -43,7 +44,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
   val queue = new LinkedBlockingQueue[FetchedDataChunk]
   val topicInfos = configs.map(c => new PartitionTopicInfo(topic,
                                                       c.brokerId,
-                                                      new Partition(c.brokerId, 0), 
+                                                      0,
                                                       queue, 
                                                       new AtomicLong(0), 
                                                       new AtomicLong(0), 
@@ -66,6 +67,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
   def testFetcher() {
     val perNode = 2
     var count = sendMessages(perNode)
+    waitUntilLeaderIsElected(zookeeper.client, topic, 0, 500)
     fetch(count)
     Thread.sleep(100)
     assertQueueEmpty()

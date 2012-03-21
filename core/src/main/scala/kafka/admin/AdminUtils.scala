@@ -80,10 +80,6 @@ object AdminUtils extends Logging {
       for (i <- 0 until replicaAssignmentList.size) {
         val zkPath = ZkUtils.getTopicPartitionReplicasPath(topic, i.toString)
         ZkUtils.updatePersistentPath(zkClient, zkPath, Utils.seqToCSV(replicaAssignmentList(i)))
-        // TODO: Remove this with leader election patch
-        // assign leader for the partition i
-//        ZkUtils.updateEphemeralPath(zkClient, ZkUtils.getTopicPartitionLeaderPath(topic, i.toString),
-//          replicaAssignmentList(i).head)
         debug("Updated path %s with %s for replica assignment".format(zkPath, Utils.seqToCSV(replicaAssignmentList(i))))
       }
     }

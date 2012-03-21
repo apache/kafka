@@ -246,6 +246,22 @@ object Utils extends Logging {
     else value
   }
 
+  def getLong(props: Properties, name: String, default: Long): Long =
+    getLongInRange(props, name, default, (Long.MinValue, Long.MaxValue))
+
+  def getLongInRange(props: Properties, name: String, default: Long, range: (Long, Long)): Long = {
+    val v =
+      if(props.containsKey(name))
+        props.getProperty(name).toInt
+      else
+        default
+    if(v < range._1 || v > range._2)
+      throw new IllegalArgumentException(name + " has value " + v + " which is not in the range " + range + ".")
+    else
+      v
+  }
+
+
   def getLongInRange(buffer: ByteBuffer, name: String, range: (Long, Long)): Long = {
     val value = buffer.getLong
     if(value < range._1 || value > range._2)

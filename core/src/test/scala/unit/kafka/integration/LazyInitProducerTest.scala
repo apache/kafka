@@ -21,11 +21,11 @@ import kafka.api.FetchRequestBuilder
 import kafka.common.OffsetOutOfRangeException
 import kafka.message.{Message, ByteBufferMessageSet}
 import kafka.server.{KafkaRequestHandler, KafkaConfig}
-import kafka.utils.TestUtils
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
 import scala.collection._
 import kafka.producer.ProducerData
+import kafka.utils.TestUtils
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -61,6 +61,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
     val producerData = new ProducerData[String, Message](topic, topic, sentMessages)
 
     producer.send(producerData)
+
     var fetchedMessage: ByteBufferMessageSet = null
     while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
       val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())

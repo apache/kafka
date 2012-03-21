@@ -16,12 +16,11 @@
 */
 package kafka.producer
 
-import kafka.cluster.{Broker, Partition}
 import collection.mutable.HashMap
 import kafka.api.{TopicMetadataRequest, TopicMetadata}
 import java.lang.IllegalStateException
-import kafka.common.NoLeaderForPartitionException
 import kafka.utils.Logging
+import kafka.cluster.{Replica, Partition}
 
 class BrokerPartitionInfo(producerPool: ProducerPool) extends Logging {
   val topicPartitionInfo = new HashMap[String, TopicMetadata]()
@@ -33,29 +32,37 @@ class BrokerPartitionInfo(producerPool: ProducerPool) extends Logging {
    * @return a sequence of (brokerId, numPartitions). Returns a zero-length
    * sequence if no brokers are available.
    */  
-  def getBrokerPartitionInfo(topic: String): Seq[(Partition, Broker)] = {
+  def getBrokerPartitionInfo(topic: String): Seq[Partition] = {
+    debug("Getting broker partition info for topic %s".format(topic))
     // check if the cache has metadata for this topic
     val topicMetadata = topicPartitionInfo.get(topic)
     val metadata: TopicMetadata =
-    topicMetadata match {
-      case Some(m) => m
-      case None =>
-        // refresh the topic metadata cache
-        info("Fetching metadata for topic %s".format(topic))
-        updateInfo(topic)
-        val topicMetadata = topicPartitionInfo.get(topic)
-        topicMetadata match {
-          case Some(m) => m
-          case None => throw new IllegalStateException("Failed to fetch topic metadata for topic: " + topic)
-        }
-    }
+      topicMetadata match {
+        case Some(m) => m
+        case None =>
+          // refresh the topic metadata cache
+          info("Fetching metadata for topic %s".format(topic))
+          updateInfo(topic)
+          val topicMetadata = topicPartitionInfo.get(topic)
+          topicMetadata match {
+            case Some(m) => m
+            case None => throw new IllegalStateException("Failed to fetch topic metadata for topic: " + topic)
+          }
+      }
     val partitionMetadata = metadata.partitionsMetadata
     partitionMetadata.map { m =>
+      val partition = new Partition(topic, m.partitionId)
       m.leader match {
-        case Some(leader) => (new Partition(leader.id, m.partitionId, topic) -> leader)
-        case None =>  throw new NoLeaderForPartitionException("No leader for topic %s, partition %d".format(topic, m.partitionId))
+        case Some(leader) =>
+          val leaderReplica = new Replica(leader.id, partition, topic)
+          partition.leader = Some(leaderReplica)
+          debug("Topic %s partition %d has leader %d".format(topic, m.partitionId, leader.id))
+          partition
+        case None =>
+          debug("Topic %s partition %d does not have a leader yet".format(topic, m.partitionId))
+          partition
       }
-    }.sortWith((s, t) => s._1.partId < t._1.partId)
+    }.sortWith((s, t) => s.partId < t.partId)
   }
 
   /**
@@ -78,8 +85,8 @@ class BrokerPartitionInfo(producerPool: ProducerPool) extends Logging {
       // refresh cache for all topics
       val topics = topicPartitionInfo.keySet.toList
       val topicMetadata = producer.send(new TopicMetadataRequest(topics))
-      info("Fetched metadata for topics %s".format(topicMetadata.mkString(",")))
       topicMetadata.foreach(metadata => topicPartitionInfo += (metadata.topic -> metadata))
+
     }
   }
 }

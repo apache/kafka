@@ -34,11 +34,13 @@ import kafka.consumer.{KafkaMessageStream, ConsumerConfig}
 import scala.collection.Map
 import kafka.serializer.Encoder
 import kafka.api.{ProducerRequest, TopicData, PartitionData}
+import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.TimeUnit
 
 /**
  * Utility functions to help with testing
  */
-object TestUtils {
+object TestUtils extends Logging {
   
   val Letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
   val Digits = "0123456789"
@@ -384,6 +386,35 @@ object TestUtils {
     data(0) = new TopicData(topic,partitionData)
     val pr = new kafka.javaapi.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeout, data)  	
     pr
+  }
+
+  def waitUntilLeaderIsElected(zkClient: ZkClient, topic: String, partition: Int, timeoutMs: Long): Option[Int] = {
+    val leaderLock = new ReentrantLock()
+    val leaderExists = leaderLock.newCondition()
+
+    info("Waiting for leader to be elected for topic %s partition %d".format(topic, partition))
+    leaderLock.lock()
+    try {
+      // check if leader already exists
+      val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
+      leader match {
+        case Some(l) => info("Leader %d exists for topic %s partition %d".format(l, topic, partition))
+          leader
+        case None => zkClient.subscribeDataChanges(ZkUtils.getTopicPartitionLeaderPath(topic, partition.toString),
+          new LeaderExists(topic, partition, leaderExists))
+        leaderExists.await(timeoutMs, TimeUnit.MILLISECONDS)
+          // check if leader is elected
+        val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
+        leader match {
+          case Some(l) => info("Leader %d elected for topic %s partition %d".format(l, topic, partition))
+          case None => error("Timing out after %d ms since leader is not elected for topic %s partition %d"
+            .format(timeoutMs, topic, partition))
+        }
+        leader
+      }
+    } finally {
+      leaderLock.unlock()
+    }
   }
 }
 

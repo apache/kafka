@@ -17,13 +17,14 @@
 
 package kafka.utils
 
-import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import kafka.cluster.{Broker, Cluster}
 import scala.collection._
 import java.util.Properties
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException, ZkMarshallingError}
 import kafka.consumer.TopicCount
+import org.I0Itec.zkclient.{IZkDataListener, ZkClient}
+import java.util.concurrent.locks.Condition
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -68,15 +69,9 @@ object ZkUtils extends Logging {
   }
 
   def getLeaderForPartition(zkClient: ZkClient, topic: String, partition: Int): Option[Int] = {
-    // TODO: When leader election is implemented, change this method to return the leader as follows
-    // until then, assume the first replica as the leader
-//    val leader = readDataMaybeNull(zkClient, getTopicPartitionLeaderPath(topic, partition.toString))
-    val replicaListString = readDataMaybeNull(zkClient, getTopicPartitionReplicasPath(topic, partition.toString))
-    val replicas = Utils.getCSVList(replicaListString)
-    replicas.size match {
-      case 0 => None
-      case _ => Some(replicas.head.toInt)
-    }
+    val leader = readDataMaybeNull(zkClient, getTopicPartitionLeaderPath(topic, partition.toString))
+    if(leader == null) None
+    else Some(leader.toInt)
   }
 
   def getReplicasForPartition(zkClient: ZkClient, topic: String, partition: Int): Seq[String] = {
@@ -92,6 +87,16 @@ object ZkUtils extends Logging {
     val replicas = getReplicasForPartition(zkClient, topic, partition)
     debug("The list of replicas for topic %s, partition %d is %s".format(topic, partition, replicas))
     replicas.contains(brokerId.toString)
+  }
+
+  def tryToBecomeLeaderForPartition(zkClient: ZkClient, topic: String, partition: Int, brokerId: Int): Boolean = {
+    try {
+      createEphemeralPathExpectConflict(zkClient, getTopicPartitionLeaderPath(topic, partition.toString), brokerId.toString)
+      true
+    } catch {
+      case e: ZkNodeExistsException => error("Leader exists for topic %s partition %d".format(topic, partition)); false
+      case oe => false
+    }
   }
 
   def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, creator: String, port: Int) {
@@ -317,6 +322,27 @@ object ZkUtils extends Logging {
     ret
   }
 
+  def getPartitionsAssignedToBroker(zkClient: ZkClient, topics: Seq[String], brokerId: Int): Map[String, Seq[Int]] = {
+    val topicsAndPartitions = getPartitionsForTopics(zkClient, topics.iterator)
+
+    topicsAndPartitions.map { tp =>
+      val topic = tp._1
+      val partitions = tp._2.map(p => p.toInt)
+      val relevantPartitions = partitions.filter { partition =>
+        val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partition).map(r => r.toInt)
+        assignedReplicas.contains(brokerId)
+      }
+      (topic -> relevantPartitions)
+    }
+  }
+
+  def getPartitionsAssignedToBroker(zkClient: ZkClient, topic: String, partitions: Seq[Int], broker: Int): Seq[Int] = {
+    partitions.filter { p =>
+      val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, p).map(r => r.toInt)
+      assignedReplicas.contains(broker)
+    }
+  }
+
   def deletePartition(zkClient : ZkClient, brokerId: Int, topic: String) {
     val brokerIdPath = BrokerIdsPath + "/" + brokerId
     zkClient.delete(brokerIdPath)
@@ -372,6 +398,29 @@ object ZkUtils extends Logging {
 
   def getBrokerInfoFromIds(zkClient: ZkClient, brokerIds: Seq[Int]): Seq[Broker] =
     brokerIds.map( bid => Broker.createBroker(bid, ZkUtils.readData(zkClient, ZkUtils.BrokerIdsPath + "/" + bid)) )
+
+  def getAllTopics(zkClient: ZkClient): Seq[String] = {
+    val topics = ZkUtils.getChildrenParentMayNotExist(zkClient, BrokerTopicsPath)
+    if(topics == null) Seq.empty[String]
+    else topics
+  }
+
+}
+
+class LeaderExists(topic: String, partition: Int, leaderExists: Condition) extends IZkDataListener {
+  @throws(classOf[Exception])
+  def handleDataChange(dataPath: String, data: Object) {
+    val t = dataPath.split("/").takeRight(3).head
+    val p = dataPath.split("/").takeRight(2).head.toInt
+    if(t == topic && p == partition)
+      leaderExists.signal()
+  }
+
+  @throws(classOf[Exception])
+  def handleDataDeleted(dataPath: String) {
+    leaderExists.signal()
+  }
+
 }
 
 object ZKStringSerializer extends ZkSerializer {

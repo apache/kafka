@@ -43,7 +43,7 @@ class TopicCountTest extends JUnitSuite {
 
   @Test
   def testPartition() {
-    assertTrue(new Partition(10, 0) == new Partition(10, 0))
-    assertTrue(new Partition(10, 1) != new Partition(10, 0))
+    assertTrue(new Partition("foo", 10) == new Partition("foo", 10))
+    assertTrue(new Partition("foo", 1) != new Partition("foo", 0))
   }
 }

@@ -91,7 +91,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private val rebalanceLock = new Object
   private var fetcher: Option[Fetcher] = None
   private var zkClient: ZkClient = null
-  private val topicRegistry = new Pool[String, Pool[Partition, PartitionTopicInfo]]
+  private val topicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]]
   // queues : (topic,consumerThreadId) -> queue
   private val queues = new Pool[Tuple2[String,String], BlockingQueue[FetchedDataChunk]]
   private val scheduler = new KafkaScheduler(1, "Kafka-consumer-autocommit-", false)
@@ -202,7 +202,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   }
 
   // this API is used by unit tests only
-  def getTopicRegistry: Pool[String, Pool[Partition, PartitionTopicInfo]] = topicRegistry
+  def getTopicRegistry: Pool[String, Pool[Int, PartitionTopicInfo]] = topicRegistry
 
   private def registerConsumerInZK(dirs: ZKGroupDirs, consumerIdString: String, topicCount: TopicCount) = {
     info("begin registering consumer " + consumerIdString + " in ZK")
@@ -241,7 +241,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       for (info <- infos.values) {
         val newOffset = info.getConsumeOffset
         try {
-          updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + info.partition.name,
+          updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + info.partitionId,
             newOffset.toString)
         } catch {
           case t: Throwable =>
@@ -261,7 +261,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
       for(partition <- infos.values) {
         builder.append("\n    {")
-        builder.append{partition.partition.name}
+        builder.append{partition}
         builder.append(",fetch offset:" + partition.getFetchOffset)
         builder.append(",consumer offset:" + partition.getConsumeOffset)
         builder.append("}")
@@ -278,10 +278,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     getLatestOffset(topic, brokerId, partitionId) - getConsumedOffset(topic, brokerId, partitionId)
 
   def getConsumedOffset(topic: String, brokerId: Int, partitionId: Int): Long = {
-    val partition = new Partition(brokerId, partitionId)
     val partitionInfos = topicRegistry.get(topic)
     if (partitionInfos != null) {
-      val partitionInfo = partitionInfos.get(partition)
+      val partitionInfo = partitionInfos.get(partitionId)
       if (partitionInfo != null)
         return partitionInfo.getConsumeOffset
     }
@@ -289,7 +288,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     //otherwise, try to get it from zookeeper
     try {
       val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
-      val znode = topicDirs.consumerOffsetDir + "/" + partition.name
+      val znode = topicDirs.consumerOffsetDir + "/" + partitionId
       val offsetString = readDataMaybeNull(zkClient, znode)
       if (offsetString != null)
         return offsetString.toLong
@@ -383,7 +382,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       info("Releasing partition ownership")
       for ((topic, infos) <- topicRegistry) {
         for(partition <- infos.keys) {
-          val partitionOwnerPath = getConsumerPartitionOwnerPath(group, topic, partition.partId.toString)
+          val partitionOwnerPath = getConsumerPartitionOwnerPath(group, topic, partition.toString)
           deletePath(zkClient, partitionOwnerPath)
           debug("Consumer " + consumerIdString + " releasing " + partitionOwnerPath)
         }
@@ -475,7 +474,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       var partitionOwnershipDecision = new collection.mutable.HashMap[(String, String), String]()
       for ((topic, consumerThreadIdSet) <- relevantTopicThreadIdsMap) {
         topicRegistry.remove(topic)
-        topicRegistry.put(topic, new Pool[Partition, PartitionTopicInfo])
+        topicRegistry.put(topic, new Pool[Int, PartitionTopicInfo])
 
         val topicDirs = new ZKGroupTopicDirs(group, topic)
         val curConsumers = consumersPerTopicMap.get(topic).get
@@ -566,7 +565,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         for (partition <- partitionInfos.values)
           allPartitionInfos ::= partition
       info("Consumer " + consumerIdString + " selected partitions : " +
-        allPartitionInfos.sortWith((s,t) => s.partition < t.partition).map(_.toString).mkString(","))
+        allPartitionInfos.sortWith((s,t) => s.partitionId < t.partitionId).map(_.toString).mkString(","))
 
       fetcher match {
         case Some(f) =>
@@ -648,18 +647,17 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       else
         offset = offsetString.toLong
 
-      val partitionObject = new Partition(leader, partition.toInt, topic)
       val queue = queues.get((topic, consumerThreadId))
       val consumedOffset = new AtomicLong(offset)
       val fetchedOffset = new AtomicLong(offset)
       val partTopicInfo = new PartitionTopicInfo(topic,
                                                  leader,
-                                                 partitionObject,
+                                                 partition.toInt,
                                                  queue,
                                                  consumedOffset,
                                                  fetchedOffset,
                                                  new AtomicInteger(config.fetchSize))
-      partTopicInfoMap.put(partitionObject, partTopicInfo)
+      partTopicInfoMap.put(partition.toInt, partTopicInfo)
       debug(partTopicInfo + " selected new offset " + offset)
     }
   }
