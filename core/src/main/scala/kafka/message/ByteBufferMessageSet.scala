@@ -61,7 +61,7 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
 
   private def shallowValidBytes: Long = {
     if(shallowValidByteCount < 0) {
-      val iter = this.internalIterator()
+      val iter = this.internalIterator(true)
       while(iter.hasNext) {
         val messageAndOffset = iter.next
         shallowValidByteCount = messageAndOffset.offset
@@ -87,7 +87,6 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
         throw new MessageSizeTooLargeException("payload size of " + payloadSize + " larger than " + maxMessageSize)
     }
   }
-
 
   /** When flag isShallow is set to be true, we do a shallow iteration: just traverse the first level of messages. This is used in verifyMessageSize() function **/
   private def internalIterator(isShallow: Boolean = false): Iterator[MessageAndOffset] = {

@@ -199,7 +199,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int,
    * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
    * Returns the offset at which the messages are written.
    */
-  def append(messages: MessageSet): Unit = {
+  def append(messages: ByteBufferMessageSet): Unit = {
     // validate the messages
     var numberOfMessages = 0
     for(messageAndOffset <- messages) {
@@ -211,12 +211,22 @@ private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int,
     BrokerTopicStat.getBrokerTopicStat(getTopicName).recordMessagesIn(numberOfMessages)
     BrokerTopicStat.getBrokerAllTopicStat.recordMessagesIn(numberOfMessages)
     logStats.recordAppendedMessages(numberOfMessages)
-    
+
+    // truncate the message set's buffer upto validbytes, before appending it to the on-disk log
+    val validByteBuffer = messages.getBuffer.duplicate()
+    val messageSetValidBytes = messages.validBytes
+    if(messageSetValidBytes > Int.MaxValue || messageSetValidBytes < 0)
+      throw new InvalidMessageSizeException("Illegal length of message set " + messageSetValidBytes +
+        " Message set cannot be appended to log. Possible causes are corrupted produce requests")
+
+    validByteBuffer.limit(messageSetValidBytes.asInstanceOf[Int])
+    val validMessages = new ByteBufferMessageSet(validByteBuffer)
+
     // they are valid, insert them in the log
     lock synchronized {
       try {
         val segment = segments.view.last
-        segment.messageSet.append(messages)
+        segment.messageSet.append(validMessages)
         maybeFlush(numberOfMessages)
         maybeRoll(segment)
       }
