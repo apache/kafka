@@ -19,9 +19,8 @@ package kafka.server
 
 import kafka.utils._
 import org.apache.zookeeper.Watcher.Event.KeeperState
-import kafka.log.LogManager
 import java.net.InetAddress
-import kafka.common.KafkaZookeeperClient
+import kafka.common.{InvalidPartitionException, KafkaZookeeperClient}
 import kafka.cluster.Replica
 import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener, IZkStateListener, ZkClient}
 
@@ -31,10 +30,12 @@ import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener, IZkStateListener,
  *   /brokers/[0...N] --> host:port
  *
  */
-class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Logging {
+class KafkaZooKeeper(config: KafkaConfig,
+                     addReplicaCbk: (String, Int) => Replica,
+                     getReplicaCbk: (String, Int) => Option[Replica]) extends Logging {
 
   val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + config.brokerId
-  var zkClient: ZkClient = null
+  private var zkClient: ZkClient = null
   var topics: List[String] = Nil
   val lock = new Object()
   var existingTopics: Set[String] = Set.empty[String]
@@ -48,10 +49,11 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Loggin
     info("connecting to ZK: " + config.zkConnect)
     zkClient = KafkaZookeeperClient.getZookeeperClient(config)
     zkClient.subscribeStateChanges(new SessionExpireListener)
-    subscribeToTopicAndPartitionsChanges
+    registerBrokerInZk()
+    subscribeToTopicAndPartitionsChanges(true)
   }
 
-  def registerBrokerInZk() {
+  private def registerBrokerInZk() {
     info("Registering broker " + brokerIdPath)
     val hostName = if (config.hostName == null) InetAddress.getLocalHost.getHostAddress else config.hostName
     val creatorId = hostName + "-" + System.currentTimeMillis
@@ -96,6 +98,14 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Loggin
     }
   }
 
+  def ensurePartitionOnThisBroker(topic: String, partition: Int) {
+    if(!ZkUtils.isPartitionOnBroker(zkClient, topic, partition, config.brokerId))
+      throw new InvalidPartitionException("Broker %d does not host partition %d for topic %s".
+        format(config.brokerId, partition, topic))
+  }
+
+  def getZookeeperClient = zkClient
+
   def handleNewTopics(topics: Seq[String]) {
     // get relevant partitions to this broker
     val topicsAndPartitionsOnThisBroker = ZkUtils.getPartitionsAssignedToBroker(zkClient, topics, config.brokerId)
@@ -122,7 +132,7 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Loggin
     startReplicasForPartitions(topic, partitionsAssignedToThisBroker)
   }
 
-  def subscribeToTopicAndPartitionsChanges {
+  def subscribeToTopicAndPartitionsChanges(startReplicas: Boolean) {
     info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
     zkClient.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicPartitionsChangeListener)
     val topics = ZkUtils.getAllTopics(zkClient)
@@ -136,8 +146,10 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Loggin
       val partitions = tp._2.map(p => p.toInt)
       partitions.foreach { partition =>
           // register leader change listener
-          zkClient.subscribeDataChanges(ZkUtils.getTopicPartitionLeaderPath(topic, partition.toString), leaderChangeListener)
+        zkClient.subscribeDataChanges(ZkUtils.getTopicPartitionLeaderPath(topic, partition.toString), leaderChangeListener)
       }
+      if(startReplicas)
+        startReplicasForPartitions(topic, partitions)
     }
   }
 
@@ -149,16 +161,11 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Loggin
     }
   }
 
-  def startReplicasForTopics(topics: Seq[String]) {
-    val partitionsAssignedToThisBroker = ZkUtils.getPartitionsAssignedToBroker(zkClient, topics, config.brokerId)
-    partitionsAssignedToThisBroker.foreach(tp => startReplicasForPartitions(tp._1, tp._2))
-  }
-
   private def startReplicasForPartitions(topic: String, partitions: Seq[Int]) {
     partitions.foreach { partition =>
       val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partition).map(r => r.toInt)
       if(assignedReplicas.contains(config.brokerId)) {
-        val replica = logManager.addReplicaForPartition(topic, partition)
+        val replica = addReplicaCbk(topic, partition)
         startReplica(replica)
       } else
         warn("Ignoring partition %d of topic %s since broker %d doesn't host any replicas for it"
@@ -246,7 +253,7 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Loggin
           .format(topic, partitionId, config.brokerId))
         val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionId).map(r => r.toInt)
         if(assignedReplicas.contains(config.brokerId)) {
-          val replica = logManager.getReplicaForPartition(topic, partitionId)
+          val replica = getReplicaCbk(topic, partitionId)
           replica match {
             case Some(r) => leaderElection(r)
             case None =>  error("No replica exists for topic %s partition %s on broker %d"

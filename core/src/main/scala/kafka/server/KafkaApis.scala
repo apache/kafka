@@ -24,15 +24,15 @@ import kafka.api._
 import kafka.log._
 import kafka.message._
 import kafka.network._
-import kafka.utils.{SystemTime, Logging}
 import org.apache.log4j.Logger
 import scala.collection.mutable.ListBuffer
+import kafka.utils.{SystemTime, Logging}
 import kafka.common.{FetchRequestFormatException, ErrorMapping}
 
 /**
  * Logic to handle the various Kafka requests
  */
-class KafkaApis(val logManager: LogManager) extends Logging {
+class KafkaApis(val logManager: LogManager, val kafkaZookeeper: KafkaZooKeeper) extends Logging {
   
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
@@ -62,7 +62,7 @@ class KafkaApis(val logManager: LogManager) extends Logging {
     val requestSize = request.getNumTopicPartitions
     val errors = new Array[Short](requestSize)
     val offsets = new Array[Long](requestSize)
-	
+
     var msgIndex = -1
     for( topicData <- request.data ) {
       for( partitionData <- topicData.partitionData ) {
@@ -70,6 +70,7 @@ class KafkaApis(val logManager: LogManager) extends Logging {
         val partition = partitionData.getTranslatedPartition(topicData.topic, logManager.chooseRandomPartition)
         try {
           // TODO: need to handle ack's here!  Will probably move to another method.
+          kafkaZookeeper.ensurePartitionOnThisBroker(topicData.topic, partition)
           val log = logManager.getOrCreateLog(topicData.topic, partition)
           log.append(partitionData.messages)
           offsets(msgIndex) = log.nextAppendOffset
@@ -156,7 +157,7 @@ class KafkaApis(val logManager: LogManager) extends Logging {
 
     val topicsMetadata = new ListBuffer[TopicMetadata]()
     val config = logManager.getServerConfig
-    val zkClient = logManager.getZookeeperClient
+    val zkClient = kafkaZookeeper.getZookeeperClient
     val topicMetadataList = AdminUtils.getTopicMetaDataFromZK(metadataRequest.topics, zkClient)
 
     metadataRequest.topics.zip(topicMetadataList).foreach { topicAndMetadata =>

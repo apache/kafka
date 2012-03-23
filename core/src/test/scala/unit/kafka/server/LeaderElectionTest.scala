@@ -79,7 +79,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 5000)
     assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
 
-    Thread.sleep(500)
+    Thread.sleep(zookeeper.tickTime)
 
     // bring the preferred replica back
     servers.head.startup()

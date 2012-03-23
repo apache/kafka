@@ -23,7 +23,6 @@ import kafka.admin.CreateTopicCommand
 import java.nio.ByteBuffer
 import kafka.log.LogManager
 import kafka.utils.TestUtils
-import kafka.server.{KafkaApis, KafkaConfig}
 import junit.framework.Assert._
 import org.I0Itec.zkclient.ZkClient
 import TestUtils._
@@ -31,6 +30,7 @@ import org.easymock.EasyMock
 import kafka.network.BoundedByteBufferReceive
 import kafka.api.{TopicMetadataSend, TopicMetadataRequest}
 import kafka.cluster.Broker
+import kafka.server.{KafkaZooKeeper, KafkaApis, KafkaConfig}
 
 class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
@@ -83,9 +83,11 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   private def mockLogManagerAndTestTopic(topic: String) = {
     // topic metadata request only requires 2 APIs from the log manager
     val logManager = EasyMock.createMock(classOf[LogManager])
+    val kafkaZookeeper = EasyMock.createMock(classOf[KafkaZooKeeper])
+    EasyMock.expect(kafkaZookeeper.getZookeeperClient).andReturn(zkClient)
     EasyMock.expect(logManager.getServerConfig).andReturn(configs.head)
-    EasyMock.expect(logManager.getZookeeperClient).andReturn(zkClient)
     EasyMock.replay(logManager)
+    EasyMock.replay(kafkaZookeeper)
 
     // create a topic metadata request
     val topicMetadataRequest = new TopicMetadataRequest(List(topic))
@@ -95,7 +97,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     serializedMetadataRequest.rewind()
 
     // create the kafka request handler
-    val kafkaRequestHandler = new KafkaApis(logManager)
+    val kafkaRequestHandler = new KafkaApis(logManager, kafkaZookeeper)
 
     // mock the receive API to return the request buffer as created above
     val receivedRequest = EasyMock.createMock(classOf[BoundedByteBufferReceive])
@@ -123,6 +125,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // verify the expected calls to log manager occurred in the right order
     EasyMock.verify(logManager)
+    EasyMock.verify(kafkaZookeeper)
     EasyMock.verify(receivedRequest)
   }
 }

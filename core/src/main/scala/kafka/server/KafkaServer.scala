@@ -23,6 +23,7 @@ import java.io.File
 import kafka.network.{SocketServerStats, SocketServer}
 import kafka.log.LogManager
 import kafka.utils._
+import kafka.cluster.Replica
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
@@ -37,6 +38,8 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
   var socketServer: SocketServer = null
   var requestHandlerPool: KafkaRequestHandlerPool = null
   private var logManager: LogManager = null
+  var kafkaZookeeper: KafkaZooKeeper = null
+  val replicaManager = new ReplicaManager(config)
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
@@ -62,7 +65,11 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
                                     config.numQueuedRequests,
                                     config.maxSocketRequestSize)
     Utils.registerMBean(socketServer.stats, statsMBeanName)
-    requestHandlerPool = new KafkaRequestHandlerPool(socketServer.requestChannel, new KafkaApis(logManager).handle, config.numIoThreads)
+
+    kafkaZookeeper = new KafkaZooKeeper(config, addReplica, getReplica)
+
+    requestHandlerPool = new KafkaRequestHandlerPool(socketServer.requestChannel,
+      new KafkaApis(logManager, kafkaZookeeper).handle, config.numIoThreads)
     socketServer.startup
 
     Mx4jLoader.maybeLoad
@@ -74,9 +81,7 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
     logManager.startup
 
     // starting relevant replicas and leader election for partitions assigned to this broker
-    // TODO: Some part of the broker startup logic is hidden inside KafkaZookeeper, but some of it has to be done here
-    // since it requires the log manager to come up. Ideally log manager should not hide KafkaZookeeper inside it
-    logManager.kafkaZookeeper.startReplicasForTopics(ZkUtils.getAllTopics(logManager.getZookeeperClient))
+    kafkaZookeeper.startup
     info("Server started.")
   }
   
@@ -88,6 +93,7 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
     val canShutdown = isShuttingDown.compareAndSet(false, true);
     if (canShutdown) {
       info("Shutting down Kafka server with id " + config.brokerId)
+      kafkaZookeeper.close
       if (socketServer != null)
         socketServer.shutdown()
       if(requestHandlerPool != null)
@@ -108,6 +114,14 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
    * After calling shutdown(), use this API to wait until the shutdown is complete
    */
   def awaitShutdown(): Unit = shutdownLatch.await()
+
+  def addReplica(topic: String, partition: Int): Replica = {
+    // get local log
+    val log = logManager.getOrCreateLog(topic, partition)
+    replicaManager.addLocalReplica(topic, partition, log)
+  }
+
+  def getReplica(topic: String, partition: Int): Option[Replica] = replicaManager.getReplica(topic, partition)
 
   def getLogManager(): LogManager = logManager
 

@@ -27,7 +27,8 @@ import kafka.utils.{Utils, ZKStringSerializer}
 class EmbeddedZookeeper(val connectString: String) {
   val snapshotDir = TestUtils.tempDir()
   val logDir = TestUtils.tempDir()
-  val zookeeper = new ZooKeeperServer(snapshotDir, logDir, 3000)
+  val tickTime = 2000
+  val zookeeper = new ZooKeeperServer(snapshotDir, logDir, tickTime)
   val port = connectString.split(":")(1).toInt
   val factory = new NIOServerCnxn.Factory(new InetSocketAddress("127.0.0.1", port))
   factory.startup(zookeeper)

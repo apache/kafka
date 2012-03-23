@@ -19,13 +19,13 @@ package kafka.log
 
 import java.io._
 import junit.framework.Assert._
-import kafka.server.KafkaConfig
 import org.junit.Test
 import kafka.common.OffsetOutOfRangeException
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{TestZKUtils, Utils, MockTime, TestUtils}
 import org.scalatest.junit.JUnit3Suite
 import kafka.admin.CreateTopicCommand
+import kafka.server.KafkaConfig
 
 class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
@@ -48,9 +48,10 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     logManager.startup
     logDir = logManager.logDir
 
+    TestUtils.createBrokersInZk(zookeeper.client, List(config.brokerId))
+
     // setup brokers in zookeeper as owners of partitions for this test
     CreateTopicCommand.createTopic(zookeeper.client, name, 3, 1, "0,0,0")
-
   }
 
   override def tearDown() {
