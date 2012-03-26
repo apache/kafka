@@ -50,12 +50,13 @@ trait Receive extends Transmission {
   def readFrom(channel: ReadableByteChannel): Int
   
   def readCompletely(channel: ReadableByteChannel): Int = {
-    var read = 0
+    var totalRead = 0
     while(!complete) {
-      read = readFrom(channel)
+      val read = readFrom(channel)
       trace(read + " bytes read.")
+      totalRead += read
     }
-    read
+    totalRead
   }
   
 }

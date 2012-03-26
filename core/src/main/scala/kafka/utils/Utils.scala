@@ -701,20 +701,6 @@ object Utils extends Logging {
       case _ => // swallow
     }
   }
-
-  def sendRequest(request: Request, channel: SocketChannel) = {
-    val send = new BoundedByteBufferSend(request)
-    send.writeCompletely(channel)
-  }
-
-  def getResponse(channel: SocketChannel): Tuple2[Receive,Int] = {
-    val response = new BoundedByteBufferReceive()
-    response.readCompletely(channel)
-
-    // this has the side effect of setting the initial position of buffer correctly
-    val errorCode: Int = response.buffer.getShort
-    (response, errorCode)
-  }
 }
 
 class SnapshotStats(private val monitorDurationNs: Long = 600L * 1000L * 1000L * 1000L) {

@@ -18,18 +18,19 @@
 package kafka.producer
 
 import org.scalatest.junit.JUnit3Suite
-import kafka.zk.ZooKeeperTestHarness
-import kafka.consumer.SimpleConsumer
-import org.I0Itec.zkclient.ZkClient
-import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
 import java.util.Properties
-import org.apache.log4j.{Level, Logger}
-import org.junit.Test
-import kafka.utils.{TestZKUtils, Utils, TestUtils}
-import kafka.message.Message
 import kafka.admin.CreateTopicCommand
 import kafka.api.FetchRequestBuilder
+import kafka.common.FailedToSendMessageException
+import kafka.consumer.SimpleConsumer
+import kafka.message.Message
+import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
+import kafka.zk.ZooKeeperTestHarness
+import org.apache.log4j.{Level, Logger}
+import org.I0Itec.zkclient.ZkClient
 import org.junit.Assert._
+import org.junit.Test
+import kafka.utils.{SystemTime, TestZKUtils, Utils, TestUtils}
 
 class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   private val brokerId1 = 0
@@ -77,7 +78,9 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     // restore set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.ERROR)
     server1.shutdown
+    server1.awaitShutdown()
     server2.shutdown
+    server2.awaitShutdown()
     Utils.rm(server1.config.logDir)
     Utils.rm(server2.config.logDir)    
     Thread.sleep(500)
@@ -120,107 +123,63 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
       }
     } catch {
       case e: Exception => fail("Not expected", e)
+    } finally {
+      producer.close
+    }
+  }
+
+  @Test
+  def testZKSendWithDeadBroker() {
+    val props = new Properties()
+    props.put("serializer.class", "kafka.serializer.StringEncoder")
+    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
+    props.put("socket.timeout.ms", "2000")
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+
+    // create topic
+    CreateTopicCommand.createTopic(zkClient, "new-topic", 4, 2, "0,0,0,0")
+
+    val config = new ProducerConfig(props)
+    val producer = new Producer[String, String](config)
+    try {
+      // Available partition ids should be 0, 1, 2 and 3, all lead and hosted only
+      // on broker 0
+      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
+      Thread.sleep(100)
+    } catch {
+      case e => fail("Unexpected exception: " + e)
+    }
+
+    // kill the broker
+    server1.shutdown
+    server1.awaitShutdown()
+    Thread.sleep(100)
+
+    try {
+      // These sends should fail since there are no available brokers
+      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
+      Thread.sleep(100)
+      fail("Should fail since no leader exists for the partition.")
+    } catch {
+      case e => // success
+    }
+
+    // restart server 1
+    server1.startup()
+    Thread.sleep(500)
+
+    try {
+      // cross check if broker 1 got the messages
+      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      val messageSet1 = response1.messageSet("new-topic", 0).iterator
+      assertTrue("Message set should have 1 message", messageSet1.hasNext)
+      assertEquals(new Message("test1".getBytes), messageSet1.next.message)
+      assertFalse("Message set should have another message", messageSet1.hasNext)
+    } catch {
+      case e: Exception => fail("Not expected", e)
     }
     producer.close
   }
-
-//  @Test
-//  def testZKSendWithDeadBroker() {
-//    val props = new Properties()
-//    props.put("serializer.class", "kafka.serializer.StringEncoder")
-//    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-//    props.put("zk.connect", TestZKUtils.zookeeperConnect)
-//
-//    // create topic
-//    CreateTopicCommand.createTopic(zkClient, "new-topic", 2, 1, "0,0")
-//
-//    val config = new ProducerConfig(props)
-//
-//    val producer = new Producer[String, String](config)
-//    val message = new Message("test1".getBytes)
-//    try {
-////      // kill 2nd broker
-////      server1.shutdown
-////      Thread.sleep(100)
-//
-//      // Available partition ids should be 0, 1, 2 and 3. The data in both cases should get sent to partition 0 and
-//      // all partitions have broker 0 as the leader.
-//      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-//      Thread.sleep(100)
-//
-//      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-//      Thread.sleep(3000)
-//
-//      // restart server 1
-////      server1.startup()
-////      Thread.sleep(100)
-//
-//      // cross check if brokers got the messages
-//      val response = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
-//      val messageSet = response.messageSet("new-topic", 0).iterator
-//      var numMessagesReceived = 0
-//      while(messageSet.hasNext) {
-//        val messageAndOffset = messageSet.next()
-//        assertEquals(message, messageSet.next.message)
-//        println("Received message at offset %d".format(messageAndOffset.offset))
-//        numMessagesReceived += 1
-//      }
-//      assertEquals("Message set should have 2 messages", 2, numMessagesReceived)
-//    } catch {
-//      case e: Exception => fail("Not expected", e)
-//    }
-//    producer.close
-//  }
-
-  // TODO: Need to rewrite when SyncProducer changes to throw timeout exceptions
-  //       and when leader logic is changed.
-//  @Test
-//  def testZKSendWithDeadBroker2() {
-//    val props = new Properties()
-//    props.put("serializer.class", "kafka.serializer.StringEncoder")
-//    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-//    props.put("socket.timeout.ms", "200")
-//    props.put("zk.connect", TestZKUtils.zookeeperConnect)
-//
-//    // create topic
-//    CreateTopicCommand.createTopic(zkClient, "new-topic", 4, 2, "0:1,0:1,0:1,0:1")
-//
-//    val config = new ProducerConfig(props)
-//
-//    val producer = new Producer[String, String](config)
-//    try {
-//      // Available partition ids should be 0, 1, 2 and 3. The data in both cases should get sent to partition 0 and
-//      // all partitions have broker 0 as the leader.
-//      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-//      Thread.sleep(100)
-//      // kill 2nd broker
-//      server1.shutdown
-//      Thread.sleep(500)
-//
-//      // Since all partitions are unavailable, this request will be dropped
-//      try {
-//        producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-//        fail("Leader broker for \"new-topic\" isn't up, should not be able to send data")
-//      } catch {
-//        case e: kafka.common.FailedToSendMessageException => // success
-//        case e => fail("Leader broker for \"new-topic\" isn't up, should not be able to send data")
-//      }
-//
-//      // restart server 1
-//      server1.startup()
-//      Thread.sleep(200)
-//
-//      // cross check if brokers got the messages
-//      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
-//      val messageSet1 = response1.messageSet("new-topic", 0).iterator
-//      assertTrue("Message set should have 1 message", messageSet1.hasNext)
-//      assertEquals(new Message("test1".getBytes), messageSet1.next.message)
-//      assertFalse("Message set should not have more than 1 message", messageSet1.hasNext)
-//    } catch {
-//      case e: Exception => fail("Not expected", e)
-//    }
-//    producer.close
-//  }
 
   @Test
   def testZKSendToExistingTopicWithNoBrokers() {
@@ -250,6 +209,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
       // shutdown server2
       server2.shutdown
+      server2.awaitShutdown()
       Thread.sleep(100)
       // delete the new-topic logs
       Utils.rm(server2.config.logDir)
@@ -278,6 +238,57 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
       if(server != null) server.shutdown
       producer.close
     }
+  }
+
+  @Test
+  def testAsyncSendCanCorrectlyFailWithTimeout() {
+    val timeoutMs = 500
+    val props = new Properties()
+    props.put("serializer.class", "kafka.serializer.StringEncoder")
+    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
+    props.put("socket.timeout.ms", String.valueOf(timeoutMs))
+    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+
+    val config = new ProducerConfig(props)
+    val producer = new Producer[String, String](config)
+
+    // create topics in ZK
+    CreateTopicCommand.createTopic(zkClient, "new-topic", 4, 2, "0:1,0:1,0:1,0:1")
+
+    // do a simple test to make sure plumbing is okay
+    try {
+      // this message should be assigned to partition 0 whose leader is on broker 0
+      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test")))
+      Thread.sleep(100)
+      // cross check if brokers got the messages
+      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      val messageSet1 = response1.messageSet("new-topic", 0).iterator
+      assertTrue("Message set should have 1 message", messageSet1.hasNext)
+      assertEquals(new Message("test".getBytes), messageSet1.next.message)
+    } catch {
+      case e => case e: Exception => producer.close; fail("Not expected", e)
+    }
+
+    // stop IO threads and request handling, but leave networking operational
+    // any requests should be accepted and queue up, but not handled
+    server1.requestHandlerPool.shutdown()
+
+    val t1 = SystemTime.milliseconds
+    try {
+      // this message should be assigned to partition 0 whose leader is on broker 0, but
+      // broker 0 will not response within timeoutMs millis.
+      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test")))
+    } catch {
+      case e: FailedToSendMessageException => /* success */
+      case e: Exception => fail("Not expected", e)
+    } finally {
+      producer.close
+    }
+    val t2 = SystemTime.milliseconds
+
+    // make sure we don't wait fewer than numRetries*timeoutMs milliseconds
+    // we do this because the DefaultEventHandler retries a number of times
+    assertTrue((t2-t1) >= timeoutMs*config.producerRetries)
   }
 }
 

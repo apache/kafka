@@ -24,8 +24,8 @@ import kafka.producer._
 import kafka.serializer.Encoder
 import scala.collection.Map
 import scala.collection.mutable.{ListBuffer, HashMap}
-import kafka.common.{NoLeaderForPartitionException, InvalidPartitionException, NoBrokersForPartitionException}
 import kafka.utils.{Utils, Logging}
+import kafka.common.{FailedToSendMessageException, NoLeaderForPartitionException, InvalidPartitionException, NoBrokersForPartitionException}
 
 class DefaultEventHandler[K,V](config: ProducerConfig,                               // this api is for testing
                                private val partitioner: Partitioner[K],              // use the other constructor
@@ -42,17 +42,21 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
 
   def handle(events: Seq[ProducerData[K,V]]) {
     lock synchronized {
-     val serializedData = serialize(events)
+      val serializedData = serialize(events)
       var outstandingProduceRequests = serializedData
       var remainingRetries = config.producerRetries
-      Stream.continually(dispatchSerializedData(outstandingProduceRequests))
-                        .takeWhile(requests => (remainingRetries > 0) && (requests.size > 0)).foreach {
-        currentOutstandingRequests =>
-          outstandingProduceRequests = currentOutstandingRequests
+      while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {
+        outstandingProduceRequests = dispatchSerializedData(outstandingProduceRequests)
+        if (outstandingProduceRequests.size > 0)  {
           // back off and update the topic metadata cache before attempting another send operation
           Thread.sleep(config.producerRetryBackoffMs)
-          brokerPartitionInfo.updateInfo()
+          Utils.swallowError(brokerPartitionInfo.updateInfo())
           remainingRetries -= 1
+        }
+      }
+      if(outstandingProduceRequests.size > 0) {
+        error("Failed to send the following reqeusts: " + outstandingProduceRequests)
+        throw new FailedToSendMessageException("Failed to send messages after " + config.producerRetries + " tries.", null)
       }
     }
   }
@@ -70,7 +74,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
         if((brokerid < 0) || (!send(brokerid, messageSetPerBroker)))
           failedProduceRequests.appendAll(eventsPerBrokerMap.map(r => r._2).flatten)
       }
-    }catch {
+    } catch {
       case t: Throwable => error("Failed to send messages")
     }
     failedProduceRequests

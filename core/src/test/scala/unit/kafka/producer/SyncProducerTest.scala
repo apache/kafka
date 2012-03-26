@@ -27,6 +27,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.{TestZKUtils, SystemTime, TestUtils}
 import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
+import java.net.SocketTimeoutException
 
 class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   private var messageBytes =  new Array[Byte](2);
@@ -90,7 +91,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   }
 
   @Test
-  def testProduceBlocksWhenRequired() {
+  def testProduceCorrectlyReceivesResponse() {
     // TODO: this will need to change with kafka-44
     val server = servers.head
     val props = new Properties()
@@ -133,5 +134,38 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     // the middle message should have been rejected because broker doesn't lead partition
     Assert.assertEquals(ErrorMapping.WrongPartitionCode.toShort, response2.errors(1))
     Assert.assertEquals(-1, response2.offsets(1))
+  }
+
+  @Test
+  def testProducerCanTimeout() {
+    val timeoutMs = 500
+
+    val server = servers.head
+    val props = new Properties()
+    props.put("host", "localhost")
+    props.put("port", server.socketServer.port.toString)
+    props.put("buffer.size", "102400")
+    props.put("socket.timeout.ms", String.valueOf(timeoutMs))
+    val producer = new SyncProducer(new SyncProducerConfig(props))
+
+    val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
+    val request = TestUtils.produceRequest("topic1", 0, messages)
+
+    // stop IO threads and request handling, but leave networking operational
+    // any requests should be accepted and queue up, but not handled
+    server.requestHandlerPool.shutdown()
+    
+    val t1 = SystemTime.milliseconds
+    try {
+      val response2 = producer.send(request)
+      Assert.fail("Should have received timeout exception since request handling is stopped.")
+    } catch {
+      case e: SocketTimeoutException => /* success */
+      case e => Assert.fail("Unexpected exception when expecting timeout: " + e)
+    }
+    val t2 = SystemTime.milliseconds
+
+    // make sure we don't wait fewer than timeoutMs for a response
+    Assert.assertTrue((t2-t1) >= timeoutMs)
   }
 }

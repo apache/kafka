@@ -17,52 +17,69 @@
 
 package kafka.consumer
 
-import java.net._
-import java.nio.channels._
 import kafka.api._
 import kafka.network._
 import kafka.utils._
-import kafka.utils.Utils._
 
 /**
  * A consumer of kafka messages
  */
 @threadsafe
-class SimpleConsumer(val host: String,
-                     val port: Int,
-                     val soTimeout: Int,
-                     val bufferSize: Int) extends Logging {
-  private var channel : SocketChannel = null
+class SimpleConsumer( val host: String,
+                      val port: Int,
+                      val soTimeout: Int,
+                      val bufferSize: Int ) extends Logging {
+
   private val lock = new Object()
+  private val blockingChannel = new BlockingChannel(host, port, bufferSize, 0, soTimeout)
 
-  private def connect(): SocketChannel = {
+  private def connect(): BlockingChannel = {
     close
-    val address = new InetSocketAddress(host, port)
-
-    val channel = SocketChannel.open
-    debug("Connected to " + address + " for fetching.")
-    channel.configureBlocking(true)
-    channel.socket.setReceiveBufferSize(bufferSize)
-    channel.socket.setSoTimeout(soTimeout)
-    channel.socket.setKeepAlive(true)
-    channel.connect(address)
-    trace("requested receive buffer size=" + bufferSize + " actual receive buffer size= " + channel.socket.getReceiveBufferSize)
-    trace("soTimeout=" + soTimeout + " actual soTimeout= " + channel.socket.getSoTimeout)
-    
-    channel
+    blockingChannel.connect()
+    blockingChannel
   }
 
-  private def close(channel: SocketChannel) = {
-    debug("Disconnecting from " + channel.socket.getRemoteSocketAddress())
-    swallow(channel.close())
-    swallow(channel.socket.close())
+  private def disconnect() = {
+    if(blockingChannel.isConnected) {
+      debug("Disconnecting from " + host + ":" + port)
+      blockingChannel.disconnect()
+    }
+  }
+
+  private def reconnect() {
+    disconnect()
+    connect()
   }
 
   def close() {
     lock synchronized {
-      if (channel != null)
-        close(channel)
-      channel = null
+        disconnect()
+    }
+  }
+  
+  private def sendRequest(request: Request): Tuple2[Receive, Int] = {
+    lock synchronized {
+      getOrMakeConnection()
+      var response: Tuple2[Receive,Int] = null
+      try {
+        blockingChannel.send(request)
+        response = blockingChannel.receive()
+      } catch {
+        case e : java.io.IOException =>
+          info("Reconnect in due to socket error: ", e)
+          // retry once
+          try {
+            reconnect()
+            blockingChannel.send(request)
+            response = blockingChannel.receive()
+          } catch {
+            case ioe: java.io.IOException =>
+              disconnect()
+              throw ioe
+          }
+        case e => throw e
+      }
+      response
     }
   }
 
@@ -73,35 +90,16 @@ class SimpleConsumer(val host: String,
    *  @return a set of fetched messages
    */
   def fetch(request: FetchRequest): FetchResponse = {
-    lock synchronized {
-      val startTime = SystemTime.nanoseconds
-      getOrMakeConnection()
-      var response: Tuple2[Receive,Int] = null
-      try {
-        sendRequest(request, channel)
-        response = getResponse(channel)
-      } catch {
-        case e : java.io.IOException =>
-          info("Reconnect in fetch request due to socket error: ", e)
-          // retry once
-          try {
-            channel = connect
-            sendRequest(request, channel)
-            response = getResponse(channel)
-          } catch {
-            case ioe: java.io.IOException => channel = null; throw ioe;
-          }
-        case e => throw e
-      }
-      val fetchResponse = FetchResponse.readFrom(response._1.buffer)
-      val fetchedSize = fetchResponse.sizeInBytes
+    val startTime = SystemTime.nanoseconds
+    val response = sendRequest(request)
+    val fetchResponse = FetchResponse.readFrom(response._1.buffer)
+    val fetchedSize = fetchResponse.sizeInBytes
 
-      val endTime = SystemTime.nanoseconds
-      SimpleConsumerStats.recordFetchRequest(endTime - startTime)
-      SimpleConsumerStats.recordConsumptionThroughput(fetchedSize)
+    val endTime = SystemTime.nanoseconds
+    SimpleConsumerStats.recordFetchRequest(endTime - startTime)
+    SimpleConsumerStats.recordConsumptionThroughput(fetchedSize)
 
-      fetchResponse
-    }
+    fetchResponse
   }
 
   /**
@@ -112,31 +110,14 @@ class SimpleConsumer(val host: String,
    *  @return an array of offsets
    */
   def getOffsetsBefore(topic: String, partition: Int, time: Long, maxNumOffsets: Int): Array[Long] = {
-    lock synchronized {
-      getOrMakeConnection()
-      var response: Tuple2[Receive,Int] = null
-      try {
-        sendRequest(new OffsetRequest(topic, partition, time, maxNumOffsets), channel)
-        response = getResponse(channel)
-      } catch {
-        case e : java.io.IOException =>
-          info("Reconnect in get offetset request due to socket error: ", e)
-          // retry once
-          try {
-            channel = connect
-            sendRequest(new OffsetRequest(topic, partition, time, maxNumOffsets), channel)
-            response = getResponse(channel)
-          } catch {
-            case ioe: java.io.IOException => channel = null; throw ioe;
-          }
-      }
-      OffsetRequest.deserializeOffsetArray(response._1.buffer)
-    }
+    val request = new OffsetRequest(topic, partition, time, maxNumOffsets)
+    val response = sendRequest(request)
+    OffsetRequest.deserializeOffsetArray(response._1.buffer)
   }
 
   private def getOrMakeConnection() {
-    if(channel == null) {
-      channel = connect()
+    if(!blockingChannel.isConnected) {
+      connect()
     }
   }
 }

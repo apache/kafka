@@ -17,14 +17,11 @@
 
 package kafka.producer
 
-import java.net.InetSocketAddress
-import java.nio.channels.SocketChannel
 import kafka.api._
 import kafka.common.MessageSizeTooLargeException
 import kafka.message.MessageSet
-import kafka.network.{BoundedByteBufferSend, Request, Receive}
+import kafka.network.{BlockingChannel, BoundedByteBufferSend, Request, Receive}
 import kafka.utils._
-import kafka.utils.Utils._
 
 /*
  * Send a message set.
@@ -33,11 +30,10 @@ import kafka.utils.Utils._
 class SyncProducer(val config: SyncProducerConfig) extends Logging {
   
   private val MaxConnectBackoffMs = 60000
-  private var channel : SocketChannel = null
   private var sentOnConnection = 0
   private val lock = new Object()
-  @volatile
-  private var shutdown: Boolean = false
+  @volatile private var shutdown: Boolean = false
+  private val blockingChannel = new BlockingChannel(config.host, config.port, 0, config.bufferSize, config.socketTimeoutMs)
 
   debug("Instantiating Scala Sync Producer")
 
@@ -64,21 +60,19 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
 
       var response: Tuple2[Receive, Int] = null
       try {
-        sendRequest(request, channel)
-        response = getResponse(channel)
+        blockingChannel.send(request)
+        response = blockingChannel.receive()
       } catch {
         case e: java.io.IOException =>
           // no way to tell if write succeeded. Disconnect and re-throw exception to let client handle retry
           disconnect()
-          println("sdfsdfsdf")
           throw e
-        case e => println("other sdfsdfsdfs"); throw e
+        case e => throw e
       }
       // TODO: do we still need this?
       sentOnConnection += 1
       if(sentOnConnection >= config.reconnectInterval) {
-        disconnect()
-        channel = connect()
+        reconnect()
         sentOnConnection = 0
       }
       SyncProducerStats.recordProduceRequest(SystemTime.nanoseconds - startTime)
@@ -119,41 +113,38 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
         throw new MessageSizeTooLargeException
   }
 
+  private def reconnect() {
+    disconnect()
+    connect()
+  }
+
   /**
    * Disconnect from current channel, closing connection.
    * Side effect: channel field is set to null on successful disconnect
    */
   private def disconnect() {
     try {
-      if(channel != null) {
+      if(blockingChannel.isConnected) {
         info("Disconnecting from " + config.host + ":" + config.port)
-        swallow(channel.close())
-        swallow(channel.socket.close())
-        channel = null
+        blockingChannel.disconnect()
       }
     } catch {
       case e: Exception => error("Error on disconnect: ", e)
     }
   }
     
-  private def connect(): SocketChannel = {
+  private def connect(): BlockingChannel = {
     var connectBackoffMs = 1
     val beginTimeMs = SystemTime.milliseconds
-    while(channel == null && !shutdown) {
+    while(!blockingChannel.isConnected && !shutdown) {
       try {
-        channel = SocketChannel.open()
-        channel.socket.setSendBufferSize(config.bufferSize)
-        channel.configureBlocking(true)
-        channel.socket.setSoTimeout(config.socketTimeoutMs)
-        channel.socket.setKeepAlive(true)
-        channel.connect(new InetSocketAddress(config.host, config.port))
+        blockingChannel.connect()
         info("Connected to " + config.host + ":" + config.port + " for producing")
-      }
-      catch {
+      } catch {
         case e: Exception => {
           disconnect()
           val endTimeMs = SystemTime.milliseconds
-          if ( (endTimeMs - beginTimeMs + connectBackoffMs) > config.connectTimeoutMs) {
+          if ( (endTimeMs - beginTimeMs + connectBackoffMs) > config.connectTimeoutMs ) {
             error("Producer connection to " +  config.host + ":" + config.port + " timing out after " + config.connectTimeoutMs + " ms", e)
             throw e
           }
@@ -163,12 +154,12 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
         }
       }
     }
-    channel
+    blockingChannel
   }
 
   private def getOrMakeConnection() {
-    if(channel == null) {
-      channel = connect()
+    if(!blockingChannel.isConnected) {
+      connect()
     }
   }
 }
