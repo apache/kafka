@@ -78,9 +78,12 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
     buffer.reset()
     written
   }
-  
+
+  /** default iterator that iterates over decompressed messages */
   override def iterator: Iterator[MessageAndOffset] = internalIterator()
 
+  /** iterator over compressed messages without decompressing */
+  def shallowIterator: Iterator[MessageAndOffset] = internalIterator(true)
 
   def verifyMessageSize(maxMessageSize: Int){
     var shallowIter = internalIterator(true)
@@ -124,6 +127,9 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
         message.limit(size)
         topIter.position(topIter.position + size)
         val newMessage = new Message(message)
+        if(!newMessage.isValid)
+          throw new InvalidMessageException("message is invalid, compression codec: " + newMessage.compressionCodec
+            + " size: " + size + " curr offset: " + currValidBytes + " init offset: " + initialOffset)
 
         if(isShallow){
           currValidBytes += 4 + size
@@ -133,16 +139,12 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
         else{
           newMessage.compressionCodec match {
             case NoCompressionCodec =>
-              if(!newMessage.isValid)
-                throw new InvalidMessageException("Uncompressed essage is invalid")
               debug("Message is uncompressed. Valid byte count = %d".format(currValidBytes))
               innerIter = null
               currValidBytes += 4 + size
               trace("currValidBytes = " + currValidBytes)
               new MessageAndOffset(newMessage, currValidBytes)
             case _ =>
-              if(!newMessage.isValid)
-                throw new InvalidMessageException("Compressed message is invalid")
               debug("Message is compressed. Valid byte count = %d".format(currValidBytes))
               innerIter = CompressionUtils.decompress(newMessage).internalIterator()
               if (!innerIter.hasNext) {

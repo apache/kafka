@@ -31,7 +31,8 @@ import java.util.concurrent.atomic.AtomicReference
 class ConsumerIterator[T](private val topic: String,
                           private val channel: BlockingQueue[FetchedDataChunk],
                           consumerTimeoutMs: Int,
-                          private val decoder: Decoder[T])
+                          private val decoder: Decoder[T],
+                          val enableShallowIterator: Boolean)
   extends IteratorTemplate[T] with Logging {
 
   private var current: AtomicReference[Iterator[MessageAndOffset]] = new AtomicReference(null)
@@ -74,7 +75,8 @@ class ConsumerIterator[T](private val topic: String,
                         .format(currentTopicInfo.getConsumeOffset, currentDataChunk.fetchOffset, currentTopicInfo))
           currentTopicInfo.resetConsumeOffset(currentDataChunk.fetchOffset)
         }
-        localCurrent = currentDataChunk.messages.iterator
+        localCurrent = if (enableShallowIterator) currentDataChunk.messages.shallowIterator
+                       else currentDataChunk.messages.iterator
         current.set(localCurrent)
       }
     }

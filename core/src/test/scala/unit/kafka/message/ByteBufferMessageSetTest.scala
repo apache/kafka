@@ -94,6 +94,10 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(messageSet.iterator))
       //make sure the last offset after iteration is correct
       assertEquals("offset of last message not expected", messageSet.last.offset, messageSet.serialized.limit)
+
+      //make sure shallow iterator is the same as deep iterator
+      TestUtils.checkEquals[Message](TestUtils.getMessageIterator(messageSet.shallowIterator),
+                                     TestUtils.getMessageIterator(messageSet.iterator))
     }
 
     // test for compressed regular messages
@@ -104,6 +108,8 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(messageSet.iterator))
       //make sure the last offset after iteration is correct
       assertEquals("offset of last message not expected", messageSet.last.offset, messageSet.serialized.limit)
+
+      verifyShallowIterator(messageSet)
     }
 
     // test for mixed empty and non-empty messagesets uncompressed
@@ -121,6 +127,10 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
       //make sure the last offset after iteration is correct
       assertEquals("offset of last message not expected", mixedMessageSet.last.offset, mixedMessageSet.serialized.limit)
+
+      //make sure shallow iterator is the same as deep iterator
+      TestUtils.checkEquals[Message](TestUtils.getMessageIterator(mixedMessageSet.shallowIterator),
+                                     TestUtils.getMessageIterator(mixedMessageSet.iterator))
     }
 
     // test for mixed empty and non-empty messagesets compressed
@@ -138,7 +148,15 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
       //make sure the last offset after iteration is correct
       assertEquals("offset of last message not expected", mixedMessageSet.last.offset, mixedMessageSet.serialized.limit)
+
+      verifyShallowIterator(mixedMessageSet)
     }
   }
 
+  def verifyShallowIterator(messageSet: ByteBufferMessageSet) {
+      //make sure the offsets returned by a shallow iterator is a subset of that of a deep iterator
+      val shallowOffsets = messageSet.shallowIterator.map(msgAndOff => msgAndOff.offset).toSet
+      val deepOffsets = messageSet.iterator.map(msgAndOff => msgAndOff.offset).toSet
+      assertTrue(shallowOffsets.subsetOf(deepOffsets))
+  }
 }

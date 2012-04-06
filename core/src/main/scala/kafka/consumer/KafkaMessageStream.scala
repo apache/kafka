@@ -27,11 +27,12 @@ import kafka.serializer.Decoder
 class KafkaMessageStream[T](val topic: String,
                             private val queue: BlockingQueue[FetchedDataChunk],
                             consumerTimeoutMs: Int,
-                            private val decoder: Decoder[T])
+                            private val decoder: Decoder[T],
+                            val enableShallowIterator: Boolean)
    extends Iterable[T] with java.lang.Iterable[T]{
 
   private val iter: ConsumerIterator[T] =
-    new ConsumerIterator[T](topic, queue, consumerTimeoutMs, decoder)
+    new ConsumerIterator[T](topic, queue, consumerTimeoutMs, decoder, enableShallowIterator)
     
   /**
    *  Create an iterator over messages in the stream.

@@ -105,5 +105,12 @@ class ConsumerConfig(props: Properties) extends ZKConfig(props) {
 
   val mirrorConsumerNumThreads = Utils.getInt(
     props, MirrorConsumerNumThreadsProp, MirrorConsumerNumThreads)
+
+  /** Use shallow iterator over compressed messages directly. This feature should be used very carefully.
+   *  Typically, it's only used for mirroring raw messages from one kafka cluster to another to save the
+   *  overhead of decompression.
+   *  */
+  val enableShallowIterator = Utils.getBoolean(props, "shallowiterator.enable", false)
+
 }
 
