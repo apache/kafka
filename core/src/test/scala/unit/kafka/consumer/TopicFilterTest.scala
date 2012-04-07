@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,33 +17,35 @@
 
 package kafka.consumer
 
+
 import junit.framework.Assert._
-import org.junit.Test
 import org.scalatest.junit.JUnitSuite
-import kafka.cluster.Partition
+import org.junit.Test
 
 
-class TopicCountTest extends JUnitSuite {
+class TopicFilterTest extends JUnitSuite {
 
   @Test
-  def testBasic() {
-    val consumer = "conusmer1"
-    val json = """{ "topic1" : 2, "topic2" : 3 }"""
-    val topicCount = TopicCount.constructTopicCount(consumer, json)
-    val topicCountMap = Map(
-      "topic1" -> 2,
-      "topic2" -> 3
-      )
-    val expectedTopicCount = new TopicCount(consumer, topicCountMap)
-    assertTrue(expectedTopicCount == topicCount)
+  def testWhitelists() {
 
-    val topicCount2 = TopicCount.constructTopicCount(consumer, expectedTopicCount.toJsonString)
-    assertTrue(expectedTopicCount == topicCount2)
+    val topicFilter1 = new Whitelist("white1,white2")
+    assertFalse(topicFilter1.requiresTopicEventWatcher)
+    assertTrue(topicFilter1.isTopicAllowed("white2"))
+    assertFalse(topicFilter1.isTopicAllowed("black1"))
+
+    val topicFilter2 = new Whitelist(".+")
+    assertTrue(topicFilter2.requiresTopicEventWatcher)
+    assertTrue(topicFilter2.isTopicAllowed("alltopics"))
+    
+    val topicFilter3 = new Whitelist("white_listed-topic.+")
+    assertTrue(topicFilter3.requiresTopicEventWatcher)
+    assertTrue(topicFilter3.isTopicAllowed("white_listed-topic1"))
+    assertFalse(topicFilter3.isTopicAllowed("black1"))
   }
 
   @Test
-  def testPartition() {
-    assertTrue(new Partition(10, 0) == new Partition(10, 0))
-    assertTrue(new Partition(10, 1) != new Partition(10, 0))
+  def testBlacklists() {
+    val topicFilter1 = new Blacklist("black1")
+    assertTrue(topicFilter1.requiresTopicEventWatcher)
   }
 }

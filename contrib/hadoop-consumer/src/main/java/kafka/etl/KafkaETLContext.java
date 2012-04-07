@@ -16,27 +16,25 @@
  */
 package kafka.etl;
 
+
 import java.io.IOException;
 import java.net.URI;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
-import java.util.zip.CRC32;
 import kafka.api.FetchRequest;
-import kafka.javaapi.MultiFetchResponse;
 import kafka.api.OffsetRequest;
 import kafka.common.ErrorMapping;
+import kafka.javaapi.MultiFetchResponse;
 import kafka.javaapi.consumer.SimpleConsumer;
 import kafka.javaapi.message.ByteBufferMessageSet;
-import kafka.message.Message;
 import kafka.message.MessageAndOffset;
-import kafka.message.MessageSet;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.OutputCollector;
 import org.apache.hadoop.mapred.Reporter;
 import org.apache.hadoop.mapred.lib.MultipleOutputs;
-import java.nio.ByteBuffer;
 
 @SuppressWarnings({ "deprecation"})
 public class KafkaETLContext {
@@ -139,7 +137,7 @@ public class KafkaETLContext {
             while ( !gotNext && _respIterator.hasNext()) {
                 ByteBufferMessageSet msgSet = _respIterator.next();
                 if ( hasError(msgSet)) return false;
-                _messageIt =  (Iterator<MessageAndOffset>) msgSet.iterator();
+                _messageIt = msgSet.iterator();
                 gotNext = get(key, value);
             }
         }
@@ -190,17 +188,17 @@ public class KafkaETLContext {
     
     protected boolean get(KafkaETLKey key, BytesWritable value) throws IOException {
         if (_messageIt != null && _messageIt.hasNext()) {
-            MessageAndOffset msgAndOffset = _messageIt.next();
+            MessageAndOffset messageAndOffset = _messageIt.next();
             
-            ByteBuffer buf = msgAndOffset.message().payload();
+            ByteBuffer buf = messageAndOffset.message().payload();
             int origSize = buf.remaining();
             byte[] bytes = new byte[origSize];
-            buf.get(bytes, buf.position(), origSize);
+          buf.get(bytes, buf.position(), origSize);
             value.set(bytes, 0, origSize);
             
-            key.set(_index, _offset, msgAndOffset.message().checksum());
+            key.set(_index, _offset, messageAndOffset.message().checksum());
             
-            _offset = msgAndOffset.offset();  //increase offset
+            _offset = messageAndOffset.offset();  //increase offset
             _count ++;  //increase count
             
             return true;

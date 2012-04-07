@@ -16,12 +16,12 @@
 */
 package kafka.javaapi.producer.async;
 
-import kafka.javaapi.producer.SyncProducer;
-import kafka.producer.async.QueueItem;
-import kafka.serializer.Encoder;
 
 import java.util.List;
 import java.util.Properties;
+import kafka.javaapi.producer.SyncProducer;
+import kafka.producer.async.QueueItem;
+import kafka.serializer.Encoder;
 
 /**
  * Handler that dispatches the batched data from the queue of the

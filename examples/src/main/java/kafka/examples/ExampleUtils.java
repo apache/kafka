@@ -16,8 +16,8 @@
  */
 package kafka.examples;
 
-import java.nio.ByteBuffer;
 
+import java.nio.ByteBuffer;
 import kafka.message.Message;
 
 public class ExampleUtils

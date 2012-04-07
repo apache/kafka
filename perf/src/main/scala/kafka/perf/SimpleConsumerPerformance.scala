@@ -18,9 +18,7 @@
 package kafka.perf
 
 import java.net.URI
-import joptsimple._
 import kafka.utils._
-import kafka.server._
 import kafka.consumer.SimpleConsumer
 import org.apache.log4j.Logger
 import kafka.api.{OffsetRequest, FetchRequest}

@@ -17,34 +17,53 @@
 
 package kafka.javaapi.consumer;
 
-import kafka.consumer.KafkaMessageStream;
-import kafka.message.Message;
-import kafka.serializer.Decoder;
 
 import java.util.List;
 import java.util.Map;
+import kafka.consumer.KafkaStream;
+import kafka.consumer.TopicFilter;
+import kafka.message.Message;
+import kafka.serializer.Decoder;
 
 public interface ConsumerConnector {
-    /**
-     *  Create a list of MessageStreams of type T for each topic.
-     *
-     *  @param topicCountMap  a map of (topic, #streams) pair
-     *  @param decoder a decoder that converts from Message to T
-     *  @return a map of (topic, list of  KafkaMessageStream) pair. The number of items in the
-     *          list is #streams. Each KafkaMessageStream supports an iterator of messages.
-     */
-    public <T> Map<String, List<KafkaMessageStream<T>>> createMessageStreams(
-            Map<String, Integer> topicCountMap, Decoder<T> decoder);
-    public Map<String, List<KafkaMessageStream<Message>>> createMessageStreams(
-            Map<String, Integer> topicCountMap);
+  /**
+   *  Create a list of MessageStreams of type T for each topic.
+   *
+   *  @param topicCountMap  a map of (topic, #streams) pair
+   *  @param decoder a decoder that converts from Message to T
+   *  @return a map of (topic, list of  KafkaStream) pairs.
+   *          The number of items in the list is #streams. Each stream supports
+   *          an iterator over message/metadata pairs.
+   */
+  public <T> Map<String, List<KafkaStream<T>>> createMessageStreams(
+      Map<String, Integer> topicCountMap, Decoder<T> decoder);
+  public Map<String, List<KafkaStream<Message>>> createMessageStreams(
+      Map<String, Integer> topicCountMap);
 
-    /**
-     *  Commit the offsets of all broker partitions connected by this connector.
-     */
-    public void commitOffsets();
+  /**
+   *  Create a list of MessageAndTopicStreams containing messages of type T.
+   *
+   *  @param topicFilter a TopicFilter that specifies which topics to
+   *                    subscribe to (encapsulates a whitelist or a blacklist).
+   *  @param numStreams the number of message streams to return.
+   *  @param decoder a decoder that converts from Message to T
+   *  @return a list of KafkaStream. Each stream supports an
+   *          iterator over its MessageAndMetadata elements.
+   */
+  public <T> List<KafkaStream<T>> createMessageStreamsByFilter(
+      TopicFilter topicFilter, int numStreams, Decoder<T> decoder);
+  public List<KafkaStream<Message>> createMessageStreamsByFilter(
+      TopicFilter topicFilter, int numStreams);
+  public List<KafkaStream<Message>> createMessageStreamsByFilter(
+      TopicFilter topicFilter);
 
-    /**
-     *  Shut down the connector
-     */
-    public void shutdown();
+  /**
+   *  Commit the offsets of all broker partitions connected by this connector.
+   */
+  public void commitOffsets();
+
+  /**
+   *  Shut down the connector
+   */
+  public void shutdown();
 }

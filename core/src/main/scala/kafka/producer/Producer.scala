@@ -22,7 +22,7 @@ import kafka.utils._
 import java.util.Properties
 import kafka.cluster.{Partition, Broker}
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.common.{NoBrokersForPartitionException, InvalidConfigException, InvalidPartitionException}
+import kafka.common.{NoBrokersForPartitionException, InvalidPartitionException}
 import kafka.api.ProducerRequest
 
 class Producer[K,V](config: ProducerConfig,

@@ -22,9 +22,7 @@ import org.apache.log4j.spi.LoggingEvent
 import org.apache.log4j.AppenderSkeleton
 import org.apache.log4j.helpers.LogLog
 import kafka.utils.Logging
-import kafka.serializer.Encoder
 import java.util.{Properties, Date}
-import kafka.message.Message
 import scala.collection._
 
 class KafkaLog4jAppender extends AppenderSkeleton with Logging {

@@ -19,35 +19,18 @@ package kafka.consumer
 
 import scala.collection._
 import scala.util.parsing.json.JSON
-import kafka.utils.Logging
+import org.I0Itec.zkclient.ZkClient
+import java.util.regex.Pattern
+import kafka.utils.{ZKGroupDirs, ZkUtils, Logging}
 
-private[kafka] object TopicCount extends Logging {
-  val myConversionFunc = {input : String => input.toInt}
-  JSON.globalNumberParser = myConversionFunc
 
-  def constructTopicCount(consumerIdSting: String, jsonString : String) : TopicCount = {
-    var topMap : Map[String,Int] = null
-    try {
-      JSON.parseFull(jsonString) match {
-        case Some(m) => topMap = m.asInstanceOf[Map[String,Int]]
-        case None => throw new RuntimeException("error constructing TopicCount : " + jsonString)
-      }
-    }
-    catch {
-      case e =>
-        error("error parsing consumer json string " + jsonString, e)
-        throw e
-    }
+private[kafka] trait TopicCount {
+  def getConsumerThreadIdsPerTopic: Map[String, Set[String]]
 
-    new TopicCount(consumerIdSting, topMap)
-  }
-
-}
-
-private[kafka] class TopicCount(val consumerIdString: String, val topicCountMap: Map[String, Int]) {
-
-  def getConsumerThreadIdsPerTopic()
-    : Map[String, Set[String]] = {
+  def dbString: String
+  
+  protected def makeConsumerThreadIdsPerTopic(consumerIdString: String,
+                                            topicCountMap: Map[String,  Int]) = {
     val consumerThreadIdsPerTopicMap = new mutable.HashMap[String, Set[String]]()
     for ((topic, nConsumers) <- topicCountMap) {
       val consumerSet = new mutable.HashSet[String]
@@ -58,11 +41,96 @@ private[kafka] class TopicCount(val consumerIdString: String, val topicCountMap:
     }
     consumerThreadIdsPerTopicMap
   }
+}
+
+private[kafka] object TopicCount extends Logging {
+
+  /*
+   * Example of whitelist topic count stored in ZooKeeper:
+   * Topics with whitetopic as prefix, and four streams: *4*whitetopic.*
+   *
+   * Example of blacklist topic count stored in ZooKeeper:
+   * Topics with blacktopic as prefix, and four streams: !4!blacktopic.*
+   */
+
+  val WHITELIST_MARKER = "*"
+  val BLACKLIST_MARKER = "!"
+  private val WHITELIST_PATTERN =
+    Pattern.compile("""\*(\p{Digit}+)\*(.*)""")
+  private val BLACKLIST_PATTERN =
+    Pattern.compile("""!(\p{Digit}+)!(.*)""")
+
+  val myConversionFunc = {input : String => input.toInt}
+  JSON.globalNumberParser = myConversionFunc
+
+  def constructTopicCount(group: String,
+                          consumerId: String,
+                          zkClient: ZkClient) : TopicCount = {
+    val dirs = new ZKGroupDirs(group)
+    val topicCountString = ZkUtils.readData(zkClient, dirs.consumerRegistryDir + "/" + consumerId)
+    val hasWhitelist = topicCountString.startsWith(WHITELIST_MARKER)
+    val hasBlacklist = topicCountString.startsWith(BLACKLIST_MARKER)
+
+    if (hasWhitelist || hasBlacklist)
+      info("Constructing topic count for %s from %s using %s as pattern."
+        .format(consumerId, topicCountString,
+          if (hasWhitelist) WHITELIST_PATTERN else BLACKLIST_PATTERN))
+
+    if (hasWhitelist || hasBlacklist) {
+      val matcher = if (hasWhitelist)
+        WHITELIST_PATTERN.matcher(topicCountString)
+      else
+        BLACKLIST_PATTERN.matcher(topicCountString)
+      require(matcher.matches())
+      val numStreams = matcher.group(1).toInt
+      val regex = matcher.group(2)
+      val filter = if (hasWhitelist)
+        new Whitelist(regex)
+      else
+        new Blacklist(regex)
+
+      new WildcardTopicCount(zkClient, consumerId, filter, numStreams)
+    }
+    else {
+      var topMap : Map[String,Int] = null
+      try {
+        JSON.parseFull(topicCountString) match {
+          case Some(m) => topMap = m.asInstanceOf[Map[String,Int]]
+          case None => throw new RuntimeException("error constructing TopicCount : " + topicCountString)
+        }
+      }
+      catch {
+        case e =>
+          error("error parsing consumer json string " + topicCountString, e)
+          throw e
+      }
+
+      new StaticTopicCount(consumerId, topMap)
+    }
+  }
+
+  def constructTopicCount(consumerIdString: String, topicCount: Map[String,  Int]) =
+    new StaticTopicCount(consumerIdString, topicCount)
+
+  def constructTopicCount(consumerIdString: String,
+                          filter: TopicFilter,
+                          numStreams: Int,
+                          zkClient: ZkClient) =
+    new WildcardTopicCount(zkClient, consumerIdString, filter, numStreams)
+
+}
+
+private[kafka] class StaticTopicCount(val consumerIdString: String,
+                                val topicCountMap: Map[String, Int])
+                                extends TopicCount {
+
+  def getConsumerThreadIdsPerTopic =
+    makeConsumerThreadIdsPerTopic(consumerIdString, topicCountMap)
 
   override def equals(obj: Any): Boolean = {
     obj match {
       case null => false
-      case n: TopicCount => consumerIdString == n.consumerIdString && topicCountMap == n.topicCountMap
+      case n: StaticTopicCount => consumerIdString == n.consumerIdString && topicCountMap == n.topicCountMap
       case _ => false
     }
   }
@@ -73,7 +141,7 @@ private[kafka] class TopicCount(val consumerIdString: String, val topicCountMap:
    *    "topic2" : 4
    *  }
    */
-  def toJsonString() : String = {
+  def dbString = {
     val builder = new StringBuilder
     builder.append("{ ")
     var i = 0
@@ -84,6 +152,29 @@ private[kafka] class TopicCount(val consumerIdString: String, val topicCountMap:
       i += 1
     }
     builder.append(" }")
-    builder.toString
+    builder.toString()
   }
 }
+
+private[kafka] class WildcardTopicCount(zkClient: ZkClient,
+                                        consumerIdString: String,
+                                        topicFilter: TopicFilter,
+                                        numStreams: Int) extends TopicCount {
+  def getConsumerThreadIdsPerTopic = {
+    val wildcardTopics = ZkUtils.getChildrenParentMayNotExist(
+      zkClient, ZkUtils.BrokerTopicsPath).filter(topicFilter.isTopicAllowed(_))
+    makeConsumerThreadIdsPerTopic(consumerIdString,
+                                  Map(wildcardTopics.map((_, numStreams)): _*))
+  }
+
+  def dbString = {
+    val marker = topicFilter match {
+      case wl: Whitelist => TopicCount.WHITELIST_MARKER
+      case bl: Blacklist => TopicCount.BLACKLIST_MARKER
+    }
+
+    "%s%d%s%s".format(marker, numStreams, marker, topicFilter.regex)
+  }
+
+}
+

@@ -23,72 +23,76 @@ trait Logging {
   val loggerName = this.getClass.getName
   lazy val logger = Logger.getLogger(loggerName)
 
+  protected var logIdent = ""
+  
+  private def msgWithLogIdent(msg: String) = "%s%s".format(logIdent, msg)
+
   def trace(msg: => String): Unit = {
     if (logger.isTraceEnabled())
-      logger.trace(msg)	
+      logger.trace(msgWithLogIdent(msg))
   }
   def trace(e: => Throwable): Any = {
     if (logger.isTraceEnabled())
-      logger.trace("",e)	
+      logger.trace(logIdent,e)
   }
   def trace(msg: => String, e: => Throwable) = {
     if (logger.isTraceEnabled())
-      logger.trace(msg,e)
+      logger.trace(msgWithLogIdent(msg),e)
   }
 
   def debug(msg: => String): Unit = {
     if (logger.isDebugEnabled())
-      logger.debug(msg)
+      logger.debug(msgWithLogIdent(msg))
   }
   def debug(e: => Throwable): Any = {
     if (logger.isDebugEnabled())
-      logger.debug("",e)	
+      logger.debug(logIdent,e)
   }
   def debug(msg: => String, e: => Throwable) = {
     if (logger.isDebugEnabled())
-      logger.debug(msg,e)
+      logger.debug(msgWithLogIdent(msg),e)
   }
 
   def info(msg: => String): Unit = {
     if (logger.isInfoEnabled())
-      logger.info(msg)
+      logger.info(msgWithLogIdent(msg))
   }
   def info(e: => Throwable): Any = {
     if (logger.isInfoEnabled())
-      logger.info("",e)
+      logger.info(logIdent,e)
   }
   def info(msg: => String,e: => Throwable) = {
     if (logger.isInfoEnabled())
-      logger.info(msg,e)
+      logger.info(msgWithLogIdent(msg),e)
   }
 
   def warn(msg: => String): Unit = {
-    logger.warn(msg)
+    logger.warn(msgWithLogIdent(msg))
   }
   def warn(e: => Throwable): Any = {
-    logger.warn("",e)
+    logger.warn(logIdent,e)
   }
   def warn(msg: => String, e: => Throwable) = {
-    logger.warn(msg,e)
+    logger.warn(msgWithLogIdent(msg),e)
   }	
 
   def error(msg: => String): Unit = {
-    logger.error(msg)
+    logger.error(msgWithLogIdent(msg))
   }		
   def error(e: => Throwable): Any = {
-    logger.error("",e)
+    logger.error(logIdent,e)
   }
   def error(msg: => String, e: => Throwable) = {
-    logger.error(msg,e)
+    logger.error(msgWithLogIdent(msg),e)
   }
 
   def fatal(msg: => String): Unit = {
-    logger.fatal(msg)
+    logger.fatal(msgWithLogIdent(msg))
   }
   def fatal(e: => Throwable): Any = {
-    logger.fatal("",e)
+    logger.fatal(logIdent,e)
   }	
   def fatal(msg: => String, e: => Throwable) = {
-    logger.fatal(msg,e)
+    logger.fatal(msgWithLogIdent(msg),e)
   }
 }

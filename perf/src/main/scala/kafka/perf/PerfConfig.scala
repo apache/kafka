@@ -18,7 +18,7 @@
 package kafka.perf
 
 import joptsimple.OptionParser
-import java.text.SimpleDateFormat
+
 
 class PerfConfig(args: Array[String]) {
   val parser = new OptionParser

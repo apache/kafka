@@ -17,8 +17,6 @@
 
 package kafka
 
-import consumer.ConsumerConfig
-import producer.ProducerConfig
 import server.{KafkaConfig, KafkaServerStartable, KafkaServer}
 import utils.{Utils, Logging}
 import org.apache.log4j.jmx.LoggerDynamicMBean
@@ -30,8 +28,8 @@ object Kafka extends Logging {
     import org.apache.log4j.Logger
     Utils.registerMBean(new LoggerDynamicMBean(Logger.getRootLogger()), kafkaLog4jMBeanName)
 
-    if (!List(1, 3).contains(args.length)) {
-      println("USAGE: java [options] %s server.properties [consumer.properties producer.properties]".format(classOf[KafkaServer].getSimpleName()))
+    if (args.length != 1) {
+      println("USAGE: java [options] %s server.properties".format(classOf[KafkaServer].getSimpleName()))
       System.exit(1)
     }
   
@@ -39,14 +37,7 @@ object Kafka extends Logging {
       val props = Utils.loadProps(args(0))
       val serverConfig = new KafkaConfig(props)
 
-      val kafkaServerStartble = args.length match {
-        case 3 =>
-          val consumerConfig = new ConsumerConfig(Utils.loadProps(args(1)))
-          val producerConfig = new ProducerConfig(Utils.loadProps(args(2)))
-          new KafkaServerStartable(serverConfig, consumerConfig, producerConfig)
-        case 1 =>
-          new KafkaServerStartable(serverConfig)
-      }
+      val kafkaServerStartble = new KafkaServerStartable(serverConfig)
 
       // attach shutdown handler to catch control-c
       Runtime.getRuntime().addShutdownHook(new Thread() {

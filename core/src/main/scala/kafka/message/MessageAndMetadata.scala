@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -15,20 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.utils
+package kafka.message
 
-import org.apache.log4j.Logger
-import org.scalatest.junit.JUnitSuite
-import org.junit.Test
+case class MessageAndMetadata[T](message: T, topic: String = "")
 
-
-class UtilsTest extends JUnitSuite {
-  
-  private val logger = Logger.getLogger(classOf[UtilsTest]) 
-
-  @Test
-  def testSwallow() {
-    Utils.swallow(logger.info, throw new IllegalStateException("test"))
-  }
-
-}

@@ -16,17 +16,14 @@
  */
 package kafka.examples;
 
+
 import java.util.ArrayList;
 import java.util.List;
-
+import kafka.api.FetchRequest;
 import kafka.javaapi.MultiFetchResponse;
 import kafka.javaapi.consumer.SimpleConsumer;
 import kafka.javaapi.message.ByteBufferMessageSet;
 import kafka.message.MessageAndOffset;
-import scala.collection.Iterator;
-
-import kafka.api.FetchRequest;
-import kafka.message.Message;
 
 
 public class SimpleConsumerDemo

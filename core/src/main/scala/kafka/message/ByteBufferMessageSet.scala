@@ -36,7 +36,6 @@ import kafka.common.{MessageSizeTooLargeException, InvalidMessageSizeException, 
 class ByteBufferMessageSet(private val buffer: ByteBuffer,
                            private val initialOffset: Long = 0L,
                            private val errorCode: Int = ErrorMapping.NoError) extends MessageSet with Logging {
-  private var validByteCount = -1L
   private var shallowValidByteCount = -1L
   if(sizeInBytes > Int.MaxValue)
     throw new InvalidMessageSizeException("Message set cannot be larger than " + Int.MaxValue)

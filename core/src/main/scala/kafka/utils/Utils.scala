@@ -29,12 +29,13 @@ import scala.collection._
 import scala.collection.mutable
 import kafka.message.{NoCompressionCodec, CompressionCodec}
 import org.I0Itec.zkclient.ZkClient
+import joptsimple.{OptionSpec, OptionSet, OptionParser}
+
 
 /**
  * Helper functions!
  */
 object Utils extends Logging {
-  
   /**
    * Wrap the given function in a java.lang.Runnable
    * @param fun A function
@@ -655,6 +656,16 @@ object Utils extends Logging {
       zk.close()
     } catch {
       case _ => // swallow
+    }
+  }
+
+  def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
+    for(arg <- required) {
+      if(!options.has(arg)) {
+        error("Missing required argument \"" + arg + "\"")
+        parser.printHelpOn(System.err)
+        System.exit(1)
+      }
     }
   }
 }

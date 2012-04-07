@@ -19,37 +19,38 @@ package kafka.consumer
 
 import kafka.utils.{IteratorTemplate, Logging}
 import java.util.concurrent.{TimeUnit, BlockingQueue}
-import kafka.message.MessageAndOffset
 import kafka.serializer.Decoder
 import java.util.concurrent.atomic.AtomicReference
+import kafka.message.{MessageAndOffset, MessageAndMetadata}
+
 
 /**
  * An iterator that blocks until a value can be read from the supplied queue.
  * The iterator takes a shutdownCommand object which can be added to the queue to trigger a shutdown
  *
  */
-class ConsumerIterator[T](private val topic: String,
-                          private val channel: BlockingQueue[FetchedDataChunk],
+class ConsumerIterator[T](private val channel: BlockingQueue[FetchedDataChunk],
                           consumerTimeoutMs: Int,
                           private val decoder: Decoder[T],
                           val enableShallowIterator: Boolean)
-  extends IteratorTemplate[T] with Logging {
+  extends IteratorTemplate[MessageAndMetadata[T]] with Logging {
 
   private var current: AtomicReference[Iterator[MessageAndOffset]] = new AtomicReference(null)
   private var currentTopicInfo:PartitionTopicInfo = null
   private var consumedOffset: Long = -1L
 
-  override def next(): T = {
-    val decodedMessage = super.next()
+  override def next(): MessageAndMetadata[T] = {
+    val item = super.next()
     if(consumedOffset < 0)
       throw new IllegalStateException("Offset returned by the message set is invalid %d".format(consumedOffset))
     currentTopicInfo.resetConsumeOffset(consumedOffset)
-    trace("Setting consumed offset to %d".format(consumedOffset))
+    val topic = currentTopicInfo.topic
+    trace("Setting %s consumed offset to %d".format(topic, consumedOffset))
     ConsumerTopicStat.getConsumerTopicStat(topic).recordMessagesPerTopic(1)
-    decodedMessage
+    item
   }
 
-  protected def makeNext(): T = {
+  protected def makeNext(): MessageAndMetadata[T] = {
     var currentDataChunk: FetchedDataChunk = null
     // if we don't have an iterator, get one
     var localCurrent = current.get()
@@ -82,10 +83,11 @@ class ConsumerIterator[T](private val topic: String,
     }
     val item = localCurrent.next()
     consumedOffset = item.offset
-    decoder.toEvent(item.message)
+
+    new MessageAndMetadata(decoder.toEvent(item.message), currentTopicInfo.topic)
   }
 
-  def clearCurrentChunk() = {
+  def clearCurrentChunk() {
     try {
       info("Clearing the current data chunk for this consumer iterator")
       current.set(null)
@@ -94,3 +96,4 @@ class ConsumerIterator[T](private val topic: String,
 }
 
 class ConsumerTimeoutException() extends RuntimeException()
+

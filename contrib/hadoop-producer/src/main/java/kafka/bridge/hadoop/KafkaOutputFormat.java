@@ -16,23 +16,25 @@
  */
 package kafka.bridge.hadoop;
 
-import java.util.Properties;
 
+import java.io.IOException;
+import java.net.URI;
+import java.util.Properties;
 import kafka.javaapi.producer.Producer;
 import kafka.message.Message;
 import kafka.producer.ProducerConfig;
-
-import org.apache.commons.lang.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.NullWritable;
-import org.apache.hadoop.mapreduce.*;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.JobContext;
+import org.apache.hadoop.mapreduce.OutputCommitter;
+import org.apache.hadoop.mapreduce.OutputFormat;
+import org.apache.hadoop.mapreduce.RecordWriter;
+import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputCommitter;
 import org.apache.log4j.Logger;
-
-import java.io.IOException;
-import java.net.URI;
 
 public class KafkaOutputFormat<W extends BytesWritable> extends OutputFormat<NullWritable, W>
 {

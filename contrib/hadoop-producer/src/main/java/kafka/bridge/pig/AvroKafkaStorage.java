@@ -16,9 +16,12 @@
  */
 package kafka.bridge.pig;
 
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import kafka.bridge.hadoop.KafkaOutputFormat;
 import kafka.bridge.hadoop.KafkaRecordWriter;
-
 import org.apache.avro.io.BinaryEncoder;
 import org.apache.avro.io.Encoder;
 import org.apache.hadoop.fs.Path;
@@ -32,10 +35,6 @@ import org.apache.pig.StoreFunc;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.piggybank.storage.avro.PigAvroDatumWriter;
 import org.apache.pig.piggybank.storage.avro.PigSchema2Avro;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
 
 public class AvroKafkaStorage extends StoreFunc
 {

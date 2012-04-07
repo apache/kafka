@@ -56,13 +56,13 @@ object TestZKConsumerOffsets {
   }
 }
 
-private class ConsumerThread(stream: KafkaMessageStream[Message]) extends Thread {
+private class ConsumerThread(stream: KafkaStream[Message]) extends Thread {
   val shutdownLatch = new CountDownLatch(1)
 
   override def run() {
     println("Starting consumer thread..")
-    for (message <- stream) {
-      println("consumed: " + Utils.toString(message.payload, "UTF-8"))
+    for (messageAndMetadata <- stream) {
+      println("consumed: " + Utils.toString(messageAndMetadata.message.payload, "UTF-8"))
     }
     shutdownLatch.countDown
     println("thread shutdown !" )

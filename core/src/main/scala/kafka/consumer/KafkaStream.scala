@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,23 +17,20 @@
 
 package kafka.consumer
 
+
 import java.util.concurrent.BlockingQueue
 import kafka.serializer.Decoder
+import kafka.message.MessageAndMetadata
 
-/**
- * All calls to elements should produce the same thread-safe iterator? Should have a separate thread
- * that feeds messages into a blocking queue for processing.
- */
-class KafkaMessageStream[T](val topic: String,
-                            private val queue: BlockingQueue[FetchedDataChunk],
-                            consumerTimeoutMs: Int,
-                            private val decoder: Decoder[T],
-                            val enableShallowIterator: Boolean)
-   extends Iterable[T] with java.lang.Iterable[T]{
+class KafkaStream[T](private val queue: BlockingQueue[FetchedDataChunk],
+                     consumerTimeoutMs: Int,
+                     private val decoder: Decoder[T],
+                     val enableShallowIterator: Boolean)
+   extends Iterable[MessageAndMetadata[T]] with java.lang.Iterable[MessageAndMetadata[T]] {
 
   private val iter: ConsumerIterator[T] =
-    new ConsumerIterator[T](topic, queue, consumerTimeoutMs, decoder, enableShallowIterator)
-    
+    new ConsumerIterator[T](queue, consumerTimeoutMs, decoder, enableShallowIterator)
+
   /**
    *  Create an iterator over messages in the stream.
    */

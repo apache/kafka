@@ -21,11 +21,9 @@ import scala.collection.JavaConversions._
 import kafka.utils.{ZkUtils, ZKStringSerializer, Logging}
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
-import kafka.server.KafkaServerStartable
-import kafka.common.ConsumerRebalanceFailedException
 
 class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
-    val eventHandler: TopicEventHandler[String], kafkaServerStartable: KafkaServerStartable) extends Logging {
+    val eventHandler: TopicEventHandler[String]) extends Logging {
 
   val lock = new Object()
 
@@ -35,7 +33,7 @@ class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
   startWatchingTopicEvents()
 
   private def startWatchingTopicEvents() {
-    val topicEventListener = new ZkTopicEventListener(kafkaServerStartable)
+    val topicEventListener = new ZkTopicEventListener()
     ZkUtils.makeSurePersistentPathExists(zkClient, ZkUtils.BrokerTopicsPath)
 
     zkClient.subscribeStateChanges(
@@ -52,6 +50,7 @@ class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
 
   def shutdown() {
     lock.synchronized {
+      info("Shutting down topic event watcher.")
       if (zkClient != null) {
         stopWatchingTopicEvents()
         zkClient.close()
@@ -62,7 +61,7 @@ class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
     }
   }
 
-  class ZkTopicEventListener(val kafkaServerStartable: KafkaServerStartable) extends IZkChildListener {
+  class ZkTopicEventListener extends IZkChildListener {
 
     @throws(classOf[Exception])
     def handleChildChange(parent: String, children: java.util.List[String]) {
@@ -76,11 +75,8 @@ class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
           }
         }
         catch {
-          case e: ConsumerRebalanceFailedException =>
-            fatal("can't rebalance in embedded consumer; proceed to shutdown", e)
-            kafkaServerStartable.shutdown()
           case e =>
-            error("error in handling child changes in embedded consumer", e)
+            error("error in handling child changes", e)
         }
       }
     }

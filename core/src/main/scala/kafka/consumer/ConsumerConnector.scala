@@ -29,12 +29,28 @@ trait ConsumerConnector {
    *  Create a list of MessageStreams for each topic.
    *
    *  @param topicCountMap  a map of (topic, #streams) pair
-   *  @return a map of (topic, list of  KafkaMessageStream) pair. The number of items in the
-   *          list is #streams. Each KafkaMessageStream supports an iterator of messages.
+   *  @param decoder Decoder to decode each Message to type T
+   *  @return a map of (topic, list of  KafkaStream) pairs.
+   *          The number of items in the list is #streams. Each stream supports
+   *          an iterator over message/metadata pairs.
    */
   def createMessageStreams[T](topicCountMap: Map[String,Int],
                               decoder: Decoder[T] = new DefaultDecoder)
-    : Map[String,List[KafkaMessageStream[T]]]
+    : Map[String,List[KafkaStream[T]]]
+
+  /**
+   *  Create a list of message streams for all topics that match a given filter.
+   *
+   *  @param topicFilter Either a Whitelist or Blacklist TopicFilter object.
+   *  @param numStreams Number of streams to return
+   *  @param decoder Decoder to decode each Message to type T
+   *  @return a list of KafkaStream each of which provides an
+   *          iterator over message/metadata pairs over allowed topics.
+   */
+  def createMessageStreamsByFilter[T](topicFilter: TopicFilter,
+                                      numStreams: Int = 1,
+                                      decoder: Decoder[T] = new DefaultDecoder)
+    : Seq[KafkaStream[T]]
 
   /**
    *  Commit the offsets of all broker partitions connected by this connector.

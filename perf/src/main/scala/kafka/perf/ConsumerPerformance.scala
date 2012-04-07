@@ -17,15 +17,12 @@
 
 package kafka.perf
 
-import java.net.URI
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
-import joptsimple._
 import org.apache.log4j.Logger
 import kafka.message.Message
-import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{ZKStringSerializer, Utils}
+import kafka.utils.Utils
 import java.util.{Random, Properties}
 import kafka.consumer._
 import java.text.SimpleDateFormat
@@ -139,7 +136,7 @@ object ConsumerPerformance {
     val hideHeader = options.has(hideHeaderOpt)
   }
 
-  class ConsumerPerfThread(threadId: Int, name: String, stream: KafkaMessageStream[Message],
+  class ConsumerPerfThread(threadId: Int, name: String, stream: KafkaStream[Message],
                            config:ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong)
     extends Thread(name) {
     private val shutdownLatch = new CountDownLatch(1)
@@ -157,9 +154,9 @@ object ConsumerPerformance {
       var lastMessagesRead = 0L
 
       try {
-        for (message <- stream if messagesRead < config.numMessages) {
+        for (messageAndMetadata <- stream if messagesRead < config.numMessages) {
           messagesRead += 1
-          bytesRead += message.payloadSize
+          bytesRead += messageAndMetadata.message.payloadSize
 
           if (messagesRead % config.reportingInterval == 0) {
             if(config.showDetailedStats)

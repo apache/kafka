@@ -82,15 +82,15 @@ object ConsumerShell {
   }
 }
 
-class ZKConsumerThread(stream: KafkaMessageStream[String]) extends Thread with Logging {
+class ZKConsumerThread(stream: KafkaStream[String]) extends Thread with Logging {
   val shutdownLatch = new CountDownLatch(1)
 
   override def run() {
     println("Starting consumer thread..")
     var count: Int = 0
     try {
-      for (message <- stream) {
-        println("consumed: " + message)
+      for (messageAndMetadata <- stream) {
+        println("consumed: " + messageAndMetadata.message)
         count += 1
       }
     }catch {
