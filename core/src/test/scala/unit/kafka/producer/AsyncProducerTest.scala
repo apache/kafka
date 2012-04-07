@@ -30,23 +30,19 @@ import kafka.producer.async._
 import kafka.serializer.{StringEncoder, StringDecoder, Encoder}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
-import kafka.utils.{NegativePartitioner, TestZKUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import collection.Map
 import collection.mutable.ListBuffer
-import org.I0Itec.zkclient.ZkClient
 import org.scalatest.junit.JUnit3Suite
+import kafka.utils.{NegativePartitioner, TestZKUtils, TestUtils}
 
 class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
   val configs = props.map(p => new KafkaConfig(p) { override val flushInterval = 1})
-  var zkClient: ZkClient = null
   var brokers: Seq[Broker] = null
 
   override def setUp() {
     super.setUp()
-    zkClient = zookeeper.client
-    // create brokers in zookeeper
     brokers = TestUtils.createBrokersInZk(zkClient, configs.map(config => config.brokerId))
   }
 

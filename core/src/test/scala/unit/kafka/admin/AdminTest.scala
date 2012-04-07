@@ -134,18 +134,18 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
       List("1", "2", "3"),
       List("1", "3", "4")      
       )
-    TestUtils.createBrokersInZk(zookeeper.client, List(0, 1, 2, 3, 4))
+    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
 
     val topic = "test"
     // create the topic
-    AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicaAssignment, zookeeper.client)
-    val actualReplicaAssignment = AdminUtils.getTopicMetaDataFromZK(List(topic), zookeeper.client).head
+    AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
+    val actualReplicaAssignment = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
                                   .get.partitionsMetadata.map(p => p.replicas)
     val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id.toString).toList).toList
     expectedReplicaAssignment.toList.zip(actualReplicaList).foreach(l => assertEquals(l._1, l._2))
 
     try {
-      AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicaAssignment, zookeeper.client)
+      AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
       fail("shouldn't be able to create a topic already exists")
     }
     catch {
@@ -161,10 +161,10 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
       List("1", "2", "3")
     )
     val topic = "auto-topic"
-    TestUtils.createBrokersInZk(zookeeper.client, List(0, 1, 2, 3))
-    AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicaAssignment, zookeeper.client)
+    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3))
+    AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
 
-    val newTopicMetadata = AdminUtils.getTopicMetaDataFromZK(List(topic), zookeeper.client).head
+    val newTopicMetadata = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
     newTopicMetadata match {
       case Some(metadata) => assertEquals(topic, metadata.topic)
         assertNotNull("partition metadata list cannot be null", metadata.partitionsMetadata)

@@ -22,26 +22,22 @@ import kafka.zk.ZooKeeperTestHarness
 import kafka.admin.CreateTopicCommand
 import java.nio.ByteBuffer
 import kafka.log.LogManager
-import kafka.utils.TestUtils
 import junit.framework.Assert._
-import org.I0Itec.zkclient.ZkClient
-import TestUtils._
 import org.easymock.EasyMock
 import kafka.network.BoundedByteBufferReceive
 import kafka.api.{TopicMetadataSend, TopicMetadataRequest}
 import kafka.cluster.Broker
 import kafka.server.{KafkaZooKeeper, KafkaApis, KafkaConfig}
+import kafka.utils.TestUtils
+import kafka.utils.TestUtils._
 
 class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
   val configs = props.map(p => new KafkaConfig(p) { override val flushInterval = 1})
-  var zkClient: ZkClient = null
   var brokers: Seq[Broker] = null
 
   override def setUp() {
     super.setUp()
-    zkClient = zookeeper.client
-    // create brokers in zookeeper
     brokers = TestUtils.createBrokersInZk(zkClient, configs.map(config => config.brokerId))
   }
 

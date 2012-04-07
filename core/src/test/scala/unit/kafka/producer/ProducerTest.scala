@@ -27,10 +27,9 @@ import kafka.message.Message
 import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.log4j.{Level, Logger}
-import org.I0Itec.zkclient.ZkClient
 import org.junit.Assert._
 import org.junit.Test
-import kafka.utils.{SystemTime, TestZKUtils, Utils, TestUtils}
+import kafka.utils._
 
 class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   private val brokerId1 = 0
@@ -42,13 +41,10 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null
   private val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
-  private var zkClient: ZkClient = null
 
   override def setUp() {
     super.setUp()
     // set up 2 brokers with 4 partitions each
-    zkClient = zookeeper.client
-
     val props1 = TestUtils.createBrokerConfig(brokerId1, port1)
     val config1 = new KafkaConfig(props1) {
       override val numPartitions = 4
@@ -166,7 +162,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // restart server 1
     server1.startup()
-    Thread.sleep(500)
+    Thread.sleep(100)
 
     try {
       // cross check if broker 1 got the messages

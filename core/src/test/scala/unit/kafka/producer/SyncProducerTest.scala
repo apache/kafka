@@ -116,10 +116,10 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     response.offsets.foreach(Assert.assertEquals(-1L, _))
 
     // #2 - test that we get correct offsets when partition is owner by broker
-    val zkClient = zookeeper.client
     CreateTopicCommand.createTopic(zkClient, "topic1", 1, 1)
     CreateTopicCommand.createTopic(zkClient, "topic3", 1, 1)
 
+    Thread.sleep(500)
     val response2 = producer.send(request)
     Assert.assertEquals(request.correlationId, response2.correlationId)
     Assert.assertEquals(response2.errors.length, response2.offsets.length)

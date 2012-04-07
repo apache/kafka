@@ -26,7 +26,6 @@ import collection.mutable.WrappedArray
 import kafka.consumer.SimpleConsumer
 import org.junit.{After, Before, Test}
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
-import org.apache.log4j._
 import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
 import kafka.admin.CreateTopicCommand
@@ -44,8 +43,6 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
   val brokerPort: Int = 9099
   var simpleConsumer: SimpleConsumer = null
 
-  private val logger = Logger.getLogger(classOf[LogOffsetTest])
-  
   @Before
   override def setUp() {
     super.setUp()
@@ -99,7 +96,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
     // setup brokers in zookeeper as owners of partitions for this test
-    CreateTopicCommand.createTopic(zookeeper.client, topic, 1, 1, "1")
+    CreateTopicCommand.createTopic(zkClient, topic, 1, 1, "1")
 
     val logManager = server.getLogManager
     val log = logManager.getOrCreateLog(topic, part)
@@ -137,7 +134,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
     // setup brokers in zookeeper as owners of partitions for this test
-    CreateTopicCommand.createTopic(zookeeper.client, topic, 1, 1, "1")
+    CreateTopicCommand.createTopic(zkClient, topic, 1, 1, "1")
 
     var offsetChanged = false
     for(i <- 1 to 14) {
@@ -158,7 +155,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
     // setup brokers in zookeeper as owners of partitions for this test
-    CreateTopicCommand.createTopic(zookeeper.client, topic, 3, 1, "1,1,1")
+    CreateTopicCommand.createTopic(zkClient, topic, 3, 1, "1,1,1")
 
     val logManager = server.getLogManager
     val log = logManager.getOrCreateLog(topic, part)
@@ -185,7 +182,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
     // setup brokers in zookeeper as owners of partitions for this test
-    CreateTopicCommand.createTopic(zookeeper.client, topic, 3, 1, "1,1,1")
+    CreateTopicCommand.createTopic(zkClient, topic, 3, 1, "1,1,1")
 
     val logManager = server.getLogManager
     val log = logManager.getOrCreateLog(topic, part)

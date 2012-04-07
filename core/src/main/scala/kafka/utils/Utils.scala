@@ -29,7 +29,6 @@ import scala.collection.mutable
 import kafka.message.{NoCompressionCodec, CompressionCodec}
 import org.I0Itec.zkclient.ZkClient
 import java.util.{Random, Properties}
-import kafka.network.{BoundedByteBufferReceive, Receive, BoundedByteBufferSend, Request}
 
 /**
  * Helper functions!

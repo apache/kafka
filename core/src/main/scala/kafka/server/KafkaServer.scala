@@ -17,13 +17,13 @@
 
 package kafka.server
 
-import java.util.concurrent._
-import java.util.concurrent.atomic._
 import java.io.File
 import kafka.network.{SocketServerStats, SocketServer}
 import kafka.log.LogManager
 import kafka.utils._
 import kafka.cluster.Replica
+import java.util.concurrent._
+import atomic.AtomicBoolean
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
@@ -32,8 +32,8 @@ import kafka.cluster.Replica
 class KafkaServer(val config: KafkaConfig) extends Logging {
 
   val CleanShutdownFile = ".kafka_cleanshutdown"
-  private val isShuttingDown = new AtomicBoolean(false)  
-  private val shutdownLatch = new CountDownLatch(1)
+  private var isShuttingDown = new AtomicBoolean(false)
+  private var shutdownLatch = new CountDownLatch(1)
   private val statsMBeanName = "kafka:type=kafka.SocketServerStats"
   var socketServer: SocketServer = null
   var requestHandlerPool: KafkaRequestHandlerPool = null
@@ -47,6 +47,8 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
    */
   def startup() {
     info("Starting Kafka server...")
+    isShuttingDown = new AtomicBoolean(false)
+    shutdownLatch = new CountDownLatch(1)
     var needRecovery = true
     val cleanShutDownFile = new File(new File(config.logDir), CleanShutdownFile)
     if (cleanShutDownFile.exists) {

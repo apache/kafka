@@ -20,10 +20,9 @@ package kafka.server
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.admin.CreateTopicCommand
-import org.I0Itec.zkclient.ZkClient
 import kafka.utils.TestUtils._
 import junit.framework.Assert._
-import kafka.utils.{ZKStringSerializer, Utils, TestUtils}
+import kafka.utils.{Utils, TestUtils}
 
 class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
@@ -37,12 +36,9 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
   val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2)
 
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
-  var zkClient: ZkClient = null
 
   override def setUp() {
     super.setUp()
-
-    zkClient = new ZkClient(zkConnect, 6000, 3000, ZKStringSerializer)
 
     // start both servers
     val server1 = TestUtils.createServer(new KafkaConfig(configProps1))

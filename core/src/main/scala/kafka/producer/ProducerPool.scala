@@ -88,6 +88,7 @@ class ProducerPool(val config: ProducerConfig, val zkClient: ZkClient) extends L
       val iter = syncProducers.values.iterator
       while(iter.hasNext)
         iter.next.close
+      zkClient.close()
     }
   }
 }

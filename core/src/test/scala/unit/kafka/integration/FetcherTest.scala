@@ -28,8 +28,8 @@ import kafka.server._
 import org.scalatest.junit.JUnit3Suite
 import kafka.integration.KafkaServerTestHarness
 import kafka.producer.{ProducerData, Producer}
-import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
+import kafka.utils.TestUtils
 
 class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
 
@@ -67,7 +67,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
   def testFetcher() {
     val perNode = 2
     var count = sendMessages(perNode)
-    waitUntilLeaderIsElected(zookeeper.client, topic, 0, 500)
+    waitUntilLeaderIsElected(zkClient, topic, 0, 500)
     fetch(count)
     Thread.sleep(100)
     assertQueueEmpty()

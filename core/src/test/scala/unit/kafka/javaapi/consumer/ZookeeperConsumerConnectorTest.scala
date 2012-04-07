@@ -26,8 +26,8 @@ import kafka.consumer.{ConsumerConfig, KafkaMessageStream}
 import org.apache.log4j.{Level, Logger}
 import kafka.message._
 import kafka.javaapi.producer.{ProducerData, Producer}
-import kafka.utils.{Utils, Logging, TestUtils}
 import kafka.utils.TestUtils._
+import kafka.utils.{Utils, Logging, TestUtils}
 
 class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
@@ -53,8 +53,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     // send some messages to each broker
     val sentMessages1 = sendMessages(nMessages, "batch1")
 
-    waitUntilLeaderIsElected(zookeeper.client, topic, 0, 500)
-    waitUntilLeaderIsElected(zookeeper.client, topic, 1, 500)
+    waitUntilLeaderIsElected(zkClient, topic, 0, 500)
+    waitUntilLeaderIsElected(zkClient, topic, 1, 500)
 
     // create a consumer
     val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zookeeperConnect, group, consumer1))

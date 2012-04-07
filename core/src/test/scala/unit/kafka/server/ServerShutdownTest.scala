@@ -48,7 +48,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       server.startup()
 
       // create topic
-      CreateTopicCommand.createTopic(zookeeper.client, topic, 1, 1, "0")
+      CreateTopicCommand.createTopic(zkClient, topic, 1, 1, "0")
 
       val producer = new Producer[Int, Message](getProducerConfig(64*1024, 100000, 10000))
 
@@ -60,6 +60,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       server.shutdown()
       val cleanShutDownFile = new File(new File(config.logDir), server.CleanShutdownFile)
       assertTrue(cleanShutDownFile.exists)
+      producer.close()
     }
 
 
@@ -73,7 +74,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       val server = new KafkaServer(config)
       server.startup()
 
-      waitUntilLeaderIsElected(zookeeper.client, topic, 0, 1000)
+      waitUntilLeaderIsElected(zkClient, topic, 0, 1000)
 
       var fetchedMessage: ByteBufferMessageSet = null
       while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
@@ -97,6 +98,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
 
       server.shutdown()
       Utils.rm(server.config.logDir)
+      producer.close()
     }
 
   }
