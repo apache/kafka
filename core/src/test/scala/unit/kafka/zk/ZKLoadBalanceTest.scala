@@ -40,7 +40,7 @@ class ZKLoadBalanceTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   def testLoadBalance() {
     // create the first partition
-    ZkUtils.setupPartition(zookeeper.client, 400, "broker1", 1111, "topic1", 1)
+    ZkUtils.setupPartition(zkClient, 400, "broker1", 1111, "topic1", 1)
     // add the first consumer
     val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, firstConsumer))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, false)
@@ -74,7 +74,7 @@ class ZKLoadBalanceTest extends JUnit3Suite with ZooKeeperTestHarness {
         (300, "broker3", 1111, "topic1", 2) )
 
       for ((brokerID, host, port, topic, nParts) <- brokers)
-        ZkUtils.setupPartition(zookeeper.client, brokerID, host, port, topic, nParts)
+        ZkUtils.setupPartition(zkClient, brokerID, host, port, topic, nParts)
 
 
       // wait a bit to make sure rebalancing logic is triggered
@@ -91,7 +91,7 @@ class ZKLoadBalanceTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     {
       // now delete a partition
-      ZkUtils.deletePartition(zookeeper.client, 400, "topic1")
+      ZkUtils.deletePartition(zkClient, 400, "topic1")
 
       // wait a bit to make sure rebalancing logic is triggered
       Thread.sleep(500)
@@ -110,11 +110,11 @@ class ZKLoadBalanceTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   private def getZKChildrenValues(path : String) : Seq[Tuple2[String,String]] = {
     import scala.collection.JavaConversions
-    val children = zookeeper.client.getChildren(path)
+    val children = zkClient.getChildren(path)
     Collections.sort(children)
     val childrenAsSeq : Seq[java.lang.String] = JavaConversions.asBuffer(children)
     childrenAsSeq.map(partition =>
-      (partition, zookeeper.client.readData(path + "/" + partition).asInstanceOf[String]))
+      (partition, zkClient.readData(path + "/" + partition).asInstanceOf[String]))
   }
 
   private def checkSetEqual(actual : Seq[Tuple2[String,String]], expected : Seq[Tuple2[String,String]]) {

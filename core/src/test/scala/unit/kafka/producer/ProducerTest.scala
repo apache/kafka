@@ -187,6 +187,8 @@ class ProducerTest extends JUnitSuite {
       Assert.fail("Should fail with InvalidPartitionException")
     }catch {
       case e: InvalidPartitionException => // expected, do nothing
+    }finally {
+      richProducer.close()
     }
   }
 
@@ -202,17 +204,22 @@ class ProducerTest extends JUnitSuite {
       fail("Should fail with ClassCastException due to incompatible Encoder")
     } catch {
       case e: ClassCastException =>
+    }finally {
+      stringProducer1.close()
     }
 
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     val stringProducer2 = new Producer[String, String](new ProducerConfig(props))
     stringProducer2.send(new ProducerData[String, String](topic, "test", Array("test")))
+    stringProducer2.close()
 
     val messageProducer1 = new Producer[String, Message](config)
     try {
       messageProducer1.send(new ProducerData[String, Message](topic, "test", Array(new Message("test".getBytes))))
     } catch {
       case e: ClassCastException => fail("Should not fail with ClassCastException due to default Encoder")
+    }finally {
+      messageProducer1.close()
     }
   }
 
@@ -423,8 +430,9 @@ class ProducerTest extends JUnitSuite {
       Assert.assertEquals(new Message("test1".getBytes), messageSet2.next.message)
     } catch {
       case e: Exception => fail("Not expected", e)
+    }finally {
+      producer.close
     }
-    producer.close
   }
 
   @Test
@@ -459,8 +467,9 @@ class ProducerTest extends JUnitSuite {
       Assert.assertEquals(new Message("test1".getBytes), messageSet1.next.message)
     } catch {
       case e: Exception => fail("Not expected")
+    }finally {
+      producer.close
     }
-    producer.close
   }
 
   @Test

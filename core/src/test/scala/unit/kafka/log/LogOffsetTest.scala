@@ -42,8 +42,6 @@ class LogOffsetTest extends JUnitSuite {
   val brokerPort: Int = 9099
   var simpleConsumer: SimpleConsumer = null
 
-  private val logger = Logger.getLogger(classOf[LogOffsetTest])
-  
   @Before
   def setUp() {
     val config: Properties = createBrokerConfig(1, brokerPort)

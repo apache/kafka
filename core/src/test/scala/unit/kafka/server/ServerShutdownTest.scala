@@ -66,6 +66,7 @@ class ServerShutdownTest extends JUnitSuite {
       server.shutdown()
       val cleanShutDownFile = new File(new File(config.logDir), server.CLEAN_SHUTDOWN_FILE)
       assertTrue(cleanShutDownFile.exists)
+      producer.close()
     }
 
 
@@ -103,6 +104,7 @@ class ServerShutdownTest extends JUnitSuite {
 
       server.shutdown()
       Utils.rm(server.config.logDir)
+      producer.close()
     }
 
   }

@@ -30,9 +30,9 @@ import java.io.File
  */
 class KafkaServer(val config: KafkaConfig) extends Logging {
   val CLEAN_SHUTDOWN_FILE = ".kafka_cleanshutdown"
-  private val isShuttingDown = new AtomicBoolean(false)
-  
-  private val shutdownLatch = new CountDownLatch(1)
+  private var isShuttingDown = new AtomicBoolean(false)
+  private var shutdownLatch = new CountDownLatch(1)
+
   private val statsMBeanName = "kafka:type=kafka.SocketServerStats"
   
   var socketServer: SocketServer = null
@@ -47,6 +47,8 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
    */
   def startup() {
     info("Starting Kafka server...")
+    isShuttingDown = new AtomicBoolean(false)
+    shutdownLatch = new CountDownLatch(1)
     var needRecovery = true
     val cleanShutDownFile = new File(new File(config.logDir), CLEAN_SHUTDOWN_FILE)
     if (cleanShutDownFile.exists) {
