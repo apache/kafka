@@ -700,6 +700,21 @@ object Utils extends Logging {
       case _ => // swallow
     }
   }
+
+  def stringMapToJsonString(jsonDataMap: Map[String, String]): String = {
+    val builder = new StringBuilder
+    builder.append("{ ")
+    var numElements = 0
+    for ( (key, value) <- jsonDataMap) {
+      if (numElements > 0)
+        builder.append(",")
+      builder.append("\"" + key + "\": ")
+      builder.append("\"" + value + "\"")
+      numElements += 1
+    }
+    builder.append(" }")
+    builder.toString
+  }
 }
 
 class SnapshotStats(private val monitorDurationNs: Long = 600L * 1000L * 1000L * 1000L) {

@@ -25,11 +25,13 @@ import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException, 
 import kafka.consumer.TopicCount
 import org.I0Itec.zkclient.{IZkDataListener, ZkClient}
 import java.util.concurrent.locks.Condition
+import kafka.common.NoEpochForPartitionException
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
   val BrokerIdsPath = "/brokers/ids"
   val BrokerTopicsPath = "/brokers/topics"
+  val BrokerStatePath = "/brokers/state"
 
   def getTopicPath(topic: String): String ={
     BrokerTopicsPath + "/" + topic
@@ -59,6 +61,10 @@ object ZkUtils extends Logging {
     getTopicPartitionPath(topic, partitionId) + "/" + "leader"
   }
 
+  def getBrokerStateChangePath(brokerId: Int): String = {
+    BrokerStatePath + "/" + brokerId
+  }
+
   def getSortedBrokerList(zkClient: ZkClient): Seq[String] ={
       ZkUtils.getChildren(zkClient, ZkUtils.BrokerIdsPath).sorted
   }
@@ -69,9 +75,37 @@ object ZkUtils extends Logging {
   }
 
   def getLeaderForPartition(zkClient: ZkClient, topic: String, partition: Int): Option[Int] = {
-    val leader = readDataMaybeNull(zkClient, getTopicPartitionLeaderPath(topic, partition.toString))
-    if(leader == null) None
-    else Some(leader.toInt)
+    val leaderAndEpoch = readDataMaybeNull(zkClient, getTopicPartitionLeaderPath(topic, partition.toString))
+    if(leaderAndEpoch == null) None
+    else {
+      val leaderAndEpochInfo = leaderAndEpoch.split(";")
+      Some(leaderAndEpochInfo.head.toInt)
+    }
+  }
+
+  /**
+   * This API should read the epoch in the ISR path. It is sufficient to read the epoch in the ISR path, since if the
+   * leader fails after updating epoch in the leader path and before updating epoch in the ISR path, effectively some
+   * other broker will retry becoming leader with the same new epoch value.
+   */
+  def getEpochForPartition(client: ZkClient, topic: String, partition: Int): Int = {
+    val lastKnownEpoch = try {
+      val isrAndEpoch = readData(client, getTopicPartitionInSyncPath(topic, partition.toString))
+      if(isrAndEpoch != null) {
+        val isrAndEpochInfo = isrAndEpoch.split(";")
+        if(isrAndEpochInfo.last.isEmpty)
+          throw new NoEpochForPartitionException("No epoch in ISR path for topic %s partition %d is empty".format(topic, partition))
+        else
+          isrAndEpochInfo.last.toInt
+      }else {
+        throw new NoEpochForPartitionException("ISR path for topic %s partition %d is empty".format(topic, partition))
+      }
+    }catch {
+      case e: ZkNoNodeException =>
+        throw new NoEpochForPartitionException("No epoch since leader never existed for topic %s partition %d".format(topic, partition))
+      case e1 => throw e1
+    }
+    lastKnownEpoch
   }
 
   def getReplicasForPartition(zkClient: ZkClient, topic: String, partition: Int): Seq[String] = {
@@ -83,20 +117,58 @@ object ZkUtils extends Logging {
     }
   }
 
+  def getInSyncReplicasForPartition(client: ZkClient, topic: String, partition: Int): Seq[Int] = {
+    val replicaListAndEpochString = readDataMaybeNull(client, getTopicPartitionInSyncPath(topic, partition.toString))
+    if(replicaListAndEpochString == null)
+      Seq.empty[Int]
+    else {
+      val replicasAndEpochInfo = replicaListAndEpochString.split(";")
+      Utils.getCSVList(replicasAndEpochInfo.head).map(r => r.toInt)
+    }
+  }
+
   def isPartitionOnBroker(zkClient: ZkClient, topic: String, partition: Int, brokerId: Int): Boolean = {
     val replicas = getReplicasForPartition(zkClient, topic, partition)
     debug("The list of replicas for topic %s, partition %d is %s".format(topic, partition, replicas))
     replicas.contains(brokerId.toString)
   }
 
-  def tryToBecomeLeaderForPartition(zkClient: ZkClient, topic: String, partition: Int, brokerId: Int): Boolean = {
+  def tryToBecomeLeaderForPartition(client: ZkClient, topic: String, partition: Int, brokerId: Int): Option[Int] = {
     try {
-      createEphemeralPathExpectConflict(zkClient, getTopicPartitionLeaderPath(topic, partition.toString), brokerId.toString)
-      true
+      // NOTE: first increment epoch, then become leader
+      val newEpoch = incrementEpochForPartition(client, topic, partition, brokerId)
+      createEphemeralPathExpectConflict(client, getTopicPartitionLeaderPath(topic, partition.toString),
+        "%d;%d".format(brokerId, newEpoch))
+      val currentISR = getInSyncReplicasForPartition(client, topic, partition)
+      updatePersistentPath(client, getTopicPartitionInSyncPath(topic, partition.toString),
+        "%s;%d".format(currentISR.mkString(","), newEpoch))
+      info("Elected broker %d with epoch %d to be leader for topic %s partition %d".format(brokerId, newEpoch, topic, partition))
+      Some(newEpoch)
     } catch {
-      case e: ZkNodeExistsException => error("Leader exists for topic %s partition %d".format(topic, partition)); false
-      case oe => false
+      case e: ZkNodeExistsException => error("Leader exists for topic %s partition %d".format(topic, partition)); None
+      case oe => None
     }
+  }
+
+  def incrementEpochForPartition(client: ZkClient, topic: String, partition: Int, leader: Int) = {
+    // read previous epoch, increment it and write it to the leader path and the ISR path.
+    val epoch = try {
+      Some(getEpochForPartition(client, topic, partition))
+    }catch {
+      case e: NoEpochForPartitionException => None
+      case e1 => throw e1
+    }
+
+    val newEpoch = epoch match {
+      case Some(partitionEpoch) =>
+        debug("Existing epoch for topic %s partition %d is %d".format(topic, partition, epoch))
+        partitionEpoch + 1
+      case None =>
+        // this is the first time leader is elected for this partition. So set epoch to 1
+        debug("First epoch is 1 for topic %s partition %d".format(topic, partition))
+        1
+    }
+    newEpoch
   }
 
   def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, creator: String, port: Int) {
@@ -186,7 +258,7 @@ object ZkUtils extends Logging {
   /**
    * Create an persistent node with the given path and data. Create parents if necessary.
    */
-  def createPersistentPath(client: ZkClient, path: String, data: String): Unit = {
+  def createPersistentPath(client: ZkClient, path: String, data: String = ""): Unit = {
     try {
       client.createPersistent(path, data)
     }
@@ -196,6 +268,10 @@ object ZkUtils extends Logging {
         client.createPersistent(path, data)
       }
     }
+  }
+
+  def createSequentialPersistentPath(client: ZkClient, path: String, data: String = ""): String = {
+    client.createPersistentSequential(path, data)
   }
 
   /**
@@ -238,7 +314,7 @@ object ZkUtils extends Logging {
     }
   }
 
-  def deletePath(client: ZkClient, path: String) {
+  def deletePath(client: ZkClient, path: String): Boolean = {
     try {
       client.delete(path)
     }
@@ -246,6 +322,7 @@ object ZkUtils extends Logging {
       case e: ZkNoNodeException =>
         // this can happen during a connection loss event, return normally
         info(path + " deleted during connection loss; this is ok")
+        false
       case e2 => throw e2
     }
   }

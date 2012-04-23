@@ -23,6 +23,8 @@ import java.net.InetAddress
 import kafka.common.{InvalidPartitionException, KafkaZookeeperClient}
 import kafka.cluster.Replica
 import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener, IZkStateListener, ZkClient}
+import kafka.admin.AdminUtils
+import java.lang.{Thread, IllegalStateException}
 
 /**
  * Handles the server's interaction with zookeeper. The server needs to register the following paths:
@@ -36,11 +38,10 @@ class KafkaZooKeeper(config: KafkaConfig,
 
   val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + config.brokerId
   private var zkClient: ZkClient = null
-  var topics: List[String] = Nil
-  val lock = new Object()
-  var existingTopics: Set[String] = Set.empty[String]
-  val leaderChangeListener = new LeaderChangeListener
-  val topicPartitionsChangeListener = new TopicChangeListener
+  private val leaderChangeListener = new LeaderChangeListener
+  private val topicPartitionsChangeListener = new TopicChangeListener
+  private var stateChangeHandler: StateChangeCommandHandler = null
+
   private val topicListenerLock = new Object
   private val leaderChangeLock = new Object
 
@@ -48,6 +49,7 @@ class KafkaZooKeeper(config: KafkaConfig,
     /* start client */
     info("connecting to ZK: " + config.zkConnect)
     zkClient = KafkaZookeeperClient.getZookeeperClient(config)
+    startStateChangeCommandHandler()
     zkClient.subscribeStateChanges(new SessionExpireListener)
     registerBrokerInZk()
     subscribeToTopicAndPartitionsChanges(true)
@@ -58,6 +60,13 @@ class KafkaZooKeeper(config: KafkaConfig,
     val hostName = if (config.hostName == null) InetAddress.getLocalHost.getHostAddress else config.hostName
     val creatorId = hostName + "-" + System.currentTimeMillis
     ZkUtils.registerBrokerInZk(zkClient, config.brokerId, hostName, creatorId, config.port)
+  }
+
+  private def startStateChangeCommandHandler() {
+    val stateChangeQ = new ZkQueue(zkClient, ZkUtils.getBrokerStateChangePath(config.brokerId), config.stateChangeQSize)
+    stateChangeHandler = new StateChangeCommandHandler("StateChangeCommandHandler", config, stateChangeQ,
+      ensureStateChangeCommandValidityOnThisBroker, ensureEpochValidity)
+    stateChangeHandler.start()
   }
 
   /**
@@ -93,6 +102,7 @@ class KafkaZooKeeper(config: KafkaConfig,
 
   def close() {
     if (zkClient != null) {
+      stateChangeHandler.shutdown()
       info("Closing zookeeper client...")
       zkClient.close()
     }
@@ -184,7 +194,6 @@ class KafkaZooKeeper(config: KafkaConfig,
       case Some(leader) => info("Topic %s partition %d has leader %d".format(replica.topic, replica.partition.partId, leader))
       case None => // leader election
         leaderElection(replica)
-
     }
   }
 
@@ -201,9 +210,12 @@ class KafkaZooKeeper(config: KafkaConfig,
       }catch {
         case e => // ignoring
       }
-      if(ZkUtils.tryToBecomeLeaderForPartition(zkClient, replica.topic, replica.partition.partId, replica.brokerId)) {
-        info("Broker %d is leader for topic %s partition %d".format(replica.brokerId, replica.topic, replica.partition.partId))
-        // TODO: Become leader as part of KAFKA-302
+      val newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, replica.topic, replica.partition.partId, replica.brokerId)
+      newLeaderEpoch match {
+        case Some(epoch) =>
+          info("Broker %d is leader for topic %s partition %d".format(replica.brokerId, replica.topic, replica.partition.partId))
+          // TODO: Become leader as part of KAFKA-302
+        case None =>
       }
     }
   }
@@ -231,6 +243,26 @@ class KafkaZooKeeper(config: KafkaConfig,
         }
       }
     }
+  }
+
+  private def ensureStateChangeCommandValidityOnThisBroker(stateChangeCommand: StateChangeCommand): Boolean = {
+    // check if this broker hosts a replica for this topic and partition
+    ZkUtils.isPartitionOnBroker(zkClient, stateChangeCommand.topic, stateChangeCommand.partition, config.brokerId)
+  }
+
+  private def ensureEpochValidity(stateChangeCommand: StateChangeCommand): Boolean = {
+    // get the topic and partition that this request is meant for
+    val topic = stateChangeCommand.topic
+    val partition = stateChangeCommand.partition
+    val epoch = stateChangeCommand.epoch
+
+    val currentLeaderEpoch = ZkUtils.getEpochForPartition(zkClient, topic, partition)
+    // check if the request's epoch matches the current leader's epoch OR the admin command's epoch
+    val validEpoch = (currentLeaderEpoch == epoch) || (epoch == AdminUtils.AdminEpoch)
+    if(epoch > currentLeaderEpoch)
+      throw new IllegalStateException(("Illegal epoch state. Request's epoch %d larger than registered epoch %d for " +
+        "topic %s partition %d").format(epoch, currentLeaderEpoch, topic, partition))
+    validEpoch
   }
 
   class LeaderChangeListener extends IZkDataListener with Logging {

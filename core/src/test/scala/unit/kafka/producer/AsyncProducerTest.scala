@@ -24,7 +24,6 @@ import org.easymock.EasyMock
 import org.junit.Test
 import kafka.api._
 import kafka.cluster.Broker
-import kafka.common.{InvalidConfigException, NoBrokersForPartitionException, InvalidPartitionException}
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import kafka.producer.async._
 import kafka.serializer.{StringEncoder, StringDecoder, Encoder}
@@ -35,6 +34,7 @@ import collection.Map
 import collection.mutable.ListBuffer
 import org.scalatest.junit.JUnit3Suite
 import kafka.utils.{NegativePartitioner, TestZKUtils, TestUtils}
+import kafka.common.{NoBrokersForPartitionException, InvalidPartitionException, InvalidConfigException, QueueFullException}
 
 class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
@@ -56,7 +56,7 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     val mockEventHandler = new EventHandler[String,String] {
 
       def handle(events: Seq[ProducerData[String,String]]) {
-        Thread.sleep(1000000)
+        Thread.sleep(500)
       }
 
       def close {}
@@ -79,6 +79,8 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
     catch {
       case e: QueueFullException => //expected
+    }finally {
+      producer.close()
     }
   }
 
@@ -319,6 +321,8 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
       fail("Should fail with ClassCastException due to incompatible Encoder")
     } catch {
       case e: ClassCastException =>
+    }finally {
+      producer.close()
     }
   }
 

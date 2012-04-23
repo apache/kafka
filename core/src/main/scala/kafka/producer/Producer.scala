@@ -18,11 +18,11 @@ package kafka.producer
 
 import async._
 import kafka.utils._
-import kafka.common.InvalidConfigException
 import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
 import kafka.serializer.Encoder
 import java.util.concurrent.atomic.{AtomicLong, AtomicBoolean}
 import org.I0Itec.zkclient.ZkClient
+import kafka.common.{QueueFullException, InvalidConfigException}
 
 class Producer[K,V](config: ProducerConfig,
                     private val eventHandler: EventHandler[K,V]) // for testing only
@@ -120,6 +120,7 @@ extends Logging {
   def close() = {
     val canShutdown = hasShutdown.compareAndSet(false, true)
     if(canShutdown) {
+      info("Shutting down producer")
       if (producerSendThread != null)
         producerSendThread.shutdown
       eventHandler.close
