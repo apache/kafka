@@ -33,20 +33,27 @@ object MirrorMaker extends Logging {
     info ("Starting mirror maker")
     val parser = new OptionParser
 
-    val consumerConfigOpt = parser.accepts("consumer-config",
+    val consumerConfigOpt = parser.accepts("consumer.config",
       "Consumer config to consume from a source cluster. " +
       "You may specify multiple of these.")
       .withRequiredArg()
       .describedAs("config file")
       .ofType(classOf[String])
 
-    val producerConfigOpt = parser.accepts("producer-config",
+    val producerConfigOpt = parser.accepts("producer.config",
       "Embedded producer config.")
       .withRequiredArg()
       .describedAs("config file")
       .ofType(classOf[String])
+
+    val numProducersOpt = parser.accepts("num.producers",
+      "Number of producer instances")
+      .withRequiredArg()
+      .describedAs("Number of producers")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(1)
     
-    val numStreamsOpt = parser.accepts("num-streams",
+    val numStreamsOpt = parser.accepts("num.streams",
       "Number of consumption streams.")
       .withRequiredArg()
       .describedAs("Number of threads")
@@ -83,11 +90,11 @@ object MirrorMaker extends Logging {
 
     val numStreams = options.valueOf(numStreamsOpt)
 
-    val producer = {
+    val producers = (1 to options.valueOf(numProducersOpt).intValue()).map(_ => {
       val config = new ProducerConfig(
         Utils.loadProps(options.valueOf(producerConfigOpt)))
       new Producer[Null, Message](config)
-    }
+    })
 
     val threads = {
       val connectors = options.valuesOf(consumerConfigOpt).toList
@@ -97,7 +104,7 @@ object MirrorMaker extends Logging {
       Runtime.getRuntime.addShutdownHook(new Thread() {
         override def run() {
           connectors.foreach(_.shutdown())
-          producer.close()
+          producers.foreach(_.close())
         }
       })
 
@@ -110,7 +117,7 @@ object MirrorMaker extends Logging {
         connectors.map(_.createMessageStreamsByFilter(filterSpec, numStreams.intValue()))
 
       streams.flatten.zipWithIndex.map(streamAndIndex => {
-        new MirrorMakerThread(streamAndIndex._1, producer, streamAndIndex._2)
+        new MirrorMakerThread(streamAndIndex._1, producers, streamAndIndex._2)
       })
     }
 
@@ -120,18 +127,20 @@ object MirrorMaker extends Logging {
   }
 
   class MirrorMakerThread(stream: KafkaStream[Message],
-                          producer: Producer[Null, Message],
+                          producers: Seq[Producer[Null, Message]],
                           threadId: Int)
           extends Thread with Logging {
 
     private val shutdownLatch = new CountDownLatch(1)
     private val threadName = "mirrormaker-" + threadId
+    private val producerSelector = Utils.circularIterator(producers)
 
     this.setName(threadName)
 
     override def run() {
       try {
         for (msgAndMetadata <- stream) {
+          val producer = producerSelector.next()
           val pd = new ProducerData[Null, Message](
             msgAndMetadata.topic, msgAndMetadata.message)
           producer.send(pd)

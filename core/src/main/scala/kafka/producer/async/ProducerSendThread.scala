@@ -115,7 +115,7 @@ private[async] class ProducerSendThread[T](val threadName: String,
       if(events.size > 0)
         handler.handle(events, underlyingProducer, serializer)
     }catch {
-      case e: Exception => error("Error in handling batch of " + events.size + " events", e)
+      case e => error("Error in handling batch of " + events.size + " events", e)
     }
   }
 

@@ -20,6 +20,7 @@ package kafka.utils
 import org.apache.log4j.Logger
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
+import org.junit.Assert._
 
 
 class UtilsTest extends JUnitSuite {
@@ -29,6 +30,25 @@ class UtilsTest extends JUnitSuite {
   @Test
   def testSwallow() {
     Utils.swallow(logger.info, throw new IllegalStateException("test"))
+  }
+
+  @Test
+  def testCircularIterator() {
+    val l = List(1, 2)
+    val itl = Utils.circularIterator(l)
+    assertEquals(1, itl.next())
+    assertEquals(2, itl.next())
+    assertEquals(1, itl.next())
+    assertEquals(2, itl.next())
+    assertFalse(itl.hasDefiniteSize)
+
+    val s = Set(1, 2)
+    val its = Utils.circularIterator(s)
+    assertEquals(1, its.next())
+    assertEquals(2, its.next())
+    assertEquals(1, its.next())
+    assertEquals(2, its.next())
+    assertEquals(1, its.next())
   }
 
 }

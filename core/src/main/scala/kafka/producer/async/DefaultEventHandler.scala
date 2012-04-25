@@ -47,9 +47,25 @@ private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
   private def send(messagesPerTopic: Map[(String, Int), ByteBufferMessageSet], syncProducer: SyncProducer) {
     if(messagesPerTopic.size > 0) {
       val requests = messagesPerTopic.map(f => new ProducerRequest(f._1._1, f._1._2, f._2)).toArray
-      syncProducer.multiSend(requests)
-      trace("kafka producer sent messages for topics %s to broker %s:%d"
-        .format(messagesPerTopic, syncProducer.config.host, syncProducer.config.port))
+
+      val maxAttempts = config.numRetries + 1
+      var attemptsRemaining = maxAttempts
+      var sent = false
+
+      while (attemptsRemaining > 0 && !sent) {
+        attemptsRemaining -= 1
+        try {
+          syncProducer.multiSend(requests)
+          trace("kafka producer sent messages for topics %s to broker %s:%d (on attempt %d)"
+                        .format(messagesPerTopic, syncProducer.config.host, syncProducer.config.port, maxAttempts - attemptsRemaining))
+          sent = true
+        }
+        catch {
+          case e => warn("Error sending messages, %d attempts remaining".format(attemptsRemaining))
+          if (attemptsRemaining == 0)
+            throw e
+        }
+      }
     }
   }
 

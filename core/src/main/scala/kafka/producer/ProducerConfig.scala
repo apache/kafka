@@ -32,6 +32,17 @@ class ProducerConfig(val props: Properties) extends ZKConfig(props)
   if(Utils.propertyExists(brokerList) && Utils.getString(props, "partitioner.class", null) != null)
     throw new InvalidConfigException("partitioner.class cannot be used when broker.list is set")
 
+  /**
+   * If DefaultEventHandler is used, this specifies the number of times to
+   * retry if an error is encountered during send. Currently, it is only
+   * appropriate when broker.list points to a VIP. If the zk.connect option
+   * is used instead, this will not have any effect because with the zk-based
+   * producer, brokers are not re-selected upon retry. So retries would go to
+   * the same (potentially still down) broker. (KAFKA-253 will help address
+   * this.)
+   */
+  val numRetries = Utils.getInt(props, "num.retries", 0)
+
   /** If both broker.list and zk.connect options are specified, throw an exception */
   if(Utils.propertyExists(brokerList) && Utils.propertyExists(zkConnect))
     throw new InvalidConfigException("only one of broker.list and zk.connect can be specified")

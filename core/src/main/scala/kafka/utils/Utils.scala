@@ -668,6 +668,17 @@ object Utils extends Logging {
       }
     }
   }
+
+  /**
+   * Create a circular (looping) iterator over a collection.
+   * @param coll An iterable over the underlying collection.
+   * @return A circular iterator over the collection.
+   */
+  def circularIterator[T](coll: Iterable[T]) = {
+    val stream: Stream[T] =
+      for (forever <- Stream.continually(1); t <- coll) yield t
+    stream.iterator
+  }
 }
 
 class SnapshotStats(private val monitorDurationNs: Long = 600L * 1000L * 1000L * 1000L) {
