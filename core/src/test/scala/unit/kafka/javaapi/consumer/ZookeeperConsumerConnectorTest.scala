@@ -46,7 +46,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   val nMessages = 2
 
   def testBasic() {
-    val requestHandlerLogger = Logger.getLogger(classOf[KafkaApis])
+    val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
     var actualMessages: List[Message] = Nil
 

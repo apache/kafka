@@ -110,7 +110,7 @@ case class ProducerRequest( versionId: Short,
     }
   }
 
-  def getNumTopicPartitions = data.foldLeft(0)(_ + _.partitionData.length)
+  def topicPartitionCount = data.foldLeft(0)(_ + _.partitionData.length)
 
   def expectResponse = requiredAcks > 0
 }

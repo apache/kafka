@@ -238,7 +238,7 @@ private[kafka] class Processor(val id: Int,
   private def processNewResponses() {
     var curr = requestChannel.receiveResponse(id)
     while(curr != null) {
-      trace("Socket server received response to send: " + curr)
+      trace("Socket server received response to send, registering for write: " + curr)
       val key = curr.requestKey.asInstanceOf[SelectionKey]
       try {
         key.interestOps(SelectionKey.OP_WRITE)

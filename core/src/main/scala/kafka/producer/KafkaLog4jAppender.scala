@@ -65,7 +65,7 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
       throw new MissingConfigException("topic must be specified by the Kafka log4j appender")
     if(serializerClass == null) {
       serializerClass = "kafka.serializer.StringEncoder"
-      LogLog.warn("Using default encoder - kafka.serializer.StringEncoder")
+      LogLog.debug("Using default encoder - kafka.serializer.StringEncoder")
     }
     props.put("serializer.class", serializerClass)
     val config : ProducerConfig = new ProducerConfig(props)

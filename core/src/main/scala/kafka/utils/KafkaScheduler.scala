@@ -23,7 +23,6 @@ import java.lang.IllegalStateException
 
 /**
  * A scheduler for running jobs in the background
- * TODO: ScheduledThreadPoolExecutor notriously swallows exceptions
  */
 class KafkaScheduler(val numThreads: Int, val baseThreadName: String, isDaemon: Boolean) extends Logging {
   private val threadId = new AtomicLong(0)
@@ -32,11 +31,7 @@ class KafkaScheduler(val numThreads: Int, val baseThreadName: String, isDaemon: 
 
   def startUp = {
     executor = new ScheduledThreadPoolExecutor(numThreads, new ThreadFactory() {
-      def newThread(runnable: Runnable): Thread = {
-        val t = new Thread(runnable, baseThreadName + threadId.getAndIncrement)
-        t.setDaemon(isDaemon)
-        t
-      }
+      def newThread(runnable: Runnable): Thread = Utils.daemonThread(baseThreadName + threadId.getAndIncrement, runnable)
     })
     executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false)
     executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false)
@@ -57,12 +52,12 @@ class KafkaScheduler(val numThreads: Int, val baseThreadName: String, isDaemon: 
   def shutdownNow() {
     checkIfExecutorHasStarted
     executor.shutdownNow()
-    info("force shutdown scheduler " + baseThreadName)
+    info("Forcing shutdown of scheduler " + baseThreadName)
   }
 
   def shutdown() {
     checkIfExecutorHasStarted
     executor.shutdown()
-    info("shutdown scheduler " + baseThreadName)
+    info("Shutdown scheduler " + baseThreadName)
   }
 }

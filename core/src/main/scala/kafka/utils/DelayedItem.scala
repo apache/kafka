@@ -39,7 +39,7 @@ class DelayedItem[T](val item: T, delay: Long, unit: TimeUnit) extends Delayed {
   def compareTo(d: Delayed): Int = {
     val delayed = d.asInstanceOf[DelayedItem[T]]
     val myEnd = createdMs + delayMs
-    val yourEnd = delayed.createdMs - delayed.delayMs
+    val yourEnd = delayed.createdMs + delayed.delayMs
     
     if(myEnd < yourEnd) -1
     else if(myEnd > yourEnd) 1

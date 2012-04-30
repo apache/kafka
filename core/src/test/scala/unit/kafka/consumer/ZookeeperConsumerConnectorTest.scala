@@ -35,6 +35,7 @@ import kafka.utils.TestUtils._
 
 class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
+  val RebalanceBackoffMs = 5000
   var dirs : ZKGroupTopicDirs = null
   val zookeeperConnect = TestZKUtils.zookeeperConnect
   val numNodes = 2
@@ -63,7 +64,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   }
 
   def testBasic() {
-    val requestHandlerLogger = Logger.getLogger(classOf[KafkaApis])
+    val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
 
     // test consumer timeout logic
@@ -117,8 +118,9 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     zkConsumerConnector1.commitOffsets
 
     // create a consumer
-    val consumerConfig2 = new ConsumerConfig(
-      TestUtils.createConsumerProperties(zkConnect, group, consumer2))
+    val consumerConfig2 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer2)) {
+      override val rebalanceBackoffMs = RebalanceBackoffMs
+    }
     val zkConsumerConnector2 = new ZookeeperConsumerConnector(consumerConfig2, true)
     val topicMessageStreams2 = zkConsumerConnector2.createMessageStreams(Predef.Map(topic -> 1))
     // send some messages to each broker
@@ -202,8 +204,9 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     zkConsumerConnector1.commitOffsets
 
     // create a consumer
-    val consumerConfig2 = new ConsumerConfig(
-      TestUtils.createConsumerProperties(zkConnect, group, consumer2))
+    val consumerConfig2 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer2)) {
+      override val rebalanceBackoffMs = RebalanceBackoffMs
+    }
     val zkConsumerConnector2 = new ZookeeperConsumerConnector(consumerConfig2, true)
     val topicMessageStreams2 = zkConsumerConnector2.createMessageStreams(Predef.Map(topic -> 1))
     // send some messages to each broker
@@ -300,7 +303,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val actual_2 = getZKChildrenValues(dirs.consumerOwnerDir)
     val expected_2 = List( ("0", "group1_consumer0-0"),
                            ("1", "group1_consumer0-0"))
-   assertEquals(expected_2, actual_2)
+    assertEquals(expected_2, actual_2)
 
     zkConsumerConnector1.shutdown
 
@@ -372,7 +375,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     // also check partition ownership
     val actual_1 = getZKChildrenValues(dirs.consumerOwnerDir)
     val expected_1 = List( ("0", "group1_consumer1-0"))
-   assertEquals(expected_1, actual_1)
+    assertEquals(expected_1, actual_1)
 
     val receivedMessages1 = getMessages(nMessages, topicMessageStreams1)
     assertEquals(nMessages, receivedMessages1.size)

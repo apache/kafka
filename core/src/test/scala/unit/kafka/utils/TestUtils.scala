@@ -416,6 +416,7 @@ object TestUtils extends Logging {
       leaderLock.unlock()
     }
   }
+
 }
 
 object TestZKUtils {

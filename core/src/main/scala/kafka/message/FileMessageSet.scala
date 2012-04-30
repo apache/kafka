@@ -92,7 +92,7 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
   /**
    * Return a message set which is a view into this set starting from the given offset and with the given size limit.
    */
-  def read(readOffset: Long, size: Long): MessageSet = {
+  def read(readOffset: Long, size: Long): FileMessageSet = {
     new FileMessageSet(channel, this.offset + readOffset, scala.math.min(this.offset + readOffset + size, highWaterMark),
       false, new AtomicBoolean(false))
   }

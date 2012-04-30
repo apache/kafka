@@ -70,8 +70,8 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
 
     kafkaZookeeper = new KafkaZooKeeper(config, addReplica, getReplica)
 
-    requestHandlerPool = new KafkaRequestHandlerPool(socketServer.requestChannel,
-      new KafkaApis(logManager, kafkaZookeeper).handle, config.numIoThreads)
+    val apis = new KafkaApis(socketServer.requestChannel, logManager, kafkaZookeeper)
+    requestHandlerPool = new KafkaRequestHandlerPool(socketServer.requestChannel, apis, config.numIoThreads)
     socketServer.startup
 
     Mx4jLoader.maybeLoad

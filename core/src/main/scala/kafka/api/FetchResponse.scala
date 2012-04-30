@@ -42,7 +42,7 @@ case class PartitionData(partition: Int, error: Int = ErrorMapping.NoError, init
 
   def this(partition: Int, messages: MessageSet) = this(partition, ErrorMapping.NoError, 0L, messages)
 
-  def getTranslatedPartition(topic: String, randomSelector: String => Int): Int = {
+  def translatePartition(topic: String, randomSelector: String => Int): Int = {
     if (partition == ProducerRequest.RandomPartition)
       return randomSelector(topic)
     else 

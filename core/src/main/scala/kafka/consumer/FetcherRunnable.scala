@@ -18,6 +18,7 @@
 package kafka.consumer
 
 import java.io.IOException
+import java.nio.channels.ClosedByInterruptException
 import java.util.concurrent.CountDownLatch
 import kafka.api.{FetchRequestBuilder, OffsetRequest}
 import kafka.cluster.Broker
@@ -33,7 +34,7 @@ class FetcherRunnable(val name: String,
                       val partitionTopicInfos: List[PartitionTopicInfo])
   extends Thread(name) with Logging {
   private val shutdownLatch = new CountDownLatch(1)
-  private val simpleConsumer = new SimpleConsumer(broker.host, broker.port, config.socketTimeoutMs,
+  private val simpleConsumer = new SimpleConsumer(broker.host, broker.port, config.maxFetchWaitMs + config.socketTimeoutMs,
     config.socketBufferSize)
   @volatile
   private var stopped = false
@@ -54,19 +55,19 @@ class FetcherRunnable(val name: String,
     var reqId = 0
     try {
       while (!stopped) {
-        // TODO: fix up the max wait and min bytes
         val builder = new FetchRequestBuilder().
           correlationId(reqId).
           clientId(config.consumerId.getOrElse(name)).
-          maxWait(0).
-          minBytes(0)
+          maxWait(config.maxFetchWaitMs).
+          minBytes(config.minFetchBytes)
         partitionTopicInfos.foreach(pti =>
           builder.addFetch(pti.topic, pti.partitionId, pti.getFetchOffset(), config.fetchSize)
         )
 
         val fetchRequest = builder.build()
-        trace("fetch request: " + fetchRequest)
+        val start = System.currentTimeMillis
         val response = simpleConsumer.fetch(fetchRequest)
+        trace("Fetch completed in " + (System.currentTimeMillis - start) + " ms with max wait of " + config.maxFetchWaitMs)
 
         var read = 0L
         for(infopti <- partitionTopicInfos) {
@@ -74,7 +75,7 @@ class FetcherRunnable(val name: String,
           try {
             var done = false
             if(messages.getErrorCode == ErrorMapping.OffsetOutOfRangeCode) {
-              info("offset for " + infopti + " out of range")
+              info("Offset for " + infopti + " out of range")
               // see if we can fix this error
               val resetOffset = resetConsumerOffsets(infopti.topic, infopti.partitionId)
               if(resetOffset >= 0) {
@@ -86,36 +87,35 @@ class FetcherRunnable(val name: String,
             if (!done)
               read += infopti.enqueue(messages, infopti.getFetchOffset)
           } catch {
-            case e1: IOException =>
+            case e: IOException =>
               // something is wrong with the socket, re-throw the exception to stop the fetcher
-              throw e1
-            case e2 =>
+              throw e
+            case e =>
               if (!stopped) {
                 // this is likely a repeatable error, log it and trigger an exception in the consumer
-                error("error in FetcherRunnable for " + infopti, e2)
-                infopti.enqueueError(e2, infopti.getFetchOffset)
+                error("Error in fetcher for " + infopti, e)
+                infopti.enqueueError(e, infopti.getFetchOffset)
               }
               // re-throw the exception to stop the fetcher
-              throw e2
+              throw e
           }
         }
         reqId = if(reqId == Int.MaxValue) 0 else reqId + 1
 
         trace("fetched bytes: " + read)
-        if(read == 0) {
-          debug("backing off " + config.fetcherBackoffMs + " ms")
-          Thread.sleep(config.fetcherBackoffMs)
-        }
       }
     } catch {
+      case e: ClosedByInterruptException => 
+        // we interrupted ourselves, close quietly
+        debug("Fetch request interrupted, exiting...")
       case e =>
-        if (stopped)
-          info("FecherRunnable " + this + " interrupted")
+        if(stopped)
+          info("Fetcher stopped...")
         else
-          error("error in FetcherRunnable ", e)
+          error("Error in fetcher ", e)
     }
 
-    info("stopping fetcher " + name + " to host " + broker.host)
+    info("Stopping fetcher " + name + " to host " + broker.host)
     Utils.swallow(logger.info, simpleConsumer.close)
     shutdownComplete()
   }
@@ -139,7 +139,7 @@ class FetcherRunnable(val name: String,
     val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
 
     // reset manually in zookeeper
-    info("updating partition " + partitionId + " for topic " + topic + " with " +
+    info("Updating partition " + partitionId + " for topic " + topic + " with " +
             (if(offset == OffsetRequest.EarliestTime) "earliest " else " latest ") + "offset " + offsets(0))
     ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + partitionId, offsets(0).toString)
 

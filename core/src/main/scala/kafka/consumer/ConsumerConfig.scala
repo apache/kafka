@@ -33,6 +33,8 @@ object ConsumerConfig {
   val MaxRebalanceRetries = 4
   val AutoOffsetReset = OffsetRequest.SmallestTimeString
   val ConsumerTimeoutMs = -1
+  val MinFetchBytes = 1
+  val MaxFetchWaitMs = 3000
   val MirrorTopicsWhitelist = ""
   val MirrorTopicsBlacklist = ""
   val MirrorConsumerNumThreads = 1
@@ -52,7 +54,7 @@ class ConsumerConfig(props: Properties) extends ZKConfig(props) {
    *  Set this explicitly for only testing purpose. */
   val consumerId: Option[String] = Option(Utils.getString(props, "consumerid", null))
 
-  /** the socket timeout for network requests */
+  /** the socket timeout for network requests. The actual timeout set will be max.fetch.wait + socket.timeout.ms. */
   val socketTimeoutMs = Utils.getInt(props, "socket.timeout.ms", SocketTimeout)
   
   /** the socket receive buffer for network requests */
@@ -60,10 +62,6 @@ class ConsumerConfig(props: Properties) extends ZKConfig(props) {
   
   /** the number of byes of messages to attempt to fetch */
   val fetchSize = Utils.getInt(props, "fetch.size", FetchSize)
-  
-  /** to avoid repeatedly polling a broker node which has no new data
-      we will backoff every time we get an empty set from the broker*/
-  val fetcherBackoffMs: Long = Utils.getInt(props, "fetcher.backoff.ms", DefaultFetcherBackoffMs)
   
   /** if true, periodically commit to zookeeper the offset of messages already fetched by the consumer */
   val autoCommit = Utils.getBoolean(props, "autocommit.enable", AutoCommit)
@@ -76,7 +74,13 @@ class ConsumerConfig(props: Properties) extends ZKConfig(props) {
 
   /** max number of retries during rebalance */
   val maxRebalanceRetries = Utils.getInt(props, "rebalance.retries.max", MaxRebalanceRetries)
-
+  
+  /** the minimum amount of data the server should return for a fetch request. If insufficient data is available the request will block */
+  val minFetchBytes = Utils.getInt(props, "min.fetch.bytes", MinFetchBytes)
+  
+  /** the maximum amount of time the server will block before answering the fetch request if there isn't sufficient data to immediate satisfy min.fetch.bytes */
+  val maxFetchWaitMs = Utils.getInt(props, "max.fetch.wait.ms", MaxFetchWaitMs)
+  
   /** backoff time between retries during rebalance */
   val rebalanceBackoffMs = Utils.getInt(props, "rebalance.backoff.ms", zkSyncTimeMs)
 

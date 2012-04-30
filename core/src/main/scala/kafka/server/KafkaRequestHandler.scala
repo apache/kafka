@@ -17,52 +17,38 @@
 
 package kafka.server
 
+import org.apache.log4j._
 import kafka.network._
 import kafka.utils._
 
 /**
- * Thread that answers kafka requests.
+ * A thread that answers kafka requests.
  */
-class KafkaRequestHandler(val requestChannel: RequestChannel, val handle: (Receive) => Option[Send]) extends Runnable with Logging { 
-  
+class KafkaRequestHandler(val requestChannel: RequestChannel, apis: KafkaApis) extends Runnable with Logging { 
+     
   def run() { 
     while(true) { 
       val req = requestChannel.receiveRequest()
       trace("Processor " + Thread.currentThread.getName + " got request " + req)
       if(req == RequestChannel.AllDone)
         return
-      handle(req.request) match { 
-        case Some(send) => { 
-          val resp = new RequestChannel.Response(processor = req.processor, 
-                                                 requestKey = req.requestKey, 
-                                                 response = send,
-                                                 start = req.start,
-                                                 elapsed = -1)
-          requestChannel.sendResponse(resp)
-          trace("Processor " + Thread.currentThread.getName + " sent response " + resp)
-        }
-        case None =>
-      }
+      apis.handle(req)
     }
   }
 
-  def shutdown() {
-    requestChannel.sendRequest(RequestChannel.AllDone)
-  }
+  def shutdown(): Unit = requestChannel.sendRequest(RequestChannel.AllDone)
   
 }
 
-/**
- * Pool of request handling threads.
- */
-class KafkaRequestHandlerPool(val requestChannel: RequestChannel, val handler: (Receive) => Option[Send], numThreads: Int) { 
+class KafkaRequestHandlerPool(val requestChannel: RequestChannel, 
+                              val apis: KafkaApis, 
+                              numThreads: Int) { 
   
   val threads = new Array[Thread](numThreads)
   val runnables = new Array[KafkaRequestHandler](numThreads)
   for(i <- 0 until numThreads) { 
-    runnables(i) = new KafkaRequestHandler(requestChannel, handler)
-    threads(i) = new Thread(runnables(i), "kafka-request-handler-" + i)
-    threads(i).setDaemon(true)
+    runnables(i) = new KafkaRequestHandler(requestChannel, apis)
+    threads(i) = Utils.daemonThread("kafka-request-handler-" + i, runnables(i))
     threads(i).start()
   }
   

@@ -24,7 +24,7 @@ import java.nio.ByteBuffer
 import kafka.log.LogManager
 import junit.framework.Assert._
 import org.easymock.EasyMock
-import kafka.network.BoundedByteBufferReceive
+import kafka.network._
 import kafka.api.{TopicMetadataSend, TopicMetadataRequest}
 import kafka.cluster.Broker
 import kafka.server.{KafkaZooKeeper, KafkaApis, KafkaConfig}
@@ -93,7 +93,8 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     serializedMetadataRequest.rewind()
 
     // create the kafka request handler
-    val kafkaRequestHandler = new KafkaApis(logManager, kafkaZookeeper)
+    val requestChannel = new RequestChannel(2, 5)
+    val apis = new KafkaApis(requestChannel, logManager, kafkaZookeeper)
 
     // mock the receive API to return the request buffer as created above
     val receivedRequest = EasyMock.createMock(classOf[BoundedByteBufferReceive])
@@ -101,23 +102,18 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     EasyMock.replay(receivedRequest)
 
     // call the API (to be tested) to get metadata
-    val metadataResponse = kafkaRequestHandler.handleTopicMetadataRequest(receivedRequest)
-
-    // verify the topic metadata returned
-    metadataResponse match {
-      case Some(metadata) =>
-        val responseBuffer = metadata.asInstanceOf[TopicMetadataSend].metadata
-        val topicMetadata = TopicMetadataRequest.deserializeTopicsMetadataResponse(responseBuffer)
-        assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
-        assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
-        val partitionMetadata = topicMetadata.head.partitionsMetadata
-        assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
-        assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
-        assertEquals(brokers, partitionMetadata.head.replicas)
-        assertNull("Not expecting log metadata", partitionMetadata.head.logMetadata.getOrElse(null))
-      case None =>
-        fail("Metadata response expected")
-    }
+    apis.handleTopicMetadataRequest(new RequestChannel.Request(processor=0, requestKey=5, request=receivedRequest, start=1))
+    val metadataResponse = requestChannel.receiveResponse(0).response.asInstanceOf[TopicMetadataSend].metadata
+    
+    // check assertions
+    val topicMetadata = TopicMetadataRequest.deserializeTopicsMetadataResponse(metadataResponse)
+    assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
+    assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
+    val partitionMetadata = topicMetadata.head.partitionsMetadata
+    assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
+    assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
+    assertEquals(brokers, partitionMetadata.head.replicas)
+    assertNull("Not expecting log metadata", partitionMetadata.head.logMetadata.getOrElse(null))
 
     // verify the expected calls to log manager occurred in the right order
     EasyMock.verify(logManager)

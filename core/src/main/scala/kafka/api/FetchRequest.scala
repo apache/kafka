@@ -76,6 +76,11 @@ case class OffsetDetail(topic: String, partitions: Seq[Int], offsets: Seq[Long],
 
 object FetchRequest {
   val CurrentVersion = 1.shortValue()
+  val DefaultCorrelationId = -1
+  val DefaultClientId = ""
+  val DefaultReplicaId = -1
+  val DefaultMaxWait = 0
+  val DefaultMinBytes = 0
 
   def readFrom(buffer: ByteBuffer): FetchRequest = {
     val versionId = buffer.getShort
@@ -94,13 +99,13 @@ object FetchRequest {
 
 }
 
-case class FetchRequest( versionId: Short,
-                         correlationId: Int,
-                         clientId: String,
-                         replicaId: Int,
-                         maxWait: Int,
-                         minBytes: Int,
-                         offsetInfo: Seq[OffsetDetail] ) extends Request(RequestKeys.Fetch) {
+case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
+                        correlationId: Int = FetchRequest.DefaultCorrelationId,
+                        clientId: String = FetchRequest.DefaultClientId,
+                        replicaId: Int = FetchRequest.DefaultReplicaId,
+                        maxWait: Int = FetchRequest.DefaultMaxWait,
+                        minBytes: Int = FetchRequest.DefaultMinBytes,
+                        offsetInfo: Seq[OffsetDetail] ) extends Request(RequestKeys.Fetch) {
 
   // ensure that a topic "X" appears in at most one OffsetDetail
   def validate() {
@@ -138,13 +143,14 @@ case class FetchRequest( versionId: Short,
   def sizeInBytes: Int = 2 + 4 + (2 + clientId.length()) + 4 + 4 + 4 + offsetInfo.foldLeft(4)(_ + _.sizeInBytes())
 }
 
+
 class FetchRequestBuilder() {
-  private var correlationId = -1
+  private var correlationId = FetchRequest.DefaultCorrelationId
   private val versionId = FetchRequest.CurrentVersion
-  private var clientId = ""
-  private var replicaId = -1        // sensible default
-  private var maxWait = -1          // sensible default
-  private var minBytes = -1         // sensible default
+  private var clientId = FetchRequest.DefaultClientId
+  private var replicaId = FetchRequest.DefaultReplicaId
+  private var maxWait = FetchRequest.DefaultMaxWait
+  private var minBytes = FetchRequest.DefaultMinBytes
   private val requestMap = new HashMap[String, Tuple3[Buffer[Int], Buffer[Long], Buffer[Int]]]
 
   def addFetch(topic: String, partition: Int, offset: Long, fetchSize: Int) = {

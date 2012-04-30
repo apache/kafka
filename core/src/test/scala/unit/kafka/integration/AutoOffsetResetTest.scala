@@ -34,11 +34,11 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
   val topic = "test_topic"
   val group = "default_group"
   val testConsumer = "consumer"
-  val brokerPort = 9892
-  val configs = List(new KafkaConfig(TestUtils.createBrokerConfig(0, brokerPort)))
-  val numMessages = 10
-  val largeOffset = 10000
-  val smallOffset = -1
+  val BrokerPort = 9892
+  val configs = List(new KafkaConfig(TestUtils.createBrokerConfig(0, BrokerPort)))
+  val NumMessages = 10
+  val LargeOffset = 10000
+  val SmallOffset = -1
   
   val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
 
@@ -55,165 +55,55 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
     super.tearDown
   }
   
-  def testEarliestOffsetResetForward() = {
-    val producer: Producer[String, Message] = TestUtils.createProducer(zkConnect)
-
-    for(i <- 0 until numMessages) {
-      producer.send(new ProducerData[String, Message](topic, topic, new Message("test".getBytes())))
-    }
-
-    // update offset in zookeeper for consumer to jump "forward" in time
-    val dirs = new ZKGroupTopicDirs(group, topic)
-    var consumerProps = TestUtils.createConsumerProperties(zkConnect, group, testConsumer)
-    consumerProps.put("autooffset.reset", "smallest")
-    consumerProps.put("consumer.timeout.ms", "2000")
-    val consumerConfig = new ConsumerConfig(consumerProps)
+  def testResetToEarliestWhenOffsetTooHigh() = 
+    assertEquals(NumMessages, resetAndConsume(NumMessages, "smallest", LargeOffset))
+  
+  def testResetToEarliestWhenOffsetTooLow() =
+    assertEquals(NumMessages, resetAndConsume(NumMessages, "smallest", SmallOffset))
     
-    TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0", largeOffset)
-    info("Updated consumer offset to " + largeOffset)
-
-    Thread.sleep(500)
-    val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
-    val messageStreams = consumerConnector.createMessageStreams(Map(topic -> 1))
-
-    var threadList = List[Thread]()
-    val nMessages : AtomicInteger = new AtomicInteger(0)
-    for ((topic, streamList) <- messageStreams)
-      for (i <- 0 until streamList.length)
-        threadList ::= new Thread("kafka-zk-consumer-" + i) {
-          override def run() {
-
-            try {
-              for (message <- streamList(i)) {
-                nMessages.incrementAndGet
-              }
-            }
-            catch {
-              case te: ConsumerTimeoutException => info("Consumer thread timing out..")
-              case _: InterruptedException => 
-              case _: ClosedByInterruptException =>
-              case e => throw e
-            }
-          }
-
-        }
-
-
-    for (thread <- threadList)
-      thread.start
-
-    threadList(0).join(2000)
-
-    info("Asserting...")
-    assertEquals(numMessages, nMessages.get)
-    consumerConnector.shutdown
-  }
-
-  def testEarliestOffsetResetBackward() = {
+  def testResetToLatestWhenOffsetTooHigh() = 
+    assertEquals(0, resetAndConsume(NumMessages, "largest", LargeOffset))
+    
+  def testResetToLatestWhenOffsetTooLow() = 
+    assertEquals(0, resetAndConsume(NumMessages, "largest", SmallOffset))
+  
+  /* Produce the given number of messages, create a consumer with the given offset policy, 
+   * then reset the offset to the given value and consume until we get no new messages. 
+   * Returns the count of messages received.
+   */
+  def resetAndConsume(numMessages: Int, resetTo: String, offset: Long): Int = {
     val producer: Producer[String, Message] = TestUtils.createProducer(zkConnect)
 
-    for(i <- 0 until numMessages) {
+    for(i <- 0 until numMessages)
       producer.send(new ProducerData[String, Message](topic, topic, new Message("test".getBytes())))
-    }
 
     // update offset in zookeeper for consumer to jump "forward" in time
     val dirs = new ZKGroupTopicDirs(group, topic)
     var consumerProps = TestUtils.createConsumerProperties(zkConnect, group, testConsumer)
-    consumerProps.put("autooffset.reset", "smallest")
+    consumerProps.put("autooffset.reset", resetTo)
     consumerProps.put("consumer.timeout.ms", "2000")
+    consumerProps.put("max.fetch.wait.ms", "0")
     val consumerConfig = new ConsumerConfig(consumerProps)
 
-    TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0", smallOffset)
-    info("Updated consumer offset to " + smallOffset)
-
-
+    TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0", offset)
+    info("Updated consumer offset to " + offset)
+    
     val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
-    val messageStreams = consumerConnector.createMessageStreams(Map(topic -> 1))
+    val messageStream = consumerConnector.createMessageStreams(Map(topic -> 1))(topic).head
 
-    var threadList = List[Thread]()
-    val nMessages : AtomicInteger = new AtomicInteger(0)
-    for ((topic, streamList) <- messageStreams)
-      for (i <- 0 until streamList.length)
-        threadList ::= new Thread("kafka-zk-consumer-" + i) {
-          override def run() {
-
-            try {
-              for (message <- streamList(i)) {
-                nMessages.incrementAndGet
-              }
-            }
-            catch {
-              case _: InterruptedException =>
-              case _: ClosedByInterruptException =>
-              case e => throw e
-            }
-          }
-
-        }
-
-
-    for (thread <- threadList)
-      thread.start
-
-    threadList(0).join(2000)
-
-    assertEquals(numMessages, nMessages.get)
-    consumerConnector.shutdown
-  }
-
-  def testLatestOffsetResetForward() = {
-    val producer: Producer[String, Message] = TestUtils.createProducer(zkConnect)
-
-    for(i <- 0 until numMessages) {
-      producer.send(new ProducerData[String, Message](topic, topic, new Message("test".getBytes())))
+    var received = 0
+    val iter = messageStream.iterator
+    try {
+      for (i <- 0 until numMessages) {
+        iter.next // will throw a timeout exception if the message isn't there
+        received += 1
+      }
+    } catch {
+      case e: ConsumerTimeoutException => 
+        info("consumer timed out after receiving " + received + " messages.")
     }
-
-    // update offset in zookeeper for consumer to jump "forward" in time
-    val dirs = new ZKGroupTopicDirs(group, topic)
-    var consumerProps = TestUtils.createConsumerProperties(zkConnect, group, testConsumer)
-    consumerProps.put("autooffset.reset", "largest")
-    consumerProps.put("consumer.timeout.ms", "2000")
-    val consumerConfig = new ConsumerConfig(consumerProps)
-
-    TestUtils.updateConsumerOffset(consumerConfig, dirs.consumerOffsetDir + "/" + "0", largeOffset)
-    info("Updated consumer offset to " + largeOffset)
-
-
-    val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
-    val messageStreams = consumerConnector.createMessageStreams(Map(topic -> 1))
-
-    var threadList = List[Thread]()
-    val nMessages : AtomicInteger = new AtomicInteger(0)
-    for ((topic, streamList) <- messageStreams)
-      for (i <- 0 until streamList.length)
-        threadList ::= new Thread("kafka-zk-consumer-" + i) {
-          override def run() {
-
-            try {
-              for (message <- streamList(i)) {
-                nMessages.incrementAndGet
-              }
-            }
-            catch {
-              case _: InterruptedException =>
-              case _: ClosedByInterruptException =>
-              case e => throw e
-            }
-          }
-
-        }
-
-
-    for (thread <- threadList)
-      thread.start
-
-    threadList(0).join(2000)
-
-    info("Asserting...")
-
-    assertEquals(0, nMessages.get)
     consumerConnector.shutdown
+    received
   }
-
   
 }

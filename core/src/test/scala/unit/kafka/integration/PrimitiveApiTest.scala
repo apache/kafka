@@ -82,8 +82,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness {
       new OffsetDetail("topic1", Array(3, 4, 5), Array(0L, 0L, 0L), Array(1000, 1000, 1000)),
       new OffsetDetail("topic2", Array(3, 4, 5), Array(0L, 0L, 0L), Array(1000, 1000, 1000))
     )
-    val request = new FetchRequest( versionId = FetchRequest.CurrentVersion, correlationId = 0, clientId = "",
-                                    replicaId = -1, maxWait = -1, minBytes = -1, offsetInfo = offsets)
+    val request = new FetchRequest(offsetInfo = offsets)
     try {
       consumer.fetch(request)
       fail("FetchRequest should throw FetchRequestFormatException due to duplicate topics")
@@ -172,7 +171,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness {
     {
       // send some invalid offsets
       val builder = new FetchRequestBuilder()
-      for( (topic, partition) <- topics)
+      for((topic, partition) <- topics)
         builder.addFetch(topic, partition, -1, 10000)
 
       try {
@@ -189,7 +188,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness {
     {
       // send some invalid partitions
       val builder = new FetchRequestBuilder()
-      for( (topic, partition) <- topics)
+      for((topic, partition) <- topics)
         builder.addFetch(topic, -1, 0, 10000)
 
       try {

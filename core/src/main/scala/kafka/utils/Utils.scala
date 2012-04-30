@@ -97,6 +97,11 @@ object Utils extends Logging {
   def newThread(name: String, runnable: Runnable, daemon: Boolean): Thread = {
     val thread = new Thread(runnable, name) 
     thread.setDaemon(daemon)
+    thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+      def uncaughtException(t: Thread, e: Throwable) {
+        error("Uncaught exception in thread '" + t.getName + "':", e)
+      } 
+    })
     thread
   }
    

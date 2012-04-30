@@ -65,7 +65,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
     val partitionedData = partitionAndCollate(messages)
     val failedProduceRequests = new ListBuffer[ProducerData[K,Message]]
     try {
-      for ( (brokerid, eventsPerBrokerMap) <- partitionedData ) {
+      for ((brokerid, eventsPerBrokerMap) <- partitionedData) {
         if (logger.isTraceEnabled)
           eventsPerBrokerMap.foreach(partitionAndEvent => trace("Handling event for Topic: %s, Broker: %d, Partitions: %s"
             .format(partitionAndEvent._1, brokerid, partitionAndEvent._2)))
@@ -163,7 +163,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
         throw new NoLeaderForPartitionException("No leader for some partition(s) on broker %d".format(brokerId))
       if(messagesPerTopic.size > 0) {
         val topics = new HashMap[String, ListBuffer[PartitionData]]()
-        for( ((topicName, partitionId), messagesSet) <- messagesPerTopic ) {
+        for(((topicName, partitionId), messagesSet) <- messagesPerTopic) {
           topics.get(topicName) match {
             case Some(x) => trace("found " + topicName)
             case None => topics += topicName -> new ListBuffer[PartitionData]() //create a new listbuffer for this topic

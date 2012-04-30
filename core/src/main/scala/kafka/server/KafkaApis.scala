@@ -19,55 +19,80 @@ package kafka.server
 
 import java.io.IOException
 import java.lang.IllegalStateException
+import java.util.concurrent.atomic._
 import kafka.admin.{CreateTopicCommand, AdminUtils}
 import kafka.api._
 import kafka.log._
 import kafka.message._
 import kafka.network._
 import org.apache.log4j.Logger
-import scala.collection.mutable.ListBuffer
+import scala.collection._
 import kafka.utils.{SystemTime, Logging}
-import kafka.common.{FetchRequestFormatException, ErrorMapping}
+import kafka.common._
+import scala.math._
 
 /**
  * Logic to handle the various Kafka requests
  */
-class KafkaApis(val logManager: LogManager, val kafkaZookeeper: KafkaZooKeeper) extends Logging {
+class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager, val kafkaZookeeper: KafkaZooKeeper) extends Logging {
   
+  private val fetchRequestPurgatory = new FetchRequestPurgatory(requestChannel)
   private val requestLogger = Logger.getLogger("kafka.request.logger")
 
-  def handle(receive: Receive): Option[Send] = { 
-    val apiId = receive.buffer.getShort() 
+  /**
+   * Top-level method that handles all requests and multiplexes to the right api
+   */
+  def handle(request: RequestChannel.Request) { 
+    val apiId = request.request.buffer.getShort() 
     apiId match {
-      case RequestKeys.Produce => handleProducerRequest(receive)
-      case RequestKeys.Fetch => handleFetchRequest(receive)
-      case RequestKeys.Offsets => handleOffsetRequest(receive)
-      case RequestKeys.TopicMetadata => handleTopicMetadataRequest(receive)
+      case RequestKeys.Produce => handleProducerRequest(request)
+      case RequestKeys.Fetch => handleFetchRequest(request)
+      case RequestKeys.Offsets => handleOffsetRequest(request)
+      case RequestKeys.TopicMetadata => handleTopicMetadataRequest(request)
       case _ => throw new IllegalStateException("No mapping found for handler id " + apiId)
     }
   }
 
-  def handleProducerRequest(receive: Receive): Option[Send] = {
+  /**
+   * Handle a produce request
+   */
+  def handleProducerRequest(request: RequestChannel.Request) {
+    val produceRequest = ProducerRequest.readFrom(request.request.buffer)
     val sTime = SystemTime.milliseconds
-    val request = ProducerRequest.readFrom(receive.buffer)
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Producer request " + request.toString)
 
-    val response = handleProducerRequest(request)
+    val response = produce(produceRequest)
     debug("kafka produce time " + (SystemTime.milliseconds - sTime) + " ms")
-    Some(new ProducerResponseSend(response))
+    requestChannel.sendResponse(new RequestChannel.Response(request, new ProducerResponseSend(response), -1))
+    
+    // Now check any outstanding fetches this produce just unblocked
+    var satisfied = new mutable.ArrayBuffer[DelayedFetch]
+    for(topicData <- produceRequest.data) {
+      for(partition <- topicData.partitionData)
+        satisfied ++= fetchRequestPurgatory.update((topicData.topic, partition.partition), topicData)
+    }
+    // send any newly unblocked responses
+    for(fetchReq <- satisfied) {
+       val topicData = readMessageSets(fetchReq.fetch.offsetInfo)
+       val response = new FetchResponse(FetchRequest.CurrentVersion, fetchReq.fetch.correlationId, topicData)
+       requestChannel.sendResponse(new RequestChannel.Response(fetchReq.request, new FetchResponseSend(response, ErrorMapping.NoError), -1))
+    }
   }
 
-  private def handleProducerRequest(request: ProducerRequest): ProducerResponse = {
-    val requestSize = request.getNumTopicPartitions
+  /**
+   * Helper method for handling a parsed producer request
+   */
+  private def produce(request: ProducerRequest): ProducerResponse = {
+    val requestSize = request.topicPartitionCount
     val errors = new Array[Short](requestSize)
     val offsets = new Array[Long](requestSize)
 
     var msgIndex = -1
-    for( topicData <- request.data ) {
-      for( partitionData <- topicData.partitionData ) {
+    for(topicData <- request.data) {
+      for(partitionData <- topicData.partitionData) {
         msgIndex += 1
-        val partition = partitionData.getTranslatedPartition(topicData.topic, logManager.chooseRandomPartition)
+        val partition = partitionData.translatePartition(topicData.topic, logManager.chooseRandomPartition)
         try {
           // TODO: need to handle ack's here!  Will probably move to another method.
           kafkaZookeeper.ensurePartitionOnThisBroker(topicData.topic, partition)
@@ -82,7 +107,7 @@ class KafkaApis(val logManager: LogManager, val kafkaZookeeper: KafkaZooKeeper) 
             e match {
               case _: IOException =>
                 fatal("Halting due to unrecoverable I/O error while handling producer request: " + e.getMessage, e)
-                Runtime.getRuntime.halt(1)
+                System.exit(1)
               case _ =>
                 errors(msgIndex) = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]).toShort
                 offsets(msgIndex) = -1
@@ -93,8 +118,11 @@ class KafkaApis(val logManager: LogManager, val kafkaZookeeper: KafkaZooKeeper) 
     new ProducerResponse(ProducerResponse.CurrentVersion, request.correlationId, errors, offsets)
   }
 
-  def handleFetchRequest(request: Receive): Option[Send] = {
-    val fetchRequest = FetchRequest.readFrom(request.buffer)
+  /**
+   * Handle a fetch request
+   */
+  def handleFetchRequest(request: RequestChannel.Request) {
+    val fetchRequest = FetchRequest.readFrom(request.request.buffer)
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Fetch request " + fetchRequest.toString)
 
@@ -104,13 +132,54 @@ class KafkaApis(val logManager: LogManager, val kafkaZookeeper: KafkaZooKeeper) 
     } catch {
       case e:FetchRequestFormatException =>
         val response = new FetchResponse(FetchResponse.CurrentVersion, fetchRequest.correlationId, Array.empty)
-        return Some(new FetchResponseSend(response, ErrorMapping.InvalidFetchRequestFormatCode))
+        val channelResponse = new RequestChannel.Response(request, new FetchResponseSend(response, ErrorMapping.InvalidFetchRequestFormatCode), -1)
+        requestChannel.sendResponse(channelResponse)
     }
-
-    val fetchedData = new ListBuffer[TopicData]()
-
+    
+    // if there are enough bytes available right now we can answer the request, otherwise we have to punt
+    val availableBytes = availableFetchBytes(fetchRequest)
+    if(fetchRequest.maxWait <= 0 || availableBytes >= fetchRequest.minBytes) {
+      val topicData = readMessageSets(fetchRequest.offsetInfo)
+      val response = new FetchResponse(FetchRequest.CurrentVersion, fetchRequest.correlationId, topicData)
+      requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(response, ErrorMapping.NoError), -1))
+    } else {
+      // create a list of (topic, partition) pairs to use as keys for this delayed request
+      val keys: Seq[Any] = fetchRequest.offsetInfo.flatMap(o => o.partitions.map((o.topic, _)))
+      val delayedFetch = new DelayedFetch(keys, request, fetchRequest, fetchRequest.maxWait, availableBytes)
+      fetchRequestPurgatory.watch(delayedFetch)
+    }
+  }
+    
+  /**
+   * Calculate the number of available bytes for the given fetch request
+   */
+  private def availableFetchBytes(fetchRequest: FetchRequest): Long = {
+    var totalBytes = 0L
     for(offsetDetail <- fetchRequest.offsetInfo) {
-      val info = new ListBuffer[PartitionData]()
+      for(i <- 0 until offsetDetail.partitions.size) {
+        try {
+          val maybeLog = logManager.getLog(offsetDetail.topic, offsetDetail.partitions(i)) 
+          val available = maybeLog match {
+            case Some(log) => max(0, log.getHighwaterMark - offsetDetail.offsets(i))
+            case None => 0
+          }
+    	  totalBytes += math.min(offsetDetail.fetchSizes(i), available)
+        } catch {
+          case e: InvalidPartitionException => 
+            info("Invalid partition " + offsetDetail.partitions(i) + "in fetch request from client '" + fetchRequest.clientId + "'")
+        }
+      }
+    }
+    totalBytes
+  }
+  
+  /**
+   * Read from all the offset details given and produce an array of topic datas
+   */
+  private def readMessageSets(offsets: Seq[OffsetDetail]): Array[TopicData] = {
+    val fetchedData = new mutable.ArrayBuffer[TopicData]()
+    for(offsetDetail <- offsets) {
+      val info = new mutable.ArrayBuffer[PartitionData]()
       val topic = offsetDetail.topic
       val (partitions, offsets, fetchSizes) = (offsetDetail.partitions, offsetDetail.offsets, offsetDetail.fetchSizes)
       for( (partition, offset, fetchSize) <- (partitions, offsets, fetchSizes).zipped.map((_,_,_)) ) {
@@ -122,10 +191,12 @@ class KafkaApis(val logManager: LogManager, val kafkaZookeeper: KafkaZooKeeper) 
       }
       fetchedData.append(new TopicData(topic, info.toArray))
     }
-    val response = new FetchResponse(FetchRequest.CurrentVersion, fetchRequest.correlationId, fetchedData.toArray )
-    Some(new FetchResponseSend(response, ErrorMapping.NoError))
+    fetchedData.toArray
   }
-
+  
+  /**
+   * Read from a single topic/partition at the given offset
+   */
   private def readMessageSet(topic: String, partition: Int, offset: Long, maxSize: Int): Either[Int, MessageSet] = {
     var response: Either[Int, MessageSet] = null
     try {
@@ -140,22 +211,28 @@ class KafkaApis(val logManager: LogManager, val kafkaZookeeper: KafkaZooKeeper) 
     response
   }
 
-  def handleOffsetRequest(request: Receive): Option[Send] = {
-    val offsetRequest = OffsetRequest.readFrom(request.buffer)
+  /**
+   * Service the offset request API 
+   */
+  def handleOffsetRequest(request: RequestChannel.Request) {
+    val offsetRequest = OffsetRequest.readFrom(request.request.buffer)
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Offset request " + offsetRequest.toString)
     val offsets = logManager.getOffsets(offsetRequest)
     val response = new OffsetArraySend(offsets)
-    Some(response)
+    requestChannel.sendResponse(new RequestChannel.Response(request, response, -1))
   }
 
-  def handleTopicMetadataRequest(request: Receive): Option[Send] = {
-    val metadataRequest = TopicMetadataRequest.readFrom(request.buffer)
+  /**
+   * Service the topic metadata request API
+   */
+  def handleTopicMetadataRequest(request: RequestChannel.Request) {
+    val metadataRequest = TopicMetadataRequest.readFrom(request.request.buffer)
 
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Topic metadata request " + metadataRequest.toString())
 
-    val topicsMetadata = new ListBuffer[TopicMetadata]()
+    val topicsMetadata = new mutable.ArrayBuffer[TopicMetadata]()
     val config = logManager.getServerConfig
     val zkClient = kafkaZookeeper.getZookeeperClient
     val topicMetadataList = AdminUtils.getTopicMetaDataFromZK(metadataRequest.topics, zkClient)
@@ -181,6 +258,37 @@ class KafkaApis(val logManager: LogManager, val kafkaZookeeper: KafkaZooKeeper) 
       }
     }
     info("Sending response for topic metadata request")
-    Some(new TopicMetadataSend(topicsMetadata))
+    requestChannel.sendResponse(new RequestChannel.Response(request, new TopicMetadataSend(topicsMetadata), -1))
+  }
+  
+  /**
+   * A delayed fetch request
+   */
+  class DelayedFetch(keys: Seq[Any], request: RequestChannel.Request, val fetch: FetchRequest, delayMs: Long, initialSize: Long) extends DelayedRequest(keys, request, delayMs) {
+    val bytesAccumulated = new AtomicLong(initialSize)
+   }
+
+  /**
+   * A holding pen for fetch requests waiting to be satisfied
+   */
+  class FetchRequestPurgatory(requestChannel: RequestChannel) extends RequestPurgatory[DelayedFetch, TopicData] {
+    
+    /**
+     * A fetch request is satisfied when it has accumulated enough data to meet the min_bytes field
+     */
+    def checkSatisfied(topicData: TopicData, delayedFetch: DelayedFetch): Boolean = {
+      val messageDataSize = topicData.partitionData.map(_.messages.sizeInBytes).sum
+      val accumulatedSize = delayedFetch.bytesAccumulated.addAndGet(messageDataSize)
+      accumulatedSize >= delayedFetch.fetch.minBytes
+    }
+    
+    /**
+     * When a request expires just answer it with whatever data is present
+     */
+    def expire(delayed: DelayedFetch) {
+      val topicData = readMessageSets(delayed.fetch.offsetInfo)
+      val response = new FetchResponse(FetchRequest.CurrentVersion, delayed.fetch.correlationId, topicData)
+      requestChannel.sendResponse(new RequestChannel.Response(delayed.request, new FetchResponseSend(response, ErrorMapping.NoError), -1))
+    }
   }
 }

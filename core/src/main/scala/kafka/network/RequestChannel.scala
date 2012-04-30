@@ -22,7 +22,10 @@ import java.util.concurrent._
 object RequestChannel { 
   val AllDone = new Request(1, 2, null, 0)
   case class Request(processor: Int, requestKey: Any, request: Receive, start: Long)
-  case class Response(processor: Int, requestKey: Any, response: Send, start: Long, elapsed: Long)
+  case class Response(processor: Int, requestKey: Any, response: Send, start: Long, elapsed: Long) {
+    def this(request: Request, send: Send, ellapsed: Long) = 
+      this(request.processor, request.requestKey, send, request.start, ellapsed)
+  }
 }
 
 class RequestChannel(val numProcessors: Int, val queueSize: Int) { 
