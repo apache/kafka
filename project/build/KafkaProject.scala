@@ -56,9 +56,28 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
         <exclude module="log4j"/>
         <exclude module="jline"/>
       </dependency>
-      <dependency org="com.github.sgroschupf" name="zkclient" rev="0.1">
-      </dependency>
     </dependencies>
+
+    def zkClientDep =
+      <dependency>
+       <groupId>zkclient</groupId>
+       <artifactId>zkclient</artifactId>
+       <version>20120522</version>
+       <scope>compile</scope>
+       </dependency>
+
+    object ZkClientDepAdder extends RuleTransformer(new RewriteRule() {
+      override def transform(node: Node): Seq[Node] = node match {
+        case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
+          Elem(prefix, "dependencies", attribs, scope, deps ++ zkClientDep :_*)
+        }
+        case other => other
+      }
+    })
+
+    override def pomPostProcess(pom: Node): Node = {
+      ZkClientDepAdder(pom)
+    }
 
     override def artifactID = "kafka"
     override def filterScalaJars = false
