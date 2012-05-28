@@ -22,13 +22,13 @@ import java.lang.IllegalStateException
 import java.util.concurrent.atomic._
 import kafka.admin.{CreateTopicCommand, AdminUtils}
 import kafka.api._
+import kafka.common._
 import kafka.log._
 import kafka.message._
 import kafka.network._
+import kafka.utils.{SystemTime, Logging}
 import org.apache.log4j.Logger
 import scala.collection._
-import kafka.utils.{SystemTime, Logging}
-import kafka.common._
 import scala.math._
 
 /**
@@ -92,18 +92,17 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager, 
     for(topicData <- request.data) {
       for(partitionData <- topicData.partitionData) {
         msgIndex += 1
-        val partition = partitionData.translatePartition(topicData.topic, logManager.chooseRandomPartition)
         try {
           // TODO: need to handle ack's here!  Will probably move to another method.
-          kafkaZookeeper.ensurePartitionOnThisBroker(topicData.topic, partition)
-          val log = logManager.getOrCreateLog(topicData.topic, partition)
+          kafkaZookeeper.ensurePartitionLeaderOnThisBroker(topicData.topic, partitionData.partition)
+          val log = logManager.getOrCreateLog(topicData.topic, partitionData.partition)
           log.append(partitionData.messages)
           offsets(msgIndex) = log.nextAppendOffset
           errors(msgIndex) = ErrorMapping.NoError.toShort
           trace(partitionData.messages.sizeInBytes + " bytes written to logs.")
         } catch {
           case e =>
-            error("Error processing ProducerRequest on " + topicData.topic + ":" + partition, e)
+            error("Error processing ProducerRequest on " + topicData.topic + ":" + partitionData.partition, e)
             e match {
               case _: IOException =>
                 fatal("Halting due to unrecoverable I/O error while handling producer request: " + e.getMessage, e)

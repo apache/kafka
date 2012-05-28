@@ -125,9 +125,10 @@ private[kafka] class LogManager(val config: KafkaConfig,
     if (topic.length <= 0)
       throw new InvalidTopicException("topic name can't be empty")
     if (partition < 0 || partition >= topicPartitionsMap.getOrElse(topic, numPartitions)) {
-      warn("Wrong partition " + partition + " valid partitions (0," +
-              (topicPartitionsMap.getOrElse(topic, numPartitions) - 1) + ")")
-      throw new InvalidPartitionException("wrong partition " + partition)
+      val error = "Wrong partition %d, valid partitions (0, %d)."
+        .format(partition, (topicPartitionsMap.getOrElse(topic, numPartitions) - 1))
+      warn(error)
+      throw new InvalidPartitionException(error)
     }
     logs.get(topic)
   }

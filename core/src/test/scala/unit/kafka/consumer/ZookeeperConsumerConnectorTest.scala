@@ -90,6 +90,10 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
 
     zkConsumerConnector0.shutdown
 
+    // wait to make sure the topic and partition have a leader for the successful case
+    waitUntilLeaderIsElected(zkClient, topic, 0, 500)
+    waitUntilLeaderIsElected(zkClient, topic, 1, 500)
+
     // send some messages to each broker
     val sentMessages1_1 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages)
     val sentMessages1_2 = sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages)
@@ -100,9 +104,6 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
       TestUtils.createConsumerProperties(zkConnect, group, consumer1))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Predef.Map(topic -> 1))
-
-    waitUntilLeaderIsElected(zkClient, topic, 0, 500)
-    waitUntilLeaderIsElected(zkClient, topic, 1, 500)
 
     val receivedMessages1 = getMessages(nMessages*2, topicMessageStreams1)
     assertEquals(sentMessages1.size, receivedMessages1.size)

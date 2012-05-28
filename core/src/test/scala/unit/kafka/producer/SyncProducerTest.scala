@@ -17,6 +17,7 @@
 
 package kafka.producer
 
+import java.net.SocketTimeoutException
 import java.util.Properties
 import junit.framework.Assert
 import kafka.admin.CreateTopicCommand
@@ -27,7 +28,6 @@ import kafka.server.KafkaConfig
 import kafka.utils.{TestZKUtils, SystemTime, TestUtils}
 import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
-import java.net.SocketTimeoutException
 
 class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   private var messageBytes =  new Array[Byte](2);
@@ -92,7 +92,6 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
 
   @Test
   def testProduceCorrectlyReceivesResponse() {
-    // TODO: this will need to change with kafka-44
     val server = servers.head
     val props = new Properties()
     props.put("host", "localhost")
@@ -106,21 +105,25 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
 
     // #1 - test that we get an error when partition does not belong to broker in response
-    val request = TestUtils.produceRequestWithAcks(Array("topic1", "topic2", "topic3"), Array(0), messages)
+    val request = TestUtils.produceRequestWithAcks(Array("topic1", "topic2", "topic3"), Array(0), messages, 1)
     val response = producer.send(request)
 
+    Assert.assertNotNull(response)
     Assert.assertEquals(request.correlationId, response.correlationId)
     Assert.assertEquals(response.errors.length, response.offsets.length)
     Assert.assertEquals(3, response.errors.length)
-    response.errors.foreach(Assert.assertEquals(ErrorMapping.WrongPartitionCode.toShort, _))
+    response.errors.foreach(Assert.assertEquals(ErrorMapping.NoLeaderForPartitionCode.toShort, _))
     response.offsets.foreach(Assert.assertEquals(-1L, _))
 
-    // #2 - test that we get correct offsets when partition is owner by broker
+    // #2 - test that we get correct offsets when partition is owned by broker
     CreateTopicCommand.createTopic(zkClient, "topic1", 1, 1)
+    TestUtils.waitUntilLeaderIsElected(zkClient, "topic1", 0, 500)
     CreateTopicCommand.createTopic(zkClient, "topic3", 1, 1)
+    TestUtils.waitUntilLeaderIsElected(zkClient, "topic3", 0, 500)
 
     Thread.sleep(500)
     val response2 = producer.send(request)
+    Assert.assertNotNull(response2)
     Assert.assertEquals(request.correlationId, response2.correlationId)
     Assert.assertEquals(response2.errors.length, response2.offsets.length)
     Assert.assertEquals(3, response2.errors.length)
@@ -132,7 +135,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     Assert.assertEquals(messages.sizeInBytes, response2.offsets(2))
 
     // the middle message should have been rejected because broker doesn't lead partition
-    Assert.assertEquals(ErrorMapping.WrongPartitionCode.toShort, response2.errors(1))
+    Assert.assertEquals(ErrorMapping.NoLeaderForPartitionCode.toShort, response2.errors(1))
     Assert.assertEquals(-1, response2.offsets(1))
   }
 

@@ -34,6 +34,8 @@ object ErrorMapping {
   val WrongPartitionCode = 3
   val InvalidFetchSizeCode = 4
   val InvalidFetchRequestFormatCode = 5
+  val NoLeaderForPartitionCode = 6
+  val NotLeaderForPartitionCode = 7
 
   private val exceptionToCode = 
     Map[Class[Throwable], Int](
@@ -41,7 +43,9 @@ object ErrorMapping {
       classOf[InvalidMessageException].asInstanceOf[Class[Throwable]] -> InvalidMessageCode,
       classOf[InvalidPartitionException].asInstanceOf[Class[Throwable]] -> WrongPartitionCode,
       classOf[InvalidMessageSizeException].asInstanceOf[Class[Throwable]] -> InvalidFetchSizeCode,
-      classOf[FetchRequestFormatException].asInstanceOf[Class[Throwable]] -> InvalidFetchRequestFormatCode
+      classOf[FetchRequestFormatException].asInstanceOf[Class[Throwable]] -> InvalidFetchRequestFormatCode,
+      classOf[NoLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NoLeaderForPartitionCode,
+      classOf[NotLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NotLeaderForPartitionCode
     ).withDefaultValue(UnknownCode)
   
   /* invert the mapping */

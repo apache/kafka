@@ -23,7 +23,6 @@ import kafka.network._
 import kafka.utils._
 
 object ProducerRequest {
-  val RandomPartition = -1
   val CurrentVersion: Short = 0
 
   def readFrom(buffer: ByteBuffer): ProducerRequest = {
@@ -84,7 +83,7 @@ case class ProducerRequest( versionId: Short,
     }
   }
 
-  def sizeInBytes(): Int = {
+  def sizeInBytes: Int = {
     var size = 0 
     //size, request_type_id, version_id, correlation_id, client_id, required_acks, ack_timeout, data.size
     size = 2 + 4 + 2 + clientId.length + 2 + 4 + 4;
@@ -105,12 +104,11 @@ case class ProducerRequest( versionId: Short,
           clientId == that.clientId &&
           requiredAcks == that.requiredAcks &&
           ackTimeout == that.ackTimeout &&
-          data.toSeq == that.data.toSeq)
+          data.toSeq == that.data.toSeq )
       case _ => false
     }
   }
 
   def topicPartitionCount = data.foldLeft(0)(_ + _.partitionData.length)
 
-  def expectResponse = requiredAcks > 0
 }

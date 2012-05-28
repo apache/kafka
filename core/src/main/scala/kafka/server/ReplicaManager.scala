@@ -23,7 +23,7 @@ import collection.mutable
 
 class ReplicaManager(config: KafkaConfig) extends Logging {
 
-  private var replicas: mutable.Map[(String, Int), Replica] = new mutable.HashMap[(String, Int), Replica]()
+  private val replicas = new mutable.HashMap[(String, Int), Replica]()
 
   def addLocalReplica(topic: String, partitionId: Int, log: Log): Replica = {
     val replica = replicas.get((topic, partitionId))
@@ -37,7 +37,7 @@ class ReplicaManager(config: KafkaConfig) extends Logging {
       case None =>
         val partition = new Partition(topic, partitionId)
         val replica = new Replica(config.brokerId, partition, topic, Some(log), log.getHighwaterMark, log.maxSize, true)
-        replicas += (topic, partitionId) -> replica
+        replicas.put((topic, partitionId), replica)
         info("Added local replica for topic %s partition %s on broker %d"
           .format(replica.topic, replica.partition.partId, replica.brokerId))
     }
@@ -51,7 +51,7 @@ class ReplicaManager(config: KafkaConfig) extends Logging {
       case None =>
         val partition = new Partition(topic, partitionId)
         val replica = new Replica(config.brokerId, partition, topic, None, -1, -1, false)
-        replicas += (topic, partitionId) -> replica
+        replicas.put((topic, partitionId), replica)
         info("Added remote replica for topic %s partition %s on broker %d"
           .format(replica.topic, replica.partition.partId, replica.brokerId))
     }

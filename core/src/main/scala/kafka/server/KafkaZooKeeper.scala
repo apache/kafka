@@ -17,14 +17,14 @@
 
 package kafka.server
 
+import java.lang.{Thread, IllegalStateException}
+import java.net.InetAddress
+import kafka.admin.AdminUtils
+import kafka.cluster.Replica
+import kafka.common.{NoLeaderForPartitionException, NotLeaderForPartitionException, KafkaZookeeperClient}
 import kafka.utils._
 import org.apache.zookeeper.Watcher.Event.KeeperState
-import java.net.InetAddress
-import kafka.common.{InvalidPartitionException, KafkaZookeeperClient}
-import kafka.cluster.Replica
 import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener, IZkStateListener, ZkClient}
-import kafka.admin.AdminUtils
-import java.lang.{Thread, IllegalStateException}
 
 /**
  * Handles the server's interaction with zookeeper. The server needs to register the following paths:
@@ -108,10 +108,15 @@ class KafkaZooKeeper(config: KafkaConfig,
     }
   }
 
-  def ensurePartitionOnThisBroker(topic: String, partition: Int) {
-    if(!ZkUtils.isPartitionOnBroker(zkClient, topic, partition, config.brokerId))
-      throw new InvalidPartitionException("Broker %d does not host partition %d for topic %s".
-        format(config.brokerId, partition, topic))
+  def ensurePartitionLeaderOnThisBroker(topic: String, partition: Int) {
+    ZkUtils.getLeaderForPartition(zkClient, topic, partition) match {
+      case Some(leader) =>
+        if(leader != config.brokerId)
+          throw new NotLeaderForPartitionException("Broker %d is not leader for partition %d for topic %s"
+            .format(config.brokerId, partition, topic))
+      case None =>
+        throw new NoLeaderForPartitionException("There is no leader for topic %s partition %d".format(topic, partition))
+    }
   }
 
   def getZookeeperClient = zkClient

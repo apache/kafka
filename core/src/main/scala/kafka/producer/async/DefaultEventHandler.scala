@@ -19,13 +19,13 @@ package kafka.producer.async
 
 import kafka.api.{ProducerRequest, TopicData, PartitionData}
 import kafka.cluster.Partition
+import kafka.common._
 import kafka.message.{Message, NoCompressionCodec, ByteBufferMessageSet}
 import kafka.producer._
 import kafka.serializer.Encoder
+import kafka.utils.{Utils, Logging}
 import scala.collection.Map
 import scala.collection.mutable.{ListBuffer, HashMap}
-import kafka.utils.{Utils, Logging}
-import kafka.common.{FailedToSendMessageException, NoLeaderForPartitionException, InvalidPartitionException, NoBrokersForPartitionException}
 
 class DefaultEventHandler[K,V](config: ProducerConfig,                               // this api is for testing
                                private val partitioner: Partitioner[K],              // use the other constructor
@@ -71,8 +71,13 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
             .format(partitionAndEvent._1, brokerid, partitionAndEvent._2)))
         val messageSetPerBroker = groupMessagesToSet(eventsPerBrokerMap)
 
-        if((brokerid < 0) || (!send(brokerid, messageSetPerBroker)))
-          failedProduceRequests.appendAll(eventsPerBrokerMap.map(r => r._2).flatten)
+        val failedTopicPartitions = send(brokerid, messageSetPerBroker)
+        for( (topic, partition) <- failedTopicPartitions ) {
+          eventsPerBrokerMap.get((topic, partition)) match {
+            case Some(data) => failedProduceRequests.appendAll(data)
+            case None => // nothing
+          }
+        }
       }
     } catch {
       case t: Throwable => error("Failed to send messages")
@@ -156,31 +161,37 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
    *
    * @param brokerId the broker that will receive the request
    * @param messagesPerTopic the messages as a map from (topic, partition) -> messages
+   * @return the set (topic, partitions) messages which incurred an error sending or processing
    */
-  private def send(brokerId: Int, messagesPerTopic: Map[(String, Int), ByteBufferMessageSet]): Boolean = {
-    try {
-      if(brokerId < 0)
-        throw new NoLeaderForPartitionException("No leader for some partition(s) on broker %d".format(brokerId))
-      if(messagesPerTopic.size > 0) {
-        val topics = new HashMap[String, ListBuffer[PartitionData]]()
-        for(((topicName, partitionId), messagesSet) <- messagesPerTopic) {
-          topics.get(topicName) match {
-            case Some(x) => trace("found " + topicName)
-            case None => topics += topicName -> new ListBuffer[PartitionData]() //create a new listbuffer for this topic
-          }
-          topics(topicName).append(new PartitionData(partitionId, messagesSet))
-        }
-        val topicData = topics.map(kv => new TopicData(kv._1, kv._2.toArray))
-        val producerRequest = new ProducerRequest(config.correlationId, config.clientId, config.requiredAcks, config.ackTimeout, topicData.toArray)
+  private def send(brokerId: Int, messagesPerTopic: Map[(String, Int), ByteBufferMessageSet]): Seq[(String, Int)] = {
+    if(brokerId < 0) {
+      messagesPerTopic.keys.toSeq
+    } else if(messagesPerTopic.size > 0) {
+      val topics = new HashMap[String, ListBuffer[PartitionData]]()
+      for( ((topicName, partitionId), messagesSet) <- messagesPerTopic ) {
+        val partitionData = topics.getOrElseUpdate(topicName, new ListBuffer[PartitionData]())
+        partitionData.append(new PartitionData(partitionId, messagesSet))
+      }
+      val topicData = topics.map(kv => new TopicData(kv._1, kv._2.toArray)).toArray
+      val producerRequest = new ProducerRequest(config.correlationId, config.clientId, config.requiredAcks, config.ackTimeout, topicData)
+      try {
         val syncProducer = producerPool.getProducer(brokerId)
         val response = syncProducer.send(producerRequest)
-        // TODO: possibly send response to response callback handler
-        trace("kafka producer sent messages for topics %s to broker %d on %s:%d"
+        trace("producer sent messages for topics %s to broker %d on %s:%d"
           .format(messagesPerTopic, brokerId, syncProducer.config.host, syncProducer.config.port))
+        var msgIdx = -1
+        val errors = new ListBuffer[(String, Int)]
+        for( topic <- topicData; partition <- topic.partitionData ) {
+          msgIdx += 1
+          if(msgIdx > response.errors.size || response.errors(msgIdx) != ErrorMapping.NoError)
+            errors.append((topic.topic, partition.partition))
+        }
+        errors
+      } catch {
+        case e => messagesPerTopic.keys.toSeq
       }
-      true
-    }catch {
-      case t: Throwable => false
+    } else {
+      List.empty
     }
   }
 

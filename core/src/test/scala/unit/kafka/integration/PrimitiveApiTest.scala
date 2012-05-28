@@ -17,25 +17,28 @@
 
 package kafka.integration
 
+import java.io.File
 import java.nio.ByteBuffer
+import java.util.Properties
 import junit.framework.Assert._
+import kafka.admin.CreateTopicCommand
 import kafka.api.{OffsetDetail, FetchRequest, FetchRequestBuilder}
 import kafka.common.{FetchRequestFormatException, OffsetOutOfRangeException, InvalidPartitionException}
-import kafka.server.{KafkaRequestHandler, KafkaConfig}
-import org.apache.log4j.{Level, Logger}
-import org.scalatest.junit.JUnit3Suite
-import java.util.Properties
+import kafka.message.Message
 import kafka.producer.{ProducerData, Producer, ProducerConfig}
 import kafka.serializer.StringDecoder
-import kafka.message.Message
-import java.io.File
+import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import kafka.utils.{TestZKUtils, TestUtils}
+import org.apache.log4j.{Level, Logger}
+import org.I0Itec.zkclient.ZkClient
+import kafka.zk.ZooKeeperTestHarness
+import org.scalatest.junit.JUnit3Suite
 import scala.collection._
 
 /**
  * End to end tests of the primitive apis against a local server
  */
-class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness {
+class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with ZooKeeperTestHarness {
   
   val port = TestUtils.choosePort
   val props = TestUtils.createBrokerConfig(0, port)
@@ -142,6 +145,8 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness {
   }
 
   def testProduceAndMultiFetch() {
+    createSimpleTopicsAndAwaitLeader(zkClient, List("test1", "test2", "test3", "test4"), config.brokerId)
+
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
     {
@@ -207,6 +212,8 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness {
   }
 
   def testProduceAndMultiFetchWithCompression() {
+    createSimpleTopicsAndAwaitLeader(zkClient, List("test1", "test2", "test3", "test4"), config.brokerId)
+
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
     {
@@ -272,6 +279,8 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness {
   }
 
   def testMultiProduce() {
+    createSimpleTopicsAndAwaitLeader(zkClient, List("test1", "test2", "test3", "test4"), config.brokerId)
+
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
     val messages = new mutable.HashMap[String, Seq[Message]]
@@ -327,5 +336,16 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness {
     assertFalse(fetchResponse.messageSet(newTopic, 0).iterator.hasNext)
     val logFile = new File(config.logDir, newTopic + "-0")
     assertTrue(!logFile.exists)
+  }
+
+  /**
+   * For testing purposes, just create these topics each with one partition and one replica for
+   * which the provided broker should the leader for.  Create and wait for broker to lead.  Simple.
+   */
+  def createSimpleTopicsAndAwaitLeader(zkClient: ZkClient, topics: Seq[String], brokerId: Int) {
+    for( topic <- topics ) {
+      CreateTopicCommand.createTopic(zkClient, topic, 1, 1, brokerId.toString)
+      TestUtils.waitUntilLeaderIsElected(zkClient, topic, 0, 500)
+    }
   }
 }
