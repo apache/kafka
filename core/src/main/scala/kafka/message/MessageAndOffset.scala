@@ -13,11 +13,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 
 package kafka.message
 
-/**
- * Represents message and offset of the next message. This is used in the MessageSet to iterate over it
- */
-case class MessageAndOffset(val message: Message, val offset: Long)
+
+case class MessageAndOffset(message: Message, offset: Long)
+

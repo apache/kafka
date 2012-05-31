@@ -338,7 +338,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
         val iterator = messageStream.iterator
         for (i <- 0 until nMessages * 2) {
           assertTrue(iterator.hasNext())
-          val message = iterator.next()
+          val message = iterator.next().message
           receivedMessages ::= message
           debug("received message: " + message)
         }
@@ -426,14 +426,14 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     messages.sortWith((s,t) => s.checksum < t.checksum)
   }
 
-  def getMessages(nMessagesPerThread: Int, topicMessageStreams: Map[String,List[KafkaMessageStream[Message]]]): List[Message]= {
+  def getMessages(nMessagesPerThread: Int, topicMessageStreams: Map[String,List[KafkaStream[Message]]]): List[Message]= {
     var messages: List[Message] = Nil
     for ((topic, messageStreams) <- topicMessageStreams) {
       for (messageStream <- messageStreams) {
         val iterator = messageStream.iterator
         for (i <- 0 until nMessagesPerThread) {
           assertTrue(iterator.hasNext)
-          val message = iterator.next
+          val message = iterator.next.message
           messages ::= message
           debug("received message: " + Utils.toString(message.payload, "UTF-8"))
         }

@@ -24,8 +24,6 @@ import kafka.api.{FetchRequestBuilder, OffsetRequest}
 import kafka.consumer.SimpleConsumer
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-
-import org.apache.log4j.Logger
 import org.scalatest.junit.JUnit3Suite
 
 class BackwardsCompatibilityTest extends JUnit3Suite with KafkaServerTestHarness {
@@ -44,8 +42,6 @@ class BackwardsCompatibilityTest extends JUnit3Suite with KafkaServerTestHarness
   kafkaProps.put("zk.connect", zkConnect.toString)
   val configs = List(new KafkaConfig(kafkaProps))
   var simpleConsumer: SimpleConsumer = null
-
-  private val logger = Logger.getLogger(getClass())
 
   override def setUp() {
     super.setUp()

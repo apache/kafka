@@ -73,7 +73,9 @@ readonly num_iterations=5
 readonly zk_source_port=2181
 readonly zk_mirror_port=2182
 
-readonly topic_1=test01
+readonly topic_prefix=test
+readonly max_topic_id=2
+readonly unbalanced_start_id=2
 readonly consumer_grp=group1
 readonly source_console_consumer_grp=source
 readonly mirror_console_consumer_grp=mirror
@@ -96,10 +98,16 @@ readonly num_kafka_target_server=3
 readonly wait_time_after_killing_broker=0
 readonly wait_time_after_restarting_broker=5
 
-background_producer_pid=
+readonly producer_4_brokerinfo_str="broker.list=1:localhost:9091,2:localhost:9092,3:localhost:9093,4:localhost:9094"
+readonly producer_3_brokerinfo_str="broker.list=1:localhost:9091,2:localhost:9092,3:localhost:9093"
+
+background_producer_pid_1=
+background_producer_pid_2=
+
 no_bouncing=$#
 
 iter=1
+abort_test=false
 
 pid_zk_source=
 pid_zk_target=
@@ -177,16 +185,28 @@ get_random_range() {
 
 verify_consumer_rebalancing() {
 
-   info "Verifying consumer rebalancing operation"
+    info "Verifying consumer rebalancing operation"
 
-    $base_dir/bin/kafka-run-class.sh \
-        kafka.tools.VerifyConsumerRebalance \
-        --zk.connect=localhost:2181 \
-        --group $consumer_grp \
-     2>&1 >> $consumer_rebalancing_log
+    CONSUMER_REBALANCING_RESULT=`$base_dir/bin/kafka-run-class.sh \
+                                 kafka.tools.VerifyConsumerRebalance \
+                                 --zk.connect=localhost:2181 \
+                                 --group $consumer_grp`
+    echo "$CONSUMER_REBALANCING_RESULT" >> $consumer_rebalancing_log
+
+    REBALANCE_STATUS_LINE=`grep "Rebalance operation" $consumer_rebalancing_log | tail -1`
+    # info "REBALANCE_STATUS_LINE: $REBALANCE_STATUS_LINE"
+    REBALANCE_STATUS=`echo $REBALANCE_STATUS_LINE | grep "Rebalance operation successful" || echo -n "Rebalance operation failed"`
+    info "REBALANCE_STATUS: $REBALANCE_STATUS"
+
+    if [ "${REBALANCE_STATUS}_x" == "Rebalance operation failed_x" ]; then
+        info "setting abort_test to true due to Rebalance operation failed"
+        abort_test="true"
+    fi
 }
 
 wait_for_zero_consumer_lags() {
+
+    topic_id=$1
 
     # no of times to check for zero lagging
     no_of_zero_to_verify=3
@@ -196,7 +216,7 @@ wait_for_zero_consumer_lags() {
         TOTAL_LAG=0
         CONSUMER_LAGS=`$base_dir/bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker \
                        --group $consumer_grp --zkconnect localhost:$zk_source_port \
-                       --topic $topic_1 | grep "Consumer lag" | tr -d ' ' | cut -f2 -d '='`
+                       --topic ${topic_prefix}_${topic_id} | grep "Consumer lag" | tr -d ' ' | cut -f2 -d '='`
 
         for lag in $CONSUMER_LAGS;
         do
@@ -217,6 +237,8 @@ wait_for_zero_consumer_lags() {
 
 wait_for_zero_source_console_consumer_lags() {
 
+    topic_id=$1
+
     # no of times to check for zero lagging
     no_of_zero_to_verify=3
 
@@ -225,7 +247,7 @@ wait_for_zero_source_console_consumer_lags() {
         TOTAL_LAG=0
         CONSUMER_LAGS=`$base_dir/bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker \
                        --group $source_console_consumer_grp --zkconnect localhost:$zk_source_port \
-                       --topic $topic_1 | grep "Consumer lag" | tr -d ' ' | cut -f2 -d '='`
+                       --topic ${topic_prefix}_${topic_id} | grep "Consumer lag" | tr -d ' ' | cut -f2 -d '='`
 
         for lag in $CONSUMER_LAGS;
         do
@@ -246,6 +268,8 @@ wait_for_zero_source_console_consumer_lags() {
 
 wait_for_zero_mirror_console_consumer_lags() {
 
+    topic_id=$1
+
     # no of times to check for zero lagging
     no_of_zero_to_verify=3
 
@@ -254,7 +278,7 @@ wait_for_zero_mirror_console_consumer_lags() {
         TOTAL_LAG=0
         CONSUMER_LAGS=`$base_dir/bin/kafka-run-class.sh kafka.tools.ConsumerOffsetChecker \
                        --group $mirror_console_consumer_grp --zkconnect localhost:$zk_mirror_port \
-                       --topic $topic_1 | grep "Consumer lag" | tr -d ' ' | cut -f2 -d '='`
+                       --topic ${topic_prefix}_${topic_id} | grep "Consumer lag" | tr -d ' ' | cut -f2 -d '='`
 
         for lag in $CONSUMER_LAGS;
         do
@@ -321,6 +345,8 @@ cleanup() {
     rm -f $console_consumer_source_crc_sorted_log
     rm -f $console_consumer_mirror_crc_sorted_uniq_log
     rm -f $console_consumer_source_crc_sorted_uniq_log
+
+    rm -f $consumer_rebalancing_log
 }
 
 start_zk() {
@@ -380,40 +406,65 @@ start_embedded_consumer_server() {
 }
 
 start_console_consumer_for_source_producer() {
-    info "starting console consumers for source producer"
+
+    topic_id=$1
+
+    info "starting console consumers for source producer on topic id [$topic_id]"
 
     $base_dir/bin/kafka-run-class.sh kafka.consumer.ConsoleConsumer \
         --zookeeper localhost:$zk_source_port \
-        --topic $topic_1 \
+        --topic ${topic_prefix}_${topic_id} \
         --group $source_console_consumer_grp \
-        --from-beginning \
+        --from-beginning --consumer-timeout-ms 5000 \
         --formatter "kafka.consumer.ConsoleConsumer\$ChecksumMessageFormatter" \
-        2>&1 > ${console_consumer_source_log} &
-    console_consumer_source_pid=$!
-
-    info "  -> console consumer source pid: $console_consumer_source_pid"
+        --property topic=${topic_prefix}_${topic_id} \
+        2>&1 >> ${console_consumer_source_log} 
 }
 
 start_console_consumer_for_mirror_producer() {
-    info "starting console consumers for mirroring producer"
+
+    topic_id=$1
+
+    info "starting console consumers for mirroring producer on topic id [$topic_id]"
 
     $base_dir/bin/kafka-run-class.sh kafka.consumer.ConsoleConsumer \
         --zookeeper localhost:$zk_mirror_port \
-        --topic $topic_1 \
+        --topic ${topic_prefix}_${topic_id} \
         --group $mirror_console_consumer_grp \
-        --from-beginning \
+        --from-beginning --consumer-timeout-ms 5000 \
         --formatter "kafka.consumer.ConsoleConsumer\$ChecksumMessageFormatter" \
-        2>&1 > ${console_consumer_mirror_log} &
-    console_consumer_mirror_pid=$!
+        --property topic=${topic_prefix}_${topic_id} \
+        2>&1 >> ${console_consumer_mirror_log} 
+}
 
-    info "  -> console consumer mirror pid: $console_consumer_mirror_pid"
+consume_source_producer_messages() {
+    consumer_counter=1
+    while [ $consumer_counter -le $max_topic_id ]
+    do
+        start_console_consumer_for_source_producer $consumer_counter
+        consumer_counter=$(( $consumer_counter + 1 ))
+    done
+}
+
+consume_mirror_producer_messages() {
+    consumer_counter=1
+    while [ $consumer_counter -le $max_topic_id ]
+    do
+        start_console_consumer_for_mirror_producer $consumer_counter
+        consumer_counter=$(( $consumer_counter + 1 ))
+    done
 }
 
 shutdown_producer() {
     info "shutting down producer"
-    if [ "x${background_producer_pid}" != "x" ]; then
-        # kill_child_processes 0 ${background_producer_pid};
-        kill -TERM ${background_producer_pid} 2> /dev/null;
+    if [ "x${background_producer_pid_1}" != "x" ]; then
+        # kill_child_processes 0 ${background_producer_pid_1};
+        kill -TERM ${background_producer_pid_1} 2> /dev/null;
+    fi
+
+    if [ "x${background_producer_pid_2}" != "x" ]; then
+        # kill_child_processes 0 ${background_producer_pid_2};
+        kill -TERM ${background_producer_pid_2} 2> /dev/null;
     fi
 }
 
@@ -450,13 +501,15 @@ shutdown_servers() {
 }
 
 start_background_producer() {
+    bkrinfo_str=$1
+    start_topic_id=$2
+    end_topic_id=$3
 
     batch_no=0
-    curr_iter=0
+    topic_id=${start_topic_id}
 
-    while [ $num_iterations -gt $curr_iter ]
+    while [ 'x' == 'x' ]
     do
-        topic=$1
         sleeptime=
 
         get_random_range $sleep_min $sleep_max
@@ -464,18 +517,23 @@ start_background_producer() {
 
         batch_no=$(($batch_no + 1))
 
+        if [ $topic_id -gt $end_topic_id ]; then
+            topic_id=${start_topic_id}
+        fi
+
         $base_dir/bin/kafka-run-class.sh \
             kafka.perf.ProducerPerformance \
-            --brokerinfo zk.connect=localhost:2181 \
-            --topic $topic \
+            --brokerinfo $bkrinfo_str \
+            --topic ${topic_prefix}_${topic_id} \
             --messages $num_msg_per_batch \
             --message-size $message_size \
             --batch-size 50 \
             --vary-message-size \
             --threads 1 \
-            --reporting-interval $num_msg_per_batch \
-            --async \
+            --reporting-interval $num_msg_per_batch --async \
             2>&1 >> $base_dir/producer_performance.log    # appending all producers' msgs
+
+        topic_id=$(( $topic_id + 1 ))
 
         sleep $sleeptime
     done
@@ -485,9 +543,9 @@ cmp_checksum() {
 
     cmp_result=0
 
-    grep ^checksum $console_consumer_source_log | tr -d ' ' | cut -f2 -d ':' > $console_consumer_source_crc_log
-    grep ^checksum $console_consumer_mirror_log | tr -d ' ' | cut -f2 -d ':' > $console_consumer_mirror_crc_log
-    grep ^checksum $producer_performance_log | tr -d ' ' | cut -f2 -d ':' > $producer_performance_crc_log
+    grep checksum $console_consumer_source_log | tr -d ' ' | cut -f2 -d ':' > $console_consumer_source_crc_log
+    grep checksum $console_consumer_mirror_log | tr -d ' ' | cut -f2 -d ':' > $console_consumer_mirror_crc_log
+    grep checksum $producer_performance_log | tr -d ' ' | cut -f4 -d ':' | cut -f1 -d '(' > $producer_performance_crc_log
 
     sort $console_consumer_mirror_crc_log > $console_consumer_mirror_crc_sorted_log
     sort $console_consumer_source_crc_log > $console_consumer_source_crc_sorted_log
@@ -555,6 +613,37 @@ cmp_checksum() {
     echo "========================================================" >> $checksum_diff_log
     echo "${duplicate_mirror_crc}"                                  >> $checksum_diff_log
 
+    topic_chksum_counter=1
+    while [ $topic_chksum_counter -le $max_topic_id ]
+    do
+        # get producer topic counts
+        this_chksum_count=`grep -c ${topic_prefix}_${topic_chksum_counter}\- $producer_performance_log`
+        echo "PRODUCER topic ${topic_prefix}_${topic_chksum_counter} count: ${this_chksum_count}"
+
+        topic_chksum_counter=$(($topic_chksum_counter + 1))
+    done
+    echo
+
+    topic_chksum_counter=1
+    while [ $topic_chksum_counter -le $max_topic_id ]
+    do
+        this_chksum_count=`grep -c ${topic_prefix}_${topic_chksum_counter}\- $console_consumer_source_log`
+        echo "SOURCE consumer topic ${topic_prefix}_${topic_chksum_counter} count: ${this_chksum_count}"
+
+        topic_chksum_counter=$(($topic_chksum_counter + 1))
+    done
+    echo
+
+    topic_chksum_counter=1
+    while [ $topic_chksum_counter -le $max_topic_id ]
+    do
+        this_chksum_count=`grep -c ${topic_prefix}_${topic_chksum_counter}\- $console_consumer_mirror_log`
+        echo "MIRROR consumer topic ${topic_prefix}_${topic_chksum_counter} count: ${this_chksum_count}"
+
+        topic_chksum_counter=$(($topic_chksum_counter + 1))
+    done
+    echo
+
     return $cmp_result
 }
 
@@ -567,15 +656,32 @@ start_test() {
     start_target_servers_cluster
     sleep 2
 
-    start_background_producer $topic_1 &
-    background_producer_pid=$!
+    start_background_producer $producer_4_brokerinfo_str 1 $(( $unbalanced_start_id - 1 )) &
+    background_producer_pid_1=$!
 
     info "=========================================="
-    info "Started background producer pid [${background_producer_pid}]"
+    info "Started background producer pid [${background_producer_pid_1}]"
     info "=========================================="
 
-    sleep 5
-    
+    sleep 10
+   
+    start_background_producer $producer_3_brokerinfo_str $unbalanced_start_id $max_topic_id &
+    background_producer_pid_2=$!
+
+    info "=========================================="
+    info "Started background producer pid [${background_producer_pid_2}]"
+    info "=========================================="
+
+    sleep 10
+
+    verify_consumer_rebalancing
+
+    info "abort_test: [${abort_test}]"
+    if [ "${abort_test}_x" == "true_x" ]; then
+        info "aborting test"
+        iter=$((${num_iterations} + 1))
+    fi
+ 
     while [ $num_iterations -ge $iter ]
     do
         echo
@@ -592,7 +698,6 @@ start_test() {
                 # even iterations -> bounce target kafka borker
                 get_random_range 1 $num_kafka_target_server 
                 idx=$?
-
                 if [ "x${kafka_target_pids[$idx]}" != "x" ]; then
                     echo
                     info "#### Bouncing kafka TARGET broker ####"
@@ -631,7 +736,15 @@ start_test() {
                     sleep $wait_time_after_restarting_broker
                 fi
             fi
+
             verify_consumer_rebalancing
+
+            info "abort_test: [${abort_test}]"
+            if [ "${abort_test}_x" == "true_x" ]; then
+                info "aborting test"
+                iter=$((${num_iterations} + 1))
+            fi
+
         else
             info "No bouncing performed"
         fi
@@ -670,8 +783,8 @@ trap "shutdown_producer; shutdown_servers; cmp_checksum; exit 0" INT
 
 start_test
 
-start_console_consumer_for_source_producer
-start_console_consumer_for_mirror_producer
+consume_source_producer_messages
+consume_mirror_producer_messages
 
 wait_for_zero_source_console_consumer_lags
 wait_for_zero_mirror_console_consumer_lags

@@ -20,10 +20,10 @@ package kafka.network;
 import java.net._
 import java.io._
 import org.junit._
-import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import kafka.utils.TestUtils
 import java.util.Random
+import junit.framework.Assert._
 
 class SocketServerTest extends JUnitSuite {
 

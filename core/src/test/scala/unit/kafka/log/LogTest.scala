@@ -182,7 +182,10 @@ class LogTest extends JUnitSuite {
       assertEquals(curOffset, log.nextAppendOffset)
 
       // time goes by; the log file (which is empty) is deleted again
-      log.markDeletedWhile(_ => true)
+      val deletedSegments = log.markDeletedWhile(_ => true)
+
+      // we shouldn't delete the last empty log segment.
+      assertTrue(deletedSegments.size == 0)
 
       // we now have a new log
       assertEquals(curOffset, log.nextAppendOffset)

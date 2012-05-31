@@ -96,7 +96,7 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager, 
           // TODO: need to handle ack's here!  Will probably move to another method.
           kafkaZookeeper.ensurePartitionLeaderOnThisBroker(topicData.topic, partitionData.partition)
           val log = logManager.getOrCreateLog(topicData.topic, partitionData.partition)
-          log.append(partitionData.messages)
+          log.append(partitionData.messages.asInstanceOf[ByteBufferMessageSet])
           offsets(msgIndex) = log.nextAppendOffset
           errors(msgIndex) = ErrorMapping.NoError.toShort
           trace(partitionData.messages.sizeInBytes + " bytes written to logs.")

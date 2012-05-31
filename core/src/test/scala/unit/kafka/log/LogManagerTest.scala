@@ -43,6 +43,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     val props = TestUtils.createBrokerConfig(0, -1)
     config = new KafkaConfig(props) {
                    override val logFileSize = 1024
+                   override val flushInterval = 100
                  }
     logManager = new LogManager(config, time, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup
@@ -86,10 +87,13 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
       offset += set.sizeInBytes
     }
     log.flush
-    // Why this sleep is required ? File system takes some time to update the last modified time for a file.
-    // TODO: What is unknown is why 1 second or couple 100 milliseconds didn't work ?
-    Thread.sleep(2000)
+
     assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
+
+    // update the last modified time of all log segments
+    val logSegments = log.segments.view
+    logSegments.foreach(s => s.file.setLastModified(time.currentMs))
+
     time.currentMs += maxLogAge + 3000
     logManager.cleanupLogs()
     assertEquals("Now there should only be only one segment.", 1, log.numberOfSegments)
@@ -114,8 +118,9 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     Thread.sleep(100)
     config = new KafkaConfig(props) {
       override val logFileSize = (10 * (setSize - 1)).asInstanceOf[Int] // each segment will be 10 messages
-      override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Int] // keep exactly 6 segments + 1 roll over
+      override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Long] // keep exactly 6 segments + 1 roll over
       override val logRetentionHours = retentionHours
+      override val flushInterval = 100
     }
     logManager = new LogManager(config, time, veryLargeLogFlushInterval, retentionMs, false)
     logManager.startup
@@ -182,6 +187,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     config = new KafkaConfig(props) {
                    override val logFileSize = 256
                    override val topicPartitionsMap = Utils.getTopicPartitions("testPartition:2")
+                   override val flushInterval = 100
                  }
 
     logManager = new LogManager(config, time, veryLargeLogFlushInterval, maxLogAge, false)

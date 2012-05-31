@@ -17,9 +17,9 @@
 
 package kafka.server
 
-import org.apache.log4j._
 import kafka.network._
 import kafka.utils._
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * A thread that answers kafka requests.
@@ -59,4 +59,61 @@ class KafkaRequestHandlerPool(val requestChannel: RequestChannel,
       thread.join
   }
   
+}
+
+trait BrokerTopicStatMBean {
+  def getMessagesIn: Long
+  def getBytesIn: Long
+  def getBytesOut: Long
+  def getFailedProduceRequest: Long
+  def getFailedFetchRequest: Long
+}
+
+@threadsafe
+class BrokerTopicStat extends BrokerTopicStatMBean {
+  private val numCumulatedMessagesIn = new AtomicLong(0)
+  private val numCumulatedBytesIn = new AtomicLong(0)
+  private val numCumulatedBytesOut = new AtomicLong(0)
+  private val numCumulatedFailedProduceRequests = new AtomicLong(0)
+  private val numCumulatedFailedFetchRequests = new AtomicLong(0)
+
+  def getMessagesIn: Long = numCumulatedMessagesIn.get
+
+  def recordMessagesIn(nMessages: Int) = numCumulatedMessagesIn.getAndAdd(nMessages)
+
+  def getBytesIn: Long = numCumulatedBytesIn.get
+
+  def recordBytesIn(nBytes: Long) = numCumulatedBytesIn.getAndAdd(nBytes)
+
+  def getBytesOut: Long = numCumulatedBytesOut.get
+
+  def recordBytesOut(nBytes: Long) = numCumulatedBytesOut.getAndAdd(nBytes)
+
+  def recordFailedProduceRequest = numCumulatedFailedProduceRequests.getAndIncrement
+
+  def getFailedProduceRequest = numCumulatedFailedProduceRequests.get()
+
+  def recordFailedFetchRequest = numCumulatedFailedFetchRequests.getAndIncrement
+
+  def getFailedFetchRequest = numCumulatedFailedFetchRequests.get()
+}
+
+object BrokerTopicStat extends Logging {
+  private val stats = new Pool[String, BrokerTopicStat]
+  private val allTopicStat = new BrokerTopicStat
+  Utils.registerMBean(allTopicStat, "kafka:type=kafka.BrokerAllTopicStat")
+
+  def getBrokerAllTopicStat(): BrokerTopicStat = allTopicStat
+
+  def getBrokerTopicStat(topic: String): BrokerTopicStat = {
+    var stat = stats.get(topic)
+    if (stat == null) {
+      stat = new BrokerTopicStat
+      if (stats.putIfNotExists(topic, stat) == null)
+        Utils.registerMBean(stat, "kafka:type=kafka.BrokerTopicStat." + topic)
+      else
+        stat = stats.get(topic)
+    }
+    return stat
+  }
 }

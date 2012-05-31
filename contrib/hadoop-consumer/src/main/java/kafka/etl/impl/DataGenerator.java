@@ -17,32 +17,24 @@
 
 package kafka.etl.impl;
 
-import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Random;
-import java.util.Map.Entry;
-import java.util.Properties;
 
-import kafka.message.NoCompressionCodec;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Properties;
+import java.util.Random;
+import kafka.etl.KafkaETLKey;
+import kafka.etl.KafkaETLRequest;
+import kafka.etl.Props;
+import kafka.javaapi.message.ByteBufferMessageSet;
+import kafka.javaapi.producer.SyncProducer;
+import kafka.message.Message;
+import kafka.producer.SyncProducerConfig;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.SequenceFile;
 import org.apache.hadoop.mapred.JobConf;
-
-import kafka.etl.KafkaETLKey;
-import kafka.etl.KafkaETLRequest;
-import kafka.etl.KafkaETLUtils;
-import kafka.etl.Props;
-import kafka.javaapi.message.ByteBufferMessageSet;
-import kafka.message.Message;
-import kafka.javaapi.producer.SyncProducer;
-import kafka.producer.SyncProducerConfig;
 
 /**
  * Use this class to produce test events to Kafka server. Each event contains a

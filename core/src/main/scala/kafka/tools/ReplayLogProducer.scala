@@ -32,8 +32,6 @@ object ReplayLogProducer extends Logging {
   private val GROUPID: String = "replay-log-producer"
 
   def main(args: Array[String]) {
-    var isNoPrint = false;
-
     val config = new Config(args)
 
     val executor = Executors.newFixedThreadPool(config.numThreads)
@@ -151,7 +149,7 @@ object ReplayLogProducer extends Logging {
     }
   }
 
-  class ZKConsumerThread(config: Config, stream: KafkaMessageStream[Message]) extends Thread with Logging {
+  class ZKConsumerThread(config: Config, stream: KafkaStream[Message]) extends Thread with Logging {
     val shutdownLatch = new CountDownLatch(1)
     val props = new Properties()
     val brokerInfoList = config.brokerInfo.split("=")
@@ -180,9 +178,9 @@ object ReplayLogProducer extends Logging {
             stream.slice(0, config.numMessages)
           else
             stream
-        for (message <- iter) {
+        for (messageAndMetadata <- iter) {
           try {
-            producer.send(new ProducerData[Message, Message](config.outputTopic, message))
+            producer.send(new ProducerData[Message, Message](config.outputTopic, messageAndMetadata.message))
             if (config.delayedMSBtwSend > 0 && (messageCount + 1) % config.batchSize == 0)
               Thread.sleep(config.delayedMSBtwSend)
             messageCount += 1

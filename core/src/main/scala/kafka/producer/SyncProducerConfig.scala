@@ -40,6 +40,9 @@ trait SyncProducerConfigShared {
 
   val reconnectInterval = Utils.getInt(props, "reconnect.interval", 30000)
 
+  /** negative reconnect time interval means disabling this time-based reconnect feature */
+  var reconnectTimeInterval = Utils.getInt(props, "reconnect.time.interval.ms", 1000*1000*10)
+
   val maxMessageSize = Utils.getInt(props, "max.message.size", 1000000)
 
   /* the client application sending the producer requests */

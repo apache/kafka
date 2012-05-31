@@ -18,10 +18,10 @@
 package kafka.message
 
 import kafka.utils.Logging
-import kafka.common.{InvalidMessageSizeException, ErrorMapping}
 import java.nio.ByteBuffer
 import java.nio.channels._
 import kafka.utils.IteratorTemplate
+import kafka.common.{MessageSizeTooLargeException, InvalidMessageSizeException, ErrorMapping}
 
 /**
  * A sequence of messages stored in a byte buffer
@@ -36,8 +36,9 @@ import kafka.utils.IteratorTemplate
 class ByteBufferMessageSet(private val buffer: ByteBuffer,
                            private val initialOffset: Long = 0L,
                            private val errorCode: Int = ErrorMapping.NoError) extends MessageSet with Logging {
-  private var validByteCount = -1L
   private var shallowValidByteCount = -1L
+  if(sizeInBytes > Int.MaxValue)
+    throw new InvalidMessageSizeException("Message set cannot be larger than " + Int.MaxValue)
 
   def this(compressionCodec: CompressionCodec, messages: Message*) {
     this(MessageSet.createByteBuffer(compressionCodec, messages:_*), 0L, ErrorMapping.NoError)
@@ -59,7 +60,7 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
 
   private def shallowValidBytes: Long = {
     if(shallowValidByteCount < 0) {
-      val iter = deepIterator
+      val iter = this.internalIterator(true)
       while(iter.hasNext) {
         val messageAndOffset = iter.next
         shallowValidByteCount = messageAndOffset.offset
@@ -70,12 +71,31 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
   }
   
   /** Write the messages in this set to the given channel */
-  def writeTo(channel: GatheringByteChannel, offset: Long, size: Long): Long =
-    channel.write(buffer.duplicate)
-  
-  override def iterator: Iterator[MessageAndOffset] = deepIterator
+  def writeTo(channel: GatheringByteChannel, offset: Long, size: Long): Long = {
+    buffer.mark()
+    val written = channel.write(buffer)
+    buffer.reset()
+    written
+  }
 
-  private def deepIterator(): Iterator[MessageAndOffset] = {
+  /** default iterator that iterates over decompressed messages */
+  override def iterator: Iterator[MessageAndOffset] = internalIterator()
+
+  /** iterator over compressed messages without decompressing */
+  def shallowIterator: Iterator[MessageAndOffset] = internalIterator(true)
+
+  def verifyMessageSize(maxMessageSize: Int){
+    var shallowIter = internalIterator(true)
+    while(shallowIter.hasNext){
+      var messageAndOffset = shallowIter.next
+      val payloadSize = messageAndOffset.message.payloadSize
+      if ( payloadSize > maxMessageSize)
+        throw new MessageSizeTooLargeException("payload size of " + payloadSize + " larger than " + maxMessageSize)
+    }
+  }
+
+  /** When flag isShallow is set to be true, we do a shallow iteration: just traverse the first level of messages. This is used in verifyMessageSize() function **/
+  private def internalIterator(isShallow: Boolean = false): Iterator[MessageAndOffset] = {
     ErrorMapping.maybeThrowException(errorCode)
     new IteratorTemplate[MessageAndOffset] {
       var topIter = buffer.slice()
@@ -106,33 +126,50 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
         message.limit(size)
         topIter.position(topIter.position + size)
         val newMessage = new Message(message)
-        newMessage.compressionCodec match {
-          case NoCompressionCodec =>
-            debug("Message is uncompressed. Valid byte count = %d".format(currValidBytes))
-            innerIter = null
-            currValidBytes += 4 + size
-            trace("currValidBytes = " + currValidBytes)
-            new MessageAndOffset(newMessage, currValidBytes)
-          case _ =>
-            debug("Message is compressed. Valid byte count = %d".format(currValidBytes))
-            innerIter = CompressionUtils.decompress(newMessage).deepIterator
-            if (!innerIter.hasNext) {
-              currValidBytes += 4 + lastMessageSize
+        if(!newMessage.isValid)
+          throw new InvalidMessageException("message is invalid, compression codec: " + newMessage.compressionCodec
+            + " size: " + size + " curr offset: " + currValidBytes + " init offset: " + initialOffset)
+
+        if(isShallow){
+          currValidBytes += 4 + size
+          trace("shallow iterator currValidBytes = " + currValidBytes)
+          new MessageAndOffset(newMessage, currValidBytes)
+        }
+        else{
+          newMessage.compressionCodec match {
+            case NoCompressionCodec =>
+              debug("Message is uncompressed. Valid byte count = %d".format(currValidBytes))
               innerIter = null
-            }
-            makeNext()
+              currValidBytes += 4 + size
+              trace("currValidBytes = " + currValidBytes)
+              new MessageAndOffset(newMessage, currValidBytes)
+            case _ =>
+              debug("Message is compressed. Valid byte count = %d".format(currValidBytes))
+              innerIter = CompressionUtils.decompress(newMessage).internalIterator()
+              if (!innerIter.hasNext) {
+                currValidBytes += 4 + lastMessageSize
+                innerIter = null
+              }
+              makeNext()
+          }
         }
       }
 
       override def makeNext(): MessageAndOffset = {
-        val isInnerDone = innerDone()
-        isInnerDone match {
-          case true => makeNextOuter
-          case false => {
-            val messageAndOffset = innerIter.next
-            if (!innerIter.hasNext)
-              currValidBytes += 4 + lastMessageSize
-            new MessageAndOffset(messageAndOffset.message, currValidBytes)
+        if(isShallow){
+          makeNextOuter
+        }
+        else{
+          val isInnerDone = innerDone()
+          debug("makeNext() in internalIterator: innerDone = " + isInnerDone)
+          isInnerDone match {
+            case true => makeNextOuter
+            case false => {
+              val messageAndOffset = innerIter.next
+              if (!innerIter.hasNext)
+                currValidBytes += 4 + lastMessageSize
+              new MessageAndOffset(messageAndOffset.message, currValidBytes)
+            }
           }
         }
       }

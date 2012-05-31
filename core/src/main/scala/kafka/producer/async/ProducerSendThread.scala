@@ -70,10 +70,11 @@ class ProducerSendThread[K,V](val threadName: String,
             trace("Dequeued item for topic %s, partition key: %s, data: %s"
               .format(currentQueueItem.getTopic, currentQueueItem.getKey.toString, currentQueueItem.getData.toString))
           events += currentQueueItem
-
-          // check if the batch size is reached
-          full = events.size >= batchSize
         }
+
+        // check if the batch size is reached
+        full = events.size >= batchSize
+
         if(full || expired) {
           if(expired) debug(elapsed + " ms elapsed. Queue time reached. Sending..")
           if(full) debug("Batch full. Sending..")

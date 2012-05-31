@@ -52,7 +52,6 @@ object TestEndToEndLatency {
     
     val message = new Message("hello there beautiful".getBytes)
     var totalTime = 0.0
-    var totalSize = 0L
     for(i <- 0 until numMessages) {
       var begin = System.nanoTime
       producer.send(new ProducerData(topic, message))
@@ -62,7 +61,6 @@ object TestEndToEndLatency {
       if(i % 10000 == 0)
         println(i + "\t" + ellapsed / 1000.0 / 1000.0)
       totalTime += ellapsed
-      totalSize += received.size
     }
     println("Avg latency: " + (totalTime / numMessages / 1000.0 / 1000.0)) + "ms"
     producer.close()

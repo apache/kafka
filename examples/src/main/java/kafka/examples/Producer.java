@@ -16,9 +16,10 @@
  */
 package kafka.examples;
 
+
+import java.util.Properties;
 import kafka.javaapi.producer.ProducerData;
 import kafka.producer.ProducerConfig;
-import java.util.Properties;
 
 public class Producer extends Thread
 {

@@ -19,16 +19,13 @@ package kafka.examples;
 import kafka.api.FetchRequest;
 import kafka.api.FetchRequestBuilder;
 import kafka.javaapi.FetchResponse;
+import java.util.ArrayList;
+import java.util.List;
 import kafka.javaapi.consumer.SimpleConsumer;
 import kafka.javaapi.message.ByteBufferMessageSet;
-import kafka.javaapi.message.MessageSet;
 import kafka.message.MessageAndOffset;
-
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-
 
 public class SimpleConsumerDemo {
     

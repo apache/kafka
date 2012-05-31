@@ -42,24 +42,24 @@ private [consumer] class Fetcher(val config: ConsumerConfig, val zkClient : ZkCl
     fetcherThreads = EMPTY_FETCHER_THREADS
   }
 
-  def clearFetcherQueues[T](topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster,
+  def clearFetcherQueues(topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster,
                             queuesTobeCleared: Iterable[BlockingQueue[FetchedDataChunk]],
-                            kafkaMessageStreams: Map[String,List[KafkaMessageStream[T]]]) {
+                            messageStreams: Map[String,List[KafkaStream[_]]]) {
 
     // Clear all but the currently iterated upon chunk in the consumer thread's queue
     queuesTobeCleared.foreach(_.clear)
     info("Cleared all relevant queues for this fetcher")
 
     // Also clear the currently iterated upon chunk in the consumer threads
-    if(kafkaMessageStreams != null)
-       kafkaMessageStreams.foreach(_._2.foreach(s => s.clear()))
+    if(messageStreams != null)
+       messageStreams.foreach(_._2.foreach(s => s.clear()))
 
     info("Cleared the data chunks in all the consumer message iterators")
 
   }
 
-  def startConnections[T](topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster,
-                            kafkaMessageStreams: Map[String,List[KafkaMessageStream[T]]]) {
+  def startConnections(topicInfos: Iterable[PartitionTopicInfo],
+                       cluster: Cluster) {
     if (topicInfos == null)
       return
 

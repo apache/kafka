@@ -16,9 +16,11 @@
  */
 package kafka.javaapi.consumer
 
-import kafka.consumer.{KafkaMessageStream, ConsumerConfig}
 import kafka.message.Message
 import kafka.serializer.{DefaultDecoder, Decoder}
+import kafka.consumer._
+import scala.collection.JavaConversions.asList
+
 
 /**
  * This class handles the consumers interaction with zookeeper
@@ -68,14 +70,14 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   def createMessageStreams[T](
         topicCountMap: java.util.Map[String,java.lang.Integer],
         decoder: Decoder[T])
-      : java.util.Map[String,java.util.List[KafkaMessageStream[T]]] = {
+      : java.util.Map[String,java.util.List[KafkaStream[T]]] = {
     import scala.collection.JavaConversions._
 
     val scalaTopicCountMap: Map[String, Int] = Map.empty[String, Int] ++ asMap(topicCountMap.asInstanceOf[java.util.Map[String, Int]])
     val scalaReturn = underlying.consume(scalaTopicCountMap, decoder)
-    val ret = new java.util.HashMap[String,java.util.List[KafkaMessageStream[T]]]
+    val ret = new java.util.HashMap[String,java.util.List[KafkaStream[T]]]
     for ((topic, streams) <- scalaReturn) {
-      var javaStreamList = new java.util.ArrayList[KafkaMessageStream[T]]
+      var javaStreamList = new java.util.ArrayList[KafkaStream[T]]
       for (stream <- streams)
         javaStreamList.add(stream)
       ret.put(topic, javaStreamList)
@@ -85,9 +87,17 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   def createMessageStreams(
         topicCountMap: java.util.Map[String,java.lang.Integer])
-      : java.util.Map[String,java.util.List[KafkaMessageStream[Message]]] =
+      : java.util.Map[String,java.util.List[KafkaStream[Message]]] =
     createMessageStreams(topicCountMap, new DefaultDecoder)
 
+  def createMessageStreamsByFilter[T](topicFilter: TopicFilter, numStreams: Int, decoder: Decoder[T]) =
+    asList(underlying.createMessageStreamsByFilter(topicFilter, numStreams, decoder))
+
+  def createMessageStreamsByFilter(topicFilter: TopicFilter, numStreams: Int) =
+    createMessageStreamsByFilter(topicFilter, numStreams, new DefaultDecoder)
+
+  def createMessageStreamsByFilter(topicFilter: TopicFilter) =
+    createMessageStreamsByFilter(topicFilter, 1, new DefaultDecoder)
 
   def commitOffsets() {
     underlying.commitOffsets

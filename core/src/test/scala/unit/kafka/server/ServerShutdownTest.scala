@@ -20,6 +20,7 @@ import java.io.File
 import kafka.consumer.SimpleConsumer
 import java.util.Properties
 import org.junit.Test
+import org.scalatest.junit.JUnitSuite
 import junit.framework.Assert._
 import kafka.message.{Message, ByteBufferMessageSet}
 import org.scalatest.junit.JUnit3Suite

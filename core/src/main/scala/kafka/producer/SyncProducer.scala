@@ -18,10 +18,16 @@
 package kafka.producer
 
 import kafka.api._
-import kafka.common.MessageSizeTooLargeException
 import kafka.message.MessageSet
 import kafka.network.{BlockingChannel, BoundedByteBufferSend, Request, Receive}
 import kafka.utils._
+import java.util.Random
+import kafka.common.MessageSizeTooLargeException
+
+object SyncProducer {
+  val RequestKey: Short = 0
+  val randomGenerator = new Random
+}
 
 /*
  * Send a message set.
@@ -31,14 +37,22 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   
   private val MaxConnectBackoffMs = 60000
   private var sentOnConnection = 0
+  /** make time-based reconnect starting at a random time **/
+  private var lastConnectionTime = System.currentTimeMillis - SyncProducer.randomGenerator.nextDouble() * config.reconnectInterval
+
   private val lock = new Object()
   @volatile private var shutdown: Boolean = false
   private val blockingChannel = new BlockingChannel(config.host, config.port, 0, config.bufferSize, config.socketTimeoutMs)
 
-  debug("Instantiating Scala Sync Producer")
+  trace("Instantiating Scala Sync Producer")
 
   private def verifyRequest(request: Request) = {
-    if (logger.isTraceEnabled) {
+    /**
+     * This seems a little convoluted, but the idea is to turn on verification simply changing log4j settings
+     * Also, when verification is turned on, care should be taken to see that the logs don't fill up with unnecessary
+     * data. So, leaving the rest of the logging at TRACE, while errors should be logged at ERROR level
+     */
+    if (logger.isDebugEnabled) {
       val buffer = new BoundedByteBufferSend(request).buffer
       trace("verifying sendbuffer of size " + buffer.limit)
       val requestTypeId = buffer.getShort()
@@ -71,9 +85,11 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
       }
       // TODO: do we still need this?
       sentOnConnection += 1
-      if(sentOnConnection >= config.reconnectInterval) {
+
+      if(sentOnConnection >= config.reconnectInterval || (config.reconnectTimeInterval >= 0 && System.currentTimeMillis - lastConnectionTime >= config.reconnectTimeInterval)) {
         reconnect()
         sentOnConnection = 0
+        lastConnectionTime = System.currentTimeMillis
       }
       SyncProducerStats.recordProduceRequest(SystemTime.nanoseconds - startTime)
       response

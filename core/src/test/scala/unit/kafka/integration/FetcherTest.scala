@@ -56,7 +56,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
     super.setUp
     fetcher = new Fetcher(new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), null)
     fetcher.stopConnectionsToAllBrokers
-    fetcher.startConnections(topicInfos, cluster, null)
+    fetcher.startConnections(topicInfos, cluster)
   }
 
   override def tearDown() {

@@ -23,7 +23,7 @@ import junit.framework.Assert
 import kafka.admin.CreateTopicCommand
 import kafka.common.{ErrorMapping, MessageSizeTooLargeException}
 import kafka.integration.KafkaServerTestHarness
-import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
+import kafka.message.{NoCompressionCodec, DefaultCompressionCodec, Message, ByteBufferMessageSet}
 import kafka.server.KafkaConfig
 import kafka.utils.{TestZKUtils, SystemTime, TestUtils}
 import org.junit.Test
@@ -71,7 +71,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   }
 
   @Test
-  def testMessageSizeTooLarge() {
+  def testSingleMessageSizeTooLarge() {
     val server = servers.head
     val props = new Properties()
     props.put("host", "localhost")
@@ -85,6 +85,26 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     try {
       producer.send(TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(bytes))))
       Assert.fail("Message was too large to send, SyncProducer should have thrown exception.")
+    } catch {
+      case e: MessageSizeTooLargeException => /* success */
+    }
+  }
+
+  @Test
+  def testCompressedMessageSizeTooLarge() {
+    val server = servers.head
+    val props = new Properties()
+    props.put("host", "localhost")
+    props.put("port", server.socketServer.port.toString)
+    props.put("buffer.size", "102400")
+    props.put("connect.timeout.ms", "300")
+    props.put("reconnect.interval", "500")
+    props.put("max.message.size", "100")
+    val producer = new SyncProducer(new SyncProducerConfig(props))
+    val bytes = new Array[Byte](101)
+    try {
+      producer.send(TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec, messages = new Message(bytes))))
+      Assert.fail("Message was too large to send, SyncProducer should have thrown exception for DefaultCompressionCodec.")
     } catch {
       case e: MessageSizeTooLargeException => /* success */
     }

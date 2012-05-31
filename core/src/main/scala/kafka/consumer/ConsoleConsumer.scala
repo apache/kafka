@@ -36,11 +36,19 @@ object ConsoleConsumer extends Logging {
 
   def main(args: Array[String]) {
     val parser = new OptionParser
-    val topicIdOpt = parser.accepts("topic", "REQUIRED: The topic id to consume on.")
+    val topicIdOpt = parser.accepts("topic", "The topic id to consume on.")
                            .withRequiredArg
                            .describedAs("topic")
                            .ofType(classOf[String])
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " + 
+    val whitelistOpt = parser.accepts("whitelist", "Whitelist of topics to include for consumption.")
+                             .withRequiredArg
+                             .describedAs("whitelist")
+                             .ofType(classOf[String])
+    val blacklistOpt = parser.accepts("blacklist", "Blacklist of topics to exclude from consumption.")
+                             .withRequiredArg
+                             .describedAs("blacklist")
+                             .ofType(classOf[String])
+    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
                                       "Multiple URLS can be given to allow fail-over.")
                            .withRequiredArg
                            .describedAs("urls")
@@ -90,8 +98,20 @@ object ConsoleConsumer extends Logging {
         "skip it instead of halt.")
 
     val options: OptionSet = tryParse(parser, args)
-    checkRequiredArgs(parser, options, topicIdOpt, zkConnectOpt)
+    Utils.checkRequiredArgs(parser, options, zkConnectOpt)
     
+    val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
+    if (topicOrFilterOpt.size != 1) {
+      error("Exactly one of whitelist/blacklist/topic is required.")
+      parser.printHelpOn(System.err)
+      System.exit(1)
+    }
+    val topicArg = options.valueOf(topicOrFilterOpt.head)
+    val filterSpec = if (options.has(blacklistOpt))
+      new Blacklist(topicArg)
+    else
+      new Whitelist(topicArg)
+
     val props = new Properties()
     props.put("groupid", options.valueOf(groupIdOpt))
     props.put("socket.buffersize", options.valueOf(socketBufferSizeOpt).toString)
@@ -104,7 +124,6 @@ object ConsoleConsumer extends Logging {
     val config = new ConsumerConfig(props)
     val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
     
-    val topic = options.valueOf(topicIdOpt)
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
     val formatterArgs = tryParseFormatterArgs(options.valuesOf(messageFormatterArgOpt))
     
@@ -123,21 +142,20 @@ object ConsoleConsumer extends Logging {
           tryCleanupZookeeper(options.valueOf(zkConnectOpt), options.valueOf(groupIdOpt))
       }
     })
-    
-    var stream = connector.createMessageStreams(Map(topic -> 1)).get(topic).get.get(0)
-    val iter =
-      if(maxMessages >= 0)
-        stream.slice(0, maxMessages)
-      else
-        stream
+
+    val stream = connector.createMessageStreamsByFilter(filterSpec).get(0)
+    val iter = if(maxMessages >= 0)
+      stream.slice(0, maxMessages)
+    else
+      stream
 
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
     formatter.init(formatterArgs)
 
     try {
-      for(message <- iter) {
+      for(messageAndTopic <- iter) {
         try {
-          formatter.writeTo(message, System.out)
+          formatter.writeTo(messageAndTopic.message, System.out)
         } catch {
           case e =>
             if (skipMessageOnError)
@@ -173,16 +191,6 @@ object ConsoleConsumer extends Logging {
     }
   }
   
-  def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
-    for(arg <- required) {
-      if(!options.has(arg)) {
-        error("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
-  }
-  
   def tryParseFormatterArgs(args: Iterable[String]): Properties = {
     val splits = args.map(_ split "=").filterNot(_ == null).filterNot(_.length == 0)
     if(!splits.forall(_.length == 2)) {
@@ -210,9 +218,19 @@ object ConsoleConsumer extends Logging {
   }
 
   class ChecksumMessageFormatter extends MessageFormatter {
+    private var topicStr: String = _
+    
+    override def init(props: Properties) {
+      topicStr = props.getProperty("topic")
+      if (topicStr != null) 
+        topicStr = topicStr + "-"
+      else
+        topicStr = ""
+    }
+    
     def writeTo(message: Message, output: PrintStream) {
       val chksum = message.checksum
-      output.println("checksum:" + chksum)
+      output.println(topicStr + "checksum:" + chksum)
     }
   }
   
