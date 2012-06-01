@@ -98,11 +98,8 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
       val partitionIndex = getPartition(event.getKey, totalNumPartitions)
       val brokerPartition = topicPartitionsList(partitionIndex)
 
-      val leaderBrokerId = brokerPartition.leader match {
-        case Some(leader) => leader.brokerId
-        case None => -1
-        // postpone the failure until the send operation, so that requests for other brokers are handled correctly
-      }
+      // postpone the failure until the send operation, so that requests for other brokers are handled correctly
+      val leaderBrokerId = brokerPartition.leaderId().getOrElse(-1)
 
       var dataPerBroker: HashMap[(String, Int), Seq[ProducerData[K,Message]]] = null
       ret.get(leaderBrokerId) match {
@@ -113,7 +110,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
           ret.put(leaderBrokerId, dataPerBroker)
       }
 
-      val topicAndPartition = (event.getTopic, brokerPartition.partId)
+      val topicAndPartition = (event.getTopic, brokerPartition.partitionId)
       var dataPerTopicPartition: ListBuffer[ProducerData[K,Message]] = null
       dataPerBroker.get(topicAndPartition) match {
         case Some(element) =>
@@ -131,7 +128,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
     debug("Getting the number of broker partitions registered for topic: " + pd.getTopic)
     val topicPartitionsList = brokerPartitionInfo.getBrokerPartitionInfo(pd.getTopic)
     debug("Broker partitions registered for topic: %s are %s"
-      .format(pd.getTopic, topicPartitionsList.map(p => p.partId).mkString(",")))
+      .format(pd.getTopic, topicPartitionsList.map(p => p.partitionId).mkString(",")))
     val totalNumPartitions = topicPartitionsList.length
     if(totalNumPartitions == 0) throw new NoBrokersForPartitionException("Partition = " + pd.getKey)
     topicPartitionsList

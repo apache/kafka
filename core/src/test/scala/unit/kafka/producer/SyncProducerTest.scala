@@ -177,7 +177,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     // stop IO threads and request handling, but leave networking operational
     // any requests should be accepted and queue up, but not handled
     server.requestHandlerPool.shutdown()
-    
+
     val t1 = SystemTime.milliseconds
     try {
       val response2 = producer.send(request)

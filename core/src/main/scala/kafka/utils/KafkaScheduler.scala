@@ -39,24 +39,24 @@ class KafkaScheduler(val numThreads: Int, val baseThreadName: String, isDaemon: 
 
   def hasShutdown: Boolean = executor.isShutdown
 
-  private def checkIfExecutorHasStarted = {
+  private def ensureExecutorHasStarted = {
     if(executor == null)
       throw new IllegalStateException("Kafka scheduler has not been started")
   }
 
   def scheduleWithRate(fun: () => Unit, delayMs: Long, periodMs: Long) = {
-    checkIfExecutorHasStarted
+    ensureExecutorHasStarted
     executor.scheduleAtFixedRate(Utils.loggedRunnable(fun), delayMs, periodMs, TimeUnit.MILLISECONDS)
   }
 
   def shutdownNow() {
-    checkIfExecutorHasStarted
+    ensureExecutorHasStarted
     executor.shutdownNow()
     info("Forcing shutdown of scheduler " + baseThreadName)
   }
 
   def shutdown() {
-    checkIfExecutorHasStarted
+    ensureExecutorHasStarted
     executor.shutdown()
     info("Shutdown scheduler " + baseThreadName)
   }

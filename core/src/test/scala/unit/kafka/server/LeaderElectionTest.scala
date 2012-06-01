@@ -51,6 +51,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     val server2 = TestUtils.createServer(new KafkaConfig(configProps2))
 
     servers ++= List(server1, server2)
+    try {
     // start 2 brokers
     val topic = "new-topic"
     val partitionId = 0
@@ -59,7 +60,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     CreateTopicCommand.createTopic(zkClient, topic, 1, 2, "0:1")
 
     // wait until leader is elected
-    var leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 200)
+    var leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
     assertTrue("Leader should get elected", leader.isDefined)
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
@@ -68,7 +69,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     servers.head.shutdown()
 
     // check if leader moves to the other server
-    leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
+    leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 1500)
     assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
 
     Thread.sleep(zookeeper.tickTime)
@@ -85,9 +86,14 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // test if the leader is the preferred replica
     assertEquals("Leader must be preferred replica on broker 0", 0, leader.getOrElse(-1))
-    // shutdown the servers and delete data hosted on them
-    servers.map(server => server.shutdown())
-    servers.map(server => Utils.rm(server.config.logDir))
+    }catch {
+      case e => error("Error while running leader election test ", e)
+    } finally {
+      // shutdown the servers and delete data hosted on them
+      servers.map(server => server.shutdown())
+      servers.map(server => Utils.rm(server.config.logDir))
+
+    }
   }
 
   // Assuming leader election happens correctly, test if epoch changes as expected
@@ -105,17 +111,17 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
       var newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic, partitionId, 0)
       assertTrue("Broker 0 should become leader", newLeaderEpoch.isDefined)
-      assertEquals("First epoch value should be 1", 1, newLeaderEpoch.get)
+      assertEquals("First epoch value should be 1", 1, newLeaderEpoch.get._1)
 
       ZkUtils.deletePath(zkClient, ZkUtils.getTopicPartitionLeaderPath(topic, partitionId.toString))
       newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic, partitionId, 1)
       assertTrue("Broker 1 should become leader", newLeaderEpoch.isDefined)
-      assertEquals("Second epoch value should be 2", 2, newLeaderEpoch.get)
+      assertEquals("Second epoch value should be 2", 2, newLeaderEpoch.get._1)
 
       ZkUtils.deletePath(zkClient, ZkUtils.getTopicPartitionLeaderPath(topic, partitionId.toString))
       newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic, partitionId, 0)
       assertTrue("Broker 0 should become leader again", newLeaderEpoch.isDefined)
-      assertEquals("Third epoch value should be 3", 3, newLeaderEpoch.get)
+      assertEquals("Third epoch value should be 3", 3, newLeaderEpoch.get._1)
 
     }finally {
       TestUtils.deleteBrokersInZk(zkClient, List(brokerId1, brokerId2))

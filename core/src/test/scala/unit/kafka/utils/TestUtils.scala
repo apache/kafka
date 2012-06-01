@@ -32,10 +32,10 @@ import kafka.cluster.Broker
 import collection.mutable.ListBuffer
 import kafka.consumer.ConsumerConfig
 import scala.collection.Map
-import kafka.serializer.Encoder
-import kafka.api.{ProducerRequest, TopicData, PartitionData}
+import kafka.api.{TopicData, PartitionData}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.TimeUnit
+import kafka.serializer.{DefaultEncoder, Encoder}
 
 /**
  * Utility functions to help with testing
@@ -122,6 +122,7 @@ object TestUtils extends Logging {
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
     props.put("log.flush.interval", "1")
     props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("replica.socket.timeout.ms", "1500")
     props
   }
   
@@ -280,12 +281,13 @@ object TestUtils extends Logging {
   /**
    * Create a producer for the given host and port
    */
-  def createProducer[K, V](zkConnect: String): Producer[K, V] = {
+  def createProducer[K, V](zkConnect: String, encoder: Encoder[V] = new DefaultEncoder): Producer[K, V] = {
     val props = new Properties()
     props.put("zk.connect", zkConnect)
     props.put("buffer.size", "65536")
     props.put("connect.timeout.ms", "100000")
     props.put("reconnect.interval", "10000")
+    props.put("serializer.class", encoder.getClass.getCanonicalName)
     new Producer[K, V](new ProducerConfig(props))
   }
 

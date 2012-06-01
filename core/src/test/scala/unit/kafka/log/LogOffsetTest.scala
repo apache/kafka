@@ -63,33 +63,6 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   @Test
-  def testEmptyLogs() {
-    val fetchResponse = simpleConsumer.fetch(new FetchRequestBuilder().addFetch("test", 0, 0, 300 * 1024).build())
-    assertFalse(fetchResponse.messageSet("test", 0).iterator.hasNext)
-
-    val name = "test"
-    val logFile = new File(logDir, name + "-0")
-    
-    {
-      val offsets = simpleConsumer.getOffsetsBefore(name, 0, OffsetRequest.LatestTime, 10)
-      assertTrue( (Array(0L): WrappedArray[Long]) == (offsets: WrappedArray[Long]) )
-      assertTrue(!logFile.exists())
-    }
-
-    {
-      val offsets = simpleConsumer.getOffsetsBefore(name, 0, OffsetRequest.EarliestTime, 10)
-      assertTrue( (Array(0L): WrappedArray[Long]) == (offsets: WrappedArray[Long]) )
-      assertTrue(!logFile.exists())
-    }
-
-    {
-      val offsets = simpleConsumer.getOffsetsBefore(name, 0, SystemTime.milliseconds, 10)
-      assertEquals( 0, offsets.length )
-      assertTrue(!logFile.exists())
-    }
-  }
-
-  @Test
   def testGetOffsetsBeforeLatestTime() {
     val topicPartition = "kafka-" + 0
     val topic = topicPartition.split("-").head

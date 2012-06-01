@@ -18,8 +18,6 @@
 package kafka.integration
 
 import junit.framework.Assert._
-import java.nio.channels.ClosedByInterruptException
-import java.util.concurrent.atomic.AtomicInteger
 import kafka.utils.{ZKGroupTopicDirs, Logging}
 import kafka.consumer.{ConsumerTimeoutException, ConsumerConfig, ConsumerConnector, Consumer}
 import kafka.server._
@@ -61,10 +59,10 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
   def testResetToEarliestWhenOffsetTooLow() =
     assertEquals(NumMessages, resetAndConsume(NumMessages, "smallest", SmallOffset))
     
-  def testResetToLatestWhenOffsetTooHigh() = 
+  def testResetToLatestWhenOffsetTooHigh() =
     assertEquals(0, resetAndConsume(NumMessages, "largest", LargeOffset))
-    
-  def testResetToLatestWhenOffsetTooLow() = 
+
+  def testResetToLatestWhenOffsetTooLow() =
     assertEquals(0, resetAndConsume(NumMessages, "largest", SmallOffset))
   
   /* Produce the given number of messages, create a consumer with the given offset policy, 

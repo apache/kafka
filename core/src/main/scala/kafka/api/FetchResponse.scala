@@ -29,18 +29,20 @@ object PartitionData {
     val partition = buffer.getInt
     val error = buffer.getInt
     val initialOffset = buffer.getLong
+    val hw = buffer.getLong()
     val messageSetSize = buffer.getInt
     val messageSetBuffer = buffer.slice()
     messageSetBuffer.limit(messageSetSize)
     buffer.position(buffer.position + messageSetSize)
-    new PartitionData(partition, error, initialOffset, new ByteBufferMessageSet(messageSetBuffer, initialOffset, error))
+    new PartitionData(partition, error, initialOffset, hw, new ByteBufferMessageSet(messageSetBuffer, initialOffset, error))
   }
 }
 
-case class PartitionData(partition: Int, error: Int = ErrorMapping.NoError, initialOffset:Long = 0L, messages: MessageSet) {
-  val sizeInBytes = 4 + 4 + 8 + 4 + messages.sizeInBytes.intValue()
+case class PartitionData(partition: Int, error: Int = ErrorMapping.NoError, initialOffset:Long = 0L, hw: Long = -1L,
+                         messages: MessageSet) {
+  val sizeInBytes = 4 + 4 + 8 + 4 + messages.sizeInBytes.intValue() + 8
 
-  def this(partition: Int, messages: MessageSet) = this(partition, ErrorMapping.NoError, 0L, messages)
+  def this(partition: Int, messages: MessageSet) = this(partition, ErrorMapping.NoError, 0L, -1L, messages)
 
 }
 
@@ -117,6 +119,14 @@ case class FetchResponse(versionId: Short, correlationId: Int, data: Array[Topic
     }
     messageSet.asInstanceOf[ByteBufferMessageSet]
   }
+
+  def highWatermark(topic: String, partition: Int): Long = {
+    topicMap.get(topic) match {
+      case Some(topicData) =>
+        TopicData.findPartition(topicData.partitionData, partition).map(_.hw).getOrElse(-1L)
+      case None => -1L
+    }
+  }
 }
 
 // SENDS
@@ -125,10 +135,11 @@ class PartitionDataSend(val partitionData: PartitionData) extends Send {
   private val messageSize = partitionData.messages.sizeInBytes
   private var messagesSentSize = 0L
 
-  private val buffer = ByteBuffer.allocate(20)
+  private val buffer = ByteBuffer.allocate(28)
   buffer.putInt(partitionData.partition)
   buffer.putInt(partitionData.error)
   buffer.putLong(partitionData.initialOffset)
+  buffer.putLong(partitionData.hw)
   buffer.putInt(partitionData.messages.sizeInBytes.intValue())
   buffer.rewind()
 

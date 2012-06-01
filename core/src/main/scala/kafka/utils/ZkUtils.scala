@@ -133,20 +133,21 @@ object ZkUtils extends Logging {
     replicas.contains(brokerId.toString)
   }
 
-  def tryToBecomeLeaderForPartition(client: ZkClient, topic: String, partition: Int, brokerId: Int): Option[Int] = {
+  def tryToBecomeLeaderForPartition(client: ZkClient, topic: String, partition: Int, brokerId: Int): Option[(Int, Seq[Int])] = {
     try {
       // NOTE: first increment epoch, then become leader
       val newEpoch = incrementEpochForPartition(client, topic, partition, brokerId)
       createEphemeralPathExpectConflict(client, getTopicPartitionLeaderPath(topic, partition.toString),
         "%d;%d".format(brokerId, newEpoch))
       val currentISR = getInSyncReplicasForPartition(client, topic, partition)
+      val updatedISR = if(currentISR.size == 0) List(brokerId) else currentISR
       updatePersistentPath(client, getTopicPartitionInSyncPath(topic, partition.toString),
-        "%s;%d".format(currentISR.mkString(","), newEpoch))
+        "%s;%d".format(updatedISR.mkString(","), newEpoch))
       info("Elected broker %d with epoch %d to be leader for topic %s partition %d".format(brokerId, newEpoch, topic, partition))
-      Some(newEpoch)
+      Some(newEpoch, updatedISR)
     } catch {
       case e: ZkNodeExistsException => error("Leader exists for topic %s partition %d".format(topic, partition)); None
-      case oe => None
+      case oe => error("Error while electing leader for topic %s partition %d".format(topic, partition), oe); None
     }
   }
 
@@ -161,7 +162,7 @@ object ZkUtils extends Logging {
 
     val newEpoch = epoch match {
       case Some(partitionEpoch) =>
-        debug("Existing epoch for topic %s partition %d is %d".format(topic, partition, epoch))
+        debug("Existing epoch for topic %s partition %d is %d".format(topic, partition, partitionEpoch))
         partitionEpoch + 1
       case None =>
         // this is the first time leader is elected for this partition. So set epoch to 1

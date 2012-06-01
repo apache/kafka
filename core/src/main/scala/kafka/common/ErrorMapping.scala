@@ -20,6 +20,7 @@ package kafka.common
 import kafka.message.InvalidMessageException
 import java.nio.ByteBuffer
 import java.lang.Throwable
+import scala.Predef._
 
 /**
  * A bi-directional mapping between error codes and exceptions x  
@@ -31,21 +32,23 @@ object ErrorMapping {
   val NoError = 0
   val OffsetOutOfRangeCode = 1
   val InvalidMessageCode = 2
-  val WrongPartitionCode = 3
+  val InvalidPartitionCode = 3
   val InvalidFetchSizeCode = 4
   val InvalidFetchRequestFormatCode = 5
-  val NoLeaderForPartitionCode = 6
-  val NotLeaderForPartitionCode = 7
+  val NotLeaderForPartitionCode = 6
+  val NoLeaderForPartitionCode = 7
+  val UnknownTopicCode = 8
 
   private val exceptionToCode = 
     Map[Class[Throwable], Int](
       classOf[OffsetOutOfRangeException].asInstanceOf[Class[Throwable]] -> OffsetOutOfRangeCode,
       classOf[InvalidMessageException].asInstanceOf[Class[Throwable]] -> InvalidMessageCode,
-      classOf[InvalidPartitionException].asInstanceOf[Class[Throwable]] -> WrongPartitionCode,
+      classOf[InvalidPartitionException].asInstanceOf[Class[Throwable]] -> InvalidPartitionCode,
       classOf[InvalidMessageSizeException].asInstanceOf[Class[Throwable]] -> InvalidFetchSizeCode,
       classOf[FetchRequestFormatException].asInstanceOf[Class[Throwable]] -> InvalidFetchRequestFormatCode,
-      classOf[NoLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NoLeaderForPartitionCode,
-      classOf[NotLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NotLeaderForPartitionCode
+      classOf[NotLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NotLeaderForPartitionCode,
+      classOf[NoLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NoLeaderForPartitionCode
+//      classOf[UnknownTopicException].asInstanceOf[Class[Throwable]] -> UnknownTopicCode
     ).withDefaultValue(UnknownCode)
   
   /* invert the mapping */

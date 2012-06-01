@@ -270,7 +270,7 @@ public class KafkaETLContext {
         } else if (errorCode == ErrorMapping.InvalidMessageCode()) {
             throw new IOException(_input + " current offset=" + _offset
                     + " : invalid offset.");
-        } else if (errorCode == ErrorMapping.WrongPartitionCode()) {
+        } else if (errorCode == ErrorMapping.InvalidPartitionCode()) {
             throw new IOException(_input + " : wrong partition");
         } else if (errorCode != ErrorMapping.NoError()) {
             throw new IOException(_input + " current offset=" + _offset

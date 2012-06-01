@@ -17,23 +17,22 @@
 
 package kafka.integration
 
-import java.io.File
 import java.nio.ByteBuffer
-import java.util.Properties
 import junit.framework.Assert._
-import kafka.admin.CreateTopicCommand
 import kafka.api.{OffsetDetail, FetchRequest, FetchRequestBuilder}
-import kafka.common.{FetchRequestFormatException, OffsetOutOfRangeException, InvalidPartitionException}
-import kafka.message.Message
+import kafka.server.{KafkaRequestHandler, KafkaConfig}
+import java.util.Properties
 import kafka.producer.{ProducerData, Producer, ProducerConfig}
 import kafka.serializer.StringDecoder
-import kafka.server.{KafkaRequestHandler, KafkaConfig}
+import kafka.message.Message
 import kafka.utils.{TestZKUtils, TestUtils}
 import org.apache.log4j.{Level, Logger}
 import org.I0Itec.zkclient.ZkClient
 import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
 import scala.collection._
+import kafka.admin.CreateTopicCommand
+import kafka.common.{InvalidPartitionException, NotLeaderForPartitionException, FetchRequestFormatException, OffsetOutOfRangeException}
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -93,7 +92,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       case e: FetchRequestFormatException => "success"
     }
   }
-  
+
   def testDefaultEncoderProducerAndFetch() {
     val topic = "test-topic"
     val props = new Properties()
@@ -158,7 +157,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
         messages += topic -> messageList
         producer.send(producerData)
         builder.addFetch(topic, partition, 0, 10000)
-      }
+    }
 
       // wait a bit for produced message to be available
       Thread.sleep(700)
@@ -199,8 +198,9 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        for( (topic, partition) <- topics)
+        for( (topic, partition) <- topics) {
           response.messageSet(topic, -1).iterator
+        }
         fail("Expected exception when fetching message with invalid partition")
       } catch {
         case e: InvalidPartitionException => "this is good"
@@ -332,10 +332,10 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
   def testConsumerNotExistTopic() {
     val newTopic = "new-topic"
+    CreateTopicCommand.createTopic(zkClient, newTopic, 1, 1, config.brokerId.toString)
+    Thread.sleep(200)
     val fetchResponse = consumer.fetch(new FetchRequestBuilder().addFetch(newTopic, 0, 0, 10000).build())
     assertFalse(fetchResponse.messageSet(newTopic, 0).iterator.hasNext)
-    val logFile = new File(config.logDir, newTopic + "-0")
-    assertTrue(!logFile.exists)
   }
 
   /**

@@ -146,6 +146,8 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
     */
   def highWaterMark(): Long = setHighWaterMark.get()
 
+  def getEndOffset(): Long = offset + sizeInBytes()
+
   def checkMutable(): Unit = {
     if(!mutable)
       throw new IllegalStateException("Attempt to invoke mutation on immutable message set.")
@@ -208,7 +210,13 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
     needRecover.set(false)    
     len - validUpTo
   }
-  
+
+  def truncateUpto(hw: Long) = {
+    channel.truncate(hw)
+    setSize.set(hw)
+    setHighWaterMark.set(hw)
+  }
+
   /**
    * Read, validate, and discard a single message, returning the next valid offset, and
    * the message being validated

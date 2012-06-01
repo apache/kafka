@@ -21,15 +21,16 @@ import java.io.File
 import kafka.network.{SocketServerStats, SocketServer}
 import kafka.log.LogManager
 import kafka.utils._
-import kafka.cluster.Replica
 import java.util.concurrent._
 import atomic.AtomicBoolean
+import kafka.cluster.Replica
+import org.I0Itec.zkclient.ZkClient
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.
  */
-class KafkaServer(val config: KafkaConfig) extends Logging {
+class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logging {
 
   val CleanShutdownFile = ".kafka_cleanshutdown"
   private var isShuttingDown = new AtomicBoolean(false)
@@ -39,7 +40,8 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
   var requestHandlerPool: KafkaRequestHandlerPool = null
   private var logManager: LogManager = null
   var kafkaZookeeper: KafkaZooKeeper = null
-  val replicaManager = new ReplicaManager(config)
+  private var replicaManager: ReplicaManager = null
+  private var apis: KafkaApis = null
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
@@ -68,9 +70,11 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
                                     config.maxSocketRequestSize)
     Utils.registerMBean(socketServer.stats, statsMBeanName)
 
-    kafkaZookeeper = new KafkaZooKeeper(config, addReplica, getReplica)
+    kafkaZookeeper = new KafkaZooKeeper(config, addReplica, getReplica, makeLeader, makeFollower)
 
-    val apis = new KafkaApis(socketServer.requestChannel, logManager, kafkaZookeeper)
+    replicaManager = new ReplicaManager(config, time, kafkaZookeeper.getZookeeperClient)
+
+    apis = new KafkaApis(socketServer.requestChannel, logManager, replicaManager, kafkaZookeeper)
     requestHandlerPool = new KafkaRequestHandlerPool(socketServer.requestChannel, apis, config.numIoThreads)
     socketServer.startup
 
@@ -84,6 +88,7 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
 
     // starting relevant replicas and leader election for partitions assigned to this broker
     kafkaZookeeper.startup
+
     info("Server started.")
   }
   
@@ -95,7 +100,9 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
     val canShutdown = isShuttingDown.compareAndSet(false, true);
     if (canShutdown) {
       info("Shutting down Kafka server with id " + config.brokerId)
-      kafkaZookeeper.close
+      apis.close()
+      if(replicaManager != null)
+        replicaManager.close()
       if (socketServer != null)
         socketServer.shutdown()
       if(requestHandlerPool != null)
@@ -103,6 +110,7 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
       Utils.unregisterMBean(statsMBeanName)
       if(logManager != null)
         logManager.close()
+      kafkaZookeeper.close
 
       val cleanShutDownFile = new File(new File(config.logDir), CleanShutdownFile)
       debug("Creating clean shutdown file " + cleanShutDownFile.getAbsolutePath())
@@ -117,13 +125,23 @@ class KafkaServer(val config: KafkaConfig) extends Logging {
    */
   def awaitShutdown(): Unit = shutdownLatch.await()
 
-  def addReplica(topic: String, partition: Int): Replica = {
+  def addReplica(topic: String, partition: Int, assignedReplicas: Set[Int]): Replica = {
+    info("Added local replica for topic %s partition %d on broker %d".format(topic, partition, config.brokerId))
     // get local log
     val log = logManager.getOrCreateLog(topic, partition)
-    replicaManager.addLocalReplica(topic, partition, log)
+    replicaManager.addLocalReplica(topic, partition, log, assignedReplicas)
   }
 
-  def getReplica(topic: String, partition: Int): Option[Replica] = replicaManager.getReplica(topic, partition)
+  def makeLeader(replica: Replica, currentISRInZk: Seq[Int]) {
+    replicaManager.makeLeader(replica, currentISRInZk)
+  }
+
+  def makeFollower(replica: Replica, leaderBrokerId: Int, zkClient: ZkClient) {
+    replicaManager.makeFollower(replica, leaderBrokerId, zkClient)
+  }
+
+  def getReplica(topic: String, partition: Int): Option[Replica] =
+    replicaManager.getReplica(topic, partition)
 
   def getLogManager(): LogManager = logManager
 

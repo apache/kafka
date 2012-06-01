@@ -14,12 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package kafka.common
 
 /**
- * Exception raised when broker receives a produce message for partition it does not lead
- * @param message - A more detailed and descriptive error message
+ * Thrown when a request is made for partition on a broker that is NOT a leader for that partition
  */
-class NotLeaderForPartitionException(message: String) extends Exception(message) {
+class NotLeaderForPartitionException(message: String) extends RuntimeException(message) {
   def this() = this(null)
 }

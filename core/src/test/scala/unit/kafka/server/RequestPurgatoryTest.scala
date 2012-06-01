@@ -20,7 +20,6 @@ package kafka.server
 import scala.collection._
 import org.junit.{After, Before, Test}
 import junit.framework.Assert._
-import kafka.server._
 import kafka.message._
 import kafka.api._
 import kafka.utils.TestUtils

@@ -18,10 +18,10 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.common.FetchRequestFormatException
 import kafka.network.Request
 import kafka.utils.Utils
 import scala.collection.mutable.{HashMap, Buffer, ListBuffer}
+import kafka.common.FetchRequestFormatException
 
 object OffsetDetail {
 
@@ -116,7 +116,8 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
     var topics = Set[String]()
     val iter = offsetInfo.iterator
     while(iter.hasNext) {
-      val topic = iter.next.topic
+      val offsetData = iter.next()
+      val topic = offsetData.topic
       if(topics.contains(topic))
         throw new FetchRequestFormatException("FetchRequest has multiple OffsetDetails for topic: " + topic)
       else

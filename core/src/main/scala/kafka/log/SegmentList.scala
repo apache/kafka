@@ -72,7 +72,29 @@ private[log] class SegmentList[T](seq: Seq[T])(implicit m: ClassManifest[T]) {
     }
     deleted
   }
-  
+
+  /**
+   * Delete the items from position newEnd until end of list
+   */
+  def truncLast(newEnd: Int): Seq[T] = {
+    if(newEnd >= contents.get().size-1)
+      throw new IllegalArgumentException("End index must be segment list size - 1");
+    var deleted: Array[T] = null
+    var done = false
+    while(!done) {
+      val curr = contents.get()
+      val newLength = newEnd + 1
+      val updated = new Array[T](newLength)
+      Array.copy(curr, 0, updated, 0, newLength)
+      if(contents.compareAndSet(curr, updated)) {
+        deleted = new Array[T](curr.length - newLength)
+        Array.copy(curr, newEnd + 1, deleted, 0, curr.length - newLength)
+        done = true
+      }
+    }
+    deleted
+  }
+
   /**
    * Get a consistent view of the sequence
    */

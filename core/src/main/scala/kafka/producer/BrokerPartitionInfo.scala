@@ -55,14 +55,14 @@ class BrokerPartitionInfo(producerPool: ProducerPool) extends Logging {
       m.leader match {
         case Some(leader) =>
           val leaderReplica = new Replica(leader.id, partition, topic)
-          partition.leader = Some(leaderReplica)
+          partition.leaderId(Some(leaderReplica.brokerId))
           debug("Topic %s partition %d has leader %d".format(topic, m.partitionId, leader.id))
           partition
         case None =>
           debug("Topic %s partition %d does not have a leader yet".format(topic, m.partitionId))
           partition
       }
-    }.sortWith((s, t) => s.partId < t.partId)
+    }.sortWith((s, t) => s.partitionId < t.partitionId)
   }
 
   /**

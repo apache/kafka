@@ -30,10 +30,11 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.producer.{ProducerData, Producer}
 import kafka.utils.TestUtils._
 import kafka.utils.TestUtils
+import kafka.admin.CreateTopicCommand
 
 class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
 
-  val numNodes = 2
+  val numNodes = 1
   val configs = 
     for(props <- TestUtils.createBrokerConfigs(numNodes))
       yield new KafkaConfig(props)
@@ -54,6 +55,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
 
   override def setUp() {
     super.setUp
+    CreateTopicCommand.createTopic(zkClient, topic, 1, 1, configs.head.brokerId.toString)
     fetcher = new Fetcher(new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), null)
     fetcher.stopConnectionsToAllBrokers
     fetcher.startConnections(topicInfos, cluster)
@@ -69,11 +71,9 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
     var count = sendMessages(perNode)
     waitUntilLeaderIsElected(zkClient, topic, 0, 500)
     fetch(count)
-    Thread.sleep(100)
     assertQueueEmpty()
     count = sendMessages(perNode)
     fetch(count)
-    Thread.sleep(100)
     assertQueueEmpty()
   }
   

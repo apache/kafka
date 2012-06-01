@@ -49,6 +49,53 @@ class SegmentListTest extends JUnitSuite {
   }
   
   @Test
+  def testTruncLast() {
+    {
+      val hd = List(1,2,3)
+      val tail = List(4,5,6)
+      val sl = new SegmentList(hd ::: tail)
+      val view = sl.view
+      assertEquals(hd ::: tail, view.iterator.toList)
+      val deleted = sl.truncLast(2)
+      assertEquals(hd, sl.view.iterator.toList)
+      assertEquals(tail, deleted.iterator.toList)
+      assertEquals("View should remain consistent", hd ::: tail, view.iterator.toList)
+    }
+
+    {
+      val hd = List(1,2,3,4,5)
+      val tail = List(6)
+      val sl = new SegmentList(hd ::: tail)
+      val view = sl.view
+      assertEquals(hd ::: tail, view.iterator.toList)
+      try {
+        sl.truncLast(6)
+        sl.truncLast(5)
+        sl.truncLast(-1)
+        fail("Attempt to truncate with illegal index should fail")
+      }catch {
+        case e: IllegalArgumentException => // this is ok
+      }
+      val deleted = sl.truncLast(4)
+      assertEquals(hd, sl.view.iterator.toList)
+      assertEquals(tail, deleted.iterator.toList)
+      assertEquals("View should remain consistent", hd ::: tail, view.iterator.toList)
+    }
+
+    {
+      val hd = List(1)
+      val tail = List(2,3,4,5,6)
+      val sl = new SegmentList(hd ::: tail)
+      val view = sl.view
+      assertEquals(hd ::: tail, view.iterator.toList)
+      val deleted = sl.truncLast(0)
+      assertEquals(hd, sl.view.iterator.toList)
+      assertEquals(tail, deleted.iterator.toList)
+      assertEquals("View should remain consistent", hd ::: tail, view.iterator.toList)
+    }
+  }
+
+  @Test
   def testTruncBeyondList() {
     val sl = new SegmentList(List(1, 2))
     sl.trunc(3)

@@ -20,6 +20,7 @@ package kafka.server
 import java.util.Properties
 import kafka.utils.{Utils, ZKConfig}
 import kafka.message.Message
+import kafka.consumer.ConsumerConfig
 
 /**
  * Configuration settings for the kafka server
@@ -105,7 +106,27 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
   * leader election on all replicas minus the preferred replica */
   val preferredReplicaWaitTime = Utils.getLong(props, "preferred.replica.wait.time", 300)
 
+  val keepInSyncTimeMs = Utils.getLong(props, "isr.in.sync.time.ms", 30000)
+
+  val keepInSyncBytes = Utils.getLong(props, "isr.in.sync.bytes", 4000)
+
   /* size of the state change request queue in Zookeeper */
   val stateChangeQSize = Utils.getInt(props, "state.change.queue.size", 1000)
+
+  /**
+   * Config options relevant to a follower for a replica
+   */
+  /** the socket timeout for network requests */
+  val replicaSocketTimeoutMs = Utils.getInt(props, "replica.socket.timeout.ms", ConsumerConfig.SocketTimeout)
+
+  /** the socket receive buffer for network requests */
+  val replicaSocketBufferSize = Utils.getInt(props, "replica.socket.buffersize", ConsumerConfig.SocketBufferSize)
+
+  /** the number of byes of messages to attempt to fetch */
+  val replicaFetchSize = Utils.getInt(props, "replica.fetch.size", ConsumerConfig.FetchSize)
+
+  val replicaMaxWaitTimeMs = Utils.getInt(props, "replica.fetch.wait.time.ms", 500)
+
+  val replicaMinBytes = Utils.getInt(props, "replica.fetch.min.bytes", 4086)
 
  }

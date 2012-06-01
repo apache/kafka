@@ -91,32 +91,30 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     props.put("zk.connect", TestZKUtils.zookeeperConnect)
 
     val config = new ProducerConfig(props)
-
+    // create topic with 1 partition
+    CreateTopicCommand.createTopic(zkClient, "new-topic", 1)
     val producer = new Producer[String, String](config)
     try {
-      // Available partition ids should be 0, 1, 2 and 3. The data in both cases should get sent to partition 0, but
-      // since partition 0 can exist on any of the two brokers, we need to fetch from both brokers
+      // Available partition ids should be 0.
       producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-      Thread.sleep(100)
       producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-      Thread.sleep(1000)
-      // cross check if one of the brokers got the messages
-      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
-      val messageSet1 = response1.messageSet("new-topic", 0).iterator
-      val response2 = consumer2.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
-      val messageSet2 = response2.messageSet("new-topic", 0).iterator
-      assertTrue("Message set should have 1 message", (messageSet1.hasNext || messageSet2.hasNext))
+      // get the leader
+      val leaderOpt = ZkUtils.getLeaderForPartition(zkClient, "new-topic", 0)
+      assertTrue("Leader for topic new-topic partition 0 should exist", leaderOpt.isDefined)
+      val leader = leaderOpt.get
 
-      if(messageSet1.hasNext) {
-        assertEquals(new Message("test1".getBytes), messageSet1.next.message)
-        assertTrue("Message set should have 1 message", messageSet1.hasNext)
-        assertEquals(new Message("test1".getBytes), messageSet1.next.message)
+      val messageSet = if(leader == server1.config.brokerId) {
+        val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+        response1.messageSet("new-topic", 0).iterator
+      }else {
+        val response2 = consumer2.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+        response2.messageSet("new-topic", 0).iterator
       }
-      else {
-        assertEquals(new Message("test1".getBytes), messageSet2.next.message)
-        assertTrue("Message set should have 1 message", messageSet2.hasNext)
-        assertEquals(new Message("test1".getBytes), messageSet2.next.message)
-      }
+      assertTrue("Message set should have 1 message", messageSet.hasNext)
+
+      assertEquals(new Message("test1".getBytes), messageSet.next.message)
+      assertTrue("Message set should have 1 message", messageSet.hasNext)
+      assertEquals(new Message("test1".getBytes), messageSet.next.message)
     } catch {
       case e: Exception => fail("Not expected", e)
     } finally {
@@ -175,65 +173,6 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
       case e: Exception => fail("Not expected", e)
     }
     producer.close
-  }
-
-  @Test
-  def testZKSendToExistingTopicWithNoBrokers() {
-    val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
-
-    val config = new ProducerConfig(props)
-
-    val producer = new Producer[String, String](config)
-    var server: KafkaServer = null
-
-    // create topic
-    CreateTopicCommand.createTopic(zkClient, "new-topic", 4, 2, "0:1,0:1,0:1,0:1")
-
-    try {
-      // Available partition ids should be 0, 1, 2 and 3. The data in both cases should get sent to partition 0 and
-      // all partitions have broker 0 as the leader.
-      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test")))
-      Thread.sleep(100)
-      // cross check if brokers got the messages
-      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
-      val messageSet1 = response1.messageSet("new-topic", 0).iterator
-      assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      assertEquals(new Message("test".getBytes), messageSet1.next.message)
-
-      // shutdown server2
-      server2.shutdown
-      server2.awaitShutdown()
-      Thread.sleep(100)
-      // delete the new-topic logs
-      Utils.rm(server2.config.logDir)
-      Thread.sleep(100)
-      // start it up again. So broker 2 exists under /broker/ids, but nothing exists under /broker/topics/new-topic
-      val props2 = TestUtils.createBrokerConfig(brokerId2, port2)
-      val config2 = new KafkaConfig(props2) {
-        override val numPartitions = 4
-      }
-      server = TestUtils.createServer(config2)
-      Thread.sleep(100)
-
-      // now there are no brokers registered under test-topic.
-      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test")))
-      Thread.sleep(100)
-
-      // cross check if brokers got the messages
-      val response2 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
-      val messageSet2 = response2.messageSet("new-topic", 0).iterator
-      assertTrue("Message set should have 1 message", messageSet2.hasNext)
-      assertEquals(new Message("test".getBytes), messageSet2.next.message)
-
-    } catch {
-      case e: Exception => fail("Not expected", e)
-    } finally {
-      if(server != null) server.shutdown
-      producer.close
-    }
   }
 
   @Test

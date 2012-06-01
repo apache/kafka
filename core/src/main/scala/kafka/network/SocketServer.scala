@@ -64,6 +64,7 @@ class SocketServer(val port: Int,
    * Shutdown the socket server
    */
   def shutdown() = {
+    info("Shutting down socket server")
     acceptor.shutdown
     for(processor <- processors)
       processor.shutdown

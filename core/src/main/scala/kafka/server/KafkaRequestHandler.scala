@@ -42,7 +42,7 @@ class KafkaRequestHandler(val requestChannel: RequestChannel, apis: KafkaApis) e
 
 class KafkaRequestHandlerPool(val requestChannel: RequestChannel, 
                               val apis: KafkaApis, 
-                              numThreads: Int) { 
+                              numThreads: Int) extends Logging {
   
   val threads = new Array[Thread](numThreads)
   val runnables = new Array[KafkaRequestHandler](numThreads)
@@ -53,10 +53,12 @@ class KafkaRequestHandlerPool(val requestChannel: RequestChannel,
   }
   
   def shutdown() {
+    info("Shutting down request handlers")
     for(handler <- runnables)
       handler.shutdown
     for(thread <- threads)
       thread.join
+    info("Request handlers shut down")
   }
   
 }

@@ -24,6 +24,7 @@ import java.util.concurrent.CountDownLatch
 import kafka.server.KafkaConfig
 import kafka.common.{InvalidTopicException, InvalidPartitionException}
 import kafka.api.OffsetRequest
+import kafka.log.Log._
 
 /**
  * The guy who creates and hands out logs
@@ -144,7 +145,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
     val log = getLog(offsetRequest.topic, offsetRequest.partition)
     log match {
       case Some(l) => l.getOffsetsBefore(offsetRequest)
-      case None => Log.getEmptyOffsets(offsetRequest)
+      case None => getEmptyOffsets(offsetRequest)
     }
   }
 
@@ -190,28 +191,13 @@ private[kafka] class LogManager(val config: KafkaConfig,
     log
   }
 
-  /* Attemps to delete all provided segments from a log and returns how many it was able to */
-  private def deleteSegments(log: Log, segments: Seq[LogSegment]): Int = {
-    var total = 0
-    for(segment <- segments) {
-      info("Deleting log segment " + segment.file.getName() + " from " + log.name)
-      swallow(segment.messageSet.close())
-      if(!segment.file.delete()) {
-        warn("Delete failed.")
-      } else {
-        total += 1
-      }
-    }
-    total
-  }
-
   /* Runs through the log removing segments older than a certain age */
   private def cleanupExpiredSegments(log: Log): Int = {
     val startMs = time.milliseconds
-    val topic = Utils.getTopicPartition(log.dir.getName)._1
+    val topic = Utils.getTopicPartition(log.name)._1
     val logCleanupThresholdMS = logRetentionMSMap.get(topic).getOrElse(this.logCleanupDefaultAgeMs)
     val toBeDeleted = log.markDeletedWhile(startMs - _.file.lastModified > logCleanupThresholdMS)
-    val total = deleteSegments(log, toBeDeleted)
+    val total = log.deleteSegments(toBeDeleted)
     total
   }
 
@@ -231,7 +217,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
       }
     }
     val toBeDeleted = log.markDeletedWhile( shouldDelete )
-    val total = deleteSegments(log, toBeDeleted)
+    val total = log.deleteSegments(toBeDeleted)
     total
   }
 
@@ -292,16 +278,16 @@ private[kafka] class LogManager(val config: KafkaConfig,
       try{
         val timeSinceLastFlush = System.currentTimeMillis - log.getLastFlushedTime
         var logFlushInterval = config.defaultFlushIntervalMs
-        if(logFlushIntervalMap.contains(log.getTopicName))
-          logFlushInterval = logFlushIntervalMap(log.getTopicName)
-        debug(log.getTopicName + " flush interval  " + logFlushInterval +
+        if(logFlushIntervalMap.contains(log.topicName))
+          logFlushInterval = logFlushIntervalMap(log.topicName)
+        debug(log.topicName + " flush interval  " + logFlushInterval +
             " last flushed " + log.getLastFlushedTime + " timesincelastFlush: " + timeSinceLastFlush)
         if(timeSinceLastFlush >= logFlushInterval)
           log.flush
       }
       catch {
         case e =>
-          error("Error flushing topic " + log.getTopicName, e)
+          error("Error flushing topic " + log.topicName, e)
           e match {
             case _: IOException =>
               fatal("Halting due to unrecoverable I/O error while flushing logs: " + e.getMessage, e)

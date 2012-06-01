@@ -18,6 +18,123 @@
 package kafka.cluster
 
 import kafka.log.Log
+import kafka.server.{KafkaConfig, ReplicaFetcherThread}
+import java.lang.IllegalStateException
+import kafka.utils.Logging
 
-case class Replica(brokerId: Int, partition: Partition, topic: String,
-                   var log: Option[Log] = None, var hw: Long = -1, var leo: Long = -1, isLocal: Boolean = false)
+class Replica(val brokerId: Int,
+              val partition: Partition,
+              val topic: String,
+              var log: Option[Log] = None,
+              var leoUpdateTime: Long = -1L) extends Logging {
+  private var logEndOffset: Long = -1L
+  private var replicaFetcherThread: ReplicaFetcherThread = null
+
+  def logEndOffset(newLeo: Option[Long] = None): Long = {
+    isLocal match {
+      case true =>
+        newLeo match {
+          case Some(newOffset) => throw new IllegalStateException("Trying to set the leo %d for local log".format(newOffset))
+          case None => log.get.logEndOffset
+        }
+      case false =>
+        newLeo match {
+          case Some(newOffset) =>
+            logEndOffset = newOffset
+            logEndOffset
+          case None => logEndOffset
+        }
+    }
+  }
+
+  def logEndOffsetUpdateTime(time: Option[Long] = None): Long = {
+    time match {
+      case Some(t) =>
+        leoUpdateTime = t
+        leoUpdateTime
+      case None =>
+        leoUpdateTime
+    }
+  }
+
+  def isLocal: Boolean = {
+    log match {
+      case Some(l) => true
+      case None => false
+    }
+  }
+
+  def highWatermark(highwaterMarkOpt: Option[Long] = None): Long = {
+    highwaterMarkOpt match {
+      case Some(highwaterMark) =>
+        isLocal match {
+          case true =>
+            trace("Setting hw for topic %s partition %d on broker %d to %d".format(topic, partition.partitionId,
+                                                                                   brokerId, highwaterMark))
+            log.get.setHW(highwaterMark)
+            highwaterMark
+          case false => throw new IllegalStateException("Unable to set highwatermark for topic %s ".format(topic) +
+            "partition %d on broker %d, since there is no local log for this partition"
+              .format(partition.partitionId, brokerId))
+        }
+      case None =>
+        isLocal match {
+          case true =>
+            log.get.highwaterMark
+          case false => throw new IllegalStateException("Unable to get highwatermark for topic %s ".format(topic) +
+            "partition %d on broker %d, since there is no local log for this partition"
+              .format(partition.partitionId, brokerId))
+        }
+    }
+  }
+
+  def startReplicaFetcherThread(leaderBroker: Broker, config: KafkaConfig) {
+    val name = "Replica-Fetcher-%d-%s-%d".format(brokerId, topic, partition.partitionId)
+    replicaFetcherThread = new ReplicaFetcherThread(name, this, leaderBroker, config)
+    replicaFetcherThread.setDaemon(true)
+    replicaFetcherThread.start()
+  }
+
+  def stopReplicaFetcherThread() {
+    if(replicaFetcherThread != null) {
+      replicaFetcherThread.shutdown()
+      replicaFetcherThread = null
+    }
+  }
+
+  def getIfFollowerAndLeader(): (Boolean, Int) = {
+    replicaFetcherThread != null match {
+      case true => (true, replicaFetcherThread.getLeader().id)
+      case false => (false, -1)
+    }
+  }
+
+  def close() {
+    if(replicaFetcherThread != null)
+      replicaFetcherThread.shutdown()
+  }
+
+  override def equals(that: Any): Boolean = {
+    if(!(that.isInstanceOf[Replica]))
+      return false
+    val other = that.asInstanceOf[Replica]
+    if(topic.equals(other.topic) && brokerId == other.brokerId && partition.equals(other.partition))
+      return true
+    false
+  }
+
+  override def hashCode(): Int = {
+    31 + topic.hashCode() + 17*brokerId + partition.hashCode()
+  }
+
+
+  override def toString(): String = {
+    val replicaString = new StringBuilder
+    replicaString.append("ReplicaId: " + brokerId)
+    replicaString.append("; Topic: " + topic)
+    replicaString.append("; Partition: " + partition.toString)
+    replicaString.append("; isLocal: " + isLocal)
+    if(isLocal) replicaString.append("; Highwatermark: " + highWatermark())
+    replicaString.toString()
+  }
+}

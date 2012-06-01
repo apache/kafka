@@ -50,7 +50,7 @@ class LogTest extends JUnitSuite {
     createEmptyLogs(logDir, 0)
     new Log(logDir, 1024, 1000, false)
   }
-  
+
   @Test
   def testLoadInvalidLogsFails() {
     createEmptyLogs(logDir, 0, 15)
@@ -61,7 +61,7 @@ class LogTest extends JUnitSuite {
       case e: IllegalStateException => "This is good"
     }
   }
-  
+
   @Test
   def testAppendAndRead() {
     val log = new Log(logDir, 1024, 1000, false)
@@ -77,7 +77,7 @@ class LogTest extends JUnitSuite {
     }
     assertEquals(10, current)
   }
-  
+
   @Test
   def testReadOutOfRange() {
     createEmptyLogs(logDir, 1024)
@@ -96,7 +96,7 @@ class LogTest extends JUnitSuite {
       case e: OffsetOutOfRangeException => "This is good."
     }
   }
-  
+
   /** Test that writing and reading beyond the log size boundary works */
   @Test
   def testLogRolls() {
@@ -106,7 +106,7 @@ class LogTest extends JUnitSuite {
     for(i <- 0 until numMessages)
       log.append(TestUtils.singleMessageSet(Integer.toString(i).getBytes()))
     log.flush
-    
+
     /* now do successive reads and iterate over the resulting message sets counting the messages
      * we should find exact 100 messages.
      */
@@ -124,7 +124,7 @@ class LogTest extends JUnitSuite {
     }
     assertEquals("We did not find all the messages we put in", numMessages, current)
   }
-  
+
   @Test
   def testFindSegment() {
     assertEquals("Search in empty segments list should find nothing", None, Log.findRange(makeRanges(), 45))
@@ -185,7 +185,7 @@ class LogTest extends JUnitSuite {
       val deletedSegments = log.markDeletedWhile(_ => true)
 
       // we shouldn't delete the last empty log segment.
-      assertTrue(deletedSegments.size == 0)
+      assertTrue("We shouldn't delete the last empty log segment", log.segments.view.size == 1)
 
       // we now have a new log
       assertEquals(curOffset, log.nextAppendOffset)

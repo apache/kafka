@@ -17,18 +17,18 @@
 
 package kafka.log
 
-import java.util.concurrent.atomic._
-import java.text.NumberFormat
-import java.io._
-import kafka.message._
-import kafka.utils._
-import kafka.common._
 import kafka.api.OffsetRequest
-import java.util._
-import kafka.server.BrokerTopicStat
+import java.io.{IOException, RandomAccessFile, File}
+import java.util.{Comparator, Collections, ArrayList}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicInteger}
+import kafka.message.{MessageSet, InvalidMessageException, FileMessageSet}
+import kafka.utils._
+import java.text.NumberFormat
+import kafka.common.OffsetOutOfRangeException
 
-private[kafka] object Log {
+object Log {
   val FileSuffix = ".kafka"
+  val hwFileName = "highwatermark"
 
   /**
    * Find a given range object in a list of ranges by a value in that range. Does a binary search over the ranges
@@ -76,9 +76,9 @@ private[kafka] object Log {
     nf.setMinimumIntegerDigits(20)
     nf.setMaximumFractionDigits(0)
     nf.setGroupingUsed(false)
-    nf.format(offset) + Log.FileSuffix
+    nf.format(offset) + FileSuffix
   }
-  
+
   def getEmptyOffsets(request: OffsetRequest): Array[Long] = {
     if (request.time == OffsetRequest.LatestTime || request.time == OffsetRequest.EarliestTime)
       return Array(0L)
@@ -87,10 +87,11 @@ private[kafka] object Log {
   }
 }
 
+
 /**
  * A segment file in the log directory. Each log semgment consists of an open message set, a start offset and a size 
  */
-private[log] class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long) extends Range {
+class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long) extends Range {
   @volatile var deleted = false
   def size: Long = messageSet.highWaterMark
   override def toString() = "(file=" + file + ", start=" + start + ", size=" + size + ")"
@@ -101,7 +102,10 @@ private[log] class LogSegment(val file: File, val messageSet: FileMessageSet, va
  * An append-only log for storing messages. 
  */
 @threadsafe
-private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean) extends Logging {
+private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean)
+  extends Logging {
+
+  import kafka.log.Log._
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
@@ -115,54 +119,60 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
   /* The actual segments of the log */
   private[log] val segments: SegmentList[LogSegment] = loadSegments()
 
-  /* The name of this log */
-  val name  = dir.getName()
+
+  /* create the leader highwatermark file handle */
+  private val hwFile = new RandomAccessFile(dir.getAbsolutePath + "/" + hwFileName, "rw")
+
+  private var hw: Long = 0
 
   private val logStats = new LogStats(this)
 
-  Utils.registerMBean(logStats, "kafka:type=kafka.logs." + dir.getName)  
+  Utils.registerMBean(logStats, "kafka:type=kafka.logs." + dir.getName)
+
+  /* The name of this log */
+  def name  = dir.getName()
 
   /* Load the log segments from the log files on disk */
   private def loadSegments(): SegmentList[LogSegment] = {
     // open all the segments read-only
-    val accum = new ArrayList[LogSegment]
+    val logSegments = new ArrayList[LogSegment]
     val ls = dir.listFiles()
     if(ls != null) {
-      for(file <- ls if file.isFile && file.toString.endsWith(Log.FileSuffix)) {
+      for(file <- ls if file.isFile && file.toString.endsWith(FileSuffix)) {
         if(!file.canRead)
           throw new IOException("Could not read file " + file)
         val filename = file.getName()
-        val start = filename.substring(0, filename.length - Log.FileSuffix.length).toLong
+        val start = filename.substring(0, filename.length - FileSuffix.length).toLong
         val messageSet = new FileMessageSet(file, false)
-        accum.add(new LogSegment(file, messageSet, start))
+        logSegments.add(new LogSegment(file, messageSet, start))
       }
     }
 
-    if(accum.size == 0) {
+    if(logSegments.size == 0) {
       // no existing segments, create a new mutable segment
-      val newFile = new File(dir, Log.nameFromOffset(0))
+      val newFile = new File(dir, nameFromOffset(0))
       val set = new FileMessageSet(newFile, true)
-      accum.add(new LogSegment(newFile, set, 0))
+      logSegments.add(new LogSegment(newFile, set, 0))
     } else {
       // there is at least one existing segment, validate and recover them/it
       // sort segments into ascending order for fast searching
-      Collections.sort(accum, new Comparator[LogSegment] {
+      Collections.sort(logSegments, new Comparator[LogSegment] {
         def compare(s1: LogSegment, s2: LogSegment): Int = {
           if(s1.start == s2.start) 0
           else if(s1.start < s2.start) -1
           else 1
         }
       })
-      validateSegments(accum)
+      validateSegments(logSegments)
 
       //make the final section mutable and run recovery on it if necessary
-      val last = accum.remove(accum.size - 1)
+      val last = logSegments.remove(logSegments.size - 1)
       last.messageSet.close()
       info("Loading the last segment " + last.file.getAbsolutePath() + " in mutable mode, recovery " + needRecovery)
       val mutable = new LogSegment(last.file, new FileMessageSet(last.file, true, new AtomicBoolean(needRecovery)), last.start)
-      accum.add(mutable)
+      logSegments.add(mutable)
     }
-    new SegmentList(accum.toArray(new Array[LogSegment](accum.size)))
+    new SegmentList(logSegments.toArray(new Array[LogSegment](logSegments.size)))
   }
 
   /**
@@ -191,8 +201,12 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
   def close() {
     debug("Closing log " + name)
     lock synchronized {
-      for(seg <- segments.view)
+      for(seg <- segments.view) {
+        info("Closing log segment " + seg.file.getAbsolutePath)
         seg.messageSet.close()
+      }
+      checkpointHW()
+      hwFile.close()
     }
   }
 
@@ -200,7 +214,7 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
    * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
    * Returns the offset at which the messages are written.
    */
-  def append(messages: ByteBufferMessageSet): Unit = {
+  def append(messages: MessageSet): Unit = {
     // validate the messages
     var numberOfMessages = 0
     for(messageAndOffset <- messages) {
@@ -209,25 +223,13 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
       numberOfMessages += 1;
     }
 
-    BrokerTopicStat.getBrokerTopicStat(getTopicName).recordMessagesIn(numberOfMessages)
-    BrokerTopicStat.getBrokerAllTopicStat.recordMessagesIn(numberOfMessages)
     logStats.recordAppendedMessages(numberOfMessages)
-
-    // truncate the message set's buffer upto validbytes, before appending it to the on-disk log
-    val validByteBuffer = messages.getBuffer.duplicate()
-    val messageSetValidBytes = messages.validBytes
-    if(messageSetValidBytes > Int.MaxValue || messageSetValidBytes < 0)
-      throw new InvalidMessageSizeException("Illegal length of message set " + messageSetValidBytes +
-        " Message set cannot be appended to log. Possible causes are corrupted produce requests")
-
-    validByteBuffer.limit(messageSetValidBytes.asInstanceOf[Int])
-    val validMessages = new ByteBufferMessageSet(validByteBuffer)
-
+    
     // they are valid, insert them in the log
     lock synchronized {
       try {
         val segment = segments.view.last
-        segment.messageSet.append(validMessages)
+        segment.messageSet.append(messages)
         maybeFlush(numberOfMessages)
         maybeRoll(segment)
       }
@@ -260,17 +262,10 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
       val deletable = view.takeWhile(predicate)
       for(seg <- deletable)
         seg.deleted = true
-      var numToDelete = deletable.size
+      val numToDelete = deletable.size
       // if we are deleting everything, create a new empty segment
       if(numToDelete == view.size) {
-        if (view(numToDelete - 1).size > 0)
-          roll()
-        else {
-          // If the last segment to be deleted is empty and we roll the log, the new segment will have the same
-          // file name. So simply reuse the last segment and reset the modified time.
-          view(numToDelete - 1).file.setLastModified(SystemTime.milliseconds)
-          numToDelete -=1
-        }
+        roll()
       }
       segments.trunc(numToDelete)
     }
@@ -294,7 +289,12 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
   /**
    *  get the current high watermark of the log
    */
-  def getHighwaterMark: Long = segments.view.last.messageSet.highWaterMark
+  def highwaterMark: Long = segments.view.last.messageSet.highWaterMark
+
+  /**
+   *  get the offset of the last message in the log
+   */
+  def logEndOffset: Long = segments.view.last.messageSet.getEndOffset()
 
   /**
    * Roll the log over if necessary
@@ -309,12 +309,9 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
    */
   def roll() {
     lock synchronized {
+      val last = segments.view.last
       val newOffset = nextAppendOffset
-      val newFile = new File(dir, Log.nameFromOffset(newOffset))
-      if (newFile.exists) {
-        warn("newly rolled logsegment " + newFile.getName + " already exists; deleting it first")
-        newFile.delete()
-      }
+      val newFile = new File(dir, nameFromOffset(newOffset))
       debug("Rolling log '" + name + "' to " + newFile.getName())
       segments.append(new LogSegment(newFile, new FileMessageSet(newFile, true), newOffset))
     }
@@ -341,6 +338,7 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
       segments.view.last.messageSet.flush()
       unflushed.set(0)
       lastflushedTime.set(System.currentTimeMillis)
+      checkpointHW()
      }
   }
 
@@ -383,8 +381,71 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
     }
     ret
   }
- 
-  def getTopicName():String = {
+
+  /* Attemps to delete all provided segments from a log and returns how many it was able to */
+  def deleteSegments(segments: Seq[LogSegment]): Int = {
+    var total = 0
+    for(segment <- segments) {
+      info("Deleting log segment " + segment.file.getName() + " from " + name)
+      swallow(segment.messageSet.close())
+      if(!segment.file.delete()) {
+        warn("Delete failed.")
+      } else {
+        total += 1
+      }
+    }
+    total
+  }
+
+  def recoverUptoLastCheckpointedHW() {
+    if(hwFile.length() > 0) {
+      // read the last checkpointed hw from disk
+      hwFile.seek(0)
+      val lastKnownHW = hwFile.readLong()
+      // find the log segment that has this hw
+      val segmentToBeTruncated = segments.view.find(segment =>
+        lastKnownHW >= segment.start && lastKnownHW < segment.messageSet.getEndOffset())
+
+      segmentToBeTruncated match {
+        case Some(segment) =>
+          val truncatedSegmentIndex = segments.view.indexOf(segment)
+          segments.truncLast(truncatedSegmentIndex)
+        case None =>
+      }
+
+      segmentToBeTruncated match {
+        case Some(segment) =>
+          segment.messageSet.truncateUpto(lastKnownHW)
+          info("Truncated log segment %s to highwatermark %d".format(segment.file.getAbsolutePath, hw))
+        case None =>
+          assert(lastKnownHW <= segments.view.last.messageSet.size,
+            "Last checkpointed hw %d cannot be greater than the latest message offset %d in the log %s".
+              format(lastKnownHW, segments.view.last.messageSet.size, segments.view.last.file.getAbsolutePath))
+          error("Cannot truncate log to %d since the log start offset is %d and end offset is %d"
+            .format(lastKnownHW, segments.view.head.start, segments.view.last.messageSet.size))
+      }
+
+      val segmentsToBeDeleted = segments.view.filter(segment => segment.start >= lastKnownHW)
+      if(segmentsToBeDeleted.size < segments.view.size) {
+      val numSegmentsDeleted = deleteSegments(segmentsToBeDeleted)
+      if(numSegmentsDeleted != segmentsToBeDeleted.size)
+        error("Failed to delete some segments during log recovery")
+      }
+    }else
+      info("Unable to recover log upto hw. No previously checkpointed high watermark found for " + name)
+  }
+
+  def setHW(latestLeaderHW: Long) {
+    hw = latestLeaderHW
+  }
+
+  def checkpointHW() {
+    hwFile.seek(0)
+    hwFile.writeLong(hw)
+    hwFile.getChannel.force(true)
+  }
+
+  def topicName():String = {
     name.substring(0, name.lastIndexOf("-"))
   }
 

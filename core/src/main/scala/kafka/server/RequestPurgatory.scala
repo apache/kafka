@@ -21,7 +21,6 @@ import scala.collection._
 import java.util.LinkedList
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import kafka.api._
 import kafka.network._
 import kafka.utils._
 

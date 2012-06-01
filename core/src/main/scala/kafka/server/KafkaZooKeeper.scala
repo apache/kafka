@@ -17,14 +17,15 @@
 
 package kafka.server
 
-import java.lang.{Thread, IllegalStateException}
 import java.net.InetAddress
-import kafka.admin.AdminUtils
 import kafka.cluster.Replica
-import kafka.common.{NoLeaderForPartitionException, NotLeaderForPartitionException, KafkaZookeeperClient}
 import kafka.utils._
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener, IZkStateListener, ZkClient}
+import kafka.admin.AdminUtils
+import java.lang.{Thread, IllegalStateException}
+import collection.mutable.HashSet
+import kafka.common.{InvalidPartitionException, NoLeaderForPartitionException, NotLeaderForPartitionException, KafkaZookeeperClient}
 
 /**
  * Handles the server's interaction with zookeeper. The server needs to register the following paths:
@@ -33,8 +34,10 @@ import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener, IZkStateListener,
  *
  */
 class KafkaZooKeeper(config: KafkaConfig,
-                     addReplicaCbk: (String, Int) => Replica,
-                     getReplicaCbk: (String, Int) => Option[Replica]) extends Logging {
+                     addReplicaCbk: (String, Int, Set[Int]) => Replica,
+                     getReplicaCbk: (String, Int) => Option[Replica],
+                     becomeLeader: (Replica, Seq[Int]) => Unit,
+                     becomeFollower: (Replica, Int, ZkClient) => Unit) extends Logging {
 
   val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + config.brokerId
   private var zkClient: ZkClient = null
@@ -109,6 +112,12 @@ class KafkaZooKeeper(config: KafkaConfig,
   }
 
   def ensurePartitionLeaderOnThisBroker(topic: String, partition: Int) {
+    // TODO: KAFKA-352 first check if this topic exists in the cluster
+//    if(!topicPartitionsChangeListener.doesTopicExistInCluster(topic))
+//      throw new UnknownTopicException("Topic %s doesn't exist in the cluster".format(topic))
+    // check if partition id is invalid
+    if(partition < 0)
+      throw new InvalidPartitionException("Partition %d is invalid".format(partition))
     ZkUtils.getLeaderForPartition(zkClient, topic, partition) match {
       case Some(leader) =>
         if(leader != config.brokerId)
@@ -179,8 +188,9 @@ class KafkaZooKeeper(config: KafkaConfig,
   private def startReplicasForPartitions(topic: String, partitions: Seq[Int]) {
     partitions.foreach { partition =>
       val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partition).map(r => r.toInt)
+      info("Assigned replicas list for topic %s partition %d is %s".format(topic, partition, assignedReplicas.mkString(",")))
       if(assignedReplicas.contains(config.brokerId)) {
-        val replica = addReplicaCbk(topic, partition)
+        val replica = addReplicaCbk(topic, partition, assignedReplicas.toSet)
         startReplica(replica)
       } else
         warn("Ignoring partition %d of topic %s since broker %d doesn't host any replicas for it"
@@ -189,43 +199,114 @@ class KafkaZooKeeper(config: KafkaConfig,
   }
 
   private def startReplica(replica: Replica) {
-    info("Starting replica for topic %s partition %d on broker %d".format(replica.topic, replica.partition.partId, replica.brokerId))
-    replica.log match {
-      case Some(log) =>  // log is already started
-      case None =>
-      // TODO: Add log recovery upto the last checkpointed HW as part of KAFKA-46
-    }
-    ZkUtils.getLeaderForPartition(zkClient, replica.topic, replica.partition.partId) match {
-      case Some(leader) => info("Topic %s partition %d has leader %d".format(replica.topic, replica.partition.partId, leader))
+    info("Starting replica for topic %s partition %d on broker %d".format(replica.topic, replica.partition.partitionId,
+      replica.brokerId))
+    ZkUtils.getLeaderForPartition(zkClient, replica.topic, replica.partition.partitionId) match {
+      case Some(leader) => info("Topic %s partition %d has leader %d".format(replica.topic, replica.partition.partitionId,
+        leader))
+        // check if this broker is the leader, if not, then become follower
+        if(leader != config.brokerId)
+          becomeFollower(replica, leader, zkClient)
       case None => // leader election
         leaderElection(replica)
     }
   }
 
   def leaderElection(replica: Replica) {
-    info("Broker %d electing leader for topic %s partition %d".format(config.brokerId, replica.topic, replica.partition.partId))
+    info("Broker %d electing leader for topic %s partition %d".format(config.brokerId, replica.topic, replica.partition.partitionId))
     // read the AR list for replica.partition from ZK
-    val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, replica.topic, replica.partition.partId).map(r => r.toInt)
-    // TODO: read the ISR as part of KAFKA-302
-    if(assignedReplicas.contains(replica.brokerId)) {
+    val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, replica.topic, replica.partition.partitionId).map(_.toInt)
+    val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, replica.topic, replica.partition.partitionId)
+    val liveBrokers = ZkUtils.getSortedBrokerList(zkClient).map(_.toInt)
+    if(canBecomeLeader(config.brokerId, replica.topic, replica.partition.partitionId,
+                       assignedReplicas, inSyncReplicas, liveBrokers)) {
+      info("Broker %d will participate in leader election for topic %s partition %d".format(config.brokerId, replica.topic,
+                                                                                           replica.partition.partitionId))
       // wait for some time if it is not the preferred replica
       try {
-        if(replica.brokerId != assignedReplicas.head)
-          Thread.sleep(config.preferredReplicaWaitTime)
+        if(replica.brokerId != assignedReplicas.head) {
+          // sleep only if the preferred replica is alive
+          if(liveBrokers.contains(assignedReplicas.head)) {
+            info("Preferred replica %d for topic %s ".format(assignedReplicas.head, replica.topic) +
+              "partition %d is alive. Waiting for %d ms to allow it to become leader"
+              .format(replica.partition.partitionId, config.preferredReplicaWaitTime))
+            Thread.sleep(config.preferredReplicaWaitTime)
+          }
+        }
       }catch {
         case e => // ignoring
       }
-      val newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, replica.topic, replica.partition.partId, replica.brokerId)
-      newLeaderEpoch match {
-        case Some(epoch) =>
-          info("Broker %d is leader for topic %s partition %d".format(replica.brokerId, replica.topic, replica.partition.partId))
-          // TODO: Become leader as part of KAFKA-302
+      val newLeaderEpochAndISR = ZkUtils.tryToBecomeLeaderForPartition(zkClient, replica.topic,
+        replica.partition.partitionId, replica.brokerId)
+      newLeaderEpochAndISR match {
+        case Some(epochAndISR) =>
+          info("Broker %d is leader for topic %s partition %d".format(replica.brokerId, replica.topic,
+            replica.partition.partitionId))
+          info("Current ISR for topic %s partition %d is %s".format(replica.topic, replica.partition.partitionId,
+                                                                    epochAndISR._2.mkString(",")))
+          becomeLeader(replica, epochAndISR._2)
         case None =>
+          ZkUtils.getLeaderForPartition(zkClient, replica.topic, replica.partition.partitionId) match {
+            case Some(leader) =>
+              becomeFollower(replica, leader, zkClient)
+            case None =>
+              error("Lost leader for topic %s partition %d right after leader election".format(replica.topic,
+                replica.partition.partitionId))
+          }
       }
     }
   }
 
+  private def canBecomeLeader(brokerId: Int, topic: String, partition: Int, assignedReplicas: Seq[Int],
+                              inSyncReplicas: Seq[Int], liveBrokers: Seq[Int]): Boolean = {
+    // TODO: raise alert, mark the partition offline if no broker in the assigned replicas list is alive
+    assert(assignedReplicas.size > 0, "There should be at least one replica in the assigned replicas list for topic " +
+      " %s partition %d".format(topic, partition))
+    inSyncReplicas.size > 0 match {
+      case true => // check if this broker is in the ISR. If yes, return true
+        inSyncReplicas.contains(brokerId) match {
+          case true =>
+            info("Broker %d can become leader since it is in the ISR %s".format(brokerId, inSyncReplicas.mkString(",")) +
+              " for topic %s partition %d".format(topic, partition))
+            true
+          case false =>
+            // check if any broker in the ISR is alive. If not, return true only if this broker is in the AR
+            val liveBrokersInISR = inSyncReplicas.filter(r => liveBrokers.contains(r))
+            liveBrokersInISR.isEmpty match {
+              case true =>
+                if(assignedReplicas.contains(brokerId)) {
+                  info("No broker in the ISR %s for topic %s".format(inSyncReplicas.mkString(","), topic) +
+                    " partition %d is alive. Broker %d can become leader since it is in the assigned replicas %s"
+                      .format(partition, brokerId, assignedReplicas.mkString(",")))
+                  true
+                }else {
+                  info("No broker in the ISR %s for topic %s".format(inSyncReplicas.mkString(","), topic) +
+                    " partition %d is alive. Broker %d can become leader since it is in the assigned replicas %s"
+                      .format(partition, brokerId, assignedReplicas.mkString(",")))
+                  false
+                }
+              case false =>
+                info("ISR for topic %s partition %d is %s. Out of these %s brokers are alive. Broker %d "
+                  .format(topic, partition, inSyncReplicas.mkString(",")) + "cannot become leader since it doesn't exist " +
+                  "in the ISR")
+                false  // let one of the live brokers in the ISR become the leader
+            }
+        }
+      case false =>
+        if(assignedReplicas.contains(brokerId)) {
+          info("ISR for topic %s partition %d is empty. Broker %d can become leader since it "
+            .format(topic, partition, brokerId) + "is part of the assigned replicas list")
+          true
+        }else {
+          info("ISR for topic %s partition %d is empty. Broker %d cannot become leader since it "
+            .format(topic, partition, brokerId) + "is not part of the assigned replicas list")
+          false
+        }
+    }
+  }
+
   class TopicChangeListener extends IZkChildListener with Logging {
+    private val allTopics = new HashSet[String]()
 
     @throws(classOf[Exception])
     def handleChildChange(parentPath : String, curChilds : java.util.List[String]) {
@@ -233,12 +314,16 @@ class KafkaZooKeeper(config: KafkaConfig,
         debug("Topic/partition change listener fired for path " + parentPath)
         import scala.collection.JavaConversions._
         val currentChildren = asBuffer(curChilds)
+        allTopics.clear()
         // check if topic has changed or a partition for an existing topic has changed
         if(parentPath == ZkUtils.BrokerTopicsPath) {
           val currentTopics = currentChildren
           debug("New topics " + currentTopics.mkString(","))
           // for each new topic [topic], watch the path /brokers/topics/[topic]/partitions
-          currentTopics.foreach(topic => zkClient.subscribeChildChanges(ZkUtils.getTopicPartitionsPath(topic), this))
+          currentTopics.foreach { topic =>
+            zkClient.subscribeChildChanges(ZkUtils.getTopicPartitionsPath(topic), this)
+            allTopics += topic
+          }
           handleNewTopics(currentTopics)
         }else {
           val topic = parentPath.split("/").takeRight(2).head
@@ -247,6 +332,10 @@ class KafkaZooKeeper(config: KafkaConfig,
           handleNewPartitions(topic, currentChildren.map(p => p.toInt).toSeq)
         }
       }
+    }
+
+    def doesTopicExistInCluster(topic: String): Boolean = {
+      allTopics.contains(topic)
     }
   }
 
@@ -275,9 +364,19 @@ class KafkaZooKeeper(config: KafkaConfig,
     @throws(classOf[Exception])
     def handleDataChange(dataPath: String, data: Object) {
       // handle leader change event for path
-      val newLeader: String = data.asInstanceOf[String]
-      debug("Leader change listener fired for path %s. New leader is %s".format(dataPath, newLeader))
-      // TODO: update the leader in the list of replicas maintained by the log manager
+      val newLeaderAndEpochInfo: String = data.asInstanceOf[String]
+      val newLeader = newLeaderAndEpochInfo.split(";").head.toInt
+      val newEpoch = newLeaderAndEpochInfo.split(";").last.toInt
+      debug("Leader change listener fired for path %s. New leader is %d. New epoch is %d".format(dataPath, newLeader, newEpoch))
+      val topicPartitionInfo = dataPath.split("/")
+      val topic = topicPartitionInfo.takeRight(4).head
+      val partition = topicPartitionInfo.takeRight(2).head.toInt
+      info("Updating leader change information in replica for topic %s partition %d".format(topic, partition))
+      val replica = getReplicaCbk(topic, partition).getOrElse(null)
+      assert(replica != null, "Replica for topic %s partition %d should exist on broker %d"
+        .format(topic, partition, config.brokerId))
+      replica.partition.leaderId(Some(newLeader))
+      assert(getReplicaCbk(topic, partition).get.partition.leaderId().get == newLeader, "New leader should be set correctly")
     }
 
     @throws(classOf[Exception])

@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -15,30 +15,11 @@
  * limitations under the License.
  */
 
-package kafka.log
+package kafka.common
 
-import java.util.concurrent.atomic.AtomicLong
-
-trait LogStatsMBean {
-  def getName(): String
-  def getSize(): Long
-  def getNumberOfSegments: Int
-  def getCurrentOffset: Long
-  def getNumAppendedMessages: Long
-}
-
-class LogStats(val log: Log) extends LogStatsMBean {
-  private val numCumulatedMessages = new AtomicLong(0)
-
-  def getName(): String = log.name
-  
-  def getSize(): Long = log.size
-  
-  def getNumberOfSegments: Int = log.numberOfSegments
-  
-  def getCurrentOffset: Long = log.highwaterMark
-  
-  def getNumAppendedMessages: Long = numCumulatedMessages.get
-
-  def recordAppendedMessages(nMessages: Int) = numCumulatedMessages.getAndAdd(nMessages)
+/**
+ * Thrown when a request is made for a topic, that hasn't been created in a Kafka cluster
+ */
+class UnknownTopicException(message: String) extends RuntimeException(message) {
+  def this() = this(null)
 }
