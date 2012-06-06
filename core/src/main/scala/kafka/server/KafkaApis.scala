@@ -28,8 +28,11 @@ import kafka.network._
 import kafka.utils.{SystemTime, Logging}
 import org.apache.log4j.Logger
 import scala.collection._
+import mutable.HashMap
 import scala.math._
 import java.lang.IllegalStateException
+import kafka.network.RequestChannel.Response
+
 
 /**
  * Logic to handle the various Kafka requests
@@ -50,9 +53,39 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
       case RequestKeys.Fetch => handleFetchRequest(request)
       case RequestKeys.Offsets => handleOffsetRequest(request)
       case RequestKeys.TopicMetadata => handleTopicMetadataRequest(request)
+      case RequestKeys.LeaderAndISRRequest => handleLeaderAndISRRequest(request)
+      case RequestKeys.StopReplicaRequest => handleStopReplicaRequest(request)
       case _ => throw new IllegalStateException("No mapping found for handler id " + apiId)
     }
   }
+
+
+  def handleLeaderAndISRRequest(request: RequestChannel.Request){
+    val leaderAndISRRequest = LeaderAndISRRequest.readFrom(request.request.buffer)
+    val responseMap = new HashMap[(String, Int), Short]
+
+    // TODO: put in actual logic later
+    for((key, value) <- leaderAndISRRequest.leaderAndISRInfos){
+      responseMap.put(key, ErrorMapping.NoError)
+    }
+
+    val leaderAndISRResponse = new LeaderAndISRResponse(leaderAndISRRequest.versionId, responseMap)
+    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(leaderAndISRResponse), -1))
+  }
+
+
+  def handleStopReplicaRequest(request: RequestChannel.Request){
+    val stopReplicaRequest = StopReplicaRequest.readFrom(request.request.buffer)
+    val responseMap = new HashMap[(String, Int), Short]
+
+    // TODO: put in actual logic later
+    for((topic, partition) <- stopReplicaRequest.stopReplicaSet){
+      responseMap.put((topic, partition), ErrorMapping.NoError)
+    }
+    val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.versionId, responseMap)
+    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(stopReplicaResponse), -1))
+  }
+
 
   /**
    * Handle a produce request
@@ -65,7 +98,7 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
 
     val response = produce(produceRequest)
     debug("kafka produce time " + (SystemTime.milliseconds - sTime) + " ms")
-    requestChannel.sendResponse(new RequestChannel.Response(request, new ProducerResponseSend(response), -1))
+    requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response), -1))
     
     // Now check any outstanding fetches this produce just unblocked
     var satisfied = new mutable.ArrayBuffer[DelayedFetch]
@@ -77,7 +110,7 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
     for(fetchReq <- satisfied) {
        val topicData = readMessageSets(fetchReq.fetch)
        val response = new FetchResponse(FetchRequest.CurrentVersion, fetchReq.fetch.correlationId, topicData)
-       requestChannel.sendResponse(new RequestChannel.Response(fetchReq.request, new FetchResponseSend(response, ErrorMapping.NoError), -1))
+      requestChannel.sendResponse(new RequestChannel.Response(fetchReq.request, new FetchResponseSend(response), -1))
     }
   }
 
@@ -115,7 +148,7 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
         }
       }
     }
-    new ProducerResponse(ProducerResponse.CurrentVersion, request.correlationId, errors, offsets)
+    new ProducerResponse(request.versionId, request.correlationId, errors, offsets)
   }
 
   /**
@@ -131,9 +164,8 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
       fetchRequest.validate()
     } catch {
       case e:FetchRequestFormatException =>
-        val response = new FetchResponse(FetchResponse.CurrentVersion, fetchRequest.correlationId, Array.empty)
-        val channelResponse = new RequestChannel.Response(request, new FetchResponseSend(response,
-          ErrorMapping.InvalidFetchRequestFormatCode), -1)
+        val response = new FetchResponse(fetchRequest.versionId, fetchRequest.correlationId, Array.empty)
+        val channelResponse = new RequestChannel.Response(request, new FetchResponseSend(response), -1)
         requestChannel.sendResponse(channelResponse)
     }
 
@@ -147,7 +179,7 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
       debug("Returning fetch response %s for fetch request with correlation id %d"
         .format(topicData.map(_.partitionData.map(_.error).mkString(",")).mkString(","), fetchRequest.correlationId))
       val response = new FetchResponse(FetchRequest.CurrentVersion, fetchRequest.correlationId, topicData)
-      requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(response, ErrorMapping.NoError), -1))
+      requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(response), -1))
     } else {
       // create a list of (topic, partition) pairs to use as keys for this delayed request
       val keys: Seq[Any] = fetchRequest.offsetInfo.flatMap(o => o.partitions.map((o.topic, _)))
@@ -240,8 +272,8 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
   /**
    * Read from a single topic/partition at the given offset
    */
-  private def readMessageSet(topic: String, partition: Int, offset: Long, maxSize: Int): Either[Int, MessageSet] = {
-    var response: Either[Int, MessageSet] = null
+  private def readMessageSet(topic: String, partition: Int, offset: Long, maxSize: Int): Either[Short, MessageSet] = {
+    var response: Either[Short, MessageSet] = null
     try {
       // check if the current broker is the leader for the partitions
       kafkaZookeeper.ensurePartitionLeaderOnThisBroker(topic, partition)
@@ -264,8 +296,8 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Offset request " + offsetRequest.toString)
     val offsets = logManager.getOffsets(offsetRequest)
-    val response = new OffsetArraySend(offsets)
-    requestChannel.sendResponse(new RequestChannel.Response(request, response, -1))
+    val response = new OffsetResponse(offsetRequest.versionId, offsets)
+    requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response), -1))
   }
 
   /**
@@ -303,7 +335,8 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
       }
     }
     info("Sending response for topic metadata request")
-    requestChannel.sendResponse(new RequestChannel.Response(request, new TopicMetadataSend(topicsMetadata), -1))
+    val response = new TopicMetaDataResponse(metadataRequest.versionId, topicsMetadata.toSeq)
+    requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response), -1))
   }
 
   def close() {
@@ -337,7 +370,7 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
     def expire(delayed: DelayedFetch) {
       val topicData = readMessageSets(delayed.fetch)
       val response = new FetchResponse(FetchRequest.CurrentVersion, delayed.fetch.correlationId, topicData)
-      requestChannel.sendResponse(new RequestChannel.Response(delayed.request, new FetchResponseSend(response, ErrorMapping.NoError), -1))
+      requestChannel.sendResponse(new RequestChannel.Response(delayed.request, new FetchResponseSend(response), -1))
     }
   }
 }

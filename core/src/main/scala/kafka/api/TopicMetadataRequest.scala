@@ -19,16 +19,16 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import kafka.utils.Utils._
-import kafka.network.{Send, Request}
-import java.nio.channels.GatheringByteChannel
-import kafka.common.ErrorMapping
 import collection.mutable.ListBuffer
+import kafka.utils._
 
 sealed trait DetailedMetadataRequest { def requestId: Short }
 case object SegmentMetadata extends DetailedMetadataRequest { val requestId = 1.asInstanceOf[Short] }
 case object NoSegmentMetadata extends DetailedMetadataRequest { val requestId = 0.asInstanceOf[Short] }
 
 object TopicMetadataRequest {
+  val CurrentVersion = 1.shortValue()
+  val DefaultClientId = ""
 
   /**
    * TopicMetadataRequest has the following format -
@@ -48,6 +48,8 @@ object TopicMetadataRequest {
   }
 
   def readFrom(buffer: ByteBuffer): TopicMetadataRequest = {
+    val versionId = buffer.getShort
+    val clientId = Utils.readShortString(buffer)
     val numTopics = getIntInRange(buffer, "number of topics", (0, Int.MaxValue))
     val topics = new ListBuffer[String]()
     for(i <- 0 until numTopics)
@@ -66,37 +68,26 @@ object TopicMetadataRequest {
     }
     debug("topic = %s, detailed metadata request = %d"
           .format(topicsList.head, returnDetailedMetadata.requestId))
-    new TopicMetadataRequest(topics.toList, returnDetailedMetadata, timestamp, count)
-  }
-
-  def serializeTopicMetadata(topicMetadata: Seq[TopicMetadata]): ByteBuffer = {
-    val size = topicMetadata.foldLeft(4 /* num topics */)(_ + _.sizeInBytes)
-    val buffer = ByteBuffer.allocate(size)
-    debug("Allocating buffer of size %d for topic metadata response".format(size))
-    /* number of topics */
-    buffer.putInt(topicMetadata.size)
-    /* topic partition_metadata */
-    topicMetadata.foreach(m => m.writeTo(buffer))
-    buffer.rewind()
-    buffer
-  }
-
-  def deserializeTopicsMetadataResponse(buffer: ByteBuffer): Seq[TopicMetadata] = {
-    /* number of topics */
-    val numTopics = getIntInRange(buffer, "number of topics", (0, Int.MaxValue))
-    val topicMetadata = new Array[TopicMetadata](numTopics)
-    for(i <- 0 until  numTopics)
-      topicMetadata(i) = TopicMetadata.readFrom(buffer)
-    topicMetadata
+    new TopicMetadataRequest(versionId, clientId, topics.toList, returnDetailedMetadata, timestamp, count)
   }
 }
 
-case class TopicMetadataRequest(val topics: Seq[String],
+case class TopicMetadataRequest(val versionId: Short,
+                                val clientId: String,
+                                val topics: Seq[String],
                                 val detailedMetadata: DetailedMetadataRequest = NoSegmentMetadata,
                                 val timestamp: Option[Long] = None, val count: Option[Int] = None)
-  extends Request(RequestKeys.TopicMetadata){
+ extends RequestOrResponse(Some(RequestKeys.TopicMetadata)){
+
+def this(topics: Seq[String]) =
+  this(TopicMetadataRequest.CurrentVersion, TopicMetadataRequest.DefaultClientId, topics, NoSegmentMetadata, None, None)
+
+
+
 
   def writeTo(buffer: ByteBuffer) {
+    buffer.putShort(versionId)
+    Utils.writeShortString(buffer, clientId)
     buffer.putInt(topics.size)
     topics.foreach(topic => writeShortString(buffer, topic))
     buffer.putShort(detailedMetadata.requestId)
@@ -110,7 +101,7 @@ case class TopicMetadataRequest(val topics: Seq[String],
   }
 
   def sizeInBytes(): Int = {
-    var size: Int = 4 /* number of topics */ + topics.foldLeft(0)(_ + shortStringLength(_)) /* topics */ +
+    var size: Int = 2 + (2 + clientId.length) + 4 /* number of topics */ + topics.foldLeft(0)(_ + shortStringLength(_)) /* topics */ +
                     2 /* detailed metadata */
     detailedMetadata match {
       case SegmentMetadata =>
@@ -119,36 +110,5 @@ case class TopicMetadataRequest(val topics: Seq[String],
       case _ => throw new IllegalArgumentException("Invalid value for the detailed metadata request " + detailedMetadata.requestId)
     }
     size
-  }
-}
-
-class TopicMetadataSend(topicsMetadata: Seq[TopicMetadata]) extends Send {
-  private var size: Int = topicsMetadata.foldLeft(4)(_ + _.sizeInBytes)
-  private val header = ByteBuffer.allocate(6)
-  header.putInt(size + 2)
-  header.putShort(ErrorMapping.NoError.asInstanceOf[Short])
-  header.rewind()
-
-  val metadata = TopicMetadataRequest.serializeTopicMetadata(topicsMetadata)
-  metadata.rewind()
-
-  trace("Wrote size %d in header".format(size + 2))
-  var complete: Boolean = false
-
-  def writeTo(channel: GatheringByteChannel): Int = {
-    expectIncomplete()
-    var written = 0
-    if(header.hasRemaining)
-      written += channel.write(header)
-    trace("Wrote %d bytes for header".format(written))
-
-    if(!header.hasRemaining && metadata.hasRemaining)
-      written += channel.write(metadata)
-
-    trace("Wrote %d bytes for header and metadata".format(written))
-
-    if(!metadata.hasRemaining)
-      complete = true
-    written
   }
 }

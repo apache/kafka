@@ -22,7 +22,7 @@ import kafka.message._
 
 class ByteBufferMessageSet(private val buffer: ByteBuffer,
                            private val initialOffset: Long = 0L,
-                           private val errorCode: Int = ErrorMapping.NoError) extends MessageSet {
+                           private val errorCode: Short = ErrorMapping.NoError) extends MessageSet {
   val underlying: kafka.message.ByteBufferMessageSet = new kafka.message.ByteBufferMessageSet(buffer,
                                                                                               initialOffset,
                                                                                               errorCode)

@@ -31,7 +31,6 @@ import org.I0Itec.zkclient.ZkClient
 import kafka.cluster.Broker
 import collection.mutable.ListBuffer
 import kafka.consumer.ConsumerConfig
-import scala.collection.Map
 import kafka.api.{TopicData, PartitionData}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.TimeUnit

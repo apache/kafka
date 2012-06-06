@@ -25,11 +25,12 @@ import kafka.log.LogManager
 import junit.framework.Assert._
 import org.easymock.EasyMock
 import kafka.network._
-import kafka.api.{TopicMetadataSend, TopicMetadataRequest}
+import kafka.api.{TopicMetaDataResponse, TopicMetadataRequest}
 import kafka.cluster.Broker
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.server.{ReplicaManager, KafkaZooKeeper, KafkaApis, KafkaConfig}
+
 
 class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
@@ -104,10 +105,10 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // call the API (to be tested) to get metadata
     apis.handleTopicMetadataRequest(new RequestChannel.Request(processor=0, requestKey=5, request=receivedRequest, start=1))
-    val metadataResponse = requestChannel.receiveResponse(0).response.asInstanceOf[TopicMetadataSend].metadata
+    val metadataResponse = requestChannel.receiveResponse(0).response.asInstanceOf[BoundedByteBufferSend].buffer
     
     // check assertions
-    val topicMetadata = TopicMetadataRequest.deserializeTopicsMetadataResponse(metadataResponse)
+    val topicMetadata = TopicMetaDataResponse.readFrom(metadataResponse).topicsMetadata
     assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
     assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
     val partitionMetadata = topicMetadata.head.partitionsMetadata

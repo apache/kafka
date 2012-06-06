@@ -22,4 +22,6 @@ object RequestKeys {
   val Fetch: Short = 1
   val Offsets: Short = 2
   val TopicMetadata: Short = 3
+  val LeaderAndISRRequest: Short = 4
+  val StopReplicaRequest: Short = 5
 }

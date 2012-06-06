@@ -255,7 +255,7 @@ public class KafkaETLContext {
      */
     protected boolean hasError(ByteBufferMessageSet messages)
             throws IOException {
-        int errorCode = messages.getErrorCode();
+        short errorCode = messages.getErrorCode();
         if (errorCode == ErrorMapping.OffsetOutOfRangeCode()) {
             /* offset cannot cross the maximum offset (guaranteed by Kafka protocol).
                Kafka server may delete old files from time to time */

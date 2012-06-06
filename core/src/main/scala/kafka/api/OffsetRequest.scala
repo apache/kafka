@@ -18,83 +18,50 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.utils.{nonthreadsafe, Utils}
-import kafka.network.{Send, Request}
-import java.nio.channels.GatheringByteChannel
-import kafka.common.ErrorMapping
+import kafka.utils.Utils
 
 object OffsetRequest {
+  val CurrentVersion = 1.shortValue()
+  val DefaultClientId = ""
+
   val SmallestTimeString = "smallest"
   val LargestTimeString = "largest"
   val LatestTime = -1L
   val EarliestTime = -2L
 
   def readFrom(buffer: ByteBuffer): OffsetRequest = {
+    val versionId = buffer.getShort
+    val clientId = Utils.readShortString(buffer)
     val topic = Utils.readShortString(buffer, "UTF-8")
     val partition = buffer.getInt()
     val offset = buffer.getLong
     val maxNumOffsets = buffer.getInt
-    new OffsetRequest(topic, partition, offset, maxNumOffsets)
-  }
-
-  def serializeOffsetArray(offsets: Array[Long]): ByteBuffer = {
-    val size = 4 + 8 * offsets.length
-    val buffer = ByteBuffer.allocate(size)
-    buffer.putInt(offsets.length)
-    for (i <- 0 until offsets.length)
-      buffer.putLong(offsets(i))
-    buffer.rewind
-    buffer
-  }
-
-  def deserializeOffsetArray(buffer: ByteBuffer): Array[Long] = {
-    val size = buffer.getInt
-    val offsets = new Array[Long](size)
-    for (i <- 0 until offsets.length)
-      offsets(i) = buffer.getLong
-    offsets
+    new OffsetRequest(versionId, clientId, topic, partition, offset, maxNumOffsets)
   }
 }
 
-class OffsetRequest(val topic: String,
-                    val partition: Int,
-                    val time: Long,
-                    val maxNumOffsets: Int) extends Request(RequestKeys.Offsets) {
+case class OffsetRequest(versionId: Short = OffsetRequest.CurrentVersion,
+                    clientId: String = OffsetRequest.DefaultClientId,
+                    topic: String,
+                    partition: Int,
+                    time: Long,
+                    maxNumOffsets: Int) extends RequestOrResponse(Some(RequestKeys.Offsets)) {
+  def this(topic: String, partition: Int, time: Long, maxNumOffsets: Int) =
+    this(OffsetRequest.CurrentVersion, OffsetRequest.DefaultClientId, topic, partition, time, maxNumOffsets)
+
+
 
   def writeTo(buffer: ByteBuffer) {
+    buffer.putShort(versionId)
+    Utils.writeShortString(buffer, clientId)
     Utils.writeShortString(buffer, topic)
     buffer.putInt(partition)
     buffer.putLong(time)
     buffer.putInt(maxNumOffsets)
   }
 
-  def sizeInBytes(): Int = 2 + topic.length + 4 + 8 + 4
+  def sizeInBytes(): Int = 2 + (2 + clientId.length()) + (2 + topic.length) + 4 + 8 + 4
 
-  override def toString(): String= "OffsetRequest(topic:" + topic + ", part:" + partition + ", time:" + time +
-          ", maxNumOffsets:" + maxNumOffsets + ")"
-}
-
-@nonthreadsafe
-private[kafka] class OffsetArraySend(offsets: Array[Long]) extends Send {
-  private var size: Long = offsets.foldLeft(4)((sum, _) => sum + 8)
-  private val header = ByteBuffer.allocate(6)
-  header.putInt(size.asInstanceOf[Int] + 2)
-  header.putShort(ErrorMapping.NoError.asInstanceOf[Short])
-  header.rewind()
-  private val contentBuffer = OffsetRequest.serializeOffsetArray(offsets)
-
-  var complete: Boolean = false
-
-  def writeTo(channel: GatheringByteChannel): Int = {
-    expectIncomplete()
-    var written = 0
-    if(header.hasRemaining)
-      written += channel.write(header)
-    if(!header.hasRemaining && contentBuffer.hasRemaining)
-      written += channel.write(contentBuffer)
-
-    if(!contentBuffer.hasRemaining)
-      complete = true
-    written
-  }
+  override def toString(): String= "OffsetRequest(version:" + versionId + ", client id:" + clientId +
+          ", topic:" + topic + ", part:" + partition + ", time:" + time + ", maxNumOffsets:" + maxNumOffsets + ")"
 }

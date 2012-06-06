@@ -20,6 +20,7 @@ package kafka.network
 import java.net.InetSocketAddress
 import java.nio.channels._
 import kafka.utils.{nonthreadsafe, Logging}
+import kafka.api.RequestOrResponse
 
 /**
  *  A simple blocking channel with timeouts correctly enabled.
@@ -70,7 +71,7 @@ class BlockingChannel( val host: String,
 
   def isConnected = connected
   
-  def send(request: Request):Int = {
+  def send(request: RequestOrResponse):Int = {
     if(!connected)
       throw new ClosedChannelException()
 
@@ -78,16 +79,14 @@ class BlockingChannel( val host: String,
     send.writeCompletely(writeChannel)
   }
   
-  def receive(): Tuple2[Receive, Int] = {
+  def receive(): Receive = {
     if(!connected)
       throw new ClosedChannelException()
 
     val response = new BoundedByteBufferReceive()
     response.readCompletely(readChannel)
 
-    // this has the side effect of setting the initial position of buffer correctly
-    val errorCode: Int = response.buffer.getShort
-    (response, errorCode)
+    response
   }
 
 }

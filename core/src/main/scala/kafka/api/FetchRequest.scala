@@ -18,7 +18,6 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.network.Request
 import kafka.utils.Utils
 import scala.collection.mutable.{HashMap, Buffer, ListBuffer}
 import kafka.common.FetchRequestFormatException
@@ -105,7 +104,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
                         replicaId: Int = FetchRequest.DefaultReplicaId,
                         maxWait: Int = FetchRequest.DefaultMaxWait,
                         minBytes: Int = FetchRequest.DefaultMinBytes,
-                        offsetInfo: Seq[OffsetDetail] ) extends Request(RequestKeys.Fetch) {
+                        offsetInfo: Seq[OffsetDetail] ) extends RequestOrResponse(Some(RequestKeys.Fetch)) {
 
   // ensure that a topic "X" appears in at most one OffsetDetail
   def validate() {

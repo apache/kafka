@@ -20,6 +20,7 @@ package kafka.network
 import java.nio._
 import java.nio.channels._
 import kafka.utils._
+import kafka.api.RequestOrResponse
 
 @nonthreadsafe
 private[kafka] class BoundedByteBufferSend(val buffer: ByteBuffer) extends Send {
@@ -37,12 +38,18 @@ private[kafka] class BoundedByteBufferSend(val buffer: ByteBuffer) extends Send 
 
   def this(size: Int) = this(ByteBuffer.allocate(size))
   
-  def this(request: Request) = {
-    this(request.sizeInBytes + 2)
-    buffer.putShort(request.id)
+  def this(request: RequestOrResponse) = {
+    this(request.sizeInBytes + (if(request.requestId != None) 2 else 0))
+    request.requestId match {
+      case Some(requestId) =>
+        buffer.putShort(requestId)
+      case None =>
+    }
+
     request.writeTo(buffer)
     buffer.rewind()
   }
+
   
   def writeTo(channel: GatheringByteChannel): Int = {
     expectIncomplete()

@@ -121,7 +121,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       buffer.put(emptyMessageSet.getSerialized())
       buffer.put(regularMessgeSet.getSerialized())
       buffer.rewind
-      val mixedMessageSet = new ByteBufferMessageSet(buffer, 0, 0)
+      val mixedMessageSet = new ByteBufferMessageSet(buffer)
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
       //make sure ByteBufferMessageSet is re-iterable.
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
@@ -142,7 +142,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       buffer.put(emptyMessageSet.getSerialized())
       buffer.put(regularMessgeSet.getSerialized())
       buffer.rewind
-      val mixedMessageSet = new ByteBufferMessageSet(buffer, 0, 0)
+      val mixedMessageSet = new ByteBufferMessageSet(buffer)
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
       //make sure ByteBufferMessageSet is re-iterable.
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))

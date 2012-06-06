@@ -19,7 +19,6 @@ package kafka.api
 
 import java.nio._
 import kafka.message._
-import kafka.network._
 import kafka.utils._
 
 object ProducerRequest {
@@ -58,7 +57,7 @@ case class ProducerRequest( versionId: Short,
                             clientId: String,
                             requiredAcks: Short,
                             ackTimeout: Int,
-                            data: Array[TopicData] ) extends Request(RequestKeys.Produce) {
+                            data: Array[TopicData] ) extends RequestOrResponse(Some(RequestKeys.Produce)) {
 
   def this(correlationId: Int, clientId: String, requiredAcks: Short, ackTimeout: Int, data: Array[TopicData]) =
     this(ProducerRequest.CurrentVersion, correlationId, clientId, requiredAcks, ackTimeout, data)

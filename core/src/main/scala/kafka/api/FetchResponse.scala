@@ -26,8 +26,8 @@ import kafka.utils.Utils
 
 object PartitionData {
   def readFrom(buffer: ByteBuffer): PartitionData = {
+    val error = buffer.getShort
     val partition = buffer.getInt
-    val error = buffer.getInt
     val initialOffset = buffer.getLong
     val hw = buffer.getLong()
     val messageSetSize = buffer.getInt
@@ -38,21 +38,48 @@ object PartitionData {
   }
 }
 
-case class PartitionData(partition: Int, error: Int = ErrorMapping.NoError, initialOffset:Long = 0L, hw: Long = -1L,
-                         messages: MessageSet) {
-  val sizeInBytes = 4 + 4 + 8 + 4 + messages.sizeInBytes.intValue() + 8
+case class PartitionData(partition: Int, error: Short = ErrorMapping.NoError, initialOffset:Long = 0L, hw: Long = -1L, messages: MessageSet) {
+  val sizeInBytes = 4 + 2 + 8 + 4 + messages.sizeInBytes.intValue() + 8
 
   def this(partition: Int, messages: MessageSet) = this(partition, ErrorMapping.NoError, 0L, -1L, messages)
-
 }
 
-object TopicData {
+// SENDS
 
+class PartitionDataSend(val partitionData: PartitionData) extends Send {
+  private val messageSize = partitionData.messages.sizeInBytes
+  private var messagesSentSize = 0L
+
+  private val buffer = ByteBuffer.allocate(26)
+  buffer.putShort(partitionData.error)
+  buffer.putInt(partitionData.partition)
+  buffer.putLong(partitionData.initialOffset)
+  buffer.putLong(partitionData.hw)
+  buffer.putInt(partitionData.messages.sizeInBytes.intValue())
+  buffer.rewind()
+
+  def complete = !buffer.hasRemaining && messagesSentSize >= messageSize
+
+  def writeTo(channel: GatheringByteChannel): Int = {
+    var written = 0
+    if(buffer.hasRemaining)
+      written += channel.write(buffer)
+    if(!buffer.hasRemaining && messagesSentSize < messageSize) {
+      val bytesSent = partitionData.messages.writeTo(channel, messagesSentSize, messageSize - messagesSentSize).toInt
+      messagesSentSize += bytesSent
+      written += bytesSent
+    }
+    written
+  }
+}
+
+
+object TopicData {
   def readFrom(buffer: ByteBuffer): TopicData = {
     val topic = Utils.readShortString(buffer, "UTF-8")
     val partitionCount = buffer.getInt
     val partitions = new Array[PartitionData](partitionCount)
-    for(i <- 0 until partitions.length)
+    for(i <- 0 until partitionCount)
       partitions(i) = PartitionData.readFrom(buffer)
     new TopicData(topic, partitions.sortBy(_.partition))
   }
@@ -90,74 +117,6 @@ case class TopicData(topic: String, partitionData: Array[PartitionData]) {
   }
 }
 
-object FetchResponse {
-  val CurrentVersion = 1.shortValue()
-
-  def readFrom(buffer: ByteBuffer): FetchResponse = {
-    val versionId = buffer.getShort
-    val correlationId = buffer.getInt
-    val dataCount = buffer.getInt
-    val data = new Array[TopicData](dataCount)
-    for(i <- 0 until data.length)
-      data(i) = TopicData.readFrom(buffer)
-    new FetchResponse(versionId, correlationId, data)
-  }
-}
-
-case class FetchResponse(versionId: Short, correlationId: Int, data: Array[TopicData])  {
-
-  val sizeInBytes = 2 + 4 + data.foldLeft(4)(_ + _.sizeInBytes)
-
-  lazy val topicMap = data.groupBy(_.topic).mapValues(_.head)
-  
-  def messageSet(topic: String, partition: Int): ByteBufferMessageSet = {
-    val messageSet = topicMap.get(topic) match {
-      case Some(topicData) =>
-        TopicData.findPartition(topicData.partitionData, partition).map(_.messages).getOrElse(MessageSet.Empty)
-      case None =>
-        MessageSet.Empty
-    }
-    messageSet.asInstanceOf[ByteBufferMessageSet]
-  }
-
-  def highWatermark(topic: String, partition: Int): Long = {
-    topicMap.get(topic) match {
-      case Some(topicData) =>
-        TopicData.findPartition(topicData.partitionData, partition).map(_.hw).getOrElse(-1L)
-      case None => -1L
-    }
-  }
-}
-
-// SENDS
-
-class PartitionDataSend(val partitionData: PartitionData) extends Send {
-  private val messageSize = partitionData.messages.sizeInBytes
-  private var messagesSentSize = 0L
-
-  private val buffer = ByteBuffer.allocate(28)
-  buffer.putInt(partitionData.partition)
-  buffer.putInt(partitionData.error)
-  buffer.putLong(partitionData.initialOffset)
-  buffer.putLong(partitionData.hw)
-  buffer.putInt(partitionData.messages.sizeInBytes.intValue())
-  buffer.rewind()
-
-  def complete = !buffer.hasRemaining && messagesSentSize >= messageSize
-
-  def writeTo(channel: GatheringByteChannel): Int = {
-    var written = 0
-    if(buffer.hasRemaining)
-      written += channel.write(buffer)
-    if(!buffer.hasRemaining && messagesSentSize < messageSize) {
-      val bytesSent = partitionData.messages.writeTo(channel, messagesSentSize, messageSize - messagesSentSize).toInt
-      messagesSentSize += bytesSent
-      written += bytesSent
-    }
-    written
-  }
-}
-
 class TopicDataSend(val topicData: TopicData) extends Send {
   val size = topicData.sizeInBytes
 
@@ -187,17 +146,60 @@ class TopicDataSend(val topicData: TopicData) extends Send {
   }
 }
 
-class FetchResponseSend(val fetchResponse: FetchResponse,
-                        val errorCode: Int = ErrorMapping.NoError) extends Send {
 
+
+
+object FetchResponse {
+  def readFrom(buffer: ByteBuffer): FetchResponse = {
+    val versionId = buffer.getShort
+    val errorCode = buffer.getShort
+    val correlationId = buffer.getInt
+    val dataCount = buffer.getInt
+    val data = new Array[TopicData](dataCount)
+    for(i <- 0 until data.length)
+      data(i) = TopicData.readFrom(buffer)
+    new FetchResponse(versionId, correlationId, data, errorCode)
+  }
+}
+
+
+case class FetchResponse(versionId: Short,
+                         correlationId: Int,
+                         data: Array[TopicData],
+                         errorCode: Short = ErrorMapping.NoError)  {
+
+  val sizeInBytes = 2 + 4 + 2 + data.foldLeft(4)(_ + _.sizeInBytes)
+
+  lazy val topicMap = data.groupBy(_.topic).mapValues(_.head)
+
+  def messageSet(topic: String, partition: Int): ByteBufferMessageSet = {
+    val messageSet = topicMap.get(topic) match {
+      case Some(topicData) =>
+        TopicData.findPartition(topicData.partitionData, partition).map(_.messages).getOrElse(MessageSet.Empty)
+      case None =>
+        MessageSet.Empty
+    }
+    messageSet.asInstanceOf[ByteBufferMessageSet]
+  }
+
+  def highWatermark(topic: String, partition: Int): Long = {
+    topicMap.get(topic) match {
+      case Some(topicData) =>
+        TopicData.findPartition(topicData.partitionData, partition).map(_.hw).getOrElse(-1L)
+      case None => -1L
+    }
+  }
+}
+
+
+class FetchResponseSend(val fetchResponse: FetchResponse) extends Send {
   private val size = fetchResponse.sizeInBytes
-  
   private var sent = 0
   
   private val buffer = ByteBuffer.allocate(16)
-  buffer.putInt(size + 2)
-  buffer.putShort(errorCode.shortValue())
+  buffer.putInt(size)
   buffer.putShort(fetchResponse.versionId)
+  buffer.putShort(fetchResponse.errorCode)
   buffer.putInt(fetchResponse.correlationId)
   buffer.putInt(fetchResponse.data.length)
   buffer.rewind()
@@ -220,6 +222,5 @@ class FetchResponseSend(val fetchResponse: FetchResponse,
     written
   }
 
-  def sendSize = 4 + 2 + fetchResponse.sizeInBytes
-
+  def sendSize = 4 + fetchResponse.sizeInBytes
 }

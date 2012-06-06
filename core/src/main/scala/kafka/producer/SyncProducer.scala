@@ -19,7 +19,7 @@ package kafka.producer
 
 import kafka.api._
 import kafka.message.MessageSet
-import kafka.network.{BlockingChannel, BoundedByteBufferSend, Request, Receive}
+import kafka.network.{BlockingChannel, BoundedByteBufferSend, Receive}
 import kafka.utils._
 import java.util.Random
 import kafka.common.MessageSizeTooLargeException
@@ -46,7 +46,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
 
   trace("Instantiating Scala Sync Producer")
 
-  private def verifyRequest(request: Request) = {
+  private def verifyRequest(request: RequestOrResponse) = {
     /**
      * This seems a little convoluted, but the idea is to turn on verification simply changing log4j settings
      * Also, when verification is turned on, care should be taken to see that the logs don't fill up with unnecessary
@@ -66,13 +66,13 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   /**
    * Common functionality for the public send methods
    */
-  private def doSend(request: Request): Tuple2[Receive, Int] = {
+  private def doSend(request: RequestOrResponse): Receive = {
     lock synchronized {
       verifyRequest(request)
       val startTime = SystemTime.nanoseconds
       getOrMakeConnection()
 
-      var response: Tuple2[Receive, Int] = null
+      var response: Receive = null
       try {
         blockingChannel.send(request)
         response = blockingChannel.receive()
@@ -108,12 +108,13 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
       }
     }
     val response = doSend(producerRequest)
-    ProducerResponse.deserializeResponse(response._1.buffer)
+    ProducerResponse.readFrom(response.buffer)
   }
 
   def send(request: TopicMetadataRequest): Seq[TopicMetadata] = {
     val response = doSend(request)
-    TopicMetadataRequest.deserializeTopicsMetadataResponse(response._1.buffer)
+    val topicMetaDataResponse = TopicMetaDataResponse.readFrom(response.buffer)
+    topicMetaDataResponse.topicsMetadata
   }
 
   def close() = {

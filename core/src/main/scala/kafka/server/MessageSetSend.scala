@@ -29,13 +29,13 @@ import kafka.common.ErrorMapping
  * wholly in kernel space
  */
 @nonthreadsafe
-private[server] class MessageSetSend(val messages: MessageSet, val errorCode: Int) extends Send {
+private[server] class MessageSetSend(val messages: MessageSet, val errorCode: Short) extends Send {
   
   private var sent: Long = 0
   private var size: Long = messages.sizeInBytes
   private val header = ByteBuffer.allocate(6)
   header.putInt(size.asInstanceOf[Int] + 2)
-  header.putShort(errorCode.asInstanceOf[Short])
+  header.putShort(errorCode)
   header.rewind()
   
   var complete: Boolean = false

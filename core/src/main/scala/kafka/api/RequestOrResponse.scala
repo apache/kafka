@@ -1,3 +1,5 @@
+package kafka.api
+
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -15,11 +17,9 @@
  * limitations under the License.
  */
 
-package kafka.network
-
 import java.nio._
 
-private[kafka] abstract class Request(val id: Short) {
+private[kafka] abstract class RequestOrResponse(val requestId: Option[Short] = None) {
 
   def sizeInBytes: Int
   

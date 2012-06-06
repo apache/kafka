@@ -21,40 +21,28 @@ import java.nio.ByteBuffer
 import kafka.common.ErrorMapping
 
 
-object ProducerResponse {
-  def readFrom(buffer: ByteBuffer): ProducerResponse = {
+object OffsetResponse {
+  def readFrom(buffer: ByteBuffer): OffsetResponse = {
     val versionId = buffer.getShort
-    val correlationId = buffer.getInt
     val errorCode = buffer.getShort
-    val errorsSize = buffer.getInt
-    val errors = new Array[Short](errorsSize)
-    for( i <- 0 until errorsSize) {
-      errors(i) = buffer.getShort
-    }
     val offsetsSize = buffer.getInt
     val offsets = new Array[Long](offsetsSize)
     for( i <- 0 until offsetsSize) {
       offsets(i) = buffer.getLong
     }
-    new ProducerResponse(versionId, correlationId, errors, offsets, errorCode)
+    new OffsetResponse(versionId, offsets, errorCode)
   }
 }
 
-case class ProducerResponse(versionId: Short,  correlationId: Int, errors: Array[Short],
-                            offsets: Array[Long], errorCode: Short = ErrorMapping.NoError) extends RequestOrResponse{
-  val sizeInBytes = 2 + 2 + 4 + (4 + 2 * errors.length) + (4 + 8 * offsets.length)
+case class OffsetResponse(versionId: Short,
+                          offsets: Array[Long],
+                          errorCode: Short = ErrorMapping.NoError) extends RequestOrResponse{
+  val sizeInBytes = 2 + 2 + offsets.foldLeft(4)((sum, _) => sum + 8)
 
   def writeTo(buffer: ByteBuffer) {
-    /* version id */
     buffer.putShort(versionId)
-    /* correlation id */
-    buffer.putInt(correlationId)
     /* error code */
     buffer.putShort(errorCode)
-    /* errors */
-    buffer.putInt(errors.length)
-    errors.foreach(buffer.putShort(_))
-    /* offsets */
     buffer.putInt(offsets.length)
     offsets.foreach(buffer.putLong(_))
   }

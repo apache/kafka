@@ -28,36 +28,36 @@ import scala.Predef._
 object ErrorMapping {
   val EmptyByteBuffer = ByteBuffer.allocate(0)
 
-  val UnknownCode = -1
-  val NoError = 0
-  val OffsetOutOfRangeCode = 1
-  val InvalidMessageCode = 2
-  val InvalidPartitionCode = 3
-  val InvalidFetchSizeCode = 4
-  val InvalidFetchRequestFormatCode = 5
-  val NotLeaderForPartitionCode = 6
-  val NoLeaderForPartitionCode = 7
-  val UnknownTopicCode = 8
+  val UnknownCode : Short = -1
+  val NoError : Short = 0
+  val OffsetOutOfRangeCode : Short = 1
+  val InvalidMessageCode : Short = 2
+  val InvalidPartitionCode : Short = 3
+  val InvalidFetchSizeCode  : Short = 4
+  val InvalidFetchRequestFormatCode : Short = 5
+  val NoLeaderForPartitionCode : Short = 6
+  val NotLeaderForPartitionCode : Short = 7
+  val UnknownTopicCode : Short = 8
 
   private val exceptionToCode = 
-    Map[Class[Throwable], Int](
+    Map[Class[Throwable], Short](
       classOf[OffsetOutOfRangeException].asInstanceOf[Class[Throwable]] -> OffsetOutOfRangeCode,
       classOf[InvalidMessageException].asInstanceOf[Class[Throwable]] -> InvalidMessageCode,
       classOf[InvalidPartitionException].asInstanceOf[Class[Throwable]] -> InvalidPartitionCode,
       classOf[InvalidMessageSizeException].asInstanceOf[Class[Throwable]] -> InvalidFetchSizeCode,
       classOf[FetchRequestFormatException].asInstanceOf[Class[Throwable]] -> InvalidFetchRequestFormatCode,
       classOf[NotLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NotLeaderForPartitionCode,
-      classOf[NoLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NoLeaderForPartitionCode
-//      classOf[UnknownTopicException].asInstanceOf[Class[Throwable]] -> UnknownTopicCode
+      classOf[NoLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NoLeaderForPartitionCode,
+      classOf[UnknownTopicException].asInstanceOf[Class[Throwable]] -> UnknownTopicCode
     ).withDefaultValue(UnknownCode)
   
   /* invert the mapping */
   private val codeToException = 
-    (Map[Int, Class[Throwable]]() ++ exceptionToCode.iterator.map(p => (p._2, p._1))).withDefaultValue(classOf[UnknownException])
+    (Map[Short, Class[Throwable]]() ++ exceptionToCode.iterator.map(p => (p._2, p._1))).withDefaultValue(classOf[UnknownException])
   
-  def codeFor(exception: Class[Throwable]): Int = exceptionToCode(exception)
+  def codeFor(exception: Class[Throwable]): Short = exceptionToCode(exception)
   
-  def maybeThrowException(code: Int) =
+  def maybeThrowException(code: Short) =
     if(code != 0)
       throw codeToException(code).newInstance()
 }

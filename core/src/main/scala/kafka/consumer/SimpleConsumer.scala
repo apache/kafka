@@ -57,10 +57,10 @@ class SimpleConsumer( val host: String,
     }
   }
   
-  private def sendRequest(request: Request): Tuple2[Receive, Int] = {
+  private def sendRequest(request: RequestOrResponse): Receive = {
     lock synchronized {
       getOrMakeConnection()
-      var response: Tuple2[Receive,Int] = null
+      var response: Receive = null
       try {
         blockingChannel.send(request)
         response = blockingChannel.receive()
@@ -92,7 +92,7 @@ class SimpleConsumer( val host: String,
   def fetch(request: FetchRequest): FetchResponse = {
     val startTime = SystemTime.nanoseconds
     val response = sendRequest(request)
-    val fetchResponse = FetchResponse.readFrom(response._1.buffer)
+    val fetchResponse = FetchResponse.readFrom(response.buffer)
     val fetchedSize = fetchResponse.sizeInBytes
 
     val endTime = SystemTime.nanoseconds
@@ -112,7 +112,7 @@ class SimpleConsumer( val host: String,
   def getOffsetsBefore(topic: String, partition: Int, time: Long, maxNumOffsets: Int): Array[Long] = {
     val request = new OffsetRequest(topic, partition, time, maxNumOffsets)
     val response = sendRequest(request)
-    OffsetRequest.deserializeOffsetArray(response._1.buffer)
+    OffsetResponse.readFrom(response.buffer).offsets
   }
 
   private def getOrMakeConnection() {
