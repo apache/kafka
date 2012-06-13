@@ -162,6 +162,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
    */
   private def send(brokerId: Int, messagesPerTopic: Map[(String, Int), ByteBufferMessageSet]): Seq[(String, Int)] = {
     if(brokerId < 0) {
+      warn("failed to send to broker %d with data %s".format(brokerId, messagesPerTopic))
       messagesPerTopic.keys.toSeq
     } else if(messagesPerTopic.size > 0) {
       val topics = new HashMap[String, ListBuffer[PartitionData]]()
@@ -185,7 +186,9 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
         }
         errors
       } catch {
-        case e => messagesPerTopic.keys.toSeq
+        case e =>
+          warn("failed to send to broker %d with data %s".format(brokerId, messagesPerTopic), e)
+          messagesPerTopic.keys.toSeq
       }
     } else {
       List.empty
