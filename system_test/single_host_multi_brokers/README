@@ -1,0 +1,39 @@
+==================
+Test Descriptions
+==================
+This test suite performs Kafka system test on the replication feature as described here:
+1. Start the Kafka cluster
+2. Create topic
+3. Find the leader
+4. Stop the leader in Step 3
+5. Send n messages
+6. Consume the messages
+7. Start the leader in Step 3
+8. Goto Step 3 for all servers in the cluster
+9. Validate test results
+
+==================
+Quick Start
+==================
+1. Modify the values of "num_kafka_server" & "replica_factor" as needed.
+2. Execute the test as: 
+   <kafka home>/system_test/single_host_multi_brokers $ bin/run-test.sh
+
+==================
+Expected Results
+==================
+The following items should match:
+1. The checksums of the data files in all replicas
+2. The sizes of the data files in all replicas
+3. The no. of messages produced and consumed
+
+==================
+Notes
+==================
+1. There is no need to copy and paste the config/server.properties
+   files to match the no. of brokers in the Kafka cluster.
+2. The required no. of server properties files will be automatically
+   generated according to the value of "num_kafka_server".
+3. The default values in the generated properties files will be
+   copied from the settings in config/server.properties while the
+   brokerid and server port will be incremented accordingly.
