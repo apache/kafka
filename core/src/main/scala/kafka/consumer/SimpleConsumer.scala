@@ -31,7 +31,7 @@ class SimpleConsumer( val host: String,
                       val bufferSize: Int ) extends Logging {
 
   private val lock = new Object()
-  private val blockingChannel = new BlockingChannel(host, port, bufferSize, 0, soTimeout)
+  private val blockingChannel = new BlockingChannel(host, port, bufferSize, BlockingChannel.UseDefaultBufferSize, soTimeout)
 
   private def connect(): BlockingChannel = {
     close

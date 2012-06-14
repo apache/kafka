@@ -39,7 +39,7 @@ class Partition(val topic: String,
     try {
       leaderISRUpdateLock.lock()
       if(newLeader.isDefined) {
-        info("Updating leader for for topic %s partition %d to replica %d".format(topic, partitionId, newLeader.get))
+        info("Updating leader for topic %s partition %d to replica %d".format(topic, partitionId, newLeader.get))
         leaderReplicaId = newLeader
       }
       leaderReplicaId

@@ -31,10 +31,13 @@ import org.I0Itec.zkclient.ZkClient
 import kafka.cluster.Broker
 import collection.mutable.ListBuffer
 import kafka.consumer.ConsumerConfig
-import kafka.api.{TopicData, PartitionData}
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.TimeUnit
 import kafka.serializer.{DefaultEncoder, Encoder}
+import kafka.common.ErrorMapping
+import kafka.api._
+import collection.mutable.{Map, Set}
+
 
 /**
  * Utility functions to help with testing
@@ -395,6 +398,52 @@ object TestUtils extends Logging {
   }
 
 }
+
+object ControllerTestUtils{
+  def createSampleLeaderAndISRRequest() : LeaderAndISRRequest = {
+    val topic1 = "test1"
+    val topic2 = "test2"
+
+    val leader1 = 1;
+    val ISR1 = List(1, 2, 3)
+
+    val leader2 = 2;
+    val ISR2 = List(2, 3, 4)
+
+    val leaderAndISR1 = new LeaderAndISR(leader1, 1, ISR1, 1)
+    val leaderAndISR2 = new LeaderAndISR(leader2, 1, ISR2, 2)
+    val map = Map(((topic1, 1), leaderAndISR1), ((topic1, 2), leaderAndISR1),
+                  ((topic2, 1), leaderAndISR2), ((topic2, 2), leaderAndISR2))
+    new LeaderAndISRRequest(1, "client 1", 1, 4, map)
+  }
+
+  def createSampleLeaderAndISRResponse() : LeaderAndISRResponse = {
+    val topic1 = "test1"
+    val topic2 = "test2"
+    val responseMap = Map(((topic1, 1), ErrorMapping.NoError), ((topic1, 2), ErrorMapping.NoError),
+                          ((topic2, 1), ErrorMapping.NoError), ((topic2, 2), ErrorMapping.NoError))
+    new LeaderAndISRResponse(1, responseMap)
+  }
+
+
+  def createSampleStopReplicaRequest() : StopReplicaRequest = {
+    val topic1 = "test1"
+    val topic2 = "test2"
+    new StopReplicaRequest(1, "client 1", 1000, Set((topic1, 1), (topic1, 2),
+                                                    (topic2, 1), (topic2, 2)))
+  }
+
+  def createSampleStopReplicaResponse() : StopReplicaResponse = {
+    val topic1 = "test1"
+    val topic2 = "test2"
+    val responseMap = Map(((topic1, 1), ErrorMapping.NoError), ((topic1, 2), ErrorMapping.NoError),
+                          ((topic2, 1), ErrorMapping.NoError), ((topic2, 2), ErrorMapping.NoError))
+    new StopReplicaResponse(1, responseMap)
+  }
+}
+
+
+
 
 object TestZKUtils {
   val zookeeperConnect = "127.0.0.1:2182"  

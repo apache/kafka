@@ -42,13 +42,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   var kafkaZookeeper: KafkaZooKeeper = null
   private var replicaManager: ReplicaManager = null
   private var apis: KafkaApis = null
+  var kafkaController: KafkaController = new KafkaController(config)
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
    */
   def startup() {
-    info("Starting Kafka server...")
+    info("Starting Kafka server..." + config.brokerId)
     isShuttingDown = new AtomicBoolean(false)
     shutdownLatch = new CountDownLatch(1)
     var needRecovery = true
@@ -89,6 +90,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     // starting relevant replicas and leader election for partitions assigned to this broker
     kafkaZookeeper.startup
 
+    kafkaController.startup()
+
     info("Server started.")
   }
   
@@ -110,13 +113,16 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       Utils.unregisterMBean(statsMBeanName)
       if(logManager != null)
         logManager.close()
+      if(kafkaController != null)
+        kafkaController.shutDown()
+
       kafkaZookeeper.close
 
       val cleanShutDownFile = new File(new File(config.logDir), CleanShutdownFile)
       debug("Creating clean shutdown file " + cleanShutDownFile.getAbsolutePath())
       cleanShutDownFile.createNewFile
       shutdownLatch.countDown()
-      info("Kafka server shut down completed")
+      info("Kafka server with id %d shut down completed".format(config.brokerId))
     }
   }
   

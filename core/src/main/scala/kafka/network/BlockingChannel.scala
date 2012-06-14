@@ -22,6 +22,11 @@ import java.nio.channels._
 import kafka.utils.{nonthreadsafe, Logging}
 import kafka.api.RequestOrResponse
 
+
+object BlockingChannel{
+  val UseDefaultBufferSize = -1
+}
+
 /**
  *  A simple blocking channel with timeouts correctly enabled.
  *
@@ -32,7 +37,6 @@ class BlockingChannel( val host: String,
                        val readBufferSize: Int, 
                        val writeBufferSize: Int, 
                        val readTimeoutMs: Int ) extends Logging {
-
   private var connected = false
   private var channel: SocketChannel = null
   private var readChannel: ReadableByteChannel = null

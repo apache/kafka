@@ -99,6 +99,13 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
    * Following properties are relevant to Kafka replication
    */
 
+  /* the socket timeout for controller-to-broker channels */
+  val controllerSocketTimeoutMs = Utils.getInt(props, "controller.socket.timeout.ms", 30000)
+
+  /* the buffer size for controller-to-broker-channels */
+  val controllerMessageQueueSize= Utils.getInt(props, "controller.message.queue.size", 10)
+
+
   /* default replication factors for automatically created topics */
   val defaultReplicationFactor = Utils.getInt(props, "default.replication.factor", 1)
 

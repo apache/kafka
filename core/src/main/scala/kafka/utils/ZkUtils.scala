@@ -32,6 +32,7 @@ object ZkUtils extends Logging {
   val BrokerIdsPath = "/brokers/ids"
   val BrokerTopicsPath = "/brokers/topics"
   val BrokerStatePath = "/brokers/state"
+  val ControllerPath = "/controller"
 
   def getTopicPath(topic: String): String ={
     BrokerTopicsPath + "/" + topic
@@ -41,8 +42,17 @@ object ZkUtils extends Logging {
     getTopicPath(topic) + "/partitions"
   }
 
+  def getController(zkClient: ZkClient): Int= {
+    val controller = readDataMaybeNull(zkClient, ControllerPath)
+    controller.toInt
+  }
+
   def getTopicPartitionPath(topic: String, partitionId: String): String ={
     getTopicPartitionsPath(topic) + "/" + partitionId
+  }
+
+  def getTopicPartitionLeaderAndISR(topic: String, partitionId: String): String ={
+    getTopicPartitionPath(topic, partitionId) + "/" + "leaderAndISR"
   }
 
   def getTopicVersion(zkClient: ZkClient, topic: String): String ={
