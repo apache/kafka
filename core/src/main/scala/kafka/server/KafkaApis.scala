@@ -126,6 +126,8 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
     for(topicData <- request.data) {
       for(partitionData <- topicData.partitionData) {
         msgIndex += 1
+        BrokerTopicStat.getBrokerTopicStat(topicData.topic).recordBytesIn(partitionData.messages.sizeInBytes)
+        BrokerTopicStat.getBrokerAllTopicStat.recordBytesIn(partitionData.messages.sizeInBytes)
         try {
           kafkaZookeeper.ensurePartitionLeaderOnThisBroker(topicData.topic, partitionData.partition)
           val log = logManager.getOrCreateLog(topicData.topic, partitionData.partition)
@@ -136,6 +138,8 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
           trace(partitionData.messages.sizeInBytes + " bytes written to logs.")
         } catch {
           case e =>
+            BrokerTopicStat.getBrokerTopicStat(topicData.topic).recordFailedProduceRequest
+            BrokerTopicStat.getBrokerAllTopicStat.recordFailedProduceRequest
             error("Error processing ProducerRequest on " + topicData.topic + ":" + partitionData.partition, e)
             e match {
               case _: IOException =>
@@ -239,12 +243,16 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
       for( (partition, offset, fetchSize) <- (partitions, offsets, fetchSizes).zipped.map((_,_,_)) ) {
         val partitionInfo = readMessageSet(topic, partition, offset, fetchSize) match {
           case Left(err) =>
+            BrokerTopicStat.getBrokerTopicStat(topic).recordFailedFetchRequest
+            BrokerTopicStat.getBrokerAllTopicStat.recordFailedFetchRequest
             fetchRequest.replicaId match {
               case -1 => new PartitionData(partition, err, offset, -1L, MessageSet.Empty)
               case _ =>
                 new PartitionData(partition, err, offset, -1L, MessageSet.Empty)
             }
           case Right(messages) =>
+            BrokerTopicStat.getBrokerTopicStat(topic).recordBytesOut(messages.sizeInBytes)
+            BrokerTopicStat.getBrokerAllTopicStat.recordBytesOut(messages.sizeInBytes)
             val leaderReplicaOpt = replicaManager.getReplica(topic, partition, logManager.config.brokerId)
             assert(leaderReplicaOpt.isDefined, "Leader replica for topic %s partition %d".format(topic, partition) +
               " must exist on leader broker %d".format(logManager.config.brokerId))

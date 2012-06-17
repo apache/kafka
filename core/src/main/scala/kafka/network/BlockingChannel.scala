@@ -53,6 +53,7 @@ class BlockingChannel( val host: String,
       channel.configureBlocking(true)
       channel.socket.setSoTimeout(readTimeoutMs)
       channel.socket.setKeepAlive(true)
+      channel.socket.setTcpNoDelay(true)
       channel.connect(new InetSocketAddress(host, port))
 
       writeChannel = channel

@@ -185,7 +185,7 @@ class LogTest extends JUnitSuite {
       val deletedSegments = log.markDeletedWhile(_ => true)
 
       // we shouldn't delete the last empty log segment.
-      assertTrue("We shouldn't delete the last empty log segment", log.segments.view.size == 1)
+      assertTrue("We shouldn't delete the last empty log segment", deletedSegments.size == 0)
 
       // we now have a new log
       assertEquals(curOffset, log.nextAppendOffset)
