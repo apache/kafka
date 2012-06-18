@@ -133,9 +133,8 @@ class KafkaZooKeeper(config: KafkaConfig,
   def handleNewTopics(topics: Seq[String]) {
     // get relevant partitions to this broker
     val topicsAndPartitionsOnThisBroker = ZkUtils.getPartitionsAssignedToBroker(zkClient, topics, config.brokerId)
-    topicsAndPartitionsOnThisBroker.foreach { tp =>
-      val topic = tp._1
-      val partitionsAssignedToThisBroker = tp._2
+    debug("Partitions assigned to broker %d are %s".format(config.brokerId, topicsAndPartitionsOnThisBroker.mkString(",")))
+    for( (topic, partitionsAssignedToThisBroker) <- topicsAndPartitionsOnThisBroker ) {
       // subscribe to leader changes for these partitions
       subscribeToLeaderForPartitions(topic, partitionsAssignedToThisBroker)
       // start replicas for these partitions
@@ -143,37 +142,19 @@ class KafkaZooKeeper(config: KafkaConfig,
     }
   }
 
-  def handleNewPartitions(topic: String, partitions: Seq[Int]) {
-    info("Handling topic %s partitions %s".format(topic, partitions.mkString(",")))
-    // find the partitions relevant to this broker
-    val partitionsAssignedToThisBroker = ZkUtils.getPartitionsAssignedToBroker(zkClient, topic, partitions, config.brokerId)
-    info("Partitions assigned to broker %d for topic %s are %s"
-      .format(config.brokerId, topic, partitionsAssignedToThisBroker.mkString(",")))
-
-    // subscribe to leader changes for these partitions
-    subscribeToLeaderForPartitions(topic, partitionsAssignedToThisBroker)
-    // start replicas for these partitions
-    startReplicasForPartitions(topic, partitionsAssignedToThisBroker)
-  }
-
   def subscribeToTopicAndPartitionsChanges(startReplicas: Boolean) {
     info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
     zkClient.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicPartitionsChangeListener)
     val topics = ZkUtils.getAllTopics(zkClient)
-    debug("Existing topics are %s".format(topics.mkString(",")))
-    topics.foreach(topic => zkClient.subscribeChildChanges(ZkUtils.getTopicPartitionsPath(topic), topicPartitionsChangeListener))
+    val topicsAndPartitionsOnThisBroker = ZkUtils.getPartitionsAssignedToBroker(zkClient, topics, config.brokerId)
+    debug("Partitions assigned to broker %d are %s".format(config.brokerId, topicsAndPartitionsOnThisBroker.mkString(",")))
+    for( (topic, partitionsAssignedToThisBroker) <- topicsAndPartitionsOnThisBroker ) {
+      // subscribe to leader changes for these partitions
+      subscribeToLeaderForPartitions(topic, partitionsAssignedToThisBroker)
 
-    val partitionsAssignedToThisBroker = ZkUtils.getPartitionsAssignedToBroker(zkClient, topics, config.brokerId)
-    debug("Partitions assigned to broker %d are %s".format(config.brokerId, partitionsAssignedToThisBroker.mkString(",")))
-    partitionsAssignedToThisBroker.foreach { tp =>
-      val topic = tp._1
-      val partitions = tp._2.map(p => p.toInt)
-      partitions.foreach { partition =>
-          // register leader change listener
-        zkClient.subscribeDataChanges(ZkUtils.getTopicPartitionLeaderPath(topic, partition.toString), leaderChangeListener)
-      }
+      // start replicas for these partitions
       if(startReplicas)
-        startReplicasForPartitions(topic, partitions)
+        startReplicasForPartitions(topic, partitionsAssignedToThisBroker)
     }
   }
 
@@ -199,11 +180,11 @@ class KafkaZooKeeper(config: KafkaConfig,
   }
 
   private def startReplica(replica: Replica) {
-    info("Starting replica for topic %s partition %d on broker %d".format(replica.topic, replica.partition.partitionId,
-      replica.brokerId))
+    info("Starting replica for topic %s partition %d on broker %d"
+      .format(replica.topic, replica.partition.partitionId, replica.brokerId))
     ZkUtils.getLeaderForPartition(zkClient, replica.topic, replica.partition.partitionId) match {
-      case Some(leader) => info("Topic %s partition %d has leader %d".format(replica.topic, replica.partition.partitionId,
-        leader))
+      case Some(leader) =>
+        info("Topic %s partition %d has leader %d".format(replica.topic, replica.partition.partitionId,leader))
         // check if this broker is the leader, if not, then become follower
         if(leader != config.brokerId)
           becomeFollower(replica, leader, zkClient)
@@ -218,10 +199,9 @@ class KafkaZooKeeper(config: KafkaConfig,
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, replica.topic, replica.partition.partitionId).map(_.toInt)
     val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, replica.topic, replica.partition.partitionId)
     val liveBrokers = ZkUtils.getSortedBrokerList(zkClient).map(_.toInt)
-    if(canBecomeLeader(config.brokerId, replica.topic, replica.partition.partitionId,
-                       assignedReplicas, inSyncReplicas, liveBrokers)) {
-      info("Broker %d will participate in leader election for topic %s partition %d".format(config.brokerId, replica.topic,
-                                                                                           replica.partition.partitionId))
+    if(canBecomeLeader(config.brokerId, replica.topic, replica.partition.partitionId, assignedReplicas, inSyncReplicas, liveBrokers)) {
+      info("Broker %d will participate in leader election for topic %s partition %d"
+        .format(config.brokerId, replica.topic, replica.partition.partitionId))
       // wait for some time if it is not the preferred replica
       try {
         if(replica.brokerId != assignedReplicas.head) {
@@ -233,7 +213,7 @@ class KafkaZooKeeper(config: KafkaConfig,
             Thread.sleep(config.preferredReplicaWaitTime)
           }
         }
-      }catch {
+      } catch {
         case e => // ignoring
       }
       val newLeaderEpochAndISR = ZkUtils.tryToBecomeLeaderForPartition(zkClient, replica.topic,
@@ -279,7 +259,7 @@ class KafkaZooKeeper(config: KafkaConfig,
                     " partition %d is alive. Broker %d can become leader since it is in the assigned replicas %s"
                       .format(partition, brokerId, assignedReplicas.mkString(",")))
                   true
-                }else {
+                } else {
                   info("No broker in the ISR %s for topic %s".format(inSyncReplicas.mkString(","), topic) +
                     " partition %d is alive. Broker %d can become leader since it is in the assigned replicas %s"
                       .format(partition, brokerId, assignedReplicas.mkString(",")))
@@ -297,7 +277,7 @@ class KafkaZooKeeper(config: KafkaConfig,
           info("ISR for topic %s partition %d is empty. Broker %d can become leader since it "
             .format(topic, partition, brokerId) + "is part of the assigned replicas list")
           true
-        }else {
+        } else {
           info("ISR for topic %s partition %d is empty. Broker %d cannot become leader since it "
             .format(topic, partition, brokerId) + "is not part of the assigned replicas list")
           false
@@ -310,27 +290,19 @@ class KafkaZooKeeper(config: KafkaConfig,
 
     @throws(classOf[Exception])
     def handleChildChange(parentPath : String, curChilds : java.util.List[String]) {
+      import collection.JavaConversions
       topicListenerLock.synchronized {
         debug("Topic/partition change listener fired for path " + parentPath)
-        import scala.collection.JavaConversions._
-        val currentChildren = asBuffer(curChilds)
+        val currentChildren = JavaConversions.asBuffer(curChilds).toSet
+        val newTopics = currentChildren -- allTopics
+        val deletedTopics = allTopics -- currentChildren
         allTopics.clear()
-        // check if topic has changed or a partition for an existing topic has changed
-        if(parentPath == ZkUtils.BrokerTopicsPath) {
-          val currentTopics = currentChildren
-          debug("New topics " + currentTopics.mkString(","))
-          // for each new topic [topic], watch the path /brokers/topics/[topic]/partitions
-          currentTopics.foreach { topic =>
-            zkClient.subscribeChildChanges(ZkUtils.getTopicPartitionsPath(topic), this)
-            allTopics += topic
-          }
-          handleNewTopics(currentTopics)
-        }else {
-          val topic = parentPath.split("/").takeRight(2).head
-          debug("Partitions changed for topic %s on broker %d with new value %s"
-            .format(topic, config.brokerId, currentChildren.mkString(",")))
-          handleNewPartitions(topic, currentChildren.map(p => p.toInt).toSeq)
-        }
+        allTopics ++ currentChildren
+
+        debug("New topics: [%s]. Deleted topics: [%s]".format(newTopics.mkString(","), deletedTopics.mkString(",")))
+        handleNewTopics(newTopics.toSeq)
+        // TODO: Handle topic deletions
+        //handleDeletedTopics(deletedTopics.toSeq)
       }
     }
 

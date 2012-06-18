@@ -91,8 +91,11 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     props.put("zk.connect", TestZKUtils.zookeeperConnect)
 
     val config = new ProducerConfig(props)
-    // create topic with 1 partition
+
+    // create topic with 1 partition and await leadership
     CreateTopicCommand.createTopic(zkClient, "new-topic", 1)
+    TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 0, 500)
+
     val producer = new Producer[String, String](config)
     try {
       // Available partition ids should be 0.
@@ -132,6 +135,10 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // create topic
     CreateTopicCommand.createTopic(zkClient, "new-topic", 4, 2, "0,0,0,0")
+    TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 0, 500)
+    TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 1, 500)
+    TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 2, 500)
+    TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 3, 500)
 
     val config = new ProducerConfig(props)
     val producer = new Producer[String, String](config)
@@ -189,6 +196,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // create topics in ZK
     CreateTopicCommand.createTopic(zkClient, "new-topic", 4, 2, "0:1,0:1,0:1,0:1")
+    TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 0, 500)
 
     // do a simple test to make sure plumbing is okay
     try {

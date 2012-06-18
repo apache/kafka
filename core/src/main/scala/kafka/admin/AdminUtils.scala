@@ -18,12 +18,12 @@
 package kafka.admin
 
 import java.util.Random
+import kafka.api.{TopicMetadata, PartitionMetadata}
+import kafka.cluster.Broker
+import kafka.utils.{Logging, Utils, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import kafka.api.{TopicMetadata, PartitionMetadata}
-import kafka.utils.{Logging, SystemTime, Utils, ZkUtils}
-import kafka.cluster.Broker
-import collection.mutable.HashMap
+import scala.collection.mutable
 
 object AdminUtils extends Logging {
   val rand = new Random
@@ -49,7 +49,7 @@ object AdminUtils extends Logging {
    */
   def assignReplicasToBrokers(brokerList: Seq[String], nPartitions: Int, replicationFactor: Int,
           fixedStartIndex: Int = -1)  // for testing only
-    : Array[List[String]] = {
+    : Map[Int, List[String]] = {
     if (nPartitions <= 0)
       throw new AdministrationException("number of partitions must be larger than 0")
     if (replicationFactor <= 0)
@@ -57,7 +57,7 @@ object AdminUtils extends Logging {
     if (replicationFactor > brokerList.size)
       throw new AdministrationException("replication factor: " + replicationFactor +
               " larger than available brokers: " + brokerList.size)
-    val ret = new Array[List[String]](nPartitions)
+    val ret = new mutable.HashMap[Int, List[String]]()
     val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
 
     var secondReplicaShift = -1
@@ -68,47 +68,40 @@ object AdminUtils extends Logging {
       var replicaList = List(brokerList(firstReplicaIndex))
       for (j <- 0 until replicationFactor - 1)
         replicaList ::= brokerList(getWrappedIndex(firstReplicaIndex, secondReplicaShift, j, brokerList.size))
-      ret(i) = replicaList.reverse
+      ret.put(i, replicaList.reverse)
     }
-    ret
+    ret.toMap
   }
 
-  def createReplicaAssignmentPathInZK(topic: String, replicaAssignmentList: Seq[List[String]], zkClient: ZkClient) {
+  def createTopicPartitionAssignmentPathInZK(topic: String, replicaAssignment: Map[Int, List[String]], zkClient: ZkClient) {
     try {
-      val topicVersion = SystemTime.milliseconds
-      ZkUtils.createPersistentPath(zkClient, ZkUtils.BrokerTopicsPath + "/" + topic, topicVersion.toString)
-      for (i <- 0 until replicaAssignmentList.size) {
-        val zkPath = ZkUtils.getTopicPartitionReplicasPath(topic, i.toString)
-        ZkUtils.updatePersistentPath(zkClient, zkPath, Utils.seqToCSV(replicaAssignmentList(i)))
-        debug("Updated path %s with %s for replica assignment".format(zkPath, Utils.seqToCSV(replicaAssignmentList(i))))
-      }
-    }
-    catch {
-      case e: ZkNodeExistsException =>
-        throw new AdministrationException("topic " + topic + " already exists, with version "
-          + ZkUtils.getTopicVersion (zkClient, topic))
-      case e2 =>
-        throw new AdministrationException(e2.toString)      
+      val zkPath = ZkUtils.getTopicPath(topic)
+      val jsonPartitionMap = Utils.mapToJson(replicaAssignment.map(e => (e._1.toString -> e._2)))
+      ZkUtils.createPersistentPath(zkClient, zkPath, jsonPartitionMap)
+      debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionMap))
+    } catch {
+      case e: ZkNodeExistsException => throw new AdministrationException("topic %s already exists".format(topic))
+      case e2 => throw new AdministrationException(e2.toString)
     }
   }
 
   def getTopicMetaDataFromZK(topics: Seq[String], zkClient: ZkClient): Seq[Option[TopicMetadata]] = {
-    val cachedBrokerInfo = new HashMap[Int, Broker]()
-
-    val metadataList = topics.map { topic =>
+    val cachedBrokerInfo = new mutable.HashMap[Int, Broker]()
+    topics.map { topic =>
       if (ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic))) {
-        val partitions = ZkUtils.getSortedPartitionIdsForTopic(zkClient, topic)
-        val partitionMetadata = new Array[PartitionMetadata](partitions.size)
+        val topicPartitionAssignment = ZkUtils.getPartitionAssignmentForTopics(zkClient, List(topic).iterator).get(topic).get
+        val sortedPartitions = topicPartitionAssignment.toList.sortWith( (m1,m2) => m1._1.toInt < m2._1.toInt )
 
-        for (i <-0 until partitionMetadata.size) {
-          val replicas = ZkUtils.readData(zkClient, ZkUtils.getTopicPartitionReplicasPath(topic, partitions(i).toString))
-          val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, topic, partitions(i))
-          val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partitions(i))
+        val partitionMetadata = sortedPartitions.map { partitionMap =>
+          val partition = partitionMap._1.toInt
+          val replicas = partitionMap._2
+          val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, topic, partition)
+          val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
           debug("replicas = " + replicas + ", in sync replicas = " + inSyncReplicas + ", leader = " + leader)
 
-          partitionMetadata(i) = new PartitionMetadata(partitions(i),
-            leader match { case None => None case Some(l) => Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l.toInt)).head) },
-            getBrokerInfoFromCache(zkClient, cachedBrokerInfo, Utils.getCSVList(replicas).map(id => id.toInt)),
+          new PartitionMetadata(partition,
+            leader.map(l => getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l)).head),
+            getBrokerInfoFromCache(zkClient, cachedBrokerInfo, replicas.map(id => id.toInt)),
             getBrokerInfoFromCache(zkClient, cachedBrokerInfo, inSyncReplicas),
             None /* Return log segment metadata when getOffsetsBefore will be replaced with this API */)
         }
@@ -117,7 +110,6 @@ object AdminUtils extends Logging {
         None
       }
     }
-    metadataList.toList
   }
 
   private def getBrokerInfoFromCache(zkClient: ZkClient,

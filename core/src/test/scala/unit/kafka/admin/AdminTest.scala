@@ -50,18 +50,18 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // correct assignment
     {
-      val expectedAssignment = Array(
-        List("0", "1", "2"),
-        List("1", "2", "3"),
-        List("2", "3", "4"),
-        List("3", "4", "0"),
-        List("4", "0", "1"),
-        List("0", "2", "3"),
-        List("1", "3", "4"),
-        List("2", "4", "0"),
-        List("3", "0", "1"),
-        List("4", "1", "2")
-        )
+      val expectedAssignment = Map(
+        0 -> List("0", "1", "2"),
+        1 -> List("1", "2", "3"),
+        2 -> List("2", "3", "4"),
+        3 -> List("3", "4", "0"),
+        4 -> List("4", "0", "1"),
+        5 -> List("0", "2", "3"),
+        6 -> List("1", "3", "4"),
+        7 -> List("2", "4", "0"),
+        8 -> List("3", "0", "1"),
+        9 -> List("4", "1", "2")
+      )
 
       val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerList, 10, 3, 0)
       val e = (expectedAssignment.toList == actualAssignment.toList)
@@ -109,46 +109,51 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     // good assignment
     {
       val replicationAssignmentStr = "0:1:2,1:2:3"
-      val expectedReplicationAssignment = Array(
-        List("0", "1", "2"),
-        List("1", "2", "3")
+      val expectedReplicationAssignment = Map(
+        0 -> List("0", "1", "2"),
+        1 -> List("1", "2", "3")
       )
       val actualReplicationAssignment = CreateTopicCommand.getManualReplicaAssignment(replicationAssignmentStr, brokerList)
-      assertTrue(expectedReplicationAssignment.toList == actualReplicationAssignment.toList)
+      assertEquals(expectedReplicationAssignment.size, actualReplicationAssignment.size)
+      for( (part, replicas) <- expectedReplicationAssignment ) {
+        assertEquals(replicas, actualReplicationAssignment(part))
+      }
     }
   }
 
   @Test
   def testTopicCreationInZK() {
-    val expectedReplicaAssignment = Array(
-      List("0", "1", "2"),
-      List("1", "2", "3"),
-      List("2", "3", "4"),
-      List("3", "4", "0"),
-      List("4", "0", "1"),
-      List("0", "2", "3"),
-      List("1", "3", "4"),
-      List("2", "4", "0"),
-      List("3", "0", "1"),
-      List("4", "1", "2"),
-      List("1", "2", "3"),
-      List("1", "3", "4")      
-      )
+    val expectedReplicaAssignment = Map(
+      0  -> List("0", "1", "2"),
+      1  -> List("1", "2", "3"),
+      2  -> List("2", "3", "4"),
+      3  -> List("3", "4", "0"),
+      4  -> List("4", "0", "1"),
+      5  -> List("0", "2", "3"),
+      6  -> List("1", "3", "4"),
+      7  -> List("2", "4", "0"),
+      8  -> List("3", "0", "1"),
+      9  -> List("4", "1", "2"),
+      10 -> List("1", "2", "3"),
+      11 -> List("1", "3", "4")
+    )
     TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
 
     val topic = "test"
     // create the topic
-    AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
+    AdminUtils.createTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
     val actualReplicaAssignment = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
                                   .get.partitionsMetadata.map(p => p.replicas)
     val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id.toString).toList).toList
-    expectedReplicaAssignment.toList.zip(actualReplicaList).foreach(l => assertEquals(l._1, l._2))
+    assertEquals(expectedReplicaAssignment.size, actualReplicaList.size)
+    for( i <- 0 until actualReplicaList.size ) {
+      assertEquals(expectedReplicaAssignment.get(i).get, actualReplicaList(i))
+    }
 
     try {
-      AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
+      AdminUtils.createTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
       fail("shouldn't be able to create a topic already exists")
-    }
-    catch {
+    } catch {
       case e: AdministrationException => // this is good
       case e2 => throw e2
     }
@@ -156,22 +161,26 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testGetTopicMetadata() {
-    val expectedReplicaAssignment = Array(
-      List("0", "1", "2"),
-      List("1", "2", "3")
+    val expectedReplicaAssignment = Map(
+      0 -> List("0", "1", "2"),
+      1 -> List("1", "2", "3")
     )
     val topic = "auto-topic"
     TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3))
-    AdminUtils.createReplicaAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
+    AdminUtils.createTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
 
     val newTopicMetadata = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
     newTopicMetadata match {
-      case Some(metadata) => assertEquals(topic, metadata.topic)
+      case Some(metadata) =>
+        assertEquals(topic, metadata.topic)
         assertNotNull("partition metadata list cannot be null", metadata.partitionsMetadata)
         assertEquals("partition metadata list length should be 2", 2, metadata.partitionsMetadata.size)
         val actualReplicaAssignment = metadata.partitionsMetadata.map(p => p.replicas)
         val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id.toString).toList).toList
-        assertEquals(expectedReplicaAssignment.toList, actualReplicaList)
+        assertEquals(expectedReplicaAssignment.size, actualReplicaList.size)
+        for(i <- 0 until actualReplicaList.size) {
+          assertEquals(expectedReplicaAssignment(i), actualReplicaList(i))
+        }
       case None => fail("Topic " + topic + " should've been automatically created")
     }
   }

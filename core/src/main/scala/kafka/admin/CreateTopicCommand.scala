@@ -18,8 +18,9 @@
 package kafka.admin
 
 import joptsimple.OptionParser
-import org.I0Itec.zkclient.ZkClient
 import kafka.utils.{Logging, Utils, ZKStringSerializer, ZkUtils}
+import org.I0Itec.zkclient.ZkClient
+import scala.collection.mutable
 
 object CreateTopicCommand extends Logging {
 
@@ -71,13 +72,11 @@ object CreateTopicCommand extends Logging {
       zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
       createTopic(zkClient, topic, nPartitions, replicationFactor, replicaAssignmentStr)
       println("creation succeeded!")
-    }
-    catch {
+    } catch {
       case e =>
         println("creation failed because of " + e.getMessage)
         println(Utils.stackTrace(e))
-    }
-    finally {
+    } finally {
       if (zkClient != null)
         zkClient.close()
     }
@@ -85,19 +84,19 @@ object CreateTopicCommand extends Logging {
 
   def createTopic(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicationFactor: Int = 1, replicaAssignmentStr: String = "") {
     val brokerList = ZkUtils.getSortedBrokerList(zkClient)
-    var replicaAssignment: Seq[List[String]] = null
 
-    if (replicaAssignmentStr == "")
-      replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, numPartitions, replicationFactor)
+    val partitionReplicaAssignment = if (replicaAssignmentStr == "")
+      AdminUtils.assignReplicasToBrokers(brokerList, numPartitions, replicationFactor)
     else
-      replicaAssignment = getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet)
-    debug("Replica assignment list for %s is %s".format(topic, replicaAssignment))
-    AdminUtils.createReplicaAssignmentPathInZK(topic, replicaAssignment, zkClient)
+      getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet)
+
+    debug("Replica assignment list for %s is %s".format(topic, partitionReplicaAssignment))
+    AdminUtils.createTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment, zkClient)
   }
 
-  def getManualReplicaAssignment(replicaAssignmentList: String, availableBrokerList: Set[String]): Array[List[String]] = {
+  def getManualReplicaAssignment(replicaAssignmentList: String, availableBrokerList: Set[String]): Map[Int, List[String]] = {
     val partitionList = replicaAssignmentList.split(",")
-    val ret = new Array[List[String]](partitionList.size)
+    val ret = new mutable.HashMap[Int, List[String]]()
     for (i <- 0 until partitionList.size) {
       val brokerList = partitionList(i).split(":").map(s => s.trim())
       if (brokerList.size <= 0)
@@ -107,10 +106,10 @@ object CreateTopicCommand extends Logging {
       if (!brokerList.toSet.subsetOf(availableBrokerList))
         throw new AdministrationException("some specified brokers not available. specified brokers: " + brokerList.toString +
                 "available broker:" + availableBrokerList.toString)
-      ret(i) = brokerList.toList
+      ret.put(i, brokerList.toList)
       if (ret(i).size != ret(0).size)
         throw new AdministrationException("partition " + i + " has different replication factor: " + brokerList)
     }
-    ret
+    ret.toMap
   }
 }

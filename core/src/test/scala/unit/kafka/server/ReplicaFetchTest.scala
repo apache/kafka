@@ -52,8 +52,9 @@ class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
     val followerBrokerId = configs.last.brokerId
     val leaderBroker = new Broker(leaderBrokerId, "localhost", "localhost", configs.head.port)
 
-    // create a topic and partition
+    // create a topic and partition and await leadership
     CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(c => c.brokerId).mkString(":"))
+    TestUtils.waitUntilLeaderIsElected(zkClient, topic, 0, 1000)
 
     // send test messages to leader
     val producer = TestUtils.createProducer[String, String](zkConnect, new StringEncoder)

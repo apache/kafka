@@ -17,15 +17,16 @@
 
 package kafka.utils
 
-import org.I0Itec.zkclient.serialize.ZkSerializer
-import kafka.cluster.{Broker, Cluster}
-import scala.collection._
 import java.util.Properties
-import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException, ZkMarshallingError}
+import java.util.concurrent.locks.Condition
+import kafka.cluster.{Broker, Cluster}
+import kafka.common.NoEpochForPartitionException
 import kafka.consumer.TopicCount
 import org.I0Itec.zkclient.{IZkDataListener, ZkClient}
-import java.util.concurrent.locks.Condition
-import kafka.common.NoEpochForPartitionException
+import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException, ZkMarshallingError}
+import org.I0Itec.zkclient.serialize.ZkSerializer
+import scala.collection._
+import util.parsing.json.JSON
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -110,7 +111,7 @@ object ZkUtils extends Logging {
       }else {
         throw new NoEpochForPartitionException("ISR path for topic %s partition %d is empty".format(topic, partition))
       }
-    }catch {
+    } catch {
       case e: ZkNoNodeException =>
         throw new NoEpochForPartitionException("No epoch since leader never existed for topic %s partition %d".format(topic, partition))
       case e1 => throw e1
@@ -118,15 +119,23 @@ object ZkUtils extends Logging {
     lastKnownEpoch
   }
 
+  /**
+   * Gets the assigned replicas (AR) for a specific topic and partition
+   */
   def getReplicasForPartition(zkClient: ZkClient, topic: String, partition: Int): Seq[String] = {
-    val replicaListString = readDataMaybeNull(zkClient, getTopicPartitionReplicasPath(topic, partition.toString))
-    if(replicaListString == null)
-      Seq.empty[String]
-    else {
-      Utils.getCSVList(replicaListString)
+    val topicAndPartitionAssignment = getPartitionAssignmentForTopics(zkClient, List(topic).iterator)
+    topicAndPartitionAssignment.get(topic) match {
+      case Some(partitionAssignment) => partitionAssignment.get(partition.toString) match {
+        case Some(replicaList) => replicaList
+        case None => Seq.empty[String]
+      }
+      case None => Seq.empty[String]
     }
   }
 
+  /**
+   * Gets the in-sync replicas (ISR) for a specific topic and partition
+   */
   def getInSyncReplicasForPartition(client: ZkClient, topic: String, partition: Int): Seq[Int] = {
     val replicaListAndEpochString = readDataMaybeNull(client, getTopicPartitionInSyncPath(topic, partition.toString))
     if(replicaListAndEpochString == null)
@@ -225,8 +234,7 @@ object ZkUtils extends Logging {
   private def createEphemeralPath(client: ZkClient, path: String, data: String): Unit = {
     try {
       client.createEphemeral(path, data)
-    }
-    catch {
+    } catch {
       case e: ZkNoNodeException => {
         createParentPath(client, path)
         client.createEphemeral(path, data)
@@ -241,23 +249,20 @@ object ZkUtils extends Logging {
   def createEphemeralPathExpectConflict(client: ZkClient, path: String, data: String): Unit = {
     try {
       createEphemeralPath(client, path, data)
-    }
-    catch {
+    } catch {
       case e: ZkNodeExistsException => {
         // this can happen when there is connection loss; make sure the data is what we intend to write
         var storedData: String = null
         try {
           storedData = readData(client, path)
-        }
-        catch {
+        } catch {
           case e1: ZkNoNodeException => // the node disappeared; treat as if node existed and let caller handles this
           case e2 => throw e2
         }
         if (storedData == null || storedData != data) {
           info("conflict in " + path + " data: " + data + " stored data: " + storedData)
           throw e
-        }
-        else {
+        } else {
           // otherwise, the creation succeeded, return normally
           info(path + " exists with value " + data + " during connection loss; this is ok")
         }
@@ -272,8 +277,7 @@ object ZkUtils extends Logging {
   def createPersistentPath(client: ZkClient, path: String, data: String = ""): Unit = {
     try {
       client.createPersistent(path, data)
-    }
-    catch {
+    } catch {
       case e: ZkNoNodeException => {
         createParentPath(client, path)
         client.createPersistent(path, data)
@@ -292,14 +296,12 @@ object ZkUtils extends Logging {
   def updatePersistentPath(client: ZkClient, path: String, data: String): Unit = {
     try {
       client.writeData(path, data)
-    }
-    catch {
+    } catch {
       case e: ZkNoNodeException => {
         createParentPath(client, path)
         try {
           client.createPersistent(path, data)
-        }
-        catch {
+        } catch {
           case e: ZkNodeExistsException => client.writeData(path, data)
           case e2 => throw e2
         }
@@ -315,8 +317,7 @@ object ZkUtils extends Logging {
   def updateEphemeralPath(client: ZkClient, path: String, data: String): Unit = {
     try {
       client.writeData(path, data)
-    }
-    catch {
+    } catch {
       case e: ZkNoNodeException => {
         createParentPath(client, path)
         client.createEphemeral(path, data)
@@ -328,8 +329,7 @@ object ZkUtils extends Logging {
   def deletePath(client: ZkClient, path: String): Boolean = {
     try {
       client.delete(path)
-    }
-    catch {
+    } catch {
       case e: ZkNoNodeException =>
         // this can happen during a connection loss event, return normally
         info(path + " deleted during connection loss; this is ok")
@@ -341,8 +341,7 @@ object ZkUtils extends Logging {
   def deletePathRecursive(client: ZkClient, path: String) {
     try {
       client.deleteRecursive(path)
-    }
-    catch {
+    } catch {
       case e: ZkNoNodeException =>
         // this can happen during a connection loss event, return normally
         info(path + " deleted during connection loss; this is ok")
@@ -368,16 +367,12 @@ object ZkUtils extends Logging {
     import scala.collection.JavaConversions._
     // triggers implicit conversion from java list to scala Seq
 
-    var ret: java.util.List[String] = null
     try {
-      ret = client.getChildren(path)
-    }
-    catch {
-      case e: ZkNoNodeException =>
-        return Nil
+      client.getChildren(path)
+    } catch {
+      case e: ZkNoNodeException => return Nil
       case e2 => throw e2
     }
-    return ret
   }
 
   /**
@@ -399,35 +394,40 @@ object ZkUtils extends Logging {
     cluster
   }
 
-  def getPartitionsForTopics(zkClient: ZkClient, topics: Iterator[String]): mutable.Map[String, Seq[String]] = {
-    val ret = new mutable.HashMap[String, Seq[String]]()
-    topics.foreach { topic =>
-      // get the partitions that exist for topic
-      val partitions = getChildrenParentMayNotExist(zkClient, getTopicPartitionsPath(topic))
-      debug("children of /brokers/topics/%s are %s".format(topic, partitions))
-      ret += (topic -> partitions.sortWith((s,t) => s < t))
+  def getPartitionAssignmentForTopics(zkClient: ZkClient, topics: Iterator[String]): mutable.Map[String, Map[String, List[String]]] = {
+    val ret = new mutable.HashMap[String, Map[String, List[String]]]()
+    topics.foreach{ topic =>
+      val jsonPartitionMap = readDataMaybeNull(zkClient, getTopicPath(topic))
+      val partitionMap = if (jsonPartitionMap == null) {
+        Map[String, List[String]]()
+      } else {
+        JSON.parseFull(jsonPartitionMap) match {
+          case Some(m) => m.asInstanceOf[Map[String, List[String]]]
+          case None => Map[String, List[String]]()
+        }
+      }
+      debug("partition map for /brokers/topics/%s is %s".format(topic, partitionMap))
+      ret += (topic -> partitionMap)
     }
     ret
   }
 
-  def getPartitionsAssignedToBroker(zkClient: ZkClient, topics: Seq[String], brokerId: Int): Map[String, Seq[Int]] = {
-    val topicsAndPartitions = getPartitionsForTopics(zkClient, topics.iterator)
-
-    topicsAndPartitions.map { tp =>
-      val topic = tp._1
-      val partitions = tp._2.map(p => p.toInt)
-      val relevantPartitions = partitions.filter { partition =>
-        val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partition).map(r => r.toInt)
-        assignedReplicas.contains(brokerId)
-      }
-      (topic -> relevantPartitions)
+  def getPartitionsForTopics(zkClient: ZkClient, topics: Iterator[String]): mutable.Map[String, Seq[String]] = {
+    getPartitionAssignmentForTopics(zkClient, topics).map{ topicAndPartitionMap =>
+      val topic = topicAndPartitionMap._1
+      val partitionMap = topicAndPartitionMap._2
+      debug("partition assignment of /brokers/topics/%s is %s".format(topic, partitionMap))
+      (topic -> partitionMap.keys.toSeq.sortWith((s,t) => s < t))
     }
   }
 
-  def getPartitionsAssignedToBroker(zkClient: ZkClient, topic: String, partitions: Seq[Int], broker: Int): Seq[Int] = {
-    partitions.filter { p =>
-      val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, p).map(r => r.toInt)
-      assignedReplicas.contains(broker)
+  def getPartitionsAssignedToBroker(zkClient: ZkClient, topics: Seq[String], brokerId: Int): Map[String, Seq[Int]] = {
+    val topicsAndPartitions = getPartitionAssignmentForTopics(zkClient, topics.iterator)
+    topicsAndPartitions.map{ topicAndPartitionMap =>
+      val topic = topicAndPartitionMap._1
+      val partitionMap = topicAndPartitionMap._2
+      val relevantPartitions = partitionMap.filter( m => m._2.contains(brokerId.toString) )
+      (topic -> relevantPartitions.keySet.map(_.toInt).toSeq)
     }
   }
 
@@ -468,14 +468,6 @@ object ZkUtils extends Logging {
     for ( (topic, consumerList) <- consumersPerTopicMap )
       consumersPerTopicMap.put(topic, consumerList.sortWith((s,t) => s < t))
     consumersPerTopicMap
-  }
-
-  /**
-   * For a given topic, this returns the sorted list of partition ids registered for this topic
-   */
-  def getSortedPartitionIdsForTopic(zkClient: ZkClient, topic: String): Seq[Int] = {
-    val topicPartitionsPath = ZkUtils.getTopicPartitionsPath(topic)
-    ZkUtils.getChildrenParentMayNotExist(zkClient, topicPartitionsPath).map(pid => pid.toInt).sortWith((s,t) => s < t)
   }
 
   def getBrokerInfoFromIds(zkClient: ZkClient, brokerIds: Seq[Int]): Seq[Broker] =

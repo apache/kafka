@@ -749,6 +749,21 @@ object Utils extends Logging {
     builder.toString
   }
 
+  def mapToJson[T <: Any](map: Map[String, List[String]]): String = {
+    val builder = new StringBuilder
+    builder.append("{ ")
+    var numElements = 0
+    for ( (key, value) <- map ) {
+      if (numElements > 0)
+        builder.append(",")
+      builder.append("\"" + key + "\": ")
+      builder.append("[%s]".format(value.map("\""+_+"\"").mkString(",")))
+      numElements += 1
+    }
+    builder.append(" }")
+    builder.toString
+  }
+
   def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
     for(arg <- required) {
       if(!options.has(arg)) {

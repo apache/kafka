@@ -329,8 +329,7 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
         case None =>
           /* check if auto creation of topics is turned on */
           if(config.autoCreateTopics) {
-            CreateTopicCommand.createTopic(zkClient, topic, config.numPartitions,
-              config.defaultReplicationFactor)
+            CreateTopicCommand.createTopic(zkClient, topic, config.numPartitions, config.defaultReplicationFactor)
             info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
               .format(topic, config.numPartitions, config.defaultReplicationFactor))
             val newTopicMetadata = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
