@@ -22,19 +22,29 @@ import kafka.utils.{Pool, Utils, threadsafe, Logging}
 
 trait ConsumerTopicStatMBean {
   def getMessagesPerTopic: Long
+  def getBytesPerTopic: Long
 }
 
 @threadsafe
 class ConsumerTopicStat extends ConsumerTopicStatMBean {
   private val numCumulatedMessagesPerTopic = new AtomicLong(0)
+  private val numCumulatedBytesPerTopic = new AtomicLong(0)
 
   def getMessagesPerTopic: Long = numCumulatedMessagesPerTopic.get
 
   def recordMessagesPerTopic(nMessages: Int) = numCumulatedMessagesPerTopic.getAndAdd(nMessages)
+
+  def getBytesPerTopic: Long = numCumulatedBytesPerTopic.get
+
+  def recordBytesPerTopic(nBytes: Long) = numCumulatedBytesPerTopic.getAndAdd(nBytes)
 }
 
 object ConsumerTopicStat extends Logging {
   private val stats = new Pool[String, ConsumerTopicStat]
+  private val allTopicStat = new ConsumerTopicStat
+  Utils.registerMBean(allTopicStat, "kafka:type=kafka.ConsumerAllTopicStat")
+
+  def getConsumerAllTopicStat(): ConsumerTopicStat = allTopicStat
 
   def getConsumerTopicStat(topic: String): ConsumerTopicStat = {
     var stat = stats.get(topic)

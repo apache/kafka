@@ -61,6 +61,8 @@ private[consumer] class PartitionTopicInfo(val topic: String,
       chunkQueue.put(new FetchedDataChunk(messages, this, fetchOffset))
       val newOffset = fetchedOffset.addAndGet(size)
       debug("updated fetch offset of ( %s ) to %d".format(this, newOffset))
+      ConsumerTopicStat.getConsumerTopicStat(topic).recordBytesPerTopic(size)
+      ConsumerTopicStat.getConsumerAllTopicStat().recordBytesPerTopic(size)
     }
     size
   }

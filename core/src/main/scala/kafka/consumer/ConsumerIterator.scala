@@ -47,6 +47,7 @@ class ConsumerIterator[T](private val channel: BlockingQueue[FetchedDataChunk],
     val topic = currentTopicInfo.topic
     trace("Setting %s consumed offset to %d".format(topic, consumedOffset))
     ConsumerTopicStat.getConsumerTopicStat(topic).recordMessagesPerTopic(1)
+    ConsumerTopicStat.getConsumerAllTopicStat().recordMessagesPerTopic(1)
     item
   }
 
