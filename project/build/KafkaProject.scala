@@ -191,6 +191,9 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
          <dependency org="org.apache.hadoop" name="hadoop-core" rev="0.20.2">
            <exclude module="junit"/>
          </dependency>
+         <dependency org="org.apache.pig" name="pig" rev="0.8.0">
+           <exclude module="junit"/>
+         </dependency>
        </dependencies>
 
     }
@@ -209,6 +212,9 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
            <exclude module="jms"/>
            <exclude module=""/>
          <dependency org="org.apache.hadoop" name="hadoop-core" rev="0.20.2">
+           <exclude module="junit"/>
+         </dependency>
+         <dependency org="org.apache.pig" name="pig" rev="0.8.0">
            <exclude module="junit"/>
          </dependency>
        </dependencies>
