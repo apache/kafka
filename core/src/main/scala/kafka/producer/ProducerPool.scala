@@ -73,7 +73,7 @@ class ProducerPool(val config: ProducerConfig, val zkClient: ZkClient) extends L
         if(syncProducers.size == 0)
           throw new NoBrokersForPartitionException("No brokers available")
       }
-      syncProducers.get(Utils.random.nextInt(syncProducers.size)).get
+      syncProducers.head._2
     }
   }
 
