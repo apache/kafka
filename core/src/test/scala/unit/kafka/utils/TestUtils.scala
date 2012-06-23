@@ -397,6 +397,18 @@ object TestUtils extends Logging {
     }
   }
 
+  def waitUntilTrue(condition: () => Boolean, waitTime: Long): Boolean = {
+    val startTime = System.currentTimeMillis()
+    while (true) {
+      if (condition())
+        return true
+      if (System.currentTimeMillis() > startTime + waitTime)
+        return false
+      Thread.sleep(100)
+    }
+    // should never hit here
+    throw new RuntimeException("unexpected error")
+  }
 }
 
 object ControllerTestUtils{
@@ -441,9 +453,6 @@ object ControllerTestUtils{
     new StopReplicaResponse(1, responseMap)
   }
 }
-
-
-
 
 object TestZKUtils {
   val zookeeperConnect = "127.0.0.1:2182"  

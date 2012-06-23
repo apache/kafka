@@ -23,17 +23,15 @@ import kafka.utils.TestUtils._
 import kafka.producer.ProducerData
 import kafka.serializer.StringEncoder
 import kafka.admin.CreateTopicCommand
-import kafka.cluster.{Replica, Partition, Broker}
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.TestUtils
 import junit.framework.Assert._
-import java.io.File
-import kafka.log.Log
 
 class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
   val props = createBrokerConfigs(2)
   val configs = props.map(p => new KafkaConfig(p) { override val flushInterval = 1})
   var brokers: Seq[KafkaServer] = null
-  val topic = "foobar"
+  val topic1 = "foo"
+  val topic2 = "bar"
 
   override def setUp() {
     super.setUp()
@@ -41,45 +39,36 @@ class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
   }
 
   override def tearDown() {
-    super.tearDown()
     brokers.foreach(_.shutdown())
+    super.tearDown()
   }
 
   def testReplicaFetcherThread() {
     val partition = 0
-    val testMessageList = List("test1", "test2", "test3", "test4")
-    val leaderBrokerId = configs.head.brokerId
-    val followerBrokerId = configs.last.brokerId
-    val leaderBroker = new Broker(leaderBrokerId, "localhost", "localhost", configs.head.port)
+    val testMessageList1 = List("test1", "test2", "test3", "test4")
+    val testMessageList2 = List("test5", "test6", "test7", "test8")
 
     // create a topic and partition and await leadership
-    CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(c => c.brokerId).mkString(":"))
-    TestUtils.waitUntilLeaderIsElected(zkClient, topic, 0, 1000)
+    for (topic <- List(topic1,topic2)) {
+      CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(c => c.brokerId).mkString(":"))
+      TestUtils.waitUntilLeaderIsElected(zkClient, topic, 0, 1000)
+    }
 
     // send test messages to leader
     val producer = TestUtils.createProducer[String, String](zkConnect, new StringEncoder)
-    producer.send(new ProducerData[String, String](topic, "test", testMessageList))
+    producer.send(new ProducerData[String, String](topic1, testMessageList1),
+                  new ProducerData[String, String](topic2, testMessageList2))
+    producer.close()
 
-    // create a tmp directory
-    val tmpLogDir = TestUtils.tempDir()
-    val replicaLogDir = new File(tmpLogDir, topic + "-" + partition)
-    replicaLogDir.mkdirs()
-    val replicaLog = new Log(replicaLogDir, 500, 500, false)
-
-    // create replica fetch thread
-    val time = new MockTime
-    val testPartition = new Partition(topic, partition, time)
-    testPartition.leaderId(Some(leaderBrokerId))
-    val testReplica = new Replica(followerBrokerId, testPartition, topic, Some(replicaLog))
-    val replicaFetchThread = new ReplicaFetcherThread("replica-fetcher", testReplica, leaderBroker, configs.last)
-
-    // start a replica fetch thread to the above broker
-    replicaFetchThread.start()
-
-    Thread.sleep(700)
-    replicaFetchThread.shutdown()
-
-    assertEquals(60L, testReplica.log.get.logEndOffset)
-    replicaLog.close()
+    def condition(): Boolean = {
+      var result = true
+      for (topic <- List(topic1, topic2)) {
+        val expectedOffset = brokers.head.getLogManager().getLog(topic, partition).get.logEndOffset
+        result = result && expectedOffset > 0 && brokers.foldLeft(true) { (total, item) => total &&
+          (expectedOffset == item.getLogManager().getLog(topic, partition).get.logEndOffset) }
+      }
+      result
+    }
+    assertTrue("broker logs should be identical", waitUntilTrue(condition, 6000))
   }
 }

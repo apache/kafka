@@ -17,67 +17,41 @@
 
 package kafka.server
 
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.CountDownLatch
-import kafka.api.FetchRequestBuilder
-import kafka.utils.Logging
-import kafka.cluster.{Broker, Replica}
-import kafka.consumer.SimpleConsumer
+import kafka.api.{OffsetRequest, PartitionData}
+import kafka.cluster.Broker
+import kafka.message.ByteBufferMessageSet
 
-class ReplicaFetcherThread(name: String, replica: Replica, leaderBroker: Broker, config: KafkaConfig)
-  extends Thread(name) with Logging {
-  val isRunning: AtomicBoolean = new AtomicBoolean(true)
-  private val shutdownLatch = new CountDownLatch(1)
-  private val replicaConsumer = new SimpleConsumer(leaderBroker.host, leaderBroker.port,
-    config.replicaSocketTimeoutMs, config.replicaSocketBufferSize)
+class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: KafkaConfig, replicaMgr: ReplicaManager)
+        extends AbstractFetcherThread(name = name, sourceBroker = sourceBroker, socketTimeout = brokerConfig.replicaSocketTimeoutMs,
+          socketBufferSize = brokerConfig.replicaSocketBufferSize, fetchSize = brokerConfig.replicaFetchSize,
+          fetcherBrokerId = brokerConfig.brokerId, maxWait = brokerConfig.replicaMaxWaitTimeMs,
+          minBytes = brokerConfig.replicaMinBytes) {
 
-  override def run() {
-    try {
-      info("Starting replica fetch thread %s for topic %s partition %d".format(name, replica.topic, replica.partition.partitionId))
-      while(isRunning.get()) {
-        val builder = new FetchRequestBuilder().
-          clientId(name).
-          replicaId(replica.brokerId).
-          maxWait(config.replicaMaxWaitTimeMs).
-          minBytes(config.replicaMinBytes)
+  // process fetched data and return the new fetch offset
+  def processPartitionData(topic: String, fetchOffset: Long, partitionData: PartitionData) = {
+    val partitionId = partitionData.partition
+    val replica = replicaMgr.getReplica(topic, partitionId).get
+    val messageSet = partitionData.messages.asInstanceOf[ByteBufferMessageSet]
 
-        // TODO: KAFKA-339 Keep this simple single fetch for now. Change it to fancier multi fetch when message
-        // replication actually works
-        val fetchOffset = replica.logEndOffset()
-        trace("Follower %d issuing fetch request for topic %s partition %d to leader %d from offset %d"
-          .format(replica.brokerId, replica.topic, replica.partition.partitionId, leaderBroker.id, fetchOffset))
-        builder.addFetch(replica.topic, replica.partition.partitionId, fetchOffset, config.replicaFetchSize)
-
-        val fetchRequest = builder.build()
-        val response = replicaConsumer.fetch(fetchRequest)
-        // TODO: KAFKA-339 Check for error. Don't blindly read the messages
-        // append messages to local log
-        replica.log.get.append(response.messageSet(replica.topic, replica.partition.partitionId))
-        // record the hw sent by the leader for this partition
-        val followerHighWatermark = replica.logEndOffset().min(response.data.head.partitionData.head.hw)
-        replica.highWatermark(Some(followerHighWatermark))
-        trace("Follower %d set replica highwatermark for topic %s partition %d to %d"
-          .format(replica.brokerId, replica.topic, replica.partition.partitionId, replica.highWatermark()))
-      }
-    }catch {
-      case e: InterruptedException => warn("Replica fetcher thread %s interrupted. Shutting down".format(name))
-      case e1 => error("Error in replica fetcher thread. Shutting down due to ", e1)
-    }
-    shutdownComplete()
+    if (fetchOffset != replica.logEndOffset())
+      throw new RuntimeException("offset mismatch: fetchOffset=%d, logEndOffset=%d".format(fetchOffset, replica.logEndOffset()))
+    replica.log.get.append(messageSet)
+    replica.highWatermark(Some(partitionData.hw))
+    trace("follower %d set replica highwatermark for topic %s partition %d to %d"
+          .format(replica.brokerId, topic, partitionId, partitionData.hw))
   }
 
-  private def shutdownComplete() = {
-    replicaConsumer.close()
-    shutdownLatch.countDown
+  // handle a partition whose offset is out of range and return a new fetch offset
+  def handleOffsetOutOfRange(topic: String, partitionId: Int): Long = {
+    // This means the local replica is out of date. Truncate the log and catch up from beginning.
+    val offsets = simpleConsumer.getOffsetsBefore(topic, partitionId, OffsetRequest.EarliestTime, 1)
+    val replica = replicaMgr.getReplica(topic, partitionId).get
+    replica.log.get.truncateAndStartWithNewOffset(offsets(0))
+    return offsets(0)
   }
 
-  def getLeader(): Broker = leaderBroker
-
-  def shutdown() {
-    info("Shutting down replica fetcher thread")
-    isRunning.set(false)
-    interrupt()
-    shutdownLatch.await()
-    info("Replica fetcher thread shutdown completed")
+  // any logic for partitions whose leader has changed
+  def handlePartitionsWithNewLeader(partitions: List[Tuple2[String, Int]]): Unit = {
+    // no handler needed since the controller will make the changes accordingly
   }
 }

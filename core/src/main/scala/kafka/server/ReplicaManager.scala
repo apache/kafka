@@ -32,6 +32,8 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
   private var leaderReplicas = new ListBuffer[Partition]()
   private val leaderReplicaLock = new ReentrantLock()
   private var isrExpirationScheduler = new KafkaScheduler(1, "isr-expiration-thread-", true)
+  private val replicaFetcherManager = new ReplicaFetcherManager(config, this)
+
   // start ISR expiration thread
   isrExpirationScheduler.startUp
   isrExpirationScheduler.scheduleWithRate(maybeShrinkISR, 0, config.keepInSyncTimeMs)
@@ -139,7 +141,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
 
   def makeLeader(replica: Replica, currentISRInZk: Seq[Int]) {
     // stop replica fetcher thread, if any
-    replica.stopReplicaFetcherThread()
+    replicaFetcherManager.removeFetcher(replica.topic, replica.partition.partitionId)
     // read and cache the ISR
     replica.partition.leaderId(Some(replica.brokerId))
     replica.partition.updateISR(currentISRInZk.toSet)
@@ -153,7 +155,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
   }
 
   def makeFollower(replica: Replica, leaderBrokerId: Int, zkClient: ZkClient) {
-    info("Broker %d becoming follower to leader %d for topic %s partition %d"
+    info("broker %d intending to follow leader %d for topic %s partition %d"
       .format(config.brokerId, leaderBrokerId, replica.topic, replica.partition.partitionId))
     // remove this replica's partition from the ISR expiration queue
     try {
@@ -169,13 +171,15 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
     }
     // get leader for this replica
     val leaderBroker = ZkUtils.getBrokerInfoFromIds(zkClient, List(leaderBrokerId)).head
-    val isReplicaAFollower = replica.getIfFollowerAndLeader()
+    val currentLeaderBroker = replicaFetcherManager.fetcherSourceBroker(replica.topic, replica.partition.partitionId)
     // Become follower only if it is not already following the same leader
-    if(!(isReplicaAFollower._1 && (isReplicaAFollower._2 == leaderBroker.id))) {
+    if( currentLeaderBroker == None || currentLeaderBroker.get != leaderBroker.id) {
+      info("broker %d becoming follower to leader %d for topic %s partition %d"
+        .format(config.brokerId, leaderBrokerId, replica.topic, replica.partition.partitionId))
       // stop fetcher thread to previous leader
-      replica.stopReplicaFetcherThread()
+      replicaFetcherManager.removeFetcher(replica.topic, replica.partition.partitionId)
       // start fetcher thread to current leader
-      replica.startReplicaFetcherThread(leaderBroker, config)
+      replicaFetcherManager.addFetcher(replica.topic, replica.partition.partitionId, replica.logEndOffset(), leaderBroker)
     }
   }
 
@@ -244,6 +248,6 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
 
   def close() {
     isrExpirationScheduler.shutdown()
-    allReplicas.foreach(_._2.assignedReplicas().foreach(_.close()))
+    replicaFetcherManager.shutdown()
   }
 }

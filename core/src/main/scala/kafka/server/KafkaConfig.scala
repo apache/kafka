@@ -136,4 +136,7 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
 
   val replicaMinBytes = Utils.getInt(props, "replica.fetch.min.bytes", 4086)
 
+  /* number of fetcher threads used to replicate messages from a source broker.
+  *  Increasing this value can increase the degree of I/O parallelism in the follower broker. */
+  val numReplicaFetchers = Utils.getInt(props, "replica.fetchers", 1)
  }

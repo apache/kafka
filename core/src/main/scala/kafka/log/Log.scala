@@ -405,6 +405,19 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
     ret
   }
 
+  /**
+   *  Truncate all segments in the log and start a new segment on a new offset
+   */
+  def truncateAndStartWithNewOffset(newOffset: Long) {
+    lock synchronized {
+      val deletedSegments = segments.trunc(segments.view.size)
+      val newFile = new File(dir, Log.nameFromOffset(newOffset))
+      debug("tuncate and start log '" + name + "' to " + newFile.getName())
+      segments.append(new LogSegment(newFile, new FileMessageSet(newFile, true), newOffset))
+      deleteSegments(deletedSegments)
+    }
+  }
+
   /* Attemps to delete all provided segments from a log and returns how many it was able to */
   def deleteSegments(segments: Seq[LogSegment]): Int = {
     var total = 0

@@ -18,7 +18,6 @@
 package kafka.cluster
 
 import kafka.log.Log
-import kafka.server.{KafkaConfig, ReplicaFetcherThread}
 import java.lang.IllegalStateException
 import kafka.utils.Logging
 
@@ -28,7 +27,6 @@ class Replica(val brokerId: Int,
               var log: Option[Log] = None,
               var leoUpdateTime: Long = -1L) extends Logging {
   private var logEndOffset: Long = -1L
-  private var replicaFetcherThread: ReplicaFetcherThread = null
 
   def logEndOffset(newLeo: Option[Long] = None): Long = {
     isLocal match {
@@ -86,32 +84,6 @@ class Replica(val brokerId: Int,
               .format(partition.partitionId, brokerId))
         }
     }
-  }
-
-  def startReplicaFetcherThread(leaderBroker: Broker, config: KafkaConfig) {
-    val name = "Replica-Fetcher-%d-%s-%d".format(brokerId, topic, partition.partitionId)
-    replicaFetcherThread = new ReplicaFetcherThread(name, this, leaderBroker, config)
-    replicaFetcherThread.setDaemon(true)
-    replicaFetcherThread.start()
-  }
-
-  def stopReplicaFetcherThread() {
-    if(replicaFetcherThread != null) {
-      replicaFetcherThread.shutdown()
-      replicaFetcherThread = null
-    }
-  }
-
-  def getIfFollowerAndLeader(): (Boolean, Int) = {
-    replicaFetcherThread != null match {
-      case true => (true, replicaFetcherThread.getLeader().id)
-      case false => (false, -1)
-    }
-  }
-
-  def close() {
-    if(replicaFetcherThread != null)
-      replicaFetcherThread.shutdown()
   }
 
   override def equals(that: Any): Boolean = {

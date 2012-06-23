@@ -60,6 +60,8 @@ object ErrorMapping {
   def maybeThrowException(code: Short) =
     if(code != 0)
       throw codeToException(code).newInstance()
+
+  def exceptionFor(code: Short) : Throwable = codeToException(code).newInstance()
 }
 
 class InvalidTopicException(message: String) extends RuntimeException(message) {
