@@ -62,7 +62,17 @@ object ConsoleConsumer extends Logging {
                            .withRequiredArg
                            .describedAs("size")
                            .ofType(classOf[java.lang.Integer])
-                           .defaultsTo(1024 * 1024)   
+                           .defaultsTo(1024 * 1024)
+    val minFetchBytesOpt = parser.accepts("min-fetch-bytes", "The min number of bytes each fetch request waits for.")
+                           .withRequiredArg
+                           .describedAs("bytes")
+                           .ofType(classOf[java.lang.Integer])
+                           .defaultsTo(1)
+    val maxWaitMsOpt = parser.accepts("max-wait-ms", "The max amount of time each fetch request waits.")
+                           .withRequiredArg
+                           .describedAs("ms")
+                           .ofType(classOf[java.lang.Integer])
+                           .defaultsTo(100)
     val socketBufferSizeOpt = parser.accepts("socket-buffer-size", "The size of the tcp RECV size.")
                            .withRequiredArg
                            .describedAs("size")
@@ -116,6 +126,8 @@ object ConsoleConsumer extends Logging {
     props.put("groupid", options.valueOf(groupIdOpt))
     props.put("socket.buffersize", options.valueOf(socketBufferSizeOpt).toString)
     props.put("fetch.size", options.valueOf(fetchSizeOpt).toString)
+    props.put("min.fetch.bytes", options.valueOf(minFetchBytesOpt).toString)
+    props.put("max.fetch.wait.ms", options.valueOf(maxWaitMsOpt).toString)
     props.put("auto.commit", "true")
     props.put("autocommit.interval.ms", options.valueOf(autoCommitIntervalOpt).toString)
     props.put("autooffset.reset", if(options.has(resetBeginningOpt)) "smallest" else "largest")

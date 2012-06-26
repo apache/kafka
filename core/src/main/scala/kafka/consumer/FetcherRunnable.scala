@@ -67,7 +67,8 @@ class FetcherRunnable(val name: String,
         val fetchRequest = builder.build()
         val start = System.currentTimeMillis
         val response = simpleConsumer.fetch(fetchRequest)
-        trace("Fetch completed in " + (System.currentTimeMillis - start) + " ms with max wait of " + config.maxFetchWaitMs)
+        trace("Fetch request %s completed in %d ms with max wait of %d".format(fetchRequest,
+          (System.currentTimeMillis - start), config.maxFetchWaitMs))
 
         var read = 0L
         for(infopti <- partitionTopicInfos) {

@@ -301,7 +301,6 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
    * The byte offset of the message that will be appended next.
    */
   def nextAppendOffset: Long = {
-    flush
     val last = segments.view.last
     last.start + last.size
   }
@@ -329,6 +328,7 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
    */
   def roll() {
     lock synchronized {
+      flush
       val newOffset = nextAppendOffset
       val newFile = new File(dir, nameFromOffset(newOffset))
       if (newFile.exists) {

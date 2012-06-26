@@ -33,7 +33,7 @@ object ConsumerConfig {
   val AutoOffsetReset = OffsetRequest.SmallestTimeString
   val ConsumerTimeoutMs = -1
   val MinFetchBytes = 1
-  val MaxFetchWaitMs = 3000
+  val MaxFetchWaitMs = 100
   val MirrorTopicsWhitelist = ""
   val MirrorTopicsBlacklist = ""
   val MirrorConsumerNumThreads = 1
