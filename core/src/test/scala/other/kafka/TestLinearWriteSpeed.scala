@@ -69,8 +69,8 @@ object TestLinearWriteSpeed {
       buffer.rewind()
       channels(i % numFiles).write(buffer)
     }
-    val ellapsedSecs = (System.currentTimeMillis - begin) / 1000.0
-    System.out.println(bytesToWrite / (1024 * 1024 * ellapsedSecs) + " MB per sec")
+    val elapsedSecs = (System.currentTimeMillis - begin) / 1000.0
+    System.out.println(bytesToWrite / (1024 * 1024 * elapsedSecs) + " MB per sec")
   }
   
 }

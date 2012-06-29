@@ -73,7 +73,7 @@ abstract class AbstractFetcherThread(val name: String, sourceBroker: Broker, soc
         // process fetched data
         fetchMapLock synchronized {
           for ( topicData <- response.data ) {
-            for ( partitionData <- topicData.partitionData) {
+            for ( partitionData <- topicData.partitionDataArray) {
               val topic = topicData.topic
               val partitionId = partitionData.partition
               val key = (topic, partitionId)

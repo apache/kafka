@@ -44,7 +44,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
     lock synchronized {
       val serializedData = serialize(events)
       var outstandingProduceRequests = serializedData
-      var remainingRetries = config.producerRetries
+      var remainingRetries = config.producerRetries + 1
       while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {
         outstandingProduceRequests = dispatchSerializedData(outstandingProduceRequests)
         if (outstandingProduceRequests.size > 0)  {
@@ -171,7 +171,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
         partitionData.append(new PartitionData(partitionId, messagesSet))
       }
       val topicData = topics.map(kv => new TopicData(kv._1, kv._2.toArray)).toArray
-      val producerRequest = new ProducerRequest(config.correlationId, config.clientId, config.requiredAcks, config.ackTimeout, topicData)
+      val producerRequest = new ProducerRequest(config.correlationId, config.clientId, config.requiredAcks, config.ackTimeoutMs, topicData)
       try {
         val syncProducer = producerPool.getProducer(brokerId)
         val response = syncProducer.send(producerRequest)
@@ -179,7 +179,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,                          
           .format(messagesPerTopic, brokerId, syncProducer.config.host, syncProducer.config.port))
         var msgIdx = -1
         val errors = new ListBuffer[(String, Int)]
-        for( topic <- topicData; partition <- topic.partitionData ) {
+        for( topic <- topicData; partition <- topic.partitionDataArray ) {
           msgIdx += 1
           if(msgIdx > response.errors.size || response.errors(msgIdx) != ErrorMapping.NoError)
             errors.append((topic.topic, partition.partition))

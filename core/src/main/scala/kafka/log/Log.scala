@@ -367,11 +367,11 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
 
   def getOffsetsBefore(request: OffsetRequest): Array[Long] = {
     val segsArray = segments.view
-    var offsetTimeArray: Array[Tuple2[Long, Long]] = null
+    var offsetTimeArray: Array[(Long, Long)] = null
     if (segsArray.last.size > 0)
-      offsetTimeArray = new Array[Tuple2[Long, Long]](segsArray.length + 1)
+      offsetTimeArray = new Array[(Long, Long)](segsArray.length + 1)
     else
-      offsetTimeArray = new Array[Tuple2[Long, Long]](segsArray.length)
+      offsetTimeArray = new Array[(Long, Long)](segsArray.length)
 
     for (i <- 0 until segsArray.length)
       offsetTimeArray(i) = (segsArray(i).start, segsArray(i).file.lastModified)

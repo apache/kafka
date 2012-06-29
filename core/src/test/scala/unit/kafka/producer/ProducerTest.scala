@@ -30,6 +30,8 @@ import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
 import org.junit.Test
 import kafka.utils._
+import java.util
+
 
 class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   private val brokerId1 = 0
@@ -85,22 +87,31 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testZKSendToNewTopic() {
-    val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    val props1 = new util.Properties()
+    props1.put("serializer.class", "kafka.serializer.StringEncoder")
+    props1.put("partitioner.class", "kafka.utils.StaticPartitioner")
+    props1.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props1.put("producer.request.required.acks", "2")
+    props1.put("producer.request.ack.timeout.ms", "-1")
 
-    val config = new ProducerConfig(props)
+    val props2 = new util.Properties()
+    props2.putAll(props1)
+    props2.put("producer.request.required.acks", "3")
+    props2.put("producer.request.ack.timeout.ms", "1000")
+
+    val config1 = new ProducerConfig(props1)
+    val config2 = new ProducerConfig(props2)
 
     // create topic with 1 partition and await leadership
-    CreateTopicCommand.createTopic(zkClient, "new-topic", 1)
+    CreateTopicCommand.createTopic(zkClient, "new-topic", 1, 2)
     TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 0, 500)
 
-    val producer = new Producer[String, String](config)
+    val producer1 = new Producer[String, String](config1)
+    val producer2 = new Producer[String, String](config2)
     try {
       // Available partition ids should be 0.
-      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
+      producer1.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
+      producer1.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
       // get the leader
       val leaderOpt = ZkUtils.getLeaderForPartition(zkClient, "new-topic", 0)
       assertTrue("Leader for topic new-topic partition 0 should exist", leaderOpt.isDefined)
@@ -118,12 +129,26 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
       assertEquals(new Message("test1".getBytes), messageSet.next.message)
       assertTrue("Message set should have 1 message", messageSet.hasNext)
       assertEquals(new Message("test1".getBytes), messageSet.next.message)
+      assertFalse("Message set should not have any more messages", messageSet.hasNext)
     } catch {
       case e: Exception => fail("Not expected", e)
     } finally {
-      producer.close
+      producer1.close()
+    }
+
+    try {
+      producer2.send(new ProducerData[String, String]("new-topic", "test", Array("test2")))
+      fail("Should have timed out for 3 acks.")
+    }
+    catch {
+      case se: FailedToSendMessageException => true
+      case e => fail("Not expected", e)
+    }
+    finally {
+      producer2.close()
     }
   }
+
 
   @Test
   def testZKSendWithDeadBroker() {

@@ -21,6 +21,7 @@ import java.nio._
 import kafka.message._
 import kafka.utils._
 
+
 object ProducerRequest {
   val CurrentVersion: Short = 0
 
@@ -29,7 +30,7 @@ object ProducerRequest {
     val correlationId: Int = buffer.getInt
     val clientId: String = Utils.readShortString(buffer, "UTF-8")
     val requiredAcks: Short = buffer.getShort
-    val ackTimeout: Int = buffer.getInt
+    val ackTimeoutMs: Int = buffer.getInt
     //build the topic structure
     val topicCount = buffer.getInt
     val data = new Array[TopicData](topicCount)
@@ -48,7 +49,7 @@ object ProducerRequest {
       }
       data(i) = new TopicData(topic,partitionData)
     }
-    new ProducerRequest(versionId, correlationId, clientId, requiredAcks, ackTimeout, data)
+    new ProducerRequest(versionId, correlationId, clientId, requiredAcks, ackTimeoutMs, data)
   }
 }
 
@@ -56,24 +57,24 @@ case class ProducerRequest( versionId: Short,
                             correlationId: Int,
                             clientId: String,
                             requiredAcks: Short,
-                            ackTimeout: Int,
+                            ackTimeoutMs: Int,
                             data: Array[TopicData] ) extends RequestOrResponse(Some(RequestKeys.Produce)) {
 
-  def this(correlationId: Int, clientId: String, requiredAcks: Short, ackTimeout: Int, data: Array[TopicData]) =
-    this(ProducerRequest.CurrentVersion, correlationId, clientId, requiredAcks, ackTimeout, data)
+  def this(correlationId: Int, clientId: String, requiredAcks: Short, ackTimeoutMs: Int, data: Array[TopicData]) =
+    this(ProducerRequest.CurrentVersion, correlationId, clientId, requiredAcks, ackTimeoutMs, data)
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     buffer.putInt(correlationId)
     Utils.writeShortString(buffer, clientId, "UTF-8")
     buffer.putShort(requiredAcks)
-    buffer.putInt(ackTimeout)
+    buffer.putInt(ackTimeoutMs)
     //save the topic structure
     buffer.putInt(data.size) //the number of topics
     for(topicData <- data) {
       Utils.writeShortString(buffer, topicData.topic, "UTF-8") //write the topic
-      buffer.putInt(topicData.partitionData.size) //the number of partitions
-      for(partitionData <- topicData.partitionData) {
+      buffer.putInt(topicData.partitionDataArray.size) //the number of partitions
+      for(partitionData <- topicData.partitionDataArray) {
         buffer.putInt(partitionData.partition)
         buffer.putInt(partitionData.messages.getSerialized().limit)
         buffer.put(partitionData.messages.getSerialized())
@@ -85,10 +86,10 @@ case class ProducerRequest( versionId: Short,
   def sizeInBytes: Int = {
     var size = 0 
     //size, request_type_id, version_id, correlation_id, client_id, required_acks, ack_timeout, data.size
-    size = 2 + 4 + 2 + clientId.length + 2 + 4 + 4;
+    size = 2 + 4 + 2 + clientId.length + 2 + 4 + 4
     for(topicData <- data) {
 	    size += 2 + topicData.topic.length + 4
-      for(partitionData <- topicData.partitionData) {
+      for(partitionData <- topicData.partitionDataArray) {
         size += 4 + 4 + partitionData.messages.sizeInBytes.asInstanceOf[Int]
       }
     }
@@ -102,12 +103,13 @@ case class ProducerRequest( versionId: Short,
         ( correlationId == that.correlationId &&
           clientId == that.clientId &&
           requiredAcks == that.requiredAcks &&
-          ackTimeout == that.ackTimeout &&
+          ackTimeoutMs == that.ackTimeoutMs &&
           data.toSeq == that.data.toSeq )
       case _ => false
     }
   }
 
-  def topicPartitionCount = data.foldLeft(0)(_ + _.partitionData.length)
+  def topicPartitionCount = data.foldLeft(0)(_ + _.partitionDataArray.length)
 
 }
+

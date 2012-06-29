@@ -613,12 +613,12 @@ object Utils extends Logging {
       v
   }
 
-  def getHostPort(hostport: String) : Tuple2[String, Int] = {
+  def getHostPort(hostport: String) : (String, Int) = {
     val splits = hostport.split(":")
     (splits(0), splits(1).toInt)
   }
 
-  def getTopicPartition(topicPartition: String) : Tuple2[String, Int] = {
+  def getTopicPartition(topicPartition: String) : (String, Int) = {
     val index = topicPartition.lastIndexOf('-')
     (topicPartition.substring(0,index), topicPartition.substring(index+1).toInt)
   }

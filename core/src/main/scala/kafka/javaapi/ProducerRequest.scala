@@ -23,10 +23,10 @@ import java.nio.ByteBuffer
 class ProducerRequest(val correlationId: Int,
                       val clientId: String,
                       val requiredAcks: Short,
-                      val ackTimeout: Int,
+                      val ackTimeoutMs: Int,
                       val data: Array[TopicData]) extends RequestOrResponse(Some(RequestKeys.Produce)) {
 	
-  val underlying = new kafka.api.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeout, data)
+  val underlying = new kafka.api.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeoutMs, data)
 
   def writeTo(buffer: ByteBuffer) { underlying.writeTo(buffer) }
 

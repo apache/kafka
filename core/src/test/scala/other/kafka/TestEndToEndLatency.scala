@@ -56,11 +56,11 @@ object TestEndToEndLatency {
       var begin = System.nanoTime
       producer.send(new ProducerData(topic, message))
       val received = iter.next
-      val ellapsed = System.nanoTime - begin
+      val elapsed = System.nanoTime - begin
       // poor man's progress bar
       if(i % 10000 == 0)
-        println(i + "\t" + ellapsed / 1000.0 / 1000.0)
-      totalTime += ellapsed
+        println(i + "\t" + elapsed / 1000.0 / 1000.0)
+      totalTime += elapsed
     }
     println("Avg latency: " + (totalTime / numMessages / 1000.0 / 1000.0)) + "ms"
     producer.close()

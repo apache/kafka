@@ -38,6 +38,7 @@ object ErrorMapping {
   val NoLeaderForPartitionCode : Short = 6
   val NotLeaderForPartitionCode : Short = 7
   val UnknownTopicCode : Short = 8
+  val RequestTimedOutCode: Short = 9
 
   private val exceptionToCode = 
     Map[Class[Throwable], Short](
@@ -48,6 +49,7 @@ object ErrorMapping {
       classOf[FetchRequestFormatException].asInstanceOf[Class[Throwable]] -> InvalidFetchRequestFormatCode,
       classOf[NotLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NotLeaderForPartitionCode,
       classOf[NoLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NoLeaderForPartitionCode,
+      classOf[RequestTimedOutException].asInstanceOf[Class[Throwable]] -> RequestTimedOutCode,
       classOf[UnknownTopicException].asInstanceOf[Class[Throwable]] -> UnknownTopicCode
     ).withDefaultValue(UnknownCode)
   

@@ -101,7 +101,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
    */
   def send(producerRequest: ProducerRequest): ProducerResponse = {
     for( topicData <- producerRequest.data ) {
-      for( partitionData <- topicData.partitionData ) {
+      for( partitionData <- topicData.partitionDataArray ) {
 	      verifyMessageSize(partitionData.messages)
         val setSize = partitionData.messages.sizeInBytes.asInstanceOf[Int]
         trace("Got message set with " + setSize + " bytes to send")

@@ -39,7 +39,7 @@ class RequestPurgatoryTest {
   def teardown() {
     purgatory.shutdown()
   }
-  
+
   @Test
   def testRequestSatisfaction() {
     val r1 = new DelayedRequest(Array("test1"), null, 100000L)
@@ -66,11 +66,11 @@ class RequestPurgatoryTest {
     purgatory.watch(r1)
     purgatory.watch(r2)
     purgatory.awaitExpiration(r1)
-    val ellapsed = System.currentTimeMillis - start
-    println(ellapsed)
+    val elapsed = System.currentTimeMillis - start
+    println(elapsed)
     assertTrue("r1 expired", purgatory.expired.contains(r1))
     assertTrue("r2 hasn't expired", !purgatory.expired.contains(r2))
-    assertTrue("Time for expiration was about 20ms", (ellapsed - expiration).abs < 10L)
+    assertTrue("Time for expiration was about 20ms", (elapsed - expiration).abs < 10L)
   }
   
   class MockRequestPurgatory extends RequestPurgatory[DelayedRequest, ProducerRequest] {

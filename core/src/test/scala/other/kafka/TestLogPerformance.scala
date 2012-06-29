@@ -43,10 +43,10 @@ object TestLogPerformance {
     for(i <- 0 until numBatches)
       log.append(messageSet)
     log.close()
-    val ellapsed = (System.currentTimeMillis() - start) / 1000.0
+    val elapsed = (System.currentTimeMillis() - start) / 1000.0
     val writtenBytes = MessageSet.entrySize(message) * numMessages
     println("message size = " + MessageSet.entrySize(message))
-    println("MB/sec: " + writtenBytes / ellapsed / (1024.0 * 1024.0))
+    println("MB/sec: " + writtenBytes / elapsed / (1024.0 * 1024.0))
     Utils.rm(dir)
   }
   

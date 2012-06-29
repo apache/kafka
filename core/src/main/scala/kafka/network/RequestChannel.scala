@@ -18,13 +18,14 @@
 package kafka.network
 
 import java.util.concurrent._
+import kafka.utils.SystemTime
 
 object RequestChannel { 
   val AllDone = new Request(1, 2, null, 0)
   case class Request(processor: Int, requestKey: Any, request: Receive, start: Long)
-  case class Response(processor: Int, requestKey: Any, response: Send, start: Long, elapsed: Long) {
-    def this(request: Request, send: Send, ellapsed: Long) = 
-      this(request.processor, request.requestKey, send, request.start, ellapsed)
+  case class Response(processor: Int, requestKey: Any, response: Send, start: Long, elapsedNs: Long) {
+    def this(request: Request, send: Send) =
+      this(request.processor, request.requestKey, send, request.start, SystemTime.nanoseconds - request.start)
   }
 }
 

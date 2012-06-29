@@ -46,21 +46,28 @@ trait SyncProducerConfigShared {
   val maxMessageSize = Utils.getInt(props, "max.message.size", 1000000)
 
   /* the client application sending the producer requests */
-  val correlationId = Utils.getInt(props,"producer.request.correlation_id",-1)
+  val correlationId = Utils.getInt(props,"producer.request.correlation_id", SyncProducerConfig.DefaultCorrelationId)
 
   /* the client application sending the producer requests */
-  val clientId = Utils.getString(props,"producer.request.client_id","")
+  val clientId = Utils.getString(props,"producer.request.client_id",SyncProducerConfig.DefaultClientId)
 
-  /* the required_acks of the producer requests */
-  val requiredAcks = Utils.getShort(props,"producer.request.required_acks",0)
+  /*
+   * The required acks of the producer requests - negative value means ack
+   * after the replicas in ISR have caught up to the leader's offset
+   * corresponding to this produce request.
+   */
+  val requiredAcks = Utils.getShort(props,"producer.request.required.acks", SyncProducerConfig.DefaultRequiredAcks)
 
-  /* the ack_timeout of the producer requests */
-  val ackTimeout = Utils.getInt(props,"producer.request.ack_timeout",1)
+  /*
+   * The ack timeout of the producer requests - negative value means wait
+   * indefinitely (or until an ack is received).
+   */
+  val ackTimeoutMs = Utils.getInt(props,"producer.request.ack.timeout.ms", SyncProducerConfig.DefaultAckTimeoutMs)
 }
 
 object SyncProducerConfig {
   val DefaultCorrelationId = -1
   val DefaultClientId = ""
   val DefaultRequiredAcks : Short = 0
-  val DefaultAckTimeoutMs = 1
+  val DefaultAckTimeoutMs = -1
 }

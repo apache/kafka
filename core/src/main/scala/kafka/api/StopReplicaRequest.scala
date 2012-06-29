@@ -30,29 +30,29 @@ object StopReplicaRequest {
   def readFrom(buffer: ByteBuffer): StopReplicaRequest = {
     val versionId = buffer.getShort
     val clientId = Utils.readShortString(buffer)
-    val ackTimeout = buffer.getInt
+    val ackTimeoutMs = buffer.getInt
     val topicPartitionPairCount = buffer.getInt
     val topicPartitionPairSet = new HashSet[(String, Int)]()
     for (i <- 0 until topicPartitionPairCount){
       topicPartitionPairSet.add((Utils.readShortString(buffer, "UTF-8"), buffer.getInt))
     }
-    new StopReplicaRequest(versionId, clientId, ackTimeout, topicPartitionPairSet)
+    new StopReplicaRequest(versionId, clientId, ackTimeoutMs, topicPartitionPairSet)
   }
 }
 
 case class StopReplicaRequest(versionId: Short,
                               clientId: String,
-                              ackTimeout: Int,
+                              ackTimeoutMs: Int,
                               stopReplicaSet: Set[(String, Int)]
                                      ) extends RequestOrResponse(Some(RequestKeys.StopReplicaRequest)) {
-  def this(ackTimeout: Int, stopReplicaSet: Set[(String, Int)]) = {
-    this(StopReplicaRequest.CurrentVersion, StopReplicaRequest.DefaultClientId, ackTimeout, stopReplicaSet)
+  def this(ackTimeoutMs: Int, stopReplicaSet: Set[(String, Int)]) = {
+    this(StopReplicaRequest.CurrentVersion, StopReplicaRequest.DefaultClientId, ackTimeoutMs, stopReplicaSet)
   }
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     Utils.writeShortString(buffer, clientId)
-    buffer.putInt(ackTimeout)
+    buffer.putInt(ackTimeoutMs)
     buffer.putInt(stopReplicaSet.size)
     for ((topic, partitionId) <- stopReplicaSet){
       Utils.writeShortString(buffer, topic, "UTF-8")

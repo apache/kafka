@@ -26,6 +26,7 @@ import atomic.AtomicBoolean
 import kafka.cluster.Replica
 import org.I0Itec.zkclient.ZkClient
 
+
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.

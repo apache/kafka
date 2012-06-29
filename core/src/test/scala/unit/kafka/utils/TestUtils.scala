@@ -343,9 +343,9 @@ object TestUtils extends Logging {
   def produceRequestWithAcks(topics: Seq[String], partitions: Seq[Int], message: ByteBufferMessageSet, acks: Int): kafka.api.ProducerRequest = {
     val correlationId = SyncProducerConfig.DefaultCorrelationId
     val clientId = SyncProducerConfig.DefaultClientId
-    val ackTimeout = SyncProducerConfig.DefaultAckTimeoutMs
+    val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
     val data = topics.map(new TopicData(_, partitions.map(new PartitionData(_, message)).toArray))
-    new kafka.api.ProducerRequest(correlationId, clientId, acks.toShort, ackTimeout, data.toArray)
+    new kafka.api.ProducerRequest(correlationId, clientId, acks.toShort, ackTimeoutMs, data.toArray)
   }
 
   def produceJavaRequest(topic: String, message: kafka.javaapi.message.ByteBufferMessageSet): kafka.javaapi.ProducerRequest = {
@@ -359,12 +359,12 @@ object TestUtils extends Logging {
   def produceJavaRequest(correlationId: Int, topic: String, partition: Int, message: kafka.javaapi.message.ByteBufferMessageSet): kafka.javaapi.ProducerRequest = {
     val clientId = "test"
     val requiredAcks: Short = 0
-    val ackTimeout = 0
+    val ackTimeoutMs = 0
     var data = new Array[TopicData](1)
     var partitionData = new Array[PartitionData](1)
     partitionData(0) = new PartitionData(partition,message.underlying)
     data(0) = new TopicData(topic,partitionData)
-    val pr = new kafka.javaapi.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeout, data)  	
+    val pr = new kafka.javaapi.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeoutMs, data)
     pr
   }
 

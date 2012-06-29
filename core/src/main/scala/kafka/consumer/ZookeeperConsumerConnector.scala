@@ -95,7 +95,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private var zkClient: ZkClient = null
   private var topicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]]
   // topicThreadIdAndQueues : (topic,consumerThreadId) -> queue
-  private val topicThreadIdAndQueues = new Pool[Tuple2[String,String], BlockingQueue[FetchedDataChunk]]
+  private val topicThreadIdAndQueues = new Pool[(String,String), BlockingQueue[FetchedDataChunk]]
   private val scheduler = new KafkaScheduler(1, "Kafka-consumer-autocommit-", false)
   private val messageStreamCreated = new AtomicBoolean(false)
 

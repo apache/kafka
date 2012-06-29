@@ -103,15 +103,15 @@ object TopicData {
   }
 }
 
-case class TopicData(topic: String, partitionData: Array[PartitionData]) {
-  val sizeInBytes = 2 + topic.length + partitionData.foldLeft(4)(_ + _.sizeInBytes)
+case class TopicData(topic: String, partitionDataArray: Array[PartitionData]) {
+  val sizeInBytes = 2 + topic.length + partitionDataArray.foldLeft(4)(_ + _.sizeInBytes)
 
   // need to override equals due to brokern java-arrays equals functionality
   override def equals(other: Any): Boolean = {
     other match {
       case that: TopicData =>
         ( topic == that.topic &&
-          partitionData.toSeq == that.partitionData.toSeq )
+          partitionDataArray.toSeq == that.partitionDataArray.toSeq )
       case _ => false
     }
   }
@@ -124,11 +124,11 @@ class TopicDataSend(val topicData: TopicData) extends Send {
 
   private val buffer = ByteBuffer.allocate(2 + topicData.topic.length() + 4)
   Utils.writeShortString(buffer, topicData.topic, "UTF-8")
-  buffer.putInt(topicData.partitionData.length)
+  buffer.putInt(topicData.partitionDataArray.length)
   buffer.rewind()
 
-  val sends = new MultiSend(topicData.partitionData.map(new PartitionDataSend(_)).toList) {
-    val expectedBytesToWrite = topicData.partitionData.foldLeft(0)(_ + _.sizeInBytes)
+  val sends = new MultiSend(topicData.partitionDataArray.map(new PartitionDataSend(_)).toList) {
+    val expectedBytesToWrite = topicData.partitionDataArray.foldLeft(0)(_ + _.sizeInBytes)
   }
 
   def complete = sent >= size
@@ -175,7 +175,7 @@ case class FetchResponse(versionId: Short,
   def messageSet(topic: String, partition: Int): ByteBufferMessageSet = {
     val messageSet = topicMap.get(topic) match {
       case Some(topicData) =>
-        TopicData.findPartition(topicData.partitionData, partition).map(_.messages).getOrElse(MessageSet.Empty)
+        TopicData.findPartition(topicData.partitionDataArray, partition).map(_.messages).getOrElse(MessageSet.Empty)
       case None =>
         MessageSet.Empty
     }
@@ -185,7 +185,7 @@ case class FetchResponse(versionId: Short,
   def highWatermark(topic: String, partition: Int): Long = {
     topicMap.get(topic) match {
       case Some(topicData) =>
-        TopicData.findPartition(topicData.partitionData, partition).map(_.hw).getOrElse(-1L)
+        TopicData.findPartition(topicData.partitionDataArray, partition).map(_.hw).getOrElse(-1L)
       case None => -1L
     }
   }

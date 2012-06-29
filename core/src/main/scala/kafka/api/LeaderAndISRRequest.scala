@@ -58,7 +58,7 @@ object LeaderAndISRRequest {
     val versionId = buffer.getShort
     val clientId = Utils.readShortString(buffer)
     val isInit = buffer.get()
-    val ackTimeout = buffer.getInt
+    val ackTimeoutMs = buffer.getInt
     val leaderAndISRRequestCount = buffer.getInt
     val leaderAndISRInfos = new HashMap[(String, Int), LeaderAndISR]
 
@@ -69,7 +69,7 @@ object LeaderAndISRRequest {
 
       leaderAndISRInfos.put((topic, partition), leaderAndISRRequest)
     }
-    new LeaderAndISRRequest(versionId, clientId, isInit, ackTimeout, leaderAndISRInfos)
+    new LeaderAndISRRequest(versionId, clientId, isInit, ackTimeoutMs, leaderAndISRInfos)
   }
 }
 
@@ -77,19 +77,19 @@ object LeaderAndISRRequest {
 case class LeaderAndISRRequest (versionId: Short,
                                 clientId: String,
                                 isInit: Byte,
-                                ackTimeout: Int,
+                                ackTimeoutMs: Int,
                                 leaderAndISRInfos:
                                 Map[(String, Int), LeaderAndISR])
         extends RequestOrResponse(Some(RequestKeys.LeaderAndISRRequest)) {
-  def this(isInit: Byte, ackTimeout: Int, leaderAndISRInfos: Map[(String, Int), LeaderAndISR]) = {
-    this(LeaderAndISRRequest.CurrentVersion, LeaderAndISRRequest.DefaultClientId, isInit, ackTimeout, leaderAndISRInfos)
+  def this(isInit: Byte, ackTimeoutMs: Int, leaderAndISRInfos: Map[(String, Int), LeaderAndISR]) = {
+    this(LeaderAndISRRequest.CurrentVersion, LeaderAndISRRequest.DefaultClientId, isInit, ackTimeoutMs, leaderAndISRInfos)
   }
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     Utils.writeShortString(buffer, clientId)
     buffer.put(isInit)
-    buffer.putInt(ackTimeout)
+    buffer.putInt(ackTimeoutMs)
     buffer.putInt(leaderAndISRInfos.size)
     for((key, value) <- leaderAndISRInfos){
       Utils.writeShortString(buffer, key._1, "UTF-8")

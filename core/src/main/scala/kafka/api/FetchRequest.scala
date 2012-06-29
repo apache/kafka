@@ -78,6 +78,7 @@ object FetchRequest {
   val DefaultCorrelationId = -1
   val DefaultClientId = ""
   val DefaultReplicaId = -1
+  val NonFollowerId = DefaultReplicaId
   val DefaultMaxWait = 0
   val DefaultMinBytes = 0
 
