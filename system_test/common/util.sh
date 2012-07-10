@@ -27,7 +27,7 @@ get_random_range() {
     up=$2
     range=$(($up - $lo + 1))
 
-    return $(($(($RANDOM % range)) + $lo))
+    echo $(($(($RANDOM % range)) + $lo))
 }
 
 # =========================================

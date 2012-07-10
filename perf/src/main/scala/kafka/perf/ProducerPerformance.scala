@@ -91,10 +91,17 @@ object ProducerPerformance extends Logging {
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
-      .defaultsTo(10)
+      .defaultsTo(1)
     val compressionCodecOption = parser.accepts("compression-codec", "If set, messages are sent compressed")
       .withRequiredArg
       .describedAs("compression codec ")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(0)
+    val initialMessageIdOpt = parser.accepts("initial-message-id", "If set, messages will be tagged with an " + 
+        "ID and sent by producer starting from this ID sequentially. Message content will be String type and " + 
+        "in the form of 'Message:000...1:xxx...'")
+      .withRequiredArg()
+      .describedAs("initial message id")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(0)
 
@@ -114,11 +121,24 @@ object ProducerPerformance extends Logging {
     val hideHeader = options.has(hideHeaderOpt)
     val brokerInfo = options.valueOf(brokerInfoOpt)
     val messageSize = options.valueOf(messageSizeOpt).intValue
-    val isFixSize = !options.has(varyMessageSizeOpt)
-    val isAsync = options.has(asyncOpt)
+    var isFixSize = !options.has(varyMessageSizeOpt)
+    var isAsync = options.has(asyncOpt)
     var batchSize = options.valueOf(batchSizeOpt).intValue
-    val numThreads = options.valueOf(numThreadsOpt).intValue
+    var numThreads = options.valueOf(numThreadsOpt).intValue
     val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOption).intValue)
+    val initialMessageId = options.valueOf(initialMessageIdOpt).intValue()
+    val seqIdMode = options.has(initialMessageIdOpt)
+    
+    // override necessary flags in seqIdMode
+    if (seqIdMode) { 
+      isAsync = true
+      batchSize = 1
+      isFixSize = true
+
+      warn("seqIdMode - isAsync is overridden to:" + isAsync)
+      warn("seqIdMode - batchSize is overridden to:" + batchSize)
+      warn("seqIdMode - sFixSize is overridden to: " + isFixSize)
+    }
   }
 
   private def getStringOfLength(len: Int) : String = {
@@ -157,18 +177,27 @@ object ProducerPerformance extends Logging {
     }
     val producerConfig = new ProducerConfig(props)
     val producer = new Producer[Message, Message](producerConfig)
+    val seqIdNumDigit = 10   // no. of digits for max int value
 
     override def run {
       var bytesSent = 0L
       var lastBytesSent = 0L
       var nSends = 0
       var lastNSends = 0
-      val message = new Message(new Array[Byte](config.messageSize))
+      var message = new Message(new Array[Byte](config.messageSize))
       var reportTime = System.currentTimeMillis()
       var lastReportTime = reportTime
       val messagesPerThread = if(!config.isAsync) config.numMessages / config.numThreads / config.batchSize
                               else config.numMessages / config.numThreads
       debug("Messages per thread = " + messagesPerThread)
+
+      // generate the sequential message ID
+      val SEP            = ":"              // message field separator
+      val messageIdLabel = "MessageID"
+      val threadIdLabel  = "ThreadID"
+      val topicLabel     = "Topic"
+      var leftPaddedSeqId : String = ""
+      
       var messageSet: List[Message] = Nil
       if(config.isFixSize) {
         for(k <- 0 until config.batchSize) {
@@ -178,6 +207,31 @@ object ProducerPerformance extends Logging {
       var j: Long = 0L
       while(j < messagesPerThread) {
         var strLength = config.messageSize
+        
+        if (config.seqIdMode) {
+          // Each thread gets a unique range of sequential no. for its ids.
+          // Eg. 1000 msg in 10 threads => 100 msg per thread
+          // thread 0 IDs :   0 ~  99
+          // thread 1 IDs : 100 ~ 199
+          // thread 2 IDs : 200 ~ 299
+          // . . .
+          
+          val msgId = config.initialMessageId + (messagesPerThread * threadId) + j
+          leftPaddedSeqId = String.format("%0"+seqIdNumDigit+"d", long2Long(msgId))
+          
+          val msgHeader = topicLabel      + SEP + 
+                          config.topic    + SEP + 
+                          threadIdLabel   + SEP + 
+                          threadId        + SEP + 
+                          messageIdLabel  + SEP + 
+                          leftPaddedSeqId + SEP
+                             
+          val seqMsgString = String.format("%1$-"+config.messageSize+"s", msgHeader).replace(' ', 'x')
+          
+          debug(seqMsgString)
+          message = new Message(seqMsgString.getBytes())
+        }
+                
         if (!config.isFixSize) {
           for(k <- 0 until config.batchSize) {
             strLength = rand.nextInt(config.messageSize)
@@ -200,11 +254,9 @@ object ProducerPerformance extends Logging {
               rand.nextBytes(messageBytes)
               val message = new Message(messageBytes)
               producer.send(new ProducerData[Message,Message](config.topic, message))
-              debug(config.topic + "-checksum:" + message.checksum)
               bytesSent += message.payloadSize
             }else {
               producer.send(new ProducerData[Message,Message](config.topic, message))
-              debug(config.topic + "-checksum:" + message.checksum)
               bytesSent += message.payloadSize
             }
             nSends += 1

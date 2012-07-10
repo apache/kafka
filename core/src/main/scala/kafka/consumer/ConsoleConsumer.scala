@@ -27,6 +27,7 @@ import java.io.PrintStream
 import kafka.message._
 import kafka.utils.{Utils, Logging}
 import kafka.utils.ZKStringSerializer
+import kafka.serializer.StringDecoder
 
 /**
  * Consumer that dumps messages out to standard out.
@@ -235,7 +236,7 @@ object ConsoleConsumer extends Logging {
     override def init(props: Properties) {
       topicStr = props.getProperty("topic")
       if (topicStr != null) 
-        topicStr = topicStr + "-"
+        topicStr = topicStr + ":"
       else
         topicStr = ""
     }
@@ -243,6 +244,27 @@ object ConsoleConsumer extends Logging {
     def writeTo(message: Message, output: PrintStream) {
       val chksum = message.checksum
       output.println(topicStr + "checksum:" + chksum)
+    }
+  }
+  
+  class DecodedMessageFormatter extends MessageFormatter {
+    var topicStr: String = _
+    val decoder = new StringDecoder()
+    
+    override def init(props: Properties) {
+      topicStr = props.getProperty("topic")
+      if (topicStr != null) 
+        topicStr = topicStr + ":"
+      else
+        topicStr = ""
+    }
+    
+    def writeTo(message: Message, output: PrintStream) {
+      try {
+        output.println(topicStr + decoder.toEvent(message) + ":payloadsize:" + message.payloadSize)
+      } catch {
+        case e => e.printStackTrace()
+      }
     }
   }
   

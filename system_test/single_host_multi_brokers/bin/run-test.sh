@@ -58,14 +58,14 @@ readonly producer_prop_pathname=${config_dir}/producer.properties
 readonly consumer_prop_pathname=${config_dir}/consumer.properties
 
 readonly producer_perf_log_pathname=${base_dir}/producer_perf_output.log
-readonly producer_perf_crc_log_pathname=${base_dir}/producer_perf_crc.log
-readonly producer_perf_crc_sorted_log_pathname=${base_dir}/producer_perf_crc_sorted.log
-readonly producer_perf_crc_sorted_uniq_log_pathname=${base_dir}/producer_perf_crc_sorted_uniq.log
+readonly producer_perf_mid_log_pathname=${base_dir}/producer_perf_mid.log
+readonly producer_perf_mid_sorted_log_pathname=${base_dir}/producer_perf_mid_sorted.log
+readonly producer_perf_mid_sorted_uniq_log_pathname=${base_dir}/producer_perf_mid_sorted_uniq.log
 
 readonly console_consumer_log_pathname=${base_dir}/console_consumer.log
-readonly console_consumer_crc_log_pathname=${base_dir}/console_consumer_crc.log
-readonly console_consumer_crc_sorted_log_pathname=${base_dir}/console_consumer_crc_sorted.log
-readonly console_consumer_crc_sorted_uniq_log_pathname=${base_dir}/console_consumer_crc_sorted_uniq.log
+readonly console_consumer_mid_log_pathname=${base_dir}/console_consumer_mid.log
+readonly console_consumer_mid_sorted_log_pathname=${base_dir}/console_consumer_mid_sorted.log
+readonly console_consumer_mid_sorted_uniq_log_pathname=${base_dir}/console_consumer_mid_sorted_uniq.log
 
 readonly this_test_stderr_output_log_pathname=${base_dir}/this_test_stderr_output.log
 
@@ -129,20 +129,20 @@ cleanup() {
     rm -f $this_test_stderr_output_log_pathname
 
     rm -f $producer_perf_log_pathname
-    rm -f $producer_perf_crc_log_pathname
-    rm -f $producer_perf_crc_sorted_log_pathname
-    rm -f $producer_perf_crc_sorted_uniq_log_pathname
+    rm -f $producer_perf_mid_log_pathname
+    rm -f $producer_perf_mid_sorted_log_pathname
+    rm -f $producer_perf_mid_sorted_uniq_log_pathname
 
     rm -f $console_consumer_log_pathname
-    rm -f $console_consumer_crc_log_pathname
-    rm -f $console_consumer_crc_sorted_log_pathname
-    rm -f $console_consumer_crc_sorted_uniq_log_pathname
+    rm -f $console_consumer_mid_log_pathname
+    rm -f $console_consumer_mid_sorted_log_pathname
+    rm -f $console_consumer_mid_sorted_uniq_log_pathname
 }
 
 get_leader_brokerid() {
     log_line=`grep -i -h 'is leader' ${base_dir}/kafka_server_*.log | sort | tail -1`
     info "found the log line: $log_line"
-    broker_id=`echo $log_line | awk -F ' ' '{print $5}'`
+    broker_id=`echo $log_line | sed s'/^.*INFO Broker //g' | awk -F ' ' '{print $1}'`
 
     return $broker_id
 }
@@ -189,6 +189,7 @@ start_producer_perf() {
     this_topic=$1
     zk_conn_str=$2
     no_msg_to_produce=$3
+    init_msg_id=$4
 
     info "starting producer performance"
 
@@ -196,10 +197,9 @@ start_producer_perf() {
         --brokerinfo "zk.connect=${zk_conn_str}" \
         --topic ${this_topic} \
         --messages $no_msg_to_produce \
-        --vary-message-size \
         --message-size 100 \
-        --threads 1 \
-        --async \
+        --threads 5 \
+        --initial-message-id $init_msg_id \
         2>&1 >> $producer_perf_log_pathname
 }
 
@@ -211,7 +211,7 @@ start_console_consumer() {
     $base_dir/bin/kafka-run-class.sh kafka.consumer.ConsoleConsumer \
         --zookeeper $this_zk_conn_str \
         --topic $this_consumer_topic \
-        --formatter 'kafka.consumer.ConsoleConsumer$ChecksumMessageFormatter' \
+        --formatter 'kafka.consumer.ConsoleConsumer$DecodedMessageFormatter' \
         --consumer-timeout-ms $consumer_timeout_ms \
         2>&1 >> $console_consumer_log_pathname &
 }
@@ -269,21 +269,21 @@ validate_results() {
         info "##     ==> crc ${kafka_first_data_file_checksums[$i]}"
     done
 
-    # get the checksums from messages produced and consumed
-    grep checksum $console_consumer_log_pathname | tr -d ' ' | awk -F ':' '{print $2}' > $console_consumer_crc_log_pathname
-    grep checksum $producer_perf_log_pathname | tr ' ' '\n' | grep checksum | awk -F ':' '{print $2}' > $producer_perf_crc_log_pathname
+    # get the MessageID from messages produced and consumed
+    grep MessageID $console_consumer_log_pathname | sed s'/^.*MessageID://g' | awk -F ':' '{print $1}' > $console_consumer_mid_log_pathname
+    grep MessageID $producer_perf_log_pathname    | sed s'/^.*MessageID://g' | awk -F ':' '{print $1}' > $producer_perf_mid_log_pathname
 
-    sort $console_consumer_crc_log_pathname > $console_consumer_crc_sorted_log_pathname
-    sort $producer_perf_crc_log_pathname    > $producer_perf_crc_sorted_log_pathname
+    sort $console_consumer_mid_log_pathname > $console_consumer_mid_sorted_log_pathname
+    sort $producer_perf_mid_log_pathname    > $producer_perf_mid_sorted_log_pathname
 
-    sort -u $console_consumer_crc_sorted_log_pathname > $console_consumer_crc_sorted_uniq_log_pathname
-    sort -u $producer_perf_crc_sorted_log_pathname    > $producer_perf_crc_sorted_uniq_log_pathname
+    sort -u $console_consumer_mid_sorted_log_pathname > $console_consumer_mid_sorted_uniq_log_pathname
+    sort -u $producer_perf_mid_sorted_log_pathname    > $producer_perf_mid_sorted_uniq_log_pathname
 
-    msg_count_from_console_consumer=`cat $console_consumer_crc_log_pathname | wc -l | tr -d ' '`
-    uniq_msg_count_from_console_consumer=`cat $console_consumer_crc_sorted_uniq_log_pathname | wc -l | tr -d ' '`
+    msg_count_from_console_consumer=`cat $console_consumer_mid_log_pathname | wc -l | tr -d ' '`
+    uniq_msg_count_from_console_consumer=`cat $console_consumer_mid_sorted_uniq_log_pathname | wc -l | tr -d ' '`
 
-    msg_count_from_producer_perf=`cat $producer_perf_crc_log_pathname | wc -l | tr -d ' '`
-    uniq_msg_count_from_producer_perf=`cat $producer_perf_crc_sorted_uniq_log_pathname | wc -l | tr -d ' '`
+    msg_count_from_producer_perf=`cat $producer_perf_mid_log_pathname | wc -l | tr -d ' '`
+    uniq_msg_count_from_producer_perf=`cat $producer_perf_mid_sorted_uniq_log_pathname | wc -l | tr -d ' '`
 
     # report the findings
     echo
@@ -401,7 +401,8 @@ start_test() {
         info "sleeping for 5s"
         sleep 5
 
-        start_producer_perf $test_topic localhost:$zk_port $producer_msg_batch_size
+        init_id=$(( ($i - 1) * $producer_msg_batch_size ))
+        start_producer_perf $test_topic localhost:$zk_port $producer_msg_batch_size $init_id
         info "sleeping for 15s"
         sleep 15
         echo
