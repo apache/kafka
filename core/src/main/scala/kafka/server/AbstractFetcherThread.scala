@@ -23,9 +23,9 @@ import kafka.consumer.SimpleConsumer
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.utils.Logging
 import kafka.common.ErrorMapping
-import kafka.api.{PartitionData, FetchRequestBuilder}
-import scala.collection.mutable
+import collection.mutable
 import kafka.message.ByteBufferMessageSet
+import kafka.api.{FetchResponse, PartitionData, FetchRequestBuilder}
 
 /**
  *  Abstract class for fetching data from multiple partitions from the same broker.
@@ -42,18 +42,18 @@ abstract class AbstractFetcherThread(val name: String, sourceBroker: Broker, soc
   info("starting")
   // callbacks to be defined in subclass
 
-  // process fetched data and return the new fetch offset
+  // process fetched data
   def processPartitionData(topic: String, fetchOffset: Long, partitionData: PartitionData)
 
   // handle a partition whose offset is out of range and return a new fetch offset
   def handleOffsetOutOfRange(topic: String, partitionId: Int): Long
 
-  // any logic for partitions whose leader has changed
-  def handlePartitionsWithNewLeader(partitions: List[Tuple2[String, Int]]): Unit
+  // deal with partitions with errors, potentially due to leadership changes
+  def handlePartitionsWithErrors(partitions: Iterable[(String, Int)])
 
   override def run() {
     try {
-      while(isRunning.get()) {
+      while(isRunning.get) {
         val builder = new FetchRequestBuilder().
           clientId(name).
           replicaId(fetcherBrokerId).
@@ -66,47 +66,61 @@ abstract class AbstractFetcherThread(val name: String, sourceBroker: Broker, soc
         }
 
         val fetchRequest = builder.build()
-        val response = simpleConsumer.fetch(fetchRequest)
-        trace("issuing to broker %d of fetch request %s".format(sourceBroker.id, fetchRequest))
+        val partitionsWithError = new mutable.HashSet[(String, Int)]
+        var response: FetchResponse = null
+        try {
+          trace("issuing to broker %d of fetch request %s".format(sourceBroker.id, fetchRequest))
+          response = simpleConsumer.fetch(fetchRequest)
+        } catch {
+          case t =>
+            debug("error in fetch %s".format(fetchRequest), t)
+            if (isRunning.get) {
+              fetchMapLock synchronized {
+                partitionsWithError ++= fetchMap.keys
+                fetchMap.clear()
+              }
+            }
+        }
 
-        var partitionsWithNewLeader : List[Tuple2[String, Int]] = Nil
-        // process fetched data
-        fetchMapLock synchronized {
-          for ( topicData <- response.data ) {
-            for ( partitionData <- topicData.partitionDataArray) {
-              val topic = topicData.topic
-              val partitionId = partitionData.partition
-              val key = (topic, partitionId)
-              val currentOffset = fetchMap.get(key)
-              if (currentOffset.isDefined) {
-                partitionData.error match {
-                  case ErrorMapping.NoError =>
-                    processPartitionData(topic, currentOffset.get, partitionData)
-                    val newOffset = currentOffset.get + partitionData.messages.asInstanceOf[ByteBufferMessageSet].validBytes
-                    fetchMap.put(key, newOffset)
-                  case ErrorMapping.OffsetOutOfRangeCode =>
-                    val newOffset = handleOffsetOutOfRange(topic, partitionId)
-                    fetchMap.put(key, newOffset)
-                    warn("current offset %d for topic %s partition %d out of range; reset offset to %d"
-                      .format(currentOffset.get, topic, partitionId, newOffset))
-                  case ErrorMapping.NotLeaderForPartitionCode =>
-                    partitionsWithNewLeader ::= key
-                  case _ =>
-                    error("error for %s %d to broker %d".format(topic, partitionId, sourceBroker.host),
-                          ErrorMapping.exceptionFor(partitionData.error))
+        if (response != null) {
+          // process fetched data
+          fetchMapLock synchronized {
+            for ( topicData <- response.data ) {
+              for ( partitionData <- topicData.partitionDataArray) {
+                val topic = topicData.topic
+                val partitionId = partitionData.partition
+                val key = (topic, partitionId)
+                val currentOffset = fetchMap.get(key)
+                if (currentOffset.isDefined) {
+                  partitionData.error match {
+                    case ErrorMapping.NoError =>
+                      processPartitionData(topic, currentOffset.get, partitionData)
+                      val newOffset = currentOffset.get + partitionData.messages.asInstanceOf[ByteBufferMessageSet].validBytes
+                      fetchMap.put(key, newOffset)
+                    case ErrorMapping.OffsetOutOfRangeCode =>
+                      val newOffset = handleOffsetOutOfRange(topic, partitionId)
+                      fetchMap.put(key, newOffset)
+                      warn("current offset %d for topic %s partition %d out of range; reset offset to %d"
+                        .format(currentOffset.get, topic, partitionId, newOffset))
+                    case _ =>
+                      error("error for %s %d to broker %d".format(topic, partitionId, sourceBroker.host),
+                            ErrorMapping.exceptionFor(partitionData.error))
+                      partitionsWithError += key
+                      fetchMap.remove(key)
+                  }
                 }
               }
             }
           }
         }
-        if (partitionsWithNewLeader.size > 0) {
-          debug("changing leaders for %s".format(partitionsWithNewLeader))
-          handlePartitionsWithNewLeader(partitionsWithNewLeader)
+        if (partitionsWithError.size > 0) {
+          debug("handling partitions with error for %s".format(partitionsWithError))
+          handlePartitionsWithErrors(partitionsWithError)
         }
       }
     } catch {
-      case e: InterruptedException => info("replica fetcher runnable interrupted. Shutting down")
-      case e1 => error("error in replica fetcher runnable", e1)
+      case e: InterruptedException => info("interrupted. Shutting down")
+      case e1 => error("error in fetching", e1)
     }
     shutdownComplete()
   }

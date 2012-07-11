@@ -132,8 +132,10 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
   /** the number of byes of messages to attempt to fetch */
   val replicaFetchSize = Utils.getInt(props, "replica.fetch.size", ConsumerConfig.FetchSize)
 
+  /** max wait time for each fetcher request issued by follower replicas*/
   val replicaMaxWaitTimeMs = Utils.getInt(props, "replica.fetch.wait.time.ms", 500)
 
+  /** minimum bytes expected for each fetch response. If not enough bytes, wait up to replicaMaxWaitTimeMs */
   val replicaMinBytes = Utils.getInt(props, "replica.fetch.min.bytes", 4086)
 
   /* number of fetcher threads used to replicate messages from a source broker.

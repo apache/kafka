@@ -22,8 +22,13 @@ import kafka.cluster.Broker
 class ReplicaFetcherManager(private val brokerConfig: KafkaConfig, private val replicaMgr: ReplicaManager)
         extends AbstractFetcherManager("ReplicaFetcherManager", brokerConfig.numReplicaFetchers) {
 
-  def createFetcherThread(fetcherId: Int, sourceBroker: Broker): AbstractFetcherThread = {
+  override def createFetcherThread(fetcherId: Int, sourceBroker: Broker): AbstractFetcherThread = {
     new ReplicaFetcherThread("ReplicaFetcherThread-%d-%d".format(sourceBroker.id, fetcherId), sourceBroker, brokerConfig, replicaMgr)
   }
 
+  def shutdown() {
+    info("shutting down")
+    closeAllFetchers()
+    info("shutdown completed")
+  }  
 }

@@ -27,8 +27,8 @@ class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: Kafk
           fetcherBrokerId = brokerConfig.brokerId, maxWait = brokerConfig.replicaMaxWaitTimeMs,
           minBytes = brokerConfig.replicaMinBytes) {
 
-  // process fetched data and return the new fetch offset
-  def processPartitionData(topic: String, fetchOffset: Long, partitionData: PartitionData) = {
+  // process fetched data
+  def processPartitionData(topic: String, fetchOffset: Long, partitionData: PartitionData) {
     val partitionId = partitionData.partition
     val replica = replicaMgr.getReplica(topic, partitionId).get
     val messageSet = partitionData.messages.asInstanceOf[ByteBufferMessageSet]
@@ -51,7 +51,7 @@ class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: Kafk
   }
 
   // any logic for partitions whose leader has changed
-  def handlePartitionsWithNewLeader(partitions: List[Tuple2[String, Int]]): Unit = {
+  def handlePartitionsWithErrors(partitions: Iterable[(String, Int)]) {
     // no handler needed since the controller will make the changes accordingly
   }
 }

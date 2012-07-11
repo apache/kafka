@@ -51,18 +51,18 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
                                                       new AtomicLong(0), 
                                                       new AtomicInteger(0)))
   
-  var fetcher: Fetcher = null
+  var fetcher: ConsumerFetcherManager = null
 
   override def setUp() {
     super.setUp
     CreateTopicCommand.createTopic(zkClient, topic, 1, 1, configs.head.brokerId.toString)
-    fetcher = new Fetcher(new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), null)
-    fetcher.stopConnectionsToAllBrokers
+    fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkClient)
+    fetcher.stopAllConnections()
     fetcher.startConnections(topicInfos, cluster)
   }
 
   override def tearDown() {
-    fetcher.stopConnectionsToAllBrokers
+    fetcher.shutdown()
     super.tearDown
   }
     
@@ -103,5 +103,5 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
         return
     }
   }
-  
+    
 }

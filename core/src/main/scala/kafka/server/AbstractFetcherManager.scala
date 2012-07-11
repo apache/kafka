@@ -21,14 +21,14 @@ import scala.collection.mutable
 import kafka.utils.Logging
 import kafka.cluster.Broker
 
-abstract class AbstractFetcherManager(name: String, numReplicaFetchers: Int = 1) extends Logging {
+abstract class AbstractFetcherManager(protected val name: String, numFetchers: Int = 1) extends Logging {
     // map of (source brokerid, fetcher Id per source broker) => fetcher
   private val fetcherThreadMap = new mutable.HashMap[Tuple2[Int, Int], AbstractFetcherThread]
   private val mapLock = new Object
   this.logIdent = name + " "
 
   private def getFetcherId(topic: String, partitionId: Int) : Int = {
-    (topic.hashCode() + 31 * partitionId) % numReplicaFetchers
+    (topic.hashCode() + 31 * partitionId) % numFetchers
   }
 
   // to be defined in subclass to create a specific fetcher
@@ -73,13 +73,12 @@ abstract class AbstractFetcherManager(name: String, numReplicaFetchers: Int = 1)
     None
   }
 
-  def shutdown() = {
-    info("shutting down")
+  def closeAllFetchers() {
     mapLock synchronized {
       for ( (_, fetcher) <- fetcherThreadMap) {
         fetcher.shutdown
       }
+      fetcherThreadMap.clear()
     }
-    info("shutdown completes")
   }
 }

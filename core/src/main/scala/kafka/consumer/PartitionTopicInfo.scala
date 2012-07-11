@@ -50,20 +50,18 @@ private[consumer] class PartitionTopicInfo(val topic: String,
 
   /**
    * Enqueue a message set for processing
-   * @return the number of valid bytes
    */
-  def enqueue(messages: ByteBufferMessageSet, fetchOffset: Long): Long = {
+  def enqueue(messages: ByteBufferMessageSet) {
     val size = messages.validBytes
     if(size > 0) {
       // update fetched offset to the compressed data chunk size, not the decompressed message set size
       trace("Updating fetch offset = " + fetchedOffset.get + " with size = " + size)
-      chunkQueue.put(new FetchedDataChunk(messages, this, fetchOffset))
+      chunkQueue.put(new FetchedDataChunk(messages, this, fetchedOffset.get))
       val newOffset = fetchedOffset.addAndGet(size)
       debug("updated fetch offset of ( %s ) to %d".format(this, newOffset))
       ConsumerTopicStat.getConsumerTopicStat(topic).recordBytesPerTopic(size)
       ConsumerTopicStat.getConsumerAllTopicStat().recordBytesPerTopic(size)
     }
-    size
   }
 
   /**

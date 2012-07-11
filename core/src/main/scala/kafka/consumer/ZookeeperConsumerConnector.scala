@@ -91,7 +91,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         with Logging {
   private val isShuttingDown = new AtomicBoolean(false)
   private val rebalanceLock = new Object
-  private var fetcher: Option[Fetcher] = None
+  private var fetcher: Option[ConsumerFetcherManager] = None
   private var zkClient: ZkClient = null
   private var topicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]]
   // topicThreadIdAndQueues : (topic,consumerThreadId) -> queue
@@ -143,7 +143,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   private def createFetcher() {
     if (enableFetcher)
-      fetcher = Some(new Fetcher(config, zkClient))
+      fetcher = Some(new ConsumerFetcherManager(consumerIdString, config, zkClient))
   }
 
   private def connectZk() {
@@ -161,7 +161,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       try {
         scheduler.shutdownNow()
         fetcher match {
-          case Some(f) => f.stopConnectionsToAllBrokers
+          case Some(f) => f.shutdown
           case None =>
         }
         sendShutdownToAllQueues()
@@ -376,8 +376,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   class ZKRebalancerListener(val group: String, val consumerIdString: String,
                              val kafkaMessageAndMetadataStreams: mutable.Map[String,List[KafkaStream[_]]])
     extends IZkChildListener {
-    private var oldPartitionsPerTopicMap: mutable.Map[String, Seq[String]] = new mutable.HashMap[String, Seq[String]]()
-    private var oldConsumersPerTopicMap: mutable.Map[String,List[String]] = new mutable.HashMap[String,List[String]]()
     private var isWatcherTriggered = false
     private val lock = new ReentrantLock
     private val cond = lock.newCondition()
@@ -547,20 +545,37 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                        queuesToBeCleared: Iterable[BlockingQueue[FetchedDataChunk]]) {
       var allPartitionInfos = topicRegistry.values.map(p => p.values).flatten
       fetcher match {
-        case Some(f) => f.stopConnectionsToAllBrokers
-        f.clearFetcherQueues(allPartitionInfos, cluster, queuesToBeCleared, messageStreams)
-        info("Committing all offsets after clearing the fetcher queues")
-        /**
-        * here, we need to commit offsets before stopping the consumer from returning any more messages
-        * from the current data chunk. Since partition ownership is not yet released, this commit offsets
-        * call will ensure that the offsets committed now will be used by the next consumer thread owning the partition
-        * for the current data chunk. Since the fetchers are already shutdown and this is the last chunk to be iterated
-        * by the consumer, there will be no more messages returned by this iterator until the rebalancing finishes
-        * successfully and the fetchers restart to fetch more data chunks
-        **/
-        commitOffsets
+        case Some(f) =>
+          f.stopAllConnections
+          clearFetcherQueues(allPartitionInfos, cluster, queuesToBeCleared, messageStreams)
+          info("Committing all offsets after clearing the fetcher queues")
+          /**
+          * here, we need to commit offsets before stopping the consumer from returning any more messages
+          * from the current data chunk. Since partition ownership is not yet released, this commit offsets
+          * call will ensure that the offsets committed now will be used by the next consumer thread owning the partition
+          * for the current data chunk. Since the fetchers are already shutdown and this is the last chunk to be iterated
+          * by the consumer, there will be no more messages returned by this iterator until the rebalancing finishes
+          * successfully and the fetchers restart to fetch more data chunks
+          **/
+          commitOffsets
         case None =>
       }
+    }
+
+    private def clearFetcherQueues(topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster,
+                                   queuesTobeCleared: Iterable[BlockingQueue[FetchedDataChunk]],
+                                   messageStreams: Map[String,List[KafkaStream[_]]]) {
+
+      // Clear all but the currently iterated upon chunk in the consumer thread's queue
+      queuesTobeCleared.foreach(_.clear)
+      info("Cleared all relevant queues for this fetcher")
+
+      // Also clear the currently iterated upon chunk in the consumer threads
+      if(messageStreams != null)
+         messageStreams.foreach(_._2.foreach(s => s.clear()))
+
+      info("Cleared the data chunks in all the consumer message iterators")
+
     }
 
     private def closeFetchers(cluster: Cluster, messageStreams: Map[String,List[KafkaStream[_]]],

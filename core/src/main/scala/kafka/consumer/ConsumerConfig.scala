@@ -83,6 +83,9 @@ class ConsumerConfig(props: Properties) extends ZKConfig(props) {
   /** backoff time between retries during rebalance */
   val rebalanceBackoffMs = Utils.getInt(props, "rebalance.backoff.ms", zkSyncTimeMs)
 
+  /** backoff time to refresh the leader of a partition after it loses the current leader */
+  val refreshLeaderBackoffMs = Utils.getInt(props, "refresh.leader.backoff.ms", 200)
+
   /* what to do if an offset is out of range.
      smallest : automatically reset the offset to the smallest offset
      largest : automatically reset the offset to the largest offset
