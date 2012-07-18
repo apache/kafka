@@ -42,7 +42,6 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private val flushInterval = config.flushInterval
   private val topicPartitionsMap = config.topicPartitionsMap
   private val logCreationLock = new Object
-  private val random = new java.util.Random
   private val startupLatch: CountDownLatch = new CountDownLatch(1)
   private val logFlusherScheduler = new KafkaScheduler(1, "kafka-logflusher-", false)
   private val logFlushIntervalMap = config.flushIntervalMap
@@ -111,6 +110,14 @@ private[kafka] class LogManager(val config: KafkaConfig,
    * Create a log for the given topic and the given partition
    */
   private def createLog(topic: String, partition: Int): Log = {
+    if (topic.length <= 0)
+      throw new InvalidTopicException("topic name can't be emtpy")
+    if (partition < 0 || partition >= topicPartitionsMap.getOrElse(topic, numPartitions)) {
+      val error = "Wrong partition %d, valid partitions (0, %d)."
+        .format(partition, (topicPartitionsMap.getOrElse(topic, numPartitions) - 1))
+      warn(error)
+      throw new InvalidPartitionException(error)
+    }
     logCreationLock synchronized {
       val d = new File(logDir, topic + "-" + partition)
       d.mkdirs()
@@ -132,13 +139,6 @@ private[kafka] class LogManager(val config: KafkaConfig,
       throw new InvalidPartitionException(error)
     }
     logs.get(topic)
-  }
-
-  /**
-   * Pick a random partition from the given topic
-   */
-  def chooseRandomPartition(topic: String): Int = {
-    random.nextInt(topicPartitionsMap.getOrElse(topic, numPartitions))
   }
 
   def getOffsets(offsetRequest: OffsetRequest): Array[Long] = {
