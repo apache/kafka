@@ -381,7 +381,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestLogger.trace("Topic metadata request " + metadataRequest.toString())
 
     val topicsMetadata = new mutable.ArrayBuffer[TopicMetadata]()
-    val config = logManager.getServerConfig
     val zkClient = kafkaZookeeper.getZookeeperClient
     val topicMetadataList = AdminUtils.getTopicMetaDataFromZK(metadataRequest.topics, zkClient)
 
@@ -391,6 +390,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case Some(metadata) => topicsMetadata += metadata
         case None =>
           /* check if auto creation of topics is turned on */
+          val config = logManager.config
           if(config.autoCreateTopics) {
             CreateTopicCommand.createTopic(zkClient, topic, config.numPartitions, config.defaultReplicationFactor)
             info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"

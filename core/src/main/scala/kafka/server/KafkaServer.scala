@@ -64,6 +64,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                 1000L * 60 * config.logCleanupIntervalMinutes,
                                 1000L * 60 * 60 * config.logRetentionHours,
                                 needRecovery)
+    logManager.startup()
                                                 
     socketServer = new SocketServer(config.port,
                                     config.numNetworkThreads,
@@ -78,19 +79,12 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
     apis = new KafkaApis(socketServer.requestChannel, logManager, replicaManager, kafkaZookeeper)
     requestHandlerPool = new KafkaRequestHandlerPool(socketServer.requestChannel, apis, config.numIoThreads)
-    socketServer.startup
+    socketServer.startup()
 
     Mx4jLoader.maybeLoad
 
-    /**
-     *  Registers this broker in ZK. After this, consumers can connect to broker.
-     *  So this should happen after socket server start.
-     */
-    logManager.startup
-
     // starting relevant replicas and leader election for partitions assigned to this broker
-    kafkaZookeeper.startup
-
+    kafkaZookeeper.startup()
     kafkaController.startup()
 
     info("Server started.")

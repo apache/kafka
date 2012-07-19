@@ -83,7 +83,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     val kafkaZookeeper = EasyMock.createMock(classOf[KafkaZooKeeper])
     val replicaManager = EasyMock.createMock(classOf[ReplicaManager])
     EasyMock.expect(kafkaZookeeper.getZookeeperClient).andReturn(zkClient)
-    EasyMock.expect(logManager.getServerConfig).andReturn(configs.head)
+    EasyMock.expect(logManager.config).andReturn(configs.head)
     EasyMock.replay(logManager)
     EasyMock.replay(kafkaZookeeper)
 
@@ -118,7 +118,6 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertNull("Not expecting log metadata", partitionMetadata.head.logMetadata.getOrElse(null))
 
     // verify the expected calls to log manager occurred in the right order
-    EasyMock.verify(logManager)
     EasyMock.verify(kafkaZookeeper)
     EasyMock.verify(receivedRequest)
   }
