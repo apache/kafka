@@ -30,6 +30,7 @@ import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
 import kafka.admin.CreateTopicCommand
 import kafka.api.{FetchRequestBuilder, OffsetRequest}
+import kafka.common.UnknownTopicException
 
 object LogOffsetTest {
   val random = new Random()  
@@ -60,6 +61,16 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     server.shutdown
     Utils.rm(logDir)
     super.tearDown()
+  }
+
+  @Test
+  def testGetOffsetsForUnknownTopic() {
+    try {
+      simpleConsumer.getOffsetsBefore("foo", 0, OffsetRequest.LatestTime, 10)
+      fail("Should fail with UnknownTopicException since topic foo was never created")
+    }catch {
+      case e: UnknownTopicException => // this is ok
+    }
   }
 
   @Test
@@ -104,14 +115,14 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     topicLogDir.mkdir
 
     val topic = topicPartition.split("-").head
-    val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
     // setup brokers in zookeeper as owners of partitions for this test
     CreateTopicCommand.createTopic(zkClient, topic, 1, 1, "1")
+    TestUtils.waitUntilLeaderIsElected(zkClient, topic, 0, 500)
 
     var offsetChanged = false
     for(i <- 1 to 14) {
-      val consumerOffsets = simpleConsumer.getOffsetsBefore(topic, part,
+      val consumerOffsets = simpleConsumer.getOffsetsBefore(topic, 0,
         OffsetRequest.EarliestTime, 1)
 
       if(consumerOffsets(0) == 1) {

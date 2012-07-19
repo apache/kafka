@@ -20,7 +20,7 @@ package kafka.producer
 import kafka.cluster.Broker
 import java.util.Properties
 import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{ZkUtils, Utils, Logging}
+import kafka.utils.{ZkUtils, Logging}
 import collection.mutable.HashMap
 import java.lang.Object
 import kafka.common.{UnavailableProducerException, NoBrokersForPartitionException}

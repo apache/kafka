@@ -168,8 +168,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         BrokerTopicStat.getBrokerTopicStat(topicData.topic).recordBytesIn(partitionData.messages.sizeInBytes)
         BrokerTopicStat.getBrokerAllTopicStat.recordBytesIn(partitionData.messages.sizeInBytes)
         try {
-          // TODO: should use replicaManager for ensurePartitionLeaderOnThisBroker?
-          // although this ties in with KAFKA-352
           kafkaZookeeper.ensurePartitionLeaderOnThisBroker(topicData.topic, partitionData.partition)
           val log = logManager.getOrCreateLog(topicData.topic, partitionData.partition)
           log.append(partitionData.messages.asInstanceOf[ByteBufferMessageSet])
@@ -357,8 +355,20 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetRequest = OffsetRequest.readFrom(request.request.buffer)
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Offset request " + offsetRequest.toString)
-    val offsets = logManager.getOffsets(offsetRequest)
-    val response = new OffsetResponse(offsetRequest.versionId, offsets)
+    var response: OffsetResponse = null
+    try {
+      kafkaZookeeper.ensurePartitionLeaderOnThisBroker(offsetRequest.topic, offsetRequest.partition)
+      val offsets = logManager.getOffsets(offsetRequest)
+      response = new OffsetResponse(offsetRequest.versionId, offsets)
+    }catch {
+      case ioe: IOException =>
+        fatal("Halting due to unrecoverable I/O error while handling producer request: " + ioe.getMessage, ioe)
+        System.exit(1)
+      case e =>
+        warn("Error while responding to offset request", e)
+        response = new OffsetResponse(offsetRequest.versionId, Array.empty[Long],
+          ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]).toShort)
+    }
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
   }
 
@@ -367,7 +377,6 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleTopicMetadataRequest(request: RequestChannel.Request) {
     val metadataRequest = TopicMetadataRequest.readFrom(request.request.buffer)
-
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Topic metadata request " + metadataRequest.toString())
 
@@ -395,7 +404,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
       }
     }
-    info("Sending response for topic metadata request")
     val response = new TopicMetaDataResponse(metadataRequest.versionId, topicsMetadata.toSeq)
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
   }

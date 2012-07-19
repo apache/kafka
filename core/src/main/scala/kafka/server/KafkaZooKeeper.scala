@@ -25,7 +25,7 @@ import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener, IZkStateListener,
 import kafka.admin.AdminUtils
 import java.lang.{Thread, IllegalStateException}
 import collection.mutable.HashSet
-import kafka.common.{InvalidPartitionException, NoLeaderForPartitionException, NotLeaderForPartitionException, KafkaZookeeperClient}
+import kafka.common._
 
 /**
  * Handles the server's interaction with zookeeper. The server needs to register the following paths:
@@ -41,8 +41,8 @@ class KafkaZooKeeper(config: KafkaConfig,
 
   val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + config.brokerId
   private var zkClient: ZkClient = null
-  private val leaderChangeListener = new LeaderChangeListener
-  private val topicPartitionsChangeListener = new TopicChangeListener
+  private var leaderChangeListener: LeaderChangeListener = null
+  private var topicPartitionsChangeListener: TopicChangeListener = null
   private var stateChangeHandler: StateChangeCommandHandler = null
 
   private val topicListenerLock = new Object
@@ -52,6 +52,8 @@ class KafkaZooKeeper(config: KafkaConfig,
     /* start client */
     info("connecting to ZK: " + config.zkConnect)
     zkClient = KafkaZookeeperClient.getZookeeperClient(config)
+    leaderChangeListener = new LeaderChangeListener
+    topicPartitionsChangeListener = new TopicChangeListener
     startStateChangeCommandHandler()
     zkClient.subscribeStateChanges(new SessionExpireListener)
     registerBrokerInZk()
@@ -112,9 +114,8 @@ class KafkaZooKeeper(config: KafkaConfig,
   }
 
   def ensurePartitionLeaderOnThisBroker(topic: String, partition: Int) {
-    // TODO: KAFKA-352 first check if this topic exists in the cluster
-//    if(!topicPartitionsChangeListener.doesTopicExistInCluster(topic))
-//      throw new UnknownTopicException("Topic %s doesn't exist in the cluster".format(topic))
+    if(!topicPartitionsChangeListener.doesTopicExistInCluster(topic))
+      throw new UnknownTopicException("Topic %s doesn't exist in the cluster".format(topic))
     // check if partition id is invalid
     if(partition < 0)
       throw new InvalidPartitionException("Partition %d is invalid".format(partition))
@@ -287,6 +288,8 @@ class KafkaZooKeeper(config: KafkaConfig,
 
   class TopicChangeListener extends IZkChildListener with Logging {
     private val allTopics = new HashSet[String]()
+    // read existing topics, if any
+    allTopics ++= ZkUtils.getAllTopics(zkClient)
 
     @throws(classOf[Exception])
     def handleChildChange(parentPath : String, curChilds : java.util.List[String]) {
@@ -297,17 +300,20 @@ class KafkaZooKeeper(config: KafkaConfig,
         val newTopics = currentChildren -- allTopics
         val deletedTopics = allTopics -- currentChildren
         allTopics.clear()
-        allTopics ++ currentChildren
+        allTopics ++= currentChildren
 
         debug("New topics: [%s]. Deleted topics: [%s]".format(newTopics.mkString(","), deletedTopics.mkString(",")))
+        debug("Current topics in the cluster: [%s]".format(allTopics.mkString(",")))
         handleNewTopics(newTopics.toSeq)
         // TODO: Handle topic deletions
-        //handleDeletedTopics(deletedTopics.toSeq)
+        // handleDeletedTopics(deletedTopics.toSeq)
       }
     }
 
     def doesTopicExistInCluster(topic: String): Boolean = {
-      allTopics.contains(topic)
+      topicListenerLock.synchronized {
+        allTopics.contains(topic)
+      }
     }
   }
 

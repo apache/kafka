@@ -18,12 +18,13 @@
 package kafka.javaapi.consumer;
 
 
-import java.util.List;
-import java.util.Map;
 import kafka.consumer.KafkaStream;
 import kafka.consumer.TopicFilter;
 import kafka.message.Message;
 import kafka.serializer.Decoder;
+
+import java.util.List;
+import java.util.Map;
 
 public interface ConsumerConnector {
   /**

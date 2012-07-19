@@ -20,6 +20,7 @@ package kafka.consumer
 import kafka.api._
 import kafka.network._
 import kafka.utils._
+import kafka.common.ErrorMapping
 
 /**
  * A consumer of kafka messages
@@ -111,8 +112,10 @@ class SimpleConsumer( val host: String,
    */
   def getOffsetsBefore(topic: String, partition: Int, time: Long, maxNumOffsets: Int): Array[Long] = {
     val request = new OffsetRequest(topic, partition, time, maxNumOffsets)
-    val response = sendRequest(request)
-    OffsetResponse.readFrom(response.buffer).offsets
+    val offsetResponse = OffsetResponse.readFrom(sendRequest(request).buffer)
+    // try to throw exception based on global error codes
+    ErrorMapping.maybeThrowException(offsetResponse.errorCode)
+    offsetResponse.offsets
   }
 
   private def getOrMakeConnection() {
