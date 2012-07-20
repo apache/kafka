@@ -47,12 +47,6 @@ extends Logging {
     case _ => throw new InvalidConfigException("Valid values for producer.type are sync/async")
   }
 
-  /**
-   * This constructor can be used when all config parameters will be specified through the
-   * ProducerConfig object
-   * @param config Producer Configuration object
-   * @param zkClient The ZkClient instance use by the producer to connect to zookeeper. used ONLY for testing
-   */
   def this(config: ProducerConfig, zkClient: ZkClient = null) =
     this(config,
          new DefaultEventHandler[K,V](config,
