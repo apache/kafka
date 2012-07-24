@@ -87,5 +87,5 @@ class ProducerConfig(val props: Properties) extends ZKConfig(props)
    */
   val producerRetries = Utils.getInt(props, "producer.num.retries", 3)
 
-  val producerRetryBackoffMs = Utils.getInt(props, "producer.retry.backoff.ms", 5)
+  val producerRetryBackoffMs = Utils.getInt(props, "producer.retry.backoff.ms", 100)
 }

@@ -17,6 +17,9 @@
 
 package kafka.utils
 
+import kafka.common.KafkaException
+import java.lang.IllegalStateException
+
 class State
 object DONE extends State
 object READY extends State

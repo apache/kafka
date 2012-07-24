@@ -120,7 +120,7 @@ generate_kafka_properties_files() {
         # ======================
         keyword_to_replace="brokerid="
         string_to_be_replaced=`echo "$server_properties" | grep $keyword_to_replace`
-        brokerid_idx=$(( $brokerid_to_start + $i - 1 ))
+        brokerid_idx=$(( $brokerid_to_start + $i))
         string_to_replace="${keyword_to_replace}${brokerid_idx}"
         # info "string to be replaced : [${string_to_be_replaced}]"
         # info "string to replace     : [${string_to_replace}]"

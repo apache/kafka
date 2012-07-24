@@ -18,7 +18,6 @@
 package kafka.utils
 
 import java.util.Properties
-import java.util.concurrent.locks.Condition
 import kafka.cluster.{Broker, Cluster}
 import kafka.common.NoEpochForPartitionException
 import kafka.consumer.TopicCount
@@ -27,6 +26,7 @@ import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException, 
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import scala.collection._
 import util.parsing.json.JSON
+import java.util.concurrent.locks.{ReentrantLock, Condition}
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -481,18 +481,29 @@ object ZkUtils extends Logging {
 
 }
 
-class LeaderExists(topic: String, partition: Int, leaderExists: Condition) extends IZkDataListener {
+class LeaderExistsListener(topic: String, partition: Int, leaderLock: ReentrantLock, leaderExists: Condition) extends IZkDataListener {
   @throws(classOf[Exception])
   def handleDataChange(dataPath: String, data: Object) {
     val t = dataPath.split("/").takeRight(3).head
     val p = dataPath.split("/").takeRight(2).head.toInt
-    if(t == topic && p == partition)
-      leaderExists.signal()
+    leaderLock.lock()
+    try {
+      if(t == topic && p == partition)
+        leaderExists.signal()
+    }
+    finally {
+      leaderLock.unlock()
+    }
   }
 
   @throws(classOf[Exception])
   def handleDataDeleted(dataPath: String) {
-    leaderExists.signal()
+    leaderLock.lock()
+    try {
+      leaderExists.signal()
+    }finally {
+      leaderLock.unlock()
+    }
   }
 
 }

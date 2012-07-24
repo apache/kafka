@@ -29,7 +29,7 @@ private[kafka] class BoundedByteBufferSend(val buffer: ByteBuffer) extends Send 
 
   // Avoid possibility of overflow for 2GB-4 byte buffer
   if(buffer.remaining > Int.MaxValue - sizeBuffer.limit)
-    throw new IllegalArgumentException("Attempt to create a bounded buffer of " + buffer.remaining + " bytes, but the maximum " +
+    throw new IllegalStateException("Attempt to create a bounded buffer of " + buffer.remaining + " bytes, but the maximum " +
                                        "allowable size for a bounded buffer is " + (Int.MaxValue - sizeBuffer.limit) + ".")    
   sizeBuffer.putInt(buffer.limit)
   sizeBuffer.rewind()

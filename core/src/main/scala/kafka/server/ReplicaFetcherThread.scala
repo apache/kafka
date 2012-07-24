@@ -22,10 +22,10 @@ import kafka.cluster.Broker
 import kafka.message.ByteBufferMessageSet
 
 class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: KafkaConfig, replicaMgr: ReplicaManager)
-        extends AbstractFetcherThread(name = name, sourceBroker = sourceBroker, socketTimeout = brokerConfig.replicaSocketTimeoutMs,
-          socketBufferSize = brokerConfig.replicaSocketBufferSize, fetchSize = brokerConfig.replicaFetchSize,
-          fetcherBrokerId = brokerConfig.brokerId, maxWait = brokerConfig.replicaMaxWaitTimeMs,
-          minBytes = brokerConfig.replicaMinBytes) {
+  extends AbstractFetcherThread(name = name, sourceBroker = sourceBroker, socketTimeout = brokerConfig.replicaSocketTimeoutMs,
+    socketBufferSize = brokerConfig.replicaSocketBufferSize, fetchSize = brokerConfig.replicaFetchSize,
+    fetcherBrokerId = brokerConfig.brokerId, maxWait = brokerConfig.replicaMaxWaitTimeMs,
+    minBytes = brokerConfig.replicaMinBytes) {
 
   // process fetched data
   def processPartitionData(topic: String, fetchOffset: Long, partitionData: PartitionData) {
@@ -35,10 +35,15 @@ class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: Kafk
 
     if (fetchOffset != replica.logEndOffset())
       throw new RuntimeException("offset mismatch: fetchOffset=%d, logEndOffset=%d".format(fetchOffset, replica.logEndOffset()))
+    trace("Follower %d has replica log end offset %d. Received %d messages and leader hw %d".format(replica.brokerId,
+      replica.logEndOffset(), messageSet.sizeInBytes, partitionData.hw))
     replica.log.get.append(messageSet)
-    replica.highWatermark(Some(partitionData.hw))
-    trace("follower %d set replica highwatermark for topic %s partition %d to %d"
-          .format(replica.brokerId, topic, partitionId, partitionData.hw))
+    trace("Follower %d has replica log end offset %d after appending %d messages"
+      .format(replica.brokerId, replica.logEndOffset(), messageSet.sizeInBytes))
+    val followerHighWatermark = replica.logEndOffset().min(partitionData.hw)
+    replica.highWatermark(Some(followerHighWatermark))
+    trace("Follower %d set replica highwatermark for topic %s partition %d to %d"
+      .format(replica.brokerId, topic, partitionId, followerHighWatermark))
   }
 
   // handle a partition whose offset is out of range and return a new fetch offset

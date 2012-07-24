@@ -23,7 +23,7 @@ import kafka.utils._
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener, IZkStateListener, ZkClient}
 import kafka.admin.AdminUtils
-import java.lang.{Thread, IllegalStateException}
+import java.lang.Thread
 import collection.mutable.HashSet
 import kafka.common._
 
@@ -34,13 +34,13 @@ import kafka.common._
  *
  */
 class KafkaZooKeeper(config: KafkaConfig,
+                     zkClient: ZkClient,
                      addReplicaCbk: (String, Int, Set[Int]) => Replica,
                      getReplicaCbk: (String, Int) => Option[Replica],
                      becomeLeader: (Replica, Seq[Int]) => Unit,
                      becomeFollower: (Replica, Int, ZkClient) => Unit) extends Logging {
 
   val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + config.brokerId
-  private var zkClient: ZkClient = null
   private var leaderChangeListener: LeaderChangeListener = null
   private var topicPartitionsChangeListener: TopicChangeListener = null
   private var stateChangeHandler: StateChangeCommandHandler = null
@@ -49,9 +49,8 @@ class KafkaZooKeeper(config: KafkaConfig,
   private val leaderChangeLock = new Object
 
   def startup() {
-    /* start client */
-    info("connecting to ZK: " + config.zkConnect)
-    zkClient = KafkaZookeeperClient.getZookeeperClient(config)
+    leaderChangeListener = new LeaderChangeListener
+    topicPartitionsChangeListener = new TopicChangeListener
     leaderChangeListener = new LeaderChangeListener
     topicPartitionsChangeListener = new TopicChangeListener
     startStateChangeCommandHandler()
@@ -106,11 +105,7 @@ class KafkaZooKeeper(config: KafkaConfig,
   }
 
   def close() {
-    if (zkClient != null) {
-      stateChangeHandler.shutdown()
-      info("Closing zookeeper client...")
-      zkClient.close()
-    }
+    stateChangeHandler.shutdown()
   }
 
   def ensurePartitionLeaderOnThisBroker(topic: String, partition: Int) {
@@ -122,10 +117,10 @@ class KafkaZooKeeper(config: KafkaConfig,
     ZkUtils.getLeaderForPartition(zkClient, topic, partition) match {
       case Some(leader) =>
         if(leader != config.brokerId)
-          throw new NotLeaderForPartitionException("Broker %d is not leader for partition %d for topic %s"
+          throw new LeaderNotAvailableException("Broker %d is not leader for partition %d for topic %s"
             .format(config.brokerId, partition, topic))
       case None =>
-        throw new NoLeaderForPartitionException("There is no leader for topic %s partition %d".format(topic, partition))
+        throw new LeaderNotAvailableException("There is no leader for topic %s partition %d".format(topic, partition))
     }
   }
 
@@ -345,7 +340,8 @@ class KafkaZooKeeper(config: KafkaConfig,
       val newLeaderAndEpochInfo: String = data.asInstanceOf[String]
       val newLeader = newLeaderAndEpochInfo.split(";").head.toInt
       val newEpoch = newLeaderAndEpochInfo.split(";").last.toInt
-      debug("Leader change listener fired for path %s. New leader is %d. New epoch is %d".format(dataPath, newLeader, newEpoch))
+      debug("Leader change listener fired on broker %d for path %s. New leader is %d. New epoch is %d".format(config.brokerId,
+        dataPath, newLeader, newEpoch))
       val topicPartitionInfo = dataPath.split("/")
       val topic = topicPartitionInfo.takeRight(4).head
       val partition = topicPartitionInfo.takeRight(2).head.toInt

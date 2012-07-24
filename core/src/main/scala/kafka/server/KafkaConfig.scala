@@ -113,9 +113,9 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
   * leader election on all replicas minus the preferred replica */
   val preferredReplicaWaitTime = Utils.getLong(props, "preferred.replica.wait.time", 300)
 
-  val keepInSyncTimeMs = Utils.getLong(props, "isr.in.sync.time.ms", 30000)
+  val replicaMaxLagTimeMs = Utils.getLong(props, "replica.max.lag.time.ms", 10000)
 
-  val keepInSyncBytes = Utils.getLong(props, "isr.in.sync.bytes", 4000)
+  val replicaMaxLagBytes = Utils.getLong(props, "replica.max.lag.bytes", 4000)
 
   /* size of the state change request queue in Zookeeper */
   val stateChangeQSize = Utils.getInt(props, "state.change.queue.size", 1000)

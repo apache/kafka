@@ -21,6 +21,7 @@ import kafka.server._
 import kafka.utils.{Utils, TestUtils}
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
+import kafka.common.KafkaException
 
 /**
  * A test harness that brings up some number of broker nodes
@@ -33,7 +34,7 @@ trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
   override def setUp() {
     super.setUp
     if(configs.size <= 0)
-      throw new IllegalArgumentException("Must suply at least one server config.")
+      throw new KafkaException("Must suply at least one server config.")
     servers = configs.map(TestUtils.createServer(_))
   }
 

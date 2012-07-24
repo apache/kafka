@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
 import kafka.utils.Utils._
 import collection.mutable.ListBuffer
 import kafka.utils._
+import kafka.common.KafkaException
 
 sealed trait DetailedMetadataRequest { def requestId: Short }
 case object SegmentMetadata extends DetailedMetadataRequest { val requestId = 1.asInstanceOf[Short] }
@@ -43,7 +44,7 @@ object TopicMetadataRequest {
     requestId match {
       case SegmentMetadata.requestId => SegmentMetadata
       case NoSegmentMetadata.requestId => NoSegmentMetadata
-      case _ => throw new IllegalArgumentException("Unknown detailed metadata request id " + requestId)
+      case _ => throw new KafkaException("Unknown detailed metadata request id " + requestId)
     }
   }
 
@@ -63,7 +64,7 @@ object TopicMetadataRequest {
       case SegmentMetadata =>
         timestamp = Some(buffer.getLong)
         count = Some(buffer.getInt)
-      case _ => throw new IllegalArgumentException("Invalid value for the detailed metadata request "
+      case _ => throw new KafkaException("Invalid value for the detailed metadata request "
                                                     + returnDetailedMetadata.requestId)
     }
     debug("topic = %s, detailed metadata request = %d"
@@ -96,7 +97,7 @@ def this(topics: Seq[String]) =
         buffer.putLong(timestamp.get)
         buffer.putInt(count.get)
       case NoSegmentMetadata =>
-      case _ => throw new IllegalArgumentException("Invalid value for the detailed metadata request " + detailedMetadata.requestId)
+      case _ => throw new KafkaException("Invalid value for the detailed metadata request " + detailedMetadata.requestId)
     }
   }
 
@@ -107,7 +108,7 @@ def this(topics: Seq[String]) =
       case SegmentMetadata =>
         size += 8 /* timestamp */ + 4 /* count */
       case NoSegmentMetadata =>
-      case _ => throw new IllegalArgumentException("Invalid value for the detailed metadata request " + detailedMetadata.requestId)
+      case _ => throw new KafkaException("Invalid value for the detailed metadata request " + detailedMetadata.requestId)
     }
     size
   }

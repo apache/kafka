@@ -153,7 +153,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     Assert.assertEquals(messages.sizeInBytes, response2.offsets(0))
     Assert.assertEquals(messages.sizeInBytes, response2.offsets(2))
 
-    // the middle message should have been rejected because the topic does not exist
+    // the middle message should have been rejected because broker doesn't lead partition
     Assert.assertEquals(ErrorMapping.UnknownTopicCode.toShort, response2.errors(1))
     Assert.assertEquals(-1, response2.offsets(1))
   }
@@ -167,7 +167,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     props.put("host", "localhost")
     props.put("port", server.socketServer.port.toString)
     props.put("buffer.size", "102400")
-    props.put("socket.timeout.ms", String.valueOf(timeoutMs))
+    props.put("producer.request.timeout.ms", String.valueOf(timeoutMs))
     val producer = new SyncProducer(new SyncProducerConfig(props))
 
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))

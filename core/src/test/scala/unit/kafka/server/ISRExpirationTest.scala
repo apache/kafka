@@ -30,8 +30,8 @@ class ISRExpirationTest extends JUnit3Suite {
 
   var topicPartitionISR: Map[(String, Int), Seq[Int]] = new HashMap[(String, Int), Seq[Int]]()
   val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
-    override val keepInSyncTimeMs = 100L
-    override val keepInSyncBytes = 10L
+    override val replicaMaxLagTimeMs = 100L
+    override val replicaMaxLagBytes = 10L
   })
   val topic = "foo"
 
@@ -53,7 +53,7 @@ class ISRExpirationTest extends JUnit3Suite {
     time.sleep(150)
     leaderReplica.logEndOffsetUpdateTime(Some(time.milliseconds))
 
-    var partition0OSR = partition0.getOutOfSyncReplicas(configs.head.keepInSyncTimeMs, configs.head.keepInSyncBytes)
+    var partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
     assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR.map(_.brokerId))
 
     // add all replicas back to the ISR
@@ -65,8 +65,8 @@ class ISRExpirationTest extends JUnit3Suite {
     (partition0.assignedReplicas() - leaderReplica).foreach(partition0.updateReplicaLEO(_, 3))
     time.sleep(150)
     // now follower broker id 1 has caught upto only 3, while the leader is at 5 AND follower broker id 1 hasn't
-    // pulled any data for > keepInSyncTimeMs ms. So it is stuck
-    partition0OSR = partition0.getOutOfSyncReplicas(configs.head.keepInSyncTimeMs, configs.head.keepInSyncBytes)
+    // pulled any data for > replicaMaxLagTimeMs ms. So it is stuck
+    partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
     assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR.map(_.brokerId))
     EasyMock.verify(log)
   }
@@ -87,7 +87,7 @@ class ISRExpirationTest extends JUnit3Suite {
     time.sleep(10)
     (partition0.inSyncReplicas - leaderReplica).foreach(r => r.logEndOffsetUpdateTime(Some(time.milliseconds)))
 
-    val partition0OSR = partition0.getOutOfSyncReplicas(configs.head.keepInSyncTimeMs, configs.head.keepInSyncBytes)
+    val partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
     assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR.map(_.brokerId))
 
     EasyMock.verify(log)
@@ -137,10 +137,10 @@ class ISRExpirationTest extends JUnit3Suite {
       time.sleep(10)
       (partition1.inSyncReplicas - leaderReplicaPartition1).foreach(r => r.logEndOffsetUpdateTime(Some(time.milliseconds)))
 
-      val partition0OSR = partition0.getOutOfSyncReplicas(configs.head.keepInSyncTimeMs, configs.head.keepInSyncBytes)
+      val partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
       assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR.map(_.brokerId))
 
-      val partition1OSR = partition1.getOutOfSyncReplicas(configs.head.keepInSyncTimeMs, configs.head.keepInSyncBytes)
+      val partition1OSR = partition1.getOutOfSyncReplicas(configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
       assertEquals("Replica 0 should be out of sync", Set(configs.last.brokerId), partition1OSR.map(_.brokerId))
 
       EasyMock.verify(log0)

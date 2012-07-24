@@ -20,6 +20,7 @@ import junit.framework.Assert._
 import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
+import kafka.common.ErrorMapping
 import kafka.utils.TestUtils
 
 class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
@@ -137,13 +138,28 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
       10 -> List("1", "2", "3"),
       11 -> List("1", "3", "4")
     )
-    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
-
+    val leaderForPartitionMap = Map(
+      0 -> 0,
+      1 -> 1,
+      2 -> 2,
+      3 -> 3,
+      4 -> 4,
+      5 -> 0,
+      6 -> 1,
+      7 -> 2,
+      8 -> 3,
+      9 -> 4,
+      10 -> 1,
+      11 -> 1
+    )
     val topic = "test"
+    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
     // create the topic
     AdminUtils.createTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
+    // create leaders for all partitions
+    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap)
     val actualReplicaAssignment = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
-                                  .get.partitionsMetadata.map(p => p.replicas)
+                                  .partitionsMetadata.map(p => p.replicas)
     val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id.toString).toList).toList
     assertEquals(expectedReplicaAssignment.size, actualReplicaList.size)
     for( i <- 0 until actualReplicaList.size ) {
@@ -165,23 +181,30 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
       0 -> List("0", "1", "2"),
       1 -> List("1", "2", "3")
     )
+    val leaderForPartitionMap = Map(
+      0 -> 0,
+      1 -> 1
+    )
     val topic = "auto-topic"
     TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3))
     AdminUtils.createTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
+    // create leaders for all partitions
+    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap)
 
     val newTopicMetadata = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
-    newTopicMetadata match {
-      case Some(metadata) =>
-        assertEquals(topic, metadata.topic)
-        assertNotNull("partition metadata list cannot be null", metadata.partitionsMetadata)
-        assertEquals("partition metadata list length should be 2", 2, metadata.partitionsMetadata.size)
-        val actualReplicaAssignment = metadata.partitionsMetadata.map(p => p.replicas)
+    newTopicMetadata.errorCode match {
+      case ErrorMapping.UnknownTopicCode =>
+        fail("Topic " + topic + " should've been automatically created")
+      case _ =>
+        assertEquals(topic, newTopicMetadata.topic)
+        assertNotNull("partition metadata list cannot be null", newTopicMetadata.partitionsMetadata)
+        assertEquals("partition metadata list length should be 2", 2, newTopicMetadata.partitionsMetadata.size)
+        val actualReplicaAssignment = newTopicMetadata.partitionsMetadata.map(p => p.replicas)
         val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id.toString).toList).toList
         assertEquals(expectedReplicaAssignment.size, actualReplicaList.size)
         for(i <- 0 until actualReplicaList.size) {
           assertEquals(expectedReplicaAssignment(i), actualReplicaList(i))
         }
-      case None => fail("Topic " + topic + " should've been automatically created")
     }
   }
 }

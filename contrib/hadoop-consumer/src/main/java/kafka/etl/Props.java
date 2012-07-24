@@ -33,6 +33,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+
+import kafka.common.KafkaException;
 import org.apache.log4j.Logger;
 
 public class Props extends Properties {
@@ -122,7 +124,7 @@ public class Props extends Properties {
 	@SuppressWarnings("unchecked")
 	public static Props of(String... args) {
 		if (args.length % 2 != 0)
-			throw new IllegalArgumentException(
+			throw new KafkaException(
 					"Must have an equal number of keys and values.");
 		Map<String, String> vals = new HashMap<String, String>(args.length / 2);
 		for (int i = 0; i < args.length; i += 2)

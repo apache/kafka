@@ -49,7 +49,7 @@ class SocketServer(val port: Int,
   def startup() {
     for(i <- 0 until numProcessorThreads) {
       processors(i) = new Processor(i, time, maxRequestSize, requestChannel, stats)
-      Utils.newThread("kafka-processor-" + i, processors(i), false).start()
+      Utils.newThread("kafka-processor-%d-%d".format(port, i), processors(i), false).start()
     }
     // register the processor threads for notification of responses
     requestChannel.addResponseListener((id:Int) => processors(id).wakeup())
@@ -68,9 +68,8 @@ class SocketServer(val port: Int,
     acceptor.shutdown
     for(processor <- processors)
       processor.shutdown
-    info("Shut down socket server.")
+    info("Shut down socket server complete")
   }
-
 }
 
 /**
@@ -84,7 +83,7 @@ private[kafka] abstract class AbstractServerThread extends Runnable with Logging
   private val alive = new AtomicBoolean(false)
 
   /**
-   * Initiates a graceful shutdown by signeling to stop and waiting for the shutdown to complete
+   * Initiates a graceful shutdown by signaling to stop and waiting for the shutdown to complete
    */
   def shutdown(): Unit = {
     alive.set(false)
@@ -244,12 +243,13 @@ private[kafka] class Processor(val id: Int,
       try {
         key.interestOps(SelectionKey.OP_WRITE)
         key.attach(curr.response)
-        curr = requestChannel.receiveResponse(id)
       } catch {
         case e: CancelledKeyException => {
           debug("Ignoring response for closed socket.")
           close(key)
         }
+      }finally {
+        curr = requestChannel.receiveResponse(id)
       }
     }
   }

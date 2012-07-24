@@ -20,6 +20,7 @@ package kafka.admin
 import joptsimple.OptionParser
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils.{Utils, ZKStringSerializer, ZkUtils}
+import kafka.common.ErrorMapping
 
 object ListTopicCommand {
 
@@ -77,12 +78,12 @@ object ListTopicCommand {
 
   def showTopic(topic: String, zkClient: ZkClient) {
     val topicMetaData = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
-    topicMetaData match {
-      case None =>
+    topicMetaData.errorCode match {
+      case ErrorMapping.UnknownTopicCode =>
         println("topic " + topic + " doesn't exist!")
-      case Some(tmd) =>
+      case _ =>
         println("topic: " + topic)
-        for (part <- tmd.partitionsMetadata)
+        for (part <- topicMetaData.partitionsMetadata)
           println(part.toString)
     }
   }

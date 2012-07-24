@@ -18,11 +18,11 @@
 package kafka.producer
 
 /**
- * Represents the data to be sent using the Producer send API
- * @param topic the topic under which the message is to be published
- * @param key the key used by the partitioner to pick a broker partition
- * @param data variable length data to be published as Kafka messages under topic
- */
+* Represents the data to be sent using the Producer send API
+* @param topic the topic under which the message is to be published
+* @param key the key used by the partitioner to pick a broker partition
+* @param data variable length data to be published as Kafka messages under topic
+*/
 case class ProducerData[K,V](topic: String,
                              key: K,
                              data: Seq[V]) {

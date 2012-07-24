@@ -20,7 +20,7 @@ package kafka.api
 import java.nio.ByteBuffer
 import kafka.utils.Utils
 import scala.collection.mutable.{HashMap, Buffer, ListBuffer}
-import kafka.common.FetchRequestFormatException
+import kafka.common.{KafkaException, FetchRequestFormatException}
 
 object OffsetDetail {
 
@@ -53,7 +53,7 @@ case class OffsetDetail(topic: String, partitions: Seq[Int], offsets: Seq[Long],
     Utils.writeShortString(buffer, topic, "UTF-8")
 
     if(partitions.size > Int.MaxValue || offsets.size > Int.MaxValue || fetchSizes.size > Int.MaxValue)
-      throw new IllegalArgumentException("Number of fetches in FetchRequest exceeds " + Int.MaxValue + ".")
+      throw new KafkaException("Number of fetches in FetchRequest exceeds " + Int.MaxValue + ".")
 
     buffer.putInt(partitions.length)
     partitions.foreach(buffer.putInt(_))

@@ -24,6 +24,7 @@ import kafka.utils.{Logging, Utils, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import scala.collection.mutable
+import kafka.common.{LeaderNotAvailableException, ReplicaNotAvailableException, ErrorMapping}
 
 object AdminUtils extends Logging {
   val rand = new Random
@@ -48,15 +49,15 @@ object AdminUtils extends Logging {
    * p7        p8        p9        p5        p6       (3nd replica)
    */
   def assignReplicasToBrokers(brokerList: Seq[String], nPartitions: Int, replicationFactor: Int,
-          fixedStartIndex: Int = -1)  // for testing only
-    : Map[Int, List[String]] = {
+                              fixedStartIndex: Int = -1)  // for testing only
+  : Map[Int, List[String]] = {
     if (nPartitions <= 0)
       throw new AdministrationException("number of partitions must be larger than 0")
     if (replicationFactor <= 0)
       throw new AdministrationException("replication factor must be larger than 0")
     if (replicationFactor > brokerList.size)
       throw new AdministrationException("replication factor: " + replicationFactor +
-              " larger than available brokers: " + brokerList.size)
+        " larger than available brokers: " + brokerList.size)
     val ret = new mutable.HashMap[Int, List[String]]()
     val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
 
@@ -85,7 +86,7 @@ object AdminUtils extends Logging {
     }
   }
 
-  def getTopicMetaDataFromZK(topics: Seq[String], zkClient: ZkClient): Seq[Option[TopicMetadata]] = {
+  def getTopicMetaDataFromZK(topics: Seq[String], zkClient: ZkClient): Seq[TopicMetadata] = {
     val cachedBrokerInfo = new mutable.HashMap[Int, Broker]()
     topics.map { topic =>
       if (ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic))) {
@@ -99,15 +100,42 @@ object AdminUtils extends Logging {
           val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
           debug("replicas = " + replicas + ", in sync replicas = " + inSyncReplicas + ", leader = " + leader)
 
-          new PartitionMetadata(partition,
-            leader.map(l => getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l)).head),
-            getBrokerInfoFromCache(zkClient, cachedBrokerInfo, replicas.map(id => id.toInt)),
-            getBrokerInfoFromCache(zkClient, cachedBrokerInfo, inSyncReplicas),
-            None /* Return log segment metadata when getOffsetsBefore will be replaced with this API */)
+          var leaderInfo: Option[Broker] = None
+          var replicaInfo: Seq[Broker] = Nil
+          var isrInfo: Seq[Broker] = Nil
+          try {
+            try {
+              leaderInfo = leader match {
+                case Some(l) => Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l)).head)
+                case None => throw new LeaderNotAvailableException("No leader exists for partition " + partition)
+              }
+            }catch {
+              case e => throw new LeaderNotAvailableException("Leader not available for topic %s partition %d"
+                .format(topic, partition))
+            }
+
+            try {
+              replicaInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, replicas.map(id => id.toInt))
+              isrInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, inSyncReplicas)
+            }catch {
+              case e => throw new ReplicaNotAvailableException(e)
+            }
+
+            new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError,
+              None /* Return log segment metadata when getOffsetsBefore will be replaced with this API */)
+          }catch {
+            case e: ReplicaNotAvailableException => new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo,
+              ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]),
+              None /* Return log segment metadata when getOffsetsBefore will be replaced with this API */)
+            case le: LeaderNotAvailableException => new PartitionMetadata(partition, None, replicaInfo, isrInfo,
+              ErrorMapping.codeFor(le.getClass.asInstanceOf[Class[Throwable]]),
+              None /* Return log segment metadata when getOffsetsBefore will be replaced with this API */)
+          }
         }
-        Some(new TopicMetadata(topic, partitionMetadata))
+        new TopicMetadata(topic, partitionMetadata)
       } else {
-        None
+        // topic doesn't exist, send appropriate error code
+        new TopicMetadata(topic, Seq.empty[PartitionMetadata], ErrorMapping.UnknownTopicCode)
       }
     }
   }
@@ -120,9 +148,14 @@ object AdminUtils extends Logging {
       optionalBrokerInfo match {
         case Some(brokerInfo) => brokerInfo // return broker info from the cache
         case None => // fetch it from zookeeper
-          val brokerInfo = ZkUtils.getBrokerInfoFromIds(zkClient, List(id)).head
-          cachedBrokerInfo += (id -> brokerInfo)
-          brokerInfo
+          try {
+            val brokerInfo = ZkUtils.getBrokerInfoFromIds(zkClient, List(id)).head
+            cachedBrokerInfo += (id -> brokerInfo)
+            brokerInfo
+          }catch {
+            case e => error("Failed to fetch broker info for broker id " + id)
+            throw e
+          }
       }
     }
   }

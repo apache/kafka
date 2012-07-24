@@ -19,7 +19,6 @@ package kafka.utils
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import java.lang.IllegalStateException
 
 /**
  * A scheduler for running jobs in the background

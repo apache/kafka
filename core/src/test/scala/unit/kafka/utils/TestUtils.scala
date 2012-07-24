@@ -293,6 +293,18 @@ object TestUtils extends Logging {
     new Producer[K, V](new ProducerConfig(props))
   }
 
+  def getProducerConfig(zkConnect: String, bufferSize: Int, connectTimeout: Int,
+                        reconnectInterval: Int): Properties = {
+    val props = new Properties()
+    props.put("producer.type", "sync")
+    props.put("zk.connect", zkConnect)
+    props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
+    props.put("buffer.size", bufferSize.toString)
+    props.put("connect.timeout.ms", connectTimeout.toString)
+    props.put("reconnect.interval", reconnectInterval.toString)
+    props
+  }
+
   def updateConsumerOffset(config : ConsumerConfig, path : String, offset : Long) = {
     val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
     ZkUtils.updatePersistentPath(zkClient, path, offset.toString)
@@ -368,6 +380,11 @@ object TestUtils extends Logging {
     pr
   }
 
+  def makeLeaderForPartition(zkClient: ZkClient, topic: String, leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int]) {
+    leaderPerPartitionMap.foreach(leaderForPartition => ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic,
+      leaderForPartition._1, leaderForPartition._2))
+  }
+
   def waitUntilLeaderIsElected(zkClient: ZkClient, topic: String, partition: Int, timeoutMs: Long): Option[Int] = {
     val leaderLock = new ReentrantLock()
     val leaderExists = leaderLock.newCondition()
@@ -381,7 +398,8 @@ object TestUtils extends Logging {
         case Some(l) => info("Leader %d exists for topic %s partition %d".format(l, topic, partition))
           leader
         case None => zkClient.subscribeDataChanges(ZkUtils.getTopicPartitionLeaderPath(topic, partition.toString),
-          new LeaderExists(topic, partition, leaderExists))
+          new LeaderExistsListener(topic, partition, leaderLock, leaderExists))
+        info("No leader exists. Waiting for %d ms".format(timeoutMs))
         leaderExists.await(timeoutMs, TimeUnit.MILLISECONDS)
           // check if leader is elected
         val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)

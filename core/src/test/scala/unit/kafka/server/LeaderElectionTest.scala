@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 
 package kafka.server
 
@@ -51,7 +51,6 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     val server2 = TestUtils.createServer(new KafkaConfig(configProps2))
 
     servers ++= List(server1, server2)
-    try {
     // start 2 brokers
     val topic = "new-topic"
     val partitionId = 0
@@ -66,14 +65,13 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
 
     // kill the server hosting the preferred replica
-    servers.head.shutdown()
+    server1.shutdown()
 
     // check if leader moves to the other server
     leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 1500)
     assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
 
-    Thread.sleep(zookeeper.tickTime)
-
+    val leaderPath = zkClient.getChildren(ZkUtils.getTopicPartitionPath(topic, "0"))
     // bring the preferred replica back
     servers.head.startup()
 
@@ -86,14 +84,9 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // test if the leader is the preferred replica
     assertEquals("Leader must be preferred replica on broker 0", 0, leader.getOrElse(-1))
-    }catch {
-      case e => error("Error while running leader election test ", e)
-    } finally {
-      // shutdown the servers and delete data hosted on them
-      servers.map(server => server.shutdown())
-      servers.map(server => Utils.rm(server.config.logDir))
-
-    }
+    // shutdown the servers and delete data hosted on them
+    servers.map(server => server.shutdown())
+    servers.map(server => Utils.rm(server.config.logDir))
   }
 
   // Assuming leader election happens correctly, test if epoch changes as expected
@@ -105,27 +98,23 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     // setup 2 brokers in ZK
     val brokers = TestUtils.createBrokersInZk(zkClient, List(brokerId1, brokerId2))
 
-    try {
-      // create topic with 1 partition, 2 replicas, one on each broker
-      CreateTopicCommand.createTopic(zkClient, topic, 1, 2, "0:1")
+    // create topic with 1 partition, 2 replicas, one on each broker
+    CreateTopicCommand.createTopic(zkClient, topic, 1, 2, "0:1")
 
-      var newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic, partitionId, 0)
-      assertTrue("Broker 0 should become leader", newLeaderEpoch.isDefined)
-      assertEquals("First epoch value should be 1", 1, newLeaderEpoch.get._1)
+    var newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic, partitionId, 0)
+    assertTrue("Broker 0 should become leader", newLeaderEpoch.isDefined)
+    assertEquals("First epoch value should be 1", 1, newLeaderEpoch.get._1)
 
-      ZkUtils.deletePath(zkClient, ZkUtils.getTopicPartitionLeaderPath(topic, partitionId.toString))
-      newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic, partitionId, 1)
-      assertTrue("Broker 1 should become leader", newLeaderEpoch.isDefined)
-      assertEquals("Second epoch value should be 2", 2, newLeaderEpoch.get._1)
+    ZkUtils.deletePath(zkClient, ZkUtils.getTopicPartitionLeaderPath(topic, partitionId.toString))
+    newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic, partitionId, 1)
+    assertTrue("Broker 1 should become leader", newLeaderEpoch.isDefined)
+    assertEquals("Second epoch value should be 2", 2, newLeaderEpoch.get._1)
 
-      ZkUtils.deletePath(zkClient, ZkUtils.getTopicPartitionLeaderPath(topic, partitionId.toString))
-      newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic, partitionId, 0)
-      assertTrue("Broker 0 should become leader again", newLeaderEpoch.isDefined)
-      assertEquals("Third epoch value should be 3", 3, newLeaderEpoch.get._1)
+    ZkUtils.deletePath(zkClient, ZkUtils.getTopicPartitionLeaderPath(topic, partitionId.toString))
+    newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic, partitionId, 0)
+    assertTrue("Broker 0 should become leader again", newLeaderEpoch.isDefined)
+    assertEquals("Third epoch value should be 3", 3, newLeaderEpoch.get._1)
 
-    }finally {
-      TestUtils.deleteBrokersInZk(zkClient, List(brokerId1, brokerId2))
-    }
-
+    TestUtils.deleteBrokersInZk(zkClient, List(brokerId1, brokerId2))
   }
 }

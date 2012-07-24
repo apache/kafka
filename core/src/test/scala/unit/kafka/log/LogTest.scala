@@ -23,8 +23,8 @@ import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 import kafka.utils.{Utils, TestUtils, Range}
-import kafka.common.OffsetOutOfRangeException
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
+import kafka.common.{KafkaException, OffsetOutOfRangeException}
 
 class LogTest extends JUnitSuite {
   
@@ -58,7 +58,7 @@ class LogTest extends JUnitSuite {
       new Log(logDir, 1024, 1000, false)
       fail("Allowed load of corrupt logs without complaint.")
     } catch {
-      case e: IllegalStateException => "This is good"
+      case e: KafkaException => "This is good"
     }
   }
 
@@ -157,14 +157,14 @@ class LogTest extends JUnitSuite {
     {
       // first test a log segment starting at 0
       val log = new Log(logDir, 100, 1000, false)
-      val curOffset = log.nextAppendOffset
+      val curOffset = log.logEndOffset
       assertEquals(curOffset, 0)
 
       // time goes by; the log file is deleted
       log.markDeletedWhile(_ => true)
 
       // we now have a new log; the starting offset of the new log should remain 0
-      assertEquals(curOffset, log.nextAppendOffset)
+      assertEquals(curOffset, log.logEndOffset)
     }
 
     {
@@ -174,12 +174,12 @@ class LogTest extends JUnitSuite {
       for(i <- 0 until numMessages)
         log.append(TestUtils.singleMessageSet(Integer.toString(i).getBytes()))
 
-      val curOffset = log.nextAppendOffset
+      val curOffset = log.logEndOffset
       // time goes by; the log file is deleted
       log.markDeletedWhile(_ => true)
 
       // we now have a new log
-      assertEquals(curOffset, log.nextAppendOffset)
+      assertEquals(curOffset, log.logEndOffset)
 
       // time goes by; the log file (which is empty) is deleted again
       val deletedSegments = log.markDeletedWhile(_ => true)
@@ -188,7 +188,7 @@ class LogTest extends JUnitSuite {
       assertTrue("We shouldn't delete the last empty log segment", deletedSegments.size == 0)
 
       // we now have a new log
-      assertEquals(curOffset, log.nextAppendOffset)
+      assertEquals(curOffset, log.logEndOffset)
     }
   }
 

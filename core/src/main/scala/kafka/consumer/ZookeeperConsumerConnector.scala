@@ -30,9 +30,8 @@ import org.apache.zookeeper.Watcher.Event.KeeperState
 import kafka.api.OffsetRequest
 import java.util.UUID
 import kafka.serializer.Decoder
-import java.lang.IllegalStateException
 import kafka.utils.ZkUtils._
-import kafka.common.{NoBrokersForPartitionException, ConsumerRebalanceFailedException, InvalidConfigException}
+import kafka.common.{KafkaException, NoBrokersForPartitionException, ConsumerRebalanceFailedException, InvalidConfigException}
 
 
 /**
@@ -319,7 +318,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val cluster = getCluster(zkClient)
       val broker = cluster.getBroker(brokerId) match {
         case Some(b) => b
-        case None => throw new IllegalStateException("Broker " + brokerId + " is unavailable. Cannot issue " +
+        case None => throw new KafkaException("Broker " + brokerId + " is unavailable. Cannot issue " +
           "getOffsetsBefore request")
       }
       simpleConsumer = new SimpleConsumer(broker.host, broker.port, ConsumerConfig.SocketTimeout,

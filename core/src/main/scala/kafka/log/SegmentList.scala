@@ -20,6 +20,7 @@ package kafka.log
 import java.util.concurrent.atomic._
 import reflect._
 import scala.math._
+import kafka.common.KafkaException
 
 private[log] object SegmentList {
   val MaxAttempts: Int = 20
@@ -56,7 +57,7 @@ private[log] class SegmentList[T](seq: Seq[T])(implicit m: ClassManifest[T]) {
    */
   def trunc(newStart: Int): Seq[T] = {
     if(newStart < 0)
-      throw new IllegalArgumentException("Starting index must be positive.");
+      throw new KafkaException("Starting index must be positive.");
     var deleted: Array[T] = null
     var done = false
     while(!done) {
@@ -78,7 +79,7 @@ private[log] class SegmentList[T](seq: Seq[T])(implicit m: ClassManifest[T]) {
    */
   def truncLast(newEnd: Int): Seq[T] = {
     if(newEnd >= contents.get().size-1)
-      throw new IllegalArgumentException("End index must be segment list size - 1");
+      throw new KafkaException("End index must be segment list size - 1");
     var deleted: Array[T] = null
     var done = false
     while(!done) {

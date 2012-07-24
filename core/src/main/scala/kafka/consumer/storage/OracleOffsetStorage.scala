@@ -20,6 +20,7 @@ package kafka.consumer.storage.sql
 import java.sql._
 import kafka.utils._
 import kafka.consumer.storage.OffsetStorage
+import kafka.common.KafkaException
 
 /**
  * An offset storage implementation that uses an oracle database to save offsets
@@ -76,7 +77,7 @@ class OracleOffsetStorage(val connection: Connection) extends OffsetStorage with
     stmt.setString(4, topic)
     val updated = stmt.executeUpdate()
     if(updated > 1)
-      throw new IllegalStateException("More than one key updated by primary key!")
+      throw new KafkaException("More than one key updated by primary key!")
     else
       updated == 1
   }
@@ -100,7 +101,7 @@ class OracleOffsetStorage(val connection: Connection) extends OffsetStorage with
       } else {
         val offset = results.getLong("offset")
         if(results.next())
-          throw new IllegalStateException("More than one entry for primary key!")
+          throw new KafkaException("More than one entry for primary key!")
         Some(offset)
       }
     } finally {
@@ -120,7 +121,7 @@ class OracleOffsetStorage(val connection: Connection) extends OffsetStorage with
       stmt.setString(3, topic)
       val updated = stmt.executeUpdate()
       if(updated != 1)
-        throw new IllegalStateException("Unexpected number of keys updated: " + updated)
+        throw new KafkaException("Unexpected number of keys updated: " + updated)
     } finally {
       close(stmt)
     }

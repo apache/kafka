@@ -18,7 +18,6 @@
 package kafka.integration
 
 import kafka.api.FetchRequestBuilder
-import kafka.common.OffsetOutOfRangeException
 import kafka.message.{Message, ByteBufferMessageSet}
 import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import org.apache.log4j.{Level, Logger}
@@ -26,6 +25,7 @@ import org.scalatest.junit.JUnit3Suite
 import scala.collection._
 import kafka.producer.ProducerData
 import kafka.utils.TestUtils
+import kafka.common.{KafkaException, OffsetOutOfRangeException}
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -41,7 +41,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
   override def setUp() {
     super.setUp
     if(configs.size <= 0)
-      throw new IllegalArgumentException("Must suply at least one server config.")
+      throw new KafkaException("Must suply at least one server config.")
 
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)    
@@ -133,6 +133,8 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       produceList ::= new ProducerData[String, Message](topic, topic, set)
       builder.addFetch(topic, 0, 0, 10000)
     }
+    // wait until leader is elected
+    topics.foreach(topic => TestUtils.waitUntilLeaderIsElected(zkClient, topic, 0, 500))
     producer.send(produceList: _*)
 
     // wait a bit for produced message to be available
@@ -157,6 +159,9 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       produceList ::= new ProducerData[String, Message](topic, topic, set)
       builder.addFetch(topic, 0, 0, 10000)
     }
+    // wait until leader is elected
+    topics.foreach(topic => TestUtils.waitUntilLeaderIsElected(zkClient, topic, 0, 1500))
+
     producer.send(produceList: _*)
 
     producer.send(produceList: _*)

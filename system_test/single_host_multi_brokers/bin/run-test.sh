@@ -42,7 +42,7 @@ readonly num_kafka_server=3                           # same no. of property fil
 readonly replica_factor=3                             # should be less than or equal to "num_kafka_server"
 readonly my_brokerid_to_start=0                       # this should be '0' for now
 readonly my_server_port_to_start=9091                 # if using this default, the ports to be used will be 9091, 9092, ...
-readonly producer_msg_batch_size=200                  # batch no. of messsages by producer
+readonly producer_msg_batch_size=20                   # batch no. of messsages by producer
 readonly consumer_timeout_ms=10000                    # elapsed time for consumer to timeout and exit
 
 # ====================================
@@ -198,7 +198,7 @@ start_producer_perf() {
         --topic ${this_topic} \
         --messages $no_msg_to_produce \
         --message-size 100 \
-        --threads 5 \
+        --threads 1 \
         --initial-message-id $init_msg_id \
         2>&1 >> $producer_perf_log_pathname
 }
@@ -213,6 +213,7 @@ start_console_consumer() {
         --topic $this_consumer_topic \
         --formatter 'kafka.consumer.ConsoleConsumer$DecodedMessageFormatter' \
         --consumer-timeout-ms $consumer_timeout_ms \
+        --from-beginning \
         2>&1 >> $console_consumer_log_pathname &
 }
 
@@ -387,19 +388,11 @@ start_test() {
         ldr_bkr_id=$?
         info "leader broker id: $ldr_bkr_id"
 
-        svr_idx=$(($ldr_bkr_id + 1))
+        svr_idx=$(($ldr_bkr_id))
 
-        # ==========================================================
-        # If KAFKA-350 is fixed, uncomment the following 3 lines to
-        # STOP the server for failure test
-        # ==========================================================
-        #stop_server $svr_idx
-        #info "sleeping for 10s"
-        #sleep 10
-
-        start_console_consumer $test_topic localhost:$zk_port
-        info "sleeping for 5s"
-        sleep 5
+        stop_server $svr_idx
+        info "sleeping for 10s"
+        sleep 10
 
         init_id=$(( ($i - 1) * $producer_msg_batch_size ))
         start_producer_perf $test_topic localhost:$zk_port $producer_msg_batch_size $init_id
@@ -407,14 +400,14 @@ start_test() {
         sleep 15
         echo
 
-        # ==========================================================
-        # If KAFKA-350 is fixed, uncomment the following 3 lines to
-        # START the server for failure test
-        # ==========================================================
-        #start_server $svr_idx
-        #info "sleeping for 30s"
-        #sleep 30
+        start_server $svr_idx
+        info "sleeping for 30s"
+        sleep 30
     done
+
+    start_console_consumer $test_topic localhost:$zk_port
+    info "sleeping for 30s"
+    sleep 30
 
     validate_results
     echo

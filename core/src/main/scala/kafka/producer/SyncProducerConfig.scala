@@ -35,9 +35,6 @@ trait SyncProducerConfigShared {
 
   val connectTimeoutMs = Utils.getInt(props, "connect.timeout.ms", 5000)
 
-  /** the socket timeout for network requests */
-  val socketTimeoutMs = Utils.getInt(props, "socket.timeout.ms", 30000)  
-
   val reconnectInterval = Utils.getInt(props, "reconnect.interval", 30000)
 
   /** negative reconnect time interval means disabling this time-based reconnect feature */
@@ -59,15 +56,15 @@ trait SyncProducerConfigShared {
   val requiredAcks = Utils.getShort(props,"producer.request.required.acks", SyncProducerConfig.DefaultRequiredAcks)
 
   /*
-   * The ack timeout of the producer requests - negative value means wait
-   * indefinitely (or until an ack is received).
+   * The ack timeout of the producer requests. Value must be non-negative and non-zero
    */
-  val ackTimeoutMs = Utils.getInt(props,"producer.request.ack.timeout.ms", SyncProducerConfig.DefaultAckTimeoutMs)
+  val requestTimeoutMs = Utils.getIntInRange(props,"producer.request.timeout.ms", SyncProducerConfig.DefaultAckTimeoutMs,
+                                             (1, Integer.MAX_VALUE))
 }
 
 object SyncProducerConfig {
   val DefaultCorrelationId = -1
   val DefaultClientId = ""
   val DefaultRequiredAcks : Short = 0
-  val DefaultAckTimeoutMs = -1
+  val DefaultAckTimeoutMs = 500
 }

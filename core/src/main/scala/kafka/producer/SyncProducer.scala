@@ -22,7 +22,7 @@ import kafka.message.MessageSet
 import kafka.network.{BlockingChannel, BoundedByteBufferSend, Receive}
 import kafka.utils._
 import java.util.Random
-import kafka.common.MessageSizeTooLargeException
+import kafka.common.{ErrorMapping, MessageSizeTooLargeException}
 
 object SyncProducer {
   val RequestKey: Short = 0
@@ -42,7 +42,8 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
 
   private val lock = new Object()
   @volatile private var shutdown: Boolean = false
-  private val blockingChannel = new BlockingChannel(config.host, config.port, BlockingChannel.UseDefaultBufferSize, config.bufferSize, config.socketTimeoutMs)
+  private val blockingChannel = new BlockingChannel(config.host, config.port, BlockingChannel.UseDefaultBufferSize,
+    config.bufferSize, config.requestTimeoutMs)
 
   trace("Instantiating Scala Sync Producer")
 
@@ -114,6 +115,8 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   def send(request: TopicMetadataRequest): Seq[TopicMetadata] = {
     val response = doSend(request)
     val topicMetaDataResponse = TopicMetaDataResponse.readFrom(response.buffer)
+    // try to throw exception based on global error codes
+    ErrorMapping.maybeThrowException(topicMetaDataResponse.errorCode)
     topicMetaDataResponse.topicsMetadata
   }
 

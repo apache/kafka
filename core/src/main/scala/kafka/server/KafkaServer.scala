@@ -25,6 +25,7 @@ import java.util.concurrent._
 import atomic.AtomicBoolean
 import kafka.cluster.Replica
 import org.I0Itec.zkclient.ZkClient
+import kafka.common.KafkaZookeeperClient
 
 
 /**
@@ -44,6 +45,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   private var replicaManager: ReplicaManager = null
   private var apis: KafkaApis = null
   var kafkaController: KafkaController = new KafkaController(config)
+  var zkClient: ZkClient = null
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
@@ -59,6 +61,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       needRecovery = false
       cleanShutDownFile.delete
     }
+    /* start client */
+    info("connecting to ZK: " + config.zkConnect)
+    zkClient = KafkaZookeeperClient.getZookeeperClient(config)
     logManager = new LogManager(config,
                                 SystemTime,
                                 1000L * 60 * config.logCleanupIntervalMinutes,
@@ -73,9 +78,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                     config.maxSocketRequestSize)
     Utils.registerMBean(socketServer.stats, statsMBeanName)
 
-    kafkaZookeeper = new KafkaZooKeeper(config, addReplica, getReplica, makeLeader, makeFollower)
+    kafkaZookeeper = new KafkaZooKeeper(config, zkClient, addReplica, getReplica, makeLeader, makeFollower)
 
-    replicaManager = new ReplicaManager(config, time, kafkaZookeeper.getZookeeperClient)
+    replicaManager = new ReplicaManager(config, time, zkClient)
 
     apis = new KafkaApis(socketServer.requestChannel, logManager, replicaManager, kafkaZookeeper)
     requestHandlerPool = new KafkaRequestHandlerPool(socketServer.requestChannel, apis, config.numIoThreads)
@@ -112,6 +117,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         kafkaController.shutDown()
 
       kafkaZookeeper.close
+      info("Closing zookeeper client...")
+      zkClient.close()
 
       val cleanShutDownFile = new File(new File(config.logDir), CleanShutdownFile)
       debug("Creating clean shutdown file " + cleanShutDownFile.getAbsolutePath())

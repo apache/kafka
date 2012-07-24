@@ -18,8 +18,8 @@
 package kafka.cluster
 
 import kafka.log.Log
-import java.lang.IllegalStateException
 import kafka.utils.Logging
+import kafka.common.KafkaException
 
 class Replica(val brokerId: Int,
               val partition: Partition,
@@ -32,7 +32,7 @@ class Replica(val brokerId: Int,
     isLocal match {
       case true =>
         newLeo match {
-          case Some(newOffset) => throw new IllegalStateException("Trying to set the leo %d for local log".format(newOffset))
+          case Some(newOffset) => throw new KafkaException("Trying to set the leo %d for local log".format(newOffset))
           case None => log.get.logEndOffset
         }
       case false =>
@@ -71,15 +71,15 @@ class Replica(val brokerId: Int,
                                                                                    brokerId, highwaterMark))
             log.get.setHW(highwaterMark)
             highwaterMark
-          case false => throw new IllegalStateException("Unable to set highwatermark for topic %s ".format(topic) +
+          case false => throw new KafkaException("Unable to set highwatermark for topic %s ".format(topic) +
             "partition %d on broker %d, since there is no local log for this partition"
               .format(partition.partitionId, brokerId))
         }
       case None =>
         isLocal match {
           case true =>
-            log.get.highwaterMark
-          case false => throw new IllegalStateException("Unable to get highwatermark for topic %s ".format(topic) +
+            log.get.getHW()
+          case false => throw new KafkaException("Unable to get highwatermark for topic %s ".format(topic) +
             "partition %d on broker %d, since there is no local log for this partition"
               .format(partition.partitionId, brokerId))
         }

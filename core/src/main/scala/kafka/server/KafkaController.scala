@@ -134,11 +134,15 @@ class ControllerChannelManager(allBrokers: Set[Broker], config : KafkaConfig) ex
 
   def removeBroker(brokerId: Int){
     brokers.remove(brokerId)
-    messageChannels(brokerId).disconnect()
-    messageChannels.remove(brokerId)
-    messageQueues.remove(brokerId)
-    messageThreads(brokerId).shutDown()
-    messageThreads.remove(brokerId)
+    try {
+      messageChannels(brokerId).disconnect()
+      messageChannels.remove(brokerId)
+      messageQueues.remove(brokerId)
+      messageThreads(brokerId).shutDown()
+      messageThreads.remove(brokerId)
+    }catch {
+      case e => error("Error while removing broker by the controller", e)
+    }
   }
 }
 
@@ -189,10 +193,10 @@ class KafkaController(config : KafkaConfig) extends Logging {
   }
 
   def shutDown() = {
-    if(controllerChannelManager != null){
+    if(controllerChannelManager != null)
       controllerChannelManager.shutDown()
-    }
-    zkClient.close()
+    if(zkClient != null)
+      zkClient.close()
   }
 
   def sendRequest(brokerId : Int, request : RequestOrResponse, callback: (RequestOrResponse) => Unit = null) = {

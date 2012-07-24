@@ -18,7 +18,7 @@
 package kafka.server
 
 import util.parsing.json.JSON
-import java.lang.IllegalStateException
+import kafka.common.KafkaException
 import kafka.utils.{Utils, Logging}
 import collection.mutable.HashMap
 
@@ -45,10 +45,10 @@ object StateChangeCommand extends Logging {
               request match {
                 case StartReplica => new StartReplica(topic, partition, epoch)
                 case CloseReplica => new CloseReplica(topic, partition, epoch)
-                case _ => throw new IllegalStateException("Unknown state change request " + request)
+                case _ => throw new KafkaException("Unknown state change request " + request)
               }
             case None =>
-              throw new IllegalStateException("Illegal state change request JSON " + requestJson)
+              throw new KafkaException("Illegal state change request JSON " + requestJson)
           }
         case None => throw new RuntimeException("Error parsing state change request : " + requestJson)
       }

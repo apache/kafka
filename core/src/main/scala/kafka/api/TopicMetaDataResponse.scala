@@ -24,8 +24,8 @@ import kafka.common.ErrorMapping
 object TopicMetaDataResponse {
 
   def readFrom(buffer: ByteBuffer): TopicMetaDataResponse = {
-    val errorCode = buffer.getShort
     val versionId = buffer.getShort
+    val errorCode = buffer.getShort
 
     val topicCount = buffer.getInt
     val topicsMetadata = new Array[TopicMetadata](topicCount)

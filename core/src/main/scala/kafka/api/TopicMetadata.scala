@@ -21,6 +21,7 @@ import kafka.cluster.Broker
 import java.nio.ByteBuffer
 import kafka.utils.Utils._
 import collection.mutable.ListBuffer
+import kafka.common.{KafkaException, ErrorMapping}
 
 /**
  * topic (2 bytes + topic.length)
@@ -57,24 +58,28 @@ case object LogSegmentMetadataDoesNotExist extends LogSegmentMetadataRequest { v
 object TopicMetadata {
 
   def readFrom(buffer: ByteBuffer): TopicMetadata = {
+    val errorCode = getShortInRange(buffer, "error code", (-1, Short.MaxValue))
     val topic = readShortString(buffer)
     val numPartitions = getIntInRange(buffer, "number of partitions", (0, Int.MaxValue))
     val partitionsMetadata = new ListBuffer[PartitionMetadata]()
     for(i <- 0 until numPartitions)
       partitionsMetadata += PartitionMetadata.readFrom(buffer)
-    new TopicMetadata(topic, partitionsMetadata)
+    new TopicMetadata(topic, partitionsMetadata, errorCode)
   }
 }
 
-case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadata]) {
+case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadata], errorCode: Short = ErrorMapping.NoError) {
   def sizeInBytes: Int = {
-    var size: Int = shortStringLength(topic)
+    var size: Int = 2   /* error code */
+    size += shortStringLength(topic)
     size += partitionsMetadata.foldLeft(4 /* number of partitions */)(_ + _.sizeInBytes)
     debug("Size of topic metadata = " + size)
     size
   }
 
   def writeTo(buffer: ByteBuffer) {
+    /* error code */
+    buffer.putShort(errorCode)
     /* topic */
     writeShortString(buffer, topic)
     /* number of partitions */
@@ -86,6 +91,7 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
 object PartitionMetadata {
 
   def readFrom(buffer: ByteBuffer): PartitionMetadata = {
+    val errorCode = getShortInRange(buffer, "error code", (-1, Short.MaxValue))
     val partitionId = getIntInRange(buffer, "partition id", (0, Int.MaxValue)) /* partition id */
     val doesLeaderExist = getLeaderRequest(buffer.get)
     val leader = doesLeaderExist match {
@@ -129,18 +135,18 @@ object PartitionMetadata {
         Some(new LogMetadata(numLogSegments, totalDataSize, segmentMetadata))
       case LogSegmentMetadataDoesNotExist => None
     }
-    new PartitionMetadata(partitionId, leader, replicas, isr, logMetadata)
+    new PartitionMetadata(partitionId, leader, replicas, isr, errorCode, logMetadata)
   }
 
-  def getLeaderRequest(requestId: Byte): LeaderRequest = {
+  private def getLeaderRequest(requestId: Byte): LeaderRequest = {
     requestId match {
       case LeaderExists.requestId => LeaderExists
       case LeaderDoesNotExist.requestId => LeaderDoesNotExist
-      case _ => throw new IllegalArgumentException("Unknown leader request id " + requestId)
+      case _ => throw new KafkaException("Unknown leader request id " + requestId)
     }
   }
 
-  def getLogSegmentMetadataRequest(requestId: Byte): LogSegmentMetadataRequest = {
+  private def getLogSegmentMetadataRequest(requestId: Byte): LogSegmentMetadataRequest = {
     requestId match {
       case LogSegmentMetadataExists.requestId => LogSegmentMetadataExists
       case LogSegmentMetadataDoesNotExist.requestId => LogSegmentMetadataDoesNotExist
@@ -149,9 +155,9 @@ object PartitionMetadata {
 }
 
 case class PartitionMetadata(partitionId: Int, leader: Option[Broker], replicas: Seq[Broker], isr: Seq[Broker] = Seq.empty,
-                             logMetadata: Option[LogMetadata] = None) {
+                             errorCode: Short = ErrorMapping.NoError, logMetadata: Option[LogMetadata] = None) {
   def sizeInBytes: Int = {
-    var size: Int = 4 /* partition id */ + 1 /* if leader exists*/
+    var size: Int = 2 /* error code */ + 4 /* partition id */ + 1 /* if leader exists*/
 
     leader match {
       case Some(l) => size += l.sizeInBytes
@@ -173,6 +179,7 @@ case class PartitionMetadata(partitionId: Int, leader: Option[Broker], replicas:
   }
 
   def writeTo(buffer: ByteBuffer) {
+    buffer.putShort(errorCode)
     buffer.putInt(partitionId)
 
     /* if leader exists*/

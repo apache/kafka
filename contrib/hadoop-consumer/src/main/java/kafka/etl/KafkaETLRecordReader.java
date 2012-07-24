@@ -19,6 +19,8 @@ package kafka.etl;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+
+import kafka.common.KafkaException;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.mapred.FileSplit;
 import org.apache.hadoop.mapred.InputSplit;
@@ -63,14 +65,12 @@ extends SequenceFileRecordReader<KafkaETLKey, BytesWritable> {
            /*get attemp id*/
            String taskId = _job.get("mapred.task.id");
            if (taskId == null) {
-               throw new IllegalArgumentException(
-                                 "Configutaion does not contain the property mapred.task.id");
+               throw new KafkaException("Configuration does not contain the property mapred.task.id");
            }
            String[] parts = taskId.split("_");
            if (    parts.length != 6 || !parts[0].equals("attempt") 
                 || (!"m".equals(parts[3]) && !"r".equals(parts[3]))) {
-                   throw new IllegalArgumentException(
-                                 "TaskAttemptId string : " + taskId + " is not properly formed");
+                   throw new KafkaException("TaskAttemptId string : " + taskId + " is not properly formed");
            }
           _attemptId = parts[4]+parts[3];
        }catch (Exception e) {

@@ -25,11 +25,12 @@ import kafka.log.LogManager
 import junit.framework.Assert._
 import org.easymock.EasyMock
 import kafka.network._
-import kafka.api.{TopicMetaDataResponse, TopicMetadataRequest}
 import kafka.cluster.Broker
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.server.{ReplicaManager, KafkaZooKeeper, KafkaApis, KafkaConfig}
+import kafka.common.ErrorMapping
+import kafka.api.{TopicMetadata, TopicMetaDataResponse, TopicMetadataRequest}
 
 
 class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
@@ -66,18 +67,38 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     // create topic
     val topic = "test"
     CreateTopicCommand.createTopic(zkClient, topic, 1)
-
-    mockLogManagerAndTestTopic(topic)
+    // set up leader for topic partition 0
+    val leaderForPartitionMap = Map(
+      0 -> configs.head.brokerId
+    )
+    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap)
+    val topicMetadata = mockLogManagerAndTestTopic(topic)
+    assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
+    assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
+    val partitionMetadata = topicMetadata.head.partitionsMetadata
+    assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
+    assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
+    assertNull("Not expecting log metadata", partitionMetadata.head.logMetadata.getOrElse(null))
+    assertEquals(1, partitionMetadata.head.replicas.size)
   }
 
   def testAutoCreateTopic {
     // auto create topic
     val topic = "test"
 
-    mockLogManagerAndTestTopic(topic)
+    val topicMetadata = mockLogManagerAndTestTopic(topic)
+    assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
+    assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
+    val partitionMetadata = topicMetadata.head.partitionsMetadata
+    assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
+    assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
+    assertNull("Not expecting log metadata", partitionMetadata.head.logMetadata.getOrElse(null))
+    assertEquals(0, partitionMetadata.head.replicas.size)
+    assertEquals(None, partitionMetadata.head.leader)
+    assertEquals(ErrorMapping.LeaderNotAvailableCode, partitionMetadata.head.errorCode)
   }
 
-  private def mockLogManagerAndTestTopic(topic: String) = {
+  private def mockLogManagerAndTestTopic(topic: String): Seq[TopicMetadata] = {
     // topic metadata request only requires 2 APIs from the log manager
     val logManager = EasyMock.createMock(classOf[LogManager])
     val kafkaZookeeper = EasyMock.createMock(classOf[KafkaZooKeeper])
@@ -109,16 +130,11 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     
     // check assertions
     val topicMetadata = TopicMetaDataResponse.readFrom(metadataResponse).topicsMetadata
-    assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
-    assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
-    val partitionMetadata = topicMetadata.head.partitionsMetadata
-    assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
-    assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
-    assertEquals(brokers, partitionMetadata.head.replicas)
-    assertNull("Not expecting log metadata", partitionMetadata.head.logMetadata.getOrElse(null))
 
     // verify the expected calls to log manager occurred in the right order
     EasyMock.verify(kafkaZookeeper)
     EasyMock.verify(receivedRequest)
+
+    topicMetadata
   }
 }

@@ -22,6 +22,7 @@ import java.util.concurrent.{TimeUnit, BlockingQueue}
 import kafka.serializer.Decoder
 import java.util.concurrent.atomic.AtomicReference
 import kafka.message.{MessageAndOffset, MessageAndMetadata}
+import kafka.common.KafkaException
 
 
 /**
@@ -42,7 +43,7 @@ class ConsumerIterator[T](private val channel: BlockingQueue[FetchedDataChunk],
   override def next(): MessageAndMetadata[T] = {
     val item = super.next()
     if(consumedOffset < 0)
-      throw new IllegalStateException("Offset returned by the message set is invalid %d".format(consumedOffset))
+      throw new KafkaException("Offset returned by the message set is invalid %d".format(consumedOffset))
     currentTopicInfo.resetConsumeOffset(consumedOffset)
     val topic = currentTopicInfo.topic
     trace("Setting %s consumed offset to %d".format(topic, consumedOffset))

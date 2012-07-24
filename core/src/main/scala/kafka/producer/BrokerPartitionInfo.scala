@@ -13,14 +13,15 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 package kafka.producer
 
 import collection.mutable.HashMap
 import kafka.api.{TopicMetadataRequest, TopicMetadata}
-import java.lang.IllegalStateException
+import kafka.common.KafkaException
 import kafka.utils.Logging
 import kafka.cluster.{Replica, Partition}
+import kafka.common.{LeaderNotAvailableException, ErrorMapping, UnknownTopicException}
 
 class BrokerPartitionInfo(producerPool: ProducerPool) extends Logging {
   val topicPartitionInfo = new HashMap[String, TopicMetadata]()
@@ -31,7 +32,7 @@ class BrokerPartitionInfo(producerPool: ProducerPool) extends Logging {
    * @param topic the topic for which this information is to be returned
    * @return a sequence of (brokerId, numPartitions). Returns a zero-length
    * sequence if no brokers are available.
-   */  
+   */
   def getBrokerPartitionInfo(topic: String): Seq[Partition] = {
     debug("Getting broker partition info for topic %s".format(topic))
     // check if the cache has metadata for this topic
@@ -41,12 +42,11 @@ class BrokerPartitionInfo(producerPool: ProducerPool) extends Logging {
         case Some(m) => m
         case None =>
           // refresh the topic metadata cache
-          info("Fetching metadata for topic %s".format(topic))
-          updateInfo(topic)
+          updateInfo(List(topic))
           val topicMetadata = topicPartitionInfo.get(topic)
           topicMetadata match {
             case Some(m) => m
-            case None => throw new IllegalStateException("Failed to fetch topic metadata for topic: " + topic)
+            case None => throw new KafkaException("Failed to fetch topic metadata for topic: " + topic)
           }
       }
     val partitionMetadata = metadata.partitionsMetadata
@@ -69,24 +69,33 @@ class BrokerPartitionInfo(producerPool: ProducerPool) extends Logging {
    * It updates the cache by issuing a get topic metadata request to a random broker.
    * @param topic the topic for which the metadata is to be fetched
    */
-  def updateInfo(topic: String = null) = {
+  def updateInfo(topics: Seq[String] = Seq.empty[String]) = {
     val producer = producerPool.getAnyProducer
-    if(topic != null) {
+    val topicList = if(topics.size > 0) topics else topicPartitionInfo.keySet.toList
+    topicList.foreach { topic =>
+      info("Fetching metadata for topic %s".format(topic))
       val topicMetadataRequest = new TopicMetadataRequest(List(topic))
-      val topicMetadataList = producer.send(topicMetadataRequest)
-      val topicMetadata:Option[TopicMetadata] = if(topicMetadataList.size > 0) Some(topicMetadataList.head) else None
+      var topicMetaDataResponse: Seq[TopicMetadata] = Nil
+      try {
+        topicMetaDataResponse = producer.send(topicMetadataRequest)
+        // throw topic specific exception
+        topicMetaDataResponse.foreach(metadata => ErrorMapping.maybeThrowException(metadata.errorCode))
+        // throw partition specific exception
+        topicMetaDataResponse.foreach(metadata =>
+          metadata.partitionsMetadata.foreach(partitionMetadata => ErrorMapping.maybeThrowException(partitionMetadata.errorCode)))
+      }catch {
+        case te: UnknownTopicException => throw te
+        case e: LeaderNotAvailableException => throw e
+        case oe => warn("Ignoring non leader related error while fetching metadata", oe)  // swallow non leader related errors
+      }
+      val topicMetadata:Option[TopicMetadata] = if(topicMetaDataResponse.size > 0) Some(topicMetaDataResponse.head) else None
       topicMetadata match {
         case Some(metadata) =>
           info("Fetched metadata for topics %s".format(topic))
+          topicMetadata.foreach(metadata => trace("Metadata for topic %s is %s".format(metadata.topic, metadata.toString)))
           topicPartitionInfo += (topic -> metadata)
         case None =>
       }
-    }else {
-      // refresh cache for all topics
-      val topics = topicPartitionInfo.keySet.toList
-      val topicMetadata = producer.send(new TopicMetadataRequest(topics))
-      topicMetadata.foreach(metadata => topicPartitionInfo += (metadata.topic -> metadata))
-
     }
   }
 }

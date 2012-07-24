@@ -75,6 +75,15 @@ object ProducerPerformance extends Logging {
       .withRequiredArg
       .describedAs("broker.list=brokerid:hostname:port or zk.connect=host:port")
       .ofType(classOf[String])
+    val produceRequestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The produce request timeout in ms")
+      .withRequiredArg()
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(3000)
+    val produceRequestRequiredAcksOpt = parser.accepts("request-num-acks", "Number of acks required for producer request " +
+      "to complete")
+      .withRequiredArg()
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(-1)
     val messageSizeOpt = parser.accepts("message-size", "The size of each message.")
       .withRequiredArg
       .describedAs("size")
@@ -128,10 +137,11 @@ object ProducerPerformance extends Logging {
     val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOption).intValue)
     val initialMessageId = options.valueOf(initialMessageIdOpt).intValue()
     val seqIdMode = options.has(initialMessageIdOpt)
-    
+    val produceRequestTimeoutMs = options.valueOf(produceRequestTimeoutMsOpt).intValue()
+    val produceRequestRequiredAcks = options.valueOf(produceRequestRequiredAcksOpt).intValue()
+
     // override necessary flags in seqIdMode
     if (seqIdMode) { 
-      isAsync = true
       batchSize = 1
       isFixSize = true
 
@@ -175,6 +185,9 @@ object ProducerPerformance extends Logging {
       props.put("batch.size", config.batchSize.toString)
       props.put("queue.enqueueTimeout.ms", "-1")
     }
+    props.put("producer.request.required.acks", config.produceRequestRequiredAcks.toString)
+    props.put("producer.request.timeout.ms", config.produceRequestTimeoutMs.toString)
+
     val producerConfig = new ProducerConfig(props)
     val producer = new Producer[Message, Message](producerConfig)
     val seqIdNumDigit = 10   // no. of digits for max int value
@@ -198,12 +211,6 @@ object ProducerPerformance extends Logging {
       val topicLabel     = "Topic"
       var leftPaddedSeqId : String = ""
       
-      var messageSet: List[Message] = Nil
-      if(config.isFixSize) {
-        for(k <- 0 until config.batchSize) {
-          messageSet ::= message
-        }
-      }
       var j: Long = 0L
       while(j < messagesPerThread) {
         var strLength = config.messageSize
@@ -231,11 +238,17 @@ object ProducerPerformance extends Logging {
           debug(seqMsgString)
           message = new Message(seqMsgString.getBytes())
         }
-                
+
+        var messageSet: List[Message] = Nil
+        if(config.isFixSize) {
+          for(k <- 0 until config.batchSize) {
+            messageSet ::= message
+          }
+        }
+
         if (!config.isFixSize) {
           for(k <- 0 until config.batchSize) {
             strLength = rand.nextInt(config.messageSize)
-            val message = new Message(getByteArrayOfLength(strLength))
             messageSet ::= message
             bytesSent += message.payloadSize
           }
@@ -262,7 +275,7 @@ object ProducerPerformance extends Logging {
             nSends += 1
           }
         }catch {
-          case e: Exception => e.printStackTrace
+          case e: Exception => error("Error sending messages", e)
         }
         if(nSends % config.reportingInterval == 0) {
           reportTime = System.currentTimeMillis()

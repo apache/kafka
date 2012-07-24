@@ -20,6 +20,8 @@ package kafka.bridge.hadoop;
 import java.io.IOException;
 import java.net.URI;
 import java.util.Properties;
+
+import kafka.common.KafkaException;
 import kafka.javaapi.producer.Producer;
 import kafka.message.Message;
 import kafka.producer.ProducerConfig;
@@ -93,7 +95,7 @@ public class KafkaOutputFormat<W extends BytesWritable> extends OutputFormat<Nul
   {
     Path outputPath = getOutputPath(context);
     if (outputPath == null)
-      throw new IllegalArgumentException("no kafka output url specified");
+      throw new KafkaException("no kafka output url specified");
     URI uri = URI.create(outputPath.toString());
     Configuration job = context.getConfiguration();
 
@@ -135,7 +137,7 @@ public class KafkaOutputFormat<W extends BytesWritable> extends OutputFormat<Nul
 
       topic = uri.getFragment();
       if (topic == null)
-        throw new IllegalArgumentException("no topic specified in kafka uri fragment");
+        throw new KafkaException("no topic specified in kafka uri fragment");
 
       log.info(String.format("using kafka zk.connect %s (topic %s)", zkConnect, topic));
     } else if (uri.getScheme().equals("kafka")) {
@@ -159,13 +161,13 @@ public class KafkaOutputFormat<W extends BytesWritable> extends OutputFormat<Nul
       job.set("kafka.broker.list", brokerList);
 
       if (uri.getPath() == null || uri.getPath().length() <= 1)
-        throw new IllegalArgumentException("no topic specified in kafka uri");
+        throw new KafkaException("no topic specified in kafka uri");
 
       topic = uri.getPath().substring(1);             // ignore the initial '/' in the path
       job.set("kafka.output.topic", topic);
       log.info(String.format("using kafka broker %s (topic %s)", brokerList, topic));
     } else
-      throw new IllegalArgumentException("missing scheme from kafka uri (must be kafka:// or kafka+zk://)");
+      throw new KafkaException("missing scheme from kafka uri (must be kafka:// or kafka+zk://)");
 
     Producer<Integer, Message> producer = new Producer<Integer, Message>(new ProducerConfig(props));
     return new KafkaRecordWriter<W>(producer, topic, queueSize);

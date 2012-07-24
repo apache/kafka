@@ -20,6 +20,6 @@ package kafka.common
 /**
  * Thrown when a request is made for partition, but no leader exists for that partition
  */
-class NoLeaderForPartitionException(message: String) extends RuntimeException(message) {
+class LeaderNotAvailableException(message: String) extends RuntimeException(message) {
   def this() = this(null)
 }

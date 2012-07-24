@@ -20,6 +20,7 @@ package kafka.network
 import java.nio._
 import java.nio.channels._
 import kafka.utils.Logging
+import kafka.common.KafkaException
 
 /**
  * Represents a stateful transfer of data to or from the network
@@ -30,12 +31,12 @@ private[network] trait Transmission extends Logging {
   
   protected def expectIncomplete(): Unit = {
     if(complete)
-      throw new IllegalStateException("This operation cannot be completed on a complete request.")
+      throw new KafkaException("This operation cannot be completed on a complete request.")
   }
   
   protected def expectComplete(): Unit = {
     if(!complete)
-      throw new IllegalStateException("This operation cannot be completed on an incomplete request.")
+      throw new KafkaException("This operation cannot be completed on an incomplete request.")
   }
   
 }

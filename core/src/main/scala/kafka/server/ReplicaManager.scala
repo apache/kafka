@@ -19,12 +19,11 @@ package kafka.server
 import kafka.log.Log
 import kafka.cluster.{Partition, Replica}
 import collection.mutable
-import java.lang.IllegalStateException
 import mutable.ListBuffer
 import org.I0Itec.zkclient.ZkClient
 import java.util.concurrent.locks.ReentrantLock
 import kafka.utils.{KafkaScheduler, ZkUtils, Time, Logging}
-import kafka.common.InvalidPartitionException
+import kafka.common.{KafkaException, InvalidPartitionException}
 
 class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) extends Logging {
 
@@ -36,7 +35,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
 
   // start ISR expiration thread
   isrExpirationScheduler.startUp
-  isrExpirationScheduler.scheduleWithRate(maybeShrinkISR, 0, config.keepInSyncTimeMs)
+  isrExpirationScheduler.scheduleWithRate(maybeShrinkISR, 0, config.replicaMaxLagTimeMs)
 
   def addLocalReplica(topic: String, partitionId: Int, log: Log, assignedReplicaIds: Set[Int]): Replica = {
     val partition = getOrCreatePartition(topic, partitionId, assignedReplicaIds)
@@ -112,7 +111,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
       case Some(replicas) =>
         Some(replicas.leaderReplica())
       case None =>
-        throw new IllegalStateException("Getting leader replica failed. Partition replica metadata for topic " +
+        throw new KafkaException("Getting leader replica failed. Partition replica metadata for topic " +
       "%s partition %d doesn't exist in Replica manager on %d".format(topic, partitionId, config.brokerId))
     }
   }
@@ -136,15 +135,17 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
     if(newHw > oldHw) {
       debug("Updating leader HW for topic %s partition %d to %d".format(replica.topic, replica.partition.partitionId, newHw))
       partition.leaderHW(Some(newHw))
-    }
+    }else
+      debug("Old hw for topic %s partition %d is %d. New hw is %d. All leo's are %s".format(replica.topic,
+        replica.partition.partitionId, oldHw, newHw, allLeos.mkString(",")))
   }
 
   def makeLeader(replica: Replica, currentISRInZk: Seq[Int]) {
-    // stop replica fetcher thread, if any
-    replicaFetcherManager.removeFetcher(replica.topic, replica.partition.partitionId)
     // read and cache the ISR
     replica.partition.leaderId(Some(replica.brokerId))
     replica.partition.updateISR(currentISRInZk.toSet)
+    // stop replica fetcher thread, if any
+    replicaFetcherManager.removeFetcher(replica.topic, replica.partition.partitionId)
     // also add this partition to the list of partitions for which the leader is the current broker
     try {
       leaderReplicaLock.lock()
@@ -157,6 +158,8 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
   def makeFollower(replica: Replica, leaderBrokerId: Int, zkClient: ZkClient) {
     info("broker %d intending to follow leader %d for topic %s partition %d"
       .format(config.brokerId, leaderBrokerId, replica.topic, replica.partition.partitionId))
+    // set the leader for this partition correctly on this broker
+    replica.partition.leaderId(Some(leaderBrokerId))
     // remove this replica's partition from the ISR expiration queue
     try {
       leaderReplicaLock.lock()
@@ -186,12 +189,11 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
   def maybeShrinkISR(): Unit = {
     try {
       info("Evaluating ISR list of partitions to see which replicas can be removed from the ISR"
-        .format(config.keepInSyncTimeMs))
-
+        .format(config.replicaMaxLagTimeMs))
       leaderReplicaLock.lock()
       leaderReplicas.foreach { partition =>
          // shrink ISR if a follower is slow or stuck
-        val outOfSyncReplicas = partition.getOutOfSyncReplicas(config.keepInSyncTimeMs, config.keepInSyncBytes)
+        val outOfSyncReplicas = partition.getOutOfSyncReplicas(config.replicaMaxLagTimeMs, config.replicaMaxLagBytes)
         if(outOfSyncReplicas.size > 0) {
           val newInSyncReplicas = partition.inSyncReplicas -- outOfSyncReplicas
           assert(newInSyncReplicas.size > 0)
@@ -215,7 +217,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
       val leaderHW = partition.leaderHW()
       replica.logEndOffset() >= leaderHW
     }
-    else throw new IllegalStateException("Replica %s is not in the assigned replicas list for ".format(replica.toString) +
+    else throw new KafkaException("Replica %s is not in the assigned replicas list for ".format(replica.toString) +
       " topic %s partition %d on broker %d".format(replica.topic, replica.partition.partitionId, config.brokerId))
   }
 
@@ -230,9 +232,10 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
           // update ISR in ZK and cache
           replica.partition.updateISR(newISR.map(_.brokerId), Some(zkClient))
         }
+        debug("Recording follower %d position %d for topic %s partition %d".format(replicaId, offset, topic, partition))
         maybeIncrementLeaderHW(replica)
       case None =>
-        throw new IllegalStateException("No replica %d in replica manager on %d".format(replicaId, config.brokerId))
+        throw new KafkaException("No replica %d in replica manager on %d".format(replicaId, config.brokerId))
     }
   }
 
@@ -242,12 +245,14 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
       case Some(replica) =>
         replica.logEndOffsetUpdateTime(Some(time.milliseconds))
       case None =>
-        throw new IllegalStateException("No replica %d in replica manager on %d".format(config.brokerId, config.brokerId))
+        throw new KafkaException("No replica %d in replica manager on %d".format(config.brokerId, config.brokerId))
     }
   }
 
   def close() {
+    info("Closing replica manager on broker " + config.brokerId)
     isrExpirationScheduler.shutdown()
     replicaFetcherManager.shutdown()
+    info("Replica manager shutdown on broker " + config.brokerId)
   }
 }

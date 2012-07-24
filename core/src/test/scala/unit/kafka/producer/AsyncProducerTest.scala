@@ -212,14 +212,14 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     topic2Broker1Data.appendAll(List(new ProducerData[Int,Message]("topic2", 4, new Message("msg5".getBytes))))
     val topic2Broker2Data = new ListBuffer[ProducerData[Int,Message]]
     topic2Broker2Data.appendAll(List(new ProducerData[Int,Message]("topic2", 1, new Message("msg2".getBytes))))
-    val expectedResult = Map(
+    val expectedResult = Some(Map(
         0 -> Map(
               ("topic1", 0) -> topic1Broker1Data,
               ("topic2", 0) -> topic2Broker1Data),
         1 -> Map(
               ("topic1", 1) -> topic1Broker2Data,
               ("topic2", 1) -> topic2Broker2Data)
-      )
+      ))
 
     val actualResult = handler.partitionAndCollate(producerDataList)
     assertEquals(expectedResult, actualResult)
@@ -356,10 +356,15 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     producerDataList.append(new ProducerData[String,Message]("topic2", new Message("msg2".getBytes)))
     producerDataList.append(new ProducerData[String,Message]("topic1", new Message("msg3".getBytes)))
 
-    val partitionedData = handler.partitionAndCollate(producerDataList)
-    for ((brokerId, dataPerBroker) <- partitionedData) {
-      for ( ((topic, partitionId), dataPerTopic) <- dataPerBroker)
-        assertTrue(partitionId == 0)
+    val partitionedDataOpt = handler.partitionAndCollate(producerDataList)
+    partitionedDataOpt match {
+      case Some(partitionedData) =>
+        for ((brokerId, dataPerBroker) <- partitionedData) {
+          for ( ((topic, partitionId), dataPerTopic) <- dataPerBroker)
+            assertTrue(partitionId == 0)
+        }
+      case None =>
+        fail("Failed to collate requests by topic, partition")
     }
     EasyMock.verify(producerPool)
   }

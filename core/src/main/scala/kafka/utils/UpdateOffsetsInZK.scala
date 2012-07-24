@@ -20,7 +20,7 @@ package kafka.utils
 import org.I0Itec.zkclient.ZkClient
 import kafka.consumer.{SimpleConsumer, ConsumerConfig}
 import kafka.api.OffsetRequest
-import java.lang.IllegalStateException
+import kafka.common.KafkaException
 
 /**
  *  A utility that updates the offset of every broker partition to the offset of earliest or latest log segment file, in ZK.
@@ -58,13 +58,13 @@ object UpdateOffsetsInZK {
 
       val broker = brokerHostingPartition match {
         case Some(b) => b
-        case None => throw new IllegalStateException("Broker " + brokerHostingPartition + " is unavailable. Cannot issue " +
+        case None => throw new KafkaException("Broker " + brokerHostingPartition + " is unavailable. Cannot issue " +
           "getOffsetsBefore request")
       }
 
       val brokerInfos = ZkUtils.getBrokerInfoFromIds(zkClient, List(broker))
       if(brokerInfos.size == 0)
-        throw new IllegalStateException("Broker information for broker id %d does not exist in ZK".format(broker))
+        throw new KafkaException("Broker information for broker id %d does not exist in ZK".format(broker))
 
       val brokerInfo = brokerInfos.head
       val consumer = new SimpleConsumer(brokerInfo.host, brokerInfo.port, 10000, 100 * 1024)

@@ -20,6 +20,7 @@ package kafka.log
 import junit.framework.Assert._
 import org.junit.Test
 import org.scalatest.junit.JUnitSuite
+import kafka.common.KafkaException
 
 class SegmentListTest extends JUnitSuite {
 
@@ -74,7 +75,7 @@ class SegmentListTest extends JUnitSuite {
         sl.truncLast(-1)
         fail("Attempt to truncate with illegal index should fail")
       }catch {
-        case e: IllegalArgumentException => // this is ok
+        case e: KafkaException => // this is ok
       }
       val deleted = sl.truncLast(4)
       assertEquals(hd, sl.view.iterator.toList)

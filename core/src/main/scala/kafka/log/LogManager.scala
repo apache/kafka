@@ -20,11 +20,10 @@ package kafka.log
 import java.io._
 import kafka.utils._
 import scala.collection._
-import java.util.concurrent.CountDownLatch
 import kafka.server.KafkaConfig
-import kafka.common.{InvalidTopicException, InvalidPartitionException}
 import kafka.api.OffsetRequest
 import kafka.log.Log._
+import kafka.common.{KafkaException, InvalidTopicException, InvalidPartitionException}
 
 /**
  * The guy who creates and hands out logs
@@ -54,7 +53,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
     logDir.mkdirs()
   }
   if(!logDir.isDirectory() || !logDir.canRead())
-    throw new IllegalArgumentException(logDir.getAbsolutePath() + " is not a readable log directory.")
+    throw new KafkaException(logDir.getAbsolutePath() + " is not a readable log directory.")
   val subDirs = logDir.listFiles()
   if(subDirs != null) {
     for(dir <- subDirs) {

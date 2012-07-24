@@ -156,16 +156,15 @@ object ConsoleConsumer extends Logging {
       }
     })
 
-    val stream = connector.createMessageStreamsByFilter(filterSpec).get(0)
-    val iter = if(maxMessages >= 0)
-      stream.slice(0, maxMessages)
-    else
-      stream
-
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
     formatter.init(formatterArgs)
-
     try {
+      val stream = connector.createMessageStreamsByFilter(filterSpec).get(0)
+      val iter = if(maxMessages >= 0)
+        stream.slice(0, maxMessages)
+      else
+        stream
+
       for(messageAndTopic <- iter) {
         try {
           formatter.writeTo(messageAndTopic.message, System.out)
@@ -176,7 +175,7 @@ object ConsoleConsumer extends Logging {
             else
               throw e
         }
-        if(System.out.checkError()) { 
+        if(System.out.checkError()) {
           // This means no one is listening to our output stream any more, time to shutdown
           System.err.println("Unable to write to standard out, closing consumer.")
           formatter.close()
@@ -187,7 +186,6 @@ object ConsoleConsumer extends Logging {
     } catch {
       case e => error("Error processing message, stopping consumer: ", e)
     }
-      
     System.out.flush()
     formatter.close()
     connector.shutdown()

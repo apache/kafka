@@ -23,6 +23,7 @@ import java.nio.channels._
 import java.util.concurrent.atomic._
 
 import kafka.utils._
+import kafka.common.KafkaException
 
 /**
  * An on-disk message set. The set can be opened either mutably or immutably. Mutation attempts
@@ -38,30 +39,26 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
                                     val needRecover: AtomicBoolean) extends MessageSet with Logging {
   
   private val setSize = new AtomicLong()
-  private val setHighWaterMark = new AtomicLong()
-  
+
   def getSerialized(): ByteBuffer = throw new java.lang.UnsupportedOperationException()
 
   if(mutable) {
     if(limit < Long.MaxValue || offset > 0)
-      throw new IllegalArgumentException("Attempt to open a mutable message set with a view or offset, which is not allowed.")
+      throw new KafkaException("Attempt to open a mutable message set with a view or offset, which is not allowed.")
 
     if (needRecover.get) {
       // set the file position to the end of the file for appending messages
       val startMs = System.currentTimeMillis
       val truncated = recover()
       info("Recovery succeeded in " + (System.currentTimeMillis - startMs) / 1000 +
-                " seconds. " + truncated + " bytes truncated.")
+                " seconds. " + truncated + " bytes truncated. New log size is " + sizeInBytes() + " bytes")
     }
     else {
       setSize.set(channel.size())
-      setHighWaterMark.set(sizeInBytes)
       channel.position(channel.size)
     }
   } else {
     setSize.set(scala.math.min(channel.size(), limit) - offset)
-    setHighWaterMark.set(sizeInBytes)
-    debug("initializing high water mark in immutable mode: " + highWaterMark)
   }
   
   /**
@@ -93,7 +90,7 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
    * Return a message set which is a view into this set starting from the given offset and with the given size limit.
    */
   def read(readOffset: Long, size: Long): FileMessageSet = {
-    new FileMessageSet(channel, this.offset + readOffset, scala.math.min(this.offset + readOffset + size, highWaterMark),
+    new FileMessageSet(channel, this.offset + readOffset, scala.math.min(this.offset + readOffset + size, sizeInBytes()),
       false, new AtomicBoolean(false))
   }
   
@@ -140,17 +137,10 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
    * The number of bytes taken up by this file set
    */
   def sizeInBytes(): Long = setSize.get()
-  
-  /**
-    * The high water mark
-    */
-  def highWaterMark(): Long = setHighWaterMark.get()
-
-  def getEndOffset(): Long = offset + sizeInBytes()
 
   def checkMutable(): Unit = {
     if(!mutable)
-      throw new IllegalStateException("Attempt to invoke mutation on immutable message set.")
+      throw new KafkaException("Attempt to invoke mutation on immutable message set.")
   }
   
   /**
@@ -173,9 +163,6 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
     channel.force(true)
     val elapsedTime = SystemTime.milliseconds - startTime
     LogFlushStats.recordFlushRequest(elapsedTime)
-    debug("flush time " + elapsedTime)
-    setHighWaterMark.set(sizeInBytes)
-    debug("flush high water mark:" + highWaterMark)
   }
   
   /**
@@ -203,8 +190,6 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
     } while(next >= 0)
     channel.truncate(validUpTo)
     setSize.set(validUpTo)
-    setHighWaterMark.set(validUpTo)
-    info("recover high water mark:" + highWaterMark)
     /* This should not be necessary, but fixes bug 6191269 on some OSs. */
     channel.position(validUpTo)
     needRecover.set(false)    
@@ -214,7 +199,6 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
   def truncateUpto(hw: Long) = {
     channel.truncate(hw)
     setSize.set(hw)
-    setHighWaterMark.set(hw)
   }
 
   /**
@@ -242,7 +226,7 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
     while(messageBuffer.hasRemaining) {
       read = channel.read(messageBuffer, curr)
       if(read < 0)
-        throw new IllegalStateException("File size changed during recovery!")
+        throw new KafkaException("File size changed during recovery!")
       else
         curr += read
     }

@@ -16,7 +16,7 @@
  */
 package kafka.producer
 
-import async._
+import async.{AsyncProducerStats, DefaultEventHandler, ProducerSendThread, EventHandler}
 import kafka.utils._
 import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
 import kafka.serializer.Encoder
@@ -34,6 +34,7 @@ extends Logging {
     throw new InvalidConfigException("Batch size can't be larger than queue size.")
 
   private val queue = new LinkedBlockingQueue[ProducerData[K,V]](config.queueSize)
+
   private var sync: Boolean = true
   private var producerSendThread: ProducerSendThread[K,V] = null
   config.producerType match {

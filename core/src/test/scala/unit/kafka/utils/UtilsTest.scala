@@ -21,6 +21,7 @@ import org.apache.log4j.Logger
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 import org.junit.Assert._
+import kafka.common.KafkaException
 
 
 class UtilsTest extends JUnitSuite {
@@ -29,7 +30,7 @@ class UtilsTest extends JUnitSuite {
 
   @Test
   def testSwallow() {
-    Utils.swallow(logger.info, throw new IllegalStateException("test"))
+    Utils.swallow(logger.info, throw new KafkaException("test"))
   }
 
   @Test

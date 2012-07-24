@@ -92,7 +92,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     props1.put("partitioner.class", "kafka.utils.StaticPartitioner")
     props1.put("zk.connect", TestZKUtils.zookeeperConnect)
     props1.put("producer.request.required.acks", "2")
-    props1.put("producer.request.ack.timeout.ms", "-1")
+    props1.put("producer.request.timeout.ms", "1000")
 
     val props2 = new util.Properties()
     props2.putAll(props1)
@@ -155,7 +155,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props.put("socket.timeout.ms", "2000")
+    props.put("producer.request.timeout.ms", "2000")
     props.put("zk.connect", TestZKUtils.zookeeperConnect)
 
     // create topic
@@ -213,7 +213,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props.put("socket.timeout.ms", String.valueOf(timeoutMs))
+    props.put("producer.request.timeout.ms", String.valueOf(timeoutMs))
     props.put("zk.connect", TestZKUtils.zookeeperConnect)
 
     val config = new ProducerConfig(props)

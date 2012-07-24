@@ -30,6 +30,7 @@ import kafka.message.{NoCompressionCodec, CompressionCodec}
 import org.I0Itec.zkclient.ZkClient
 import java.util.{Random, Properties}
 import joptsimple.{OptionSpec, OptionSet, OptionParser}
+import kafka.common.KafkaException
 
 
 /**
@@ -145,7 +146,7 @@ object Utils extends Logging {
     if(string == null) {
       buffer.putShort(-1)
     } else if(string.length > Short.MaxValue) {
-      throw new IllegalArgumentException("String exceeds the maximum size of " + Short.MaxValue + ".")
+      throw new KafkaException("String exceeds the maximum size of " + Short.MaxValue + ".")
     } else {
       buffer.putShort(string.length.asInstanceOf[Short])
       buffer.put(string.getBytes(encoding))
@@ -163,7 +164,7 @@ object Utils extends Logging {
     } else {
       val encodedString = string.getBytes(encoding)
       if(encodedString.length > Short.MaxValue) {
-        throw new IllegalArgumentException("String exceeds the maximum size of " + Short.MaxValue + ".")
+        throw new KafkaException("String exceeds the maximum size of " + Short.MaxValue + ".")
       } else {
         2 + encodedString.length
       }
@@ -188,7 +189,7 @@ object Utils extends Logging {
     if(props.containsKey(name))
       return getInt(props, name, -1)
     else
-      throw new IllegalArgumentException("Missing required property '" + name + "'")
+      throw new KafkaException("Missing required property '" + name + "'")
   }
   
   /**
@@ -211,7 +212,7 @@ object Utils extends Logging {
    * @param name The property name
    * @param default The default value to use if the property is not found
    * @param range The range in which the value must fall (inclusive)
-   * @throws IllegalArgumentException If the value is not in the given range
+   * @throws KafkaException If the value is not in the given range
    * @return the integer value
    */
   def getIntInRange(props: Properties, name: String, default: Int, range: (Int, Int)): Int = {
@@ -221,7 +222,7 @@ object Utils extends Logging {
       else
         default
     if(v < range._1 || v > range._2)
-      throw new IllegalArgumentException(name + " has value " + v + " which is not in the range " + range + ".")
+      throw new KafkaException(name + " has value " + v + " which is not in the range " + range + ".")
     else
       v
   }
@@ -233,7 +234,7 @@ object Utils extends Logging {
       else
         default
     if(v < range._1 || v > range._2)
-      throw new IllegalArgumentException(name + " has value " + v + " which is not in the range " + range + ".")
+      throw new KafkaException(name + " has value " + v + " which is not in the range " + range + ".")
     else
       v
   }
@@ -241,21 +242,21 @@ object Utils extends Logging {
   def getIntInRange(buffer: ByteBuffer, name: String, range: (Int, Int)): Int = {
     val value = buffer.getInt
     if(value < range._1 || value > range._2)
-      throw new IllegalArgumentException(name + " has value " + value + " which is not in the range " + range + ".")
+      throw new KafkaException(name + " has value " + value + " which is not in the range " + range + ".")
     else value
   }
 
   def getShortInRange(buffer: ByteBuffer, name: String, range: (Short, Short)): Short = {
     val value = buffer.getShort
     if(value < range._1 || value > range._2)
-      throw new IllegalArgumentException(name + " has value " + value + " which is not in the range " + range + ".")
+      throw new KafkaException(name + " has value " + value + " which is not in the range " + range + ".")
     else value
   }
 
   def getLongInRange(buffer: ByteBuffer, name: String, range: (Long, Long)): Long = {
     val value = buffer.getLong
     if(value < range._1 || value > range._2)
-      throw new IllegalArgumentException(name + " has value " + value + " which is not in the range " + range + ".")
+      throw new KafkaException(name + " has value " + value + " which is not in the range " + range + ".")
     else value
   }
 
@@ -266,7 +267,7 @@ object Utils extends Logging {
     if(props.containsKey(name))
       return getLong(props, name, -1)
     else
-      throw new IllegalArgumentException("Missing required property '" + name + "'")
+      throw new KafkaException("Missing required property '" + name + "'")
   }
 
   /**
@@ -286,7 +287,7 @@ object Utils extends Logging {
    * @param name The property name
    * @param default The default value to use if the property is not found
    * @param range The range in which the value must fall (inclusive)
-   * @throws IllegalArgumentException If the value is not in the given range
+   * @throws KafkaException If the value is not in the given range
    * @return the long value
    */
   def getLongInRange(props: Properties, name: String, default: Long, range: (Long, Long)): Long = {
@@ -296,7 +297,7 @@ object Utils extends Logging {
       else
         default
     if(v < range._1 || v > range._2)
-      throw new IllegalArgumentException(name + " has value " + v + " which is not in the range " + range + ".")
+      throw new KafkaException(name + " has value " + v + " which is not in the range " + range + ".")
     else
       v
   }
@@ -316,7 +317,7 @@ object Utils extends Logging {
     else if("false" == props.getProperty(name))
       false
     else
-      throw new IllegalArgumentException("Unacceptable value for property '" + name + "', boolean values must be either 'true' or 'false" )
+      throw new KafkaException("Unacceptable value for property '" + name + "', boolean values must be either 'true' or 'false" )
   }
   
   /**
@@ -336,7 +337,7 @@ object Utils extends Logging {
     if(props.containsKey(name))
       props.getProperty(name)
     else
-      throw new IllegalArgumentException("Missing required property '" + name + "'")
+      throw new KafkaException("Missing required property '" + name + "'")
   }
 
   /**
@@ -350,13 +351,13 @@ object Utils extends Logging {
       for(i <- 0 until propValues.length) {
         val prop = propValues(i).split("=")
         if(prop.length != 2)
-          throw new IllegalArgumentException("Illegal format of specifying properties '" + propValues(i) + "'")
+          throw new KafkaException("Illegal format of specifying properties '" + propValues(i) + "'")
         properties.put(prop(0), prop(1))
       }
       properties
     }
     else
-      throw new IllegalArgumentException("Missing required property '" + name + "'")
+      throw new KafkaException("Missing required property '" + name + "'")
   }
 
   /**
@@ -367,12 +368,12 @@ object Utils extends Logging {
       val propString = props.getProperty(name)
       val propValues = propString.split(",")
       if(propValues.length < 1)
-        throw new IllegalArgumentException("Illegal format of specifying properties '" + propString + "'")
+        throw new KafkaException("Illegal format of specifying properties '" + propString + "'")
       val properties = new Properties
       for(i <- 0 until propValues.length) {
         val prop = propValues(i).split("=")
         if(prop.length != 2)
-          throw new IllegalArgumentException("Illegal format of specifying properties '" + propValues(i) + "'")
+          throw new KafkaException("Illegal format of specifying properties '" + propValues(i) + "'")
         properties.put(prop(0), prop(1))
       }
       properties
@@ -608,7 +609,7 @@ object Utils extends Logging {
   
   def notNull[V](v: V) = {
     if(v == null)
-      throw new IllegalArgumentException("Value cannot be null.")
+      throw new KafkaException("Value cannot be null.")
     else
       v
   }
