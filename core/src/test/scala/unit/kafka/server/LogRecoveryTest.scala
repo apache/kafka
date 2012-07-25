@@ -7,7 +7,6 @@ import kafka.utils.TestUtils._
 import kafka.utils.{Utils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.message.Message
-import java.io.RandomAccessFile
 import kafka.producer.{ProducerConfig, ProducerData, Producer}
 import org.junit.Test
 
@@ -34,15 +33,12 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   val configProps1 = configs.head
   val configProps2 = configs.last
 
-  val server1HWFile = configProps1.logDir + "/" + topic + "-0/highwatermark"
-  val server2HWFile = configProps2.logDir + "/" + topic + "-0/highwatermark"
-
   val sent1 = List(new Message("hello".getBytes()), new Message("there".getBytes()))
   val sent2 = List( new Message("more".getBytes()), new Message("messages".getBytes()))
 
   var producer: Producer[Int, Message] = null
-  var hwFile1: RandomAccessFile = null
-  var hwFile2: RandomAccessFile = null
+  var hwFile1: HighwaterMarkCheckpoint = new HighwaterMarkCheckpoint(configProps1.logDir)
+  var hwFile2: HighwaterMarkCheckpoint = new HighwaterMarkCheckpoint(configProps2.logDir)
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 
   @Test
@@ -66,22 +62,15 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
 
-    sendMessages()
-
-    hwFile1 = new RandomAccessFile(server1HWFile, "r")
-    hwFile2 = new RandomAccessFile(server2HWFile, "r")
-
-    sendMessages()
+    sendMessages(2)
     // don't wait for follower to read the leader's hw
     // shutdown the servers to allow the hw to be checkpointed
     servers.map(server => server.shutdown())
     producer.close()
-    val leaderHW = readHW(hwFile1)
+    val leaderHW = hwFile1.read(topic, 0)
     assertEquals(60L, leaderHW)
-    val followerHW = readHW(hwFile2)
+    val followerHW = hwFile2.read(topic, 0)
     assertEquals(30L, followerHW)
-    hwFile1.close()
-    hwFile2.close()
     servers.map(server => Utils.rm(server.config.logDir))
   }
 
@@ -105,16 +94,13 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
 
-    hwFile1 = new RandomAccessFile(server1HWFile, "r")
-    hwFile2 = new RandomAccessFile(server2HWFile, "r")
-
-    assertEquals(0L, readHW(hwFile1))
+    assertEquals(0L, hwFile1.read(topic, 0))
 
     sendMessages()
 
     // kill the server hosting the preferred replica
     server1.shutdown()
-    assertEquals(30L, readHW(hwFile1))
+    assertEquals(30L, hwFile1.read(topic, 0))
 
     // check if leader moves to the other server
     leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
@@ -126,10 +112,10 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
     assertEquals("Leader must remain on broker 1", 1, leader.getOrElse(-1))
 
-    assertEquals(30L, readHW(hwFile1))
+    assertEquals(30L, hwFile1.read(topic, 0))
     // since server 2 was never shut down, the hw value of 30 is probably not checkpointed to disk yet
     server2.shutdown()
-    assertEquals(30L, readHW(hwFile2))
+    assertEquals(30L, hwFile2.read(topic, 0))
 
     server2.startup()
     leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
@@ -137,17 +123,13 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     sendMessages()
     // give some time for follower 1 to record leader HW of 60
-    Thread.sleep(500)
+    TestUtils.waitUntilTrue(() => server2.getReplica(topic, 0).get.highWatermark() == 60L, 500)
+
     // shutdown the servers to allow the hw to be checkpointed
     servers.map(server => server.shutdown())
-    Thread.sleep(200)
     producer.close()
-    assert(hwFile1.length() > 0)
-    assert(hwFile2.length() > 0)
-    assertEquals(60L, readHW(hwFile1))
-    assertEquals(60L, readHW(hwFile2))
-    hwFile1.close()
-    hwFile2.close()
+    assertEquals(60L, hwFile1.read(topic, 0))
+    assertEquals(60L, hwFile2.read(topic, 0))
     servers.map(server => Utils.rm(server.config.logDir))
   }
 
@@ -160,13 +142,13 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
       override val logFileSize = 30
     })
 
-    val server1HWFile = configs.head.logDir + "/" + topic + "-0/highwatermark"
-    val server2HWFile = configs.last.logDir + "/" + topic + "-0/highwatermark"
-
     // start both servers
     server1 = TestUtils.createServer(configs.head)
     server2 = TestUtils.createServer(configs.last)
     servers ++= List(server1, server2)
+
+    hwFile1 = new HighwaterMarkCheckpoint(server1.config.logDir)
+    hwFile2 = new HighwaterMarkCheckpoint(server2.config.logDir)
 
     val producerProps = getProducerConfig(zkConnect, 64*1024, 100000, 10000)
     producerProps.put("producer.request.timeout.ms", "1000")
@@ -181,25 +163,16 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue("Leader should get elected", leader.isDefined)
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
-
-    sendMessages(10)
-
-    hwFile1 = new RandomAccessFile(server1HWFile, "r")
-    hwFile2 = new RandomAccessFile(server2HWFile, "r")
-
-    sendMessages(10)
-
+    sendMessages(20)
     // give some time for follower 1 to record leader HW of 600
-    Thread.sleep(500)
+    TestUtils.waitUntilTrue(() => server2.getReplica(topic, 0).get.highWatermark() == 600L, 500)
     // shutdown the servers to allow the hw to be checkpointed
     servers.map(server => server.shutdown())
     producer.close()
-    val leaderHW = readHW(hwFile1)
+    val leaderHW = hwFile1.read(topic, 0)
     assertEquals(600L, leaderHW)
-    val followerHW = readHW(hwFile2)
+    val followerHW = hwFile2.read(topic, 0)
     assertEquals(600L, followerHW)
-    hwFile1.close()
-    hwFile2.close()
     servers.map(server => Utils.rm(server.config.logDir))
   }
 
@@ -208,18 +181,17 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
       override val replicaMaxLagTimeMs = 5000L
       override val replicaMaxLagBytes = 10L
       override val flushInterval = 1000
-      override val flushSchedulerThreadRate = 10
       override val replicaMinBytes = 20
       override val logFileSize = 30
     })
-
-    val server1HWFile = configs.head.logDir + "/" + topic + "-0/highwatermark"
-    val server2HWFile = configs.last.logDir + "/" + topic + "-0/highwatermark"
 
     // start both servers
     server1 = TestUtils.createServer(configs.head)
     server2 = TestUtils.createServer(configs.last)
     servers ++= List(server1, server2)
+
+    hwFile1 = new HighwaterMarkCheckpoint(server1.config.logDir)
+    hwFile2 = new HighwaterMarkCheckpoint(server2.config.logDir)
 
     val producerProps = getProducerConfig(zkConnect, 64*1024, 100000, 10000)
     producerProps.put("producer.request.timeout.ms", "1000")
@@ -235,43 +207,36 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
 
-    val hwFile1 = new RandomAccessFile(server1HWFile, "r")
-    val hwFile2 = new RandomAccessFile(server2HWFile, "r")
-
     sendMessages(2)
     // allow some time for the follower to get the leader HW
-    Thread.sleep(1000)
+    TestUtils.waitUntilTrue(() => server2.getReplica(topic, 0).get.highWatermark() == 60L, 1000)
     // kill the server hosting the preferred replica
     server1.shutdown()
     server2.shutdown()
-    assertEquals(60L, readHW(hwFile1))
-    assertEquals(60L, readHW(hwFile2))
+    assertEquals(60L, hwFile1.read(topic, 0))
+    assertEquals(60L, hwFile2.read(topic, 0))
 
     server2.startup()
     // check if leader moves to the other server
     leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
     assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
 
-    assertEquals(60L, readHW(hwFile1))
+    assertEquals(60L, hwFile1.read(topic, 0))
 
     // bring the preferred replica back
     server1.startup()
 
-    assertEquals(60L, readHW(hwFile1))
-    assertEquals(60L, readHW(hwFile2))
+    assertEquals(60L, hwFile1.read(topic, 0))
+    assertEquals(60L, hwFile2.read(topic, 0))
 
     sendMessages(2)
     // allow some time for the follower to get the leader HW
-    Thread.sleep(1000)
+    TestUtils.waitUntilTrue(() => server1.getReplica(topic, 0).get.highWatermark() == 120L, 1000)
     // shutdown the servers to allow the hw to be checkpointed
     servers.map(server => server.shutdown())
     producer.close()
-    assert(hwFile1.length() > 0)
-    assert(hwFile2.length() > 0)
-    assertEquals(120L, readHW(hwFile1))
-    assertEquals(120L, readHW(hwFile2))
-    hwFile1.close()
-    hwFile2.close()
+    assertEquals(120L, hwFile1.read(topic, 0))
+    assertEquals(120L, hwFile2.read(topic, 0))
     servers.map(server => Utils.rm(server.config.logDir))
   }
 
@@ -279,10 +244,5 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     for(i <- 0 until numMessages) {
       producer.send(new ProducerData[Int, Message](topic, 0, sent1))
     }
-  }
-
-  private def readHW(hwFile: RandomAccessFile): Long = {
-    hwFile.seek(0)
-    hwFile.readLong()
   }
 }

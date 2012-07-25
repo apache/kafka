@@ -18,40 +18,35 @@
 package kafka.cluster
 
 import kafka.log.Log
-import kafka.utils.Logging
+import kafka.utils.{SystemTime, Time, Logging}
 import kafka.common.KafkaException
 
 class Replica(val brokerId: Int,
               val partition: Partition,
               val topic: String,
-              var log: Option[Log] = None,
-              var leoUpdateTime: Long = -1L) extends Logging {
+              time: Time = SystemTime,
+              var hw: Option[Long] = None,
+              var log: Option[Log] = None) extends Logging {
   private var logEndOffset: Long = -1L
+  private var logEndOffsetUpdateTimeMs: Long = -1L
 
   def logEndOffset(newLeo: Option[Long] = None): Long = {
     isLocal match {
       case true =>
         newLeo match {
-          case Some(newOffset) => throw new KafkaException("Trying to set the leo %d for local log".format(newOffset))
+          case Some(newOffset) => logEndOffsetUpdateTimeMs = time.milliseconds; newOffset
           case None => log.get.logEndOffset
         }
       case false =>
         newLeo match {
           case Some(newOffset) =>
             logEndOffset = newOffset
+            logEndOffsetUpdateTimeMs = time.milliseconds
+            trace("Setting log end offset for replica %d for topic %s partition %d to %d"
+              .format(brokerId, topic, partition.partitionId, logEndOffset))
             logEndOffset
           case None => logEndOffset
         }
-    }
-  }
-
-  def logEndOffsetUpdateTime(time: Option[Long] = None): Long = {
-    time match {
-      case Some(t) =>
-        leoUpdateTime = t
-        leoUpdateTime
-      case None =>
-        leoUpdateTime
     }
   }
 
@@ -62,6 +57,8 @@ class Replica(val brokerId: Int,
     }
   }
 
+  def logEndOffsetUpdateTime = logEndOffsetUpdateTimeMs
+
   def highWatermark(highwaterMarkOpt: Option[Long] = None): Long = {
     highwaterMarkOpt match {
       case Some(highwaterMark) =>
@@ -69,7 +66,7 @@ class Replica(val brokerId: Int,
           case true =>
             trace("Setting hw for topic %s partition %d on broker %d to %d".format(topic, partition.partitionId,
                                                                                    brokerId, highwaterMark))
-            log.get.setHW(highwaterMark)
+            hw = Some(highwaterMark)
             highwaterMark
           case false => throw new KafkaException("Unable to set highwatermark for topic %s ".format(topic) +
             "partition %d on broker %d, since there is no local log for this partition"
@@ -78,7 +75,11 @@ class Replica(val brokerId: Int,
       case None =>
         isLocal match {
           case true =>
-            log.get.getHW()
+            hw match {
+              case Some(highWatermarkValue) => highWatermarkValue
+              case None => throw new KafkaException("HighWatermark does not exist for topic %s ".format(topic) +
+              " partition %d on broker %d but local log exists".format(partition.partitionId, brokerId))
+            }
           case false => throw new KafkaException("Unable to get highwatermark for topic %s ".format(topic) +
             "partition %d on broker %d, since there is no local log for this partition"
               .format(partition.partitionId, brokerId))

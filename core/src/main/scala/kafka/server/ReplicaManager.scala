@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 package kafka.server
 
 import kafka.log.Log
@@ -25,21 +25,28 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.utils.{KafkaScheduler, ZkUtils, Time, Logging}
 import kafka.common.{KafkaException, InvalidPartitionException}
 
-class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) extends Logging {
+class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient, kafkaScheduler: KafkaScheduler)
+  extends Logging {
 
   private var allReplicas = new mutable.HashMap[(String, Int), Partition]()
   private var leaderReplicas = new ListBuffer[Partition]()
   private val leaderReplicaLock = new ReentrantLock()
-  private var isrExpirationScheduler = new KafkaScheduler(1, "isr-expiration-thread-", true)
   private val replicaFetcherManager = new ReplicaFetcherManager(config, this)
+  private val highwaterMarkCheckpoint = new HighwaterMarkCheckpoint(config.logDir)
+  info("Created highwatermark file %s on broker %d".format(highwaterMarkCheckpoint.name, config.brokerId))
 
-  // start ISR expiration thread
-  isrExpirationScheduler.startUp
-  isrExpirationScheduler.scheduleWithRate(maybeShrinkISR, 0, config.replicaMaxLagTimeMs)
+  def startup() {
+    // start the highwatermark checkpoint thread
+    kafkaScheduler.scheduleWithRate(checkpointHighwaterMarks, "highwatermark-checkpoint-thread", 0,
+      config.defaultFlushIntervalMs)
+    // start ISR expiration thread
+    kafkaScheduler.scheduleWithRate(maybeShrinkISR, "isr-expiration-thread-", 0, config.replicaMaxLagTimeMs)
+  }
 
   def addLocalReplica(topic: String, partitionId: Int, log: Log, assignedReplicaIds: Set[Int]): Replica = {
     val partition = getOrCreatePartition(topic, partitionId, assignedReplicaIds)
-    val localReplica = new Replica(config.brokerId, partition, topic, Some(log))
+    val localReplica = new Replica(config.brokerId, partition, topic, time,
+      Some(readCheckpointedHighWatermark(topic, partitionId)), Some(log))
 
     val replicaOpt = partition.getReplica(config.brokerId)
     replicaOpt match {
@@ -81,12 +88,12 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
       case Some(partition) => partition
       case None =>
         throw new InvalidPartitionException("Partition for topic %s partition %d doesn't exist in replica manager on %d"
-        .format(topic, partitionId, config.brokerId))
+          .format(topic, partitionId, config.brokerId))
     }
   }
 
   def addRemoteReplica(topic: String, partitionId: Int, replicaId: Int, partition: Partition): Replica = {
-    val remoteReplica = new Replica(replicaId, partition, topic)
+    val remoteReplica = new Replica(replicaId, partition, topic, time)
 
     val replicaAdded = partition.addReplica(remoteReplica)
     if(replicaAdded)
@@ -112,20 +119,17 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
         Some(replicas.leaderReplica())
       case None =>
         throw new KafkaException("Getting leader replica failed. Partition replica metadata for topic " +
-      "%s partition %d doesn't exist in Replica manager on %d".format(topic, partitionId, config.brokerId))
+          "%s partition %d doesn't exist in Replica manager on %d".format(topic, partitionId, config.brokerId))
     }
   }
 
-  def getPartition(topic: String, partitionId: Int): Option[Partition] =
-    allReplicas.get((topic, partitionId))
-
-  def updateReplicaLEO(replica: Replica, fetchOffset: Long) {
+  private def updateReplicaLeo(replica: Replica, fetchOffset: Long) {
     // set the replica leo
     val partition = ensurePartitionExists(replica.topic, replica.partition.partitionId)
-    partition.updateReplicaLEO(replica, fetchOffset)
+    partition.updateReplicaLeo(replica, fetchOffset)
   }
 
-  def maybeIncrementLeaderHW(replica: Replica) {
+  private def maybeIncrementLeaderHW(replica: Replica) {
     // set the replica leo
     val partition = ensurePartitionExists(replica.topic, replica.partition.partitionId)
     // set the leader HW to min of the leo of all replicas
@@ -141,58 +145,70 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
   }
 
   def makeLeader(replica: Replica, currentISRInZk: Seq[Int]) {
-    // read and cache the ISR
-    replica.partition.leaderId(Some(replica.brokerId))
-    replica.partition.updateISR(currentISRInZk.toSet)
-    // stop replica fetcher thread, if any
-    replicaFetcherManager.removeFetcher(replica.topic, replica.partition.partitionId)
-    // also add this partition to the list of partitions for which the leader is the current broker
+    info("Broker %d started the leader state transition for topic %s partition %d"
+      .format(config.brokerId, replica.topic, replica.partition.partitionId))
     try {
+      // read and cache the ISR
+      replica.partition.leaderId(Some(replica.brokerId))
+      replica.partition.updateISR(currentISRInZk.toSet)
+      // stop replica fetcher thread, if any
+      replicaFetcherManager.removeFetcher(replica.topic, replica.partition.partitionId)
+      // also add this partition to the list of partitions for which the leader is the current broker
       leaderReplicaLock.lock()
       leaderReplicas += replica.partition
+      info("Broker %d completed the leader state transition for topic %s partition %d"
+        .format(config.brokerId, replica.topic, replica.partition.partitionId))
+    }catch {
+      case e => error("Broker %d failed to complete the leader state transition for topic %s partition %d"
+        .format(config.brokerId, replica.topic, replica.partition.partitionId), e)
     }finally {
       leaderReplicaLock.unlock()
     }
   }
 
   def makeFollower(replica: Replica, leaderBrokerId: Int, zkClient: ZkClient) {
-    info("broker %d intending to follow leader %d for topic %s partition %d"
+    info("Broker %d starting the follower state transition to follow leader %d for topic %s partition %d"
       .format(config.brokerId, leaderBrokerId, replica.topic, replica.partition.partitionId))
-    // set the leader for this partition correctly on this broker
-    replica.partition.leaderId(Some(leaderBrokerId))
-    // remove this replica's partition from the ISR expiration queue
     try {
+      // set the leader for this partition correctly on this broker
+      replica.partition.leaderId(Some(leaderBrokerId))
+      replica.log match {
+        case Some(log) =>  // log is already started
+          log.truncateTo(replica.highWatermark())
+        case None =>
+      }
+      // get leader for this replica
+      val leaderBroker = ZkUtils.getBrokerInfoFromIds(zkClient, List(leaderBrokerId)).head
+      val currentLeaderBroker = replicaFetcherManager.fetcherSourceBroker(replica.topic, replica.partition.partitionId)
+      // become follower only if it is not already following the same leader
+      if( currentLeaderBroker == None || currentLeaderBroker.get != leaderBroker.id) {
+        info("broker %d becoming follower to leader %d for topic %s partition %d"
+          .format(config.brokerId, leaderBrokerId, replica.topic, replica.partition.partitionId))
+        // stop fetcher thread to previous leader
+        replicaFetcherManager.removeFetcher(replica.topic, replica.partition.partitionId)
+        // start fetcher thread to current leader
+        replicaFetcherManager.addFetcher(replica.topic, replica.partition.partitionId, replica.logEndOffset(), leaderBroker)
+      }
+      // remove this replica's partition from the ISR expiration queue
       leaderReplicaLock.lock()
       leaderReplicas -= replica.partition
+      info("Broker %d completed the follower state transition to follow leader %d for topic %s partition %d"
+        .format(config.brokerId, leaderBrokerId, replica.topic, replica.partition.partitionId))
+    }catch {
+      case e => error("Broker %d failed to complete the follower state transition to follow leader %d for topic %s partition %d"
+        .format(config.brokerId, leaderBrokerId, replica.topic, replica.partition.partitionId), e)
     }finally {
       leaderReplicaLock.unlock()
     }
-    replica.log match {
-      case Some(log) =>  // log is already started
-        log.recoverUptoLastCheckpointedHW()
-      case None =>
-    }
-    // get leader for this replica
-    val leaderBroker = ZkUtils.getBrokerInfoFromIds(zkClient, List(leaderBrokerId)).head
-    val currentLeaderBroker = replicaFetcherManager.fetcherSourceBroker(replica.topic, replica.partition.partitionId)
-    // Become follower only if it is not already following the same leader
-    if( currentLeaderBroker == None || currentLeaderBroker.get != leaderBroker.id) {
-      info("broker %d becoming follower to leader %d for topic %s partition %d"
-        .format(config.brokerId, leaderBrokerId, replica.topic, replica.partition.partitionId))
-      // stop fetcher thread to previous leader
-      replicaFetcherManager.removeFetcher(replica.topic, replica.partition.partitionId)
-      // start fetcher thread to current leader
-      replicaFetcherManager.addFetcher(replica.topic, replica.partition.partitionId, replica.logEndOffset(), leaderBroker)
-    }
   }
 
-  def maybeShrinkISR(): Unit = {
+  private def maybeShrinkISR(): Unit = {
     try {
       info("Evaluating ISR list of partitions to see which replicas can be removed from the ISR"
         .format(config.replicaMaxLagTimeMs))
       leaderReplicaLock.lock()
       leaderReplicas.foreach { partition =>
-         // shrink ISR if a follower is slow or stuck
+      // shrink ISR if a follower is slow or stuck
         val outOfSyncReplicas = partition.getOutOfSyncReplicas(config.replicaMaxLagTimeMs, config.replicaMaxLagBytes)
         if(outOfSyncReplicas.size > 0) {
           val newInSyncReplicas = partition.inSyncReplicas -- outOfSyncReplicas
@@ -210,7 +226,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
     }
   }
 
-  def checkIfISRCanBeExpanded(replica: Replica): Boolean = {
+  private def checkIfISRCanBeExpanded(replica: Replica): Boolean = {
     val partition = ensurePartitionExists(replica.topic, replica.partition.partitionId)
     if(partition.inSyncReplicas.contains(replica)) false
     else if(partition.assignedReplicas().contains(replica)) {
@@ -225,7 +241,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
     val replicaOpt = getReplica(topic, partition, replicaId)
     replicaOpt match {
       case Some(replica) =>
-        updateReplicaLEO(replica, offset)
+        updateReplicaLeo(replica, offset)
         // check if this replica needs to be added to the ISR
         if(checkIfISRCanBeExpanded(replica)) {
           val newISR = replica.partition.inSyncReplicas + replica
@@ -239,20 +255,45 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient) ex
     }
   }
 
-  def recordLeaderLogUpdate(topic: String, partition: Int) = {
+  def recordLeaderLogEndOffset(topic: String, partition: Int, logEndOffset: Long) = {
     val replicaOpt = getReplica(topic, partition, config.brokerId)
     replicaOpt match {
-      case Some(replica) =>
-        replica.logEndOffsetUpdateTime(Some(time.milliseconds))
+      case Some(replica) => replica.logEndOffset(Some(logEndOffset))
       case None =>
         throw new KafkaException("No replica %d in replica manager on %d".format(config.brokerId, config.brokerId))
     }
   }
 
-  def close() {
-    info("Closing replica manager on broker " + config.brokerId)
-    isrExpirationScheduler.shutdown()
+  /**
+   * Flushes the highwatermark value for all partitions to the highwatermark file
+   */
+  private def checkpointHighwaterMarks() {
+    val highwaterMarksForAllPartitions = allReplicas.map { partition =>
+      val topic = partition._1._1
+      val partitionId = partition._1._2
+      val localReplicaOpt = partition._2.getReplica(config.brokerId)
+      val hw = localReplicaOpt match {
+        case Some(localReplica) => localReplica.highWatermark()
+        case None =>
+          error("Error while checkpointing highwatermark for topic %s partition %d.".format(topic, partitionId) +
+            " Replica metadata doesn't exist in replica manager on broker " + config.brokerId)
+          0L
+      }
+      (topic, partitionId) -> hw
+    }.toMap
+    highwaterMarkCheckpoint.write(highwaterMarksForAllPartitions)
+    info("Checkpointed highwatermarks")
+  }
+
+  /**
+   * Reads the checkpointed highWatermarks for all partitions
+   * @returns checkpointed value of highwatermark for topic, partition. If one doesn't exist, returns 0
+   */
+  def readCheckpointedHighWatermark(topic: String, partition: Int): Long = highwaterMarkCheckpoint.read(topic, partition)
+
+  def shutdown() {
     replicaFetcherManager.shutdown()
+    checkpointHighwaterMarks()
     info("Replica manager shutdown on broker " + config.brokerId)
   }
 }

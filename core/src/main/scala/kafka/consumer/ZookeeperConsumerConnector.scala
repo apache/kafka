@@ -93,9 +93,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private var fetcher: Option[ConsumerFetcherManager] = None
   private var zkClient: ZkClient = null
   private var topicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]]
-  // topicThreadIdAndQueues : (topic,consumerThreadId) -> queue
   private val topicThreadIdAndQueues = new Pool[(String,String), BlockingQueue[FetchedDataChunk]]
-  private val scheduler = new KafkaScheduler(1, "Kafka-consumer-autocommit-", false)
+  private val scheduler = new KafkaScheduler(1)
   private val messageStreamCreated = new AtomicBoolean(false)
 
   private var sessionExpirationListener: ZKSessionExpireListener = null
@@ -121,8 +120,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   connectZk()
   createFetcher()
   if (config.autoCommit) {
+    scheduler.startUp
     info("starting auto committer every " + config.autoCommitIntervalMs + " ms")
-    scheduler.scheduleWithRate(autoCommit, config.autoCommitIntervalMs, config.autoCommitIntervalMs)
+    scheduler.scheduleWithRate(autoCommit, "Kafka-consumer-autocommit-", config.autoCommitIntervalMs,
+      config.autoCommitIntervalMs, false)
   }
 
   def this(config: ConsumerConfig) = this(config, true)

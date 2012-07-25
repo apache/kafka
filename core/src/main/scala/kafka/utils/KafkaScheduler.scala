@@ -18,20 +18,24 @@
 package kafka.utils
 
 import java.util.concurrent._
-import java.util.concurrent.atomic._
+import atomic._
+import collection.mutable.HashMap
 
 /**
  * A scheduler for running jobs in the background
  */
-class KafkaScheduler(val numThreads: Int, val baseThreadName: String, isDaemon: Boolean) extends Logging {
-  private val threadId = new AtomicLong(0)
+class KafkaScheduler(val numThreads: Int) extends Logging {
   private var executor:ScheduledThreadPoolExecutor = null
-  startUp
+  private val daemonThreadFactory = new ThreadFactory() {
+      def newThread(runnable: Runnable): Thread = Utils.newThread(runnable, true)
+    }
+  private val nonDaemonThreadFactory = new ThreadFactory() {
+      def newThread(runnable: Runnable): Thread = Utils.newThread(runnable, false)
+    }
+  private val threadNamesAndIds = new HashMap[String, AtomicInteger]()
 
   def startUp = {
-    executor = new ScheduledThreadPoolExecutor(numThreads, new ThreadFactory() {
-      def newThread(runnable: Runnable): Thread = Utils.daemonThread(baseThreadName + threadId.getAndIncrement, runnable)
-    })
+    executor = new ScheduledThreadPoolExecutor(numThreads)
     executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false)
     executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false)
   }
@@ -43,20 +47,26 @@ class KafkaScheduler(val numThreads: Int, val baseThreadName: String, isDaemon: 
       throw new IllegalStateException("Kafka scheduler has not been started")
   }
 
-  def scheduleWithRate(fun: () => Unit, delayMs: Long, periodMs: Long) = {
+  def scheduleWithRate(fun: () => Unit, name: String, delayMs: Long, periodMs: Long, isDaemon: Boolean = true) = {
     ensureExecutorHasStarted
-    executor.scheduleAtFixedRate(Utils.loggedRunnable(fun), delayMs, periodMs, TimeUnit.MILLISECONDS)
+    if(isDaemon)
+      executor.setThreadFactory(daemonThreadFactory)
+    else
+      executor.setThreadFactory(nonDaemonThreadFactory)
+    val threadId = threadNamesAndIds.getOrElseUpdate(name, new AtomicInteger(0))
+    executor.scheduleAtFixedRate(Utils.loggedRunnable(fun, name + threadId.incrementAndGet()), delayMs, periodMs,
+      TimeUnit.MILLISECONDS)
   }
 
   def shutdownNow() {
     ensureExecutorHasStarted
     executor.shutdownNow()
-    info("Forcing shutdown of scheduler " + baseThreadName)
+    info("Forcing shutdown of Kafka scheduler")
   }
 
   def shutdown() {
     ensureExecutorHasStarted
     executor.shutdown()
-    info("Shutdown scheduler " + baseThreadName)
+    info("Shutdown Kafka scheduler")
   }
 }

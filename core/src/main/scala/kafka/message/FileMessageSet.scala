@@ -196,9 +196,12 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
     len - validUpTo
   }
 
-  def truncateUpto(hw: Long) = {
-    channel.truncate(hw)
-    setSize.set(hw)
+  def truncateTo(targetSize: Long) = {
+    if(targetSize >= sizeInBytes())
+      throw new KafkaException("Attempt to truncate log segment to %d bytes failed since the current ".format(targetSize) +
+        " size of this log segment is only %d bytes".format(sizeInBytes()))
+    channel.truncate(targetSize)
+    setSize.set(targetSize)
   }
 
   /**

@@ -30,6 +30,7 @@ import kafka.common.{KafkaException, InvalidTopicException, InvalidPartitionExce
  */
 @threadsafe
 private[kafka] class LogManager(val config: KafkaConfig,
+                                scheduler: KafkaScheduler,
                                 private val time: Time,
                                 val logCleanupIntervalMs: Long,
                                 val logCleanupDefaultAgeMs: Long,
@@ -40,11 +41,9 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private val maxSize: Long = config.logFileSize
   private val flushInterval = config.flushInterval
   private val logCreationLock = new Object
-  private val logFlusherScheduler = new KafkaScheduler(1, "kafka-logflusher-", false)
   private val logFlushIntervals = config.flushIntervalMap
   private val logRetentionMs = config.logRetentionHoursMap.map(e => (e._1, e._2 * 60 * 60 * 1000L)) // convert hours to ms
   private val logRetentionSize = config.logRetentionSize
-  private val scheduler = new KafkaScheduler(1, "kafka-logcleaner-", false)
 
   /* Initialize a log for each subdirectory of the main log directory */
   private val logs = new Pool[String, Pool[Int, Log]]()
@@ -76,17 +75,13 @@ private[kafka] class LogManager(val config: KafkaConfig,
   def startup() {
     /* Schedule the cleanup task to delete old logs */
     if(scheduler != null) {
-      if(scheduler.hasShutdown) {
-        println("Restarting log cleaner scheduler")
-        scheduler.startUp
-      }
-      info("starting log cleaner every " + logCleanupIntervalMs + " ms")
-      scheduler.scheduleWithRate(cleanupLogs, 60 * 1000, logCleanupIntervalMs)
+      info("Starting log cleaner every " + logCleanupIntervalMs + " ms")
+      scheduler.scheduleWithRate(cleanupLogs, "kafka-logcleaner-", 60 * 1000, logCleanupIntervalMs, false)
+      info("Starting log flusher every " + config.flushSchedulerThreadRate +
+        " ms with the following overrides " + logFlushIntervals)
+      scheduler.scheduleWithRate(flushAllLogs, "kafka-logflusher-",
+        config.flushSchedulerThreadRate, config.flushSchedulerThreadRate, false)
     }
-
-    if(logFlusherScheduler.hasShutdown) logFlusherScheduler.startUp
-    info("Starting log flusher every " + config.flushSchedulerThreadRate + " ms with the following overrides " + logFlushIntervals)
-    logFlusherScheduler.scheduleWithRate(flushAllLogs, config.flushSchedulerThreadRate, config.flushSchedulerThreadRate)
   }
 
 
@@ -95,7 +90,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
    */
   private def createLog(topic: String, partition: Int): Log = {
     if (topic.length <= 0)
-      throw new InvalidTopicException("topic name can't be emtpy")
+      throw new InvalidTopicException("Topic name can't be emtpy")
     if (partition < 0 || partition >= config.topicPartitionsMap.getOrElse(topic, numPartitions)) {
       val error = "Wrong partition %d, valid partitions (0, %d)."
         .format(partition, (config.topicPartitionsMap.getOrElse(topic, numPartitions) - 1))
@@ -207,10 +202,8 @@ private[kafka] class LogManager(val config: KafkaConfig,
   /**
    * Close all the logs
    */
-  def close() {
+  def shutdown() {
     info("Closing log manager")
-    scheduler.shutdown()
-    logFlusherScheduler.shutdown()
     allLogs.foreach(_.close())
   }
   
@@ -220,7 +213,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   def allLogs() = logs.values.flatMap(_.values)
 
   private def flushAllLogs() = {
-    debug("flushing the high watermark of all logs")
+    debug("Flushing the high watermark of all logs")
     for (log <- allLogs)
     {
       try{

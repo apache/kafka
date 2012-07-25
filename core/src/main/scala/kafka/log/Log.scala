@@ -18,7 +18,7 @@
 package kafka.log
 
 import kafka.api.OffsetRequest
-import java.io.{IOException, RandomAccessFile, File}
+import java.io.{IOException, File}
 import java.util.{Comparator, Collections, ArrayList}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicInteger}
 import kafka.utils._
@@ -105,10 +105,8 @@ class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long
    * of data to be deleted, we have to compute the offset relative to start of the log segment
    * @param offset Absolute offset for this partition
    */
-  def truncateUpto(offset: Long) = {
-    assert(offset >= start, "Offset %d used for truncating this log segment cannot be smaller than the start offset %d".
-                            format(offset, start))
-    messageSet.truncateUpto(offset - start)
+  def truncateTo(offset: Long) = {
+    messageSet.truncateTo(offset - start)
   }
 }
 
@@ -133,13 +131,6 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
 
   /* The actual segments of the log */
   private[log] val segments: SegmentList[LogSegment] = loadSegments()
-
-  /* create the leader highwatermark file handle */
-  private val hwFile = new RandomAccessFile(dir.getAbsolutePath + "/" + hwFileName, "rw")
-  info("Created highwatermark file %s for log %s".format(dir.getAbsolutePath + "/" + hwFileName, name))
-
-  /* If hw file is absent, the hw defaults to 0. If it exists, hw is set to the checkpointed value */
-  private var hw: Long = if(hwFile.length() > 0) hwFile.readLong() else { hwFile.writeLong(0); 0 }
 
   private val logStats = new LogStats(this)
 
@@ -221,8 +212,6 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
         info("Closing log segment " + seg.file.getAbsolutePath)
         seg.messageSet.close()
       }
-      checkpointHW()
-      hwFile.close()
     }
   }
 
@@ -363,7 +352,6 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
       segments.view.last.messageSet.flush()
       unflushed.set(0)
       lastflushedTime.set(System.currentTimeMillis)
-      checkpointHW()
      }
   }
 
@@ -435,47 +423,31 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
     total
   }
 
-  def recoverUptoLastCheckpointedHW() {
-    if(hwFile.length() > 0) {
-      // read the last checkpointed hw from disk
-      hwFile.seek(0)
-      val lastKnownHW = hwFile.readLong()
-      info("Recovering log %s upto highwatermark %d".format(name, lastKnownHW))
+  def truncateTo(targetOffset: Long) {
       // find the log segment that has this hw
       val segmentToBeTruncated = segments.view.find(segment =>
-        lastKnownHW >= segment.start && lastKnownHW < segment.absoluteEndOffset)
+        targetOffset >= segment.start && targetOffset < segment.absoluteEndOffset)
 
       segmentToBeTruncated match {
         case Some(segment) =>
-          segment.truncateUpto(lastKnownHW)
-          info("Truncated log segment %s to highwatermark %d".format(segment.file.getAbsolutePath, hw))
+          val truncatedSegmentIndex = segments.view.indexOf(segment)
+          segments.truncLast(truncatedSegmentIndex)
+          segment.truncateTo(targetOffset)
+          info("Truncated log segment %s to highwatermark %d".format(segment.file.getAbsolutePath, targetOffset))
         case None =>
-          assert(lastKnownHW <= logEndOffset,
+          assert(targetOffset <= segments.view.last.absoluteEndOffset,
             "Last checkpointed hw %d cannot be greater than the latest message offset %d in the log %s".
-              format(lastKnownHW, segments.view.last.absoluteEndOffset, segments.view.last.file.getAbsolutePath))
+              format(targetOffset, segments.view.last.absoluteEndOffset, segments.view.last.file.getAbsolutePath))
           error("Cannot truncate log to %d since the log start offset is %d and end offset is %d"
-            .format(lastKnownHW, segments.view.head.start, logEndOffset))
+            .format(targetOffset, segments.view.head.start, segments.view.last.absoluteEndOffset))
       }
 
-      val segmentsToBeDeleted = segments.view.filter(segment => segment.start > lastKnownHW)
+      val segmentsToBeDeleted = segments.view.filter(segment => segment.start > targetOffset)
+      if(segmentsToBeDeleted.size < segments.view.size) {
       val numSegmentsDeleted = deleteSegments(segmentsToBeDeleted)
       if(numSegmentsDeleted != segmentsToBeDeleted.size)
         error("Failed to delete some segments during log recovery")
-    }else
-      info("Unable to recover log upto hw. No previously checkpointed high watermark found for " + name)
-  }
-
-  def setHW(latestLeaderHW: Long) {
-    hw = latestLeaderHW
-  }
-
-  def getHW(): Long = hw
-
-  def checkpointHW() {
-    hwFile.seek(0)
-    hwFile.writeLong(hw)
-    hwFile.getChannel.force(true)
-    info("Checkpointed highwatermark %d for log %s".format(hw, name))
+      }
   }
 
   def topicName():String = {

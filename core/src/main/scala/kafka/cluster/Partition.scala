@@ -56,7 +56,9 @@ class Partition(val topic: String,
     assignedReplicas
   }
 
-  def getReplica(replicaId: Int): Option[Replica] = assignedReplicas().find(_.brokerId == replicaId)
+  def getReplica(replicaId: Int): Option[Replica] = {
+    assignedReplicas().find(_.brokerId == replicaId)
+  }
 
   def addReplica(replica: Replica): Boolean = {
     if(!assignedReplicas.contains(replica)) {
@@ -65,8 +67,7 @@ class Partition(val topic: String,
     }else false
   }
 
-  def updateReplicaLEO(replica: Replica, leo: Long) {
-    replica.leoUpdateTime = time.milliseconds
+  def updateReplicaLeo(replica: Replica, leo: Long) {
     replica.logEndOffset(Some(leo))
     debug("Updating the leo to %d for replica %d".format(leo, replica.brokerId))
   }
@@ -108,7 +109,7 @@ class Partition(val topic: String,
     val possiblyStuckReplicas = inSyncReplicas.filter(r => r.logEndOffset() < leaderReplica().logEndOffset())
     info("Possibly stuck replicas for topic %s partition %d are %s".format(topic, partitionId,
       possiblyStuckReplicas.map(_.brokerId).mkString(",")))
-    val stuckReplicas = possiblyStuckReplicas.filter(r => r.logEndOffsetUpdateTime() < (time.milliseconds - keepInSyncTimeMs))
+    val stuckReplicas = possiblyStuckReplicas.filter(r => r.logEndOffsetUpdateTime < (time.milliseconds - keepInSyncTimeMs))
     info("Stuck replicas for topic %s partition %d are %s".format(topic, partitionId, stuckReplicas.map(_.brokerId).mkString(",")))
     val leader = leaderReplica()
     // Case 2 above

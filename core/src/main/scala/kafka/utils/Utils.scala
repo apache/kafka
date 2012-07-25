@@ -58,9 +58,10 @@ object Utils extends Logging {
    * @param fun A function
    * @return A Runnable that just executes the function
    */
-  def loggedRunnable(fun: () => Unit): Runnable =
+  def loggedRunnable(fun: () => Unit, name: String): Runnable =
     new Runnable() {
       def run() = {
+        Thread.currentThread().setName(name)
         try {
           fun()
         }
@@ -71,6 +72,14 @@ object Utils extends Logging {
         }
       }
     }
+
+  /**
+   * Create a daemon thread
+   * @param runnable The runnable to execute in the background
+   * @return The unstarted thread
+   */
+  def daemonThread(runnable: Runnable): Thread =
+    newThread(runnable, true)
 
   /**
    * Create a daemon thread
@@ -108,6 +117,23 @@ object Utils extends Logging {
     thread
   }
    
+  /**
+   * Create a new thread
+   * @param runnable The work for the thread to do
+   * @param daemon Should the thread block JVM shutdown?
+   * @return The unstarted thread
+   */
+  def newThread(runnable: Runnable, daemon: Boolean): Thread = {
+    val thread = new Thread(runnable)
+    thread.setDaemon(daemon)
+    thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+      def uncaughtException(t: Thread, e: Throwable) {
+        error("Uncaught exception in thread '" + t.getName + "':", e)
+      }
+    })
+    thread
+  }
+
   /**
    * Read a byte array from the given offset and size in the buffer
    * TODO: Should use System.arraycopy

@@ -37,6 +37,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
   val zookeeperConnect = TestZKUtils.zookeeperConnect
   val name = "kafka"
   val veryLargeLogFlushInterval = 10000000L
+  val scheduler = new KafkaScheduler(2)
 
   override def setUp() {
     super.setUp()
@@ -45,7 +46,8 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
                    override val logFileSize = 1024
                    override val flushInterval = 100
                  }
-    logManager = new LogManager(config, time, veryLargeLogFlushInterval, maxLogAge, false)
+    scheduler.startUp
+    logManager = new LogManager(config, scheduler, time, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup
     logDir = logManager.logDir
 
@@ -56,8 +58,9 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   override def tearDown() {
+    scheduler.shutdown()
     if(logManager != null)
-      logManager.close()
+      logManager.shutdown()
     Utils.rm(logDir)
     super.tearDown()
   }
@@ -114,7 +117,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     val retentionHours = 1
     val retentionMs = 1000 * 60 * 60 * retentionHours
     val props = TestUtils.createBrokerConfig(0, -1)
-    logManager.close
+    logManager.shutdown()
     Thread.sleep(100)
     config = new KafkaConfig(props) {
       override val logFileSize = (10 * (setSize - 1)).asInstanceOf[Int] // each segment will be 10 messages
@@ -122,7 +125,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
       override val logRetentionHours = retentionHours
       override val flushInterval = 100
     }
-    logManager = new LogManager(config, time, veryLargeLogFlushInterval, retentionMs, false)
+    logManager = new LogManager(config, scheduler, time, veryLargeLogFlushInterval, retentionMs, false)
     logManager.startup
 
     // create a log
@@ -159,7 +162,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Test
   def testTimeBasedFlush() {
     val props = TestUtils.createBrokerConfig(0, -1)
-    logManager.close
+    logManager.shutdown()
     Thread.sleep(100)
     config = new KafkaConfig(props) {
                    override val logFileSize = 1024 *1024 *1024
@@ -167,7 +170,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
                    override val flushInterval = Int.MaxValue
                    override val flushIntervalMap = Utils.getTopicFlushIntervals("timebasedflush:100")
                  }
-    logManager = new LogManager(config, time, veryLargeLogFlushInterval, maxLogAge, false)
+    logManager = new LogManager(config, scheduler, time, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup
     val log = logManager.getOrCreateLog(name, 0)
     for(i <- 0 until 200) {
@@ -182,15 +185,14 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Test
   def testConfigurablePartitions() {
     val props = TestUtils.createBrokerConfig(0, -1)
-    logManager.close
+    logManager.shutdown()
     Thread.sleep(100)
     config = new KafkaConfig(props) {
                    override val logFileSize = 256
                    override val topicPartitionsMap = Utils.getTopicPartitions("testPartition:2")
                    override val flushInterval = 100
                  }
-
-    logManager = new LogManager(config, time, veryLargeLogFlushInterval, maxLogAge, false)
+    logManager = new LogManager(config, scheduler, time, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup
 
     for(i <- 0 until 1) {

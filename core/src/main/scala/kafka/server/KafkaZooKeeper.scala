@@ -104,7 +104,7 @@ class KafkaZooKeeper(config: KafkaConfig,
     }
   }
 
-  def close() {
+  def shutdown() {
     stateChangeHandler.shutdown()
   }
 

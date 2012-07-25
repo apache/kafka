@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 
 package kafka.producer
 
@@ -35,7 +35,7 @@ import java.util
 
 class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   private val brokerId1 = 0
-  private val brokerId2 = 1  
+  private val brokerId2 = 1
   private val ports = TestUtils.choosePorts(2)
   private val (port1, port2) = (ports(0), ports(1))
   private var server1: KafkaServer = null
@@ -80,7 +80,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     server2.shutdown
     server2.awaitShutdown()
     Utils.rm(server1.config.logDir)
-    Utils.rm(server2.config.logDir)    
+    Utils.rm(server2.config.logDir)
     Thread.sleep(500)
     super.tearDown()
   }
@@ -97,7 +97,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     val props2 = new util.Properties()
     props2.putAll(props1)
     props2.put("producer.request.required.acks", "3")
-    props2.put("producer.request.ack.timeout.ms", "1000")
+    props2.put("producer.request.timeout.ms", "1000")
 
     val config1 = new ProducerConfig(props1)
     val config2 = new ProducerConfig(props2)
@@ -108,33 +108,28 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     val producer1 = new Producer[String, String](config1)
     val producer2 = new Producer[String, String](config2)
-    try {
-      // Available partition ids should be 0.
-      producer1.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-      producer1.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-      // get the leader
-      val leaderOpt = ZkUtils.getLeaderForPartition(zkClient, "new-topic", 0)
-      assertTrue("Leader for topic new-topic partition 0 should exist", leaderOpt.isDefined)
-      val leader = leaderOpt.get
+    // Available partition ids should be 0.
+    producer1.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
+    producer1.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
+    // get the leader
+    val leaderOpt = ZkUtils.getLeaderForPartition(zkClient, "new-topic", 0)
+    assertTrue("Leader for topic new-topic partition 0 should exist", leaderOpt.isDefined)
+    val leader = leaderOpt.get
 
-      val messageSet = if(leader == server1.config.brokerId) {
-        val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
-        response1.messageSet("new-topic", 0).iterator
-      }else {
-        val response2 = consumer2.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
-        response2.messageSet("new-topic", 0).iterator
-      }
-      assertTrue("Message set should have 1 message", messageSet.hasNext)
-
-      assertEquals(new Message("test1".getBytes), messageSet.next.message)
-      assertTrue("Message set should have 1 message", messageSet.hasNext)
-      assertEquals(new Message("test1".getBytes), messageSet.next.message)
-      assertFalse("Message set should not have any more messages", messageSet.hasNext)
-    } catch {
-      case e: Exception => fail("Not expected", e)
-    } finally {
-      producer1.close()
+    val messageSet = if(leader == server1.config.brokerId) {
+      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      response1.messageSet("new-topic", 0).iterator
+    }else {
+      val response2 = consumer2.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      response2.messageSet("new-topic", 0).iterator
     }
+    assertTrue("Message set should have 1 message", messageSet.hasNext)
+
+    assertEquals(new Message("test1".getBytes), messageSet.next.message)
+    assertTrue("Message set should have 1 message", messageSet.hasNext)
+    assertEquals(new Message("test1".getBytes), messageSet.next.message)
+    assertFalse("Message set should not have any more messages", messageSet.hasNext)
+    producer1.close()
 
     try {
       producer2.send(new ProducerData[String, String]("new-topic", "test", Array("test2")))
