@@ -29,7 +29,7 @@ readonly common_dir=${system_test_root}/common        # common util scripts for 
 source   ${common_dir}/util.sh                        # include the util script
 
 readonly base_dir=$(dirname $0)/..                    # root of this test suite
-readonly base_dir_full_path=$(readlink -f $base_dir)  # full path of the root of this test suite
+readonly base_dir_full_path=`cd $base_dir; pwd`       # full path of the root of this test suite
 readonly config_dir=${base_dir}/config
 
 readonly test_start_time="$(date +%s)"                # time starting the test
@@ -264,7 +264,7 @@ validate_results() {
         first_data_file_dir=${kafka_data_log_dirs[$i]}/${test_topic}-0
         first_data_file=`ls ${first_data_file_dir} | head -1`
         first_data_file_pathname=${first_data_file_dir}/$first_data_file
-        kafka_first_data_file_sizes[$i]=`stat -c%s ${first_data_file_pathname}`
+        kafka_first_data_file_sizes[$i]=`ls -l ${first_data_file_pathname} | awk '{print $5}'`
         kafka_first_data_file_checksums[$i]=`cksum ${first_data_file_pathname} | awk '{print $1}'`
         info "## broker[$i] data file: ${first_data_file_pathname} : [${kafka_first_data_file_sizes[$i]}]"
         info "##     ==> crc ${kafka_first_data_file_checksums[$i]}"
