@@ -107,14 +107,18 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   }
 
   def stopAllConnections() {
+    // first, clear noLeaderPartitionSet so that no more fetchers can be added to leader_finder_thread
     lock.lock()
-    try {
-      partitionMap = null
-      noLeaderPartitionSet.clear()
-    } finally {
-      lock.unlock()
-    }
+    noLeaderPartitionSet.clear()
+    lock.unlock()
+
+    // second, stop all existing fetchers
     closeAllFetchers()
+
+    // finally clear partitionMap
+    lock.lock()
+    partitionMap = null
+    lock.unlock()
   }
 
   def getPartitionTopicInfo(key: (String, Int)) : PartitionTopicInfo = {
