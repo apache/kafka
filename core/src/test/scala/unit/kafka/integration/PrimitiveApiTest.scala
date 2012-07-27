@@ -32,7 +32,7 @@ import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
 import scala.collection._
 import kafka.admin.CreateTopicCommand
-import kafka.common.{InvalidPartitionException, FetchRequestFormatException, OffsetOutOfRangeException}
+import kafka.common.{ErrorMapping, InvalidPartitionException, FetchRequestFormatException, OffsetOutOfRangeException}
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -91,6 +91,13 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     } catch {
       case e: FetchRequestFormatException => "success"
     }
+  }
+
+  def testEmptyFetchRequest() {
+    val offsets = Array[OffsetDetail]()
+    val request = new FetchRequest(offsetInfo = offsets)
+    val fetched = consumer.fetch(request)
+    assertTrue(fetched.errorCode == ErrorMapping.NoError && fetched.data.size == 0)
   }
 
   def testDefaultEncoderProducerAndFetch() {

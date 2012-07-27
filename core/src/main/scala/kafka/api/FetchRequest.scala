@@ -142,6 +142,8 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
   }
 
   def sizeInBytes: Int = 2 + 4 + (2 + clientId.length()) + 4 + 4 + 4 + offsetInfo.foldLeft(4)(_ + _.sizeInBytes())
+
+  def numPartitions: Int = offsetInfo.foldLeft(0)(_ + _.offsets.size)
 }
 
 

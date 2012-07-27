@@ -117,7 +117,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     val response = produceToLocalLog(produceRequest)
     debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
 
-    if (produceRequest.requiredAcks == 0 || produceRequest.requiredAcks == 1) {
+    if (produceRequest.requiredAcks == 0 ||
+        produceRequest.requiredAcks == 1 ||
+        produceRequest.data.size <= 0) {
       requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
 
       for (topicData <- produceRequest.data)
@@ -230,7 +232,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // if there are enough bytes available right now we can answer the request, otherwise we have to punt
     val availableBytes = availableFetchBytes(fetchRequest)
-    if(fetchRequest.maxWait <= 0 || availableBytes >= fetchRequest.minBytes) {
+    if(fetchRequest.maxWait <= 0 ||
+       availableBytes >= fetchRequest.minBytes ||
+       fetchRequest.numPartitions <= 0) {
       val topicData = readMessageSets(fetchRequest)
       debug("Returning fetch response %s for fetch request with correlation id %d"
         .format(topicData.map(_.partitionDataArray.map(_.error).mkString(",")).mkString(","), fetchRequest.correlationId))
