@@ -41,6 +41,7 @@ trait ProducerConsumerTestHarness extends JUnit3Suite with KafkaServerTestHarnes
       props.put("reconnect.interval", "10000")
       props.put("producer.retry.backoff.ms", "1000")
       props.put("producer.num.retries", "3")
+      props.put("producer.request.required.acks", "-1")
       producer = new Producer(new ProducerConfig(props))
       consumer = new SimpleConsumer(host,
                                    port,

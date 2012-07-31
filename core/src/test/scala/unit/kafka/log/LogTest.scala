@@ -22,13 +22,14 @@ import java.util.ArrayList
 import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
-import kafka.utils.{Utils, TestUtils, Range}
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import kafka.common.{KafkaException, OffsetOutOfRangeException}
+import kafka.utils.{MockTime, Utils, TestUtils, Range}
 
 class LogTest extends JUnitSuite {
   
   var logDir: File = null
+  val time = new MockTime
 
   @Before
   def setUp() {
@@ -48,14 +49,14 @@ class LogTest extends JUnitSuite {
   @Test
   def testLoadEmptyLog() {
     createEmptyLogs(logDir, 0)
-    new Log(logDir, 1024, 1000, false)
+    new Log(logDir, 1024, 1000, false, time)
   }
 
   @Test
   def testLoadInvalidLogsFails() {
     createEmptyLogs(logDir, 0, 15)
     try {
-      new Log(logDir, 1024, 1000, false)
+      new Log(logDir, 1024, 1000, false, time)
       fail("Allowed load of corrupt logs without complaint.")
     } catch {
       case e: KafkaException => "This is good"
@@ -64,7 +65,7 @@ class LogTest extends JUnitSuite {
 
   @Test
   def testAppendAndRead() {
-    val log = new Log(logDir, 1024, 1000, false)
+    val log = new Log(logDir, 1024, 1000, false, time)
     val message = new Message(Integer.toString(42).getBytes())
     for(i <- 0 until 10)
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
@@ -81,7 +82,7 @@ class LogTest extends JUnitSuite {
   @Test
   def testReadOutOfRange() {
     createEmptyLogs(logDir, 1024)
-    val log = new Log(logDir, 1024, 1000, false)
+    val log = new Log(logDir, 1024, 1000, false, time)
     assertEquals("Reading just beyond end of log should produce 0 byte read.", 0L, log.read(1024, 1000).sizeInBytes)
     try {
       log.read(0, 1024)
@@ -101,7 +102,7 @@ class LogTest extends JUnitSuite {
   @Test
   def testLogRolls() {
     /* create a multipart log with 100 messages */
-    val log = new Log(logDir, 100, 1000, false)
+    val log = new Log(logDir, 100, 1000, false, time)
     val numMessages = 100
     for(i <- 0 until numMessages)
       log.append(TestUtils.singleMessageSet(Integer.toString(i).getBytes()))
@@ -156,7 +157,7 @@ class LogTest extends JUnitSuite {
   def testEdgeLogRolls() {
     {
       // first test a log segment starting at 0
-      val log = new Log(logDir, 100, 1000, false)
+      val log = new Log(logDir, 100, 1000, false, time)
       val curOffset = log.logEndOffset
       assertEquals(curOffset, 0)
 
@@ -169,7 +170,7 @@ class LogTest extends JUnitSuite {
 
     {
       // second test an empty log segment starting at none-zero
-      val log = new Log(logDir, 100, 1000, false)
+      val log = new Log(logDir, 100, 1000, false, time)
       val numMessages = 1
       for(i <- 0 until numMessages)
         log.append(TestUtils.singleMessageSet(Integer.toString(i).getBytes()))

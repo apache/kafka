@@ -70,7 +70,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     /* start log manager */
     logManager = new LogManager(config,
                                 kafkaScheduler,
-                                SystemTime,
+                                time,
                                 1000L * 60 * config.logCleanupIntervalMinutes,
                                 1000L * 60 * 60 * config.logRetentionHours,
                                 needRecovery)

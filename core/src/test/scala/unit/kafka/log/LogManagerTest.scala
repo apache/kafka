@@ -118,7 +118,6 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     val retentionMs = 1000 * 60 * 60 * retentionHours
     val props = TestUtils.createBrokerConfig(0, -1)
     logManager.shutdown()
-    Thread.sleep(100)
     config = new KafkaConfig(props) {
       override val logFileSize = (10 * (setSize - 1)).asInstanceOf[Int] // each segment will be 10 messages
       override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Long] // keep exactly 6 segments + 1 roll over
@@ -138,9 +137,8 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
       log.append(set)
       offset += set.sizeInBytes
     }
-    // flush to make sure it's written to disk, then sleep to confirm
+    // flush to make sure it's written to disk
     log.flush
-    Thread.sleep(2000)
 
     // should be exactly 100 full segments + 1 new empty one
     assertEquals("There should be example 101 segments.", 100 + 1, log.numberOfSegments)
@@ -163,7 +161,6 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testTimeBasedFlush() {
     val props = TestUtils.createBrokerConfig(0, -1)
     logManager.shutdown()
-    Thread.sleep(100)
     config = new KafkaConfig(props) {
                    override val logFileSize = 1024 *1024 *1024
                    override val flushSchedulerThreadRate = 50
@@ -186,7 +183,6 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testConfigurablePartitions() {
     val props = TestUtils.createBrokerConfig(0, -1)
     logManager.shutdown()
-    Thread.sleep(100)
     config = new KafkaConfig(props) {
                    override val logFileSize = 256
                    override val topicPartitionsMap = Utils.getTopicPartitions("testPartition:2")

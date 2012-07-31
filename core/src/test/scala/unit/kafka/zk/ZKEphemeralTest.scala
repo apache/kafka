@@ -39,17 +39,11 @@ class ZKEphemeralTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
 
     var testData: String = null
-
     testData = ZkUtils.readData(zkClient, "/tmp/zktest")
     Assert.assertNotNull(testData)
-
     zkClient.close
-
-    Thread.sleep(zkSessionTimeoutMs)
-
     zkClient = new ZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
                                 ZKStringSerializer)
-
     val nodeExists = ZkUtils.pathExists(zkClient, "/tmp/zktest")
     Assert.assertFalse(nodeExists)
   }

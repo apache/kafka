@@ -29,12 +29,12 @@ import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import kafka.producer.async._
 import kafka.serializer.{StringEncoder, StringDecoder, Encoder}
 import kafka.server.KafkaConfig
-import kafka.utils.{FixedValuePartitioner, NegativePartitioner, TestZKUtils, TestUtils}
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
 import scala.collection.Map
 import scala.collection.mutable.ListBuffer
+import kafka.utils._
 
 class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
@@ -106,13 +106,6 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
   }
 
-  def getProduceData(nEvents: Int): Seq[ProducerData[String,String]] = {
-    val producerDataList = new ListBuffer[ProducerData[String,String]]
-    for (i <- 0 until nEvents)
-      producerDataList.append(new ProducerData[String,String]("topic1", null, List("msg" + i)))
-    producerDataList
-  }
-
   @Test
   def testBatchSize() {
     /**
@@ -150,17 +143,18 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     EasyMock.expectLastCall
     EasyMock.replay(mockHandler)
 
+    val queueExpirationTime = 200
     val queue = new LinkedBlockingQueue[ProducerData[String,String]](10)
     val producerSendThread =
-      new ProducerSendThread[String,String]("thread1", queue, mockHandler, 200, 5)
+      new ProducerSendThread[String,String]("thread1", queue, mockHandler, queueExpirationTime, 5)
     producerSendThread.start()
 
     for (producerData <- producerDataList)
       queue.put(producerData)
 
-    Thread.sleep(300)
-    producerSendThread.shutdown
+    Thread.sleep(queueExpirationTime + 10)
     EasyMock.verify(mockHandler)
+    producerSendThread.shutdown
   }
 
   @Test
@@ -446,7 +440,7 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     // entirely.  The second request will succeed for partition 1 but fail for partition 0.
     // On the third try for partition 0, let it succeed.
     val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), 0)
-    val response1 = 
+    val response1 =
       new ProducerResponse(ProducerRequest.CurrentVersion, 0, Array(ErrorMapping.NotLeaderForPartitionCode.toShort, 0.toShort), Array(0L, 0L))
     val request2 = TestUtils.produceRequest(topic1, 0, messagesToSet(msgs))
     val response2 = new ProducerResponse(ProducerRequest.CurrentVersion, 0, Array(0.toShort), Array(0L))
@@ -530,6 +524,13 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
   }
 
+  def getProduceData(nEvents: Int): Seq[ProducerData[String,String]] = {
+    val producerDataList = new ListBuffer[ProducerData[String,String]]
+    for (i <- 0 until nEvents)
+      producerDataList.append(new ProducerData[String,String]("topic1", null, List("msg" + i)))
+    producerDataList
+  }
+
   private def messagesToSet(messages: Seq[String]): ByteBufferMessageSet = {
     val encoder = new StringEncoder
     new ByteBufferMessageSet(NoCompressionCodec, messages.map(m => encoder.toMessage(m)): _*)
@@ -564,12 +565,5 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   private def getTopicMetadata(topic: String, partition: Seq[Int], brokerId: Int, brokerHost: String, brokerPort: Int): TopicMetadata = {
     val broker1 = new Broker(brokerId, brokerHost, brokerHost, brokerPort)
     new TopicMetadata(topic, partition.map(new PartitionMetadata(_, Some(broker1), List(broker1))))
-  }
-
-  class MockProducer(override val config: SyncProducerConfig) extends SyncProducer(config) {
-    override def send(produceRequest: ProducerRequest): ProducerResponse = {
-      Thread.sleep(1000)
-      null
-    }
   }
 }

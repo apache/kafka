@@ -49,7 +49,6 @@ class LogCorruptionTest extends JUnit3Suite with ProducerConsumerTestHarness wit
     val producerData = new ProducerData[String, Message](topic, topic, List(new Message("hello".getBytes())))
 
     producer.send(producerData)
-    Thread.sleep(200)
 
     // corrupt the file on disk
     val logFile = new File(config.logDir + File.separator + topic + "-" + partition, Log.nameFromOffset(0))
@@ -61,7 +60,6 @@ class LogCorruptionTest extends JUnit3Suite with ProducerConsumerTestHarness wit
     channel.force(true)
     channel.close
 
-    Thread.sleep(500)
     // test SimpleConsumer
     val response = consumer.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, 10000).build())
     try {

@@ -93,7 +93,6 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       }
 
       // wait a bit for produced message to be available
-      Thread.sleep(200)
       val request = builder.build()
       val response = consumer.fetch(request)
       for( (topic, offset) <- topicOffsets) {
@@ -138,7 +137,6 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
     producer.send(produceList: _*)
 
     // wait a bit for produced message to be available
-    Thread.sleep(200)
     val request = builder.build()
     val response = consumer.fetch(request)
     for(topic <- topics) {
@@ -166,7 +164,6 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
 
     producer.send(produceList: _*)
     // wait a bit for produced message to be available
-    Thread.sleep(750)
     val request = builder.build()
     val response = consumer.fetch(request)
     for(topic <- topics) {

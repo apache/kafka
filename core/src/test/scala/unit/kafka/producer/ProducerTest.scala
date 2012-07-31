@@ -68,8 +68,6 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)
-
-    Thread.sleep(500)
   }
 
   override def tearDown() {
@@ -81,7 +79,6 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     server2.awaitShutdown()
     Utils.rm(server1.config.logDir)
     Utils.rm(server2.config.logDir)
-    Thread.sleep(500)
     super.tearDown()
   }
 
@@ -151,6 +148,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("partitioner.class", "kafka.utils.StaticPartitioner")
     props.put("producer.request.timeout.ms", "2000")
+//    props.put("producer.request.required.acks", "-1")
     props.put("zk.connect", TestZKUtils.zookeeperConnect)
 
     // create topic
@@ -166,7 +164,6 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
       // Available partition ids should be 0, 1, 2 and 3, all lead and hosted only
       // on broker 0
       producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-      Thread.sleep(100)
     } catch {
       case e => fail("Unexpected exception: " + e)
     }
@@ -174,12 +171,10 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     // kill the broker
     server1.shutdown
     server1.awaitShutdown()
-    Thread.sleep(100)
 
     try {
       // These sends should fail since there are no available brokers
       producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-      Thread.sleep(100)
       fail("Should fail since no leader exists for the partition.")
     } catch {
       case e => // success
@@ -187,8 +182,6 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // restart server 1
     server1.startup()
-    Thread.sleep(100)
-
     try {
       // cross check if broker 1 got the messages
       val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
@@ -222,7 +215,6 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     try {
       // this message should be assigned to partition 0 whose leader is on broker 0
       producer.send(new ProducerData[String, String]("new-topic", "test", Array("test")))
-      Thread.sleep(100)
       // cross check if brokers got the messages
       val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
       val messageSet1 = response1.messageSet("new-topic", 0).iterator

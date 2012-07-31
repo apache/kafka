@@ -267,7 +267,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, zkClient: ZkClient, ka
   /**
    * Flushes the highwatermark value for all partitions to the highwatermark file
    */
-  private def checkpointHighwaterMarks() {
+  def checkpointHighwaterMarks() {
     val highwaterMarksForAllPartitions = allReplicas.map { partition =>
       val topic = partition._1._1
       val partitionId = partition._1._2

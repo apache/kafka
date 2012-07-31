@@ -54,7 +54,6 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       // send some messages
       producer.send(new ProducerData[Int, Message](topic, 0, sent1))
 
-      Thread.sleep(200)
       // do a clean shutdown
       server.shutdown()
       val cleanShutDownFile = new File(new File(config.logDir), server.CleanShutdownFile)
@@ -85,8 +84,6 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
 
       // send some more messages
       producer.send(new ProducerData[Int, Message](topic, 0, sent2))
-
-      Thread.sleep(200)
 
       fetchedMessage = null
       while(fetchedMessage == null || fetchedMessage.validBytes == 0) {

@@ -115,7 +115,7 @@ class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long
  * An append-only log for storing messages. 
  */
 @threadsafe
-private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean)
+private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean, time: Time)
   extends Logging {
 
   import kafka.log.Log._
@@ -288,7 +288,7 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
         else {
           // If the last segment to be deleted is empty and we roll the log, the new segment will have the same
           // file name. So simply reuse the last segment and reset the modified time.
-          view(numToDelete - 1).file.setLastModified(SystemTime.milliseconds)
+          view(numToDelete - 1).file.setLastModified(time.milliseconds)
           numToDelete -=1
         }
       }
@@ -348,10 +348,10 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
 
     lock synchronized {
       debug("Flushing log '" + name + "' last flushed: " + getLastFlushedTime + " current time: " +
-          System.currentTimeMillis)
+          time.milliseconds)
       segments.view.last.messageSet.flush()
       unflushed.set(0)
-      lastflushedTime.set(System.currentTimeMillis)
+      lastflushedTime.set(time.milliseconds)
      }
   }
 
@@ -366,7 +366,7 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
     for (i <- 0 until segsArray.length)
       offsetTimeArray(i) = (segsArray(i).start, segsArray(i).file.lastModified)
     if (segsArray.last.size > 0)
-      offsetTimeArray(segsArray.length) = (segsArray.last.start + segsArray.last.messageSet.sizeInBytes(), SystemTime.milliseconds)
+      offsetTimeArray(segsArray.length) = (segsArray.last.start + segsArray.last.messageSet.sizeInBytes(), time.milliseconds)
 
     var startIndex = -1
     request.time match {

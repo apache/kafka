@@ -31,8 +31,8 @@ import org.I0Itec.zkclient.ZkClient
 import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
 import scala.collection._
-import kafka.admin.CreateTopicCommand
 import kafka.common.{ErrorMapping, InvalidPartitionException, FetchRequestFormatException, OffsetOutOfRangeException}
+import kafka.admin.{AdminUtils, CreateTopicCommand}
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -109,7 +109,6 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
     val stringProducer1 = new Producer[String, String](config)
     stringProducer1.send(new ProducerData[String, String](topic, Array("test-message")))
-    Thread.sleep(200)
 
     val request = new FetchRequestBuilder()
       .correlationId(100)
@@ -138,7 +137,6 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
     val stringProducer1 = new Producer[String, String](config)
     stringProducer1.send(new ProducerData[String, String](topic, Array("test-message")))
-    Thread.sleep(200)
 
     var fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
     val messageSet = fetched.messageSet(topic, 0)
@@ -167,7 +165,6 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     }
 
       // wait a bit for produced message to be available
-      Thread.sleep(700)
       val request = builder.build()
       val response = consumer.fetch(request)
       for( (topic, partition) <- topics) {
@@ -235,7 +232,6 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       }
 
       // wait a bit for produced message to be available
-      Thread.sleep(200)
       val request = builder.build()
       val response = consumer.fetch(request)
       for( (topic, partition) <- topics) {
@@ -303,7 +299,6 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     producer.send(produceList: _*)
 
     // wait a bit for produced message to be available
-    Thread.sleep(200)
     val request = builder.build()
     val response = consumer.fetch(request)
     for( (topic, partition) <- topics) {
@@ -328,7 +323,6 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     producer.send(produceList: _*)
 
     // wait a bit for produced message to be available
-    Thread.sleep(200)
     val request = builder.build()
     val response = consumer.fetch(request)
     for( (topic, partition) <- topics) {
@@ -337,10 +331,12 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     }
   }
 
-  def testConsumerNotExistTopic() {
+  def testConsumerEmptyTopic() {
     val newTopic = "new-topic"
     CreateTopicCommand.createTopic(zkClient, newTopic, 1, 1, config.brokerId.toString)
-    Thread.sleep(200)
+    assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
+      AdminUtils.getTopicMetaDataFromZK(List(newTopic),
+        zkClient).head.errorCode != ErrorMapping.UnknownTopicCode, zookeeper.tickTime))
     val fetchResponse = consumer.fetch(new FetchRequestBuilder().addFetch(newTopic, 0, 0, 10000).build())
     assertFalse(fetchResponse.messageSet(newTopic, 0).iterator.hasNext)
   }

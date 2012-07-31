@@ -47,20 +47,20 @@ class ControllerBasicTest extends JUnit3Suite with ZooKeeperTestHarness  {
     brokers(0).shutdown()
     brokers(1).shutdown()
     brokers(3).shutdown()
-    Thread.sleep(1000)
-
+    assertTrue("Controller not elected", TestUtils.waitUntilTrue(() =>
+      ZkUtils.readDataMaybeNull(zkClient, ZkUtils.ControllerPath) != null, zookeeper.tickTime))
     var curController = ZkUtils.readDataMaybeNull(zkClient, ZkUtils.ControllerPath)
-    assertEquals(curController, "2")
+    assertEquals("Controller should move to broker 2", "2", curController)
 
     brokers(1).startup()
     brokers(2).shutdown()
-    Thread.sleep(1000)
+    assertTrue("Controller not elected", TestUtils.waitUntilTrue(() =>
+      ZkUtils.readDataMaybeNull(zkClient, ZkUtils.ControllerPath) != null, zookeeper.tickTime))
     curController = ZkUtils.readDataMaybeNull(zkClient, ZkUtils.ControllerPath)
-    assertEquals(curController, "1")
+    assertEquals("Controller should move to broker 1", "1", curController)
   }
 
   def testControllerCommandSend(){
-    Thread.sleep(1000)
     for(broker <- brokers){
       if(broker.kafkaController.isActive){
         val leaderAndISRRequest = ControllerTestUtils.createSampleLeaderAndISRRequest()

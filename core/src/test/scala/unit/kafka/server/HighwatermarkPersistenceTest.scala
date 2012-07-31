@@ -41,8 +41,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, new MockTime(), zkClient, scheduler)
     replicaManager.startup()
-    // sleep until flush ms
-    Thread.sleep(configs.head.defaultFlushIntervalMs)
+    replicaManager.checkpointHighwaterMarks()
     var fooPartition0Hw = replicaManager.readCheckpointedHighWatermark(topic, 0)
     assertEquals(0L, fooPartition0Hw)
     val partition0 = replicaManager.getOrCreatePartition(topic, 0, configs.map(_.brokerId).toSet)
@@ -51,8 +50,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     // create leader and follower replicas
     val leaderReplicaPartition0 = replicaManager.addLocalReplica(topic, 0, log0, configs.map(_.brokerId).toSet)
     val followerReplicaPartition0 = replicaManager.addRemoteReplica(topic, 0, configs.last.brokerId, partition0)
-    // sleep until flush ms
-    Thread.sleep(configs.head.defaultFlushIntervalMs)
+    replicaManager.checkpointHighwaterMarks()
     fooPartition0Hw = replicaManager.readCheckpointedHighWatermark(topic, 0)
     assertEquals(leaderReplicaPartition0.highWatermark(), fooPartition0Hw)
     try {
@@ -65,8 +63,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     partition0.leaderId(Some(leaderReplicaPartition0.brokerId))
     // set the highwatermark for local replica
     partition0.leaderHW(Some(5L))
-    // sleep until flush interval
-    Thread.sleep(configs.head.defaultFlushIntervalMs)
+    replicaManager.checkpointHighwaterMarks()
     fooPartition0Hw = replicaManager.readCheckpointedHighWatermark(topic, 0)
     assertEquals(leaderReplicaPartition0.highWatermark(), fooPartition0Hw)
     EasyMock.verify(zkClient)
@@ -85,8 +82,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, new MockTime(), zkClient, scheduler)
     replicaManager.startup()
-    // sleep until flush ms
-    Thread.sleep(configs.head.defaultFlushIntervalMs)
+    replicaManager.checkpointHighwaterMarks()
     var topic1Partition0Hw = replicaManager.readCheckpointedHighWatermark(topic1, 0)
     assertEquals(0L, topic1Partition0Hw)
     val topic1Partition0 = replicaManager.getOrCreatePartition(topic1, 0, configs.map(_.brokerId).toSet)
@@ -94,16 +90,14 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     val topic1Log0 = getMockLog
     // create leader and follower replicas
     val leaderReplicaTopic1Partition0 = replicaManager.addLocalReplica(topic1, 0, topic1Log0, configs.map(_.brokerId).toSet)
-    // sleep until flush ms
-    Thread.sleep(configs.head.defaultFlushIntervalMs)
+    replicaManager.checkpointHighwaterMarks()
     topic1Partition0Hw = replicaManager.readCheckpointedHighWatermark(topic1, 0)
     assertEquals(leaderReplicaTopic1Partition0.highWatermark(), topic1Partition0Hw)
     // set the leader
     topic1Partition0.leaderId(Some(leaderReplicaTopic1Partition0.brokerId))
     // set the highwatermark for local replica
     topic1Partition0.leaderHW(Some(5L))
-    // sleep until flush interval
-    Thread.sleep(configs.head.defaultFlushIntervalMs)
+    replicaManager.checkpointHighwaterMarks()
     topic1Partition0Hw = replicaManager.readCheckpointedHighWatermark(topic1, 0)
     assertEquals(5L, leaderReplicaTopic1Partition0.highWatermark())
     assertEquals(5L, topic1Partition0Hw)
@@ -113,8 +107,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     val topic2Log0 = getMockLog
     // create leader and follower replicas
     val leaderReplicaTopic2Partition0 = replicaManager.addLocalReplica(topic2, 0, topic2Log0, configs.map(_.brokerId).toSet)
-    // sleep until flush ms
-    Thread.sleep(configs.head.defaultFlushIntervalMs)
+    replicaManager.checkpointHighwaterMarks()
     var topic2Partition0Hw = replicaManager.readCheckpointedHighWatermark(topic2, 0)
     assertEquals(leaderReplicaTopic2Partition0.highWatermark(), topic2Partition0Hw)
     // set the leader
@@ -125,8 +118,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     // change the highwatermark for topic1
     topic1Partition0.leaderHW(Some(10L))
     assertEquals(10L, leaderReplicaTopic1Partition0.highWatermark())
-    // sleep until flush interval
-    Thread.sleep(configs.head.defaultFlushIntervalMs)
+    replicaManager.checkpointHighwaterMarks()
     // verify checkpointed hw for topic 2
     topic2Partition0Hw = replicaManager.readCheckpointedHighWatermark(topic2, 0)
     assertEquals(15L, topic2Partition0Hw)

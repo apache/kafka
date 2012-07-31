@@ -123,8 +123,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     sendMessages()
     // give some time for follower 1 to record leader HW of 60
-    TestUtils.waitUntilTrue(() => server2.getReplica(topic, 0).get.highWatermark() == 60L, 500)
-
+    assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
+      server2.getReplica(topic, 0).get.highWatermark() == 60L, 1000))
     // shutdown the servers to allow the hw to be checkpointed
     servers.map(server => server.shutdown())
     producer.close()
@@ -165,7 +165,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
     sendMessages(20)
     // give some time for follower 1 to record leader HW of 600
-    TestUtils.waitUntilTrue(() => server2.getReplica(topic, 0).get.highWatermark() == 600L, 500)
+    assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
+      server2.getReplica(topic, 0).get.highWatermark() == 600L, 1000))
     // shutdown the servers to allow the hw to be checkpointed
     servers.map(server => server.shutdown())
     producer.close()
@@ -209,7 +210,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     sendMessages(2)
     // allow some time for the follower to get the leader HW
-    TestUtils.waitUntilTrue(() => server2.getReplica(topic, 0).get.highWatermark() == 60L, 1000)
+    assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
+      server2.getReplica(topic, 0).get.highWatermark() == 60L, 1000))
     // kill the server hosting the preferred replica
     server1.shutdown()
     server2.shutdown()
@@ -231,7 +233,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     sendMessages(2)
     // allow some time for the follower to get the leader HW
-    TestUtils.waitUntilTrue(() => server1.getReplica(topic, 0).get.highWatermark() == 120L, 1000)
+    assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
+      server1.getReplica(topic, 0).get.highWatermark() == 120L, 1000))
     // shutdown the servers to allow the hw to be checkpointed
     servers.map(server => server.shutdown())
     producer.close()

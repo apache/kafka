@@ -100,8 +100,8 @@ object TestUtils extends Logging {
    * USING THIS IS A SIGN YOU ARE NOT WRITING A REAL UNIT TEST
    * @param config The configuration of the server
    */
-  def createServer(config: KafkaConfig): KafkaServer = {
-    val server = new KafkaServer(config)
+  def createServer(config: KafkaConfig, time: Time = SystemTime): KafkaServer = {
+    val server = new KafkaServer(config, time)
     server.startup()
     server
   }
@@ -422,7 +422,6 @@ object TestUtils extends Logging {
         return true
       if (System.currentTimeMillis() > startTime + waitTime)
         return false
-      Thread.sleep(100)
     }
     // should never hit here
     throw new RuntimeException("unexpected error")

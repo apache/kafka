@@ -55,20 +55,14 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     val logDirZkPath = propsZk.getProperty("log.dir")
     logDirZk = new File(logDirZkPath)
     serverZk = TestUtils.createServer(new KafkaConfig(propsZk));
-
-    Thread.sleep(100)
-
     simpleConsumerZk = new SimpleConsumer("localhost", portZk, 1000000, 64*1024)
   }
 
   @After
   override def tearDown() {
     simpleConsumerZk.close
-
     serverZk.shutdown
     Utils.rm(logDirZk)
-
-    Thread.sleep(500)
     super.tearDown()
   }
 
@@ -148,8 +142,6 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
 
     for(i <- 1 to 5)
       info("test")
-
-    Thread.sleep(500)
 
     val response = simpleConsumerZk.fetch(new FetchRequestBuilder().addFetch("test-topic", 0, 0L, 1024*1024).build())
     val fetchMessage = response.messageSet("test-topic", 0)
