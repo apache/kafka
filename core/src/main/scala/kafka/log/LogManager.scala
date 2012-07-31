@@ -1,11 +1,11 @@
 /**
- 	* Licensed to the Apache Software Foundation (ASF) under one or more
+ * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -35,7 +35,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
                                 val logCleanupIntervalMs: Long,
                                 val logCleanupDefaultAgeMs: Long,
                                 needRecovery: Boolean) extends Logging {
-  
+
   val logDir: File = new File(config.logDir)
   private val numPartitions = config.numPartitions
   private val maxSize: Long = config.logFileSize
@@ -44,6 +44,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private val logFlushIntervals = config.flushIntervalMap
   private val logRetentionMs = config.logRetentionHoursMap.map(e => (e._1, e._2 * 60 * 60 * 1000L)) // convert hours to ms
   private val logRetentionSize = config.logRetentionSize
+  this.logIdent = "Log Manager on Broker " + config.brokerId + ", "
 
   /* Initialize a log for each subdirectory of the main log directory */
   private val logs = new Pool[String, Pool[Int, Log]]()
@@ -60,11 +61,11 @@ private[kafka] class LogManager(val config: KafkaConfig,
         warn("Skipping unexplainable file '" + dir.getAbsolutePath() + "'--should it be there?")
       } else {
         info("Loading log '" + dir.getName() + "'")
-        val log = new Log(dir, maxSize, flushInterval, needRecovery)
-        val topicPartion = Utils.getTopicPartition(dir.getName)
-        logs.putIfNotExists(topicPartion._1, new Pool[Int, Log]())
-        val parts = logs.get(topicPartion._1)
-        parts.put(topicPartion._2, log)
+        val log = new Log(dir, maxSize, flushInterval, needRecovery, config.brokerId)
+        val topicPartition = Utils.getTopicPartition(dir.getName)
+        logs.putIfNotExists(topicPartition._1, new Pool[Int, Log]())
+        val parts = logs.get(topicPartition._1)
+        parts.put(topicPartition._2, log)
       }
     }
   }
@@ -78,9 +79,9 @@ private[kafka] class LogManager(val config: KafkaConfig,
       info("Starting log cleaner every " + logCleanupIntervalMs + " ms")
       scheduler.scheduleWithRate(cleanupLogs, "kafka-logcleaner-", 60 * 1000, logCleanupIntervalMs, false)
       info("Starting log flusher every " + config.flushSchedulerThreadRate +
-        " ms with the following overrides " + logFlushIntervals)
+                   " ms with the following overrides " + logFlushIntervals)
       scheduler.scheduleWithRate(flushAllLogs, "kafka-logflusher-",
-        config.flushSchedulerThreadRate, config.flushSchedulerThreadRate, false)
+                                 config.flushSchedulerThreadRate, config.flushSchedulerThreadRate, false)
     }
   }
 
@@ -93,14 +94,14 @@ private[kafka] class LogManager(val config: KafkaConfig,
       throw new InvalidTopicException("Topic name can't be emtpy")
     if (partition < 0 || partition >= config.topicPartitionsMap.getOrElse(topic, numPartitions)) {
       val error = "Wrong partition %d, valid partitions (0, %d)."
-        .format(partition, (config.topicPartitionsMap.getOrElse(topic, numPartitions) - 1))
+              .format(partition, (config.topicPartitionsMap.getOrElse(topic, numPartitions) - 1))
       warn(error)
       throw new InvalidPartitionException(error)
     }
     logCreationLock synchronized {
       val d = new File(logDir, topic + "-" + partition)
       d.mkdirs()
-      new Log(d, maxSize, flushInterval, false)
+      new Log(d, maxSize, flushInterval, false, config.brokerId)
     }
   }
 
@@ -195,18 +196,19 @@ private[kafka] class LogManager(val config: KafkaConfig,
       debug("Garbage collecting '" + log.name + "'")
       total += cleanupExpiredSegments(log) + cleanupSegmentsToMaintainSize(log)
     }
-    debug("Log cleanup completed. " + total + " files deleted in " + 
-                 (time.milliseconds - startMs) / 1000 + " seconds")
+    debug("Log cleanup completed. " + total + " files deleted in " +
+                  (time.milliseconds - startMs) / 1000 + " seconds")
   }
-  
+
   /**
    * Close all the logs
    */
   def shutdown() {
-    info("Closing log manager")
+    info("shut down")
     allLogs.foreach(_.close())
+    info("shutted down completedly")
   }
-  
+
   /**
    * Get all the partition logs
    */
@@ -222,7 +224,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
         if(logFlushIntervals.contains(log.topicName))
           logFlushInterval = logFlushIntervals(log.topicName)
         debug(log.topicName + " flush interval  " + logFlushInterval +
-            " last flushed " + log.getLastFlushedTime + " timesincelastFlush: " + timeSinceLastFlush)
+                      " last flushed " + log.getLastFlushedTime + " timesincelastFlush: " + timeSinceLastFlush)
         if(timeSinceLastFlush >= logFlushInterval)
           log.flush
       }

@@ -26,6 +26,7 @@ import collection.mutable.Set
 object StopReplicaRequest {
   val CurrentVersion = 1.shortValue()
   val DefaultClientId = ""
+  val DefaultAckTimeout = 100
 
   def readFrom(buffer: ByteBuffer): StopReplicaRequest = {
     val versionId = buffer.getShort
@@ -43,10 +44,10 @@ object StopReplicaRequest {
 case class StopReplicaRequest(versionId: Short,
                               clientId: String,
                               ackTimeoutMs: Int,
-                              stopReplicaSet: Set[(String, Int)]
-                                     ) extends RequestOrResponse(Some(RequestKeys.StopReplicaRequest)) {
-  def this(ackTimeoutMs: Int, stopReplicaSet: Set[(String, Int)]) = {
-    this(StopReplicaRequest.CurrentVersion, StopReplicaRequest.DefaultClientId, ackTimeoutMs, stopReplicaSet)
+                              stopReplicaSet: Set[(String, Int)])
+        extends RequestOrResponse(Some(RequestKeys.StopReplicaRequest)) {
+  def this(stopReplicaSet: Set[(String, Int)]) = {
+    this(StopReplicaRequest.CurrentVersion, StopReplicaRequest.DefaultClientId, StopReplicaRequest.DefaultAckTimeout, stopReplicaSet)
   }
 
   def writeTo(buffer: ByteBuffer) {

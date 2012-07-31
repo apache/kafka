@@ -352,7 +352,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   def createSimpleTopicsAndAwaitLeader(zkClient: ZkClient, topics: Seq[String], brokerId: Int) {
     for( topic <- topics ) {
       CreateTopicCommand.createTopic(zkClient, topic, 1, 1, brokerId.toString)
-      TestUtils.waitUntilLeaderIsElected(zkClient, topic, 0, 500)
+      TestUtils.waitUntilLiveLeaderIsElected(zkClient, topic, 0, 500)
     }
   }
 }

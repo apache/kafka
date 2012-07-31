@@ -45,7 +45,7 @@ object UpdateOffsetsInZK {
   private def getAndSetOffsets(zkClient: ZkClient, offsetOption: Long, config: ConsumerConfig, topic: String): Unit = {
     val cluster = ZkUtils.getCluster(zkClient)
     val partitionsPerTopicMap = ZkUtils.getPartitionsForTopics(zkClient, List(topic).iterator)
-    var partitions: Seq[String] = Nil
+    var partitions: Seq[Int] = Nil
 
     partitionsPerTopicMap.get(topic) match {
       case Some(l) =>  partitions = l.sortWith((s,t) => s < t)
@@ -54,7 +54,7 @@ object UpdateOffsetsInZK {
 
     var numParts = 0
     for (partition <- partitions) {
-      val brokerHostingPartition = ZkUtils.getLeaderForPartition(zkClient, topic, partition.toInt)
+      val brokerHostingPartition = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
 
       val broker = brokerHostingPartition match {
         case Some(b) => b
@@ -68,7 +68,7 @@ object UpdateOffsetsInZK {
 
       val brokerInfo = brokerInfos.head
       val consumer = new SimpleConsumer(brokerInfo.host, brokerInfo.port, 10000, 100 * 1024)
-      val offsets = consumer.getOffsetsBefore(topic, partition.toInt, offsetOption, 1)
+      val offsets = consumer.getOffsetsBefore(topic, partition, offsetOption, 1)
       val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
 
       println("updating partition " + partition + " with new offset: " + offsets(0))

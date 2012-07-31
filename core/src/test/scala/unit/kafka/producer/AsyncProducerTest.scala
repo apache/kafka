@@ -106,13 +106,6 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
   }
 
-  def getProduceData(nEvents: Int): Seq[ProducerData[String,String]] = {
-    val producerDataList = new ListBuffer[ProducerData[String,String]]
-    for (i <- 0 until nEvents)
-      producerDataList.append(new ProducerData[String,String]("topic1", null, List("msg" + i)))
-    producerDataList
-  }
-
   @Test
   def testBatchSize() {
     /**
@@ -528,6 +521,13 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     catch {
       case e: InvalidConfigException => //expected
     }
+  }
+
+  def getProduceData(nEvents: Int): Seq[ProducerData[String,String]] = {
+    val producerDataList = new ListBuffer[ProducerData[String,String]]
+    for (i <- 0 until nEvents)
+      producerDataList.append(new ProducerData[String,String]("topic1", null, List("msg" + i)))
+    producerDataList
   }
 
   private def messagesToSet(messages: Seq[String]): ByteBufferMessageSet = {

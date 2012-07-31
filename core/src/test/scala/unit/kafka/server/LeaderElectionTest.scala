@@ -20,12 +20,11 @@ package kafka.server
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.admin.CreateTopicCommand
-import kafka.utils.TestUtils._
 import junit.framework.Assert._
 import kafka.utils.{ZkUtils, Utils, TestUtils}
+import kafka.utils.TestUtils._
 
 class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
-
   val brokerId1 = 0
   val brokerId2 = 1
 
@@ -34,23 +33,23 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   val configProps1 = TestUtils.createBrokerConfig(brokerId1, port1)
   val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2)
-
+  var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 
   override def setUp() {
     super.setUp()
-  }
-
-  override def tearDown() {
-    super.tearDown()
-  }
-
-  def testLeaderElectionWithCreateTopic {
-    var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
     // start both servers
     val server1 = TestUtils.createServer(new KafkaConfig(configProps1))
     val server2 = TestUtils.createServer(new KafkaConfig(configProps2))
-
     servers ++= List(server1, server2)
+  }
+
+  override def tearDown() {
+    servers.map(server => server.shutdown())
+    servers.map(server => Utils.rm(server.config.logDir))
+    super.tearDown()
+  }
+
+  def testLeaderElectionAndEpoch {
     // start 2 brokers
     val topic = "new-topic"
     val partitionId = 0
@@ -59,62 +58,39 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     CreateTopicCommand.createTopic(zkClient, topic, 1, 2, "0:1")
 
     // wait until leader is elected
-    var leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
-    assertTrue("Leader should get elected", leader.isDefined)
+    val leader1 = waitUntilLiveLeaderIsElected(zkClient, topic, partitionId, 500)
+    val leaderEpoch1 = ZkUtils.getEpochForPartition(zkClient, topic, partitionId)
+    debug("leader Epoc: " + leaderEpoch1)
+    debug("Leader is elected to be: %s".format(leader1.getOrElse(-1)))
+    assertTrue("Leader should get elected", leader1.isDefined)
     // NOTE: this is to avoid transient test failures
-    assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
+    assertTrue("Leader could be broker 0 or broker 1", (leader1.getOrElse(-1) == 0) || (leader1.getOrElse(-1) == 1))
+    assertEquals("First epoch value should be 0", 0, leaderEpoch1)
 
     // kill the server hosting the preferred replica
-    server1.shutdown()
-
-    // check if leader moves to the other server
-    leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 1500)
-    assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
-
-    val leaderPath = zkClient.getChildren(ZkUtils.getTopicPartitionPath(topic, "0"))
-    // bring the preferred replica back
-    servers.head.startup()
-
-    leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
-    assertEquals("Leader must remain on broker 1", 1, leader.getOrElse(-1))
-
-    // shutdown current leader (broker 1)
     servers.last.shutdown()
-    leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
+    // check if leader moves to the other server
+    val leader2 = waitUntilLiveLeaderIsElected(zkClient, topic, partitionId, 1500)
+    val leaderEpoch2 = ZkUtils.getEpochForPartition(zkClient, topic, partitionId)
+    debug("Leader is elected to be: %s".format(leader1.getOrElse(-1)))
+    debug("leader Epoc: " + leaderEpoch2)
+    assertEquals("Leader must move to broker 0", 0, leader2.getOrElse(-1))
+    if(leader1.get == leader2.get)
+      assertEquals("Second epoch value should be " + leaderEpoch1, leaderEpoch1, leaderEpoch2)
+    else
+      assertEquals("Second epoch value should be %d".format(leaderEpoch1+1) , leaderEpoch1+1, leaderEpoch2)
 
-    // test if the leader is the preferred replica
-    assertEquals("Leader must be preferred replica on broker 0", 0, leader.getOrElse(-1))
-    // shutdown the servers and delete data hosted on them
-    servers.map(server => server.shutdown())
-    servers.map(server => Utils.rm(server.config.logDir))
-  }
-
-  // Assuming leader election happens correctly, test if epoch changes as expected
-  def testEpoch() {
-    // keep switching leaders to see if epoch changes correctly
-    val topic = "new-topic"
-    val partitionId = 0
-
-    // setup 2 brokers in ZK
-    val brokers = TestUtils.createBrokersInZk(zkClient, List(brokerId1, brokerId2))
-
-    // create topic with 1 partition, 2 replicas, one on each broker
-    CreateTopicCommand.createTopic(zkClient, topic, 1, 2, "0:1")
-
-    var newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic, partitionId, 0)
-    assertTrue("Broker 0 should become leader", newLeaderEpoch.isDefined)
-    assertEquals("First epoch value should be 1", 1, newLeaderEpoch.get._1)
-
-    ZkUtils.deletePath(zkClient, ZkUtils.getTopicPartitionLeaderPath(topic, partitionId.toString))
-    newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic, partitionId, 1)
-    assertTrue("Broker 1 should become leader", newLeaderEpoch.isDefined)
-    assertEquals("Second epoch value should be 2", 2, newLeaderEpoch.get._1)
-
-    ZkUtils.deletePath(zkClient, ZkUtils.getTopicPartitionLeaderPath(topic, partitionId.toString))
-    newLeaderEpoch = ZkUtils.tryToBecomeLeaderForPartition(zkClient, topic, partitionId, 0)
-    assertTrue("Broker 0 should become leader again", newLeaderEpoch.isDefined)
-    assertEquals("Third epoch value should be 3", 3, newLeaderEpoch.get._1)
-
-    TestUtils.deleteBrokersInZk(zkClient, List(brokerId1, brokerId2))
+    servers.last.startup()
+    servers.head.shutdown()
+    Thread.sleep(zookeeper.tickTime)
+    val leader3 = waitUntilLiveLeaderIsElected(zkClient, topic, partitionId, 1500)
+    val leaderEpoch3 = ZkUtils.getEpochForPartition(zkClient, topic, partitionId)
+    debug("leader Epoc: " + leaderEpoch3)
+    debug("Leader is elected to be: %s".format(leader3.getOrElse(-1)))
+    assertEquals("Leader must return to 1", 1, leader3.getOrElse(-1))
+    if(leader2.get == leader3.get)
+      assertEquals("Second epoch value should be " + leaderEpoch2, leaderEpoch2, leaderEpoch3)
+    else
+      assertEquals("Second epoch value should be %d".format(leaderEpoch2+1) , leaderEpoch2+1, leaderEpoch3)
   }
 }

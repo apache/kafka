@@ -100,7 +100,7 @@ class ISRExpirationTest extends JUnit3Suite {
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, time, zkClient, scheduler)
+    val replicaManager = new ReplicaManager(configs.head, time, zkClient, scheduler, null)
     try {
       val partition0 = replicaManager.getOrCreatePartition(topic, 0, configs.map(_.brokerId).toSet)
       // create leader log
