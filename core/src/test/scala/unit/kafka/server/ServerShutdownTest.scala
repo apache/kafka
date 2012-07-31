@@ -73,7 +73,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       val server = new KafkaServer(config)
       server.startup()
 
-      waitUntilLiveLeaderIsElected(zkClient, topic, 0, 1000)
+      waitUntilLeaderIsElected(zkClient, topic, 0, 1000)
 
       var fetchedMessage: ByteBufferMessageSet = null
       while(fetchedMessage == null || fetchedMessage.validBytes == 0) {

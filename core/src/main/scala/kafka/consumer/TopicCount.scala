@@ -66,7 +66,7 @@ private[kafka] object TopicCount extends Logging {
                           consumerId: String,
                           zkClient: ZkClient) : TopicCount = {
     val dirs = new ZKGroupDirs(group)
-    val topicCountString = ZkUtils.readData(zkClient, dirs.consumerRegistryDir + "/" + consumerId)._1
+    val topicCountString = ZkUtils.readData(zkClient, dirs.consumerRegistryDir + "/" + consumerId)
     val hasWhitelist = topicCountString.startsWith(WHITELIST_MARKER)
     val hasBlacklist = topicCountString.startsWith(BLACKLIST_MARKER)
 

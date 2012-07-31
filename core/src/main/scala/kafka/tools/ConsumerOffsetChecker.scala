@@ -33,7 +33,7 @@ object ConsumerOffsetChecker extends Logging {
   // e.g., 127.0.0.1-1315436360737:127.0.0.1:9092
 
   private def getConsumer(zkClient: ZkClient, bid: String): Option[SimpleConsumer] = {
-    val brokerInfo = ZkUtils.readDataMaybeNull(zkClient, "/brokers/ids/%s".format(bid))._1
+    val brokerInfo = ZkUtils.readDataMaybeNull(zkClient, "/brokers/ids/%s".format(bid))
     val consumer = brokerInfo match {
       case BrokerIpPattern(ip, port) =>
         Some(new SimpleConsumer(ip, port.toInt, 10000, 100000))
@@ -47,9 +47,9 @@ object ConsumerOffsetChecker extends Logging {
   private def processPartition(zkClient: ZkClient,
                                group: String, topic: String, bidPid: String) {
     val offset = ZkUtils.readData(zkClient, "/consumers/%s/offsets/%s/%s".
-            format(group, topic, bidPid))._1.toLong
+            format(group, topic, bidPid)).toLong
     val owner = ZkUtils.readDataMaybeNull(zkClient, "/consumers/%s/owners/%s/%s".
-            format(group, topic, bidPid))._1
+            format(group, topic, bidPid))
     println("%s,%s,%s (Group,Topic,BrokerId-PartitionId)".format(group, topic, bidPid))
     println("%20s%s".format("Owner = ", owner))
     println("%20s%d".format("Consumer offset = ", offset))

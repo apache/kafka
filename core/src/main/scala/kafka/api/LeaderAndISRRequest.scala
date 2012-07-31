@@ -25,39 +25,27 @@ import collection.mutable.HashMap
 
 
 object LeaderAndISR {
-  val initialLeaderEpoch: Int = 0
-  val initialZKVersion: Int = 0
   def readFrom(buffer: ByteBuffer): LeaderAndISR = {
     val leader = buffer.getInt
     val leaderGenId = buffer.getInt
     val ISRString = Utils.readShortString(buffer, "UTF-8")
     val ISR = ISRString.split(",").map(_.toInt).toList
-    val zkVersion = buffer.getInt
+    val zkVersion = buffer.getLong
     new LeaderAndISR(leader, leaderGenId, ISR, zkVersion)
   }
 }
 
-case class LeaderAndISR(var leader: Int, var leaderEpoch: Int, var ISR: List[Int], var zkVersion: Int){
-  def this(leader: Int, ISR: List[Int]) = this(leader, LeaderAndISR.initialLeaderEpoch, ISR, LeaderAndISR.initialZKVersion)
-
+case class LeaderAndISR(leader: Int, leaderEpoc: Int, ISR: List[Int], zkVersion: Long){
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(leader)
-    buffer.putInt(leaderEpoch)
+    buffer.putInt(leaderEpoc)
     Utils.writeShortString(buffer, ISR.mkString(","), "UTF-8")
-    buffer.putInt(zkVersion)
+    buffer.putLong(zkVersion)
   }
 
   def sizeInBytes(): Int = {
-    val size = 4 + 4 + (2 + ISR.mkString(",").length) + 4
+    val size = 4 + 4 + (2 + ISR.mkString(",").length) + 8
     size
-  }
-
-  override def toString(): String = {
-    val jsonDataMap = new HashMap[String, String]
-    jsonDataMap.put("leader", leader.toString)
-    jsonDataMap.put("leaderEpoch", leaderEpoch.toString)
-    jsonDataMap.put("ISR", ISR.mkString(","))
-    Utils.stringMapToJsonString(jsonDataMap)
   }
 }
 
@@ -65,14 +53,11 @@ case class LeaderAndISR(var leader: Int, var leaderEpoch: Int, var ISR: List[Int
 object LeaderAndISRRequest {
   val CurrentVersion = 1.shortValue()
   val DefaultClientId = ""
-  val IsInit: Boolean = true
-  val NotInit: Boolean = false
-  val DefaultAckTimeout: Int = 1000
 
   def readFrom(buffer: ByteBuffer): LeaderAndISRRequest = {
     val versionId = buffer.getShort
     val clientId = Utils.readShortString(buffer)
-    val isInit = if(buffer.get() == 1.toByte) true else false
+    val isInit = buffer.get()
     val ackTimeoutMs = buffer.getInt
     val leaderAndISRRequestCount = buffer.getInt
     val leaderAndISRInfos = new HashMap[(String, Int), LeaderAndISR]
@@ -91,18 +76,19 @@ object LeaderAndISRRequest {
 
 case class LeaderAndISRRequest (versionId: Short,
                                 clientId: String,
-                                isInit: Boolean,
+                                isInit: Byte,
                                 ackTimeoutMs: Int,
-                                leaderAndISRInfos: Map[(String, Int), LeaderAndISR])
+                                leaderAndISRInfos:
+                                Map[(String, Int), LeaderAndISR])
         extends RequestOrResponse(Some(RequestKeys.LeaderAndISRRequest)) {
-  def this(isInit: Boolean, leaderAndISRInfos: Map[(String, Int), LeaderAndISR]) = {
-    this(LeaderAndISRRequest.CurrentVersion, LeaderAndISRRequest.DefaultClientId, isInit, LeaderAndISRRequest.DefaultAckTimeout, leaderAndISRInfos)
+  def this(isInit: Byte, ackTimeoutMs: Int, leaderAndISRInfos: Map[(String, Int), LeaderAndISR]) = {
+    this(LeaderAndISRRequest.CurrentVersion, LeaderAndISRRequest.DefaultClientId, isInit, ackTimeoutMs, leaderAndISRInfos)
   }
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     Utils.writeShortString(buffer, clientId)
-    buffer.put(if(isInit) 1.toByte else 0.toByte)
+    buffer.put(isInit)
     buffer.putInt(ackTimeoutMs)
     buffer.putInt(leaderAndISRInfos.size)
     for((key, value) <- leaderAndISRInfos){

@@ -16,12 +16,11 @@
  */
 package kafka.cluster
 
-import java.util.concurrent.locks.ReentrantLock
-import scala.collection._
-import kafka.utils.{ZkUtils, SystemTime, Time}
-import kafka.common.{KafkaException, LeaderNotAvailableException}
+import kafka.utils.{SystemTime, Time, Logging}
 import org.I0Itec.zkclient.ZkClient
-import kafka.utils.Logging
+import kafka.utils.ZkUtils._
+import java.util.concurrent.locks.ReentrantLock
+import kafka.common.{KafkaException, LeaderNotAvailableException}
 
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
@@ -120,8 +119,14 @@ class Partition(val topic: String,
   }
 
   def updateISR(newISR: Set[Int], zkClientOpt: Option[ZkClient] = None) {
-    try{
+    try {
       leaderISRUpdateLock.lock()
+      zkClientOpt match {
+        case Some(zkClient) =>
+          // update ISR in ZK
+          updateISRInZk(newISR, zkClient)
+        case None =>
+      }
       // update partition's ISR in cache
       inSyncReplicas = newISR.map {r =>
         getReplica(r) match {
@@ -130,19 +135,26 @@ class Partition(val topic: String,
         }
       }
       info("Updated ISR for topic %s partition %d to %s in cache".format(topic, partitionId, newISR.mkString(",")))
-      if(zkClientOpt.isDefined){
-        val zkClient = zkClientOpt.get
-        val curLeaderAndISR = ZkUtils.getLeaderAndISRForPartition(zkClient, topic, partitionId)
-        curLeaderAndISR match {
-          case None =>
-            throw new IllegalStateException("The leaderAndISR info for partition [%s, %s] is not in Zookeeper".format(topic, partitionId))
-          case Some(m) =>
-            m.ISR = newISR.toList
-            ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicPartitionLeaderAndISRPath(topic, partitionId), m.toString)
-        }
-      }
-    } finally {
+    }catch {
+      case e => throw new KafkaException("Failed to update ISR for topic %s ".format(topic) +
+        "partition %d to %s".format(partitionId, newISR.mkString(",")), e)
+    }finally {
       leaderISRUpdateLock.unlock()
+    }
+  }
+
+  private def updateISRInZk(newISR: Set[Int], zkClient: ZkClient) = {
+    val replicaListAndEpochString = readDataMaybeNull(zkClient, getTopicPartitionInSyncPath(topic, partitionId.toString))
+    if(replicaListAndEpochString == null) {
+      throw new LeaderNotAvailableException(("Illegal partition state. ISR cannot be updated for topic " +
+        "%s partition %d since leader and ISR does not exist in ZK".format(topic, partitionId)))
+    }
+    else {
+      val replicasAndEpochInfo = replicaListAndEpochString.split(";")
+      val epoch = replicasAndEpochInfo.last
+      updatePersistentPath(zkClient, getTopicPartitionInSyncPath(topic, partitionId.toString),
+        "%s;%s".format(newISR.mkString(","), epoch))
+      info("Updated ISR for topic %s partition %d to %s in ZK".format(topic, partitionId, newISR.mkString(",")))
     }
   }
 

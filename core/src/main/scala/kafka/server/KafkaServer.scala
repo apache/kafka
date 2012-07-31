@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
+ * 
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -24,9 +24,8 @@ import kafka.utils._
 import java.util.concurrent._
 import atomic.AtomicBoolean
 import kafka.cluster.Replica
-import kafka.api.LeaderAndISR
-import scala.collection._
 import org.I0Itec.zkclient.ZkClient
+import kafka.common.KafkaZookeeperClient
 
 
 /**
@@ -34,7 +33,7 @@ import org.I0Itec.zkclient.ZkClient
  * to start up and shutdown a single Kafka node.
  */
 class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logging {
-  this.logIdent = "Kafka Server " + config.brokerId + ", "
+
   val CleanShutdownFile = ".kafka_cleanshutdown"
   private var isShuttingDown = new AtomicBoolean(false)
   private var shutdownLatch = new CountDownLatch(1)
@@ -45,7 +44,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   var kafkaZookeeper: KafkaZooKeeper = null
   var replicaManager: ReplicaManager = null
   private var apis: KafkaApis = null
-  var kafkaController: KafkaController = null
+  var kafkaController: KafkaController = new KafkaController(config)
   val kafkaScheduler = new KafkaScheduler(4)
   var zkClient: ZkClient = null
 
@@ -54,7 +53,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
    */
   def startup() {
-    info("starting")
+    info("Starting Kafka server..." + config.brokerId)
     isShuttingDown = new AtomicBoolean(false)
     shutdownLatch = new CountDownLatch(1)
     var needRecovery = true
@@ -63,10 +62,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       needRecovery = false
       cleanShutDownFile.delete
     }
-
+    /* start client */
+    info("Connecting to ZK: " + config.zkConnect)
+    zkClient = KafkaZookeeperClient.getZookeeperClient(config)
     /* start scheduler */
     kafkaScheduler.startUp
-
     /* start log manager */
     logManager = new LogManager(config,
                                 kafkaScheduler,
@@ -75,106 +75,87 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                 1000L * 60 * 60 * config.logRetentionHours,
                                 needRecovery)
     logManager.startup()
-
-    socketServer = new SocketServer(config.brokerId,
-                                    config.port,
+                                                
+    socketServer = new SocketServer(config.port,
                                     config.numNetworkThreads,
                                     config.monitoringPeriodSecs,
                                     config.numQueuedRequests,
                                     config.maxSocketRequestSize)
-
-    socketServer.startup
-
     Utils.registerMBean(socketServer.stats, statsMBeanName)
 
-    /* start client */
-    kafkaZookeeper = new KafkaZooKeeper(config)
-    // starting relevant replicas and leader election for partitions assigned to this broker
-    kafkaZookeeper.startup
+    kafkaZookeeper = new KafkaZooKeeper(config, zkClient, addReplica, getReplica, makeLeader, makeFollower)
 
-    info("Connecting to ZK: " + config.zkConnect)
+    replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler)
 
-    replicaManager = new ReplicaManager(config, time, kafkaZookeeper.getZookeeperClient, kafkaScheduler, deleteLog)
+    apis = new KafkaApis(socketServer.requestChannel, logManager, replicaManager, kafkaZookeeper)
+    requestHandlerPool = new KafkaRequestHandlerPool(socketServer.requestChannel, apis, config.numIoThreads)
+    socketServer.startup()
 
-    kafkaController = new KafkaController(config, kafkaZookeeper.getZookeeperClient)
-    apis = new KafkaApis(socketServer.requestChannel, logManager, replicaManager, kafkaZookeeper,
-                         addReplica, stopReplica, makeLeader, makeFollower, config.brokerId)
-    requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
     Mx4jLoader.maybeLoad
 
-    /**
-     *  Registers this broker in ZK. After this, consumers can connect to broker.
-     *  So this should happen after socket server start.
-     */
+    // starting relevant replicas and leader election for partitions assigned to this broker
+    kafkaZookeeper.startup()
     // start the replica manager
     replicaManager.startup()
     // start the controller
     kafkaController.startup()
-    info("started")
+
+    info("Server started.")
   }
-
-
+  
   /**
    * Shutdown API for shutting down a single instance of the Kafka server.
    * Shuts down the LogManager, the SocketServer and the log cleaner scheduler thread
    */
   def shutdown() {
-    info("shutting down")
     val canShutdown = isShuttingDown.compareAndSet(false, true);
     if (canShutdown) {
-      if(requestHandlerPool != null)
-        requestHandlerPool.shutdown()
+      info("Shutting down Kafka server with id " + config.brokerId)
       kafkaScheduler.shutdown()
       apis.close()
-      kafkaZookeeper.shutdown()
       if(replicaManager != null)
         replicaManager.shutdown()
       if (socketServer != null)
         socketServer.shutdown()
+      if(requestHandlerPool != null)
+        requestHandlerPool.shutdown()
       Utils.unregisterMBean(statsMBeanName)
       if(logManager != null)
         logManager.shutdown()
-
       if(kafkaController != null)
         kafkaController.shutDown()
-
+      kafkaZookeeper.shutdown()
+      zkClient.close()
       val cleanShutDownFile = new File(new File(config.logDir), CleanShutdownFile)
-      debug("creating clean shutdown file " + cleanShutDownFile.getAbsolutePath())
+      debug("Creating clean shutdown file " + cleanShutDownFile.getAbsolutePath())
       cleanShutDownFile.createNewFile
       shutdownLatch.countDown()
-      info("shutted down completed")
+      info("Kafka server with id %d shut down completed".format(config.brokerId))
     }
   }
-
+  
   /**
    * After calling shutdown(), use this API to wait until the shutdown is complete
    */
   def awaitShutdown(): Unit = shutdownLatch.await()
 
   def addReplica(topic: String, partition: Int, assignedReplicas: Set[Int]): Replica = {
+    info("Added local replica for topic %s partition %d on broker %d".format(topic, partition, config.brokerId))
+    // get local log
     val log = logManager.getOrCreateLog(topic, partition)
     replicaManager.addLocalReplica(topic, partition, log, assignedReplicas)
   }
 
-  def makeLeader(replica: Replica, leaderAndISR: LeaderAndISR): Short = {
-    replicaManager.makeLeader(replica, leaderAndISR)
+  def makeLeader(replica: Replica, currentISRInZk: Seq[Int]) {
+    replicaManager.makeLeader(replica, currentISRInZk)
   }
 
-  def makeFollower(replica: Replica, leaderAndISR: LeaderAndISR): Short = {
-    replicaManager.makeFollower(replica, leaderAndISR)
+  def makeFollower(replica: Replica, leaderBrokerId: Int, zkClient: ZkClient) {
+    replicaManager.makeFollower(replica, leaderBrokerId, zkClient)
   }
 
   def getReplica(topic: String, partition: Int): Option[Replica] =
     replicaManager.getReplica(topic, partition)
-
-  def stopReplica(topic: String, partition: Int): Short = {
-    replicaManager.stopReplica(topic, partition)
-  }
-
-  def deleteLog(topic: String,  partition: Int): Unit = {
-    /* TODO: handle deleteLog in a better way */
-    //logManager.deleteLog(topic, partition)
-  }
 
   def getLogManager(): LogManager = logManager
 

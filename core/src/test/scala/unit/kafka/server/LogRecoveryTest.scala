@@ -57,7 +57,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(_.brokerId).mkString(":"))
 
     // wait until leader is elected
-    var leader = waitUntilLiveLeaderIsElected(zkClient, topic, partitionId, 500)
+    var leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
     assertTrue("Leader should get elected", leader.isDefined)
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
@@ -89,7 +89,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(_.brokerId).mkString(":"))
 
     // wait until leader is elected
-    var leader = waitUntilLiveLeaderIsElected(zkClient, topic, partitionId, 500)
+    var leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
     assertTrue("Leader should get elected", leader.isDefined)
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
@@ -103,13 +103,13 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(30L, hwFile1.read(topic, 0))
 
     // check if leader moves to the other server
-    leader = waitUntilLiveLeaderIsElected(zkClient, topic, partitionId, 500)
+    leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
     assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
 
     // bring the preferred replica back
     server1.startup()
 
-    leader = waitUntilLiveLeaderIsElected(zkClient, topic, partitionId, 500)
+    leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
     assertEquals("Leader must remain on broker 1", 1, leader.getOrElse(-1))
 
     assertEquals(30L, hwFile1.read(topic, 0))
@@ -118,7 +118,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(30L, hwFile2.read(topic, 0))
 
     server2.startup()
-    leader = waitUntilLiveLeaderIsElected(zkClient, topic, partitionId, 500)
+    leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
     assertEquals("Leader must remain on broker 0", 0, leader.getOrElse(-1))
 
     sendMessages()
@@ -159,7 +159,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(_.brokerId).mkString(":"))
 
     // wait until leader is elected
-    var leader = waitUntilLiveLeaderIsElected(zkClient, topic, partitionId, 500)
+    var leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
     assertTrue("Leader should get elected", leader.isDefined)
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
@@ -202,7 +202,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(_.brokerId).mkString(":"))
 
     // wait until leader is elected
-    var leader = waitUntilLiveLeaderIsElected(zkClient, topic, partitionId, 500)
+    var leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
     assertTrue("Leader should get elected", leader.isDefined)
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
@@ -218,7 +218,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     server2.startup()
     // check if leader moves to the other server
-    leader = waitUntilLiveLeaderIsElected(zkClient, topic, partitionId, 500)
+    leader = waitUntilLeaderIsElected(zkClient, topic, partitionId, 500)
     assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
 
     assertEquals(60L, hwFile1.read(topic, 0))

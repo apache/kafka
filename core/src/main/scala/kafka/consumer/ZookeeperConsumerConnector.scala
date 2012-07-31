@@ -296,7 +296,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     try {
       val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
       val znode = topicDirs.consumerOffsetDir + "/" + partitionId
-      val offsetString = readDataMaybeNull(zkClient, znode)._1
+      val offsetString = readDataMaybeNull(zkClient, znode)
       if (offsetString != null)
         return offsetString.toLong
       else
@@ -416,7 +416,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       }
     }
 
-    private def deletePartitionOwnershipFromZK(topic: String, partition: Int) {
+    private def deletePartitionOwnershipFromZK(topic: String, partition: String) {
       val topicDirs = new ZKGroupTopicDirs(group, topic)
       val znode = topicDirs.consumerOwnerDir + "/" + partition
       deletePath(zkClient, znode)
@@ -427,7 +427,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       info("Releasing partition ownership")
       for ((topic, infos) <- localTopicRegistry) {
         for(partition <- infos.keys)
-          deletePartitionOwnershipFromZK(topic, partition)
+          deletePartitionOwnershipFromZK(topic, partition.toString)
         localTopicRegistry.remove(topic)
       }
     }
@@ -484,7 +484,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
       releasePartitionOwnership(topicRegistry)
 
-      var partitionOwnershipDecision = new collection.mutable.HashMap[(String, Int), String]()
+      var partitionOwnershipDecision = new collection.mutable.HashMap[(String, String), String]()
       var currentTopicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]]
 
       for ((topic, consumerThreadIdSet) <- myTopicThreadIdsMap) {
@@ -492,7 +492,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
         val topicDirs = new ZKGroupTopicDirs(group, topic)
         val curConsumers = consumersPerTopicMap.get(topic).get
-        var curPartitions: Seq[Int] = partitionsPerTopicMap.get(topic).get
+        var curPartitions: Seq[String] = partitionsPerTopicMap.get(topic).get
 
         val nPartsPerConsumer = curPartitions.size / curConsumers.size
         val nConsumersWithExtraPart = curPartitions.size % curConsumers.size
@@ -602,13 +602,13 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       }
     }
 
-    private def reflectPartitionOwnershipDecision(partitionOwnershipDecision: Map[(String, Int), String]): Boolean = {
-      var successfullyOwnedPartitions : List[(String, Int)] = Nil
+    private def reflectPartitionOwnershipDecision(partitionOwnershipDecision: Map[(String, String), String]): Boolean = {
+      var successfullyOwnedPartitions : List[(String, String)] = Nil
       val partitionOwnershipSuccessful = partitionOwnershipDecision.map { partitionOwner =>
         val topic = partitionOwner._1._1
         val partition = partitionOwner._1._2
         val consumerThreadId = partitionOwner._2
-        val partitionOwnerPath = getConsumerPartitionOwnerPath(group, topic, partition)
+        val partitionOwnerPath = getConsumerPartitionOwnerPath(group, topic,partition)
         try {
           createEphemeralPathExpectConflict(zkClient, partitionOwnerPath, consumerThreadId)
           info(consumerThreadId + " successfully owned partition " + partition + " for topic " + topic)
@@ -633,29 +633,29 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     }
 
     private def addPartitionTopicInfo(currentTopicRegistry: Pool[String, Pool[Int, PartitionTopicInfo]],
-                                      topicDirs: ZKGroupTopicDirs, partition: Int,
+                                      topicDirs: ZKGroupTopicDirs, partition: String,
                                       topic: String, consumerThreadId: String) {
       val partTopicInfoMap = currentTopicRegistry.get(topic)
 
       // find the leader for this partition
-      val leaderOpt = getLeaderForPartition(zkClient, topic, partition)
+      val leaderOpt = getLeaderForPartition(zkClient, topic, partition.toInt)
       leaderOpt match {
-        case None => throw new NoBrokersForPartitionException("No leader available for partition %d on topic %s".
+        case None => throw new NoBrokersForPartitionException("No leader available for partition %s on topic %s".
           format(partition, topic))
-        case Some(l) => debug("Leader for partition %d for topic %s is %d".format(partition, topic, l))
+        case Some(l) => debug("Leader for partition %s for topic %s is %d".format(partition, topic, l))
       }
       val leader = leaderOpt.get
 
       val znode = topicDirs.consumerOffsetDir + "/" + partition
-      val offsetString = readDataMaybeNull(zkClient, znode)._1
+      val offsetString = readDataMaybeNull(zkClient, znode)
       // If first time starting a consumer, set the initial offset based on the config
       var offset : Long = 0L
       if (offsetString == null)
         offset = config.autoOffsetReset match {
               case OffsetRequest.SmallestTimeString =>
-                  earliestOrLatestOffset(topic, leader, partition, OffsetRequest.EarliestTime)
+                  earliestOrLatestOffset(topic, leader, partition.toInt, OffsetRequest.EarliestTime)
               case OffsetRequest.LargestTimeString =>
-                  earliestOrLatestOffset(topic, leader, partition, OffsetRequest.LatestTime)
+                  earliestOrLatestOffset(topic, leader, partition.toInt, OffsetRequest.LatestTime)
               case _ =>
                   throw new InvalidConfigException("Wrong value in autoOffsetReset in ConsumerConfig")
         }
@@ -666,12 +666,12 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val fetchedOffset = new AtomicLong(offset)
       val partTopicInfo = new PartitionTopicInfo(topic,
                                                  leader,
-                                                 partition,
+                                                 partition.toInt,
                                                  queue,
                                                  consumedOffset,
                                                  fetchedOffset,
                                                  new AtomicInteger(config.fetchSize))
-      partTopicInfoMap.put(partition, partTopicInfo)
+      partTopicInfoMap.put(partition.toInt, partTopicInfo)
       debug(partTopicInfo + " selected new offset " + offset)
     }
   }

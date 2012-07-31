@@ -31,13 +31,12 @@ import kafka.utils._
  *   N Processor threads that each have their own selector and read requests from sockets
  *   M Handler threads that handle requests and produce responses back to the processor threads for writing.
  */
-class SocketServer(val brokerId: Int,
-                   val port: Int,
+class SocketServer(val port: Int,
                    val numProcessorThreads: Int, 
                    val monitoringPeriodSecs: Int,
                    val maxQueuedRequests: Int,
                    val maxRequestSize: Int = Int.MaxValue) extends Logging {
-  this.logIdent = "Socket Server on Broker " + brokerId + ", "
+
   private val time = SystemTime
   private val processors = new Array[Processor](numProcessorThreads)
   private var acceptor: Acceptor = new Acceptor(port, processors)
@@ -58,18 +57,18 @@ class SocketServer(val brokerId: Int,
     // start accepting connections
     Utils.newThread("kafka-acceptor", acceptor, false).start()
     acceptor.awaitStartup
-    info("started")
+    info("Kafka socket server started")
   }
 
   /**
    * Shutdown the socket server
    */
   def shutdown() = {
-    info("shutting down")
+    info("Shutting down socket server")
     acceptor.shutdown
     for(processor <- processors)
       processor.shutdown
-    info("shutted down completely")
+    info("Shut down socket server complete")
   }
 }
 

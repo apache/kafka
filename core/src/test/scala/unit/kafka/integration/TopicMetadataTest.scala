@@ -117,8 +117,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // create the kafka request handler
     val requestChannel = new RequestChannel(2, 5)
-    val apis = new KafkaApis(requestChannel, logManager, replicaManager, kafkaZookeeper, null,
-                             null, null, null, 1)
+    val apis = new KafkaApis(requestChannel, logManager, replicaManager, kafkaZookeeper)
 
     // mock the receive API to return the request buffer as created above
     val receivedRequest = EasyMock.createMock(classOf[BoundedByteBufferReceive])

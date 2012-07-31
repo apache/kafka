@@ -23,7 +23,7 @@ import kafka.cluster.Broker
 
 abstract class AbstractFetcherManager(protected val name: String, numFetchers: Int = 1) extends Logging {
     // map of (source brokerid, fetcher Id per source broker) => fetcher
-  private val fetcherThreadMap = new mutable.HashMap[(Int, Int), AbstractFetcherThread]
+  private val fetcherThreadMap = new mutable.HashMap[Tuple2[Int, Int], AbstractFetcherThread]
   private val mapLock = new Object
   this.logIdent = name + " "
 
@@ -52,7 +52,7 @@ abstract class AbstractFetcherManager(protected val name: String, numFetchers: I
   }
 
   def removeFetcher(topic: String, partitionId: Int) {
-    info("removing fetcher on topic %s, partition %d".format(topic, partitionId))
+    info("%s removing fetcher on topic %s, partition %d".format(name, topic, partitionId))
     mapLock synchronized {
       for ((key, fetcher) <- fetcherThreadMap) {
         fetcher.removePartition(topic, partitionId)

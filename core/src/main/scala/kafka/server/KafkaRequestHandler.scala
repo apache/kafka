@@ -24,44 +24,41 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * A thread that answers kafka requests.
  */
-class KafkaRequestHandler(id: Int, brokerId: Int, val requestChannel: RequestChannel, apis: KafkaApis) extends Runnable with Logging {
-  this.logIdent = "Kafka Request Handler " + id + " on Broker " + brokerId + ", "
-
+class KafkaRequestHandler(val requestChannel: RequestChannel, apis: KafkaApis) extends Runnable with Logging { 
+     
   def run() { 
     while(true) { 
       val req = requestChannel.receiveRequest()
-      if(req == RequestChannel.AllDone){
-        trace("receives shut down command, shut down".format(brokerId, id))
+      trace("Processor " + Thread.currentThread.getName + " got request " + req)
+      if(req == RequestChannel.AllDone)
         return
-      }
-      debug("handles request " + req)
       apis.handle(req)
     }
   }
 
   def shutdown(): Unit = requestChannel.sendRequest(RequestChannel.AllDone)
+  
 }
 
-class KafkaRequestHandlerPool(val brokerId: Int,
-                              val requestChannel: RequestChannel,
-                              val apis: KafkaApis,
+class KafkaRequestHandlerPool(val requestChannel: RequestChannel, 
+                              val apis: KafkaApis, 
                               numThreads: Int) extends Logging {
-  this.logIdent = "Kafka Request Handler on Broker " + brokerId + ", "
+  
   val threads = new Array[Thread](numThreads)
   val runnables = new Array[KafkaRequestHandler](numThreads)
   for(i <- 0 until numThreads) { 
-    runnables(i) = new KafkaRequestHandler(i, brokerId, requestChannel, apis)
+    runnables(i) = new KafkaRequestHandler(requestChannel, apis)
     threads(i) = Utils.daemonThread("kafka-request-handler-" + i, runnables(i))
     threads(i).start()
   }
   
   def shutdown() {
-    info("shutting down")
+    info("Shutting down request handlers")
     for(handler <- runnables)
       handler.shutdown
     for(thread <- threads)
       thread.join
-    info("shutted down completely")
+    info("Request handlers shut down")
   }
   
 }
