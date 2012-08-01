@@ -101,7 +101,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // create topic with 1 partition and await leadership
     CreateTopicCommand.createTopic(zkClient, "new-topic", 1, 2)
-    TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
 
     val producer1 = new Producer[String, String](config1)
     val producer2 = new Producer[String, String](config2)
@@ -153,10 +153,10 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // create topic
     CreateTopicCommand.createTopic(zkClient, "new-topic", 4, 2, "0,0,0,0")
-    TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 0, 500)
-    TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 1, 500)
-    TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 2, 500)
-    TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 3, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 1, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 2, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 3, 500)
 
     val config = new ProducerConfig(props)
     val producer = new Producer[String, String](config)
@@ -182,6 +182,8 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // restart server 1
     server1.startup()
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
+
     try {
       // cross check if broker 1 got the messages
       val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
@@ -209,7 +211,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // create topics in ZK
     CreateTopicCommand.createTopic(zkClient, "new-topic", 4, 2, "0:1,0:1,0:1,0:1")
-    TestUtils.waitUntilLeaderIsElected(zkClient, "new-topic", 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
 
     // do a simple test to make sure plumbing is okay
     try {

@@ -39,7 +39,7 @@ class ZKEphemeralTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
 
     var testData: String = null
-    testData = ZkUtils.readData(zkClient, "/tmp/zktest")
+    testData = ZkUtils.readData(zkClient, "/tmp/zktest")._1
     Assert.assertNotNull(testData)
     zkClient.close
     zkClient = new ZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs,

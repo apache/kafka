@@ -25,7 +25,8 @@ import kafka.server.{KafkaServer, KafkaConfig}
 import kafka.api._
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
-import kafka.utils.{ControllerTestUtils, ZkUtils, TestUtils}
+import kafka.admin.CreateTopicCommand
+import kafka.utils.{ZkUtils, ControllerTestUtils, TestUtils}
 
 
 class ControllerBasicTest extends JUnit3Suite with ZooKeeperTestHarness  {
@@ -36,11 +37,13 @@ class ControllerBasicTest extends JUnit3Suite with ZooKeeperTestHarness  {
   override def setUp() {
     super.setUp()
     brokers = configs.map(config => TestUtils.createServer(config))
+    CreateTopicCommand.createTopic(zkClient, "test1", 1, 4, "0:1:2:3")
+    CreateTopicCommand.createTopic(zkClient, "test2", 1, 4, "0:1:2:3")
   }
 
   override def tearDown() {
-    super.tearDown()
     brokers.foreach(_.shutdown())
+    super.tearDown()
   }
 
   def testControllerFailOver(){
@@ -48,36 +51,37 @@ class ControllerBasicTest extends JUnit3Suite with ZooKeeperTestHarness  {
     brokers(1).shutdown()
     brokers(3).shutdown()
     assertTrue("Controller not elected", TestUtils.waitUntilTrue(() =>
-      ZkUtils.readDataMaybeNull(zkClient, ZkUtils.ControllerPath) != null, zookeeper.tickTime))
-    var curController = ZkUtils.readDataMaybeNull(zkClient, ZkUtils.ControllerPath)
+      ZkUtils.readDataMaybeNull(zkClient, ZkUtils.ControllerPath)._1 != null, zookeeper.tickTime))
+    var curController = ZkUtils.readDataMaybeNull(zkClient, ZkUtils.ControllerPath)._1
     assertEquals("Controller should move to broker 2", "2", curController)
+
 
     brokers(1).startup()
     brokers(2).shutdown()
     assertTrue("Controller not elected", TestUtils.waitUntilTrue(() =>
-      ZkUtils.readDataMaybeNull(zkClient, ZkUtils.ControllerPath) != null, zookeeper.tickTime))
-    curController = ZkUtils.readDataMaybeNull(zkClient, ZkUtils.ControllerPath)
+      ZkUtils.readDataMaybeNull(zkClient, ZkUtils.ControllerPath)._1 != null, zookeeper.tickTime))
+    curController = ZkUtils.readDataMaybeNull(zkClient, ZkUtils.ControllerPath)._1
     assertEquals("Controller should move to broker 1", "1", curController)
   }
 
   def testControllerCommandSend(){
     for(broker <- brokers){
       if(broker.kafkaController.isActive){
-        val leaderAndISRRequest = ControllerTestUtils.createSampleLeaderAndISRRequest()
-        val stopReplicaRequest = ControllerTestUtils.createSampleStopReplicaRequest()
+        val leaderAndISRRequest = ControllerTestUtils.createTestLeaderAndISRRequest()
+        val stopReplicaRequest = ControllerTestUtils.createTestStopReplicaRequest()
 
         val successCount: AtomicInteger = new AtomicInteger(0)
         val countDownLatch: CountDownLatch = new CountDownLatch(8)
 
         def compareLeaderAndISRResponseWithExpectedOne(response: RequestOrResponse){
-          val expectedResponse = ControllerTestUtils.createSampleLeaderAndISRResponse()
+          val expectedResponse = ControllerTestUtils.createTestLeaderAndISRResponse()
           if(response.equals(expectedResponse))
             successCount.addAndGet(1)
           countDownLatch.countDown()
         }
 
         def compareStopReplicaResponseWithExpectedOne(response: RequestOrResponse){
-          val expectedResponse = ControllerTestUtils.createSampleStopReplicaResponse()
+          val expectedResponse = ControllerTestUtils.createTestStopReplicaResponse()
           if(response.equals(expectedResponse))
             successCount.addAndGet(1)
           countDownLatch.countDown()
@@ -87,10 +91,10 @@ class ControllerBasicTest extends JUnit3Suite with ZooKeeperTestHarness  {
         broker.kafkaController.sendRequest(1, leaderAndISRRequest, compareLeaderAndISRResponseWithExpectedOne)
         broker.kafkaController.sendRequest(2, leaderAndISRRequest, compareLeaderAndISRResponseWithExpectedOne)
         broker.kafkaController.sendRequest(3, leaderAndISRRequest, compareLeaderAndISRResponseWithExpectedOne)
-        broker.kafkaController.sendRequest(0, stopReplicaRequest, compareStopReplicaResponseWithExpectedOne)
-        broker.kafkaController.sendRequest(1, stopReplicaRequest, compareStopReplicaResponseWithExpectedOne)
-        broker.kafkaController.sendRequest(2, stopReplicaRequest, compareStopReplicaResponseWithExpectedOne)
-        broker.kafkaController.sendRequest(3, stopReplicaRequest, compareStopReplicaResponseWithExpectedOne)
+        broker.kafkaController.sendRequest(0, leaderAndISRRequest, compareLeaderAndISRResponseWithExpectedOne)
+        broker.kafkaController.sendRequest(1, leaderAndISRRequest, compareLeaderAndISRResponseWithExpectedOne)
+        broker.kafkaController.sendRequest(2, leaderAndISRRequest, compareLeaderAndISRResponseWithExpectedOne)
+        broker.kafkaController.sendRequest(3, leaderAndISRRequest, compareLeaderAndISRResponseWithExpectedOne)
         countDownLatch.await()
 
         assertEquals(successCount.get(), 8)

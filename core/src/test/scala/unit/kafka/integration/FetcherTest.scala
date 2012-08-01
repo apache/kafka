@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -35,27 +35,28 @@ import kafka.admin.CreateTopicCommand
 class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
 
   val numNodes = 1
-  val configs = 
+  val configs =
     for(props <- TestUtils.createBrokerConfigs(numNodes))
-      yield new KafkaConfig(props)
+    yield new KafkaConfig(props)
   val messages = new mutable.HashMap[Int, Seq[Message]]
   val topic = "topic"
   val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, c.brokerId.toString, "localhost", c.port)))
   val shutdown = ZookeeperConsumerConnector.shutdownCommand
   val queue = new LinkedBlockingQueue[FetchedDataChunk]
   val topicInfos = configs.map(c => new PartitionTopicInfo(topic,
-                                                      c.brokerId,
-                                                      0,
-                                                      queue, 
-                                                      new AtomicLong(0), 
-                                                      new AtomicLong(0), 
-                                                      new AtomicInteger(0)))
-  
+                                                           c.brokerId,
+                                                           0,
+                                                           queue,
+                                                           new AtomicLong(0),
+                                                           new AtomicLong(0),
+                                                           new AtomicInteger(0)))
+
   var fetcher: ConsumerFetcherManager = null
 
   override def setUp() {
     super.setUp
     CreateTopicCommand.createTopic(zkClient, topic, 1, 1, configs.head.brokerId.toString)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
     fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkClient)
     fetcher.stopAllConnections()
     fetcher.startConnections(topicInfos, cluster)
@@ -65,20 +66,20 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
     fetcher.shutdown()
     super.tearDown
   }
-    
+
   def testFetcher() {
     val perNode = 2
     var count = sendMessages(perNode)
-    waitUntilLeaderIsElected(zkClient, topic, 0, 500)
+
     fetch(count)
     assertQueueEmpty()
     count = sendMessages(perNode)
     fetch(count)
     assertQueueEmpty()
   }
-  
+
   def assertQueueEmpty(): Unit = assertEquals(0, queue.size)
-  
+
   def sendMessages(messagesPerNode: Int): Int = {
     var count = 0
     for(conf <- configs) {
@@ -91,7 +92,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
     }
     count
   }
-  
+
   def fetch(expected: Int) {
     var count = 0
     while(true) {
@@ -103,5 +104,5 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
         return
     }
   }
-    
+
 }

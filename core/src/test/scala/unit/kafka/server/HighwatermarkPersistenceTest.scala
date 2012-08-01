@@ -39,9 +39,11 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     val scheduler = new KafkaScheduler(2)
     scheduler.startUp
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, new MockTime(), zkClient, scheduler)
+    val replicaManager = new ReplicaManager(configs.head, new MockTime(), zkClient, scheduler, null)
     replicaManager.startup()
-    replicaManager.checkpointHighwaterMarks()
+    replicaManager.startHighWaterMarksCheckPointThread()
+    // sleep until flush ms
+    Thread.sleep(configs.head.defaultFlushIntervalMs)
     var fooPartition0Hw = replicaManager.readCheckpointedHighWatermark(topic, 0)
     assertEquals(0L, fooPartition0Hw)
     val partition0 = replicaManager.getOrCreatePartition(topic, 0, configs.map(_.brokerId).toSet)
@@ -80,7 +82,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     val scheduler = new KafkaScheduler(2)
     scheduler.startUp
     // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, new MockTime(), zkClient, scheduler)
+    val replicaManager = new ReplicaManager(configs.head, new MockTime(), zkClient, scheduler, null)
     replicaManager.startup()
     replicaManager.checkpointHighwaterMarks()
     var topic1Partition0Hw = replicaManager.readCheckpointedHighWatermark(topic1, 0)

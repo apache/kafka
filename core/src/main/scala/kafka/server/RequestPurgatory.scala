@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -39,7 +39,7 @@ class DelayedRequest(val keys: Seq[Any], val request: RequestChannel.Request, de
  * request to be satisfied. For example it could be that we are waiting for user-specified number of acks on a given (topic, partition)
  * to be able to respond to a request or it could be that we are waiting for a given number of bytes to accumulate on a given request
  * to be able to respond to that request (in the simple case we might wait for at least one byte to avoid busy waiting).
- * 
+ *
  * For us the key is generally a (topic, partition) pair.
  * By calling 
  *   watch(delayedRequest) 
@@ -47,27 +47,27 @@ class DelayedRequest(val keys: Seq[Any], val request: RequestChannel.Request, de
  *   val satisfied = update(key, request) 
  * when a request relevant to the given key occurs. This triggers bookeeping logic and returns back any requests satisfied by this
  * new request.
- * 
+ *
  * An implementation provides extends two helper functions
  *   def checkSatisfied(request: R, delayed: T): Boolean
  * this function returns true if the given request (in combination with whatever previous requests have happened) satisfies the delayed
  * request delayed. This method will likely also need to do whatever bookkeeping is necessary.
- * 
+ *
  * The second function is
  *   def expire(delayed: T)
  * this function handles delayed requests that have hit their time limit without being satisfied.
- * 
+ *
  */
-abstract class RequestPurgatory[T <: DelayedRequest, R] {
-  
+abstract class RequestPurgatory[T <: DelayedRequest, R](logPrefix: String) extends  Logging{
+  this.logIdent = logPrefix
   /* a list of requests watching each key */
   private val watchersForKey = new ConcurrentHashMap[Any, Watchers]
-  
+
   /* background thread expiring requests that have been waiting too long */
-  private val expiredRequestReaper = new ExpiredRequestReaper
+  private val expiredRequestReaper = new ExpiredRequestReaper(logPrefix)
   private val expirationThread = Utils.daemonThread("request-expiration-task", expiredRequestReaper)
   expirationThread.start()
-  
+
   /**
    * Add a new delayed request watching the contained keys
    */
@@ -78,7 +78,7 @@ abstract class RequestPurgatory[T <: DelayedRequest, R] {
     }
     expiredRequestReaper.enqueue(delayedRequest)
   }
-  
+
   /**
    * Update any watchers and return a list of newly satisfied requests.
    */
@@ -89,7 +89,7 @@ abstract class RequestPurgatory[T <: DelayedRequest, R] {
     else
       w.collectSatisfiedRequests(request)
   }
-  
+
   private def watchersFor(key: Any): Watchers = {
     var lst = watchersForKey.get(key)
     if(lst == null) {
@@ -98,46 +98,46 @@ abstract class RequestPurgatory[T <: DelayedRequest, R] {
     }
     lst
   }
-  
+
   /**
    * Check if this request satisfied this delayed request
    */
   protected def checkSatisfied(request: R, delayed: T): Boolean
-  
+
   /**
    * Handle an expired delayed request
    */
   protected def expire(delayed: T)
-  
+
   /**
    * Shutdown the expirey thread
    */
   def shutdown() {
     expiredRequestReaper.shutdown()
   }
-  
+
   /**
    * A linked list of DelayedRequests watching some key with some associated bookeeping logic
    */
   private class Watchers {
-    
+
     /* a few magic parameters to help do cleanup to avoid accumulating old watchers */
     private val CleanupThresholdSize = 100
     private val CleanupThresholdPrct = 0.5
-    
+
     private val requests = new LinkedList[T]
-    
+
     /* you can only change this if you have added something or marked something satisfied */
     var liveCount = 0.0
-  
+
     def add(t: T) {
       synchronized {
-        requests.add(t)
-        liveCount += 1
-        maybePurge()
-      }
+                     requests.add(t)
+                     liveCount += 1
+                     maybePurge()
+                   }
     }
-    
+
     private def maybePurge() {
       if(requests.size > CleanupThresholdSize && liveCount / requests.size < CleanupThresholdPrct) {
         val iter = requests.iterator()
@@ -148,55 +148,56 @@ abstract class RequestPurgatory[T <: DelayedRequest, R] {
         }
       }
     }
-  
+
     def decLiveCount() {
       synchronized {
-        liveCount -= 1
-      }
+                     liveCount -= 1
+                   }
     }
-    
+
     def collectSatisfiedRequests(request: R): Seq[T] = {
       val response = new mutable.ArrayBuffer[T]
       synchronized {
-        val iter = requests.iterator()
-        while(iter.hasNext) {
-          val curr = iter.next
-          if(curr.satisfied.get) {
-            // another thread has satisfied this request, remove it
-            iter.remove()
-          } else {
-            if(checkSatisfied(request, curr)) {
-              iter.remove()
-              val updated = curr.satisfied.compareAndSet(false, true)
-              if(updated == true) {
-                response += curr
-                liveCount -= 1
-                expiredRequestReaper.satisfyRequest()
-              }
-            }
-          }
-        }
-      }
+                     val iter = requests.iterator()
+                     while(iter.hasNext) {
+                       val curr = iter.next
+                       if(curr.satisfied.get) {
+                         // another thread has satisfied this request, remove it
+                         iter.remove()
+                       } else {
+                         if(checkSatisfied(request, curr)) {
+                           iter.remove()
+                           val updated = curr.satisfied.compareAndSet(false, true)
+                           if(updated == true) {
+                             response += curr
+                             liveCount -= 1
+                             expiredRequestReaper.satisfyRequest()
+                           }
+                         }
+                       }
+                     }
+                   }
       response
     }
   }
-  
+
   /**
    * Runnable to expire requests that have sat unfullfilled past their deadline
    */
-  private class ExpiredRequestReaper extends Runnable with Logging {
-    
+  private class ExpiredRequestReaper(logPrefix: String) extends Runnable with Logging {
+    this.logIdent = "ExpiredRequestReaper for " + logPrefix
+
     /* a few magic parameters to help do cleanup to avoid accumulating old watchers */
     private val CleanupThresholdSize = 100
     private val CleanupThresholdPrct = 0.5
-    
+
     private val delayed = new DelayQueue[T]
     private val running = new AtomicBoolean(true)
     private val shutdownLatch = new CountDownLatch(1)
     private val needsPurge = new AtomicBoolean(false)
     /* The count of elements in the delay queue that are unsatisfied */
     private val unsatisfied = new AtomicInteger(0)
-    
+
     /** Main loop for the expiry thread */
     def run() {
       while(running.get) {
@@ -204,18 +205,18 @@ abstract class RequestPurgatory[T <: DelayedRequest, R] {
           val curr = pollExpired()
           expire(curr)
         } catch {
-          case ie: InterruptedException => 
+          case ie: InterruptedException =>
             if(needsPurge.getAndSet(false)) {
               val purged = purgeSatisfied()
               debug("Forced purge of " + purged + " requests from delay queue.")
             }
-          case e: Exception => 
+          case e: Exception =>
             error("Error in long poll expiry thread: ", e)
         }
       }
       shutdownLatch.countDown()
     }
-    
+
     /** Add a request to be expired */
     def enqueue(t: T) {
       delayed.add(t)
@@ -223,23 +224,24 @@ abstract class RequestPurgatory[T <: DelayedRequest, R] {
       if(unsatisfied.get > CleanupThresholdSize && unsatisfied.get / delayed.size.toDouble < CleanupThresholdPrct)
         forcePurge()
     }
-    
+
     private def forcePurge() {
       needsPurge.set(true)
       expirationThread.interrupt()
     }
-    
+
     /** Shutdown the expiry thread*/
     def shutdown() {
-      debug("Shutting down request expiry thread")
+      debug("shutting down")
       running.set(false)
       expirationThread.interrupt()
       shutdownLatch.await()
+      debug("shut down completely")
     }
-    
+
     /** Record the fact that we satisfied a request in the stats for the expiry queue */
     def satisfyRequest(): Unit = unsatisfied.getAndDecrement()
-    
+
     /**
      * Get the next expired event
      */
@@ -256,7 +258,7 @@ abstract class RequestPurgatory[T <: DelayedRequest, R] {
       }
       throw new RuntimeException("This should not happen")
     }
-  
+
     /**
      * Delete all expired events from the delay queue
      */
@@ -273,5 +275,5 @@ abstract class RequestPurgatory[T <: DelayedRequest, R] {
       purged
     }
   }
-  
+
 }

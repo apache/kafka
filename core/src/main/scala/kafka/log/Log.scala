@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -29,7 +29,6 @@ import kafka.common.{KafkaException, InvalidMessageSizeException, OffsetOutOfRan
 
 object Log {
   val FileSuffix = ".kafka"
-  val hwFileName = "highwatermark"
 
   /**
    * Find a given range object in a list of ranges by a value in that range. Does a binary search over the ranges
@@ -115,8 +114,8 @@ class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long
  * An append-only log for storing messages. 
  */
 @threadsafe
-private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean, time: Time)
-  extends Logging {
+private[kafka] class Log( val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean, time: Time, brokerId: Int = 0) extends Logging {
+  this.logIdent = "Kafka Log on Broker " + brokerId + ", "
 
   import kafka.log.Log._
 
@@ -126,7 +125,7 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
   /* The current number of unflushed messages appended to the write */
   private val unflushed = new AtomicInteger(0)
 
-   /* last time it was flushed */
+  /* last time it was flushed */
   private val lastflushedTime = new AtomicLong(System.currentTimeMillis)
 
   /* The actual segments of the log */
@@ -191,8 +190,7 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
         val curr = segments.get(i)
         val next = segments.get(i+1)
         if(curr.start + curr.size != next.start)
-          throw new KafkaException("The following segments don't validate: " +
-                  curr.file.getAbsolutePath() + ", " + next.file.getAbsolutePath())
+          throw new KafkaException("The following segments don't validate: " + curr.file.getAbsolutePath() + ", " + next.file.getAbsolutePath())
       }
     }
   }
@@ -231,13 +229,12 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
     BrokerTopicStat.getBrokerTopicStat(topicName).recordMessagesIn(numberOfMessages)
     BrokerTopicStat.getBrokerAllTopicStat.recordMessagesIn(numberOfMessages)
     logStats.recordAppendedMessages(numberOfMessages)
-    
+
     // truncate the message set's buffer upto validbytes, before appending it to the on-disk log
     val validByteBuffer = messages.getBuffer.duplicate()
     val messageSetValidBytes = messages.validBytes
     if(messageSetValidBytes > Int.MaxValue || messageSetValidBytes < 0)
-      throw new InvalidMessageSizeException("Illegal length of message set " + messageSetValidBytes +
-        " Message set cannot be appended to log. Possible causes are corrupted produce requests")
+      throw new InvalidMessageSizeException("Illegal length of message set " + messageSetValidBytes + " Message set cannot be appended to log. Possible causes are corrupted produce requests")
 
     validByteBuffer.limit(messageSetValidBytes.asInstanceOf[Int])
     val validMessages = new ByteBufferMessageSet(validByteBuffer)
@@ -375,15 +372,15 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
       case OffsetRequest.EarliestTime =>
         startIndex = 0
       case _ =>
-          var isFound = false
-          debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
-          startIndex = offsetTimeArray.length - 1
-          while (startIndex >= 0 && !isFound) {
-            if (offsetTimeArray(startIndex)._2 <= request.time)
-              isFound = true
-            else
-              startIndex -=1
-          }
+        var isFound = false
+        debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
+        startIndex = offsetTimeArray.length - 1
+        while (startIndex >= 0 && !isFound) {
+          if (offsetTimeArray(startIndex)._2 <= request.time)
+            isFound = true
+          else
+            startIndex -=1
+        }
     }
 
     val retSize = request.maxNumOffsets.min(startIndex + 1)
@@ -408,7 +405,13 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
     }
   }
 
-  /* Attemps to delete all provided segments from a log and returns how many it was able to */
+
+  def deleteWholeLog():Unit = {
+    deleteSegments(segments.contents.get())
+    Utils.rm(dir)
+  }
+
+  /* Attempts to delete all provided segments from a log and returns how many it was able to */
   def deleteSegments(segments: Seq[LogSegment]): Int = {
     var total = 0
     for(segment <- segments) {
@@ -424,30 +427,27 @@ private[kafka] class Log(val dir: File, val maxSize: Long, val flushInterval: In
   }
 
   def truncateTo(targetOffset: Long) {
-      // find the log segment that has this hw
-      val segmentToBeTruncated = segments.view.find(segment =>
-        targetOffset >= segment.start && targetOffset < segment.absoluteEndOffset)
+    // find the log segment that has this hw
+    val segmentToBeTruncated = segments.view.find(
+      segment => targetOffset >= segment.start && targetOffset < segment.absoluteEndOffset)
 
-      segmentToBeTruncated match {
-        case Some(segment) =>
-          val truncatedSegmentIndex = segments.view.indexOf(segment)
-          segments.truncLast(truncatedSegmentIndex)
-          segment.truncateTo(targetOffset)
-          info("Truncated log segment %s to highwatermark %d".format(segment.file.getAbsolutePath, targetOffset))
-        case None =>
-          assert(targetOffset <= segments.view.last.absoluteEndOffset,
-            "Last checkpointed hw %d cannot be greater than the latest message offset %d in the log %s".
-              format(targetOffset, segments.view.last.absoluteEndOffset, segments.view.last.file.getAbsolutePath))
-          error("Cannot truncate log to %d since the log start offset is %d and end offset is %d"
-            .format(targetOffset, segments.view.head.start, segments.view.last.absoluteEndOffset))
-      }
+    segmentToBeTruncated match {
+      case Some(segment) =>
+        val truncatedSegmentIndex = segments.view.indexOf(segment)
+        segments.truncLast(truncatedSegmentIndex)
+        segment.truncateTo(targetOffset)
+        info("Truncated log segment %s to highwatermark %d".format(segment.file.getAbsolutePath, targetOffset))
+      case None =>
+        assert(targetOffset <= segments.view.last.absoluteEndOffset, "Last checkpointed hw %d cannot be greater than the latest message offset %d in the log %s".format(targetOffset, segments.view.last.absoluteEndOffset, segments.view.last.file.getAbsolutePath))
+        error("Cannot truncate log to %d since the log start offset is %d and end offset is %d".format(targetOffset, segments.view.head.start, segments.view.last.absoluteEndOffset))
+    }
 
-      val segmentsToBeDeleted = segments.view.filter(segment => segment.start > targetOffset)
-      if(segmentsToBeDeleted.size < segments.view.size) {
+    val segmentsToBeDeleted = segments.view.filter(segment => segment.start > targetOffset)
+    if(segmentsToBeDeleted.size < segments.view.size) {
       val numSegmentsDeleted = deleteSegments(segmentsToBeDeleted)
       if(numSegmentsDeleted != segmentsToBeDeleted.size)
         error("Failed to delete some segments during log recovery")
-      }
+    }
   }
 
   def topicName():String = {

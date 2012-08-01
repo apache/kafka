@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -159,9 +159,9 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
 
     // #2 - test that we get correct offsets when partition is owned by broker
     CreateTopicCommand.createTopic(zkClient, "topic1", 1, 1)
-    TestUtils.waitUntilLeaderIsElected(zkClient, "topic1", 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "topic1", 0, 500)
     CreateTopicCommand.createTopic(zkClient, "topic3", 1, 1)
-    TestUtils.waitUntilLeaderIsElected(zkClient, "topic3", 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "topic3", 0, 500)
 
     val response2 = producer.send(request)
     Assert.assertNotNull(response2)

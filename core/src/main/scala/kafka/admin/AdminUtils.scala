@@ -91,10 +91,10 @@ object AdminUtils extends Logging {
     topics.map { topic =>
       if (ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic))) {
         val topicPartitionAssignment = ZkUtils.getPartitionAssignmentForTopics(zkClient, List(topic).iterator).get(topic).get
-        val sortedPartitions = topicPartitionAssignment.toList.sortWith( (m1,m2) => m1._1.toInt < m2._1.toInt )
+        val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
 
         val partitionMetadata = sortedPartitions.map { partitionMap =>
-          val partition = partitionMap._1.toInt
+          val partition = partitionMap._1
           val replicas = partitionMap._2
           val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, topic, partition)
           val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)

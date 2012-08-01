@@ -57,7 +57,7 @@ class BackwardsCompatibilityTest extends JUnit3Suite with KafkaServerTestHarness
   // test for reading data with magic byte 0
   def testProtocolVersion0() {
     CreateTopicCommand.createTopic(zkClient, topic, 0, 1, configs.head.brokerId.toString)
-    TestUtils.waitUntilLeaderIsElected(zkClient, topic, 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
     val lastOffset = simpleConsumer.getOffsetsBefore(topic, 0, OffsetRequest.LatestTime, 1)
     var fetchOffset: Long = 0L
     var messageCount: Int = 0

@@ -51,7 +51,7 @@ class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
     // create a topic and partition and await leadership
     for (topic <- List(topic1,topic2)) {
       CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(c => c.brokerId).mkString(":"))
-      TestUtils.waitUntilLeaderIsElected(zkClient, topic, 0, 1000)
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
     }
 
     // send test messages to leader

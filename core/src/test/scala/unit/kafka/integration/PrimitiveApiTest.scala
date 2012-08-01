@@ -337,6 +337,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
       AdminUtils.getTopicMetaDataFromZK(List(newTopic),
         zkClient).head.errorCode != ErrorMapping.UnknownTopicCode, zookeeper.tickTime))
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, newTopic, 0, 500)
     val fetchResponse = consumer.fetch(new FetchRequestBuilder().addFetch(newTopic, 0, 0, 10000).build())
     assertFalse(fetchResponse.messageSet(newTopic, 0).iterator.hasNext)
   }
@@ -348,7 +349,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   def createSimpleTopicsAndAwaitLeader(zkClient: ZkClient, topics: Seq[String], brokerId: Int) {
     for( topic <- topics ) {
       CreateTopicCommand.createTopic(zkClient, topic, 1, 1, brokerId.toString)
-      TestUtils.waitUntilLeaderIsElected(zkClient, topic, 0, 500)
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
     }
   }
 }

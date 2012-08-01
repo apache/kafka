@@ -73,7 +73,7 @@ class RequestPurgatoryTest {
     assertTrue("Time for expiration was about 20ms", (elapsed - expiration).abs < 10L)
   }
   
-  class MockRequestPurgatory extends RequestPurgatory[DelayedRequest, ProducerRequest] {
+  class MockRequestPurgatory extends RequestPurgatory[DelayedRequest, ProducerRequest]("Mock Request Purgatory") {
     val satisfied = mutable.Set[DelayedRequest]()
     val expired = mutable.Set[DelayedRequest]()
     def awaitExpiration(delayed: DelayedRequest) = {
