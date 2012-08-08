@@ -142,7 +142,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       debug("creating clean shutdown file " + cleanShutDownFile.getAbsolutePath())
       cleanShutDownFile.createNewFile
       shutdownLatch.countDown()
-      info("shutted down completed")
+      info("shut down completed")
     }
   }
 

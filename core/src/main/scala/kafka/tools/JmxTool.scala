@@ -48,11 +48,10 @@ object JmxTool {
     val helpOpt = parser.accepts("help", "Print usage information.")
     val dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " + 
                                                       "See java.text.SimpleDateFormat for options.")
-      .withRequiredArg
+      .withOptionalArg()
       .describedAs("format")
       .ofType(classOf[String])
-      .defaultsTo("yyyy-MM-dd HH:mm:ss.SSS")
-    val jmxServiceUrlOpt = 
+    val jmxServiceUrlOpt =
       parser.accepts("jmx-url", "The url to connect to to poll JMX data. See Oracle javadoc for JMXServiceURL for details.")
       .withRequiredArg
       .describedAs("service-url")
@@ -68,7 +67,8 @@ object JmxTool {
 
     val url = new JMXServiceURL(options.valueOf(jmxServiceUrlOpt))
     val interval = options.valueOf(reportingIntervalOpt).intValue
-    val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
+    val dateFormatExists = options.has(dateFormatOpt)
+    val dateFormat = if(dateFormatExists) Some(new SimpleDateFormat(options.valueOf(dateFormatOpt))) else None
     val jmxc = JMXConnectorFactory.connect(url, null)
     val mbsc = jmxc.getMBeanServerConnection()
 
@@ -88,7 +88,10 @@ object JmxTool {
     while(true) {
       val start = System.currentTimeMillis
       val attributes = queryAttributes(mbsc, names)
-      attributes("time") = dateFormat.format(new Date)
+      attributes("time") = dateFormat match {
+        case Some(dFormat) => dFormat.format(new Date)
+        case None => System.currentTimeMillis().toString
+      }
       println(keys.map(attributes(_)).mkString(", "))
       val sleep = max(0, interval - (System.currentTimeMillis - start))
       Thread.sleep(sleep)

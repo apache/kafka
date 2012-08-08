@@ -91,6 +91,10 @@ pid_zk=
 kafka_pids=
 test_failure_counter=0
 leader_elected_timestamp=
+jmx_ports=
+jmx_ports[1]=9990
+jmx_ports[2]=9991
+jmx_ports[3]=9992
 
 initialize() {
     info "initializing ..."
@@ -144,15 +148,15 @@ cleanup() {
 }
 
 get_leader_brokerid() {
-    log_line=`grep -i -h 'is leader' ${base_dir}/kafka_server_*.log | sort | tail -1`
+    log_line=`grep -i -h 'completed the leader state transition' ${base_dir}/kafka_server_*.log | sort | tail -1`
     info "found the log line: $log_line"
-    broker_id=`echo $log_line | sed s'/^.*INFO Broker //g' | awk -F ' ' '{print $1}'`
+    broker_id=`echo $log_line | sed s'/^.*INFO Replica Manager on Broker //g' | awk -F ',' '{print $1}'`
 
     return $broker_id
 }
 
 get_elected_leader_unix_timestamp() {
-    log_line=`grep -i -h 'is leader' ${base_dir}/kafka_server_*.log | sort | tail -1`
+    log_line=`grep -i -h 'completed the leader state transition' ${base_dir}/kafka_server_*.log | sort | tail -1`
     info "found the log line: $log_line"
 
     this_timestamp=`echo $log_line | cut -f2 -d '[' | cut -f1 -d ']'`
@@ -209,8 +213,8 @@ stop_server() {
 start_server() {
     s_idx=$1
 
-    info "starting kafka server"
-    $base_dir/bin/kafka-run-class.sh kafka.Kafka ${kafka_prop_pathnames[$s_idx]} \
+    info "starting kafka server on jmx port ${jmx_ports[${s_idx}]}"
+    JMX_PORT=${jmx_ports[${s_idx}]} $base_dir/bin/kafka-run-class.sh kafka.Kafka ${kafka_prop_pathnames[$s_idx]} \
         2>&1 >> ${kafka_log4j_log_pathnames[$s_idx]} &
     kafka_pids[${s_idx}]=$!
     info "  -> kafka_pids[$s_idx]: ${kafka_pids[$s_idx]}"
@@ -275,7 +279,7 @@ shutdown_servers() {
 
      # running processes are not terminated properly in a Hudson job,
      # this is a temporary workaround to kill all processes
-     `ps axuw | grep "java\|run\-" | grep -v grep | grep -v slave | grep -v vi | grep -v "run\-test\.sh" | awk '{print $2}' | xargs kill -9`
+     `ps axuw | grep "kafka\|run\-" | grep -v grep | grep -v slave | grep -v vi | grep -v "run\-test\.sh" | awk '{print $2}' | xargs kill -9`
 
 }
 
