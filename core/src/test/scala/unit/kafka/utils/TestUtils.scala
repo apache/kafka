@@ -33,10 +33,10 @@ import collection.mutable.ListBuffer
 import kafka.consumer.ConsumerConfig
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.TimeUnit
-import kafka.serializer.{DefaultEncoder, Encoder}
 import kafka.common.ErrorMapping
 import kafka.api._
 import collection.mutable.{Map, Set}
+import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
 
 
 /**
@@ -114,12 +114,17 @@ object TestUtils extends Logging {
     yield createBrokerConfig(node, port)
   }
 
+  def getBrokerListStrFromConfigs(configs: Seq[KafkaConfig]): String = {
+    configs.map(c => c.hostName + ":" + c.port).mkString(",")
+  }
+
   /**
    * Create a test config for the given node id
    */
   def createBrokerConfig(nodeId: Int, port: Int): Properties = {
     val props = new Properties
     props.put("brokerid", nodeId.toString)
+    props.put("hostname", "localhost")
     props.put("port", port.toString)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
     props.put("log.flush.interval", "1")
@@ -283,9 +288,9 @@ object TestUtils extends Logging {
   /**
    * Create a producer for the given host and port
    */
-  def createProducer[K, V](zkConnect: String, encoder: Encoder[V] = new DefaultEncoder): Producer[K, V] = {
+  def createProducer[K, V](brokerList: String, encoder: Encoder[V] = new DefaultEncoder): Producer[K, V] = {
     val props = new Properties()
-    props.put("zk.connect", zkConnect)
+    props.put("broker.list", brokerList)
     props.put("buffer.size", "65536")
     props.put("connect.timeout.ms", "100000")
     props.put("reconnect.interval", "10000")
@@ -293,11 +298,11 @@ object TestUtils extends Logging {
     new Producer[K, V](new ProducerConfig(props))
   }
 
-  def getProducerConfig(zkConnect: String, bufferSize: Int, connectTimeout: Int,
+  def getProducerConfig(brokerList: String, bufferSize: Int, connectTimeout: Int,
                         reconnectInterval: Int): Properties = {
     val props = new Properties()
     props.put("producer.type", "sync")
-    props.put("zk.connect", zkConnect)
+    props.put("broker.list", brokerList)
     props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
     props.put("buffer.size", bufferSize.toString)
     props.put("connect.timeout.ms", connectTimeout.toString)
@@ -346,6 +351,11 @@ object TestUtils extends Logging {
    */
   def produceRequest(topic: String, partition: Int, message: ByteBufferMessageSet): kafka.api.ProducerRequest = {
     produceRequest(SyncProducerConfig.DefaultCorrelationId,topic,partition,message)
+  }
+
+  def messagesToSet(messages: Seq[String]): ByteBufferMessageSet = {
+    val encoder = new StringEncoder
+    new ByteBufferMessageSet(NoCompressionCodec, messages.map(m => encoder.toMessage(m)): _*)
   }
 
   def produceRequest(correlationId: Int, topic: String, partition: Int, message: ByteBufferMessageSet): kafka.api.ProducerRequest = {

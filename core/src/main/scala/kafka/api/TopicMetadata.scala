@@ -154,7 +154,7 @@ object PartitionMetadata {
   }
 }
 
-case class PartitionMetadata(partitionId: Int, leader: Option[Broker], replicas: Seq[Broker], isr: Seq[Broker] = Seq.empty,
+case class PartitionMetadata(partitionId: Int, val leader: Option[Broker], replicas: Seq[Broker], isr: Seq[Broker] = Seq.empty,
                              errorCode: Short = ErrorMapping.NoError, logMetadata: Option[LogMetadata] = None) {
   def sizeInBytes: Int = {
     var size: Int = 2 /* error code */ + 4 /* partition id */ + 1 /* if leader exists*/

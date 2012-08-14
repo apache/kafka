@@ -49,7 +49,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       // create topic
       CreateTopicCommand.createTopic(zkClient, topic, 1, 1, "0")
 
-      val producer = new Producer[Int, Message](new ProducerConfig(getProducerConfig(zkConnect, 64*1024, 100000, 10000)))
+      val producer = new Producer[Int, Message](new ProducerConfig(getProducerConfig(TestUtils.getBrokerListStrFromConfigs(Seq(config)), 64*1024, 100000, 10000)))
 
       // send some messages
       producer.send(new ProducerData[Int, Message](topic, 0, sent1))
@@ -63,7 +63,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
 
 
     {
-      val producer = new Producer[Int, Message](new ProducerConfig(getProducerConfig(zkConnect, 64*1024, 100000, 10000)))
+      val producer = new Producer[Int, Message](new ProducerConfig(getProducerConfig(TestUtils.getBrokerListStrFromConfigs(Seq(config)), 64*1024, 100000, 10000)))
       val consumer = new SimpleConsumer(host,
                                         port,
                                         1000000,

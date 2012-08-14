@@ -72,7 +72,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
 
   def sendMessages(conf: KafkaConfig, messagesPerNode: Int, header: String, compressed: CompressionCodec): List[Message]= {
     var messages: List[Message] = Nil
-    val producer: kafka.producer.Producer[Int, Message] = TestUtils.createProducer(zkConnect)
+    val producer: kafka.producer.Producer[Int, Message] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs))
     val javaProducer: Producer[Int, Message] = new kafka.javaapi.producer.Producer(producer)
     for (partition <- 0 until numParts) {
       val ms = 0.until(messagesPerNode).map(x =>

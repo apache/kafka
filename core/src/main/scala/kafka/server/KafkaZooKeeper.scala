@@ -44,7 +44,7 @@ class KafkaZooKeeper(config: KafkaConfig) extends Logging {
 
   private def registerBrokerInZk() {
     info("Registering broker " + brokerIdPath)
-    val hostName = if (config.hostName == null) InetAddress.getLocalHost.getHostAddress else config.hostName
+    val hostName = config.hostName
     val creatorId = hostName + "-" + System.currentTimeMillis
     ZkUtils.registerBrokerInZk(zkClient, config.brokerId, hostName, creatorId, config.port)
   }

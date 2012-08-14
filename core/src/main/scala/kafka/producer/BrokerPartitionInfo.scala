@@ -19,13 +19,17 @@ package kafka.producer
 import collection.mutable.HashMap
 import kafka.api.{TopicMetadataRequest, TopicMetadata}
 import kafka.common.KafkaException
-import kafka.utils.Logging
+import kafka.utils.{Logging, Utils}
+import kafka.common.ErrorMapping
 import kafka.cluster.{Replica, Partition}
-import kafka.common.{LeaderNotAvailableException, ErrorMapping, UnknownTopicException}
 
-class BrokerPartitionInfo(producerPool: ProducerPool) extends Logging {
-  val topicPartitionInfo = new HashMap[String, TopicMetadata]()
-  val zkClient = producerPool.getZkClient
+
+class BrokerPartitionInfo(producerConfig: ProducerConfig,
+                          producerPool: ProducerPool,
+                          topicPartitionInfo: HashMap[String, TopicMetadata])
+        extends Logging {
+  val brokerList = producerConfig.brokerList
+  val brokers = Utils.getAllBrokersFromBrokerList(brokerList)
 
   /**
    * Return a sequence of (brokerId, numPartitions).
@@ -69,33 +73,43 @@ class BrokerPartitionInfo(producerPool: ProducerPool) extends Logging {
    * It updates the cache by issuing a get topic metadata request to a random broker.
    * @param topic the topic for which the metadata is to be fetched
    */
-  def updateInfo(topics: Seq[String] = Seq.empty[String]) = {
-    val producer = producerPool.getAnyProducer
-    val topicList = if(topics.size > 0) topics else topicPartitionInfo.keySet.toList
-    topicList.foreach { topic =>
-      info("Fetching metadata for topic %s".format(topic))
-      val topicMetadataRequest = new TopicMetadataRequest(List(topic))
-      var topicMetaDataResponse: Seq[TopicMetadata] = Nil
+  def updateInfo(topics: Seq[String]) = {
+    var fetchMetaDataSucceeded: Boolean = false
+    var i: Int = 0
+    val topicMetadataRequest = new TopicMetadataRequest(topics)
+    var topicMetaDataResponse: Seq[TopicMetadata] = Nil
+    var t: Throwable = null
+    while(i < brokers.size && !fetchMetaDataSucceeded) {
+      val producer: SyncProducer = ProducerPool.createSyncProducer(producerConfig, brokers(i))
+      info("Fetching metadata for topic %s".format(brokers))
       try {
         topicMetaDataResponse = producer.send(topicMetadataRequest)
-        // throw topic specific exception
-        topicMetaDataResponse.foreach(metadata => ErrorMapping.maybeThrowException(metadata.errorCode))
+        fetchMetaDataSucceeded = true
         // throw partition specific exception
-        topicMetaDataResponse.foreach(metadata =>
-          metadata.partitionsMetadata.foreach(partitionMetadata => ErrorMapping.maybeThrowException(partitionMetadata.errorCode)))
-      }catch {
-        case te: UnknownTopicException => throw te
-        case e: LeaderNotAvailableException => throw e
-        case oe => warn("Ignoring non leader related error while fetching metadata", oe)  // swallow non leader related errors
+        topicMetaDataResponse.foreach(tmd =>{
+          trace("Metadata for topic %s is %s".format(tmd.topic, tmd))
+          if(tmd.errorCode == ErrorMapping.NoError){
+            topicPartitionInfo.put(tmd.topic, tmd)
+          } else
+            warn("Metadata for topic [%s] is erronous: [%s]".format(tmd.topic, tmd), ErrorMapping.exceptionFor(tmd.errorCode))
+          tmd.partitionsMetadata.foreach(pmd =>{
+            if (pmd.errorCode != ErrorMapping.NoError){
+              debug("Metadata for topic partition [%s, %d] is errornous: [%s]".format(tmd.topic, pmd.partitionId, pmd), ErrorMapping.exceptionFor(pmd.errorCode))
+            }
+          })
+        })
+        producerPool.updateProducer(topicMetaDataResponse)
+      } catch {
+        case e =>
+          warn("fetching broker partition metadata for topics [%s] from broker [%s] failed".format(topics, brokers(i).toString), e)
+          t = e
+      } finally {
+        i = i + 1
+        producer.close()
       }
-      val topicMetadata:Option[TopicMetadata] = if(topicMetaDataResponse.size > 0) Some(topicMetaDataResponse.head) else None
-      topicMetadata match {
-        case Some(metadata) =>
-          info("Fetched metadata for topics %s".format(topic))
-          topicMetadata.foreach(metadata => trace("Metadata for topic %s is %s".format(metadata.topic, metadata.toString)))
-          topicPartitionInfo += (topic -> metadata)
-        case None =>
-      }
+    }
+    if(!fetchMetaDataSucceeded){
+      throw new KafkaException("fetching broker partition metadata for topics [%s] from broker [%s] failed".format(topics, brokers), t)
     }
   }
 }

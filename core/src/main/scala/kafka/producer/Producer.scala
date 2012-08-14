@@ -21,15 +21,12 @@ import kafka.utils._
 import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
 import kafka.serializer.Encoder
 import java.util.concurrent.atomic.{AtomicLong, AtomicBoolean}
-import org.I0Itec.zkclient.ZkClient
 import kafka.common.{QueueFullException, InvalidConfigException}
 
 class Producer[K,V](config: ProducerConfig,
                     private val eventHandler: EventHandler[K,V]) // for testing only
 extends Logging {
   private val hasShutdown = new AtomicBoolean(false)
-  if(!Utils.propertyExists(config.zkConnect))
-    throw new InvalidConfigException("zk.connect property must be specified in the producer")
   if (config.batchSize > config.queueSize)
     throw new InvalidConfigException("Batch size can't be larger than queue size.")
 
@@ -48,14 +45,12 @@ extends Logging {
     case _ => throw new InvalidConfigException("Valid values for producer.type are sync/async")
   }
 
-  def this(config: ProducerConfig, zkClient: ZkClient = null) =
+  def this(config: ProducerConfig) =
     this(config,
          new DefaultEventHandler[K,V](config,
                                       Utils.getObject[Partitioner[K]](config.partitionerClass),
                                       Utils.getObject[Encoder[V]](config.serializerClass),
-                                      new ProducerPool(config, if(zkClient == null)
-                                      new ZkClient(config.zkConnect, config.zkSessionTimeoutMs,
-                                        config.zkConnectionTimeoutMs, ZKStringSerializer) else zkClient)))
+                                      new ProducerPool(config)))
 
   /**
    * Sends the data, partitioned by key to the topic using either the

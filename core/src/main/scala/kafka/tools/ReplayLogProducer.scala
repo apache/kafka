@@ -72,9 +72,9 @@ object ReplayLogProducer extends Logging {
       .describedAs("zookeeper url")
       .ofType(classOf[String])
       .defaultsTo("127.0.0.1:2181")
-    val brokerInfoOpt = parser.accepts("brokerinfo", "REQUIRED: broker info (either from zookeeper or a list.")
+    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: the broker list must be specified.")
       .withRequiredArg
-      .describedAs("broker.list=brokerid:hostname:port or zk.connect=host:port")
+      .describedAs("hostname:port")
       .ofType(classOf[String])
     val inputTopicOpt = parser.accepts("inputtopic", "REQUIRED: The topic to consume from.")
       .withRequiredArg
@@ -117,7 +117,7 @@ object ReplayLogProducer extends Logging {
       .defaultsTo(0)
 
     val options = parser.parse(args : _*)
-    for(arg <- List(brokerInfoOpt, inputTopicOpt)) {
+    for(arg <- List(brokerListOpt, inputTopicOpt)) {
       if(!options.has(arg)) {
         System.err.println("Missing required argument \"" + arg + "\"")
         parser.printHelpOn(System.err)
@@ -125,7 +125,7 @@ object ReplayLogProducer extends Logging {
       }
     }
     val zkConnect = options.valueOf(zkConnectOpt)
-    val brokerInfo = options.valueOf(brokerInfoOpt)
+    val brokerList = options.valueOf(brokerListOpt)
     val numMessages = options.valueOf(numMessagesOpt).intValue
     val isAsync = options.has(asyncOpt)
     val delayedMSBtwSend = options.valueOf(delayMSBtwBatchOpt).longValue
@@ -152,11 +152,7 @@ object ReplayLogProducer extends Logging {
   class ZKConsumerThread(config: Config, stream: KafkaStream[Message]) extends Thread with Logging {
     val shutdownLatch = new CountDownLatch(1)
     val props = new Properties()
-    val brokerInfoList = config.brokerInfo.split("=")
-    if (brokerInfoList(0) == "zk.connect")
-      props.put("zk.connect", brokerInfoList(1))
-    else
-      props.put("broker.list", brokerInfoList(1))
+    props.put("broker.list", config.brokerList)
     props.put("reconnect.interval", Integer.MAX_VALUE.toString)
     props.put("buffer.size", (64*1024).toString)
     props.put("compression.codec", config.compressionCodec.codec.toString)

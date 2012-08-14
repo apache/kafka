@@ -104,7 +104,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val topic = "test-topic"
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     val config = new ProducerConfig(props)
 
     val stringProducer1 = new Producer[String, String](config)
@@ -131,7 +131,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val topic = "test-topic"
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("compression", "true")
     val config = new ProducerConfig(props)
 

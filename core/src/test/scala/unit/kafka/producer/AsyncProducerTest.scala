@@ -25,25 +25,22 @@ import org.junit.Test
 import kafka.api._
 import kafka.cluster.Broker
 import kafka.common._
-import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
+import kafka.message.Message
 import kafka.producer.async._
 import kafka.serializer.{StringEncoder, StringDecoder, Encoder}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
-import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
 import scala.collection.Map
 import scala.collection.mutable.ListBuffer
 import kafka.utils._
 
-class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
+class AsyncProducerTest extends JUnit3Suite {
   val props = createBrokerConfigs(1)
   val configs = props.map(p => new KafkaConfig(p) { override val flushInterval = 1})
-  var brokers: Seq[Broker] = null
 
   override def setUp() {
     super.setUp()
-    brokers = TestUtils.createBrokersInZk(zkClient, configs.map(config => config.brokerId))
   }
 
   override def tearDown() {
@@ -64,7 +61,7 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("producer.type", "async")
     props.put("queue.size", "10")
     props.put("batch.size", "1")
@@ -88,13 +85,13 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testProduceAfterClosed() {
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("producer.type", "async")
     props.put("batch.size", "1")
 
     val config = new ProducerConfig(props)
     val produceData = getProduceData(10)
-    val producer = new Producer[String, String](config, zkClient)
+    val producer = new Producer[String, String](config)
     producer.close
 
     try {
@@ -167,35 +164,31 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     producerDataList.append(new ProducerData[Int,Message]("topic2", 4, new Message("msg5".getBytes)))
 
     val props = new Properties()
-    props.put("zk.connect", zkConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     val broker1 = new Broker(0, "localhost", "localhost", 9092)
     val broker2 = new Broker(1, "localhost", "localhost", 9093)
+    broker1
     // form expected partitions metadata
     val partition1Metadata = new PartitionMetadata(0, Some(broker1), List(broker1, broker2))
     val partition2Metadata = new PartitionMetadata(1, Some(broker2), List(broker1, broker2))
     val topic1Metadata = new TopicMetadata("topic1", List(partition1Metadata, partition2Metadata))
     val topic2Metadata = new TopicMetadata("topic2", List(partition1Metadata, partition2Metadata))
 
+    val topicPartitionInfos = new collection.mutable.HashMap[String, TopicMetadata]
+    topicPartitionInfos.put("topic1", topic1Metadata)
+    topicPartitionInfos.put("topic2", topic2Metadata)
+
     val intPartitioner = new Partitioner[Int] {
       def partition(key: Int, numPartitions: Int): Int = key % numPartitions
     }
     val config = new ProducerConfig(props)
 
-    val syncProducer = getSyncProducer(List("topic1", "topic2"), List(topic1Metadata, topic2Metadata))
-
-    val producerPool = EasyMock.createMock(classOf[ProducerPool])
-    producerPool.getZkClient
-    EasyMock.expectLastCall().andReturn(zkClient)
-    producerPool.addProducers(config)
-    EasyMock.expectLastCall()
-    producerPool.getAnyProducer
-    EasyMock.expectLastCall().andReturn(syncProducer).times(2)
-    EasyMock.replay(producerPool)
+    val producerPool = new ProducerPool(config)
     val handler = new DefaultEventHandler[Int,String](config,
                                                       partitioner = intPartitioner,
                                                       encoder = null.asInstanceOf[Encoder[String]],
-                                                      producerPool = producerPool)
-
+                                                      producerPool = producerPool,
+                                                      topicPartitionInfos)
 
     val topic1Broker1Data = new ListBuffer[ProducerData[Int,Message]]
     topic1Broker1Data.appendAll(List(new ProducerData[Int,Message]("topic1", 0, new Message("msg1".getBytes)),
@@ -217,25 +210,27 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     val actualResult = handler.partitionAndCollate(producerDataList)
     assertEquals(expectedResult, actualResult)
-    EasyMock.verify(syncProducer)
-    EasyMock.verify(producerPool)
   }
 
   @Test
   def testSerializeEvents() {
     val produceData = TestUtils.getMsgStrings(5).map(m => new ProducerData[String,String]("topic1",m))
     val props = new Properties()
-    props.put("zk.connect", zkConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     val config = new ProducerConfig(props)
     // form expected partitions metadata
     val topic1Metadata = getTopicMetadata("topic1", 0, 0, "localhost", 9092)
+    val topicPartitionInfos = new collection.mutable.HashMap[String, TopicMetadata]
+    topicPartitionInfos.put("topic1", topic1Metadata)
 
-    val syncProducer = getSyncProducer(List("topic1"), List(topic1Metadata))
-    val producerPool = getMockProducerPool(config, syncProducer)
+    val producerPool = new ProducerPool(config)
+
     val handler = new DefaultEventHandler[String,String](config,
                                                          partitioner = null.asInstanceOf[Partitioner[String]],
                                                          encoder = new StringEncoder,
-                                                         producerPool = producerPool)
+                                                         producerPool = producerPool,
+                                                         topicPartitionInfos
+    )
 
     val serializedData = handler.serialize(produceData)
     val decoder = new StringDecoder
@@ -248,20 +243,22 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     val producerDataList = new ListBuffer[ProducerData[String,Message]]
     producerDataList.append(new ProducerData[String,Message]("topic1", "key1", new Message("msg1".getBytes)))
     val props = new Properties()
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     val config = new ProducerConfig(props)
 
     // form expected partitions metadata
     val topic1Metadata = getTopicMetadata("topic1", 0, 0, "localhost", 9092)
 
-    val syncProducer = getSyncProducer(List("topic1"), List(topic1Metadata))
+    val topicPartitionInfos = new collection.mutable.HashMap[String, TopicMetadata]
+    topicPartitionInfos.put("topic1", topic1Metadata)
 
-    val producerPool = getMockProducerPool(config, syncProducer)
+    val producerPool = new ProducerPool(config)
 
     val handler = new DefaultEventHandler[String,String](config,
                                                          partitioner = new NegativePartitioner,
                                                          encoder = null.asInstanceOf[Encoder[String]],
-                                                         producerPool = producerPool)
+                                                         producerPool = producerPool,
+                                                         topicPartitionInfos)
     try {
       handler.partitionAndCollate(producerDataList)
       fail("Should fail with InvalidPartitionException")
@@ -269,29 +266,29 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     catch {
       case e: InvalidPartitionException => // expected, do nothing
     }
-    EasyMock.verify(syncProducer)
-    EasyMock.verify(producerPool)
   }
 
   @Test
   def testNoBroker() {
     val props = new Properties()
-    props.put("zk.connect", zkConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
 
     val config = new ProducerConfig(props)
     // create topic metadata with 0 partitions
     val topic1Metadata = new TopicMetadata("topic1", Seq.empty)
 
-    val syncProducer = getSyncProducer(List("topic1"), List(topic1Metadata))
+    val topicPartitionInfos = new collection.mutable.HashMap[String, TopicMetadata]
+    topicPartitionInfos.put("topic1", topic1Metadata)
 
-    val producerPool = getMockProducerPool(config, syncProducer)
+    val producerPool = new ProducerPool(config)
 
     val producerDataList = new ListBuffer[ProducerData[String,String]]
     producerDataList.append(new ProducerData[String,String]("topic1", "msg1"))
     val handler = new DefaultEventHandler[String,String](config,
                                                          partitioner = null.asInstanceOf[Partitioner[String]],
                                                          encoder = new StringEncoder,
-                                                         producerPool = producerPool)
+                                                         producerPool = producerPool,
+                                                         topicPartitionInfos)
     try {
       handler.handle(producerDataList)
       fail("Should fail with NoBrokersForPartitionException")
@@ -299,14 +296,12 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     catch {
       case e: NoBrokersForPartitionException => // expected, do nothing
     }
-    EasyMock.verify(syncProducer)
-    EasyMock.verify(producerPool)
   }
 
   @Test
   def testIncompatibleEncoder() {
     val props = new Properties()
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     val config = new ProducerConfig(props)
 
     val producer=new Producer[String, String](config)
@@ -323,28 +318,23 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Test
   def testRandomPartitioner() {
     val props = new Properties()
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     val config = new ProducerConfig(props)
 
     // create topic metadata with 0 partitions
     val topic1Metadata = getTopicMetadata("topic1", 0, 0, "localhost", 9092)
     val topic2Metadata = getTopicMetadata("topic2", 0, 0, "localhost", 9092)
 
-    val syncProducer = getSyncProducer(List("topic1", "topic2"), List(topic1Metadata, topic2Metadata))
+    val topicPartitionInfos = new collection.mutable.HashMap[String, TopicMetadata]
+    topicPartitionInfos.put("topic1", topic1Metadata)
+    topicPartitionInfos.put("topic2", topic2Metadata)
 
-    val producerPool = EasyMock.createMock(classOf[ProducerPool])
-    producerPool.getZkClient
-    EasyMock.expectLastCall().andReturn(zkClient)
-    producerPool.addProducers(config)
-    EasyMock.expectLastCall()
-    producerPool.getAnyProducer
-    EasyMock.expectLastCall().andReturn(syncProducer).times(2)
-    EasyMock.replay(producerPool)
-
+    val producerPool = new ProducerPool(config)
     val handler = new DefaultEventHandler[String,String](config,
                                                          partitioner = null.asInstanceOf[Partitioner[String]],
                                                          encoder = null.asInstanceOf[Encoder[String]],
-                                                         producerPool = producerPool)
+                                                         producerPool = producerPool,
+                                                         topicPartitionInfos)
     val producerDataList = new ListBuffer[ProducerData[String,Message]]
     producerDataList.append(new ProducerData[String,Message]("topic1", new Message("msg1".getBytes)))
     producerDataList.append(new ProducerData[String,Message]("topic2", new Message("msg2".getBytes)))
@@ -360,7 +350,6 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
       case None =>
         fail("Failed to collate requests by topic, partition")
     }
-    EasyMock.verify(producerPool)
   }
 
   @Test
@@ -369,40 +358,24 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("producer.type", "async")
     props.put("batch.size", "5")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
 
     val config = new ProducerConfig(props)
 
     val topic = "topic1"
     val topic1Metadata = getTopicMetadata(topic, 0, 0, "localhost", 9092)
+    val topicPartitionInfos = new collection.mutable.HashMap[String, TopicMetadata]
+    topicPartitionInfos.put("topic1", topic1Metadata)
+
+    val producerPool = new ProducerPool(config)
 
     val msgs = TestUtils.getMsgStrings(10)
-    val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
-    mockSyncProducer.send(new TopicMetadataRequest(List(topic)))
-    EasyMock.expectLastCall().andReturn(List(topic1Metadata))
-    mockSyncProducer.send(TestUtils.produceRequest(topic, 0, messagesToSet(msgs.take(5))))
-    EasyMock.expectLastCall().andReturn(new ProducerResponse(ProducerRequest.CurrentVersion, 0, Array(0.toShort), Array(0L)))
-    mockSyncProducer.send(TestUtils.produceRequest(topic, 0, messagesToSet(msgs.takeRight(5))))
-    EasyMock.expectLastCall().andReturn(new ProducerResponse(ProducerRequest.CurrentVersion, 0, Array(0.toShort), Array(0L)))
-	  EasyMock.replay(mockSyncProducer)
-
-    val producerPool = EasyMock.createMock(classOf[ProducerPool])
-    producerPool.getZkClient
-    EasyMock.expectLastCall().andReturn(zkClient)
-    producerPool.addProducers(config)
-    EasyMock.expectLastCall()
-    producerPool.getAnyProducer
-    EasyMock.expectLastCall().andReturn(mockSyncProducer)
-    producerPool.getProducer(0)
-    EasyMock.expectLastCall().andReturn(mockSyncProducer).times(2)
-    producerPool.close()
-    EasyMock.expectLastCall()
-    EasyMock.replay(producerPool)
 
     val handler = new DefaultEventHandler[String,String]( config,
                                                           partitioner = null.asInstanceOf[Partitioner[String]],
                                                           encoder = new StringEncoder,
-                                                          producerPool = producerPool )
+                                                          producerPool = producerPool,
+                                                          topicPartitionInfos)
 
     val producer = new Producer[String, String](config, handler)
     try {
@@ -413,36 +386,31 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     } catch {
       case e: Exception => fail("Not expected", e)
     }
-
-    EasyMock.verify(mockSyncProducer)
-    EasyMock.verify(producerPool)
   }
 
   @Test
   def testFailedSendRetryLogic() {
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
 
     val config = new ProducerConfig(props)
 
     val topic1 = "topic1"
     val topic1Metadata = getTopicMetadata(topic1, Array(0, 1), 0, "localhost", 9092)
-    val msgs = TestUtils.getMsgStrings(2)
+    val topicPartitionInfos = new collection.mutable.HashMap[String, TopicMetadata]
+    topicPartitionInfos.put("topic1", topic1Metadata)
 
-    // producer used to return topic metadata
-    val metadataSyncProducer = EasyMock.createMock(classOf[SyncProducer])
-    metadataSyncProducer.send(new TopicMetadataRequest(List(topic1)))
-    EasyMock.expectLastCall().andReturn(List(topic1Metadata)).times(3)
-    EasyMock.replay(metadataSyncProducer)
+
+    val msgs = TestUtils.getMsgStrings(2)
 
     // produce request for topic1 and partitions 0 and 1.  Let the first request fail
     // entirely.  The second request will succeed for partition 1 but fail for partition 0.
     // On the third try for partition 0, let it succeed.
-    val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), 0)
+    val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), TestUtils.messagesToSet(msgs), 0)
     val response1 =
       new ProducerResponse(ProducerRequest.CurrentVersion, 0, Array(ErrorMapping.NotLeaderForPartitionCode.toShort, 0.toShort), Array(0L, 0L))
-    val request2 = TestUtils.produceRequest(topic1, 0, messagesToSet(msgs))
+    val request2 = TestUtils.produceRequest(topic1, 0, TestUtils.messagesToSet(msgs))
     val response2 = new ProducerResponse(ProducerRequest.CurrentVersion, 0, Array(0.toShort), Array(0L))
     val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
     EasyMock.expect(mockSyncProducer.send(request1)).andThrow(new RuntimeException) // simulate SocketTimeoutException
@@ -451,13 +419,8 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     EasyMock.replay(mockSyncProducer)
 
     val producerPool = EasyMock.createMock(classOf[ProducerPool])
-    EasyMock.expect(producerPool.getZkClient).andReturn(zkClient)
-    EasyMock.expect(producerPool.addProducers(config))
-    EasyMock.expect(producerPool.getAnyProducer).andReturn(metadataSyncProducer)
     EasyMock.expect(producerPool.getProducer(0)).andReturn(mockSyncProducer)
-    EasyMock.expect(producerPool.getAnyProducer).andReturn(metadataSyncProducer)
     EasyMock.expect(producerPool.getProducer(0)).andReturn(mockSyncProducer)
-    EasyMock.expect(producerPool.getAnyProducer).andReturn(metadataSyncProducer)
     EasyMock.expect(producerPool.getProducer(0)).andReturn(mockSyncProducer)
     EasyMock.expect(producerPool.close())
     EasyMock.replay(producerPool)
@@ -465,7 +428,8 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     val handler = new DefaultEventHandler[Int,String](config,
                                                       partitioner = new FixedValuePartitioner(),
                                                       encoder = new StringEncoder,
-                                                      producerPool = producerPool)
+                                                      producerPool = producerPool,
+                                                      topicPartitionInfos)
     try {
       val data = List(
         new ProducerData[Int,String](topic1, 0, msgs),
@@ -477,7 +441,6 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
       case e: Exception => fail("Not expected", e)
     }
 
-    EasyMock.verify(metadataSyncProducer)
     EasyMock.verify(mockSyncProducer)
     EasyMock.verify(producerPool)
   }
@@ -511,16 +474,13 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testInvalidConfiguration() {
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("broker.list", TestZKUtils.zookeeperConnect)
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
     props.put("producer.type", "async")
-
     try {
       new ProducerConfig(props)
       fail("should complain about wrong config")
     }
     catch {
-      case e: InvalidConfigException => //expected
+      case e: KafkaException => //expected
     }
   }
 
@@ -529,33 +489,6 @@ class AsyncProducerTest extends JUnit3Suite with ZooKeeperTestHarness {
     for (i <- 0 until nEvents)
       producerDataList.append(new ProducerData[String,String]("topic1", null, List("msg" + i)))
     producerDataList
-  }
-
-  private def messagesToSet(messages: Seq[String]): ByteBufferMessageSet = {
-    val encoder = new StringEncoder
-    new ByteBufferMessageSet(NoCompressionCodec, messages.map(m => encoder.toMessage(m)): _*)
-  }
-
-  private def getSyncProducer(topic: Seq[String], topicMetadata: Seq[TopicMetadata]): SyncProducer = {
-    val syncProducer = EasyMock.createMock(classOf[SyncProducer])
-    topic.zip(topicMetadata).foreach { topicAndMetadata =>
-      syncProducer.send(new TopicMetadataRequest(List(topicAndMetadata._1)))
-      EasyMock.expectLastCall().andReturn(List(topicAndMetadata._2))
-    }
-    EasyMock.replay(syncProducer)
-    syncProducer
-  }
-
-  private def getMockProducerPool(config: ProducerConfig, syncProducer: SyncProducer): ProducerPool = {
-    val producerPool = EasyMock.createMock(classOf[ProducerPool])
-    producerPool.getZkClient
-    EasyMock.expectLastCall().andReturn(zkClient)
-    producerPool.addProducers(config)
-    EasyMock.expectLastCall()
-    producerPool.getAnyProducer
-    EasyMock.expectLastCall().andReturn(syncProducer)
-    EasyMock.replay(producerPool)
-    producerPool
   }
 
   private def getTopicMetadata(topic: String, partition: Int, brokerId: Int, brokerHost: String, brokerPort: Int): TopicMetadata = {

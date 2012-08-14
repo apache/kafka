@@ -32,9 +32,9 @@ object ConsoleProducer {
                            .withRequiredArg
                            .describedAs("topic")
                            .ofType(classOf[String])
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The zookeeper connection string for the kafka zookeeper instance in the form HOST:PORT[/CHROOT].")
+    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
                            .withRequiredArg
-                           .describedAs("connection_string")
+                           .describedAs("broker-list")
                            .ofType(classOf[String])
     val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
     val compressOpt = parser.accepts("compress", "If set, messages batches are sent compressed")
@@ -68,7 +68,7 @@ object ConsoleProducer {
 
 
     val options = parser.parse(args : _*)
-    for(arg <- List(topicOpt, zkConnectOpt)) {
+    for(arg <- List(topicOpt, brokerListOpt)) {
       if(!options.has(arg)) {
         System.err.println("Missing required argument \"" + arg + "\"")
         parser.printHelpOn(System.err)
@@ -77,7 +77,7 @@ object ConsoleProducer {
     }
 
     val topic = options.valueOf(topicOpt)
-    val zkConnect = options.valueOf(zkConnectOpt)
+    val brokerList = options.valueOf(brokerListOpt)
     val sync = options.has(syncOpt)
     val compress = options.has(compressOpt)
     val batchSize = options.valueOf(batchSizeOpt)
@@ -87,7 +87,7 @@ object ConsoleProducer {
     val cmdLineProps = parseLineReaderArgs(options.valuesOf(propertyOpt))
 
     val props = new Properties()
-    props.put("zk.connect", zkConnect)
+    props.put("broker.list", brokerList)
     props.put("compression.codec", DefaultCompressionCodec.codec.toString)
     props.put("producer.type", if(sync) "sync" else "async")
     if(options.has(batchSizeOpt))

@@ -21,6 +21,8 @@ import java.util.Properties
 import kafka.utils.{Utils, ZKConfig}
 import kafka.message.Message
 import kafka.consumer.ConsumerConfig
+import java.net.InetAddress
+
 
 /**
  * Configuration settings for the kafka server
@@ -30,7 +32,7 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
   val port: Int = Utils.getInt(props, "port", 6667)
 
   /* hostname of broker. If not set, will pick up from the value returned from getLocalHost. If there are multiple interfaces getLocalHost may not be what you want. */
-  val hostName: String = Utils.getString(props, "hostname", null)
+  val hostName: String = Utils.getString(props, "hostname", InetAddress.getLocalHost.getHostAddress)
 
   /* the broker id for this server */
   val brokerId: Int = Utils.getInt(props, "brokerid")

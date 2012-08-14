@@ -102,10 +102,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
     Mx4jLoader.maybeLoad
 
-    /**
-     *  Registers this broker in ZK. After this, consumers can connect to broker.
-     *  So this should happen after socket server start.
-     */
     // start the replica manager
     replicaManager.startup()
     // start the controller

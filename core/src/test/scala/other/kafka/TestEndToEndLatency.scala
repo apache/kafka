@@ -24,13 +24,14 @@ import kafka.message._
 
 object TestEndToEndLatency {
   def main(args: Array[String]) {
-    if(args.length != 2) {
-      System.err.println("USAGE: java " + getClass().getName + " zookeeper_connect num_messages")
+    if(args.length != 3) {
+      System.err.println("USAGE: java " + getClass().getName + " broker_list zookeeper_connect num_messages")
       System.exit(1)
     }
-    
-    val zkConnect = args(0)
-    val numMessages = args(1).toInt
+
+    val brokerList = args(0)
+    val zkConnect = args(1)
+    val numMessages = args(2).toInt
     val topic = "test"
     
     val consumerProps = new Properties()
@@ -46,7 +47,7 @@ object TestEndToEndLatency {
     val iter = stream.iterator
 
     val producerProps = new Properties()
-    producerProps.put("zk.connect", zkConnect)
+    producerProps.put("broker.list", brokerList)
     producerProps.put("producer.type", "sync")
     val producer = new Producer[Any, Any](new ProducerConfig(producerProps))
     

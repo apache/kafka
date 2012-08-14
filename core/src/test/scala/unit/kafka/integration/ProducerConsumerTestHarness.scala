@@ -20,22 +20,21 @@ package kafka.integration
 import kafka.consumer.SimpleConsumer
 import org.scalatest.junit.JUnit3Suite
 import java.util.Properties
-import kafka.utils.TestZKUtils
 import kafka.producer.{ProducerConfig, Producer}
 import kafka.message.Message
+import kafka.utils.TestUtils
 
 trait ProducerConsumerTestHarness extends JUnit3Suite with KafkaServerTestHarness {
-  
     val port: Int
     val host = "localhost"
     var producer: Producer[String, Message] = null
     var consumer: SimpleConsumer = null
 
-    override def setUp() {
+  override def setUp() {
       super.setUp
       val props = new Properties()
       props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-      props.put("zk.connect", TestZKUtils.zookeeperConnect)
+      props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
       props.put("buffer.size", "65536")
       props.put("connect.timeout.ms", "100000")
       props.put("reconnect.interval", "10000")

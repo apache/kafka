@@ -42,7 +42,6 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
 
   override def setUp() {
     super.setUp()
-
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)
   }
@@ -70,7 +69,7 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
    * Returns the count of messages received.
    */
   def resetAndConsume(numMessages: Int, resetTo: String, offset: Long): Int = {
-    val producer: Producer[String, Message] = TestUtils.createProducer(zkConnect)
+    val producer: Producer[String, Message] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs))
 
     for(i <- 0 until numMessages)
       producer.send(new ProducerData[String, Message](topic, topic, new Message("test".getBytes())))

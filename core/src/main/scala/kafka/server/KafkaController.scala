@@ -361,7 +361,7 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
         allLeaders.put(topicPartition, leaderAndISR.leader)
       }
       else{
-        warn("during initializing leader of parition (%s, %d), assigned replicas are [%s], live brokers are [%s], no assigned replica is alive".format(topicPartition._1, topicPartition._2, replicaAssignment, allBrokerIds))
+        warn("during initializing leader of parition (%s, %d), assigned replicas are [%s], live brokers are [%s], no assigned replica is alive".format(topicPartition._1, topicPartition._2, replicaAssignment.mkString(","), allBrokerIds))
       }
     }
 
@@ -378,7 +378,7 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
 
   private def onBrokerChange(newBrokers: Set[Int] = null){
     /** handle the new brokers, send request for them to initialize the local log **/
-    if(newBrokers != null)
+    if(newBrokers != null && newBrokers.size != 0)
       deliverLeaderAndISRFromZookeeper(newBrokers, allTopics)
 
     /** handle leader election for the partitions whose leader is no longer alive **/
@@ -439,13 +439,12 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
         }
       }
     })
-    trace("after acting on broker change, the broker to leaderAndISR request map is".format(brokerToLeaderAndISRInfosMap))
     brokerToLeaderAndISRInfosMap.foreach(m => {
       val broker = m._1
       val leaderAndISRInfos = m._2
       val leaderAndISRRequest = new LeaderAndISRRequest(LeaderAndISRRequest.NotInit, leaderAndISRInfos)
       sendRequest(broker, leaderAndISRRequest)
-      info("on broker change, the LeaderAndISRRequest send to brokers [%d] is [%s]".format(leaderAndISRRequest, broker))
+      info("on broker change, the LeaderAndISRRequest send to brokers [%d] is [%s]".format(broker, leaderAndISRRequest))
     })
   }
 

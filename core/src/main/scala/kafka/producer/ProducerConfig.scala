@@ -19,36 +19,23 @@ package kafka.producer
 
 import async.AsyncProducerConfig
 import java.util.Properties
-import kafka.utils.{ZKConfig, Utils}
-import kafka.common.InvalidConfigException
+import kafka.utils.Utils
 
-class ProducerConfig(val props: Properties) extends ZKConfig(props)
-        with AsyncProducerConfig with SyncProducerConfigShared{
+class ProducerConfig(val props: Properties) extends AsyncProducerConfig with SyncProducerConfigShared{
 
-  /** For bypassing zookeeper based auto partition discovery, use this config   *
-   *  to pass in static broker and per-broker partition information. Format-    *
-   *  brokerid1:host1:port1, brokerid2:host2:port2*/
-  val brokerList = Utils.getString(props, "broker.list", null)
-  if(brokerList != null)
-    throw new InvalidConfigException("broker.list is deprecated. Use zk.connect instead")
+  /** This is for bootstrapping and the producer will only use it for getting metadata
+   * (topics, partitions and replicas). The socket connections for sending the actual data
+   * will be established based on the broker information returned in the metadata. The
+   * format is host1:por1,host2:port2, and the list can be a subset of brokers or
+   * a VIP pointing to a subset of brokers.
+   */
+  val brokerList = Utils.getString(props, "broker.list")
 
   /**
    * If DefaultEventHandler is used, this specifies the number of times to
-   * retry if an error is encountered during send. Currently, it is only
-   * appropriate when broker.list points to a VIP. If the zk.connect option
-   * is used instead, this will not have any effect because with the zk-based
-   * producer, brokers are not re-selected upon retry. So retries would go to
-   * the same (potentially still down) broker. (KAFKA-253 will help address
-   * this.)
+   * retry if an error is encountered during send.
    */
   val numRetries = Utils.getInt(props, "num.retries", 0)
-
-  /** If both broker.list and zk.connect options are specified, throw an exception */
-  if(zkConnect == null)
-    throw new InvalidConfigException("zk.connect property is required")
-
-  if(!Utils.propertyExists(zkConnect) && !Utils.propertyExists(brokerList))
-    throw new InvalidConfigException("At least one of zk.connect or broker.list must be specified")
 
   /** the partitioner class for partitioning events amongst sub-topics */
   val partitionerClass = Utils.getString(props, "partitioner.class", "kafka.producer.DefaultPartitioner")

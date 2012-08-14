@@ -71,9 +71,9 @@ object ProducerPerformance extends Logging {
   }
 
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val brokerInfoOpt = parser.accepts("brokerinfo", "REQUIRED: broker info (either from zookeeper or a list.")
+    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: the broker list must be specified.")
       .withRequiredArg
-      .describedAs("broker.list=brokerid:hostname:port or zk.connect=host:port")
+      .describedAs("hostname:port")
       .ofType(classOf[String])
     val produceRequestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The produce request timeout in ms")
       .withRequiredArg()
@@ -115,7 +115,7 @@ object ProducerPerformance extends Logging {
       .defaultsTo(0)
 
     val options = parser.parse(args : _*)
-    for(arg <- List(topicOpt, brokerInfoOpt, numMessagesOpt)) {
+    for(arg <- List(topicOpt, brokerListOpt, numMessagesOpt)) {
       if(!options.has(arg)) {
         System.err.println("Missing required argument \"" + arg + "\"")
         parser.printHelpOn(System.err)
@@ -128,7 +128,7 @@ object ProducerPerformance extends Logging {
     val showDetailedStats = options.has(showDetailedStatsOpt)
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
-    val brokerInfo = options.valueOf(brokerInfoOpt)
+    val brokerList = options.valueOf(brokerListOpt)
     val messageSize = options.valueOf(messageSizeOpt).intValue
     var isFixSize = !options.has(varyMessageSizeOpt)
     var isAsync = options.has(asyncOpt)
@@ -170,13 +170,7 @@ object ProducerPerformance extends Logging {
                        val allDone: CountDownLatch,
                        val rand: Random) extends Runnable {
     val props = new Properties()
-    val brokerInfoList = config.brokerInfo.split("=")
-    if (brokerInfoList(0) == "zk.connect") {
-      props.put("zk.connect", brokerInfoList(1))
-      props.put("zk.sessiontimeout.ms", "300000")
-    }
-    else
-      props.put("broker.list", brokerInfoList(1))
+    props.put("broker.list", config.brokerList)
     props.put("compression.codec", config.compressionCodec.codec.toString)
     props.put("reconnect.interval", Integer.MAX_VALUE.toString)
     props.put("buffer.size", (64*1024).toString)

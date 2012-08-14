@@ -125,22 +125,7 @@ public class KafkaOutputFormat<W extends BytesWritable> extends OutputFormat<Nul
     props.setProperty("max.message.size", Integer.toString(maxSize));
     props.setProperty("compression.codec", Integer.toString(compressionCodec));
 
-    if (uri.getScheme().equals("kafka+zk")) {
-      // Software load balancer:
-      //  URL: kafka+zk://<zk connect path>#<kafka topic>
-      //  e.g. kafka+zk://kafka-zk:2181/kafka#foobar
-
-      String zkConnect = uri.getAuthority() + uri.getPath();
-
-      props.setProperty("zk.connect", zkConnect);
-      job.set("kafka.zk.connect", zkConnect);
-
-      topic = uri.getFragment();
-      if (topic == null)
-        throw new KafkaException("no topic specified in kafka uri fragment");
-
-      log.info(String.format("using kafka zk.connect %s (topic %s)", zkConnect, topic));
-    } else if (uri.getScheme().equals("kafka")) {
+    if (uri.getScheme().equals("kafka")) {
       // using the legacy direct broker list
       // URL: kafka://<kafka host>/<topic>
       // e.g. kafka://kafka-server:9000,kafka-server2:9000/foobar
@@ -167,7 +152,7 @@ public class KafkaOutputFormat<W extends BytesWritable> extends OutputFormat<Nul
       job.set("kafka.output.topic", topic);
       log.info(String.format("using kafka broker %s (topic %s)", brokerList, topic));
     } else
-      throw new KafkaException("missing scheme from kafka uri (must be kafka:// or kafka+zk://)");
+      throw new KafkaException("missing scheme from kafka uri (must be kafka://)");
 
     Producer<Integer, Message> producer = new Producer<Integer, Message>(new ProducerConfig(props));
     return new KafkaRecordWriter<W>(producer, topic, queueSize);

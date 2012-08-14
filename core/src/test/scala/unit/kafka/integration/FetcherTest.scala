@@ -83,7 +83,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
   def sendMessages(messagesPerNode: Int): Int = {
     var count = 0
     for(conf <- configs) {
-      val producer: Producer[String, Message] = TestUtils.createProducer(zkConnect)
+      val producer: Producer[String, Message] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs))
       val ms = 0.until(messagesPerNode).map(x => new Message((conf.brokerId * 5 + x).toString.getBytes)).toArray
       messages += conf.brokerId -> ms
       producer.send(new ProducerData[String, Message](topic, topic, ms))

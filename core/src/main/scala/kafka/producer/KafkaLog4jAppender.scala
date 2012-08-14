@@ -23,14 +23,10 @@ import org.apache.log4j.AppenderSkeleton
 import org.apache.log4j.helpers.LogLog
 import kafka.utils.Logging
 import java.util.{Properties, Date}
-import scala.collection._
 
 class KafkaLog4jAppender extends AppenderSkeleton with Logging {
-  var port:Int = 0
-  var host:String = null
   var topic:String = null
   var serializerClass:String = null
-  var zkConnect:String = null
   var brokerList:String = null
   
   private var producer: Producer[String, String] = null
@@ -38,9 +34,6 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
   def getTopic:String = topic
   def setTopic(topic: String) { this.topic = topic }
 
-  def getZkConnect:String = zkConnect
-  def setZkConnect(zkConnect: String) { this.zkConnect = zkConnect }
-  
   def getBrokerList:String = brokerList
   def setBrokerList(brokerList: String) { this.brokerList = brokerList }
   
@@ -48,17 +41,12 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
   def setSerializerClass(serializerClass:String) { this.serializerClass = serializerClass }
 
   override def activateOptions() {
-    val connectDiagnostic : mutable.ListBuffer[String] = mutable.ListBuffer();
     // check for config parameter validity
     val props = new Properties()
-    if( zkConnect == null) connectDiagnostic += "zkConnect"
-    else props.put("zk.connect", zkConnect);
-    if( brokerList == null) connectDiagnostic += "brokerList"
-    else if( props.isEmpty) props.put("broker.list", brokerList)
-    if(props.isEmpty )
-      throw new MissingConfigException(
-        connectDiagnostic mkString ("One of these connection properties must be specified: ", ", ", ".")
-      )
+    if(brokerList != null)
+      props.put("broker.list", brokerList)
+    if(props.isEmpty)
+      throw new MissingConfigException("The broker.list property should be specified")
     if(topic == null)
       throw new MissingConfigException("topic must be specified by the Kafka log4j appender")
     if(serializerClass == null) {
@@ -68,7 +56,7 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
     props.put("serializer.class", serializerClass)
     val config : ProducerConfig = new ProducerConfig(props)
     producer = new Producer[String, String](config)
-    LogLog.debug("Kafka producer connected to " + (if(config.zkConnect == null) config.brokerList else config.zkConnect))
+    LogLog.debug("Kafka producer connected to " +  config.brokerList)
     LogLog.debug("Logging for topic: " + topic)
   }
   

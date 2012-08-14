@@ -48,7 +48,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     server2 = TestUtils.createServer(configProps2)
     servers ++= List(server1, server2)
 
-    val producerProps = getProducerConfig(zkConnect, 64*1024, 100000, 10000)
+    val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
     producerProps.put("producer.request.timeout.ms", "1000")
     producerProps.put("producer.request.required.acks", "-1")
     producer = new Producer[Int, Message](new ProducerConfig(producerProps))
@@ -80,7 +80,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     server2 = TestUtils.createServer(configProps2)
     servers ++= List(server1, server2)
 
-    val producerProps = getProducerConfig(zkConnect, 64*1024, 100000, 10000)
+    val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
     producerProps.put("producer.request.timeout.ms", "1000")
     producerProps.put("producer.request.required.acks", "-1")
     producer = new Producer[Int, Message](new ProducerConfig(producerProps))
@@ -150,7 +150,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     hwFile1 = new HighwaterMarkCheckpoint(server1.config.logDir)
     hwFile2 = new HighwaterMarkCheckpoint(server2.config.logDir)
 
-    val producerProps = getProducerConfig(zkConnect, 64*1024, 100000, 10000)
+    val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
     producerProps.put("producer.request.timeout.ms", "1000")
     producerProps.put("producer.request.required.acks", "-1")
     producer = new Producer[Int, Message](new ProducerConfig(producerProps))
@@ -194,7 +194,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     hwFile1 = new HighwaterMarkCheckpoint(server1.config.logDir)
     hwFile2 = new HighwaterMarkCheckpoint(server2.config.logDir)
 
-    val producerProps = getProducerConfig(zkConnect, 64*1024, 100000, 10000)
+    val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
     producerProps.put("producer.request.timeout.ms", "1000")
     producerProps.put("producer.request.required.acks", "-1")
     producer = new Producer[Int, Message](new ProducerConfig(producerProps))

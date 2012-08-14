@@ -31,6 +31,7 @@ import org.I0Itec.zkclient.ZkClient
 import java.util.{Random, Properties}
 import joptsimple.{OptionSpec, OptionSet, OptionParser}
 import kafka.common.KafkaException
+import kafka.cluster.Broker
 
 
 /**
@@ -789,6 +790,20 @@ object Utils extends Logging {
     }
     builder.append(" }")
     builder.toString
+  }
+
+  def getAllBrokersFromBrokerList(brokerListStr: String): Seq[Broker] = {
+    val brokersStr = Utils.getCSVList(brokerListStr)
+
+    brokersStr.zipWithIndex.map(b =>{
+      val brokerStr = b._1
+      val brokerId = b._2
+      val brokerInfos = brokerStr.split(":")
+      val hostName = brokerInfos(0)
+      val port = brokerInfos(1).toInt
+      val creatorId = hostName + "-" + System.currentTimeMillis()
+      new Broker(brokerId, creatorId, hostName, port)
+    })
   }
 
   def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {

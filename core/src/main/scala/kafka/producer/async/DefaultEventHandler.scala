@@ -17,7 +17,6 @@
 
 package kafka.producer.async
 
-import kafka.api.{ProducerRequest, TopicData, PartitionData}
 import kafka.cluster.Partition
 import kafka.common._
 import kafka.message.{Message, NoCompressionCodec, ByteBufferMessageSet}
@@ -26,17 +25,17 @@ import kafka.serializer.Encoder
 import kafka.utils.{Utils, Logging}
 import scala.collection.Map
 import scala.collection.mutable.{ListBuffer, HashMap}
+import kafka.api.{TopicMetadata, ProducerRequest, TopicData, PartitionData}
 
-class DefaultEventHandler[K,V](config: ProducerConfig,                               // this api is for testing
-                               private val partitioner: Partitioner[K],              // use the other constructor
+
+class DefaultEventHandler[K,V](config: ProducerConfig,
+                               private val partitioner: Partitioner[K],
                                private val encoder: Encoder[V],
-                               private val producerPool: ProducerPool)
+                               private val producerPool: ProducerPool,
+                               private val topicPartitionInfos: HashMap[String, TopicMetadata] = new HashMap[String, TopicMetadata])
   extends EventHandler[K,V] with Logging {
 
-  val brokerPartitionInfo = new BrokerPartitionInfo(producerPool)
-
-  // add producers to the producer pool
-  producerPool.addProducers(config)
+  val brokerPartitionInfo = new BrokerPartitionInfo(config, producerPool, topicPartitionInfos)
 
   private val lock = new Object()
 

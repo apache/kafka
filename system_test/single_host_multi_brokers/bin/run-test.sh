@@ -231,14 +231,14 @@ start_servers_cluster() {
 
 start_producer_perf() {
     this_topic=$1
-    zk_conn_str=$2
+    broker_list_str=$2
     no_msg_to_produce=$3
     init_msg_id=$4
 
     info "starting producer performance"
 
     ${base_dir}/bin/kafka-run-class.sh kafka.perf.ProducerPerformance \
-        --brokerinfo "zk.connect=${zk_conn_str}" \
+        --broker-list ${broker_list_str} \
         --topic ${this_topic} \
         --messages $no_msg_to_produce \
         --message-size 100 \
@@ -501,7 +501,7 @@ start_test() {
         fi
 
         init_id=$(( ($i - 1) * $producer_msg_batch_size ))
-        start_producer_perf $test_topic localhost:$zk_port $producer_msg_batch_size $init_id
+        start_producer_perf $test_topic localhost:9091,localhost:9092,localhost:9093 $producer_msg_batch_size $init_id
         info "sleeping for 15s"
         sleep 15
         echo

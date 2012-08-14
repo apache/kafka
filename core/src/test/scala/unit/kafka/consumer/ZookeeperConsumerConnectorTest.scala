@@ -261,9 +261,6 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
 
-    // shutdown one server
-    servers.last.shutdown
-
     // send some messages to each broker
     val sentMessages1 = sendMessagesToBrokerPartition(configs.head, topic, 0, 200, DefaultCompressionCodec)
     val sentMessages2 = sendMessagesToBrokerPartition(configs.last, topic, 1, 200, DefaultCompressionCodec)
@@ -376,11 +373,10 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     assertEquals(sentMessages1, receivedMessages1)
   }
 
-  def sendMessagesToBrokerPartition(config: KafkaConfig, topic: String, partition: Int, numMessages: Int,
-                                    compression: CompressionCodec = NoCompressionCodec): List[Message] = {
+  def sendMessagesToBrokerPartition(config: KafkaConfig, topic: String, partition: Int, numMessages: Int, compression: CompressionCodec = NoCompressionCodec): List[Message] = {
     val header = "test-%d-%d".format(config.brokerId, partition)
     val props = new Properties()
-    props.put("zk.connect", zkConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
     props.put("compression.codec", compression.codec.toString)
     val producer: Producer[Int, Message] = new Producer[Int, Message](new ProducerConfig(props))
@@ -392,20 +388,20 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     ms.toList
   }
 
-  def sendMessages(conf: KafkaConfig, messagesPerNode: Int, header: String, compression: CompressionCodec, numParts: Int): List[Message]= {
+  def sendMessages(config: KafkaConfig, messagesPerNode: Int, header: String, compression: CompressionCodec, numParts: Int): List[Message]= {
     var messages: List[Message] = Nil
     val props = new Properties()
-    props.put("zk.connect", zkConnect)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
     val producer: Producer[Int, Message] = new Producer[Int, Message](new ProducerConfig(props))
 
     for (partition <- 0 until numParts) {
       val ms = 0.until(messagesPerNode).map(x =>
-        new Message((header + conf.brokerId + "-" + partition + "-" + x).getBytes)).toArray
+        new Message((header + config.brokerId + "-" + partition + "-" + x).getBytes)).toArray
       for (message <- ms)
         messages ::= message
       producer.send(new ProducerData[Int, Message](topic, partition, ms))
-      debug("Sent %d messages to broker %d for topic %s and partition %d".format(ms.size, conf.brokerId, topic, partition))
+      debug("Sent %d messages to broker %d for topic %s and partition %d".format(ms.size, config.brokerId, topic, partition))
     }
     producer.close()
     messages.reverse
