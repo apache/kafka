@@ -315,7 +315,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
 
   /**
    * Reads the checkpointed highWatermarks for all partitions
-   * @returns checkpointed value of highwatermark for topic, partition. If one doesn't exist, returns 0
+   * @return checkpointed value of highwatermark for topic, partition. If one doesn't exist, returns 0
    */
   def readCheckpointedHighWatermark(topic: String, partition: Int): Long = highwaterMarkCheckpoint.read(topic, partition)
 

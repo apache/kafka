@@ -502,7 +502,7 @@ object Utils extends Logging {
    * instead it just returns false indicating the registration failed.
    * @param mbean The object to register as an mbean
    * @param name The name to register this mbean with
-   * @returns true if the registration succeeded
+   * @return true if the registration succeeded
    */
   def registerMBean(mbean: Object, name: String): Boolean = {
     try {
@@ -581,8 +581,8 @@ object Utils extends Logging {
   /**
    * Compute the CRC32 of the segment of the byte array given by the specificed size and offset
    * @param bytes The bytes to checksum
-   * @param the offset at which to begin checksumming
-   * @param the number of bytes to checksum
+   * @param offset the offset at which to begin checksumming
+   * @param size the number of bytes to checksum
    * @return The CRC32
    */
   def crc32(bytes: Array[Byte], offset: Int, size: Int): Long = {
