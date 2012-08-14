@@ -16,7 +16,7 @@
 
 if [ $# -lt 1 ];
 then
-	echo "USAGE: $0 server.properties [consumer.properties producer.properties]"
+	echo "USAGE: $0 server.properties"
 	exit 1
 fi
 
