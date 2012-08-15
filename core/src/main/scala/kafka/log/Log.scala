@@ -438,8 +438,8 @@ private[kafka] class Log( val dir: File, val maxSize: Long, val flushInterval: I
         segment.truncateTo(targetOffset)
         info("Truncated log segment %s to highwatermark %d".format(segment.file.getAbsolutePath, targetOffset))
       case None =>
-        assert(targetOffset <= segments.view.last.absoluteEndOffset, "Last checkpointed hw %d cannot be greater than the latest message offset %d in the log %s".format(targetOffset, segments.view.last.absoluteEndOffset, segments.view.last.file.getAbsolutePath))
-        error("Cannot truncate log to %d since the log start offset is %d and end offset is %d".format(targetOffset, segments.view.head.start, segments.view.last.absoluteEndOffset))
+        if(targetOffset > segments.view.last.absoluteEndOffset)
+         error("Last checkpointed hw %d cannot be greater than the latest message offset %d in the log %s".format(targetOffset, segments.view.last.absoluteEndOffset, segments.view.last.file.getAbsolutePath))
     }
 
     val segmentsToBeDeleted = segments.view.filter(segment => segment.start > targetOffset)

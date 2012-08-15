@@ -61,24 +61,23 @@ class RequestSendThread(val controllerId: Int,
           lock synchronized {
             channel.send(request)
             receive = channel.receive()
+            var response: RequestOrResponse = null
+            request.requestId.get match {
+              case RequestKeys.LeaderAndISRRequest =>
+                response = LeaderAndISRResponse.readFrom(receive.buffer)
+              case RequestKeys.StopReplicaRequest =>
+                response = StopReplicaResponse.readFrom(receive.buffer)
+            }
+            trace("got a response %s".format(controllerId, response, toBrokerId))
+
+            if(callback != null){
+              callback(response)
+            }
           }
         } catch {
           case e =>
             // log it and let it go. Let controller shut it down.
             debug("Exception occurs", e)
-        }
-
-        var response: RequestOrResponse = null
-        request.requestId.get match {
-          case RequestKeys.LeaderAndISRRequest =>
-            response = LeaderAndISRResponse.readFrom(receive.buffer)
-          case RequestKeys.StopReplicaRequest =>
-            response = StopReplicaResponse.readFrom(receive.buffer)
-        }
-        trace("got a response %s".format(controllerId, response, toBrokerId))
-
-        if(callback != null){
-          callback(response)
         }
       }
     } catch{
@@ -94,6 +93,7 @@ class ControllerChannelManager(allBrokers: Set[Broker], config : KafkaConfig) ex
   private val messageChannels = new HashMap[Int, BlockingChannel]
   private val messageQueues = new HashMap[Int, BlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)]]
   private val messageThreads = new HashMap[Int, RequestSendThread]
+  private val lock = new Object()
   this.logIdent = "Channel manager on controller " + config.brokerId + ", "
   for(broker <- allBrokers){
     brokers.put(broker.id, broker)
@@ -117,8 +117,10 @@ class ControllerChannelManager(allBrokers: Set[Broker], config : KafkaConfig) ex
   }
 
   def shutDown() = {
-    for((brokerId, broker) <- brokers){
-      removeBroker(brokerId)
+    lock synchronized {
+      for((brokerId, broker) <- brokers){
+        removeBroker(brokerId)
+      }
     }
   }
 
@@ -127,30 +129,34 @@ class ControllerChannelManager(allBrokers: Set[Broker], config : KafkaConfig) ex
   }
 
   def addBroker(broker: Broker){
-    brokers.put(broker.id, broker)
-    messageQueues.put(broker.id, new LinkedBlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)](config.controllerMessageQueueSize))
-    val channel = new BlockingChannel(broker.host, broker.port,
-                                      BlockingChannel.UseDefaultBufferSize,
-                                      BlockingChannel.UseDefaultBufferSize,
-                                      config.controllerSocketTimeoutMs)
-    channel.connect()
-    messageChannels.put(broker.id, channel)
-    val thread = new RequestSendThread(config.brokerId, broker.id, messageQueues(broker.id), messageChannels(broker.id))
-    thread.setDaemon(false)
-    thread.start()
-    messageThreads.put(broker.id, thread)
+    lock synchronized {
+      brokers.put(broker.id, broker)
+      messageQueues.put(broker.id, new LinkedBlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)](config.controllerMessageQueueSize))
+      val channel = new BlockingChannel(broker.host, broker.port,
+                                        BlockingChannel.UseDefaultBufferSize,
+                                        BlockingChannel.UseDefaultBufferSize,
+                                        config.controllerSocketTimeoutMs)
+      channel.connect()
+      messageChannels.put(broker.id, channel)
+      val thread = new RequestSendThread(config.brokerId, broker.id, messageQueues(broker.id), messageChannels(broker.id))
+      thread.setDaemon(false)
+      thread.start()
+      messageThreads.put(broker.id, thread)
+    }
   }
 
   def removeBroker(brokerId: Int){
-    brokers.remove(brokerId)
-    try {
-      messageChannels(brokerId).disconnect()
-      messageChannels.remove(brokerId)
-      messageQueues.remove(brokerId)
-      messageThreads(brokerId).shutDown()
-      messageThreads.remove(brokerId)
-    }catch {
-      case e => error("Error while removing broker by the controller", e)
+    lock synchronized {
+      brokers.remove(brokerId)
+      try {
+        messageChannels(brokerId).disconnect()
+        messageChannels.remove(brokerId)
+        messageQueues.remove(brokerId)
+        messageThreads(brokerId).shutDown()
+        messageThreads.remove(brokerId)
+      }catch {
+        case e => error("Error while removing broker by the controller", e)
+      }
     }
   }
 }
