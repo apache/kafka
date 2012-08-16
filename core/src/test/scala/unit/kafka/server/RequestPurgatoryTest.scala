@@ -18,26 +18,28 @@
 package kafka.server
 
 import scala.collection._
-import org.junit.{After, Before, Test}
+import org.junit.Test
 import junit.framework.Assert._
 import kafka.message._
 import kafka.api._
 import kafka.utils.TestUtils
+import org.scalatest.junit.JUnit3Suite
 
-class RequestPurgatoryTest {
+
+class RequestPurgatoryTest extends JUnit3Suite {
 
   val producerRequest1 = TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(new Message("hello1".getBytes)))
   val producerRequest2 = TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(new Message("hello2".getBytes)))
   var purgatory: MockRequestPurgatory = null
   
-  @Before
-  def setup() {
+  override def setUp() {
+    super.setUp()
     purgatory = new MockRequestPurgatory()
   }
   
-  @After
-  def teardown() {
+  override def tearDown() {
     purgatory.shutdown()
+    super.tearDown()
   }
 
   @Test
@@ -54,7 +56,7 @@ class RequestPurgatoryTest {
     assertEquals("Nothing satisfied", 0, purgatory.update("test1", producerRequest2).size)
     purgatory.satisfied += r2
     assertEquals("r2 satisfied", mutable.ArrayBuffer(r2), purgatory.update("test2", producerRequest2))
-    assertEquals("Nothing satisfied", 0, purgatory.update("test2", producerRequest2).size)  
+    assertEquals("Nothing satisfied", 0, purgatory.update("test2", producerRequest2).size)
   }
 
   @Test
@@ -73,7 +75,7 @@ class RequestPurgatoryTest {
     assertTrue("Time for expiration was about 20ms", (elapsed - expiration).abs < 10L)
   }
   
-  class MockRequestPurgatory extends RequestPurgatory[DelayedRequest, ProducerRequest]("Mock Request Purgatory") {
+  class MockRequestPurgatory extends RequestPurgatory[DelayedRequest, ProducerRequest] {
     val satisfied = mutable.Set[DelayedRequest]()
     val expired = mutable.Set[DelayedRequest]()
     def awaitExpiration(delayed: DelayedRequest) = {

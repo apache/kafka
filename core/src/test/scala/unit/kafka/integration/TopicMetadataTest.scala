@@ -103,8 +103,10 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     val logManager = EasyMock.createMock(classOf[LogManager])
     val kafkaZookeeper = EasyMock.createMock(classOf[KafkaZooKeeper])
     val replicaManager = EasyMock.createMock(classOf[ReplicaManager])
+    EasyMock.expect(replicaManager.config).andReturn(configs.head)
     EasyMock.expect(kafkaZookeeper.getZookeeperClient).andReturn(zkClient)
     EasyMock.expect(logManager.config).andReturn(configs.head)
+    EasyMock.replay(replicaManager)
     EasyMock.replay(logManager)
     EasyMock.replay(kafkaZookeeper)
 

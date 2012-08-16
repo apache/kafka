@@ -73,7 +73,6 @@ class PartitionDataSend(val partitionData: PartitionData) extends Send {
   }
 }
 
-
 object TopicData {
   def readFrom(buffer: ByteBuffer): TopicData = {
     val topic = Utils.readShortString(buffer, "UTF-8")

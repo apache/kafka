@@ -17,6 +17,8 @@
 
 package kafka
 
+
+import metrics.{KafkaMetricsReporterMBean, KafkaMetricsReporter, KafkaMetricsConfig}
 import server.{KafkaConfig, KafkaServerStartable, KafkaServer}
 import utils.{Utils, Logging}
 import org.apache.log4j.jmx.LoggerDynamicMBean
@@ -36,6 +38,13 @@ object Kafka extends Logging {
     try {
       val props = Utils.loadProps(args(0))
       val serverConfig = new KafkaConfig(props)
+      val metricsConfig = new KafkaMetricsConfig(props)
+      metricsConfig.reporters.foreach(reporterType => {
+        val reporter = Utils.getObject[KafkaMetricsReporter](reporterType)
+        reporter.init(props)
+        if (reporter.isInstanceOf[KafkaMetricsReporterMBean])
+          Utils.registerMBean(reporter, reporter.asInstanceOf[KafkaMetricsReporterMBean].getMBeanName)
+      })
 
       val kafkaServerStartble = new KafkaServerStartable(serverConfig)
 

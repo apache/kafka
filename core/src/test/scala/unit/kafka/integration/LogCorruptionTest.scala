@@ -76,7 +76,7 @@ class LogCorruptionTest extends JUnit3Suite with ProducerConsumerTestHarness wit
         fail("shouldn't reach here in SimpleConsumer since log file is corrupted.")
       fail("shouldn't reach here in SimpleConsumer since log file is corrupted.")
     } catch {
-      case e: InvalidMessageSizeException => println("This is good")
+      case e: InvalidMessageSizeException => "This is good"
     }
 
     // test ZookeeperConsumer

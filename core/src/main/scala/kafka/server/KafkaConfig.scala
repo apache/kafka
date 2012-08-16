@@ -24,6 +24,7 @@ import kafka.consumer.ConsumerConfig
 import java.net.InetAddress
 
 
+
 /**
  * Configuration settings for the kafka server
  */
@@ -138,7 +139,7 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
   val replicaMaxWaitTimeMs = Utils.getInt(props, "replica.fetch.wait.time.ms", 500)
 
   /** minimum bytes expected for each fetch response. If not enough bytes, wait up to replicaMaxWaitTimeMs */
-  val replicaMinBytes = Utils.getInt(props, "replica.fetch.min.bytes", 4086)
+  val replicaMinBytes = Utils.getInt(props, "replica.fetch.min.bytes", 4096)
 
   /* number of fetcher threads used to replicate messages from a source broker.
   *  Increasing this value can increase the degree of I/O parallelism in the follower broker. */
