@@ -38,14 +38,14 @@ class RequestSendThread(val controllerId: Int,
         extends Thread("requestSendThread-" + toBrokerId) with Logging {
   this.logIdent = "Controller %d, request send thread to broker %d, ".format(controllerId, toBrokerId)
   val isRunning: AtomicBoolean = new AtomicBoolean(true)
-  private val shutDownLatch = new CountDownLatch(1)
+  private val shutdownLatch = new CountDownLatch(1)
   private val lock = new Object()
 
-  def shutDown(): Unit = {
+  def shutdown(): Unit = {
     info("shutting down")
     isRunning.set(false)
     interrupt()
-    shutDownLatch.await()
+    shutdownLatch.await()
     info("shutted down completed")
   }
 
@@ -84,7 +84,7 @@ class RequestSendThread(val controllerId: Int,
       case e: InterruptedException => warn("intterrupted. Shutting down")
       case e1 => error("Error due to ", e1)
     }
-    shutDownLatch.countDown()
+    shutdownLatch.countDown()
   }
 }
 
@@ -107,7 +107,7 @@ class ControllerChannelManager(allBrokers: Set[Broker], config : KafkaConfig) ex
     messageQueues.put(broker.id, new LinkedBlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)](config.controllerMessageQueueSize))
   }
 
-  def startUp() = {
+  def startup() = {
     for((brokerId, broker) <- brokers){
       val thread = new RequestSendThread(config.brokerId, brokerId, messageQueues(brokerId), messageChannels(brokerId))
       thread.setDaemon(false)
@@ -116,7 +116,7 @@ class ControllerChannelManager(allBrokers: Set[Broker], config : KafkaConfig) ex
     }
   }
 
-  def shutDown() = {
+  def shutdown() = {
     lock synchronized {
       for((brokerId, broker) <- brokers){
         removeBroker(brokerId)
@@ -152,7 +152,7 @@ class ControllerChannelManager(allBrokers: Set[Broker], config : KafkaConfig) ex
         messageChannels(brokerId).disconnect()
         messageChannels.remove(brokerId)
         messageQueues.remove(brokerId)
-        messageThreads(brokerId).shutDown()
+        messageThreads(brokerId).shutdown()
         messageThreads.remove(brokerId)
       }catch {
         case e => error("Error while removing broker by the controller", e)
@@ -163,7 +163,8 @@ class ControllerChannelManager(allBrokers: Set[Broker], config : KafkaConfig) ex
 
 class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging {
   this.logIdent = "Controller " + config.brokerId + ", "
-  info("startup");
+  info("startup")
+  private var isRunning = true
   private val controllerLock = new Object
   private var controllerChannelManager: ControllerChannelManager = null
   private var allBrokers : Set[Broker] = null
@@ -189,7 +190,7 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
       info("allPartitionReplicaAssignment: %s".format(allPartitionReplicaAssignment))
       allLeaders = new mutable.HashMap[(String, Int), Int]
       controllerChannelManager = new ControllerChannelManager(allBrokers, config)
-      controllerChannelManager.startUp()
+      controllerChannelManager.startup()
       return true
     } catch {
       case e: ZkNodeExistsException =>
@@ -201,6 +202,10 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
   }
 
   private def controllerRegisterOrFailover(){
+    if(!isRunning){
+      info("controller has already been shut down, don't need to compete for lead controller any more")
+      return
+    }
     info("try to become controller")
     if(tryToBecomeController() == true){
       info("won the controller competition and work on leader and isr recovery")
@@ -209,12 +214,7 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
       onBrokerChange()
 
       // If there are some partition with leader not initialized, init the leader for them
-      val partitionReplicaAssignment = allPartitionReplicaAssignment.clone()
-      for((topicPartition, replicas) <- partitionReplicaAssignment){
-        if (allLeaders.contains(topicPartition)){
-          partitionReplicaAssignment.remove(topicPartition)
-        }
-      }
+      val partitionReplicaAssignment = allPartitionReplicaAssignment.filter(m => !allLeaders.contains(m._1))
       debug("work on init leaders: %s, current cache for all leader is: %s".format(partitionReplicaAssignment.toString(), allLeaders))
       initLeaders(partitionReplicaAssignment)
     }
@@ -228,18 +228,20 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
     controllerLock synchronized {
       registerSessionExpirationListener()
       registerControllerExistListener()
+      isRunning = true
       controllerRegisterOrFailover()
     }
   }
 
-  def shutDown() = {
+  def shutdown() = {
     controllerLock synchronized {
       if(controllerChannelManager != null){
         info("shut down")
-        controllerChannelManager.shutDown()
+        controllerChannelManager.shutdown()
         controllerChannelManager = null
         info("shutted down completely")
       }
+      isRunning = false
     }
   }
 
@@ -280,11 +282,13 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
     @throws(classOf[Exception])
     def handleNewSession() {
       controllerLock synchronized {
-        info("session expires, clean up the state")
-        controllerChannelManager.shutDown()
-        controllerChannelManager = null
-        controllerRegisterOrFailover()
+        if(controllerChannelManager != null){
+          info("session expires, clean up the state")
+          controllerChannelManager.shutdown()
+          controllerChannelManager = null
+        }
       }
+      controllerRegisterOrFailover()
     }
   }
 

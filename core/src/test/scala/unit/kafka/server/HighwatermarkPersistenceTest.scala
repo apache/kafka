@@ -37,7 +37,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     EasyMock.replay(zkClient)
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
-    scheduler.startUp
+    scheduler.startup
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, new MockTime(), zkClient, scheduler, null)
     replicaManager.startup()
@@ -80,7 +80,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     EasyMock.replay(zkClient)
     // create kafka scheduler
     val scheduler = new KafkaScheduler(2)
-    scheduler.startUp
+    scheduler.startup
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, new MockTime(), zkClient, scheduler, null)
     replicaManager.startup()

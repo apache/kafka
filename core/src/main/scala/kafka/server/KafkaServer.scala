@@ -65,7 +65,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     }
 
     /* start scheduler */
-    kafkaScheduler.startUp
+    kafkaScheduler.startup
 
     /* start log manager */
     logManager = new LogManager(config,
@@ -132,7 +132,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         logManager.shutdown()
 
       if(kafkaController != null)
-        kafkaController.shutDown()
+        kafkaController.shutdown()
 
       val cleanShutDownFile = new File(new File(config.logDir), CleanShutdownFile)
       debug("creating clean shutdown file " + cleanShutDownFile.getAbsolutePath())

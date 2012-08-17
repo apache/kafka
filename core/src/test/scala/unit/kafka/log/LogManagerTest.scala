@@ -46,7 +46,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
                    override val logFileSize = 1024
                    override val flushInterval = 100
                  }
-    scheduler.startUp
+    scheduler.startup
     logManager = new LogManager(config, scheduler, time, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup
     logDir = logManager.logDir

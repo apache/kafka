@@ -34,7 +34,7 @@ class KafkaScheduler(val numThreads: Int) extends Logging {
     }
   private val threadNamesAndIds = new HashMap[String, AtomicInteger]()
 
-  def startUp = {
+  def startup = {
     executor = new ScheduledThreadPoolExecutor(numThreads)
     executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false)
     executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false)

@@ -120,7 +120,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   connectZk()
   createFetcher()
   if (config.autoCommit) {
-    scheduler.startUp
+    scheduler.startup
     info("starting auto committer every " + config.autoCommitIntervalMs + " ms")
     scheduler.scheduleWithRate(autoCommit, "Kafka-consumer-autocommit-", config.autoCommitIntervalMs,
       config.autoCommitIntervalMs, false)
