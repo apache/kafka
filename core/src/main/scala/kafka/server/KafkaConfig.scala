@@ -36,8 +36,8 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
   val hostName: String = Utils.getString(props, "hostname", InetAddress.getLocalHost.getHostAddress)
 
   /* the broker id for this server */
-  val brokerId: Int = Utils.getInt(props, "brokerid")
-  
+  val brokerId: Int = Utils.getIntInRange(props, "brokerid", (0, Int.MaxValue))
+
   /* the SO_SNDBUFF buffer of the socket sever sockets */
   val socketSendBuffer: Int = Utils.getInt(props, "socket.send.buffer", 100*1024)
   

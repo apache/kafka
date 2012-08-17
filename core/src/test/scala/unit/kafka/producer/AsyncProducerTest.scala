@@ -480,7 +480,7 @@ class AsyncProducerTest extends JUnit3Suite {
       fail("should complain about wrong config")
     }
     catch {
-      case e: KafkaException => //expected
+      case e: IllegalArgumentException => //expected
     }
   }
 
