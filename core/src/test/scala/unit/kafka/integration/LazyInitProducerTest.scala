@@ -132,8 +132,6 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       produceList ::= new ProducerData[String, Message](topic, topic, set)
       builder.addFetch(topic, 0, 0, 10000)
     }
-    // wait until leader is elected
-    topics.foreach(topic => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500))
     producer.send(produceList: _*)
 
     // wait a bit for produced message to be available
@@ -157,9 +155,6 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       produceList ::= new ProducerData[String, Message](topic, topic, set)
       builder.addFetch(topic, 0, 0, 10000)
     }
-    // wait until leader is elected
-    topics.foreach(topic => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1500))
-
     producer.send(produceList: _*)
 
     producer.send(produceList: _*)
