@@ -25,8 +25,7 @@ import kafka.common.UnknownMagicByteException
  * Message byte offsets
  */
 object Message {
-  val MagicVersion1: Byte = 0
-  val MagicVersion2: Byte = 1
+  val MagicVersion: Byte = 1
   val CurrentMagicValue: Byte = 1
   val MagicOffset = 0
   val MagicLength = 1
@@ -43,13 +42,10 @@ object Message {
 
   /**
    * Computes the CRC value based on the magic byte
-   * @param magic Specifies the magic byte value. Possible values are 0 and 1
-   *              0 for no compression
-   *              1 for compression
-  */
+   * @param magic Specifies the magic byte value. The only value allowed currently is 1.
+   */
   def crcOffset(magic: Byte): Int = magic match {
-    case MagicVersion1 => MagicOffset + MagicLength
-    case MagicVersion2 => AttributeOffset + AttributeLength
+    case MagicVersion => AttributeOffset + AttributeLength
     case _ => throw new UnknownMagicByteException("Magic byte value of %d is unknown".format(magic))
   }
   
@@ -57,40 +53,26 @@ object Message {
 
   /**
    * Computes the offset to the message payload based on the magic byte
-   * @param magic Specifies the magic byte value. Possible values are 0 and 1
-   *              0 for no compression
-   *              1 for compression
+   * @param magic Specifies the magic byte value. The only value allowed currently is 1.
    */
   def payloadOffset(magic: Byte): Int = crcOffset(magic) + CrcLength
 
   /**
    * Computes the size of the message header based on the magic byte
-   * @param magic Specifies the magic byte value. Possible values are 0 and 1
-   *              0 for no compression
-   *              1 for compression
+   * @param magic Specifies the magic byte value. The only value allowed currently is 1.
    */
   def headerSize(magic: Byte): Int = payloadOffset(magic)
 
   /**
-   * Size of the header for magic byte 0. This is the minimum size of any message header
+   * Size of the header for magic byte 1. This is the minimum size of any message header.
    */
-  val MinHeaderSize = headerSize(0);
+  val MinHeaderSize = headerSize(1);
 }
 
 /**
  * A message. The format of an N byte message is the following:
  *
- * If magic byte is 0
- *
- * 1. 1 byte "magic" identifier to allow format changes
- *
- * 2. 4 byte CRC32 of the payload
- *
- * 3. N - 5 byte payload
- *
- * If magic byte is 1
- *
- * 1. 1 byte "magic" identifier to allow format changes
+ * 1. 1 byte "magic" identifier to allow format changes, whose value is 1 currently
  *
  * 2. 1 byte "attributes" identifier to allow annotations on the message independent of the version (e.g. compression enabled, type of codec used)
  *
