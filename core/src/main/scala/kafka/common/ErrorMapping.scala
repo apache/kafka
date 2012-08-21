@@ -32,27 +32,25 @@ object ErrorMapping {
   val NoError : Short = 0
   val OffsetOutOfRangeCode : Short = 1
   val InvalidMessageCode : Short = 2
-  val InvalidPartitionCode : Short = 3
+  val UnknownTopicOrPartitionCode : Short = 3
   val InvalidFetchSizeCode  : Short = 4
   val InvalidFetchRequestFormatCode : Short = 5
   val LeaderNotAvailableCode : Short = 6
   val NotLeaderForPartitionCode : Short = 7
-  val UnknownTopicCode : Short = 8
-  val RequestTimedOutCode: Short = 9
-  val BrokerNotExistInZookeeperCode: Short = 10
-  val ReplicaNotAvailableCode: Short = 11
+  val RequestTimedOutCode: Short = 8
+  val BrokerNotExistInZookeeperCode: Short = 9
+  val ReplicaNotAvailableCode: Short = 10
 
   private val exceptionToCode = 
     Map[Class[Throwable], Short](
       classOf[OffsetOutOfRangeException].asInstanceOf[Class[Throwable]] -> OffsetOutOfRangeCode,
       classOf[InvalidMessageException].asInstanceOf[Class[Throwable]] -> InvalidMessageCode,
-      classOf[InvalidPartitionException].asInstanceOf[Class[Throwable]] -> InvalidPartitionCode,
+      classOf[UnknownTopicOrPartitionException].asInstanceOf[Class[Throwable]] -> UnknownTopicOrPartitionCode,
       classOf[InvalidMessageSizeException].asInstanceOf[Class[Throwable]] -> InvalidFetchSizeCode,
       classOf[FetchRequestFormatException].asInstanceOf[Class[Throwable]] -> InvalidFetchRequestFormatCode,
       classOf[NotLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NotLeaderForPartitionCode,
       classOf[LeaderNotAvailableException].asInstanceOf[Class[Throwable]] -> LeaderNotAvailableCode,
       classOf[RequestTimedOutException].asInstanceOf[Class[Throwable]] -> RequestTimedOutCode,
-      classOf[UnknownTopicException].asInstanceOf[Class[Throwable]] -> UnknownTopicCode,
       classOf[BrokerNotExistException].asInstanceOf[Class[Throwable]] -> BrokerNotExistInZookeeperCode,
       classOf[ReplicaNotAvailableException].asInstanceOf[Class[Throwable]] -> ReplicaNotAvailableCode
     ).withDefaultValue(UnknownCode)

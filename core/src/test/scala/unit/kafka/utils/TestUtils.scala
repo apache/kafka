@@ -456,6 +456,19 @@ object TestUtils extends Logging {
     // should never hit here
     throw new RuntimeException("unexpected error")
   }
+
+  def isLeaderLocalOnBroker(topic: String, partitionId: Int, server: KafkaServer): Boolean = {
+    val partitionOpt = server.replicaManager.getPartition(topic, partitionId)
+    partitionOpt match {
+      case None => false
+      case Some(partition) =>
+        val replicaOpt = partition.leaderReplicaIfLocal
+        replicaOpt match {
+          case None => false
+          case Some(_) => true
+        }
+    }
+  }
 }
 
 object ControllerTestUtils{

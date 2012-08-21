@@ -8,7 +8,6 @@ import kafka.utils.{Utils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.message.Message
 import kafka.producer.{ProducerConfig, ProducerData, Producer}
-import org.junit.Test
 
 class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
@@ -41,7 +40,6 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   var hwFile2: HighwaterMarkCheckpoint = new HighwaterMarkCheckpoint(configProps2.logDir)
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 
-  @Test
   def testHWCheckpointNoFailuresSingleLogSegment {
     // start both servers
     server1 = TestUtils.createServer(configProps1)
@@ -63,15 +61,18 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
 
     sendMessages(2)
-    // don't wait for follower to read the leader's hw
-    // shutdown the servers to allow the hw to be checkpointed
-    servers.map(server => server.shutdown())
+
+    // give some time for the follower 1 to record leader HW of 60
+    assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == 60L, 1000))
+
+    servers.foreach(server => server.replicaManager.checkpointHighWatermarks())
     producer.close()
     val leaderHW = hwFile1.read(topic, 0)
     assertEquals(60L, leaderHW)
     val followerHW = hwFile2.read(topic, 0)
-    assertEquals(30L, followerHW)
-    servers.map(server => Utils.rm(server.config.logDir))
+    assertEquals(60L, followerHW)
+    servers.foreach(server => { server.shutdown(); Utils.rm(server.config.logDir)})
   }
 
   def testHWCheckpointWithFailuresSingleLogSegment {
@@ -124,13 +125,13 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     sendMessages()
     // give some time for follower 1 to record leader HW of 60
     assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.getReplica(topic, 0).get.highWatermark() == 60L, 1000))
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == 60L, 1000))
     // shutdown the servers to allow the hw to be checkpointed
-    servers.map(server => server.shutdown())
+    servers.foreach(server => server.shutdown())
     producer.close()
     assertEquals(60L, hwFile1.read(topic, 0))
     assertEquals(60L, hwFile2.read(topic, 0))
-    servers.map(server => Utils.rm(server.config.logDir))
+    servers.foreach(server => Utils.rm(server.config.logDir))
   }
 
   def testHWCheckpointNoFailuresMultipleLogSegments {
@@ -166,15 +167,15 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     sendMessages(20)
     // give some time for follower 1 to record leader HW of 600
     assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.getReplica(topic, 0).get.highWatermark() == 600L, 1000))
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == 600L, 1000))
     // shutdown the servers to allow the hw to be checkpointed
-    servers.map(server => server.shutdown())
+    servers.foreach(server => server.shutdown())
     producer.close()
     val leaderHW = hwFile1.read(topic, 0)
     assertEquals(600L, leaderHW)
     val followerHW = hwFile2.read(topic, 0)
     assertEquals(600L, followerHW)
-    servers.map(server => Utils.rm(server.config.logDir))
+    servers.foreach(server => Utils.rm(server.config.logDir))
   }
 
   def testHWCheckpointWithFailuresMultipleLogSegments {
@@ -211,7 +212,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     sendMessages(2)
     // allow some time for the follower to get the leader HW
     assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.getReplica(topic, 0).get.highWatermark() == 60L, 1000))
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == 60L, 1000))
     // kill the server hosting the preferred replica
     server1.shutdown()
     server2.shutdown()
@@ -234,13 +235,13 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     sendMessages(2)
     // allow some time for the follower to get the leader HW
     assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server1.getReplica(topic, 0).get.highWatermark() == 120L, 1000))
+      server1.replicaManager.getReplica(topic, 0).get.highWatermark == 120L, 1000))
     // shutdown the servers to allow the hw to be checkpointed
-    servers.map(server => server.shutdown())
+    servers.foreach(server => server.shutdown())
     producer.close()
     assertEquals(120L, hwFile1.read(topic, 0))
     assertEquals(120L, hwFile2.read(topic, 0))
-    servers.map(server => Utils.rm(server.config.logDir))
+    servers.foreach(server => Utils.rm(server.config.logDir))
   }
 
   private def sendMessages(numMessages: Int = 1) {

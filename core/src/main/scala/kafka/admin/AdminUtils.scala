@@ -135,7 +135,7 @@ object AdminUtils extends Logging {
         new TopicMetadata(topic, partitionMetadata)
       } else {
         // topic doesn't exist, send appropriate error code
-        new TopicMetadata(topic, Seq.empty[PartitionMetadata], ErrorMapping.UnknownTopicCode)
+        new TopicMetadata(topic, Seq.empty[PartitionMetadata], ErrorMapping.UnknownTopicOrPartitionCode)
       }
     }
   }

@@ -21,14 +21,13 @@ import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.admin.CreateTopicCommand
 import java.nio.ByteBuffer
-import kafka.log.LogManager
 import junit.framework.Assert._
 import org.easymock.EasyMock
 import kafka.network._
 import kafka.cluster.Broker
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
-import kafka.server.{ReplicaManager, KafkaZooKeeper, KafkaApis, KafkaConfig}
+import kafka.server.{ReplicaManager, KafkaApis, KafkaConfig}
 import kafka.common.ErrorMapping
 import kafka.api.{TopicMetadata, TopicMetaDataResponse, TopicMetadataRequest}
 
@@ -99,16 +98,10 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   private def mockLogManagerAndTestTopic(topic: String): Seq[TopicMetadata] = {
-    // topic metadata request only requires 2 APIs from the log manager
-    val logManager = EasyMock.createMock(classOf[LogManager])
-    val kafkaZookeeper = EasyMock.createMock(classOf[KafkaZooKeeper])
+    // topic metadata request only requires 1 call from the replica manager
     val replicaManager = EasyMock.createMock(classOf[ReplicaManager])
     EasyMock.expect(replicaManager.config).andReturn(configs.head)
-    EasyMock.expect(kafkaZookeeper.getZookeeperClient).andReturn(zkClient)
-    EasyMock.expect(logManager.config).andReturn(configs.head)
     EasyMock.replay(replicaManager)
-    EasyMock.replay(logManager)
-    EasyMock.replay(kafkaZookeeper)
 
     // create a topic metadata request
     val topicMetadataRequest = new TopicMetadataRequest(List(topic))
@@ -119,8 +112,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // create the kafka request handler
     val requestChannel = new RequestChannel(2, 5)
-    val apis = new KafkaApis(requestChannel, logManager, replicaManager, kafkaZookeeper, null,
-                             null, null, null, 1)
+    val apis = new KafkaApis(requestChannel, replicaManager, zkClient, 1)
 
     // mock the receive API to return the request buffer as created above
     val receivedRequest = EasyMock.createMock(classOf[BoundedByteBufferReceive])
@@ -135,7 +127,6 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     val topicMetadata = TopicMetaDataResponse.readFrom(metadataResponse).topicsMetadata
 
     // verify the expected calls to log manager occurred in the right order
-    EasyMock.verify(kafkaZookeeper)
     EasyMock.verify(receivedRequest)
 
     topicMetadata

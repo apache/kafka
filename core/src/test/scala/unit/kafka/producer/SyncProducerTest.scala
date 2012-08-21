@@ -154,7 +154,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     Assert.assertEquals(request.correlationId, response.correlationId)
     Assert.assertEquals(response.errors.length, response.offsets.length)
     Assert.assertEquals(3, response.errors.length)
-    response.errors.foreach(Assert.assertEquals(ErrorMapping.UnknownTopicCode.toShort, _))
+    response.errors.foreach(Assert.assertEquals(ErrorMapping.UnknownTopicOrPartitionCode.toShort, _))
     response.offsets.foreach(Assert.assertEquals(-1L, _))
 
     // #2 - test that we get correct offsets when partition is owned by broker
@@ -176,7 +176,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     Assert.assertEquals(messages.sizeInBytes, response2.offsets(2))
 
     // the middle message should have been rejected because broker doesn't lead partition
-    Assert.assertEquals(ErrorMapping.UnknownTopicCode.toShort, response2.errors(1))
+    Assert.assertEquals(ErrorMapping.UnknownTopicOrPartitionCode.toShort, response2.errors(1))
     Assert.assertEquals(-1, response2.offsets(1))
   }
 
@@ -211,29 +211,5 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
 
     // make sure we don't wait fewer than timeoutMs for a response
     Assert.assertTrue((t2-t1) >= timeoutMs)
-  }
-
-  @Test
-  def testProduceRequestForUnknownTopic() {
-    val server = servers.head
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", server.socketServer.port.toString)
-    props.put("buffer.size", "102400")
-    props.put("connect.timeout.ms", "300")
-    props.put("reconnect.interval", "500")
-    props.put("max.message.size", "100")
-
-    val producer = new SyncProducer(new SyncProducerConfig(props))
-    val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
-
-    val request = TestUtils.produceRequestWithAcks(Array("topic1", "topic2", "topic3"), Array(0), messages, 1)
-    val response = producer.send(request)
-
-    Assert.assertNotNull(response)
-    Assert.assertEquals(request.correlationId, response.correlationId)
-    Assert.assertEquals(response.errors.length, response.offsets.length)
-    Assert.assertEquals(3, response.errors.length)
-    response.errors.foreach(Assert.assertEquals(ErrorMapping.UnknownTopicCode.toShort, _))
   }
 }

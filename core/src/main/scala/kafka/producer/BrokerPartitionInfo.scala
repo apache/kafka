@@ -21,7 +21,6 @@ import kafka.api.{TopicMetadataRequest, TopicMetadata}
 import kafka.common.KafkaException
 import kafka.utils.{Logging, Utils}
 import kafka.common.ErrorMapping
-import kafka.cluster.{Replica, Partition}
 
 
 class BrokerPartitionInfo(producerConfig: ProducerConfig,
@@ -37,7 +36,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
    * @return a sequence of (brokerId, numPartitions). Returns a zero-length
    * sequence if no brokers are available.
    */
-  def getBrokerPartitionInfo(topic: String): Seq[Partition] = {
+  def getBrokerPartitionInfo(topic: String): Seq[PartitionAndLeader] = {
     debug("Getting broker partition info for topic %s".format(topic))
     // check if the cache has metadata for this topic
     val topicMetadata = topicPartitionInfo.get(topic)
@@ -55,16 +54,13 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
       }
     val partitionMetadata = metadata.partitionsMetadata
     partitionMetadata.map { m =>
-      val partition = new Partition(topic, m.partitionId)
       m.leader match {
         case Some(leader) =>
-          val leaderReplica = new Replica(leader.id, partition, topic)
-          partition.leaderId(Some(leaderReplica.brokerId))
           debug("Topic %s partition %d has leader %d".format(topic, m.partitionId, leader.id))
-          partition
+          new PartitionAndLeader(topic, m.partitionId, Some(leader.id))
         case None =>
           debug("Topic %s partition %d does not have a leader yet".format(topic, m.partitionId))
-          partition
+          new PartitionAndLeader(topic, m.partitionId, None)
       }
     }.sortWith((s, t) => s.partitionId < t.partitionId)
   }
@@ -113,3 +109,5 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
     }
   }
 }
+
+case class PartitionAndLeader(topic: String, partitionId: Int, leaderBrokerIdOpt: Option[Int])

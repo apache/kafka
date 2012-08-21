@@ -258,33 +258,13 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   }
 
   def testCompressionSetConsumption() {
-    val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
-    requestHandlerLogger.setLevel(Level.FATAL)
-
     // send some messages to each broker
     val sentMessages1 = sendMessagesToBrokerPartition(configs.head, topic, 0, 200, DefaultCompressionCodec)
     val sentMessages2 = sendMessagesToBrokerPartition(configs.last, topic, 1, 200, DefaultCompressionCodec)
     val sentMessages = (sentMessages1 ++ sentMessages2).sortWith((s,t) => s.checksum < t.checksum)
 
-    // test consumer timeout logic
-    val consumerConfig0 = new ConsumerConfig(
-      TestUtils.createConsumerProperties(zkConnect, group, consumer0)) {
-      override val consumerTimeoutMs = 5000
-    }
-    val zkConsumerConnector0 = new ZookeeperConsumerConnector(consumerConfig0, true)
-    val topicMessageStreams0 = zkConsumerConnector0.createMessageStreams(Predef.Map(topic -> 1))
-    getMessages(100, topicMessageStreams0)
-
-    // also check partition ownership
-    val actual_1 = getZKChildrenValues(dirs.consumerOwnerDir)
-    val expected_1 = List( ("0", "group1_consumer0-0"),
-                           ("1", "group1_consumer0-0"))
-    assertEquals(expected_1, actual_1)
-
-    zkConsumerConnector0.shutdown
-    // at this point, only some part of the message set was consumed. So consumed offset should still be 0
-    // also fetched offset should be 0
-    val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig0, true)
+    val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer0))
+    val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Predef.Map(topic -> 1))
     val receivedMessages = getMessages(400, topicMessageStreams1)
     val sortedReceivedMessages = receivedMessages.sortWith((s,t) => s.checksum < t.checksum)
@@ -298,8 +278,6 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     assertEquals(expected_2, actual_2)
 
     zkConsumerConnector1.shutdown
-
-    requestHandlerLogger.setLevel(Level.ERROR)
   }
 
   def testConsumerDecoder() {

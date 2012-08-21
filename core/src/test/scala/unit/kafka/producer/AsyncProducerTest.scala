@@ -261,10 +261,10 @@ class AsyncProducerTest extends JUnit3Suite {
                                                          topicPartitionInfos)
     try {
       handler.partitionAndCollate(producerDataList)
-      fail("Should fail with InvalidPartitionException")
+      fail("Should fail with UnknownTopicOrPartitionException")
     }
     catch {
-      case e: InvalidPartitionException => // expected, do nothing
+      case e: UnknownTopicOrPartitionException => // expected, do nothing
     }
   }
 

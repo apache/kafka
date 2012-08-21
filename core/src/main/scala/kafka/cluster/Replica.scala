@@ -20,36 +20,41 @@ package kafka.cluster
 import kafka.log.Log
 import kafka.utils.{SystemTime, Time, Logging}
 import kafka.common.KafkaException
+import kafka.server.ReplicaManager
+import java.util.concurrent.atomic.AtomicLong
 
 class Replica(val brokerId: Int,
               val partition: Partition,
-              val topic: String,
               time: Time = SystemTime,
-              var hw: Option[Long] = None,
-              var log: Option[Log] = None) extends Logging {
-  private var logEndOffset: Long = -1L
-  private var logEndOffsetUpdateTimeMs: Long = -1L
+              initialHighWatermarkValue: Long = 0L,
+              val log: Option[Log] = None) extends Logging {
+  //only defined in local replica
+  private[this] var highWatermarkValue: AtomicLong = new AtomicLong(initialHighWatermarkValue)
+  // only used for remote replica; logEndOffsetValue for local replica is kept in log
+  private[this] var logEndOffsetValue = new AtomicLong(ReplicaManager.UnknownLogEndOffset)
+  private[this] var logEndOffsetUpdateTimeMsValue: AtomicLong = new AtomicLong(time.milliseconds)
+  val topic = partition.topic
+  val partitionId = partition.partitionId
 
-  def logEndOffset(newLeo: Option[Long] = None): Long = {
-    isLocal match {
-      case true =>
-        newLeo match {
-          case Some(newOffset) => logEndOffsetUpdateTimeMs = time.milliseconds; newOffset
-          case None => log.get.logEndOffset
-        }
-      case false =>
-        newLeo match {
-          case Some(newOffset) =>
-            logEndOffset = newOffset
-            logEndOffsetUpdateTimeMs = time.milliseconds
-            trace("Setting log end offset for replica %d for topic %s partition %d to %d"
-              .format(brokerId, topic, partition.partitionId, logEndOffset))
-            logEndOffset
-          case None => logEndOffset
-        }
-    }
+  def logEndOffset_=(newLogEndOffset: Long) = {
+    if (!isLocal) {
+      logEndOffsetValue.set(newLogEndOffset)
+      logEndOffsetUpdateTimeMsValue.set(time.milliseconds)
+      trace("Setting log end offset for replica %d for topic %s partition %d to %d"
+            .format(brokerId, topic, partitionId, logEndOffsetValue))
+    } else
+      throw new KafkaException("Shouldn't set logEndOffset for replica %d topic %s partition %d since it's local"
+          .format(brokerId, topic, partitionId))
+
   }
 
+  def logEndOffset = {
+    if (isLocal)
+      log.get.logEndOffset
+    else
+      logEndOffsetValue.get()
+  }
+  
   def isLocal: Boolean = {
     log match {
       case Some(l) => true
@@ -57,34 +62,24 @@ class Replica(val brokerId: Int,
     }
   }
 
-  def logEndOffsetUpdateTime = logEndOffsetUpdateTimeMs
+  def logEndOffsetUpdateTimeMs = logEndOffsetUpdateTimeMsValue.get()
 
-  def highWatermark(highwaterMarkOpt: Option[Long] = None): Long = {
-    highwaterMarkOpt match {
-      case Some(highwaterMark) =>
-        isLocal match {
-          case true =>
-            trace("Setting hw for topic %s partition %d on broker %d to %d".format(topic, partition.partitionId,
-                                                                                   brokerId, highwaterMark))
-            hw = Some(highwaterMark)
-            highwaterMark
-          case false => throw new KafkaException("Unable to set highwatermark for topic %s ".format(topic) +
-            "partition %d on broker %d, since there is no local log for this partition"
-              .format(partition.partitionId, brokerId))
-        }
-      case None =>
-        isLocal match {
-          case true =>
-            hw match {
-              case Some(highWatermarkValue) => highWatermarkValue
-              case None => throw new KafkaException("HighWatermark does not exist for topic %s ".format(topic) +
-              " partition %d on broker %d but local log exists".format(partition.partitionId, brokerId))
-            }
-          case false => throw new KafkaException("Unable to get highwatermark for topic %s ".format(topic) +
-            "partition %d on broker %d, since there is no local log for this partition"
-              .format(partition.partitionId, brokerId))
-        }
-    }
+  def highWatermark_=(newHighWatermark: Long) {
+    if (isLocal) {
+      trace("Setting hw for replica %d topic %s partition %d on broker %d to %d"
+              .format(brokerId, topic, partitionId, newHighWatermark))
+      highWatermarkValue.set(newHighWatermark)
+    } else
+      throw new KafkaException("Unable to set highwatermark for replica %d topic %s partition %d since it's not local"
+              .format(brokerId, topic, partitionId))
+  }
+
+  def highWatermark = {
+    if (isLocal)
+      highWatermarkValue.get()
+    else
+      throw new KafkaException("Unable to get highwatermark for replica %d topic %s partition %d since it's not local"
+              .format(brokerId, topic, partitionId))
   }
 
   override def equals(that: Any): Boolean = {
@@ -107,7 +102,7 @@ class Replica(val brokerId: Int,
     replicaString.append("; Topic: " + topic)
     replicaString.append("; Partition: " + partition.toString)
     replicaString.append("; isLocal: " + isLocal)
-    if(isLocal) replicaString.append("; Highwatermark: " + highWatermark())
+    if(isLocal) replicaString.append("; Highwatermark: " + highWatermark)
     replicaString.toString()
   }
 }

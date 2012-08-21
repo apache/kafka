@@ -17,7 +17,6 @@
 
 package kafka.producer.async
 
-import kafka.cluster.Partition
 import kafka.common._
 import kafka.message.{Message, NoCompressionCodec, ByteBufferMessageSet}
 import kafka.producer._
@@ -105,7 +104,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         val brokerPartition = topicPartitionsList(partitionIndex)
 
         // postpone the failure until the send operation, so that requests for other brokers are handled correctly
-        val leaderBrokerId = brokerPartition.leaderId().getOrElse(-1)
+        val leaderBrokerId = brokerPartition.leaderBrokerIdOpt.getOrElse(-1)
 
         var dataPerBroker: HashMap[(String, Int), Seq[ProducerData[K,Message]]] = null
         ret.get(leaderBrokerId) match {
@@ -135,7 +134,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     }
   }
 
-  private def getPartitionListForTopic(pd: ProducerData[K,Message]): Seq[Partition] = {
+  private def getPartitionListForTopic(pd: ProducerData[K,Message]): Seq[PartitionAndLeader] = {
     debug("Getting the number of broker partitions registered for topic: " + pd.getTopic)
     val topicPartitionsList = brokerPartitionInfo.getBrokerPartitionInfo(pd.getTopic)
     debug("Broker partitions registered for topic: %s are %s"
@@ -146,7 +145,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   }
 
   /**
-   * Retrieves the partition id and throws an InvalidPartitionException if
+   * Retrieves the partition id and throws an UnknownTopicOrPartitionException if
    * the value of partition is not between 0 and numPartitions-1
    * @param key the partition key
    * @param numPartitions the total number of available partitions
@@ -154,12 +153,12 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
    */
   private def getPartition(key: K, numPartitions: Int): Int = {
     if(numPartitions <= 0)
-      throw new InvalidPartitionException("Invalid number of partitions: " + numPartitions +
+      throw new UnknownTopicOrPartitionException("Invalid number of partitions: " + numPartitions +
         "\n Valid values are > 0")
     val partition = if(key == null) Utils.getNextRandomInt(numPartitions)
     else partitioner.partition(key, numPartitions)
     if(partition < 0 || partition >= numPartitions)
-      throw new InvalidPartitionException("Invalid partition id : " + partition +
+      throw new UnknownTopicOrPartitionException("Invalid partition id : " + partition +
         "\n Valid values are in the range inclusive [0, " + (numPartitions-1) + "]")
     partition
   }

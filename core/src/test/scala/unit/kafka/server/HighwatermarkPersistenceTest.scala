@@ -21,8 +21,9 @@ import org.I0Itec.zkclient.ZkClient
 import org.scalatest.junit.JUnit3Suite
 import org.easymock.EasyMock
 import org.junit.Assert._
-import kafka.utils.{KafkaScheduler, TestUtils, MockTime}
 import kafka.common.KafkaException
+import kafka.cluster.Replica
+import kafka.utils.{SystemTime, KafkaScheduler, TestUtils, MockTime}
 
 class HighwatermarkPersistenceTest extends JUnit3Suite {
 
@@ -41,33 +42,31 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, new MockTime(), zkClient, scheduler, null)
     replicaManager.startup()
-    replicaManager.startHighWaterMarksCheckPointThread()
-    // sleep until flush ms
-    Thread.sleep(configs.head.defaultFlushIntervalMs)
-    var fooPartition0Hw = replicaManager.readCheckpointedHighWatermark(topic, 0)
+    replicaManager.checkpointHighWatermarks()
+    var fooPartition0Hw = replicaManager.highWatermarkCheckpoint.read(topic, 0)
     assertEquals(0L, fooPartition0Hw)
-    val partition0 = replicaManager.getOrCreatePartition(topic, 0, configs.map(_.brokerId).toSet)
+    val partition0 = replicaManager.getOrCreatePartition(topic, 0)
     // create leader log
     val log0 = getMockLog
     // create leader and follower replicas
-    val leaderReplicaPartition0 = replicaManager.addLocalReplica(topic, 0, log0, configs.map(_.brokerId).toSet)
-    val followerReplicaPartition0 = replicaManager.addRemoteReplica(topic, 0, configs.last.brokerId, partition0)
-    replicaManager.checkpointHighwaterMarks()
-    fooPartition0Hw = replicaManager.readCheckpointedHighWatermark(topic, 0)
-    assertEquals(leaderReplicaPartition0.highWatermark(), fooPartition0Hw)
+    val leaderReplicaPartition0 = new Replica(configs.head.brokerId, partition0, SystemTime, 0, Some(log0))
+    partition0.addReplicaIfNotExists(leaderReplicaPartition0)
+    val followerReplicaPartition0 = new Replica(configs.last.brokerId, partition0, SystemTime)
+    partition0.addReplicaIfNotExists(followerReplicaPartition0)
+    replicaManager.checkpointHighWatermarks()
+    fooPartition0Hw = replicaManager.highWatermarkCheckpoint.read(topic, 0)
+    assertEquals(leaderReplicaPartition0.highWatermark, fooPartition0Hw)
     try {
-      followerReplicaPartition0.highWatermark()
-      fail("Should fail with IllegalStateException")
+      followerReplicaPartition0.highWatermark
+      fail("Should fail with KafkaException")
     }catch {
       case e: KafkaException => // this is ok
     }
-    // set the leader
-    partition0.leaderId(Some(leaderReplicaPartition0.brokerId))
     // set the highwatermark for local replica
-    partition0.leaderHW(Some(5L))
-    replicaManager.checkpointHighwaterMarks()
-    fooPartition0Hw = replicaManager.readCheckpointedHighWatermark(topic, 0)
-    assertEquals(leaderReplicaPartition0.highWatermark(), fooPartition0Hw)
+    partition0.getReplica().get.highWatermark = 5L
+    replicaManager.checkpointHighWatermarks()
+    fooPartition0Hw = replicaManager.highWatermarkCheckpoint.read(topic, 0)
+    assertEquals(leaderReplicaPartition0.highWatermark, fooPartition0Hw)
     EasyMock.verify(zkClient)
     EasyMock.verify(log0)
   }
@@ -84,48 +83,46 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     // create replica manager
     val replicaManager = new ReplicaManager(configs.head, new MockTime(), zkClient, scheduler, null)
     replicaManager.startup()
-    replicaManager.checkpointHighwaterMarks()
-    var topic1Partition0Hw = replicaManager.readCheckpointedHighWatermark(topic1, 0)
+    replicaManager.checkpointHighWatermarks()
+    var topic1Partition0Hw = replicaManager.highWatermarkCheckpoint.read(topic1, 0)
     assertEquals(0L, topic1Partition0Hw)
-    val topic1Partition0 = replicaManager.getOrCreatePartition(topic1, 0, configs.map(_.brokerId).toSet)
+    val topic1Partition0 = replicaManager.getOrCreatePartition(topic1, 0)
     // create leader log
     val topic1Log0 = getMockLog
-    // create leader and follower replicas
-    val leaderReplicaTopic1Partition0 = replicaManager.addLocalReplica(topic1, 0, topic1Log0, configs.map(_.brokerId).toSet)
-    replicaManager.checkpointHighwaterMarks()
-    topic1Partition0Hw = replicaManager.readCheckpointedHighWatermark(topic1, 0)
-    assertEquals(leaderReplicaTopic1Partition0.highWatermark(), topic1Partition0Hw)
-    // set the leader
-    topic1Partition0.leaderId(Some(leaderReplicaTopic1Partition0.brokerId))
+    // create a local replica for topic1
+    val leaderReplicaTopic1Partition0 = new Replica(configs.head.brokerId, topic1Partition0, SystemTime, 0, Some(topic1Log0))
+    topic1Partition0.addReplicaIfNotExists(leaderReplicaTopic1Partition0)
+    replicaManager.checkpointHighWatermarks()
+    topic1Partition0Hw = replicaManager.highWatermarkCheckpoint.read(topic1, 0)
+    assertEquals(leaderReplicaTopic1Partition0.highWatermark, topic1Partition0Hw)
     // set the highwatermark for local replica
-    topic1Partition0.leaderHW(Some(5L))
-    replicaManager.checkpointHighwaterMarks()
-    topic1Partition0Hw = replicaManager.readCheckpointedHighWatermark(topic1, 0)
-    assertEquals(5L, leaderReplicaTopic1Partition0.highWatermark())
+    topic1Partition0.getReplica().get.highWatermark = 5L
+    replicaManager.checkpointHighWatermarks()
+    topic1Partition0Hw = replicaManager.highWatermarkCheckpoint.read(topic1, 0)
+    assertEquals(5L, leaderReplicaTopic1Partition0.highWatermark)
     assertEquals(5L, topic1Partition0Hw)
     // add another partition and set highwatermark
-    val topic2Partition0 = replicaManager.getOrCreatePartition(topic2, 0, configs.map(_.brokerId).toSet)
+    val topic2Partition0 = replicaManager.getOrCreatePartition(topic2, 0)
     // create leader log
     val topic2Log0 = getMockLog
-    // create leader and follower replicas
-    val leaderReplicaTopic2Partition0 = replicaManager.addLocalReplica(topic2, 0, topic2Log0, configs.map(_.brokerId).toSet)
-    replicaManager.checkpointHighwaterMarks()
-    var topic2Partition0Hw = replicaManager.readCheckpointedHighWatermark(topic2, 0)
-    assertEquals(leaderReplicaTopic2Partition0.highWatermark(), topic2Partition0Hw)
-    // set the leader
-    topic2Partition0.leaderId(Some(leaderReplicaTopic2Partition0.brokerId))
+    // create a local replica for topic2
+    val leaderReplicaTopic2Partition0 =  new Replica(configs.head.brokerId, topic2Partition0, SystemTime, 0, Some(topic2Log0))
+    topic2Partition0.addReplicaIfNotExists(leaderReplicaTopic2Partition0)
+    replicaManager.checkpointHighWatermarks()
+    var topic2Partition0Hw = replicaManager.highWatermarkCheckpoint.read(topic2, 0)
+    assertEquals(leaderReplicaTopic2Partition0.highWatermark, topic2Partition0Hw)
     // set the highwatermark for local replica
-    topic2Partition0.leaderHW(Some(15L))
-    assertEquals(15L, leaderReplicaTopic2Partition0.highWatermark())
+    topic2Partition0.getReplica().get.highWatermark = 15L
+    assertEquals(15L, leaderReplicaTopic2Partition0.highWatermark)
     // change the highwatermark for topic1
-    topic1Partition0.leaderHW(Some(10L))
-    assertEquals(10L, leaderReplicaTopic1Partition0.highWatermark())
-    replicaManager.checkpointHighwaterMarks()
+    topic1Partition0.getReplica().get.highWatermark = 10L
+    assertEquals(10L, leaderReplicaTopic1Partition0.highWatermark)
+    replicaManager.checkpointHighWatermarks()
     // verify checkpointed hw for topic 2
-    topic2Partition0Hw = replicaManager.readCheckpointedHighWatermark(topic2, 0)
+    topic2Partition0Hw = replicaManager.highWatermarkCheckpoint.read(topic2, 0)
     assertEquals(15L, topic2Partition0Hw)
     // verify checkpointed hw for topic 1
-    topic1Partition0Hw = replicaManager.readCheckpointedHighWatermark(topic1, 0)
+    topic1Partition0Hw = replicaManager.highWatermarkCheckpoint.read(topic1, 0)
     assertEquals(10L, topic1Partition0Hw)
     EasyMock.verify(zkClient)
     EasyMock.verify(topic1Log0)

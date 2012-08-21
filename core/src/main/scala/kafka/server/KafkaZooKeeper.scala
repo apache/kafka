@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.net.InetAddress
 import kafka.utils._
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
@@ -25,8 +24,7 @@ import kafka.common._
 
 
 /**
- * Handles the server's interaction with zookeeper. The server needs to register the following paths:
- *   /topics/[topic]/[node_id-partition_num]
+ * Handles registering broker with zookeeper in the following path:
  *   /brokers/[0...N] --> host:port
  */
 class KafkaZooKeeper(config: KafkaConfig) extends Logging {
@@ -79,28 +77,6 @@ class KafkaZooKeeper(config: KafkaConfig) extends Logging {
     if (zkClient != null) {
       info("Closing zookeeper client...")
       zkClient.close()
-    }
-  }
-
-  private def doesTopicExistInCluster(topic: String) : Boolean = {
-    val allTopics = ZkUtils.getAllTopics(zkClient)
-    trace("all topics, %s, topic %s".format(allTopics, topic))
-    allTopics.contains(topic)
-  }
-
-  def ensurePartitionLeaderOnThisBroker(topic: String, partition: Int) {
-    if(!doesTopicExistInCluster(topic))
-      throw new UnknownTopicException("Topic %s doesn't exist in the cluster".format(topic))
-    // check if partition id is invalid
-    if(partition < 0)
-      throw new InvalidPartitionException("Partition %d is invalid".format(partition))
-    ZkUtils.getLeaderForPartition(zkClient, topic, partition) match {
-      case Some(leader) =>
-        if(leader != config.brokerId)
-          throw new LeaderNotAvailableException("Broker %d is not leader for partition %d for topic %s"
-            .format(config.brokerId, partition, topic))
-      case None =>
-        throw new LeaderNotAvailableException("There is no leader for topic %s partition %d".format(topic, partition))
     }
   }
 

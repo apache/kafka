@@ -18,32 +18,27 @@
 package kafka.server
 
 import java.io.IOException
-import java.util.concurrent.TimeUnit
 import kafka.admin.{CreateTopicCommand, AdminUtils}
 import kafka.api._
 import kafka.common._
-import kafka.log._
 import kafka.message._
 import kafka.network._
+import kafka.utils.{Pool, SystemTime, Logging}
 import org.apache.log4j.Logger
 import scala.collection._
 import mutable.HashMap
 import scala.math._
 import kafka.network.RequestChannel.Response
-import kafka.cluster.Replica
+import java.util.concurrent.TimeUnit
 import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.{Pool, ZkUtils, SystemTime, Logging}
-
+import org.I0Itec.zkclient.ZkClient
 
 /**
  * Logic to handle the various Kafka requests
  */
-class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
-                val replicaManager: ReplicaManager, val kafkaZookeeper: KafkaZooKeeper,
-                addReplicaCbk: (String, Int, Set[Int]) => Replica,
-                stopReplicaCbk: (String, Int) => Short,
-                becomeLeader: (Replica, LeaderAndISR) => Short,
-                becomeFollower: (Replica, LeaderAndISR) => Short,
+class KafkaApis(val requestChannel: RequestChannel,
+                val replicaManager: ReplicaManager,
+                val zkClient: ZkClient,
                 brokerId: Int) extends Logging {
 
   private val metricsGroup = brokerId.toString
@@ -70,52 +65,13 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
     }
   }
 
-
   def handleLeaderAndISRRequest(request: RequestChannel.Request){
-    val responseMap = new HashMap[(String, Int), Short]
     val leaderAndISRRequest = LeaderAndISRRequest.readFrom(request.request.buffer)
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Handling leader and isr request " + leaderAndISRRequest)
     trace("Handling leader and isr request " + leaderAndISRRequest)
 
-    for((partitionInfo, leaderAndISR) <- leaderAndISRRequest.leaderAndISRInfos){
-      var errorCode = ErrorMapping.NoError
-      val topic = partitionInfo._1
-      val partition = partitionInfo._2
-
-      // If the partition does not exist locally, create it
-      if(replicaManager.getPartition(topic, partition) == None){
-        trace("The partition (%s, %d) does not exist locally, check if current broker is in assigned replicas, if so, start the local replica".format(topic, partition))
-        val assignedReplicas = ZkUtils.getReplicasForPartition(kafkaZookeeper.getZookeeperClient, topic, partition)
-        trace("Assigned replicas list for topic [%s] partition [%d] is [%s]".format(topic, partition, assignedReplicas.toString))
-        if(assignedReplicas.contains(brokerId)) {
-          val replica = addReplicaCbk(topic, partition, assignedReplicas.toSet)
-          info("Starting replica for topic [%s] partition [%d]".format(replica.topic, replica.partition.partitionId))
-        }
-      }
-      val replica = replicaManager.getReplica(topic, partition).get
-      // The command ask this broker to be new leader for P and it isn't the leader yet
-      val requestedLeaderId = leaderAndISR.leader
-      // If the broker is requested to be the leader and it's not current the leader (the leader id is set and not equal to broker id)
-      if(requestedLeaderId == brokerId && (!replica.partition.leaderId().isDefined || replica.partition.leaderId().get != brokerId)){
-        info("Becoming the leader for partition [%s, %d] at the leader and isr request %s".format(topic, partition, leaderAndISRRequest))
-        errorCode = becomeLeader(replica, leaderAndISR)
-      }
-      else if (requestedLeaderId != brokerId) {
-        info("Becoming the follower for partition [%s, %d] at the leader and isr request %s".format(topic, partition, leaderAndISRRequest))
-        errorCode = becomeFollower(replica, leaderAndISR)
-      }
-
-      responseMap.put(partitionInfo, errorCode)
-    }
-
-    if(leaderAndISRRequest.isInit == LeaderAndISRRequest.IsInit){
-      replicaManager.startHighWaterMarksCheckPointThread
-      val partitionsToRemove = replicaManager.allPartitions.filter(p => !leaderAndISRRequest.leaderAndISRInfos.contains(p._1)).keySet
-      info("Init flag is set in leaderAndISR request, partitions to remove: %s".format(partitionsToRemove))
-      partitionsToRemove.foreach(p => stopReplicaCbk(p._1, p._2))
-    }
-
+    val responseMap = replicaManager.becomeLeaderOrFollower(leaderAndISRRequest)
     val leaderAndISRResponse = new LeaderAndISRResponse(leaderAndISRRequest.versionId, responseMap)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(leaderAndISRResponse)))
   }
@@ -129,9 +85,9 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
 
     val responseMap = new HashMap[(String, Int), Short]
 
-    for((topic, partition) <- stopReplicaRequest.stopReplicaSet){
-      val errorCode = stopReplicaCbk(topic, partition)
-      responseMap.put((topic, partition), errorCode)
+    for((topic, partitionId) <- stopReplicaRequest.stopReplicaSet){
+      val errorCode = replicaManager.stopReplica(topic, partitionId)
+      responseMap.put((topic, partitionId), errorCode)
     }
     val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.versionId, responseMap)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(stopReplicaResponse)))
@@ -225,10 +181,9 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
         BrokerTopicStat.getBrokerTopicStat(topicData.topic).recordBytesIn(partitionData.messages.sizeInBytes)
         BrokerTopicStat.getBrokerAllTopicStat.recordBytesIn(partitionData.messages.sizeInBytes)
         try {
-          kafkaZookeeper.ensurePartitionLeaderOnThisBroker(topicData.topic, partitionData.partition)
-          val log = logManager.getOrCreateLog(topicData.topic, partitionData.partition)
+          val localReplica = replicaManager.getLeaderReplicaIfLocal(topicData.topic, partitionData.partition)
+          val log = localReplica.log.get
           log.append(partitionData.messages.asInstanceOf[ByteBufferMessageSet])
-          replicaManager.recordLeaderLogEndOffset(topicData.topic, partitionData.partition, log.logEndOffset)
           offsets(msgIndex) = log.logEndOffset
           errors(msgIndex) = ErrorMapping.NoError.toShort
           trace("%d bytes written to logs, nextAppendOffset = %d"
@@ -313,14 +268,14 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
     for(offsetDetail <- fetchRequest.offsetInfo) {
       for(i <- 0 until offsetDetail.partitions.size) {
         try {
-          val maybeLog = logManager.getLog(offsetDetail.topic, offsetDetail.partitions(i))
-          val available = maybeLog match {
-            case Some(log) => max(0, log.logEndOffset - offsetDetail.offsets(i))
+          val localReplica = replicaManager.getReplica(offsetDetail.topic, offsetDetail.partitions(i))
+          val available = localReplica match {
+            case Some(replica) => max(0, replica.log.get.logEndOffset - offsetDetail.offsets(i))
             case None => 0
           }
           totalBytes += math.min(offsetDetail.fetchSizes(i), available)
         } catch {
-          case e: InvalidPartitionException =>
+          case e: UnknownTopicOrPartitionException =>
             info("Invalid partition %d in fetch request from client %d."
               .format(offsetDetail.partitions(i), fetchRequest.clientId))
         }
@@ -337,8 +292,7 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
       val topic = offsetDetail.topic
       val (partitions, offsets) = (offsetDetail.partitions, offsetDetail.offsets)
       for( (partition, offset) <- (partitions, offsets).zipped.map((_,_))) {
-        replicaManager.recordFollowerPosition(topic, partition, fetchRequest.replicaId, offset,
-                                              kafkaZookeeper.getZookeeperClient)
+        replicaManager.recordFollowerPosition(topic, partition, fetchRequest.replicaId, offset)
       }
     }
   }
@@ -354,7 +308,7 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
       val info = new mutable.ArrayBuffer[PartitionData]()
       val topic = offsetDetail.topic
       val (partitions, offsets, fetchSizes) = (offsetDetail.partitions, offsetDetail.offsets, offsetDetail.fetchSizes)
-      for( (partition, offset, fetchSize) <- (partitions, offsets, fetchSizes).zipped.map((_,_,_)) ){
+      for( (partition, offset, fetchSize) <- (partitions, offsets, fetchSizes).zipped.map((_,_,_)) ) {
         val partitionInfo = readMessageSet(topic, partition, offset, fetchSize) match {
           case Left(err) =>
             BrokerTopicStat.getBrokerTopicStat(topic).recordFailedFetchRequest
@@ -367,23 +321,14 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
           case Right(messages) =>
             BrokerTopicStat.getBrokerTopicStat(topic).recordBytesOut(messages.sizeInBytes)
             BrokerTopicStat.getBrokerAllTopicStat.recordBytesOut(messages.sizeInBytes)
-            val leaderReplicaOpt = replicaManager.getReplica(topic, partition, brokerId)
-            assert(leaderReplicaOpt.isDefined, "Leader replica for topic %s partition %d must exist on leader broker %d".format(topic, partition, brokerId))
-            val leaderReplica = leaderReplicaOpt.get
-            fetchRequest.replicaId match {
-              case FetchRequest.NonFollowerId =>
-               // replica id value of -1 signifies a fetch request from an external client, not from one of the replicas
-                new PartitionData(partition, ErrorMapping.NoError, offset, leaderReplica.highWatermark(), messages)
-              case _ => // fetch request from a follower
-                val replicaOpt = replicaManager.getReplica(topic, partition, fetchRequest.replicaId)
-                assert(replicaOpt.isDefined, "No replica %d in replica manager on %d".format(fetchRequest.replicaId, brokerId))
-                val replica = replicaOpt.get
-                debug("Leader for topic [%s] partition [%d] received fetch request from follower [%d]"
-                  .format(replica.topic, replica.partition.partitionId, fetchRequest.replicaId))
-                debug("Leader returning %d messages for topic %s partition %d to follower %d"
-                  .format(messages.sizeInBytes, replica.topic, replica.partition.partitionId, fetchRequest.replicaId))
-                new PartitionData(partition, ErrorMapping.NoError, offset, leaderReplica.highWatermark(), messages)
+            val leaderReplica = replicaManager.getReplica(topic, partition).get
+            if (fetchRequest.replicaId != FetchRequest.NonFollowerId) {
+              debug("Leader for topic [%s] partition [%d] received fetch request from follower [%d]"
+                .format(topic, partition, fetchRequest.replicaId))
+              debug("Leader returning %d messages for topic %s partition %d to follower %d"
+                .format(messages.sizeInBytes, topic, partition, fetchRequest.replicaId))
             }
+            new PartitionData(partition, ErrorMapping.NoError, offset, leaderReplica.highWatermark, messages)
         }
         info.append(partitionInfo)
       }
@@ -399,10 +344,10 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
     var response: Either[Short, MessageSet] = null
     try {
       // check if the current broker is the leader for the partitions
-      kafkaZookeeper.ensurePartitionLeaderOnThisBroker(topic, partition)
+      val localReplica = replicaManager.getLeaderReplicaIfLocal(topic, partition)
       trace("Fetching log segment for topic, partition, offset, size = " + (topic, partition, offset, maxSize))
-      val log = logManager.getLog(topic, partition)
-      response = Right(log match { case Some(l) => l.read(offset, maxSize) case None => MessageSet.Empty })
+      val log = localReplica.log.get
+      response = Right(log.read(offset, maxSize))
     } catch {
       case e =>
         error("error when processing request " + (topic, partition, offset, maxSize), e)
@@ -422,8 +367,9 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
 
     var response: OffsetResponse = null
     try {
-      kafkaZookeeper.ensurePartitionLeaderOnThisBroker(offsetRequest.topic, offsetRequest.partition)
-      val offsets = logManager.getOffsets(offsetRequest)
+      // ensure leader exists
+      replicaManager.getLeaderReplicaIfLocal(offsetRequest.topic, offsetRequest.partition)
+      val offsets = replicaManager.logManager.getOffsets(offsetRequest)
       response = new OffsetResponse(offsetRequest.versionId, offsets)
     }catch {
       case ioe: IOException =>
@@ -446,10 +392,8 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
     trace("Handling topic metadata request " + metadataRequest.toString())
 
     val topicsMetadata = new mutable.ArrayBuffer[TopicMetadata]()
-    val zkClient = kafkaZookeeper.getZookeeperClient
     var errorCode = ErrorMapping.NoError
-    val config = logManager.config
-
+    val config = replicaManager.config
     try {
       val topicMetadataList = AdminUtils.getTopicMetaDataFromZK(metadataRequest.topics, zkClient)
       metadataRequest.topics.zip(topicMetadataList).foreach(
@@ -457,7 +401,7 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
           val topic = topicAndMetadata._1
           topicAndMetadata._2.errorCode match {
             case ErrorMapping.NoError => topicsMetadata += topicAndMetadata._2
-            case ErrorMapping.UnknownTopicCode =>
+            case ErrorMapping.UnknownTopicOrPartitionCode =>
               /* check if auto creation of topics is turned on */
               if(config.autoCreateTopics) {
                 CreateTopicCommand.createTopic(zkClient, topic, config.numPartitions, config.defaultReplicationFactor)
@@ -604,51 +548,22 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
       trace("Checking producer request satisfaction for %s-%d, acksPending = %b"
         .format(topic, partitionId, fetchPartitionStatus.acksPending))
       if (fetchPartitionStatus.acksPending) {
-        val leaderReplica = replicaManager.getLeaderReplica(topic, partitionId)
-        leaderReplica match {
-          case Some(leader) => {
-            if (leader.isLocal) {
-              val isr = leader.partition.inSyncReplicas
-              val numAcks = isr.count(r => {
-                if (!r.isLocal) {
-                  r.logEndOffset() >= partitionStatus(key).requiredOffset
-                }
-                else
-                  true /* also count the local (leader) replica */
-              })
-
-              trace("Received %d/%d acks for producer request to %s-%d; isr size = %d".format(
-                numAcks, produce.requiredAcks,
-                topic, partitionId, isr.size))
-              if ((produce.requiredAcks < 0 && numAcks >= isr.size) ||
-                      (produce.requiredAcks > 0 && numAcks >= produce.requiredAcks)) {
-                /*
-                 * requiredAcks < 0 means acknowledge after all replicas in ISR
-                 * are fully caught up to the (local) leader's offset
-                 * corresponding to this produce request.
-                 */
-
-                fetchPartitionStatus.acksPending = false
-                fetchPartitionStatus.error = ErrorMapping.NoError
-                val topicData =
-                  produce.data.find(_.topic == topic).get
-                val partitionData =
-                  topicData.partitionDataArray.find(_.partition == partitionId).get
-                delayedRequestMetrics.recordDelayedProducerKeyCaughtUp(key,
-                                                                       durationNs,
-                                                                       partitionData.sizeInBytes)
-                maybeUnblockDelayedFetchRequests(
-                  topic, Array(partitionData))
-              }
-            }
-            else {
-              debug("Broker not leader for %s-%d".format(topic, partitionId))
-              fetchPartitionStatus.setThisBrokerNotLeader()
-            }
-          }
-          case None =>
-            debug("Broker not leader for %s-%d".format(topic, partitionId))
-            fetchPartitionStatus.setThisBrokerNotLeader()
+        val partition = replicaManager.getOrCreatePartition(topic, partitionId)
+        val (hasEnough, errorCode) = partition.checkEnoughReplicasReachOffset(fetchPartitionStatus.requiredOffset, produce.requiredAcks)
+        if (errorCode != ErrorMapping.NoError) {
+          fetchPartitionStatus.acksPending = false
+          fetchPartitionStatus.error = errorCode
+        } else if (hasEnough) {
+          fetchPartitionStatus.acksPending = false
+          fetchPartitionStatus.error = ErrorMapping.NoError
+        }
+        if (!fetchPartitionStatus.acksPending) {
+          val topicData = produce.data.find(_.topic == topic).get
+          val partitionData = topicData.partitionDataArray.find(_.partition == partitionId).get
+          delayedRequestMetrics.recordDelayedProducerKeyCaughtUp(key,
+                                                                 durationNs,
+                                                                 partitionData.sizeInBytes)
+          maybeUnblockDelayedFetchRequests(topic, Array(partitionData))
         }
       }
 

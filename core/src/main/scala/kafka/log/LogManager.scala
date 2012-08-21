@@ -23,7 +23,7 @@ import scala.collection._
 import kafka.server.KafkaConfig
 import kafka.api.OffsetRequest
 import kafka.log.Log._
-import kafka.common.{KafkaException, InvalidTopicException, InvalidPartitionException}
+import kafka.common.{KafkaException, InvalidTopicException, UnknownTopicOrPartitionException}
 
 /**
  * The guy who creates and hands out logs
@@ -96,7 +96,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
       val error = "Wrong partition %d, valid partitions (0, %d)."
               .format(partition, (config.topicPartitionsMap.getOrElse(topic, numPartitions) - 1))
       warn(error)
-      throw new InvalidPartitionException(error)
+      throw new UnknownTopicOrPartitionException(error)
     }
     logCreationLock synchronized {
       val d = new File(logDir, topic + "-" + partition)

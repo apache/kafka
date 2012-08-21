@@ -79,7 +79,7 @@ object ListTopicCommand {
   def showTopic(topic: String, zkClient: ZkClient) {
     val topicMetaData = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
     topicMetaData.errorCode match {
-      case ErrorMapping.UnknownTopicCode =>
+      case ErrorMapping.UnknownTopicOrPartitionCode =>
         println("topic " + topic + " doesn't exist!")
       case _ =>
         println("topic: " + topic)

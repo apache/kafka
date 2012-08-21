@@ -193,7 +193,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     val newTopicMetadata = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
     newTopicMetadata.errorCode match {
-      case ErrorMapping.UnknownTopicCode =>
+      case ErrorMapping.UnknownTopicOrPartitionCode =>
         fail("Topic " + topic + " should've been automatically created")
       case _ =>
         assertEquals(topic, newTopicMetadata.topic)

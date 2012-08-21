@@ -23,8 +23,7 @@ import kafka.cluster.{Partition, Replica}
 import org.easymock.EasyMock
 import kafka.log.Log
 import org.junit.Assert._
-import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{KafkaScheduler, Time, MockTime, TestUtils}
+import kafka.utils._
 
 class ISRExpirationTest extends JUnit3Suite {
 
@@ -37,35 +36,24 @@ class ISRExpirationTest extends JUnit3Suite {
 
   def testISRExpirationForStuckFollowers() {
     val time = new MockTime
-    // create leader replica
-    val log = EasyMock.createMock(classOf[kafka.log.Log])
-    EasyMock.expect(log.logEndOffset).andReturn(5L).times(12)
-    EasyMock.replay(log)
+    val log = getLogWithLogEndOffset(15L, 2) // set logEndOffset for leader to 15L
 
-    // add one partition
-    val partition0 = getPartitionWithAllReplicasInISR(topic, 0, time, configs.head.brokerId, log, 5L)
+    // create one partition and all replicas
+    val partition0 = getPartitionWithAllReplicasInISR(topic, 0, time, configs.head, log)
     assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas.map(_.brokerId))
     val leaderReplica = partition0.getReplica(configs.head.brokerId).get
-    // set remote replicas leo to something low, like 2
-    (partition0.assignedReplicas() - leaderReplica).foreach(partition0.updateReplicaLeo(_, 2))
 
+    // let the follower catch up to 10
+    (partition0.assignedReplicas() - leaderReplica).foreach(r => r.logEndOffset = 10)
+    var partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
+    assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR.map(_.brokerId))
+
+    // let some time pass
     time.sleep(150)
-    leaderReplica.logEndOffset(Some(5L))
 
-    var partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
-    assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR.map(_.brokerId))
-
-    // add all replicas back to the ISR
-    partition0.inSyncReplicas ++= partition0.assignedReplicas()
-    assertEquals("Replica 1 should be in sync", configs.map(_.brokerId).toSet, partition0.inSyncReplicas.map(_.brokerId))
-
-    leaderReplica.logEndOffset(Some(5L))
-    // let the follower catch up only upto 3
-    (partition0.assignedReplicas() - leaderReplica).foreach(partition0.updateReplicaLeo(_, 3))
-    time.sleep(150)
-    // now follower broker id 1 has caught upto only 3, while the leader is at 5 AND follower broker id 1 hasn't
+    // now follower (broker id 1) has caught up to only 10, while the leader is at 15 AND the follower hasn't
     // pulled any data for > replicaMaxLagTimeMs ms. So it is stuck
-    partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
+    partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
     assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR.map(_.brokerId))
     EasyMock.verify(log)
   }
@@ -73,104 +61,41 @@ class ISRExpirationTest extends JUnit3Suite {
   def testISRExpirationForSlowFollowers() {
     val time = new MockTime
     // create leader replica
-    val log = getLogWithHW(15L)
+    val log = getLogWithLogEndOffset(15L, 1)
     // add one partition
-    val partition0 = getPartitionWithAllReplicasInISR(topic, 0, time, configs.head.brokerId, log, 15L)
+    val partition0 = getPartitionWithAllReplicasInISR(topic, 0, time, configs.head, log)
     assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas.map(_.brokerId))
     val leaderReplica = partition0.getReplica(configs.head.brokerId).get
     // set remote replicas leo to something low, like 4
-    (partition0.assignedReplicas() - leaderReplica).foreach(partition0.updateReplicaLeo(_, 4))
+    (partition0.assignedReplicas() - leaderReplica).foreach(r => r.logEndOffset = 4L)
 
-    time.sleep(150)
-    leaderReplica.logEndOffset(Some(15L))
-    time.sleep(10)
-    (partition0.inSyncReplicas - leaderReplica).foreach(r => r.logEndOffset(Some(4)))
-
-    val partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
+    // now follower (broker id 1) has caught up to only 4, while the leader is at 15. Since the gap it larger than
+    // replicaMaxLagBytes, the follower is out of sync.
+    val partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
     assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR.map(_.brokerId))
 
     EasyMock.verify(log)
   }
 
-  def testISRExpirationForMultiplePartitions() {
-    val time = new MockTime
-    // mock zkclient
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
-    EasyMock.replay(zkClient)
-    // create kafka scheduler
-    val scheduler = new KafkaScheduler(2)
-    // create replica manager
-    val replicaManager = new ReplicaManager(configs.head, time, zkClient, scheduler, null)
-    try {
-      val partition0 = replicaManager.getOrCreatePartition(topic, 0, configs.map(_.brokerId).toSet)
-      // create leader log
-      val log0 = getLogWithHW(5L)
-
-      // create leader and follower replicas
-      val leaderReplicaPartition0 = replicaManager.addLocalReplica(topic, 0, log0, configs.map(_.brokerId).toSet)
-      val followerReplicaPartition0 = replicaManager.addRemoteReplica(topic, 0, configs.last.brokerId, partition0)
-
-      partition0.inSyncReplicas = Set(followerReplicaPartition0, leaderReplicaPartition0)
-      // set the leader and its hw and the hw update time
-      partition0.leaderId(Some(configs.head.brokerId))
-      partition0.leaderHW(Some(5L))
-
-      // set the leo for non-leader replicas to something low
-      (partition0.assignedReplicas() - leaderReplicaPartition0).foreach(r => partition0.updateReplicaLeo(r, 2))
-
-      val log1 = getLogWithHW(15L)
-      // create leader and follower replicas for partition 1
-      val partition1 = replicaManager.getOrCreatePartition(topic, 1, configs.map(_.brokerId).toSet)
-      val leaderReplicaPartition1 = replicaManager.addLocalReplica(topic, 1, log1, configs.map(_.brokerId).toSet)
-      val followerReplicaPartition1 = replicaManager.addRemoteReplica(topic, 1, configs.last.brokerId, partition0)
-
-      partition1.inSyncReplicas = Set(followerReplicaPartition1, leaderReplicaPartition1)
-      // set the leader and its hw and the hw update time
-      partition1.leaderId(Some(configs.head.brokerId))
-      partition1.leaderHW(Some(15L))
-
-      // set the leo for non-leader replicas to something low
-      (partition1.assignedReplicas() - leaderReplicaPartition1).foreach(r => partition1.updateReplicaLeo(r, 4))
-
-      time.sleep(150)
-      leaderReplicaPartition0.logEndOffset(Some(4L))
-      leaderReplicaPartition1.logEndOffset(Some(4L))
-      time.sleep(10)
-      (partition1.inSyncReplicas - leaderReplicaPartition1).foreach(r => r.logEndOffset(Some(4L)))
-
-      val partition0OSR = partition0.getOutOfSyncReplicas(configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
-      assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR.map(_.brokerId))
-
-      val partition1OSR = partition1.getOutOfSyncReplicas(configs.head.replicaMaxLagTimeMs, configs.head.replicaMaxLagBytes)
-      assertEquals("Replica 0 should be out of sync", Set(configs.last.brokerId), partition1OSR.map(_.brokerId))
-
-      EasyMock.verify(log0)
-      EasyMock.verify(log1)
-    }catch {
-      case e => e.printStackTrace()
-    }finally {
-      replicaManager.shutdown()
-    }
-  }
-
-  private def getPartitionWithAllReplicasInISR(topic: String, partitionId: Int, time: Time, leaderId: Int,
-                                               localLog: Log, leaderHW: Long): Partition = {
-    val partition = new Partition(topic, partitionId, time)
-    val leaderReplica = new Replica(leaderId, partition, topic, time, Some(leaderHW), Some(localLog))
+  private def getPartitionWithAllReplicasInISR(topic: String, partitionId: Int, time: Time, config: KafkaConfig,
+                                               localLog: Log): Partition = {
+    val leaderId=config.brokerId
+    val replicaManager = new ReplicaManager(config, time, null, null, null)
+    val partition = replicaManager.getOrCreatePartition(topic, partitionId)
+    val leaderReplica = new Replica(leaderId, partition, time, 0, Some(localLog))
 
     val allReplicas = getFollowerReplicas(partition, leaderId, time) :+ leaderReplica
-    partition.assignedReplicas(Some(allReplicas.toSet))
+    allReplicas.foreach(r => partition.addReplicaIfNotExists(r))
     // set in sync replicas for this partition to all the assigned replicas
     partition.inSyncReplicas = allReplicas.toSet
     // set the leader and its hw and the hw update time
-    partition.leaderId(Some(leaderId))
-    partition.leaderHW(Some(leaderHW))
+    partition.leaderReplicaIdOpt = Some(leaderId)
     partition
   }
 
-  private def getLogWithHW(hw: Long): Log = {
+  private def getLogWithLogEndOffset(logEndOffset: Long, expectedCalls: Int): Log = {
     val log1 = EasyMock.createMock(classOf[kafka.log.Log])
-    EasyMock.expect(log1.logEndOffset).andReturn(hw).times(6)
+    EasyMock.expect(log1.logEndOffset).andReturn(logEndOffset).times(expectedCalls)
     EasyMock.replay(log1)
 
     log1
@@ -178,7 +103,7 @@ class ISRExpirationTest extends JUnit3Suite {
 
   private def getFollowerReplicas(partition: Partition, leaderId: Int, time: Time): Seq[Replica] = {
     configs.filter(_.brokerId != leaderId).map { config =>
-      new Replica(config.brokerId, partition, topic, time)
+      new Replica(config.brokerId, partition, time)
     }
   }
 }

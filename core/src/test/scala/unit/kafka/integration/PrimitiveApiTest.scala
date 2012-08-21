@@ -25,13 +25,13 @@ import java.util.Properties
 import kafka.producer.{ProducerData, Producer, ProducerConfig}
 import kafka.serializer.StringDecoder
 import kafka.message.Message
-import kafka.utils.{TestZKUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.log4j.{Level, Logger}
 import org.I0Itec.zkclient.ZkClient
 import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
 import scala.collection._
-import kafka.common.{ErrorMapping, InvalidPartitionException, FetchRequestFormatException, OffsetOutOfRangeException}
+import kafka.common.{ErrorMapping, UnknownTopicOrPartitionException, FetchRequestFormatException, OffsetOutOfRangeException}
 import kafka.admin.{AdminUtils, CreateTopicCommand}
 
 /**
@@ -207,7 +207,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
         }
         fail("Expected exception when fetching message with invalid partition")
       } catch {
-        case e: InvalidPartitionException => "this is good"
+        case e: UnknownTopicOrPartitionException => "this is good"
       }
     }
 
@@ -273,7 +273,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
           response.messageSet(topic, -1).iterator
         fail("Expected exception when fetching message with invalid partition")
       } catch {
-        case e: InvalidPartitionException => "this is good"
+        case e: UnknownTopicOrPartitionException => "this is good"
       }
     }
 
@@ -336,7 +336,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     CreateTopicCommand.createTopic(zkClient, newTopic, 1, 1, config.brokerId.toString)
     assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
       AdminUtils.getTopicMetaDataFromZK(List(newTopic),
-        zkClient).head.errorCode != ErrorMapping.UnknownTopicCode, zookeeper.tickTime))
+        zkClient).head.errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, newTopic, 0, 500)
     val fetchResponse = consumer.fetch(new FetchRequestBuilder().addFetch(newTopic, 0, 0, 10000).build())
     assertFalse(fetchResponse.messageSet(newTopic, 0).iterator.hasNext)

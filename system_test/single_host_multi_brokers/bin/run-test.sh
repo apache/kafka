@@ -150,7 +150,7 @@ cleanup() {
 get_leader_brokerid() {
     log_line=`grep -i -h 'completed the leader state transition' ${base_dir}/kafka_server_*.log | sort | tail -1`
     info "found the log line: $log_line"
-    broker_id=`echo $log_line | sed s'/^.*INFO Replica Manager on Broker //g' | awk -F ',' '{print $1}'`
+    broker_id=`echo $log_line | sed s'/^.*INFO Replica Manager on Broker //g' | awk -F ':' '{print $1}'`
 
     return $broker_id
 }

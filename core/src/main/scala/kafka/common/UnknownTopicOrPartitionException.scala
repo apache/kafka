@@ -17,8 +17,8 @@
 package kafka.common
 
 /**
- * Indicates that the partition id is not between 0 and numPartitions-1
+ * Indicates an unknown topic or a partition id not between 0 and numPartitions-1
  */
-class InvalidPartitionException(message: String) extends RuntimeException(message) {
+class UnknownTopicOrPartitionException(message: String) extends RuntimeException(message) {
   def this() = this(null)
 }

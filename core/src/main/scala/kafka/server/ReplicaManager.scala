@@ -16,313 +16,205 @@
  */
 package kafka.server
 
-import kafka.log.Log
 import kafka.cluster.{Partition, Replica}
 import collection._
-import mutable.ListBuffer
 import org.I0Itec.zkclient.ZkClient
-import java.util.concurrent.locks.ReentrantLock
-import kafka.utils.{KafkaScheduler, ZkUtils, Time, Logging}
-import kafka.api.LeaderAndISR
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.common.{BrokerNotExistException, KafkaException, ErrorMapping, InvalidPartitionException}
+import kafka.utils._
+import kafka.log.LogManager
+import kafka.api.{LeaderAndISRRequest, LeaderAndISR}
+import kafka.common.{UnknownTopicOrPartitionException, LeaderNotAvailableException, ErrorMapping}
 
+object ReplicaManager {
+  val UnknownLogEndOffset = -1L
+}
 
-class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient, kafkaScheduler: KafkaScheduler, deleteLocalLog: (String, Int) => Unit) extends Logging {
+class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient, kafkaScheduler: KafkaScheduler,
+                     val logManager: LogManager) extends Logging {
+  private val allPartitions = new Pool[(String, Int), Partition]
+  private var leaderPartitions = new mutable.HashSet[Partition]()
+  private val leaderPartitionsLock = new Object
+  val replicaFetcherManager = new ReplicaFetcherManager(config, this)
+  this.logIdent = "Replica Manager on Broker " + config.brokerId + ": "
 
-  var allPartitions = new mutable.HashMap[(String, Int), Partition]()
-  private var leaderReplicas = new ListBuffer[Partition]()
-  private val leaderReplicaLock = new ReentrantLock()
-  private val replicaFetcherManager = new ReplicaFetcherManager(config, this)
-  this.logIdent = "Replica Manager on Broker " + config.brokerId + ", "
-
-  val hwCheckPointThreadStarted = new AtomicBoolean(false)
-  private val highwaterMarkCheckpoint = new HighwaterMarkCheckpoint(config.logDir)
-  info("Created highwatermark file %s".format(highwaterMarkCheckpoint.name))
+  private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
+  val highWatermarkCheckpoint = new HighwaterMarkCheckpoint(config.logDir)
+  info("Created highwatermark file %s".format(highWatermarkCheckpoint.name))
 
   def startHighWaterMarksCheckPointThread() = {
-    if(hwCheckPointThreadStarted.compareAndSet(false, true))
-      kafkaScheduler.scheduleWithRate(checkpointHighwaterMarks, "highwatermark-checkpoint-thread", 0, config.defaultFlushIntervalMs)
+    if(highWatermarkCheckPointThreadStarted.compareAndSet(false, true))
+      kafkaScheduler.scheduleWithRate(checkpointHighWatermarks, "highwatermark-checkpoint-thread", 0, config.defaultFlushIntervalMs)
   }
 
   def startup() {
-    // start the highwatermark checkpoint thread
     // start ISR expiration thread
     kafkaScheduler.scheduleWithRate(maybeShrinkISR, "isr-expiration-thread-", 0, config.replicaMaxLagTimeMs)
   }
 
-  def addLocalReplica(topic: String, partitionId: Int, log: Log, assignedReplicaIds: Set[Int]): Replica = {
-    val partition = getOrCreatePartition(topic, partitionId, assignedReplicaIds)
-    var retReplica : Replica = null
-    val replicaOpt = partition.getReplica(config.brokerId)
-    replicaOpt match {
-      case Some(replica) =>
-        info("changing remote replica %s into a local replica".format(replica.toString))
-        replica.log match {
-          case None =>
-            replica.log = Some(log)
-          case Some(log) => // nothing to do since log already exists
-        }
-        retReplica = replica
-      case None =>
-        val localReplica = new Replica(config.brokerId, partition, topic, time,
-                                       Some(readCheckpointedHighWatermark(topic, partitionId)), Some(log))
-        partition.addReplica(localReplica)
-        info("adding local replica %d for topic %s partition %s on broker %d".format(localReplica.brokerId, localReplica.topic, localReplica.partition.partitionId, localReplica.brokerId))
-        retReplica = localReplica
-    }
-    val assignedReplicas = assignedReplicaIds.map(partition.getReplica(_).get)
-    partition.assignedReplicas(Some(assignedReplicas))
-    // get the replica objects for the assigned replicas for this partition
-    retReplica
-  }
-
-  def stopReplica(topic: String, partition: Int): Short  = {
-    trace("handling stop replica for partition [%s, %d]".format(topic, partition))
+  def stopReplica(topic: String, partitionId: Int): Short  = {
+    trace("Handling stop replica for partition [%s, %d]".format(topic, partitionId))
     val errorCode = ErrorMapping.NoError
-    val replica = getReplica(topic, partition)
-    if(replica.isDefined){
-      replicaFetcherManager.removeFetcher(topic, partition)
-      deleteLocalLog(topic, partition)
-      allPartitions.remove((topic, partition))
-      info("after removing partition (%s, %d), the rest of allReplicas is: [%s]".format(topic, partition, allPartitions))
+    getReplica(topic, partitionId) match {
+      case Some(replica) =>
+        replicaFetcherManager.removeFetcher(topic, partitionId)
+        /* TODO: handle deleteLog in a better way */
+        //logManager.deleteLog(topic, partition)
+        leaderPartitionsLock synchronized {
+          leaderPartitions -= replica.partition
+        }
+        allPartitions.remove((topic, partitionId))
+        info("After removing partition (%s, %d), the rest of allReplicas is: [%s]".format(topic, partitionId, allPartitions))
+      case None => //do nothing if replica no longer exists
     }
-    trace("finishes handling stop replica [%s, %d]".format(topic, partition))
+    trace("Finish handling stop replica [%s, %d]".format(topic, partitionId))
     errorCode
   }
 
-
-  def getOrCreatePartition(topic: String, partitionId: Int, assignedReplicaIds: Set[Int]): Partition = {
-    val newPartition = allPartitions.contains((topic, partitionId))
-    newPartition match {
-      case true => // partition exists, do nothing
-        allPartitions.get((topic, partitionId)).get
-      case false => // create remote replicas for each replica id in assignedReplicas
-        val partition = new Partition(topic, partitionId, time)
-        allPartitions += (topic, partitionId) -> partition
-        (assignedReplicaIds - config.brokerId).foreach(
-          replicaId => addRemoteReplica(topic, partitionId, replicaId, partition))
-        partition
+  def getOrCreatePartition(topic: String, partitionId: Int): Partition = {
+    var partition = allPartitions.get((topic, partitionId))
+    if (partition == null) {
+      allPartitions.putIfNotExists((topic, partitionId), new Partition(topic, partitionId, time, this))
+      partition = allPartitions.get((topic, partitionId))
     }
+    partition
   }
 
-  def ensurePartitionExists(topic: String, partitionId: Int): Partition = {
-    val partitionOpt = allPartitions.get((topic, partitionId))
+  def getPartition(topic: String, partitionId: Int): Option[Partition] = {
+    val partition = allPartitions.get((topic, partitionId))
+    if (partition == null)
+      None
+    else
+      Some(partition)
+  }
+
+  def getLeaderReplicaIfLocal(topic: String, partitionId: Int): Replica =  {
+    val partitionOpt = getPartition(topic, partitionId)
     partitionOpt match {
-      case Some(partition) => partition
       case None =>
-        throw new InvalidPartitionException("Partition for topic %s partition %d doesn't exist in replica manager on %d".format(topic, partitionId, config.brokerId))
-    }
-  }
-
-  def addRemoteReplica(topic: String, partitionId: Int, replicaId: Int, partition: Partition): Replica = {
-    val remoteReplica = new Replica(replicaId, partition, topic, time)
-
-    val replicaAdded = partition.addReplica(remoteReplica)
-    if(replicaAdded)
-      info("added remote replica %d for topic %s partition %s".format(remoteReplica.brokerId, remoteReplica.topic, remoteReplica.partition.partitionId))
-    remoteReplica
-  }
-
-  def getReplica(topic: String, partitionId: Int, replicaId: Int = config.brokerId): Option[Replica] = {
-    val partitionOpt = allPartitions.get((topic, partitionId))
-    partitionOpt match {
+        throw new UnknownTopicOrPartitionException("Topic %s partition %d doesn't exist on %d".format(topic, partitionId, config.brokerId))
       case Some(partition) =>
-        partition.getReplica(replicaId)
-      case None =>
-        None
+        partition.leaderReplicaIfLocal match {
+          case Some(leaderReplica) => leaderReplica
+          case None =>
+            throw new LeaderNotAvailableException("Leader not local for topic %s partition %d on broker %d"
+                    .format(topic, partitionId, config.brokerId))
+        }
     }
   }
 
-  def getLeaderReplica(topic: String, partitionId: Int): Option[Replica] = {
-    val replicasOpt = allPartitions.get((topic, partitionId))
-    replicasOpt match {
-      case Some(replicas) =>
-        Some(replicas.leaderReplica())
-      case None =>
-        throw new KafkaException("Getting leader replica failed. Partition replica metadata for topic " +
-                                         "%s partition %d doesn't exist in Replica manager on %d".format(topic, partitionId, config.brokerId))
+  def getOrCreateReplica(topic: String, partitionId: Int, replicaId: Int = config.brokerId): Replica =  {
+    getOrCreatePartition(topic, partitionId).getOrCreateReplica(replicaId)
+  }
+
+  def getReplica(topic: String, partitionId: Int, replicaId: Int = config.brokerId): Option[Replica] =  {
+    val partitionOpt = getPartition(topic, partitionId)
+    partitionOpt match {
+      case None => None
+      case Some(partition) => partition.getReplica(replicaId)
     }
   }
 
-  def getPartition(topic: String, partitionId: Int): Option[Partition] =
-    allPartitions.get((topic, partitionId))
+  def becomeLeaderOrFollower(leaderAndISRRequest: LeaderAndISRRequest): collection.Map[(String, Int), Short] = {
+    info("Handling leader and isr request %s".format(leaderAndISRRequest))
+    val responseMap = new collection.mutable.HashMap[(String, Int), Short]
 
-  private def updateReplicaLeo(replica: Replica, fetchOffset: Long) {
-    // set the replica leo
-    val partition = ensurePartitionExists(replica.topic, replica.partition.partitionId)
-    partition.updateReplicaLeo(replica, fetchOffset)
+    for((partitionInfo, leaderAndISR) <- leaderAndISRRequest.leaderAndISRInfos){
+      var errorCode = ErrorMapping.NoError
+      val topic = partitionInfo._1
+      val partitionId = partitionInfo._2
+
+      val requestedLeaderId = leaderAndISR.leader
+      try {
+        if(requestedLeaderId == config.brokerId)
+          makeLeader(topic, partitionId, leaderAndISR)
+        else
+          makeFollower(topic, partitionId, leaderAndISR)
+      } catch {
+        case e =>
+          error("Error processing leaderAndISR request %s".format(leaderAndISRRequest), e)
+          errorCode = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
+      }
+      responseMap.put(partitionInfo, errorCode)
+    }
+
+    /**
+     *  If IsInit flag is on, this means that the controller wants to treat topics not in the request
+     *  as deleted.
+     */
+    if(leaderAndISRRequest.isInit == LeaderAndISRRequest.IsInit){
+      startHighWaterMarksCheckPointThread
+      val partitionsToRemove = allPartitions.filter(p => !leaderAndISRRequest.leaderAndISRInfos.contains(p._1)).map(entry => entry._1)
+      info("Init flag is set in leaderAndISR request, partitions to remove: %s".format(partitionsToRemove))
+      partitionsToRemove.foreach(p => stopReplica(p._1, p._2))
+    }
+
+    responseMap
   }
 
-  private def maybeIncrementLeaderHW(replica: Replica) {
-    // set the replica leo
-    val partition = ensurePartitionExists(replica.topic, replica.partition.partitionId)
-    // set the leader HW to min of the leo of all replicas
-    val allLeos = partition.inSyncReplicas.map(_.logEndOffset())
-    val newHw = allLeos.min
-    val oldHw = partition.leaderHW()
-    if(newHw > oldHw) {
-      partition.leaderHW(Some(newHw))
-    }else
-      debug("Old hw for topic %s partition %d is %d. New hw is %d. All leo's are %s".format(replica.topic,
-                                                                                            replica.partition.partitionId, oldHw, newHw, allLeos.mkString(",")))
-  }
-
-  def makeLeader(replica: Replica, leaderAndISR: LeaderAndISR): Short = {
-    info("becoming Leader for topic [%s] partition [%d]".format(replica.topic, replica.partition.partitionId))
-    info("started the leader state transition for topic %s partition %d"
-                 .format(replica.topic, replica.partition.partitionId))
-    try {
-      // read and cache the ISR
-      replica.partition.leaderId(Some(replica.brokerId))
-      replica.partition.updateISR(leaderAndISR.ISR.toSet)
-      // stop replica fetcher thread, if any
-      replicaFetcherManager.removeFetcher(replica.topic, replica.partition.partitionId)
+  private def makeLeader(topic: String, partitionId: Int, leaderAndISR: LeaderAndISR) = {
+    info("Becoming Leader for topic [%s] partition [%d]".format(topic, partitionId))
+    val partition = getOrCreatePartition(topic, partitionId)
+    if (partition.makeLeader(topic, partitionId, leaderAndISR)) {
       // also add this partition to the list of partitions for which the leader is the current broker
-      leaderReplicaLock.lock()
-      leaderReplicas += replica.partition
-      info("completed the leader state transition for topic %s partition %d".format(replica.topic, replica.partition.partitionId))
-      ErrorMapping.NoError
-    }catch {
-      case e => error("failed to complete the leader state transition for topic %s partition %d".format(replica.topic, replica.partition.partitionId), e)
-      ErrorMapping.UnknownCode
-      /* TODO: add specific error code */
-    }finally {
-      leaderReplicaLock.unlock()
+      leaderPartitionsLock synchronized {
+        leaderPartitions += partition
+      } 
     }
+    info("Completed the leader state transition for topic %s partition %d".format(topic, partitionId))
   }
 
-
-  def makeFollower(replica: Replica, leaderAndISR: LeaderAndISR): Short = {
+  private def makeFollower(topic: String, partitionId: Int, leaderAndISR: LeaderAndISR) {
     val leaderBrokerId: Int = leaderAndISR.leader
-    info("starting the follower state transition to follow leader %d for topic %s partition %d"
-                 .format(leaderBrokerId, replica.topic, replica.partition.partitionId))
-    try {
-      // set the leader for this partition correctly on this broker
-      replica.partition.leaderId(Some(leaderBrokerId))
-      replica.log match {
-        case Some(log) =>  // log is already started
-          log.truncateTo(replica.highWatermark())
-        case None =>
-      }
-      debug("for partition [%s, %d], the leaderBroker is [%d]".format(replica.topic, replica.partition.partitionId, leaderAndISR.leader))
-      // get leader for this replica
-      val leaderBroker = ZkUtils.getBrokerInfoFromIds(zkClient, List(leaderBrokerId)).head
-      val currentLeaderBroker = replicaFetcherManager.fetcherSourceBroker(replica.topic, replica.partition.partitionId)
-      // become follower only if it is not already following the same leader
-      if( currentLeaderBroker == None || currentLeaderBroker.get != leaderBroker.id) {
-        info("becoming follower to leader %d for topic %s partition %d".format(leaderBrokerId, replica.topic, replica.partition.partitionId))
-        // stop fetcher thread to previous leader
-        replicaFetcherManager.removeFetcher(replica.topic, replica.partition.partitionId)
-        // start fetcher thread to current leader
-        replicaFetcherManager.addFetcher(replica.topic, replica.partition.partitionId, replica.logEndOffset(), leaderBroker)
-      }
+    info("Starting the follower state transition to follow leader %d for topic %s partition %d"
+                 .format(leaderBrokerId, topic, partitionId))
+
+    val partition = getOrCreatePartition(topic, partitionId)
+    if (partition.makeFollower(topic, partitionId, leaderAndISR)) {
       // remove this replica's partition from the ISR expiration queue
-      leaderReplicaLock.lock()
-      leaderReplicas -= replica.partition
-      info("completed the follower state transition to follow leader %d for topic %s partition %d".format(leaderAndISR.leader, replica.topic, replica.partition.partitionId))
-      ErrorMapping.NoError
-    } catch {
-      case e: BrokerNotExistException =>
-        error("failed to complete the follower state transition to follow leader %d for topic %s partition %d because the leader broker does not exist in the cluster".format(leaderAndISR.leader, replica.topic, replica.partition.partitionId), e)
-        ErrorMapping.BrokerNotExistInZookeeperCode
-      case e =>
-        error("failed to complete the follower state transition to follow leader %d for topic %s partition %d".format(leaderAndISR.leader, replica.topic, replica.partition.partitionId), e)
-        ErrorMapping.UnknownCode
-    }finally {
-      leaderReplicaLock.unlock()
+      leaderPartitionsLock synchronized {
+        leaderPartitions -= partition
+      }
     }
   }
 
   private def maybeShrinkISR(): Unit = {
-    try {
-      info("evaluating ISR list of partitions to see which replicas can be removed from the ISR")
-      leaderReplicaLock.lock()
-      leaderReplicas.foreach(partition => {
-        val outOfSyncReplicas = partition.getOutOfSyncReplicas(config.replicaMaxLagTimeMs, config.replicaMaxLagBytes)
-        if(outOfSyncReplicas.size > 0) {
-          val newInSyncReplicas = partition.inSyncReplicas -- outOfSyncReplicas
-          assert(newInSyncReplicas.size > 0)
-          info("Shrinking ISR for topic %s partition %d to %s".format(partition.topic, partition.partitionId, newInSyncReplicas.map(_.brokerId).mkString(",")))
-          // update ISR in zk and in memory
-          partition.updateISR(newInSyncReplicas.map(_.brokerId), Some(zkClient))
-        }
-      })
-    }catch {
-      case e1 => error("Error in ISR expiration thread. Shutting down due to ", e1)
-    }finally {
-      leaderReplicaLock.unlock()
+    trace("Evaluating ISR list of partitions to see which replicas can be removed from the ISR")
+    leaderPartitionsLock synchronized {
+      leaderPartitions.foreach(partition => partition.maybeShrinkISR(config.replicaMaxLagTimeMs, config.replicaMaxLagBytes))
     }
   }
 
-  private def checkIfISRCanBeExpanded(replica: Replica): Boolean = {
-    val partition = ensurePartitionExists(replica.topic, replica.partition.partitionId)
-    if(partition.inSyncReplicas.contains(replica)) false
-    else if(partition.assignedReplicas().contains(replica)) {
-      val leaderHW = partition.leaderHW()
-      replica.logEndOffset() >= leaderHW
-    }
-    else throw new KafkaException("Replica %s is not in the assigned replicas list for ".format(replica.toString) + " topic %s partition %d on broker %d".format(replica.topic, replica.partition.partitionId, config.brokerId))
-  }
-
-  def recordFollowerPosition(topic: String, partition: Int, replicaId: Int, offset: Long, zkClient: ZkClient) = {
-    val replicaOpt = getReplica(topic, partition, replicaId)
-    replicaOpt match {
-      case Some(replica) =>
-        updateReplicaLeo(replica, offset)
-        // check if this replica needs to be added to the ISR
-        if(checkIfISRCanBeExpanded(replica)) {
-          val newISR = replica.partition.inSyncReplicas + replica
-          // update ISR in ZK and cache
-          replica.partition.updateISR(newISR.map(_.brokerId), Some(zkClient))
-        }
-        debug("Recording follower %d position %d for topic %s partition %d".format(replicaId, offset, topic, partition))
-        maybeIncrementLeaderHW(replica)
-      case None =>
-        throw new KafkaException("No replica %d in replica manager on %d".format(replicaId, config.brokerId))
-    }
-  }
-
-  def recordLeaderLogEndOffset(topic: String, partition: Int, logEndOffset: Long) = {
-    val replicaOpt = getReplica(topic, partition, config.brokerId)
-    replicaOpt match {
-      case Some(replica) => replica.logEndOffset(Some(logEndOffset))
-      case None =>
-        throw new KafkaException("No replica %d in replica manager on %d".format(config.brokerId, config.brokerId))
-    }
+  def recordFollowerPosition(topic: String, partitionId: Int, replicaId: Int, offset: Long) = {
+    val partition = getOrCreatePartition(topic, partitionId)
+    partition.updateLeaderHWAndMaybeExpandISR(replicaId, offset)
   }
 
   /**
    * Flushes the highwatermark value for all partitions to the highwatermark file
    */
-  def checkpointHighwaterMarks() {
-    val highwaterMarksForAllPartitions = allPartitions.map
-            { partition =>
-              val topic = partition._1._1
-              val partitionId = partition._1._2
-              val localReplicaOpt = partition._2.getReplica(config.brokerId)
-              val hw = localReplicaOpt match {
-                case Some(localReplica) => localReplica.highWatermark()
-                case None =>
-                  error("Error while checkpointing highwatermark for topic %s partition %d.".format(topic, partitionId) + " Replica metadata doesn't exist")
-                  0L
-              }
-              (topic, partitionId) -> hw
-            }.toMap
-    highwaterMarkCheckpoint.write(highwaterMarksForAllPartitions)
-    info("Checkpointed high watermark data: %s".format(highwaterMarksForAllPartitions))
+  def checkpointHighWatermarks() {
+    val highWaterarksForAllPartitions = allPartitions.map {
+      partition =>
+        val topic = partition._1._1
+        val partitionId = partition._1._2
+        val localReplicaOpt = partition._2.getReplica(config.brokerId)
+        val hw = localReplicaOpt match {
+          case Some(localReplica) => localReplica.highWatermark
+          case None =>
+            error("Highwatermark for topic %s partition %d doesn't exist during checkpointing"
+                  .format(topic, partitionId))
+             0L
+        }
+        (topic, partitionId) -> hw
+    }.toMap
+    highWatermarkCheckpoint.write(highWaterarksForAllPartitions)
+    trace("Checkpointed high watermark data: %s".format(highWaterarksForAllPartitions))
   }
 
-  /**
-   * Reads the checkpointed highWatermarks for all partitions
-   * @return checkpointed value of highwatermark for topic, partition. If one doesn't exist, returns 0
-   */
-  def readCheckpointedHighWatermark(topic: String, partition: Int): Long = highwaterMarkCheckpoint.read(topic, partition)
-
   def shutdown() {
-    info("shut down")
+    info("Shut down")
     replicaFetcherManager.shutdown()
-    checkpointHighwaterMarks()
-    info("shuttedd down completely")
+    checkpointHighWatermarks()
+    info("Shutted down completely")
   }
 }

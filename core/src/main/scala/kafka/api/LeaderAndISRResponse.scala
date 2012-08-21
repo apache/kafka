@@ -21,7 +21,7 @@ import kafka.common.ErrorMapping
 import java.nio.ByteBuffer
 import kafka.utils.Utils
 import collection.mutable.HashMap
-import collection.mutable.Map
+import collection.Map
 
 
 object LeaderAndISRResponse {

@@ -30,7 +30,8 @@ import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
 import kafka.admin.CreateTopicCommand
 import kafka.api.{FetchRequestBuilder, OffsetRequest}
-import kafka.common.UnknownTopicException
+import kafka.utils.TestUtils._
+import kafka.common.UnknownTopicOrPartitionException
 
 object LogOffsetTest {
   val random = new Random()  
@@ -70,7 +71,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
       simpleConsumer.getOffsetsBefore("foo", 0, OffsetRequest.LatestTime, 10)
       fail("Should fail with UnknownTopicException since topic foo was never created")
     }catch {
-      case e: UnknownTopicException => // this is ok
+      case e: UnknownTopicOrPartitionException => // this is ok
     }
   }
 
@@ -97,6 +98,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val offsets = log.getOffsetsBefore(offsetRequest)
     assertTrue((Array(240L, 216L, 108L, 0L): WrappedArray[Long]) == (offsets: WrappedArray[Long]))
 
+    waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
     val consumerOffsets = simpleConsumer.getOffsetsBefore(topic, part,
                                                           OffsetRequest.LatestTime, 10)
     assertTrue((Array(240L, 216L, 108L, 0L): WrappedArray[Long]) == (consumerOffsets: WrappedArray[Long]))
@@ -156,6 +158,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     println("Offsets = " + offsets.mkString(","))
     assertTrue((Array(240L, 216L, 108L, 0L): WrappedArray[Long]) == (offsets: WrappedArray[Long]))
 
+    waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
     val consumerOffsets = simpleConsumer.getOffsetsBefore(topic, part, now, 10)
     assertTrue((Array(240L, 216L, 108L, 0L): WrappedArray[Long]) == (consumerOffsets: WrappedArray[Long]))
   }
@@ -182,6 +185,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     assertTrue( (Array(0L): WrappedArray[Long]) == (offsets: WrappedArray[Long]) )
 
+    waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
     val consumerOffsets = simpleConsumer.getOffsetsBefore(topic, part,
                                                           OffsetRequest.EarliestTime, 10)
     assertTrue( (Array(0L): WrappedArray[Long]) == (offsets: WrappedArray[Long]) )

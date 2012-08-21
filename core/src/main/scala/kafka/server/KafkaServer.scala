@@ -23,11 +23,7 @@ import kafka.log.LogManager
 import kafka.utils._
 import java.util.concurrent._
 import atomic.AtomicBoolean
-import kafka.cluster.Replica
-import kafka.api.LeaderAndISR
-import scala.collection._
 import org.I0Itec.zkclient.ZkClient
-
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
@@ -94,11 +90,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
     info("Connecting to ZK: " + config.zkConnect)
 
-    replicaManager = new ReplicaManager(config, time, kafkaZookeeper.getZookeeperClient, kafkaScheduler, deleteLog)
+    replicaManager = new ReplicaManager(config, time, kafkaZookeeper.getZookeeperClient, kafkaScheduler, logManager)
 
     kafkaController = new KafkaController(config, kafkaZookeeper.getZookeeperClient)
-    apis = new KafkaApis(socketServer.requestChannel, logManager, replicaManager, kafkaZookeeper,
-                         addReplica, stopReplica, makeLeader, makeFollower, config.brokerId)
+    apis = new KafkaApis(socketServer.requestChannel, replicaManager, kafkaZookeeper.getZookeeperClient, config.brokerId)
     requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
     Mx4jLoader.maybeLoad
 
@@ -146,31 +141,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
    * After calling shutdown(), use this API to wait until the shutdown is complete
    */
   def awaitShutdown(): Unit = shutdownLatch.await()
-
-  def addReplica(topic: String, partition: Int, assignedReplicas: Set[Int]): Replica = {
-    val log = logManager.getOrCreateLog(topic, partition)
-    replicaManager.addLocalReplica(topic, partition, log, assignedReplicas)
-  }
-
-  def makeLeader(replica: Replica, leaderAndISR: LeaderAndISR): Short = {
-    replicaManager.makeLeader(replica, leaderAndISR)
-  }
-
-  def makeFollower(replica: Replica, leaderAndISR: LeaderAndISR): Short = {
-    replicaManager.makeFollower(replica, leaderAndISR)
-  }
-
-  def getReplica(topic: String, partition: Int): Option[Replica] =
-    replicaManager.getReplica(topic, partition)
-
-  def stopReplica(topic: String, partition: Int): Short = {
-    replicaManager.stopReplica(topic, partition)
-  }
-
-  def deleteLog(topic: String,  partition: Int): Unit = {
-    /* TODO: handle deleteLog in a better way */
-    //logManager.deleteLog(topic, partition)
-  }
 
   def getLogManager(): LogManager = logManager
 
