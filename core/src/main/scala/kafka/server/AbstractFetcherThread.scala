@@ -17,29 +17,24 @@
 
 package kafka.server
 
-import java.util.concurrent.CountDownLatch
 import kafka.cluster.Broker
 import kafka.consumer.SimpleConsumer
-import java.util.concurrent.atomic.AtomicBoolean
-import kafka.utils.Logging
 import kafka.common.ErrorMapping
 import collection.mutable
 import kafka.message.ByteBufferMessageSet
 import kafka.api.{FetchResponse, PartitionData, FetchRequestBuilder}
+import kafka.utils.ShutdownableThread
+
 
 /**
  *  Abstract class for fetching data from multiple partitions from the same broker.
  */
-abstract class AbstractFetcherThread(val name: String, sourceBroker: Broker, socketTimeout: Int, socketBufferSize: Int,
+abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socketTimeout: Int, socketBufferSize: Int,
                                      fetchSize: Int, fetcherBrokerId: Int = -1, maxWait: Int = 0, minBytes: Int = 1)
-  extends Thread(name) with Logging {
-  private val isRunning: AtomicBoolean = new AtomicBoolean(true)
-  private val shutdownLatch = new CountDownLatch(1)
+  extends ShutdownableThread(name) {
   private val fetchMap = new mutable.HashMap[Tuple2[String,Int], Long] // a (topic, partitionId) -> offset map
   private val fetchMapLock = new Object
   val simpleConsumer = new SimpleConsumer(sourceBroker.host, sourceBroker.port, socketTimeout, socketBufferSize)
-  this.logIdent = name + " "
-  info("starting")
   // callbacks to be defined in subclass
 
   // process fetched data
@@ -51,78 +46,75 @@ abstract class AbstractFetcherThread(val name: String, sourceBroker: Broker, soc
   // deal with partitions with errors, potentially due to leadership changes
   def handlePartitionsWithErrors(partitions: Iterable[(String, Int)])
 
-  override def run() {
+  override def shutdown(){
+    super.shutdown()
+    simpleConsumer.close()
+  }
+
+  override def doWork() {
+    val builder = new FetchRequestBuilder().
+            clientId(name).
+            replicaId(fetcherBrokerId).
+            maxWait(maxWait).
+            minBytes(minBytes)
+
+    fetchMapLock synchronized {
+      for ( ((topic, partitionId), offset) <- fetchMap )
+        builder.addFetch(topic, partitionId, offset.longValue, fetchSize)
+    }
+
+    val fetchRequest = builder.build()
+    val partitionsWithError = new mutable.HashSet[(String, Int)]
+    var response: FetchResponse = null
     try {
-      while(isRunning.get) {
-        val builder = new FetchRequestBuilder().
-          clientId(name).
-          replicaId(fetcherBrokerId).
-          maxWait(maxWait).
-          minBytes(minBytes)
-
-        fetchMapLock synchronized {
-          for ( ((topic, partitionId), offset) <- fetchMap )
-            builder.addFetch(topic, partitionId, offset.longValue, fetchSize)
-        }
-
-        val fetchRequest = builder.build()
-        val partitionsWithError = new mutable.HashSet[(String, Int)]
-        var response: FetchResponse = null
-        try {
-          trace("issuing to broker %d of fetch request %s".format(sourceBroker.id, fetchRequest))
-          response = simpleConsumer.fetch(fetchRequest)
-        } catch {
-          case t =>
-            debug("error in fetch %s".format(fetchRequest), t)
-            if (isRunning.get) {
-              fetchMapLock synchronized {
-                partitionsWithError ++= fetchMap.keys
-                fetchMap.clear()
-              }
-            }
-        }
-
-        if (response != null) {
-          // process fetched data
+      trace("issuing to broker %d of fetch request %s".format(sourceBroker.id, fetchRequest))
+      response = simpleConsumer.fetch(fetchRequest)
+    } catch {
+      case t =>
+        debug("error in fetch %s".format(fetchRequest), t)
+        if (isRunning.get) {
           fetchMapLock synchronized {
-            for ( topicData <- response.data ) {
-              for ( partitionData <- topicData.partitionDataArray) {
-                val topic = topicData.topic
-                val partitionId = partitionData.partition
-                val key = (topic, partitionId)
-                val currentOffset = fetchMap.get(key)
-                if (currentOffset.isDefined) {
-                  partitionData.error match {
-                    case ErrorMapping.NoError =>
-                      processPartitionData(topic, currentOffset.get, partitionData)
-                      val newOffset = currentOffset.get + partitionData.messages.asInstanceOf[ByteBufferMessageSet].validBytes
-                      fetchMap.put(key, newOffset)
-                    case ErrorMapping.OffsetOutOfRangeCode =>
-                      val newOffset = handleOffsetOutOfRange(topic, partitionId)
-                      fetchMap.put(key, newOffset)
-                      warn("current offset %d for topic %s partition %d out of range; reset offset to %d"
-                        .format(currentOffset.get, topic, partitionId, newOffset))
-                    case _ =>
-                      error("error for %s %d to broker %d".format(topic, partitionId, sourceBroker.host),
-                            ErrorMapping.exceptionFor(partitionData.error))
-                      partitionsWithError += key
-                      fetchMap.remove(key)
-                  }
-                }
+            partitionsWithError ++= fetchMap.keys
+            fetchMap.clear()
+          }
+        }
+    }
+
+    if (response != null) {
+      // process fetched data
+      fetchMapLock synchronized {
+        for ( topicData <- response.data ) {
+          for ( partitionData <- topicData.partitionDataArray) {
+            val topic = topicData.topic
+            val partitionId = partitionData.partition
+            val key = (topic, partitionId)
+            val currentOffset = fetchMap.get(key)
+            if (currentOffset.isDefined) {
+              partitionData.error match {
+                case ErrorMapping.NoError =>
+                  processPartitionData(topic, currentOffset.get, partitionData)
+                  val newOffset = currentOffset.get + partitionData.messages.asInstanceOf[ByteBufferMessageSet].validBytes
+                  fetchMap.put(key, newOffset)
+                case ErrorMapping.OffsetOutOfRangeCode =>
+                  val newOffset = handleOffsetOutOfRange(topic, partitionId)
+                  fetchMap.put(key, newOffset)
+                  warn("current offset %d for topic %s partition %d out of range; reset offset to %d"
+                               .format(currentOffset.get, topic, partitionId, newOffset))
+                case _ =>
+                  error("error for %s %d to broker %d".format(topic, partitionId, sourceBroker.host),
+                        ErrorMapping.exceptionFor(partitionData.error))
+                  partitionsWithError += key
+                  fetchMap.remove(key)
               }
             }
           }
         }
-        if (partitionsWithError.size > 0) {
-          debug("handling partitions with error for %s".format(partitionsWithError))
-          handlePartitionsWithErrors(partitionsWithError)
-        }
       }
-    } catch {
-      case e: InterruptedException => info("interrupted. Shutting down")
-      case e1 => error("error in fetching", e1)
     }
-    shutdownComplete()
+    if (partitionsWithError.size > 0) {
+      debug("handling partitions with error for %s".format(partitionsWithError))
+      handlePartitionsWithErrors(partitionsWithError)
+    }
   }
 
   def addPartition(topic: String, partitionId: Int, initialOffset: Long) {
@@ -147,17 +139,5 @@ abstract class AbstractFetcherThread(val name: String, sourceBroker: Broker, soc
     fetchMapLock synchronized {
       fetchMap.size
     }
-  }
-  
-  private def shutdownComplete() = {
-    simpleConsumer.close()
-    shutdownLatch.countDown
-  }
-
-  def shutdown() {
-    isRunning.set(false)
-    interrupt()
-    shutdownLatch.await()
-    info("shutdown completed")
   }
 }

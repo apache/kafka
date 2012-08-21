@@ -37,7 +37,7 @@ class SocketServer(val brokerId: Int,
                    val monitoringPeriodSecs: Int,
                    val maxQueuedRequests: Int,
                    val maxRequestSize: Int = Int.MaxValue) extends Logging {
-  this.logIdent = "Socket Server on Broker " + brokerId + ", "
+  this.logIdent = "[Socket Server on Broker " + brokerId + "], "
   private val time = SystemTime
   private val processors = new Array[Processor](numProcessorThreads)
   private var acceptor: Acceptor = new Acceptor(port, processors)

@@ -22,41 +22,29 @@ import collection.immutable.Set
 import kafka.cluster.Broker
 import kafka.api._
 import kafka.network.{Receive, BlockingChannel}
-import kafka.utils.{ZkUtils, Logging}
-import java.util.concurrent.{CountDownLatch, LinkedBlockingQueue, BlockingQueue}
+import java.util.concurrent.{LinkedBlockingQueue, BlockingQueue}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import java.util.concurrent.atomic.AtomicBoolean
 import org.I0Itec.zkclient.{IZkStateListener, ZkClient, IZkDataListener, IZkChildListener}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import collection.JavaConversions._
+import kafka.utils.{ShutdownableThread, ZkUtils, Logging}
 import java.lang.Object
+
 
 class RequestSendThread(val controllerId: Int,
                         val toBrokerId: Int,
                         val queue: BlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)],
                         val channel: BlockingChannel)
-        extends Thread("requestSendThread-" + toBrokerId) with Logging {
-  this.logIdent = "Controller %d, request send thread to broker %d, ".format(controllerId, toBrokerId)
-  val isRunning: AtomicBoolean = new AtomicBoolean(true)
-  private val shutdownLatch = new CountDownLatch(1)
+        extends ShutdownableThread("Controller-%d-to-broker-%d-send-thread".format(controllerId, toBrokerId)){
   private val lock = new Object()
 
-  def shutdown(): Unit = {
-    info("shutting down")
-    isRunning.set(false)
-    interrupt()
-    shutdownLatch.await()
-    info("shutted down completed")
-  }
+  override def doWork(): Unit = {
+    val queueItem = queue.take()
+    val request = queueItem._1
+    val callback = queueItem._2
 
-  override def run(): Unit = {
-    try{
-      while(isRunning.get()){
-        val queueItem = queue.take()
-        val request = queueItem._1
-        val callback = queueItem._2
-
-        var receive: Receive = null
+    var receive: Receive = null
+    
         try{
           lock synchronized {
             channel.send(request)
@@ -80,12 +68,7 @@ class RequestSendThread(val controllerId: Int,
             debug("Exception occurs", e)
         }
       }
-    } catch{
-      case e: InterruptedException => warn("intterrupted. Shutting down")
-      case e1 => error("Error due to ", e1)
-    }
-    shutdownLatch.countDown()
-  }
+ 
 }
 
 class ControllerChannelManager(allBrokers: Set[Broker], config : KafkaConfig) extends Logging{
@@ -93,8 +76,8 @@ class ControllerChannelManager(allBrokers: Set[Broker], config : KafkaConfig) ex
   private val messageChannels = new HashMap[Int, BlockingChannel]
   private val messageQueues = new HashMap[Int, BlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)]]
   private val messageThreads = new HashMap[Int, RequestSendThread]
-  private val lock = new Object()
-  this.logIdent = "Channel manager on controller " + config.brokerId + ", "
+  private val lock = new Object
+  this.logIdent = "[Channel manager on controller " + config.brokerId + "], "
   for(broker <- allBrokers){
     brokers.put(broker.id, broker)
     info("channel to broker " + broker.id + " created" + " at host: " + broker.host + " and port: " + broker.port)
@@ -162,8 +145,8 @@ class ControllerChannelManager(allBrokers: Set[Broker], config : KafkaConfig) ex
 }
 
 class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging {
-  this.logIdent = "Controller " + config.brokerId + ", "
-  info("startup")
+  this.logIdent = "[Controller " + config.brokerId + "], "
+  info("startup");
   private var isRunning = true
   private val controllerLock = new Object
   private var controllerChannelManager: ControllerChannelManager = null
@@ -266,7 +249,7 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
   }
 
   class SessionExpireListener() extends IZkStateListener with Logging {
-    this.logIdent = "Controller " + config.brokerId + ", "
+    this.logIdent = "[Controller " + config.brokerId + "], "
     @throws(classOf[Exception])
     def handleStateChanged(state: KeeperState) {
       // do nothing, since zkclient will do reconnect for us.
@@ -459,7 +442,7 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
   }
 
   class BrokerChangeListener() extends IZkChildListener with Logging {
-    this.logIdent = "Controller " + config.brokerId + ", "
+    this.logIdent = "[Controller " + config.brokerId + "], "
     def handleChildChange(parentPath : String, javaCurChildren : java.util.List[String]) {
       controllerLock synchronized {
         info("broker change listener triggered")
@@ -507,7 +490,7 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
   }
 
   class TopicChangeListener extends IZkChildListener with Logging {
-    this.logIdent = "Controller " + config.brokerId + ", "
+    this.logIdent = "[Controller " + config.brokerId + "], "
 
     @throws(classOf[Exception])
     def handleChildChange(parentPath : String, curChilds : java.util.List[String]) {
@@ -530,7 +513,7 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
   }
 
   class ControllerExistListener extends IZkDataListener with Logging {
-    this.logIdent = "Controller " + config.brokerId + ", "
+    this.logIdent = "[Controller " + config.brokerId + "], "
 
     @throws(classOf[Exception])
     def handleDataChange(dataPath: String, data: Object) {

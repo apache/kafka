@@ -18,21 +18,21 @@
 package kafka.server
 
 import java.io.IOException
+import java.util.concurrent.TimeUnit
 import kafka.admin.{CreateTopicCommand, AdminUtils}
 import kafka.api._
 import kafka.common._
 import kafka.log._
 import kafka.message._
 import kafka.network._
-import kafka.utils.{ZkUtils, Pool, SystemTime, Logging}
 import org.apache.log4j.Logger
 import scala.collection._
 import mutable.HashMap
 import scala.math._
 import kafka.network.RequestChannel.Response
-import java.util.concurrent.TimeUnit
-import kafka.metrics.KafkaMetricsGroup
 import kafka.cluster.Replica
+import kafka.metrics.KafkaMetricsGroup
+import kafka.utils.{Pool, ZkUtils, SystemTime, Logging}
 
 
 /**
@@ -47,12 +47,12 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
                 brokerId: Int) extends Logging {
 
   private val metricsGroup = brokerId.toString
-  private val producerRequestPurgatory = new ProducerRequestPurgatory
-  private val fetchRequestPurgatory = new FetchRequestPurgatory(requestChannel)
+  private val producerRequestPurgatory = new ProducerRequestPurgatory(brokerId)
+  private val fetchRequestPurgatory = new FetchRequestPurgatory(brokerId, requestChannel)
   private val delayedRequestMetrics = new DelayedRequestMetrics
 
   private val requestLogger = Logger.getLogger("kafka.request.logger")
-  this.logIdent = "KafkaApis-%d ".format(brokerId)
+  this.logIdent = "[KafkaApi on Broker " + brokerId + "], "
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -511,9 +511,9 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
   /**
    * A holding pen for fetch requests waiting to be satisfied
    */
-  class FetchRequestPurgatory(requestChannel: RequestChannel) extends RequestPurgatory[DelayedFetch, Null](brokerId) {
+  class FetchRequestPurgatory(brokerId: Int, requestChannel: RequestChannel) extends RequestPurgatory[DelayedFetch, Null](brokerId) {
 
-    this.logIdent = "FetchRequestPurgatory-%d ".format(brokerId)
+    this.logIdent = "[etchRequestPurgatory-%d], ".format(brokerId)
 
     override def metricsGroupIdent = metricsGroup
 
@@ -677,10 +677,9 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
   /**
    * A holding pen for produce requests waiting to be satisfied.
    */
-  private [kafka] class ProducerRequestPurgatory extends RequestPurgatory[DelayedProduce, RequestKey](brokerId) {
+  private [kafka] class ProducerRequestPurgatory(brokerId: Int) extends RequestPurgatory[DelayedProduce, RequestKey](brokerId) {
 
-
-    this.logIdent = "ProducerRequestPurgatory-%d ".format(brokerId)
+    this.logIdent = "[ProducerRequestPurgatory-%d], ".format(brokerId)
 
     override def metricsGroupIdent = metricsGroup
 
@@ -700,8 +699,6 @@ class KafkaApis(val requestChannel: RequestChannel, val logManager: LogManager,
   }
 
   private class DelayedRequestMetrics {
-
-
     private class DelayedProducerRequestMetrics(keyLabel: String = MetricKey.globalLabel) extends KafkaMetricsGroup {
       override def metricsGroupIdent = metricsGroup
       val caughtUpFollowerFetchRequestMeter =

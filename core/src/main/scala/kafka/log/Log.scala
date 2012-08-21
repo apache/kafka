@@ -115,7 +115,7 @@ class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long
  */
 @threadsafe
 private[kafka] class Log( val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean, time: Time, brokerId: Int = 0) extends Logging {
-  this.logIdent = "Kafka Log on Broker " + brokerId + ", "
+  this.logIdent = "[Kafka Log on Broker " + brokerId + "], "
 
   import kafka.log.Log._
 

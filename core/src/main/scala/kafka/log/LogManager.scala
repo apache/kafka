@@ -44,7 +44,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private val logFlushIntervals = config.flushIntervalMap
   private val logRetentionMs = config.logRetentionHoursMap.map(e => (e._1, e._2 * 60 * 60 * 1000L)) // convert hours to ms
   private val logRetentionSize = config.logRetentionSize
-  this.logIdent = "Log Manager on Broker " + config.brokerId + ", "
+  this.logIdent = "[Log Manager on Broker " + config.brokerId + "], "
 
   /* Initialize a log for each subdirectory of the main log directory */
   private val logs = new Pool[String, Pool[Int, Log]]()

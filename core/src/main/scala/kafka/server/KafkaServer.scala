@@ -34,7 +34,7 @@ import org.I0Itec.zkclient.ZkClient
  * to start up and shutdown a single Kafka node.
  */
 class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logging {
-  this.logIdent = "Kafka Server " + config.brokerId + ", "
+  this.logIdent = "[Kafka Server " + config.brokerId + "], "
   val CleanShutdownFile = ".kafka_cleanshutdown"
   private var isShuttingDown = new AtomicBoolean(false)
   private var shutdownLatch = new CountDownLatch(1)

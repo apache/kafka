@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong
  * A thread that answers kafka requests.
  */
 class KafkaRequestHandler(id: Int, brokerId: Int, val requestChannel: RequestChannel, apis: KafkaApis) extends Runnable with Logging {
-  this.logIdent = "Kafka Request Handler " + id + " on Broker " + brokerId + ", "
+  this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
 
   def run() { 
     while(true) { 
@@ -46,7 +46,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
                               val requestChannel: RequestChannel,
                               val apis: KafkaApis,
                               numThreads: Int) extends Logging {
-  this.logIdent = "Kafka Request Handler on Broker " + brokerId + ", "
+  this.logIdent = "[Kafka Request Handler on Broker " + brokerId + "], "
   val threads = new Array[Thread](numThreads)
   val runnables = new Array[KafkaRequestHandler](numThreads)
   for(i <- 0 until numThreads) { 

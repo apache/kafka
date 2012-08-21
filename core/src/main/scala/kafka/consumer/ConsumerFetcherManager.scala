@@ -23,10 +23,9 @@ import kafka.cluster.{Cluster, Broker}
 import scala.collection.immutable
 import scala.collection.mutable
 import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.atomic.AtomicBoolean
 import kafka.utils.ZkUtils._
-import kafka.utils.SystemTime
-import java.util.concurrent.CountDownLatch
+import kafka.utils.{ShutdownableThread, SystemTime}
+
 
 /**
  *  Usage:
@@ -42,46 +41,33 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   private val noLeaderPartitionSet = new mutable.HashSet[(String, Int)]
   private val lock = new ReentrantLock
   private val cond = lock.newCondition()
-  private val isShuttingDown = new AtomicBoolean(false)
-  private val leaderFinderThreadShutdownLatch = new CountDownLatch(1)  
-  private val leaderFinderThread = new Thread(consumerIdString + "_leader_finder_thread") {
+  private val leaderFinderThread = new ShutdownableThread(consumerIdString + "-leader-finder-thread"){
     // thread responsible for adding the fetcher to the right broker when leader is available
-    override def run() {
-      info("starting %s".format(getName))
-      while (!isShuttingDown.get) {
-        try {
-          lock.lock()
-          try {
-            if (noLeaderPartitionSet.isEmpty)
-              cond.await()
-            for ((topic, partitionId) <- noLeaderPartitionSet) {
-              // find the leader for this partition
-              getLeaderForPartition(zkClient, topic, partitionId) match {
-                case Some(leaderId) =>
-                  cluster.getBroker(leaderId) match {
-                    case Some(broker) =>
-                      val pti = partitionMap((topic, partitionId))
-                      addFetcher(topic, partitionId, pti.getFetchOffset(), broker)
-                      noLeaderPartitionSet.remove((topic, partitionId))
-                    case None =>
-                      error("Broker %d is unavailable, fetcher for topic %s partition %d could not be started"
-                            .format(leaderId, topic, partitionId))
-                  }
-                case None => // let it go since we will keep retrying
+    override def doWork() {
+      lock.lock()
+      try {
+        if (noLeaderPartitionSet.isEmpty)
+          cond.await()
+        for ((topic, partitionId) <- noLeaderPartitionSet) {
+          // find the leader for this partition
+          getLeaderForPartition(zkClient, topic, partitionId) match {
+            case Some(leaderId) =>
+              cluster.getBroker(leaderId) match {
+                case Some(broker) =>
+                  val pti = partitionMap((topic, partitionId))
+                  addFetcher(topic, partitionId, pti.getFetchOffset(), broker)
+                  noLeaderPartitionSet.remove((topic, partitionId))
+                case None =>
+                  error("Broker %d is unavailable, fetcher for topic %s partition %d could not be started"
+                                .format(leaderId, topic, partitionId))
               }
-            }
-          } finally {
-            lock.unlock()
+            case None => // let it go since we will keep retrying
           }
-          Thread.sleep(config.refreshLeaderBackoffMs)
-        } catch {
-          case t =>
-            if (!isShuttingDown.get())
-              error("error in %s".format(getName), t)
         }
+      } finally {
+        lock.unlock()
       }
-      leaderFinderThreadShutdownLatch.countDown()
-      info("stopping %s".format(getName))
+      Thread.sleep(config.refreshLeaderBackoffMs)
     }
   }
   leaderFinderThread.start()
@@ -92,7 +78,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   }
 
   def startConnections(topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster) {
-    if (isShuttingDown.get)
+    if (!leaderFinderThread.isRunning.get())
       throw new RuntimeException("%s already shutdown".format(name))
     lock.lock()
     try {
@@ -146,9 +132,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
 
   def shutdown() {
     info("shutting down")
-    isShuttingDown.set(true)
-    leaderFinderThread.interrupt()
-    leaderFinderThreadShutdownLatch.await()
+    leaderFinderThread.shutdown()
     stopAllConnections()
     info("shutdown completed")
   }
