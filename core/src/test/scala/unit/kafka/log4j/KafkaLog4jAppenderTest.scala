@@ -140,7 +140,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
 
   @Test
   def testLog4jAppends() {
-    PropertyConfigurator.configure(getLog4jConfigWithZkConnect)
+    PropertyConfigurator.configure(getLog4jConfig)
 
     for(i <- 1 to 5)
       info("test")
@@ -156,7 +156,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     assertEquals(5, count)
   }
 
-  private def getLog4jConfigWithZkConnect: Properties = {
+  private def getLog4jConfig: Properties = {
     var props = new Properties()
     props.put("log4j.rootLogger", "INFO")
     props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")

@@ -24,7 +24,6 @@ import org.I0Itec.zkclient.{IZkDataListener, ZkClient}
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException, ZkMarshallingError}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import scala.collection._
-import util.parsing.json.JSON
 import kafka.api.LeaderAndISR
 import kafka.common.NoEpochForPartitionException
 import org.apache.zookeeper.data.Stat
@@ -78,7 +77,7 @@ object ZkUtils extends Logging {
     val stat = ret._2
     if(leaderAndISRStr == null) None
     else {
-      JSON.parseFull(leaderAndISRStr) match {
+      SyncJSON.parseFull(leaderAndISRStr) match {
         case Some(m) =>
           val leader = m.asInstanceOf[Map[String, String]].get("leader").get.toInt
           val epoch = m.asInstanceOf[Map[String, String]].get("leaderEpoch").get.toInt
@@ -97,7 +96,7 @@ object ZkUtils extends Logging {
     val leaderAndISR = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndISRPath(topic, partition))._1
     if(leaderAndISR == null) None
     else {
-      JSON.parseFull(leaderAndISR) match {
+      SyncJSON.parseFull(leaderAndISR) match {
         case Some(m) =>
           Some(m.asInstanceOf[Map[String, String]].get("leader").get.toInt)
         case None => None
@@ -113,7 +112,7 @@ object ZkUtils extends Logging {
   def getEpochForPartition(zkClient: ZkClient, topic: String, partition: Int): Int = {
     val leaderAndISR = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndISRPath(topic, partition))._1
     if(leaderAndISR != null) {
-      val epoch = JSON.parseFull(leaderAndISR) match {
+      val epoch = SyncJSON.parseFull(leaderAndISR) match {
         case None => throw new NoEpochForPartitionException("No epoch, leaderAndISR data for topic %s partition %d is invalid".format(topic, partition))
         case Some(m) =>
           m.asInstanceOf[Map[String, String]].get("leaderEpoch").get.toInt
@@ -131,7 +130,7 @@ object ZkUtils extends Logging {
     val leaderAndISR = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndISRPath(topic, partition))._1
     if(leaderAndISR == null) Seq.empty[Int]
     else {
-      JSON.parseFull(leaderAndISR) match {
+      SyncJSON.parseFull(leaderAndISR) match {
         case Some(m) =>
           val ISRString = m.asInstanceOf[Map[String, String]].get("ISR").get
           Utils.getCSVList(ISRString).map(r => r.toInt)
@@ -148,7 +147,7 @@ object ZkUtils extends Logging {
     val assignedReplicas = if (jsonPartitionMap == null) {
       Seq.empty[Int]
     } else {
-      JSON.parseFull(jsonPartitionMap) match {
+      SyncJSON.parseFull(jsonPartitionMap) match {
         case Some(m) => m.asInstanceOf[Map[String, List[String]]].get(partition.toString) match {
           case None => Seq.empty[Int]
           case Some(seq) => seq.map(_.toInt)
@@ -163,27 +162,6 @@ object ZkUtils extends Logging {
     val replicas = getReplicasForPartition(zkClient, topic, partition)
     debug("The list of replicas for topic %s, partition %d is %s".format(topic, partition, replicas))
     replicas.contains(brokerId.toString)
-  }
-
-  def incrementEpochForPartition(client: ZkClient, topic: String, partition: Int, leader: Int): Int = {
-    // read previous epoch, increment it and write it to the leader path and the ISR path.
-    val epoch = try {
-      Some(getEpochForPartition(client, topic, partition))
-    }catch {
-      case e: NoEpochForPartitionException => None
-      case e1 => throw e1
-    }
-
-    val newEpoch = epoch match {
-      case Some(partitionEpoch) =>
-        debug("Existing epoch for topic %s partition %d is %d".format(topic, partition, partitionEpoch))
-        partitionEpoch + 1
-      case None =>
-        // this is the first time leader is elected for this partition. So set epoch to 1
-        debug("First epoch is 1 for topic %s partition %d".format(topic, partition))
-        1
-    }
-    newEpoch
   }
 
   def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, creator: String, port: Int) {
@@ -424,7 +402,7 @@ object ZkUtils extends Logging {
     topics.foreach{ topic =>
       val jsonPartitionMap = readDataMaybeNull(zkClient, getTopicPath(topic))._1
       if (jsonPartitionMap != null) {
-        JSON.parseFull(jsonPartitionMap) match {
+        SyncJSON.parseFull(jsonPartitionMap) match {
           case Some(m) =>
             val replicaMap = m.asInstanceOf[Map[String, Seq[String]]]
             for((partition, replicas) <- replicaMap){
@@ -458,7 +436,7 @@ object ZkUtils extends Logging {
       val partitionMap = if (jsonPartitionMap == null) {
         Map[Int, Seq[Int]]()
       } else {
-        JSON.parseFull(jsonPartitionMap) match {
+        SyncJSON.parseFull(jsonPartitionMap) match {
           case Some(m) =>
             val m1 = m.asInstanceOf[Map[String, Seq[String]]]
             m1.map(p => (p._1.toInt, p._2.map(_.toInt)))
@@ -552,30 +530,7 @@ object ZkUtils extends Logging {
     if(topics == null) Seq.empty[String]
     else topics
   }
-
-  def incrementEpochForPartition(client: ZkClient, topic: String, partition: Int) = {
-    // read previous epoch, increment it and write it to the leader path and the ISR path.
-    val epoch = try {
-      Some(getEpochForPartition(client, topic, partition))
-    }catch {
-      case e: NoEpochForPartitionException => None
-      case e1 => throw e1
-    }
-    val newEpoch = epoch match {
-      case Some(partitionEpoch) =>
-        debug("Existing epoch for topic %s partition %d is %d".format(topic, partition, partitionEpoch))
-        partitionEpoch + 1
-      case None =>
-        // this is the first time leader is elected for this partition. So set epoch to 1
-        debug("First epoch is 1 for topic %s partition %d".format(topic, partition))
-        LeaderAndISR.initialLeaderEpoch
-    }
-    newEpoch
-  }
 }
-
-
-
 
 class LeaderExistsOrChangedListener(topic: String,
                                     partition: Int,
