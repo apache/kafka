@@ -101,7 +101,8 @@ private[log] class LogSegment(val file: File, val messageSet: FileMessageSet, va
  * An append-only log for storing messages. 
  */
 @threadsafe
-private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean) extends Logging {
+private[log] class Log(val dir: File, val maxSize: Long, val maxMessageSize: Int,
+                       val flushInterval: Int, val needRecovery: Boolean) extends Logging {
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
@@ -201,6 +202,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val flushInterval: Int,
    */
   def append(messages: ByteBufferMessageSet): Unit = {
     // validate the messages
+    messages.verifyMessageSize(maxMessageSize)
     var numberOfMessages = 0
     for(messageAndOffset <- messages) {
       if(!messageAndOffset.message.isValid)

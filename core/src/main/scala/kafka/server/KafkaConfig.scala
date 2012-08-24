@@ -42,7 +42,10 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
   
   /* the maximum number of bytes in a socket request */
   val maxSocketRequestSize: Int = Utils.getIntInRange(props, "max.socket.request.bytes", 100*1024*1024, (1, Int.MaxValue))
-  
+
+  /* the maximum size of message that the server can receive */
+  val maxMessageSize = Utils.getIntInRange(props, "max.message.size", 1000000, (0, Int.MaxValue))
+
   /* the number of worker threads that the server uses for handling all client requests*/
   val numThreads = Utils.getIntInRange(props, "num.threads", Runtime.getRuntime().availableProcessors, (1, Int.MaxValue))
   

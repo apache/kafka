@@ -19,10 +19,13 @@ package kafka.log
 
 import kafka.message._
 import kafka.utils.{TestUtils, Utils}
+import kafka.server.KafkaConfig
 
 object TestLogPerformance {
 
   def main(args: Array[String]): Unit = {
+    val props = TestUtils.createBrokerConfig(0, -1)
+    val config = new KafkaConfig(props)
     if(args.length < 4)
       Utils.croak("USAGE: java " + getClass().getName() + " num_messages message_size batch_size compression_codec")
     val numMessages = args(0).toInt
@@ -30,7 +33,7 @@ object TestLogPerformance {
     val batchSize = args(2).toInt
     val compressionCodec = CompressionCodec.getCompressionCodec(args(3).toInt)
     val dir = TestUtils.tempDir()
-    val log = new Log(dir, 50*1024*1024, 5000000, false)
+    val log = new Log(dir, 50*1024*1024, config.maxMessageSize, 5000000, false)
     val bytes = new Array[Byte](messageSize)
     new java.util.Random().nextBytes(bytes)
     val message = new Message(bytes)

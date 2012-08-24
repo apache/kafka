@@ -67,7 +67,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
         warn("Skipping unexplainable file '" + dir.getAbsolutePath() + "'--should it be there?")
       } else {
         info("Loading log '" + dir.getName() + "'")
-        val log = new Log(dir, maxSize, flushInterval, needRecovery)
+        val log = new Log(dir, maxSize, config.maxMessageSize, flushInterval, needRecovery)
         val topicPartion = Utils.getTopicPartition(dir.getName)
         logs.putIfNotExists(topicPartion._1, new Pool[Int, Log]())
         val parts = logs.get(topicPartion._1)
@@ -146,7 +146,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
     logCreationLock synchronized {
       val d = new File(logDir, topic + "-" + partition)
       d.mkdirs()
-      new Log(d, maxSize, flushInterval, false)
+      new Log(d, maxSize, config.maxMessageSize, flushInterval, false)
     }
   }
   
