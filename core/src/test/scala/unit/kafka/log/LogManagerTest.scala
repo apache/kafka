@@ -28,6 +28,7 @@ import kafka.common.OffsetOutOfRangeException
 class LogManagerTest extends JUnitSuite {
 
   val time: MockTime = new MockTime()
+  val maxSegAge = 100
   val maxLogAge = 1000
   var logDir: File = null
   var logManager: LogManager = null
@@ -41,7 +42,7 @@ class LogManagerTest extends JUnitSuite {
                    override val enableZookeeper = false
                    override val flushInterval = 100
                  }
-    logManager = new LogManager(config, null, time, -1, maxLogAge, false)
+    logManager = new LogManager(config, null, time, maxSegAge, -1, maxLogAge, false)
     logManager.startup
     logDir = logManager.logDir
   }
@@ -111,11 +112,11 @@ class LogManagerTest extends JUnitSuite {
     config = new KafkaConfig(props) {
       override val logFileSize = (10 * (setSize - 1)).asInstanceOf[Int] // each segment will be 10 messages
       override val enableZookeeper = false
-      override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Long] // keep exactly 6 segments + 1 roll over
+      override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Long]
       override val logRetentionHours = retentionHours
       override val flushInterval = 100
     }
-    logManager = new LogManager(config, null, time, -1, retentionMs, false)
+    logManager = new LogManager(config, null, time, maxSegAge, -1, retentionMs, false)
     logManager.startup
 
     // create a log
@@ -132,12 +133,12 @@ class LogManagerTest extends JUnitSuite {
     log.flush
     Thread.sleep(2000)
 
-    // should be exactly 100 full segments + 1 new empty one
-    assertEquals("There should be example 101 segments.", 100 + 1, log.numberOfSegments)
+    // should be exactly 100 full segments
+    assertEquals("There should be example 100 segments.", 100, log.numberOfSegments)
 
     // this cleanup shouldn't find any expired segments but should delete some to reduce size
     logManager.cleanupLogs()
-    assertEquals("Now there should be exactly 7 segments", 6 + 1, log.numberOfSegments)
+    assertEquals("Now there should be exactly 6 segments", 6, log.numberOfSegments)
     assertEquals("Should get empty fetch off new log.", 0L, log.read(offset, 1024).sizeInBytes)
     try {
       log.read(0, 1024)
@@ -161,7 +162,7 @@ class LogManagerTest extends JUnitSuite {
                    override val flushInterval = Int.MaxValue
                    override val flushIntervalMap = Utils.getTopicFlushIntervals("timebasedflush:100")
                  }
-    logManager = new LogManager(config, null, time, -1, maxLogAge, false)
+    logManager = new LogManager(config, null, time, maxSegAge, -1, maxLogAge, false)
     logManager.startup
     val log = logManager.getOrCreateLog("timebasedflush", 0)
     for(i <- 0 until 200) {
@@ -185,7 +186,7 @@ class LogManagerTest extends JUnitSuite {
                    override val flushInterval = 100
                  }
     
-    logManager = new LogManager(config, null, time, -1, maxLogAge, false)
+    logManager = new LogManager(config, null, time, maxSegAge, -1, maxLogAge, false)
     logManager.startup
     
     for(i <- 0 until 2) {

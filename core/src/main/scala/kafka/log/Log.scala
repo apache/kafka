@@ -90,9 +90,23 @@ private[log] object Log {
 /**
  * A segment file in the log directory. Each log semgment consists of an open message set, a start offset and a size 
  */
-private[log] class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long) extends Range {
+private[log] class LogSegment(val file: File, val time: Time, val messageSet: FileMessageSet, val start: Long) extends Range {
+  var firstAppendTime: Option[Long] = None
   @volatile var deleted = false
   def size: Long = messageSet.highWaterMark
+
+  private def updateFirstAppendTime() {
+    if (firstAppendTime.isEmpty)
+      firstAppendTime = Some(time.milliseconds)
+  }
+
+  def append(messages: ByteBufferMessageSet) {
+    if (messages.sizeInBytes > 0) {
+      messageSet.append(messages)
+      updateFirstAppendTime()
+    }
+   }
+
   override def toString() = "(file=" + file + ", start=" + start + ", size=" + size + ")"
 }
 
@@ -101,9 +115,8 @@ private[log] class LogSegment(val file: File, val messageSet: FileMessageSet, va
  * An append-only log for storing messages. 
  */
 @threadsafe
-private[log] class Log(val dir: File, val maxSize: Long, val maxMessageSize: Int,
-                       val flushInterval: Int, val needRecovery: Boolean) extends Logging {
-
+private[log] class Log(val dir: File, val time: Time, val maxSize: Long, val maxMessageSize: Int,
+                       val flushInterval: Int, val rollIntervalMs: Long, val needRecovery: Boolean) extends Logging {
   /* A lock that guards all modifications to the log */
   private val lock = new Object
 
@@ -121,7 +134,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val maxMessageSize: Int
 
   private val logStats = new LogStats(this)
 
-  Utils.registerMBean(logStats, "kafka:type=kafka.logs." + dir.getName)  
+  Utils.registerMBean(logStats, "kafka:type=kafka.logs." + dir.getName)
 
   /* Load the log segments from the log files on disk */
   private def loadSegments(): SegmentList[LogSegment] = {
@@ -135,7 +148,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val maxMessageSize: Int
         val filename = file.getName()
         val start = filename.substring(0, filename.length - Log.FileSuffix.length).toLong
         val messageSet = new FileMessageSet(file, false)
-        accum.add(new LogSegment(file, messageSet, start))
+        accum.add(new LogSegment(file, time, messageSet, start))
       }
     }
 
@@ -143,7 +156,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val maxMessageSize: Int
       // no existing segments, create a new mutable segment
       val newFile = new File(dir, Log.nameFromOffset(0))
       val set = new FileMessageSet(newFile, true)
-      accum.add(new LogSegment(newFile, set, 0))
+      accum.add(new LogSegment(newFile, time, set, 0))
     } else {
       // there is at least one existing segment, validate and recover them/it
       // sort segments into ascending order for fast searching
@@ -160,7 +173,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val maxMessageSize: Int
       val last = accum.remove(accum.size - 1)
       last.messageSet.close()
       info("Loading the last segment " + last.file.getAbsolutePath() + " in mutable mode, recovery " + needRecovery)
-      val mutable = new LogSegment(last.file, new FileMessageSet(last.file, true, new AtomicBoolean(needRecovery)), last.start)
+      val mutable = new LogSegment(last.file, time, new FileMessageSet(last.file, true, new AtomicBoolean(needRecovery)), last.start)
       accum.add(mutable)
     }
     new SegmentList(accum.toArray(new Array[LogSegment](accum.size)))
@@ -227,10 +240,11 @@ private[log] class Log(val dir: File, val maxSize: Long, val maxMessageSize: Int
     // they are valid, insert them in the log
     lock synchronized {
       try {
-        val segment = segments.view.last
-        segment.messageSet.append(validMessages)
-        maybeFlush(numberOfMessages)
+        var segment = segments.view.last
         maybeRoll(segment)
+        segment = segments.view.last
+        segment.append(validMessages)
+        maybeFlush(numberOfMessages)
       }
       catch {
         case e: IOException =>
@@ -301,7 +315,8 @@ private[log] class Log(val dir: File, val maxSize: Long, val maxMessageSize: Int
    * Roll the log over if necessary
    */
   private def maybeRoll(segment: LogSegment) {
-    if(segment.messageSet.sizeInBytes > maxSize)
+    if((segment.messageSet.sizeInBytes > maxSize) ||
+       ((segment.firstAppendTime.isDefined) && (time.milliseconds - segment.firstAppendTime.get > rollIntervalMs)))
       roll()
   }
 
@@ -317,7 +332,7 @@ private[log] class Log(val dir: File, val maxSize: Long, val maxMessageSize: Int
         newFile.delete()
       }
       debug("Rolling log '" + name + "' to " + newFile.getName())
-      segments.append(new LogSegment(newFile, new FileMessageSet(newFile, true), newOffset))
+      segments.append(new LogSegment(newFile, time, new FileMessageSet(newFile, true), newOffset))
     }
   }
 

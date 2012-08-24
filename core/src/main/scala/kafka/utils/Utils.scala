@@ -566,7 +566,7 @@ object Utils extends Logging {
   }
 
   /**
-   * This method gets comma seperated values which contains key,value pairs and returns a map of
+   * This method gets comma separated values which contains key,value pairs and returns a map of
    * key value pairs. the format of allCSVal is key1:val1, key2:val2 ....
    */
   private def getCSVMap[K, V](allCSVals: String, exceptionMsg:String, successMsg:String) :Map[K, V] = {
@@ -595,10 +595,28 @@ object Utils extends Logging {
     }
   }
 
-  def getTopicRentionHours(retentionHours: String) : Map[String, Int] = {
+  def getTopicRetentionHours(retentionHours: String) : Map[String, Int] = {
     val exceptionMsg = "Malformed token for topic.log.retention.hours in server.properties: "
     val successMsg =  "The retention hour for "
     getCSVMap(retentionHours, exceptionMsg, successMsg)
+  }
+
+  def getTopicRollHours(rollHours: String) : Map[String, Int] = {
+    val exceptionMsg = "Malformed token for topic.log.roll.hours in server.properties: "
+    val successMsg =  "The roll hour for "
+    getCSVMap(rollHours, exceptionMsg, successMsg)
+  }
+
+  def getTopicFileSize(fileSizes: String): Map[String, Int] = {
+    val exceptionMsg = "Malformed token for topic.log.file.size in server.properties: "
+    val successMsg =  "The roll hour for "
+    getCSVMap(fileSizes, exceptionMsg, successMsg)
+  }
+
+  def getTopicRetentionSize(retentionSizes: String): Map[String, Long] = {
+    val exceptionMsg = "Malformed token for topic.log.retention.size in server.properties: "
+    val successMsg =  "The roll hour for "
+    getCSVMap(retentionSizes, exceptionMsg, successMsg)
   }
 
   def getTopicFlushIntervals(allIntervals: String) : Map[String, Int] = {

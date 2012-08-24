@@ -33,13 +33,14 @@ import kafka.api.OffsetRequest
 private[kafka] class LogManager(val config: KafkaConfig,
                                 private val scheduler: KafkaScheduler,
                                 private val time: Time,
+                                val logRollDefaultIntervalMs: Long,
                                 val logCleanupIntervalMs: Long,
                                 val logCleanupDefaultAgeMs: Long,
                                 needRecovery: Boolean) extends Logging {
-  
+
   val logDir: File = new File(config.logDir)
   private val numPartitions = config.numPartitions
-  private val maxSize: Long = config.logFileSize
+  private val logFileSizeMap = config.logFileSizeMap
   private val flushInterval = config.flushInterval
   private val topicPartitionsMap = config.topicPartitionsMap
   private val logCreationLock = new Object
@@ -49,8 +50,9 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private val startupLatch: CountDownLatch = if (config.enableZookeeper) new CountDownLatch(1) else null
   private val logFlusherScheduler = new KafkaScheduler(1, "kafka-logflusher-", false)
   private val logFlushIntervalMap = config.flushIntervalMap
-  private val logRetentionMSMap = getLogRetentionMSMap(config.logRetentionHoursMap)
-  private val logRetentionSize = config.logRetentionSize
+  private val logRetentionSizeMap = config.logRetentionSizeMap
+  private val logRetentionMsMap = getMsMap(config.logRetentionHoursMap)
+  private val logRollMsMap = getMsMap(config.logRollHoursMap)
 
   /* Initialize a log for each subdirectory of the main log directory */
   private val logs = new Pool[String, Pool[Int, Log]]()
@@ -67,7 +69,10 @@ private[kafka] class LogManager(val config: KafkaConfig,
         warn("Skipping unexplainable file '" + dir.getAbsolutePath() + "'--should it be there?")
       } else {
         info("Loading log '" + dir.getName() + "'")
-        val log = new Log(dir, maxSize, config.maxMessageSize, flushInterval, needRecovery)
+        val topic = Utils.getTopicPartition(dir.getName)._1
+        val rollIntervalMs = logRollMsMap.get(topic).getOrElse(this.logRollDefaultIntervalMs)
+        val maxLogFileSize = logFileSizeMap.get(topic).getOrElse(config.logFileSize)
+        val log = new Log(dir, time, maxLogFileSize, config.maxMessageSize, flushInterval, rollIntervalMs, needRecovery)
         val topicPartion = Utils.getTopicPartition(dir.getName)
         logs.putIfNotExists(topicPartion._1, new Pool[Int, Log]())
         val parts = logs.get(topicPartion._1)
@@ -108,10 +113,11 @@ private[kafka] class LogManager(val config: KafkaConfig,
 
   case object StopActor
 
-  private def getLogRetentionMSMap(logRetentionHourMap: Map[String, Int]) : Map[String, Long] = {
+  private def getMsMap(hoursMap: Map[String, Int]) : Map[String, Long] = {
     var ret = new mutable.HashMap[String, Long]
-    for ( (topic, hour) <- logRetentionHourMap )
+    for ( (topic, hour) <- hoursMap ) {
       ret.put(topic, hour * 60 * 60 * 1000L)
+    }
     ret
   }
 
@@ -146,7 +152,9 @@ private[kafka] class LogManager(val config: KafkaConfig,
     logCreationLock synchronized {
       val d = new File(logDir, topic + "-" + partition)
       d.mkdirs()
-      new Log(d, maxSize, config.maxMessageSize, flushInterval, false)
+      val rollIntervalMs = logRollMsMap.get(topic).getOrElse(this.logRollDefaultIntervalMs)
+      val maxLogFileSize = logFileSizeMap.get(topic).getOrElse(config.logFileSize)
+      new Log(d, time, maxLogFileSize, config.maxMessageSize, flushInterval, rollIntervalMs, false)
     }
   }
   
@@ -236,7 +244,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private def cleanupExpiredSegments(log: Log): Int = {
     val startMs = time.milliseconds
     val topic = Utils.getTopicPartition(log.dir.getName)._1
-    val logCleanupThresholdMS = logRetentionMSMap.get(topic).getOrElse(this.logCleanupDefaultAgeMs)
+    val logCleanupThresholdMS = logRetentionMsMap.get(topic).getOrElse(this.logCleanupDefaultAgeMs)
     val toBeDeleted = log.markDeletedWhile(startMs - _.file.lastModified > logCleanupThresholdMS)
     val total = deleteSegments(log, toBeDeleted)
     total
@@ -247,8 +255,10 @@ private[kafka] class LogManager(val config: KafkaConfig,
    *  is at least logRetentionSize bytes in size
    */
   private def cleanupSegmentsToMaintainSize(log: Log): Int = {
-    if(logRetentionSize < 0 || log.size < logRetentionSize) return 0
-    var diff = log.size - logRetentionSize
+    val topic = Utils.getTopicPartition(log.dir.getName)._1
+    val maxLogRetentionSize = logRetentionSizeMap.get(topic).getOrElse(config.logRetentionSize)
+    if(maxLogRetentionSize < 0 || log.size < maxLogRetentionSize) return 0
+    var diff = log.size - maxLogRetentionSize
     def shouldDelete(segment: LogSegment) = {
       if(diff - segment.size >= 0) {
         diff -= segment.size

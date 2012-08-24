@@ -22,7 +22,7 @@ import java.util.ArrayList
 import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
-import kafka.utils.{Utils, TestUtils, Range}
+import kafka.utils.{Utils, TestUtils, Range, SystemTime, MockTime}
 import kafka.common.{MessageSizeTooLargeException, OffsetOutOfRangeException}
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import kafka.server.KafkaConfig
@@ -47,18 +47,70 @@ class LogTest extends JUnitSuite {
     for(offset <- offsets)
       new File(dir, Integer.toString(offset) + Log.FileSuffix).createNewFile()
   }
-  
+
+  /** Test that the size and time based log segment rollout works. */
+  @Test
+  def testTimeBasedLogRoll() {
+    val set = TestUtils.singleMessageSet("test".getBytes())
+    val rollMs = 1 * 60 * 60L
+    val time: MockTime = new MockTime()
+
+    // create a log
+    val log = new Log(logDir, time, 1000, config.maxMessageSize, 1000, rollMs, false)
+    time.currentMs += rollMs + 1
+
+    // segment age is less than its limit
+    log.append(set)
+    assertEquals("There should be exactly one segment.", 1, log.numberOfSegments)
+
+    log.append(set)
+    assertEquals("There should be exactly one segment.", 1, log.numberOfSegments)
+
+    // segment expires in age
+    time.currentMs += rollMs + 1
+    log.append(set)
+    assertEquals("There should be exactly 2 segments.", 2, log.numberOfSegments)
+
+    time.currentMs += rollMs + 1
+    val blank = Array[Message]()
+    log.append(new ByteBufferMessageSet(blank:_*))
+    assertEquals("There should be exactly 3 segments.", 3, log.numberOfSegments)
+
+    time.currentMs += rollMs + 1
+    // the last segment expired in age, but was blank. So new segment should not be generated
+    log.append(set)
+    assertEquals("There should be exactly 3 segments.", 3, log.numberOfSegments)
+  }
+
+  @Test
+  def testSizeBasedLogRoll() {
+    val set = TestUtils.singleMessageSet("test".getBytes())
+    val setSize = set.sizeInBytes
+    val msgPerSeg = 10
+    val segSize = msgPerSeg * (setSize - 1).asInstanceOf[Int] // each segment will be 10 messages
+
+    // create a log
+    val log = new Log(logDir, SystemTime, segSize, config.maxMessageSize, 1000, 10000, false)
+    assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
+
+    // segments expire in size
+    for (i<- 1 to (msgPerSeg + 1)) {
+      log.append(set)
+    }
+    assertEquals("There should be exactly 2 segments.", 2, log.numberOfSegments)
+  }
+
   @Test
   def testLoadEmptyLog() {
     createEmptyLogs(logDir, 0)
-    new Log(logDir, 1024, config.maxMessageSize, 1000, false)
+    new Log(logDir, SystemTime, 1024, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false)
   }
   
   @Test
   def testLoadInvalidLogsFails() {
     createEmptyLogs(logDir, 0, 15)
     try {
-      new Log(logDir, 1024, config.maxMessageSize, 1000, false)
+      new Log(logDir, SystemTime, 1024, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false)
       fail("Allowed load of corrupt logs without complaint.")
     } catch {
       case e: IllegalStateException => "This is good"
@@ -67,7 +119,7 @@ class LogTest extends JUnitSuite {
   
   @Test
   def testAppendAndRead() {
-    val log = new Log(logDir, 1024, config.maxMessageSize, 1000, false)
+    val log = new Log(logDir, SystemTime, 1024, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false)
     val message = new Message(Integer.toString(42).getBytes())
     for(i <- 0 until 10)
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
@@ -84,7 +136,7 @@ class LogTest extends JUnitSuite {
   @Test
   def testReadOutOfRange() {
     createEmptyLogs(logDir, 1024)
-    val log = new Log(logDir, 1024, config.maxMessageSize, 1000, false)
+    val log = new Log(logDir, SystemTime, 1024, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false)
     assertEquals("Reading just beyond end of log should produce 0 byte read.", 0L, log.read(1024, 1000).sizeInBytes)
     try {
       log.read(0, 1024)
@@ -104,7 +156,7 @@ class LogTest extends JUnitSuite {
   @Test
   def testLogRolls() {
     /* create a multipart log with 100 messages */
-    val log = new Log(logDir, 100, config.maxMessageSize, 1000, false)
+    val log = new Log(logDir, SystemTime, 100, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false)
     val numMessages = 100
     for(i <- 0 until numMessages)
       log.append(TestUtils.singleMessageSet(Integer.toString(i).getBytes()))
@@ -159,7 +211,7 @@ class LogTest extends JUnitSuite {
   def testEdgeLogRolls() {
     {
       // first test a log segment starting at 0
-      val log = new Log(logDir, 100, config.maxMessageSize, 1000, false)
+      val log = new Log(logDir, SystemTime, 100, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false)
       val curOffset = log.nextAppendOffset
       assertEquals(curOffset, 0)
 
@@ -172,7 +224,7 @@ class LogTest extends JUnitSuite {
 
     {
       // second test an empty log segment starting at none-zero
-      val log = new Log(logDir, 100, config.maxMessageSize, 1000, false)
+      val log = new Log(logDir, SystemTime, 100, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false)
       val numMessages = 1
       for(i <- 0 until numMessages)
         log.append(TestUtils.singleMessageSet(Integer.toString(i).getBytes()))
@@ -201,7 +253,7 @@ class LogTest extends JUnitSuite {
     val second = new ByteBufferMessageSet(NoCompressionCodec, new Message("change".getBytes()))
 
     // append messages to log
-    val log = new Log(logDir, 100, 5, 1000, false)
+    val log = new Log(logDir, SystemTime, 100, 5, 1000, 24*7*60*60*1000L, false)
 
     var ret =
     try {
