@@ -154,7 +154,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
   private def makeLeader(topic: String, partitionId: Int, leaderAndISR: LeaderAndISR) = {
     info("Becoming Leader for topic [%s] partition [%d]".format(topic, partitionId))
     val partition = getOrCreatePartition(topic, partitionId)
-    if (partition.makeLeader(topic, partitionId, leaderAndISR)) {
+    if (partition.makeLeaderOrFollower(topic, partitionId, leaderAndISR, true)) {
       // also add this partition to the list of partitions for which the leader is the current broker
       leaderPartitionsLock synchronized {
         leaderPartitions += partition
@@ -169,7 +169,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
                  .format(leaderBrokerId, topic, partitionId))
 
     val partition = getOrCreatePartition(topic, partitionId)
-    if (partition.makeFollower(topic, partitionId, leaderAndISR)) {
+    if (partition.makeLeaderOrFollower(topic, partitionId, leaderAndISR, false)) {
       // remove this replica's partition from the ISR expiration queue
       leaderPartitionsLock synchronized {
         leaderPartitions -= partition
