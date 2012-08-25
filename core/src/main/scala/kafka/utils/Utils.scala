@@ -409,7 +409,7 @@ object Utils extends Logging {
    * instead it just returns false indicating the registration failed.
    * @param mbean The object to register as an mbean
    * @param name The name to register this mbean with
-   * @returns true if the registration succeeded
+   * @return true if the registration succeeded
    */
   def registerMBean(mbean: Object, name: String): Boolean = {
     try {
@@ -445,7 +445,7 @@ object Utils extends Logging {
   /**
    * Read an unsigned integer from the current position in the buffer, 
    * incrementing the position by 4 bytes
-   * @param The buffer to read from
+   * @param buffer The buffer to read from
    * @return The integer read, as a long to avoid signedness
    */
   def getUnsignedInt(buffer: ByteBuffer): Long = 

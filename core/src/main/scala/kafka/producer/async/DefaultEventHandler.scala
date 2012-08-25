@@ -61,7 +61,7 @@ private[kafka] class DefaultEventHandler[T](val config: ProducerConfig,
           sent = true
         }
         catch {
-          case e => warn("Error sending messages, %d attempts remaining".format(attemptsRemaining))
+          case e => warn("Error sending messages, %d attempts remaining".format(attemptsRemaining), e)
           if (attemptsRemaining == 0)
             throw e
         }
