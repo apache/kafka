@@ -110,6 +110,10 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val stringProducer1 = new Producer[String, String](config)
     stringProducer1.send(new ProducerData[String, String](topic, Array("test-message")))
 
+    val replica = servers.head.replicaManager.getReplica(topic, 0).get
+    assertTrue("HighWatermark should equal logEndOffset with just 1 replica",
+               replica.logEndOffset > 0 && replica.logEndOffset == replica.highWatermark)
+
     val request = new FetchRequestBuilder()
       .correlationId(100)
       .clientId("test-client")
