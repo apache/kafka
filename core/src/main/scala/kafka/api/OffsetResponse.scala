@@ -46,4 +46,15 @@ case class OffsetResponse(versionId: Short,
     buffer.putInt(offsets.length)
     offsets.foreach(buffer.putLong(_))
   }
+
+    // need to override case-class equals due to broken java-array equals()
+  override def equals(other: Any): Boolean = {
+   other match {
+      case that: OffsetResponse =>
+        ( versionId == that.versionId &&
+          errorCode == that.errorCode &&
+          offsets.toSeq == that.offsets.toSeq)
+      case _ => false
+    }
+  }
 }

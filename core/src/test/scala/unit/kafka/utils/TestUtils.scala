@@ -471,48 +471,6 @@ object TestUtils extends Logging {
   }
 }
 
-object ControllerTestUtils{
-  def createTestLeaderAndISRRequest() : LeaderAndISRRequest = {
-    val topic1 = "test1"
-    val topic2 = "test2"
-
-    val leader1 = 0;
-    val isr1 = List(0, 1, 2)
-
-    val leader2 = 0;
-    val isr2 = List(0, 2, 3)
-
-    val leaderAndISR1 = new LeaderAndISR(leader1, 1, isr1, 1)
-    val leaderAndISR2 = new LeaderAndISR(leader2, 1, isr2, 2)
-    val map = Map(((topic1, 0), leaderAndISR1),
-                  ((topic2, 0), leaderAndISR2))
-    new LeaderAndISRRequest( LeaderAndISRRequest.NotInit, map)
-  }
-
-  def createTestLeaderAndISRResponse() : LeaderAndISRResponse = {
-    val topic1 = "test1"
-    val topic2 = "test2"
-    val responseMap = Map(((topic1, 0), ErrorMapping.NoError),
-                          ((topic2, 0), ErrorMapping.NoError))
-    new LeaderAndISRResponse(1, responseMap)
-  }
-
-
-  def createTestStopReplicaRequest() : StopReplicaRequest = {
-    val topic1 = "test1"
-    val topic2 = "test2"
-    new StopReplicaRequest(Set((topic1, 0), (topic2, 0)))
-  }
-
-  def createTestStopReplicaResponse() : StopReplicaResponse = {
-    val topic1 = "test1"
-    val topic2 = "test2"
-    val responseMap = Map(((topic1, 0), ErrorMapping.NoError),
-                          ((topic2, 0), ErrorMapping.NoError))
-    new StopReplicaResponse(1, responseMap)
-  }
-}
-
 object TestZKUtils {
   val zookeeperConnect = "127.0.0.1:2182"
 }

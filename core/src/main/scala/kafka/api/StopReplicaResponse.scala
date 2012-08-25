@@ -45,7 +45,7 @@ object StopReplicaResponse {
 case class StopReplicaResponse(val versionId: Short,
                                val responseMap: Map[(String, Int), Short],
                                val errorCode: Short = ErrorMapping.NoError) extends RequestOrResponse{
-  def sizeInBytes: Int ={
+  def sizeInBytes(): Int ={
     var size = 2 + 2 + 4
     for ((key, value) <- responseMap){
       size += (2 + key._1.length) + 4 + 2

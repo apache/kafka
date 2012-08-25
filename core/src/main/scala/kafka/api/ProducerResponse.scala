@@ -40,7 +40,7 @@ object ProducerResponse {
   }
 }
 
-case class ProducerResponse(versionId: Short,  correlationId: Int, errors: Array[Short],
+case class ProducerResponse(versionId: Short, correlationId: Int, errors: Array[Short],
                             offsets: Array[Long], errorCode: Short = ErrorMapping.NoError) extends RequestOrResponse{
   val sizeInBytes = 2 + 2 + 4 + (4 + 2 * errors.length) + (4 + 8 * offsets.length)
 
@@ -57,5 +57,18 @@ case class ProducerResponse(versionId: Short,  correlationId: Int, errors: Array
     /* offsets */
     buffer.putInt(offsets.length)
     offsets.foreach(buffer.putLong(_))
+  }
+
+  // need to override case-class equals due to broken java-array equals()
+  override def equals(other: Any): Boolean = {
+   other match {
+      case that: ProducerResponse =>
+        ( correlationId == that.correlationId &&
+          versionId == that.versionId &&
+          errorCode == that.errorCode &&
+          errors.toSeq == that.errors.toSeq &&
+          offsets.toSeq == that.offsets.toSeq)
+      case _ => false
+    }
   }
 }

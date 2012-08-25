@@ -83,7 +83,7 @@ case class ProducerRequest( versionId: Short,
     }
   }
 
-  def sizeInBytes: Int = {
+  def sizeInBytes(): Int = {
     var size = 0 
     //size, request_type_id, version_id, correlation_id, client_id, required_acks, ack_timeout, data.size
     size = 2 + 4 + 2 + clientId.length + 2 + 4 + 4
