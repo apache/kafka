@@ -129,7 +129,7 @@ object ConsoleConsumer extends Logging {
     props.put("fetch.size", options.valueOf(fetchSizeOpt).toString)
     props.put("min.fetch.bytes", options.valueOf(minFetchBytesOpt).toString)
     props.put("max.fetch.wait.ms", options.valueOf(maxWaitMsOpt).toString)
-    props.put("auto.commit", "true")
+    props.put("autocommit.enable", "true")
     props.put("autocommit.interval.ms", options.valueOf(autoCommitIntervalOpt).toString)
     props.put("autooffset.reset", if(options.has(resetBeginningOpt)) "smallest" else "largest")
     props.put("zk.connect", options.valueOf(zkConnectOpt))

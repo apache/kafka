@@ -209,62 +209,6 @@ object Utils extends Logging {
     props.load(propStream)
     props
   }
-  
-  /**
-   * Read a required integer property value or throw an exception if no such property is found
-   */
-  def getInt(props: Properties, name: String): Int = {
-    require(props.containsKey(name), "Missing required property '" + name + "'")
-    return getInt(props, name, -1)
-  }
-
-  def getIntInRange(props: Properties, name: String, range: (Int, Int)): Int = {
-    require(props.containsKey(name), "Missing required property '" + name + "'")
-    getIntInRange(props, name, -1, range)
-  }
-
-  /**
-   * Read an integer from the properties instance
-   * @param props The properties to read from
-   * @param name The property name
-   * @param default The default value to use if the property is not found
-   * @return the integer value
-   */
-  def getInt(props: Properties, name: String, default: Int): Int = 
-    getIntInRange(props, name, default, (Int.MinValue, Int.MaxValue))
-  
-  def getShort(props: Properties, name: String, default: Short): Short = 
-    getShortInRange(props, name, default, (Short.MinValue, Short.MaxValue))
-
-  /**
-   * Read an integer from the properties instance. Throw an exception 
-   * if the value is not in the given range (inclusive)
-   * @param props The properties to read from
-   * @param name The property name
-   * @param default The default value to use if the property is not found
-   * @param range The range in which the value must fall (inclusive)
-   * @throws IllegalArgumentException If the value is not in the given range
-   * @return the integer value
-   */
-  def getIntInRange(props: Properties, name: String, default: Int, range: (Int, Int)): Int = {
-    val v = 
-      if(props.containsKey(name))
-        props.getProperty(name).toInt
-      else
-        default
-    require(v >= range._1 && v <= range._2, name + " has value " + v + " which is not in the range " + range + ".")
-    v
-  }
-
- def getShortInRange(props: Properties, name: String, default: Short, range: (Short, Short)): Short = {
-    val v = 
-      if(props.containsKey(name))
-        props.getProperty(name).toShort
-      else
-        default
-    require(v >= range._1 && v <= range._2, name + " has value " + v + " which is not in the range " + range + ".")
-    v
-  }
 
   def getIntInRange(buffer: ByteBuffer, name: String, range: (Int, Int)): Int = {
     val value = buffer.getInt
@@ -285,115 +229,6 @@ object Utils extends Logging {
     if(value < range._1 || value > range._2)
       throw new KafkaException(name + " has value " + value + " which is not in the range " + range + ".")
     else value
-  }
-
-  /**
-   * Read a required long property value or throw an exception if no such property is found
-   */
-  def getLong(props: Properties, name: String): Long = {
-    require(props.containsKey(name), "Missing required property '" + name + "'")
-    return getLong(props, name, -1)
-  }
-
-  /**
-   * Read an long from the properties instance
-   * @param props The properties to read from
-   * @param name The property name
-   * @param default The default value to use if the property is not found
-   * @return the long value
-   */
-  def getLong(props: Properties, name: String, default: Long): Long = 
-    getLongInRange(props, name, default, (Long.MinValue, Long.MaxValue))
-
-  /**
-   * Read an long from the properties instance. Throw an exception 
-   * if the value is not in the given range (inclusive)
-   * @param props The properties to read from
-   * @param name The property name
-   * @param default The default value to use if the property is not found
-   * @param range The range in which the value must fall (inclusive)
-   * @throws IllegalArgumentException If the value is not in the given range
-   * @return the long value
-   */
-  def getLongInRange(props: Properties, name: String, default: Long, range: (Long, Long)): Long = {
-    val v = 
-      if(props.containsKey(name))
-        props.getProperty(name).toLong
-      else
-        default
-    require(v >= range._1 && v <= range._2, name + " has value " + v + " which is not in the range " + range + ".")
-    v
-  }
-
-  /**
-   * Read a boolean value from the properties instance
-   * @param props The properties to read from
-   * @param name The property name
-   * @param default The default value to use if the property is not found
-   * @return the boolean value
-   */
-  def getBoolean(props: Properties, name: String, default: Boolean): Boolean = {
-    if(!props.containsKey(name))
-      default
-    else {
-      val v = props.getProperty(name)
-      require(v == "true" || v == "false", "Unacceptable value for property '" + name + "', boolean values must be either 'true' or 'false")
-      v.toBoolean
-    }
-  }
-  
-  /**
-   * Get a string property, or, if no such property is defined, return the given default value
-   */
-  def getString(props: Properties, name: String, default: String): String = {
-    if(props.containsKey(name))
-      props.getProperty(name)
-    else
-      default
-  }
-  
-  /**
-   * Get a string property or throw and exception if no such property is defined.
-   */
-  def getString(props: Properties, name: String): String = {
-    require(props.containsKey(name), "Missing required property '" + name + "'")
-    props.getProperty(name)
-  }
-
-  /**
-   * Get a property of type java.util.Properties or throw and exception if no such property is defined.
-   */
-  def getProps(props: Properties, name: String): Properties = {
-    require(props.containsKey(name), "Missing required property '" + name + "'")
-    val propString = props.getProperty(name)
-    val propValues = propString.split(",")
-    val properties = new Properties
-    for(i <- 0 until propValues.length) {
-      val prop = propValues(i).split("=")
-      require(prop.length == 2, "Illegal format of specifying properties '" + propValues(i) + "'")
-      properties.put(prop(0), prop(1))
-    }
-    properties
-  }
-
-  /**
-   * Get a property of type java.util.Properties or return the default if no such property is defined
-   */
-  def getProps(props: Properties, name: String, default: Properties): Properties = {
-    if(props.containsKey(name)) {
-      val propString = props.getProperty(name)
-      val propValues = propString.split(",")
-      require(propValues.length >= 1, "Illegal format of specifying properties '" + propString + "'")
-      val properties = new Properties
-      for(i <- 0 until propValues.length) {
-        val prop = propValues(i).split("=")
-        require(prop.length == 2, "Illegal format of specifying properties '" + propValues(i) + "'")
-        properties.put(prop(0), prop(1))
-      }
-      properties
-    }
-    else
-      default
   }
 
   /**
@@ -773,14 +608,6 @@ object Utils extends Logging {
     else if(prop.compareTo("") == 0)
       false
     else true
-  }
-
-  def getCompressionCodec(props: Properties, codec: String): CompressionCodec = {
-    val codecValueString = props.getProperty(codec)
-    if(codecValueString == null)
-      NoCompressionCodec
-    else
-      CompressionCodec.getCompressionCodec(codecValueString.toInt)
   }
 
   def tryCleanupZookeeper(zkUrl: String, groupId: String) {

@@ -18,8 +18,9 @@
 package kafka.consumer
 
 import java.util.Properties
-import kafka.utils.{ZKConfig, Utils}
 import kafka.api.OffsetRequest
+import kafka.utils.{VerifiableProperties, ZKConfig}
+
 object ConsumerConfig {
   val SocketTimeout = 30 * 1000
   val SocketBufferSize = 64*1024
@@ -43,62 +44,67 @@ object ConsumerConfig {
   val MirrorConsumerNumThreadsProp = "mirror.consumer.numthreads"
 }
 
-class ConsumerConfig(props: Properties) extends ZKConfig(props) {
+class ConsumerConfig private (props: VerifiableProperties) extends ZKConfig(props) {
   import ConsumerConfig._
 
+  def this(originalProps: Properties) {
+    this(new VerifiableProperties(originalProps))
+    props.verify()
+  }
+
   /** a string that uniquely identifies a set of consumers within the same consumer group */
-  val groupId = Utils.getString(props, "groupid")
+  val groupId = props.getString("groupid")
 
   /** consumer id: generated automatically if not set.
    *  Set this explicitly for only testing purpose. */
-  val consumerId: Option[String] = Option(Utils.getString(props, "consumerid", null))
+  val consumerId: Option[String] = Option(props.getString("consumerid", null))
 
   /** the socket timeout for network requests. The actual timeout set will be max.fetch.wait + socket.timeout.ms. */
-  val socketTimeoutMs = Utils.getInt(props, "socket.timeout.ms", SocketTimeout)
+  val socketTimeoutMs = props.getInt("socket.timeout.ms", SocketTimeout)
   
   /** the socket receive buffer for network requests */
-  val socketBufferSize = Utils.getInt(props, "socket.buffersize", SocketBufferSize)
+  val socketBufferSize = props.getInt("socket.buffersize", SocketBufferSize)
   
   /** the number of byes of messages to attempt to fetch */
-  val fetchSize = Utils.getInt(props, "fetch.size", FetchSize)
+  val fetchSize = props.getInt("fetch.size", FetchSize)
   
   /** if true, periodically commit to zookeeper the offset of messages already fetched by the consumer */
-  val autoCommit = Utils.getBoolean(props, "autocommit.enable", AutoCommit)
+  val autoCommit = props.getBoolean("autocommit.enable", AutoCommit)
   
   /** the frequency in ms that the consumer offsets are committed to zookeeper */
-  val autoCommitIntervalMs = Utils.getInt(props, "autocommit.interval.ms", AutoCommitInterval)
+  val autoCommitIntervalMs = props.getInt("autocommit.interval.ms", AutoCommitInterval)
 
   /** max number of messages buffered for consumption */
-  val maxQueuedChunks = Utils.getInt(props, "queuedchunks.max", MaxQueuedChunks)
+  val maxQueuedChunks = props.getInt("queuedchunks.max", MaxQueuedChunks)
 
   /** max number of retries during rebalance */
-  val maxRebalanceRetries = Utils.getInt(props, "rebalance.retries.max", MaxRebalanceRetries)
+  val maxRebalanceRetries = props.getInt("rebalance.retries.max", MaxRebalanceRetries)
   
   /** the minimum amount of data the server should return for a fetch request. If insufficient data is available the request will block */
-  val minFetchBytes = Utils.getInt(props, "min.fetch.bytes", MinFetchBytes)
+  val minFetchBytes = props.getInt("min.fetch.bytes", MinFetchBytes)
   
   /** the maximum amount of time the server will block before answering the fetch request if there isn't sufficient data to immediate satisfy min.fetch.bytes */
-  val maxFetchWaitMs = Utils.getInt(props, "max.fetch.wait.ms", MaxFetchWaitMs)
+  val maxFetchWaitMs = props.getInt("max.fetch.wait.ms", MaxFetchWaitMs)
   
   /** backoff time between retries during rebalance */
-  val rebalanceBackoffMs = Utils.getInt(props, "rebalance.backoff.ms", zkSyncTimeMs)
+  val rebalanceBackoffMs = props.getInt("rebalance.backoff.ms", zkSyncTimeMs)
 
   /** backoff time to refresh the leader of a partition after it loses the current leader */
-  val refreshLeaderBackoffMs = Utils.getInt(props, "refresh.leader.backoff.ms", 200)
+  val refreshLeaderBackoffMs = props.getInt("refresh.leader.backoff.ms", 200)
 
   /* what to do if an offset is out of range.
      smallest : automatically reset the offset to the smallest offset
      largest : automatically reset the offset to the largest offset
      anything else: throw exception to the consumer */
-  val autoOffsetReset = Utils.getString(props, "autooffset.reset", AutoOffsetReset)
+  val autoOffsetReset = props.getString("autooffset.reset", AutoOffsetReset)
 
   /** throw a timeout exception to the consumer if no message is available for consumption after the specified interval */
-  val consumerTimeoutMs = Utils.getInt(props, "consumer.timeout.ms", ConsumerTimeoutMs)
+  val consumerTimeoutMs = props.getInt("consumer.timeout.ms", ConsumerTimeoutMs)
 
   /** Use shallow iterator over compressed messages directly. This feature should be used very carefully.
    *  Typically, it's only used for mirroring raw messages from one kafka cluster to another to save the
    *  overhead of decompression.
    *  */
-  val enableShallowIterator = Utils.getBoolean(props, "shallowiterator.enable", false)
+  val enableShallowIterator = props.getBoolean("shallowiterator.enable", false)
 }
 

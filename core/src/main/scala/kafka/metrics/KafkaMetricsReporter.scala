@@ -20,7 +20,7 @@
 
 package kafka.metrics
 
-import java.util.Properties
+import kafka.utils.VerifiableProperties
 
 /**
  * Base trait for reporter MBeans. If a client wants to expose these JMX
@@ -42,6 +42,6 @@ trait KafkaMetricsReporterMBean {
 
 
 trait KafkaMetricsReporter {
-  def init(props: Properties)
+  def init(props: VerifiableProperties)
 }
 

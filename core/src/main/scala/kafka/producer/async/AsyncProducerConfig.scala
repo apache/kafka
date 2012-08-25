@@ -16,17 +16,16 @@
 */
 package kafka.producer.async
 
-import java.util.Properties
-import kafka.utils.Utils
+import kafka.utils.VerifiableProperties
 
 trait AsyncProducerConfig {
-  val props: Properties
+  val props: VerifiableProperties
 
   /* maximum time, in milliseconds, for buffering data on the producer queue */
-  val queueTime = Utils.getInt(props, "queue.time", 5000)
+  val queueTime = props.getInt("queue.time", 5000)
 
   /** the maximum size of the blocking queue for buffering on the producer */
-  val queueSize = Utils.getInt(props, "queue.size", 10000)
+  val queueSize = props.getInt("queue.size", 10000)
 
   /**
    * Timeout for event enqueue:
@@ -34,11 +33,11 @@ trait AsyncProducerConfig {
    * -ve: enqueue will block indefinitely if the queue is full
    * +ve: enqueue will block up to this many milliseconds if the queue is full
    */
-  val enqueueTimeoutMs = Utils.getInt(props, "queue.enqueueTimeout.ms", 0)
+  val enqueueTimeoutMs = props.getInt("queue.enqueueTimeout.ms", 0)
 
   /** the number of messages batched at the producer */
-  val batchSize = Utils.getInt(props, "batch.size", 200)
+  val batchSize = props.getInt("batch.size", 200)
 
   /** the serializer class for events */
-  val serializerClass = Utils.getString(props, "serializer.class", "kafka.serializer.DefaultEncoder")
+  val serializerClass = props.getString("serializer.class", "kafka.serializer.DefaultEncoder")
 }

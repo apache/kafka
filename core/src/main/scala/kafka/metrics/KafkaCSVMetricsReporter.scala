@@ -20,12 +20,11 @@
 
 package kafka.metrics
 
-import java.util.Properties
 import com.yammer.metrics.Metrics
 import java.io.File
 import com.yammer.metrics.reporting.CsvReporter
-import kafka.utils.{Logging, Utils}
 import java.util.concurrent.TimeUnit
+import kafka.utils.{VerifiableProperties, Logging}
 
 
 private trait KafkaCSVMetricsReporterMBean extends KafkaMetricsReporterMBean
@@ -43,15 +42,15 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
   override def getMBeanName = "kafka:type=kafka.metrics.KafkaCSVMetricsReporter"
 
 
-  override def init(props: Properties) {
+  override def init(props: VerifiableProperties) {
     synchronized {
       if (!initialized) {
         val metricsConfig = new KafkaMetricsConfig(props)
-        csvDir = new File(Utils.getString(props, "kafka.csv.metrics.dir", "kafka_metrics"))
+        csvDir = new File(props.getString("kafka.csv.metrics.dir", "kafka_metrics"))
         if (!csvDir.exists())
           csvDir.mkdirs()
         underlying = new CsvReporter(Metrics.defaultRegistry(), csvDir)
-        if (Utils.getBoolean(props, "kafka.csv.metrics.reporter.enabled", false))
+        if (props.getBoolean("kafka.csv.metrics.reporter.enabled", false))
           startReporter(metricsConfig.pollingIntervalSecs)
         initialized = true
       }

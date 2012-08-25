@@ -33,10 +33,11 @@ import javax.management.ObjectName
 object Mx4jLoader extends Logging {
 
   def maybeLoad(): Boolean = {
-    if (!Utils.getBoolean(System.getProperties(), "kafka_mx4jenable", false))
+    val props = new VerifiableProperties(System.getProperties())
+    if (props.getBoolean("kafka_mx4jenable", false))
       false
-    val address = System.getProperty("mx4jaddress", "0.0.0.0")
-    val port = Utils.getInt(System.getProperties(), "mx4jport", 8082)
+    val address = props.getString("mx4jaddress", "0.0.0.0")
+    val port = props.getInt("mx4jport", 8082)
     try {
       debug("Will try to load MX4j now, if it's in the classpath");
 

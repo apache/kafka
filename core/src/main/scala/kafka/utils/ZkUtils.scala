@@ -17,7 +17,6 @@
 
 package kafka.utils
 
-import java.util.Properties
 import kafka.cluster.{Broker, Cluster}
 import kafka.consumer.TopicCount
 import org.I0Itec.zkclient.{IZkDataListener, ZkClient}
@@ -600,16 +599,16 @@ class ZKGroupTopicDirs(group: String, topic: String) extends ZKGroupDirs(group) 
 }
 
 
-class ZKConfig(props: Properties) {
+class ZKConfig(props: VerifiableProperties) {
   /** ZK host string */
-  val zkConnect = Utils.getString(props, "zk.connect", null)
+  val zkConnect = props.getString("zk.connect", null)
 
   /** zookeeper session timeout */
-  val zkSessionTimeoutMs = Utils.getInt(props, "zk.sessiontimeout.ms", 6000)
+  val zkSessionTimeoutMs = props.getInt("zk.sessiontimeout.ms", 6000)
 
   /** the max time that the client waits to establish a connection to zookeeper */
-  val zkConnectionTimeoutMs = Utils.getInt(props, "zk.connectiontimeout.ms",zkSessionTimeoutMs)
+  val zkConnectionTimeoutMs = props.getInt("zk.connectiontimeout.ms",zkSessionTimeoutMs)
 
   /** how far a ZK follower can be behind a ZK leader */
-  val zkSyncTimeMs = Utils.getInt(props, "zk.synctime.ms", 2000)
+  val zkSyncTimeMs = props.getInt("zk.synctime.ms", 2000)
 }
