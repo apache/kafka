@@ -685,10 +685,28 @@ object Utils extends Logging {
     csvString
   }
 
-  def getTopicRentionHours(retentionHours: String) : Map[String, Int] = {
+  def getTopicRetentionHours(retentionHours: String) : Map[String, Int] = {
     val exceptionMsg = "Malformed token for topic.log.retention.hours in server.properties: "
     val successMsg =  "The retention hour for "
     getCSVMap(retentionHours, exceptionMsg, successMsg)
+  }
+
+  def getTopicRollHours(rollHours: String) : Map[String, Int] = {
+    val exceptionMsg = "Malformed token for topic.log.roll.hours in server.properties: "
+    val successMsg =  "The roll hour for "
+    getCSVMap(rollHours, exceptionMsg, successMsg)
+  }
+
+  def getTopicFileSize(fileSizes: String): Map[String, Int] = {
+    val exceptionMsg = "Malformed token for topic.log.file.size in server.properties: "
+    val successMsg =  "The roll hour for "
+    getCSVMap(fileSizes, exceptionMsg, successMsg)
+  }
+
+  def getTopicRetentionSize(retentionSizes: String): Map[String, Long] = {
+    val exceptionMsg = "Malformed token for topic.log.retention.size in server.properties: "
+    val successMsg =  "The roll hour for "
+    getCSVMap(retentionSizes, exceptionMsg, successMsg)
   }
 
   def getTopicFlushIntervals(allIntervals: String) : Map[String, Int] = {

@@ -30,6 +30,7 @@ import kafka.utils._
 class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   val time: MockTime = new MockTime()
+  val maxRollInterval = 100
   val maxLogAge = 1000
   var logDir: File = null
   var logManager: LogManager = null
@@ -47,7 +48,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
                    override val flushInterval = 100
                  }
     scheduler.startup
-    logManager = new LogManager(config, scheduler, time, veryLargeLogFlushInterval, maxLogAge, false)
+    logManager = new LogManager(config, scheduler, time, maxRollInterval, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup
     logDir = logManager.logDir
 
@@ -120,11 +121,11 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     logManager.shutdown()
     config = new KafkaConfig(props) {
       override val logFileSize = (10 * (setSize - 1)).asInstanceOf[Int] // each segment will be 10 messages
-      override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Long] // keep exactly 6 segments + 1 roll over
+      override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Long]
       override val logRetentionHours = retentionHours
       override val flushInterval = 100
     }
-    logManager = new LogManager(config, scheduler, time, veryLargeLogFlushInterval, retentionMs, false)
+    logManager = new LogManager(config, scheduler, time, maxRollInterval, veryLargeLogFlushInterval, retentionMs, false)
     logManager.startup
 
     // create a log
@@ -141,11 +142,11 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     log.flush
 
     // should be exactly 100 full segments + 1 new empty one
-    assertEquals("There should be example 101 segments.", 100 + 1, log.numberOfSegments)
+    assertEquals("There should be example 100 segments.", 100, log.numberOfSegments)
 
     // this cleanup shouldn't find any expired segments but should delete some to reduce size
     logManager.cleanupLogs()
-    assertEquals("Now there should be exactly 7 segments", 6 + 1, log.numberOfSegments)
+    assertEquals("Now there should be exactly 6 segments", 6, log.numberOfSegments)
     assertEquals("Should get empty fetch off new log.", 0L, log.read(offset, 1024).sizeInBytes)
     try {
       log.read(0, 1024)
@@ -167,7 +168,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
                    override val flushInterval = Int.MaxValue
                    override val flushIntervalMap = Utils.getTopicFlushIntervals("timebasedflush:100")
                  }
-    logManager = new LogManager(config, scheduler, time, veryLargeLogFlushInterval, maxLogAge, false)
+    logManager = new LogManager(config, scheduler, time, maxRollInterval, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup
     val log = logManager.getOrCreateLog(name, 0)
     for(i <- 0 until 200) {
@@ -188,7 +189,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
                    override val topicPartitionsMap = Utils.getTopicPartitions("testPartition:2")
                    override val flushInterval = 100
                  }
-    logManager = new LogManager(config, scheduler, time, veryLargeLogFlushInterval, maxLogAge, false)
+    logManager = new LogManager(config, scheduler, time, maxRollInterval, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup
 
     for(i <- 0 until 1) {

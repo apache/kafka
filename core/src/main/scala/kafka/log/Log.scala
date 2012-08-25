@@ -91,12 +91,26 @@ object Log {
 /**
  * A segment file in the log directory. Each log semgment consists of an open message set, a start offset and a size 
  */
-class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long) extends Range {
+class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long, time: Time) extends Range {
+  var firstAppendTime: Option[Long] = None
   @volatile var deleted = false
   /* Return the size in bytes of this log segment */
   def size: Long = messageSet.sizeInBytes()
   /* Return the absolute end offset of this log segment */
   def absoluteEndOffset: Long = start + messageSet.sizeInBytes()
+
+  def updateFirstAppendTime() {
+    if (firstAppendTime.isEmpty)
+      firstAppendTime = Some(time.milliseconds)
+  }
+
+  def append(messages: ByteBufferMessageSet) {
+    if (messages.sizeInBytes > 0) {
+      messageSet.append(messages)
+      updateFirstAppendTime()
+    }
+  }
+
   override def toString() = "(file=" + file + ", start=" + start + ", size=" + size + ")"
 
   /**
@@ -114,7 +128,9 @@ class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long
  * An append-only log for storing messages. 
  */
 @threadsafe
-private[kafka] class Log( val dir: File, val maxSize: Long, val flushInterval: Int, val needRecovery: Boolean, time: Time, brokerId: Int = 0) extends Logging {
+private[kafka] class Log( val dir: File, val maxSize: Long,
+                          val flushInterval: Int, val rollIntervalMs: Long, val needRecovery: Boolean,
+                          time: Time, brokerId: Int = 0) extends Logging {
   this.logIdent = "[Kafka Log on Broker " + brokerId + "], "
 
   import kafka.log.Log._
@@ -150,7 +166,7 @@ private[kafka] class Log( val dir: File, val maxSize: Long, val flushInterval: I
         val filename = file.getName()
         val start = filename.substring(0, filename.length - FileSuffix.length).toLong
         val messageSet = new FileMessageSet(file, false)
-        logSegments.add(new LogSegment(file, messageSet, start))
+        logSegments.add(new LogSegment(file, messageSet, start, time))
       }
     }
 
@@ -158,7 +174,7 @@ private[kafka] class Log( val dir: File, val maxSize: Long, val flushInterval: I
       // no existing segments, create a new mutable segment
       val newFile = new File(dir, nameFromOffset(0))
       val set = new FileMessageSet(newFile, true)
-      logSegments.add(new LogSegment(newFile, set, 0))
+      logSegments.add(new LogSegment(newFile, set, 0, time))
     } else {
       // there is at least one existing segment, validate and recover them/it
       // sort segments into ascending order for fast searching
@@ -175,7 +191,7 @@ private[kafka] class Log( val dir: File, val maxSize: Long, val flushInterval: I
       val last = logSegments.remove(logSegments.size - 1)
       last.messageSet.close()
       info("Loading the last segment " + last.file.getAbsolutePath() + " in mutable mode, recovery " + needRecovery)
-      val mutable = new LogSegment(last.file, new FileMessageSet(last.file, true, new AtomicBoolean(needRecovery)), last.start)
+      val mutable = new LogSegment(last.file, new FileMessageSet(last.file, true, new AtomicBoolean(needRecovery)), last.start, time)
       logSegments.add(mutable)
     }
     new SegmentList(logSegments.toArray(new Array[LogSegment](logSegments.size)))
@@ -242,10 +258,11 @@ private[kafka] class Log( val dir: File, val maxSize: Long, val flushInterval: I
     // they are valid, insert them in the log
     lock synchronized {
       try {
-        val segment = segments.view.last
-        segment.messageSet.append(validMessages)
-        maybeFlush(numberOfMessages)
+        var segment = segments.view.last
         maybeRoll(segment)
+        segment = segments.view.last
+        segment.append(validMessages)
+        maybeFlush(numberOfMessages)
       }
       catch {
         case e: IOException =>
@@ -307,7 +324,8 @@ private[kafka] class Log( val dir: File, val maxSize: Long, val flushInterval: I
    * Roll the log over if necessary
    */
   private def maybeRoll(segment: LogSegment) {
-    if(segment.messageSet.sizeInBytes > maxSize)
+    if ((segment.messageSet.sizeInBytes > maxSize) ||
+       ((segment.firstAppendTime.isDefined) && (time.milliseconds - segment.firstAppendTime.get > rollIntervalMs)))
       roll()
   }
 
@@ -324,7 +342,7 @@ private[kafka] class Log( val dir: File, val maxSize: Long, val flushInterval: I
         newFile.delete()
       }
       debug("Rolling log '" + name + "' to " + newFile.getName())
-      segments.append(new LogSegment(newFile, new FileMessageSet(newFile, true), newOffset))
+      segments.append(new LogSegment(newFile, new FileMessageSet(newFile, true), newOffset, time))
     }
   }
 
@@ -400,7 +418,7 @@ private[kafka] class Log( val dir: File, val maxSize: Long, val flushInterval: I
       val deletedSegments = segments.trunc(segments.view.size)
       val newFile = new File(dir, Log.nameFromOffset(newOffset))
       debug("Truncate and start log '" + name + "' to " + newFile.getName())
-      segments.append(new LogSegment(newFile, new FileMessageSet(newFile, true), newOffset))
+      segments.append(new LogSegment(newFile, new FileMessageSet(newFile, true), newOffset, time))
       deleteSegments(deletedSegments)
     }
   }
