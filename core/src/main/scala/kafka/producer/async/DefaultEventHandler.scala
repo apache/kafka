@@ -54,7 +54,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         }
       }
       if(outstandingProduceRequests.size > 0) {
-        error("Failed to send the following reqeusts: " + outstandingProduceRequests)
+        error("Failed to send the following requests: " + outstandingProduceRequests)
         throw new FailedToSendMessageException("Failed to send messages after " + config.producerRetries + " tries.", null)
       }
     }
@@ -81,7 +81,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
             }
           }
         } catch {
-          case t: Throwable => error("Failed to send messages")
+          case t: Throwable => error("Failed to send messages", t)
         }
         failedProduceRequests
       case None => // all produce requests failed

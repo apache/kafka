@@ -24,7 +24,10 @@ trait Logging {
   lazy val logger = Logger.getLogger(loggerName)
 
   protected var logIdent = ""
-  
+
+  // Force initialization to register Log4jControllerMBean
+  private val log4jController = Log4jController
+
   private def msgWithLogIdent(msg: String) = "%s%s".format(logIdent, msg)
 
   def trace(msg: => String): Unit = {

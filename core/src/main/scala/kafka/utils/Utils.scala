@@ -525,7 +525,7 @@ object Utils extends Logging {
   /**
    * Read an unsigned integer from the current position in the buffer, 
    * incrementing the position by 4 bytes
-   * @param The buffer to read from
+   * @param buffer The buffer to read from
    * @return The integer read, as a long to avoid signedness
    */
   def getUnsignedInt(buffer: ByteBuffer): Long = 
