@@ -33,7 +33,7 @@ trait KafkaMetricsGroup extends Logging {
    *
    * @return The sub-group identifier.
    */
-  def metricsGroupIdent: String
+  def metricsGroupIdent: String = ""
 
   /**
    * Creates a new MetricName object for gauges, meters, etc. created for this

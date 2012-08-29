@@ -1,3 +1,19 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
 #!/usr/bin/env python
 
 # ===================================
@@ -11,6 +27,7 @@ import signal
 import subprocess
 import sys
 import time
+import traceback
 
 from   system_test_env    import SystemTestEnv
 sys.path.append(SystemTestEnv.SYSTEM_TEST_UTIL_DIR)
@@ -20,6 +37,7 @@ from   testcase_env       import TestcaseEnv
 
 # product specific: Kafka
 import kafka_system_test_utils
+import metrics
 
 class ReplicaBasicTest(SetupUtils):
 
@@ -85,7 +103,8 @@ class ReplicaBasicTest(SetupUtils):
                 #### => update testcaseEnv
                 self.testcaseEnv.testCaseBaseDir = testCasePathName
                 self.testcaseEnv.testCaseLogsDir = self.testcaseEnv.testCaseBaseDir + "/logs"
-    
+                self.testcaseEnv.testCaseDashboardsDir = self.testcaseEnv.testCaseBaseDir + "/dashboards"
+
                 # get testcase description
                 testcaseDescription = ""
                 for k,v in testcaseNonEntityDataDict.items():
@@ -214,8 +233,9 @@ class ReplicaBasicTest(SetupUtils):
                 # starting producer 
                 self.log_message("starting producer")
                 kafka_system_test_utils.start_producer_performance(self.systemTestEnv, self.testcaseEnv)
-                self.anonLogger.info("sleeping for 5s")
-                time.sleep(5)
+                self.anonLogger.info("sleeping for 10s")
+                time.sleep(10)
+                kafka_system_test_utils.stop_producer()
     
                 # starting previously terminated broker 
                 if (bounceLeaderFlag.lower() == "true" and not self.testcaseEnv.entityParentPidDict[leaderEntityId]):
@@ -231,26 +251,45 @@ class ReplicaBasicTest(SetupUtils):
                 # starting consumer
                 self.log_message("starting consumer")
                 kafka_system_test_utils.start_console_consumer(self.systemTestEnv, self.testcaseEnv)
-    
+                time.sleep(10)
+                kafka_system_test_utils.stop_consumer()
+                
                 # this testcase is completed - so stopping all entities
                 self.log_message("stopping all entities")
                 for entityId, parentPid in self.testcaseEnv.entityParentPidDict.items():
                     kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, entityId, parentPid)
-    
+                    
                 # validate the data matched
                 self.log_message("validating data matched")
                 result = kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
-    
+                
                 # =============================================
                 # collect logs from remote hosts
                 # =============================================
                 kafka_system_test_utils.collect_logs_from_remote_hosts(self.systemTestEnv, self.testcaseEnv)
     
+                # ==========================
+                # draw graphs
+                # ==========================
+                metrics.draw_all_graphs(self.systemTestEnv.METRICS_PATHNAME, 
+                                        self.testcaseEnv, 
+                                        self.systemTestEnv.clusterEntityConfigDictList)
+                
+                # build dashboard, one for each role
+                metrics.build_all_dashboards(self.systemTestEnv.METRICS_PATHNAME,
+                                             self.testcaseEnv.testCaseDashboardsDir,
+                                             self.systemTestEnv.clusterEntityConfigDictList)
+                
+                # stop metrics processes
+                for entity in self.systemTestEnv.clusterEntityConfigDictList:
+                    metrics.stop_metrics_collection(entity['hostname'], entity['jmx_port'])
+                                        
             except Exception as e:
-                self.log_message("Exception caught : ")
-                print e
+                self.log_message("Exception while running test {0}".format(e))
+                traceback.print_exc()
                 self.log_message("stopping all entities")
                 for entityId, parentPid in self.testcaseEnv.entityParentPidDict.items():
                     kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, entityId, parentPid)
+
 
  

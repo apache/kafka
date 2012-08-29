@@ -72,8 +72,6 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0) exten
   private val satisfactionRateBeanName = "SatisfactionRate"
   private val expirationRateBeanName = "ExpirationRate"
 
-  override def metricsGroupIdent = ""
-
   val satisfactionRateMeter = newMeter(
       satisfactionRateBeanName,
       "requests",

@@ -192,8 +192,8 @@ trait SyncProducerStatsMBean {
 }
 
 @threadsafe
-class SyncProducerStats extends SyncProducerStatsMBean {
-  private val produceRequestStats = new SnapshotStats
+class SyncProducerStats(monitoringDurationNs: Long) extends SyncProducerStatsMBean {
+  private val produceRequestStats = new SnapshotStats(monitoringDurationNs)
 
   def recordProduceRequest(requestNs: Long) = produceRequestStats.recordRequestMetric(requestNs)
 
@@ -208,8 +208,10 @@ class SyncProducerStats extends SyncProducerStatsMBean {
 
 object SyncProducerStats extends Logging {
   private val kafkaProducerstatsMBeanName = "kafka:type=kafka.KafkaProducerStats"
-  private val stats = new SyncProducerStats
+  private val stats = new SyncProducerStats(1L * 1000 * 1000 * 1000)
   swallow(Utils.registerMBean(stats, kafkaProducerstatsMBeanName))
 
-  def recordProduceRequest(requestMs: Long) = stats.recordProduceRequest(requestMs)
+  def recordProduceRequest(requestMs: Long) = {
+    stats.recordProduceRequest(requestMs)
+  }
 }

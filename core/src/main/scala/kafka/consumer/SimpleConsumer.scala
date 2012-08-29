@@ -134,8 +134,8 @@ trait SimpleConsumerStatsMBean {
 }
 
 @threadsafe
-class SimpleConsumerStats extends SimpleConsumerStatsMBean {
-  private val fetchRequestStats = new SnapshotStats
+class SimpleConsumerStats(monitoringDurationNs: Long) extends SimpleConsumerStatsMBean {
+  private val fetchRequestStats = new SnapshotStats(monitoringDurationNs)
 
   def recordFetchRequest(requestNs: Long) = fetchRequestStats.recordRequestMetric(requestNs)
 
@@ -154,7 +154,7 @@ class SimpleConsumerStats extends SimpleConsumerStatsMBean {
 
 object SimpleConsumerStats extends Logging {
   private val simpleConsumerstatsMBeanName = "kafka:type=kafka.SimpleConsumerStats"
-  private val stats = new SimpleConsumerStats
+  private val stats = new SimpleConsumerStats(1 * 1000L * 1000L * 1000L)
   Utils.registerMBean(stats, simpleConsumerstatsMBeanName)
 
   def recordFetchRequest(requestMs: Long) = stats.recordFetchRequest(requestMs)

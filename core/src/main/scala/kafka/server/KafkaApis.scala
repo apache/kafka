@@ -459,9 +459,8 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   class FetchRequestPurgatory(brokerId: Int, requestChannel: RequestChannel) extends RequestPurgatory[DelayedFetch, Null](brokerId) {
 
-    this.logIdent = "[etchRequestPurgatory-%d], ".format(brokerId)
+    this.logIdent = "[FetchRequestPurgatory-%d], ".format(brokerId)
 
-    override def metricsGroupIdent = metricsGroup
 
     /**
      * A fetch request is satisfied when it has accumulated enough data to meet the min_bytes field
@@ -598,8 +597,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     this.logIdent = "[ProducerRequestPurgatory-%d], ".format(brokerId)
 
-    override def metricsGroupIdent = metricsGroup
-
     protected def checkSatisfied(followerFetchRequestKey: RequestKey,
                                  delayedProduce: DelayedProduce) =
       delayedProduce.isSatisfied(followerFetchRequestKey)
@@ -617,7 +614,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private class DelayedRequestMetrics {
     private class DelayedProducerRequestMetrics(keyLabel: String = MetricKey.globalLabel) extends KafkaMetricsGroup {
-      override def metricsGroupIdent = metricsGroup
       val caughtUpFollowerFetchRequestMeter =
         newMeter("CaughtUpFollowerFetchRequestsPerSecond-" + keyLabel, "requests", TimeUnit.SECONDS)
       val followerCatchUpTimeHistogram = if (keyLabel == MetricKey.globalLabel)
@@ -645,7 +641,6 @@ class KafkaApis(val requestChannel: RequestChannel,
                                              keyLabel: String = MetricKey.globalLabel) extends KafkaMetricsGroup {
       private val metricPrefix = if (forFollower) "Follower" else "NonFollower"
 
-      override def metricsGroupIdent = metricsGroup
       val satisfiedRequestMeter = if (keyLabel == MetricKey.globalLabel)
         Some(newMeter(metricPrefix + "-SatisfiedRequestsPerSecond",
           "requests", TimeUnit.SECONDS))
@@ -704,7 +699,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       aggregateProduceRequestMetrics.satisfiedRequestMeter.foreach(_.mark())
       aggregateProduceRequestMetrics.satisfactionTimeHistogram.foreach(_.update(timeToSatisfyNs))
     }
-
 
     private def recordDelayedFetchThroughput(forFollower: Boolean, response: FetchResponse) {
       val metrics = if (forFollower) aggregateFollowerFetchRequestMetrics

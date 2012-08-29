@@ -4,7 +4,7 @@
             "entity_id": "0",
             "hostname": "localhost",
             "role": "zookeeper",
-            "kafka_home": "/home/nnarkhed/Projects/kafka-440",
+            "kafka_home": "/home/nnarkhed/Projects/kafka-440-with-metrics",
             "java_home": "/export/apps/jdk/JDK-1_6_0_27",
             "jmx_port": "9990"
         },
@@ -12,7 +12,7 @@
             "entity_id": "1",
             "hostname": "localhost",
             "role": "broker",
-            "kafka_home": "/home/nnarkhed/Projects/kafka-440",
+            "kafka_home": "/home/nnarkhed/Projects/kafka-440-with-metrics",
             "java_home": "/export/apps/jdk/JDK-1_6_0_27",
             "jmx_port": "9991"
         },
@@ -20,7 +20,7 @@
             "entity_id": "2",
             "hostname": "localhost",
             "role": "broker",
-            "kafka_home": "/home/nnarkhed/Projects/kafka-440",
+            "kafka_home": "/home/nnarkhed/Projects/kafka-440-with-metrics",
             "java_home": "/export/apps/jdk/JDK-1_6_0_27",
             "jmx_port": "9992"
         },
@@ -28,7 +28,7 @@
             "entity_id": "3",
             "hostname": "localhost",
             "role": "broker",
-            "kafka_home": "/home/nnarkhed/Projects/kafka-440",
+            "kafka_home": "/home/nnarkhed/Projects/kafka-440-with-metrics",
             "java_home": "/export/apps/jdk/JDK-1_6_0_27",
             "jmx_port": "9993"
         },
@@ -36,7 +36,7 @@
             "entity_id": "4",
             "hostname": "localhost",
             "role": "producer_performance",
-            "kafka_home": "/home/nnarkhed/Projects/kafka-440",
+            "kafka_home": "/home/nnarkhed/Projects/kafka-440-with-metrics",
             "java_home": "/export/apps/jdk/JDK-1_6_0_27",
             "jmx_port": "9994"
         },
@@ -44,7 +44,7 @@
             "entity_id": "5",
             "hostname": "localhost",
             "role": "console_consumer",
-            "kafka_home": "/home/nnarkhed/Projects/kafka-440",
+            "kafka_home": "/home/nnarkhed/Projects/kafka-440-with-metrics",
             "java_home": "/export/apps/jdk/JDK-1_6_0_27",
             "jmx_port": "9995"
         }

@@ -252,8 +252,8 @@ trait LogFlushStatsMBean {
 }
 
 @threadsafe
-class LogFlushStats extends LogFlushStatsMBean {
-  private val flushRequestStats = new SnapshotStats
+class LogFlushStats(monitorDurationNs: Long) extends LogFlushStatsMBean {
+  private val flushRequestStats = new SnapshotStats(monitorDurationNs)
 
   def recordFlushRequest(requestMs: Long) = flushRequestStats.recordRequestMetric(requestMs)
 
@@ -270,7 +270,7 @@ class LogFlushStats extends LogFlushStatsMBean {
 
 object LogFlushStats extends Logging {
   private val LogFlushStatsMBeanName = "kafka:type=kafka.LogFlushStats"
-  private val stats = new LogFlushStats
+  private val stats = new LogFlushStats(1L * 1000 * 1000 * 1000)
   Utils.registerMBean(stats, LogFlushStatsMBeanName)
 
   def recordFlushRequest(requestMs: Long) = stats.recordFlushRequest(requestMs)

@@ -1,0 +1,174 @@
+{
+    "dashboards": [
+        {
+            "role": "broker",
+            "graphs": [
+               { 
+                  "graph_name": "SocketServerThroughput",
+                  "y_label": "bytes-read-per-second,bytes-written-per-second",
+                  "bean_name": "kafka:type=kafka.SocketServerStats",
+                  "attributes": "BytesReadPerSecond,BytesWrittenPerSecond"
+               },
+               { 
+                  "graph_name": "FetchRequestPurgatoryNumDelayedRequests",
+                  "y_label": "num-delayed-requests",
+                  "bean_name": "kafka.server:type=FetchRequestPurgatory,name=NumDelayedRequests",
+                  "attributes": "Value"
+               },
+               { 
+                  "graph_name": "MeanFetchRequestPurgatorySatisfactionRate",
+                  "y_label": "mean-request-satisfaction-rate",
+                  "bean_name": "kafka.server:type=FetchRequestPurgatory,name=SatisfactionRate",
+                  "attributes": "MeanRate"
+               },
+               { 
+                  "graph_name": "FetchRequestPurgatoryTimeToSatisfy",
+                  "y_label": "mean-time-to-satisfy-ns,95th-percentile-time-to-satisfy-ns,99th-percentile-time-to-satisfy-ns,999th-percentile-time-to-satisfy-ns",
+                  "bean_name": "kafka.server:type=FetchRequestPurgatory,name=TimeToSatisfyInNs",
+                  "attributes": "Mean,95thPercentile,99thPercentile,999thPercentile"
+               },
+               { 
+                  "graph_name": "FetchRequestPurgatoryExpirationRate",
+                  "y_label": "expiration-rate",
+                  "bean_name": "kafka.server:type=FetchRequestPurgatory,name=ExpirationRate",
+                  "attributes": "MeanRate"
+               },
+               {
+                  "graph_name": "ProducerRequestPurgatoryNumDelayedRequests",
+                  "y_label": "num-delayed-requests",
+                  "bean_name": "kafka.server:type=ProducerRequestPurgatory,name=NumDelayedRequests",
+                  "attributes": "Value"
+               },
+               {
+                  "graph_name": "MeanProducerRequestPurgatorySatisfactionRate",
+                  "y_label": "mean-request-satisfaction-rate",
+                  "bean_name": "kafka.server:type=ProducerRequestPurgatory,name=SatisfactionRate",
+                  "attributes": "MeanRate"
+               },
+               {
+                  "graph_name": "ProducerRequestPurgatoryExpirationRate",
+                  "y_label": "expiration-rate",
+                  "bean_name": "kafka.server:type=ProducerRequestPurgatory,name=ExpirationRate",
+                  "attributes": "MeanRate"
+               },
+               {
+                  "graph_name": "DelayedProducerRequests-CaughtUpFollowerFetchRequestsPerSecond",
+                  "y_label": "mean-caught-up-follower-fetch-requests-per-second",
+                  "bean_name": "kafka.server:type=DelayedProducerRequestMetrics,name=CaughtUpFollowerRequestsPerSecond-all",
+                  "attributes": "MeanRate"
+               },
+               {
+                  "graph_name": "DelayedProducerRequests-ExpiredRequestRate",
+                  "y_label": "mean-expired-request-rate",
+                  "bean_name": "kafka.server:type=DelayedProducerRequestMetrics,name=ExpiredRequestsPerSecond-all",
+                  "attributes": "MeanRate"
+               },
+               {
+                  "graph_name": "DelayedProducerRequests-FollowerCatchUpLatency",
+                  "y_label": "mean-follower-catchup-time-ns,95th-percentile-follower-catchup-time-ns,99th-percentile-follower-catchup-time-ns,999th-percentile-follower-catchup-time-ns",
+                  "bean_name": "kafka.server:type=DelayedProducerRequestMetrics,name=FollowerCatchUpTimeInNs",
+                  "attributes": "Mean,95thPercentile,99thPercentile,999thPercentile"
+               },
+               {
+                  "graph_name": "DelayedProducerRequests-SatisfactionTimeInNs",
+                  "y_label": "mean-time-to-satisfy-ns,95th-percentile-time-to-satisfy-ns,99th-percentile-time-to-satisfy-ns,999th-percentile-time-to-satisfy-ns",
+                  "bean_name": "kafka.server:type=DelayedProducerRequestMetrics,name=SatisfactionTimeInNs",
+                  "attributes": "Mean,95thPercentile,99thPercentile,999thPercentile"
+               },
+               {
+                  "graph_name": "DelayedProducerRequests-SatisfiedRequestsPerSecond",
+                  "y_label": "mean-satisfaction-requests-per-second",
+                  "bean_name": "kafka.server:type=DelayedProducerRequestMetrics,name=SatisfiedRequestsPerSecond",
+                  "attributes": "MeanRate"
+               },
+               {
+                  "graph_name": "DelayedProducerRequests-Throughput-all",
+                  "y_label": "mean-purgatory-throughput-all",
+                  "bean_name": "kafka.server:type=DelayedProducerRequestMetrics,name=Throughput-all",
+                  "attributes": "MeanRate"
+               },
+               {
+                  "graph_name": "DelayedFetchRequests-Follower-ExpiredRequestRate",
+                  "y_label": "mean-expired-request-rate",
+                  "bean_name": "kafka.server:type=DelayedFetchRequestMetrics,name=Follower-ExpiredRequestsPerSecond",
+                  "attributes": "MeanRate"
+               },
+               {
+                  "graph_name": "DelayedFetchRequests-Follower-SatisfactionTimeInNs",
+                  "y_label": "mean-time-to-satisfy-ns,95th-percentile-time-to-satisfy-ns,99th-percentile-time-to-satisfy-ns,999th-percentile-time-to-satisfy-ns",
+                  "bean_name": "kafka.server:type=DelayedFetchRequestMetrics,name=Follower-SatisfactionTimeInNs",
+                  "attributes": "Mean,95thPercentile,99thPercentile,999thPercentile"
+               },
+               {
+                  "graph_name": "DelayedProducerRequests-Follower-SatisfiedRequestsPerSecond",
+                  "y_label": "mean-satisfaction-requests-per-second",
+                  "bean_name": "kafka.server:type=DelayedFetchRequestMetrics,name=Follower-SatisfiedRequestsPerSecond",
+                  "attributes": "MeanRate"
+               },
+               {
+                  "graph_name": "DelayedFetchRequests-Follower-Throughput-all",
+                  "y_label": "mean-purgatory-throughput-all",
+                  "bean_name": "kafka.server:type=DelayedFetchRequestMetrics,name=Follower-Throughput-all",
+                  "attributes": "MeanRate"
+               },
+               {
+                  "graph_name": "DelayedFetchRequests-NonFollower-ExpiredRequestRate",
+                  "y_label": "mean-expired-request-rate",
+                  "bean_name": "kafka.server:type=DelayedFetchRequestMetrics,name=NonFollower-ExpiredRequestsPerSecond",
+                  "attributes": "MeanRate"
+               },
+               {
+                  "graph_name": "DelayedFetchRequests-NonFollower-SatisfactionTimeInNs",
+                  "y_label": "mean-time-to-satisfy-ns,95th-percentile-time-to-satisfy-ns,99th-percentile-time-to-satisfy-ns,999th-percentile-time-to-satisfy-ns",
+                  "bean_name": "kafka.server:type=DelayedFetchRequestMetrics,name=NonFollower-SatisfactionTimeInNs",
+                  "attributes": "Mean,95thPercentile,99thPercentile,999thPercentile"
+               },
+               {
+                  "graph_name": "DelayedFetchRequests-NonFollower-SatisfiedRequestsPerSecond",
+                  "y_label": "mean-satisfaction-requests-per-second",
+                  "bean_name": "kafka.server:type=DelayedFetchRequestMetrics,name=NonFollower-SatisfiedRequestsPerSecond",
+                  "attributes": "MeanRate"
+               },
+               {
+                  "graph_name": "DelayedFetchRequests-NonFollower-Throughput-all",
+                  "y_label": "mean-purgatory-throughput-all",
+                  "bean_name": "kafka.server:type=DelayedFetchRequestMetrics,name=NonFollower-Throughput-all",
+                  "attributes": "MeanRate"
+               }
+             ]
+       },
+        {
+            "role": "producer_performance",
+            "graphs": [
+               {
+                  "graph_name": "ProducerStats",
+                  "y_label": "avg-producer-latency-ms,max-producer-latency-ms,produce-request-throughput",
+                  "bean_name": "kafka:type=kafka.KafkaProducerStats",
+                  "attributes": "AvgProduceRequestMs,MaxProduceRequestMs,ProduceRequestsPerSecond"
+               }
+             ]
+       },
+       {
+            "role": "console_consumer",
+            "graphs": [
+               {
+                  "graph_name": "SimpleConsumerRequestStats",
+                  "y_label": "simple-consumer-throughput,simple-consumer-throughput-bytes,simple-consumer-latency-ms",
+                  "bean_name": "kafka:type=kafka.SimpleConsumerStats",
+                  "attributes": "FetchRequestsPerSecond,ConsumerThroughput,AvgFetchRequestMs"
+               }
+             ]
+       },
+        {
+            "role": "zookeeper",
+            "graphs": [
+               {
+                  "graph_name": "ZookeeperServerStats",
+                  "y_label": "zookeeper-latency-ms",
+                  "bean_name": "org.apache.ZooKeeperService:name0=StandaloneServer_port-1",
+                  "attributes": "AvgRequestLatency"
+               }
+             ]
+       }
+    ]
+}

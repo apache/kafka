@@ -1,3 +1,19 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
 #!/usr/bin/env python
 
 # ===================================
@@ -16,6 +32,7 @@ import time
 import traceback
 
 import system_test_utils
+import metrics
 
 from datetime  import datetime
 from time      import mktime
@@ -79,19 +96,22 @@ def generate_testcase_log_dirs(systemTestEnv, testcaseEnv):
 
     if not os.path.exists(testcasePathName + "/config") : os.makedirs(testcasePathName + "/config")
     if not os.path.exists(testcasePathName + "/logs")   : os.makedirs(testcasePathName + "/logs")
+    if not os.path.exists(testcasePathName + "/dashboards")   : os.makedirs(testcasePathName + "/dashboards")
 
-    dashboardsPathName = testcaseEnv.testCaseLogsDir + "/dashboards"
+    dashboardsPathName = testcasePathName + "/dashboards"
     if not os.path.exists(dashboardsPathName) : os.makedirs(dashboardsPathName)
 
     for clusterEntityConfigDict in systemTestEnv.clusterEntityConfigDictList:
         entityId = clusterEntityConfigDict["entity_id"]
         role     = clusterEntityConfigDict["role"]
 
-        logger.debug("entity_id : " + entityId, extra=d)
-        logger.debug("role      : " + role,     extra=d)
-
         metricsPathName = get_testcase_config_log_dir_pathname(testcaseEnv, role, entityId, "metrics")
         if not os.path.exists(metricsPathName) : os.makedirs(metricsPathName)
+        
+        # create the role directory under dashboards
+        dashboardsRoleDir = dashboardsPathName + "/" + role
+        if not os.path.exists(dashboardsRoleDir) : os.makedirs(dashboardsRoleDir)
+        
 
 
 def collect_logs_from_remote_hosts(systemTestEnv, testcaseEnv):
@@ -191,40 +211,6 @@ def copy_file_with_dict_values(srcFile, destFile, dictObj):
                 line = key + "=" + dictObj[key] + "\n"
         outfile.write(line)
     outfile.close()
-
-
-def start_metrics_collection(jmxHost, jmxPort, mBeanObjectName, mBeanAttributes, entityId, clusterEntityConfigDictList, testcaseEnv):
-    logger.info("starting metrics collection on jmx port: " + jmxPort, extra=d)
-    jmxUrl    = "service:jmx:rmi:///jndi/rmi://" + jmxHost + ":" + jmxPort + "/jmxrmi"
-    kafkaHome = system_test_utils.get_data_by_lookup_keyval(clusterEntityConfigDictList, "entity_id", entityId, "kafka_home")
-    javaHome  = system_test_utils.get_data_by_lookup_keyval(clusterEntityConfigDictList, "entity_id", entityId, "java_home")
-    metricsPathName = get_testcase_config_log_dir_pathname(testcaseEnv, "broker", entityId, "metrics")
-
-    startMetricsCmdList = ["ssh " + jmxHost,
-                           "'JAVA_HOME=" + javaHome,
-                           "JMX_PORT= " + kafkaHome + "/bin/kafka-run-class.sh kafka.tools.JmxTool",
-                           "--jmx-url " + jmxUrl,
-                           "--object-name " + mBeanObjectName + " &> ",
-                           metricsPathName + "/metrics.csv & echo pid:$! > ",
-                           metricsPathName + "/entity_pid'"]
-   
-    startMetricsCommand = " ".join(startMetricsCmdList) 
-    logger.debug("executing command: [" + startMetricsCommand + "]", extra=d)
-    system_test_utils.async_sys_call(startMetricsCommand)
-
-    pidCmdStr = "ssh " + jmxHost + " 'cat " + metricsPathName + "/entity_pid'"
-    logger.debug("executing command: [" + pidCmdStr + "]", extra=d)
-    subproc = system_test_utils.sys_call_return_subproc(pidCmdStr)
-
-    # keep track of the remote entity pid in a dictionary
-    for line in subproc.stdout.readlines():
-        if line.startswith("pid"):
-            line = line.rstrip('\n')
-            logger.debug("found pid line: [" + line + "]", extra=d)
-            tokens  = line.split(':')
-            thisPid = tokens[1]
-            testcaseEnv.entityParentPidDict[thisPid] = thisPid
-
 
 def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv):
     logger.info("calling generate_properties_files", extra=d)
@@ -402,6 +388,7 @@ def start_entity_in_background(systemTestEnv, testcaseEnv, entityId):
     if role == "zookeeper":
         cmdList = ["ssh " + hostname,
                   "'JAVA_HOME=" + javaHome,
+                  "JMX_PORT=" + jmxPort,
                   kafkaHome + "/bin/zookeeper-server-start.sh ",
                   configPathName + "/" + configFile + " &> ",
                   logPathName + "/" + logFile + " & echo pid:$! > ",
@@ -418,7 +405,7 @@ def start_entity_in_background(systemTestEnv, testcaseEnv, entityId):
     elif role == "broker":
         cmdList = ["ssh " + hostname,
                   "'JAVA_HOME=" + javaHome,
-                  "JMX_PORT=" + jmxPort,
+                 "JMX_PORT=" + jmxPort,
                   kafkaHome + "/bin/kafka-run-class.sh kafka.Kafka",
                   configPathName + "/" + configFile + " &> ",
                   logPathName + "/" + logFile + " & echo pid:$! > ",
@@ -446,10 +433,8 @@ def start_entity_in_background(systemTestEnv, testcaseEnv, entityId):
             tokens = line.split(':')
             testcaseEnv.entityParentPidDict[entityId] = tokens[1]
 
-    # if it is a broker, start metric collection
-    if role == "broker":
-        start_metrics_collection(hostname, jmxPort, "kafka:type=kafka.SocketServerStats", \
-            "AvgFetchRequestMs, AvgProduceRequestMs", entityId, clusterEntityConfigDictList, testcaseEnv)
+    time.sleep(1)
+    metrics.start_metrics_collection(hostname, jmxPort, role, entityId, systemTestEnv, testcaseEnv)
 
 
 def start_console_consumer(systemTestEnv, testcaseEnv):
@@ -460,6 +445,8 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
     for consumerConfig in consumerConfigList:
         host              = consumerConfig["hostname"]
         entityId          = consumerConfig["entity_id"]
+        jmxPort           = consumerConfig["jmx_port"] 
+        role              = consumerConfig["role"] 
         kafkaHome         = system_test_utils.get_data_by_lookup_keyval( \
                                 clusterEntityConfigDictList, "entity_id", entityId, "kafka_home")
         javaHome          = system_test_utils.get_data_by_lookup_keyval( \
@@ -476,13 +463,15 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
         commandArgs = system_test_utils.convert_keyval_to_cmd_args(testcaseEnv.userDefinedEnvVarDict["consumerConfigPathName"])
         cmdList = ["ssh " + host,
                    "'JAVA_HOME=" + javaHome,
+                   "JMX_PORT=" + jmxPort,
                    kafkaRunClassBin + " kafka.consumer.ConsoleConsumer",
                    commandArgs + " &> " + consumerLogPathName + "'"]
 
         cmdStr = " ".join(cmdList)
         logger.debug("executing command: [" + cmdStr + "]", extra=d)
-        system_test_utils.sys_call(cmdStr)
-
+        system_test_utils.async_sys_call(cmdStr)
+        time.sleep(2)
+        metrics.start_metrics_collection(host, jmxPort, role, entityId, systemTestEnv, testcaseEnv)
 
 
 def start_producer_performance(systemTestEnv, testcaseEnv):
@@ -494,6 +483,8 @@ def start_producer_performance(systemTestEnv, testcaseEnv):
     for producerConfig in producerConfigList:
         host              = producerConfig["hostname"]
         entityId          = producerConfig["entity_id"]
+        jmxPort           = producerConfig["jmx_port"] 
+        role              = producerConfig["role"] 
         kafkaHome         = system_test_utils.get_data_by_lookup_keyval( \
                                 clusterEntityConfigDictList, "entity_id", entityId, "kafka_home")
         javaHome          = system_test_utils.get_data_by_lookup_keyval( \
@@ -510,12 +501,15 @@ def start_producer_performance(systemTestEnv, testcaseEnv):
         commandArgs = system_test_utils.convert_keyval_to_cmd_args(testcaseEnv.userDefinedEnvVarDict["producerConfigPathName"])
         cmdList = ["ssh " + host,
                    "'JAVA_HOME=" + javaHome,
+                   "JMX_PORT=" + jmxPort,
                    kafkaRunClassBin + " kafka.perf.ProducerPerformance",
                    commandArgs + " &> " + producerLogPathName + "'"]
 
         cmdStr = " ".join(cmdList)
         logger.debug("executing command: [" + cmdStr + "]", extra=d)
-        system_test_utils.sys_call(cmdStr) 
+        system_test_utils.async_sys_call(cmdStr)
+        time.sleep(1)
+        metrics.start_metrics_collection(host, jmxPort, role, entityId, systemTestEnv, testcaseEnv)
 
 
 def stop_remote_entity(systemTestEnv, entityId, parentPid):
@@ -525,8 +519,8 @@ def stop_remote_entity(systemTestEnv, entityId, parentPid):
     pidStack  = system_test_utils.get_remote_child_processes(hostname, parentPid)
 
     logger.info("terminating process id: " + parentPid + " in host: " + hostname, extra=d)
-    system_test_utils.sigterm_remote_process(hostname, pidStack)
-    time.sleep(1)
+#    system_test_utils.sigterm_remote_process(hostname, pidStack)
+#    time.sleep(1)
     system_test_utils.sigkill_remote_process(hostname, pidStack)
 
 
@@ -632,10 +626,9 @@ def validate_leader_election_successful(testcaseEnv, leaderDict, validationStatu
             validationStatusDict["Validate leader election successful"] = "PASSED"
             return True
         except Exception, e:
-            logger.error("leader info not completed:", extra=d)
+            logger.error("leader info not completed: {0}".format(e), extra=d)
+            traceback.print_exc()
             validationStatusDict["Validate leader election successful"] = "FAILED"
-            print leaderDict
-            print e
             return False
     else:
         validationStatusDict["Validate leader election successful"] = "FAILED"
@@ -677,5 +670,14 @@ def cleanup_data_at_remote_hosts(systemTestEnv, testcaseEnv):
         logger.debug("executing command [" + cmdStr + "]", extra=d)
         system_test_utils.sys_call(cmdStr)
 
-    
+def get_entity_log_directory(testCaseBaseDir, entity_id, role):
+    return testCaseBaseDir + "/logs/" + role + "-" + entity_id
 
+def get_entities_for_role(clusterConfig, role):
+    return filter(lambda entity: entity['role'] == role, clusterConfig)
+    
+def stop_consumer():
+    system_test_utils.sys_call("ps -ef | grep ConsoleConsumer | grep -v grep | tr -s ' ' | cut -f2 -d' ' | xargs kill -15")
+
+def stop_producer():
+    system_test_utils.sys_call("ps -ef | grep ProducerPerformance | grep -v grep | tr -s ' ' | cut -f2 -d' ' | xargs kill -15")
