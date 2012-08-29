@@ -255,6 +255,7 @@ private[log] class Log(val dir: File, val time: Time, val maxSize: Long, val max
     }
   }
 
+
   /**
    * Read from the log file at the given offset
    */

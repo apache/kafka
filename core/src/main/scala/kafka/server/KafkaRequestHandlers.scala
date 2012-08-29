@@ -22,7 +22,7 @@ import kafka.log._
 import kafka.network._
 import kafka.message._
 import kafka.api._
-import kafka.common.ErrorMapping
+import kafka.common.{MessageSizeTooLargeException, ErrorMapping}
 import java.util.concurrent.atomic.AtomicLong
 import kafka.utils._
 
@@ -73,11 +73,15 @@ private[kafka] class KafkaRequestHandlers(val logManager: LogManager) extends Lo
       BrokerTopicStat.getBrokerAllTopicStat.recordBytesIn(request.messages.sizeInBytes)
     }
     catch {
-      case e =>
-        error("Error processing " + requestHandlerName + " on " + request.topic + ":" + partition, e)
+      case e: MessageSizeTooLargeException =>
+        warn(e.getMessage() + " on " + request.topic + ":" + partition)
         BrokerTopicStat.getBrokerTopicStat(request.topic).recordFailedProduceRequest
         BrokerTopicStat.getBrokerAllTopicStat.recordFailedProduceRequest
-        throw e
+      case t =>
+        error("Error processing " + requestHandlerName + " on " + request.topic + ":" + partition, t)
+        BrokerTopicStat.getBrokerTopicStat(request.topic).recordFailedProduceRequest
+        BrokerTopicStat.getBrokerAllTopicStat.recordFailedProduceRequest
+        throw t
     }
   }
 
