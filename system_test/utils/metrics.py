@@ -31,6 +31,8 @@ import traceback
 
 import csv
 import time 
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 from collections import namedtuple
 import numpy
@@ -78,6 +80,8 @@ def ensure_valid_headers(headers, attributes):
         attributeColumnIndex = headers.index(attributes)
         return attributeColumnIndex
     except ValueError as ve:
+        #print "#### attributes : ", attributes
+        #print "#### headers    : ", headers
         raise Exception("There should be exactly one column that matches attribute: {0} in".format(attributes) +  
                         " headers: {0}".format(",".join(headers)))
         
@@ -119,6 +123,7 @@ def plot_graphs(inputCsvFiles, labels, title, xLabel, yLabel, attribute, outputG
             plots.append(p1)
         except Exception as e:
             logger.error("ERROR while plotting data for {0}: {1}".format(inputCsvFile, e), extra=d)
+            traceback.print_exc()
     # find xmin, xmax, ymin, ymax from all csv files
     xmin = min(map(lambda coord: coord.x, coordinates))
     xmax = max(map(lambda coord: coord.x, coordinates))
@@ -172,6 +177,7 @@ def draw_graph_for_role(graphs, entities, role, testcaseEnv):
 #            print "Finished plotting graph for metric {0} on entity {1}".format(graph['graph_name'], entity['entity_id'])
         except Exception as e:
             logger.error("ERROR while plotting graph {0}: {1}".format(outputGraphFile, e), extra=d)
+            traceback.print_exc()
 
 def build_all_dashboards(metricsDefinitionFile, testcaseDashboardsDir, clusterConfig):
     metricsHtmlFile = testcaseDashboardsDir + "/metrics.html"
@@ -231,19 +237,29 @@ def start_metrics_collection(jmxHost, jmxPort, role, entityId, systemTestEnv, te
         startMetricsCommand = " ".join(startMetricsCmdList) 
         logger.debug("executing command: [" + startMetricsCommand + "]", extra=d)
         system_test_utils.async_sys_call(startMetricsCommand)
-            
-        pidCmdStr = "ssh " + jmxHost + " 'cat " + entityMetricsDir + "/entity_pid'"
+        time.sleep(1)
+
+        pidCmdStr = "ssh " + jmxHost + " 'cat " + entityMetricsDir + "/entity_pid 2> /dev/null'"
         logger.debug("executing command: [" + pidCmdStr + "]", extra=d)
         subproc = system_test_utils.sys_call_return_subproc(pidCmdStr)
 
-            # keep track of the remote entity pid in a dictionary
+        # keep track of JMX ppid in a dictionary of entity_id to list of JMX ppid
+        # testcaseEnv.entityJmxParentPidDict:
+        #   key: entity_id
+        #   val: list of JMX ppid associated to that entity_id
+        #   { 1: [1234, 1235, 1236], 2: [2234, 2235, 2236], ... }
         for line in subproc.stdout.readlines():
+            line = line.rstrip('\n')
+            logger.debug("line: [" + line + "]", extra=d)
             if line.startswith("pid"):
-                line = line.rstrip('\n')
                 logger.debug("found pid line: [" + line + "]", extra=d)
                 tokens  = line.split(':')
                 thisPid = tokens[1]
-                testcaseEnv.entityParentPidDict[thisPid] = thisPid
+                if entityId not in testcaseEnv.entityJmxParentPidDict:
+                    testcaseEnv.entityJmxParentPidDict[entityId] = []
+                testcaseEnv.entityJmxParentPidDict[entityId].append(thisPid)
+                #print "\n#### testcaseEnv.entityJmxParentPidDict ", testcaseEnv.entityJmxParentPidDict, "\n"
+
 
 def stop_metrics_collection(jmxHost, jmxPort):
     logger.info("stopping metrics collection on " + jmxHost + ":" + jmxPort, extra=d)

@@ -24,7 +24,9 @@ import inspect
 import json
 import logging
 import os
+import re
 import signal
+import socket
 import subprocess
 import sys
 import time
@@ -32,6 +34,15 @@ import time
 logger = logging.getLogger("namedLogger")
 thisClassName = '(system_test_utils)'
 d = {'name_of_class': thisClassName}
+
+
+def get_current_unix_timestamp():
+    ts = time.time()
+    return "{0:.6f}".format(ts)
+
+
+def get_local_hostname():
+    return socket.gethostname()
 
 
 def sys_call(cmdStr):
@@ -218,6 +229,7 @@ def sigterm_remote_process(hostname, pidStack):
             sys_call_return_subproc(cmdStr)
         except:
             print "WARN - pid:",pid,"not found"
+            raise
 
 
 def sigkill_remote_process(hostname, pidStack):
@@ -231,6 +243,7 @@ def sigkill_remote_process(hostname, pidStack):
             sys_call_return_subproc(cmdStr)
         except:
             print "WARN - pid:",pid,"not found"
+            raise
 
 
 def terminate_process(pidStack):
@@ -240,6 +253,7 @@ def terminate_process(pidStack):
             os.kill(int(pid), signal.SIGTERM)
         except:
             print "WARN - pid:",pid,"not found"
+            raise
 
 
 def convert_keyval_to_cmd_args(configFilePathname):
@@ -265,6 +279,17 @@ def async_sys_call(cmd_str):
 def sys_call_return_subproc(cmd_str):
     p = subprocess.Popen(cmd_str, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     return p
+
+
+def remote_host_file_exists(hostname, pathname):
+    cmdStr = "ssh " + hostname + " 'ls " + pathname + "'"
+    logger.debug("executing command: [" + cmdStr + "]", extra=d)
+    subproc = sys_call_return_subproc(cmdStr)
+
+    for line in subproc.stdout.readlines():
+        if "No such file or directory" in line:
+            return False
+    return True
 
 
 def remote_host_directory_exists(hostname, path):
@@ -296,24 +321,39 @@ def remote_host_processes_stopped(hostname):
 def setup_remote_hosts(systemTestEnv):
     clusterEntityConfigDictList = systemTestEnv.clusterEntityConfigDictList
 
+    localKafkaHome = os.path.abspath(systemTestEnv.SYSTEM_TEST_BASE_DIR + "/..")
+    localJavaBin   = ""
+    localJavaHome  = ""
+
+    subproc = sys_call_return_subproc("which java")
+    for line in subproc.stdout.readlines():
+        if line.startswith("which: no "):
+            logger.error("No Java binary found in local host", extra=d)
+            return False
+        else:
+            line = line.rstrip('\n')
+            localJavaBin = line
+            matchObj = re.match("(.*)\/bin\/java$", line)
+            localJavaHome = matchObj.group(1)
+
+    listIndex = -1
     for clusterEntityConfigDict in clusterEntityConfigDictList:
+        listIndex += 1
+
         hostname  = clusterEntityConfigDict["hostname"]
         kafkaHome = clusterEntityConfigDict["kafka_home"]
         javaHome  = clusterEntityConfigDict["java_home"]
 
-        localKafkaHome = os.path.abspath(systemTestEnv.SYSTEM_TEST_BASE_DIR + "/..")
-        logger.info("local kafka home : [" + localKafkaHome + "]", extra=d)
-        if kafkaHome != localKafkaHome:
-            logger.error("kafkaHome [" + kafkaHome + "] must be the same as [" + localKafkaHome + "] in host [" + hostname + "]", extra=d)
-            logger.error("please update cluster_config.json and run again. Aborting test ...", extra=d)
-            sys.exit(1)
+        if hostname == "localhost" and javaHome == "default":
+            clusterEntityConfigDictList[listIndex]["java_home"] = localJavaHome
 
-        #logger.info("checking running processes in host [" + hostname + "]", extra=d)
-        #if not remote_host_processes_stopped(hostname):
-        #    logger.error("Running processes found in host [" + hostname + "]", extra=d)
-        #    return False
+        if hostname == "localhost" and kafkaHome == "default":
+            clusterEntityConfigDictList[listIndex]["kafka_home"] = localKafkaHome
 
-        logger.info("checking JAVA_HOME [" + javaHome + "] in host [" + hostname + "]", extra=d)
+        kafkaHome = clusterEntityConfigDict["kafka_home"]
+        javaHome  = clusterEntityConfigDict["java_home"]
+
+        logger.info("checking java binary [" + localJavaBin + "] in host [" + hostname + "]", extra=d)
         if not remote_host_directory_exists(hostname, javaHome):
             logger.error("Directory not found: [" + javaHome + "] in host [" + hostname + "]", extra=d)
             return False
@@ -338,4 +378,23 @@ def copy_source_to_remote_hosts(hostname, sourceDir, destDir):
 
     for line in subproc.stdout.readlines():
         dummyVar = 1
+
+
+def remove_kafka_home_dir_at_remote_hosts(hostname, kafkaHome):
+
+    if remote_host_file_exists(hostname, kafkaHome + "/bin/kafka-run-class.sh"):
+        cmdStr  = "ssh " + hostname + " 'chmod -R 777 " + kafkaHome + "'"
+        logger.info("executing command [" + cmdStr + "]", extra=d)
+        system_test_utils.sys_call(cmdStr)
+
+        cmdStr  = "ssh " + hostname + " 'rm -r " + kafkaHome + "'"
+        logger.info("executing command [" + cmdStr + "]", extra=d)
+        #system_test_utils.sys_call(cmdStr)
+    else:
+        logger.warn("possible destructive command [" + cmdStr + "]", extra=d)
+        logger.warn("check config file: system_test/cluster_config.properties", extra=d)
+        logger.warn("aborting test...", extra=d)
+        sys.exit(1)
+
+
 

@@ -30,8 +30,29 @@ class TestcaseEnv():
     # Generic testcase environment
     # ================================
 
-    # dictionary of entity parent pid
+    # dictionary of entity_id to ppid for entities such as zookeepers & brokers
+    # key: entity_id
+    # val: ppid of zk or broker associated to that entity_id
+    # { 0: 12345, 1: 12389, ... }
     entityParentPidDict = {}
+
+    # dictionary of entity_id to list of JMX ppid
+    # key: entity_id
+    # val: list of JMX ppid associated to that entity_id
+    # { 1: [1234, 1235, 1236], 2: [2234, 2235, 2236], ... }
+    entityJmxParentPidDict = {}
+
+    # dictionary of hostname-topic-ppid for consumer
+    # key: hostname
+    # val: dict of topic-ppid
+    # { host1: { test1 : 12345 }, host1: { test2 : 12389 }, ... }
+    consumerHostParentPidDict = {}
+
+    # dictionary of hostname-topic-ppid for producer
+    # key: hostname
+    # val: dict of topic-ppid
+    # { host1: { test1 : 12345 }, host1: { test2 : 12389 }, ... }
+    producerHostParentPidDict = {}
 
     # list of testcase configs
     testcaseConfigsList = []

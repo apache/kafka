@@ -44,6 +44,7 @@ class ReplicaBasicTest(SetupUtils):
     testModuleAbsPathName = os.path.realpath(__file__)
     testSuiteAbsPathName  = os.path.abspath(os.path.dirname(testModuleAbsPathName))
     isLeaderLogPattern    = "Completed the leader state transition"
+    brokerShutDownCompletedPattern = "shut down completed"
 
     def __init__(self, systemTestEnv):
 
@@ -82,12 +83,16 @@ class ReplicaBasicTest(SetupUtils):
                 self.testcaseEnv.testSuiteBaseDir = self.testSuiteAbsPathName
     
                 # initialize self.testcaseEnv with user-defined environment
-                self.testcaseEnv.userDefinedEnvVarDict["LEADER_ELECTION_COMPLETED_MSG"] = \
-                    ReplicaBasicTest.isLeaderLogPattern
+                self.testcaseEnv.userDefinedEnvVarDict["BROKER_SHUT_DOWN_COMPLETED_MSG"] = ReplicaBasicTest.brokerShutDownCompletedPattern
+                self.testcaseEnv.userDefinedEnvVarDict["REGX_BROKER_SHUT_DOWN_COMPLETED_PATTERN"] = \
+                    "\[(.*?)\] .* \[Kafka Server (.*?)\], " + ReplicaBasicTest.brokerShutDownCompletedPattern
+
+                self.testcaseEnv.userDefinedEnvVarDict["LEADER_ELECTION_COMPLETED_MSG"] = ReplicaBasicTest.isLeaderLogPattern
                 self.testcaseEnv.userDefinedEnvVarDict["REGX_LEADER_ELECTION_PATTERN"]  = \
                     "\[(.*?)\] .* Broker (.*?): " + \
                     self.testcaseEnv.userDefinedEnvVarDict["LEADER_ELECTION_COMPLETED_MSG"] + \
                     " for topic (.*?) partition (.*?) \(.*"
+
                 self.testcaseEnv.userDefinedEnvVarDict["zkConnectStr"] = ""
     
                 # find testcase properties json file
@@ -100,7 +105,7 @@ class ReplicaBasicTest(SetupUtils):
                 testcaseDirName = os.path.basename(testCasePathName)
                 self.testcaseEnv.testcaseResultsDict["test_case_name"] = testcaseDirName
     
-                #### => update testcaseEnv
+                # update testcaseEnv
                 self.testcaseEnv.testCaseBaseDir = testCasePathName
                 self.testcaseEnv.testCaseLogsDir = self.testcaseEnv.testCaseBaseDir + "/logs"
                 self.testcaseEnv.testCaseDashboardsDir = self.testcaseEnv.testCaseBaseDir + "/dashboards"
@@ -110,7 +115,6 @@ class ReplicaBasicTest(SetupUtils):
                 for k,v in testcaseNonEntityDataDict.items():
                     if ( k == "description" ): testcaseDescription = v
     
-                #### => update testcaseEnv
                 # TestcaseEnv.testcaseArgumentsDict initialized, this dictionary keeps track of the
                 # "testcase_args" in the testcase_properties.json such as replica_factor, num_partition, ...
                 self.testcaseEnv.testcaseArgumentsDict = testcaseNonEntityDataDict["testcase_args"]
@@ -124,13 +128,13 @@ class ReplicaBasicTest(SetupUtils):
                 # self.testcaseEnv.testCaseLogsDir
                 # self.testcaseEnv.testcaseArgumentsDict
     
+                print
                 # display testcase name and arguments
                 self.log_message("Test Case : " + testcaseDirName)
                 for k,v in self.testcaseEnv.testcaseArgumentsDict.items():
                     self.anonLogger.info("    " + k + " : " + v)
                 self.log_message("Description : " + testcaseDescription)
-    
-    
+   
                 # ================================================================ #
                 # ================================================================ #
                 #            Product Specific Testing Code Starts Here:            #
@@ -153,7 +157,7 @@ class ReplicaBasicTest(SetupUtils):
     
                 # clean up data directories specified in zookeeper.properties and kafka_server_<n>.properties
                 kafka_system_test_utils.cleanup_data_at_remote_hosts(self.systemTestEnv, self.testcaseEnv)
-    
+
                 # generate remote hosts log/config dirs if not exist
                 kafka_system_test_utils.generate_testcase_log_dirs_in_remote_hosts(self.systemTestEnv, self.testcaseEnv)
     
@@ -196,63 +200,46 @@ class ReplicaBasicTest(SetupUtils):
                 # 'topic': 'test_1',
                 # 'brokerid': '3'}
     
+                # =============================================
                 # validate to see if leader election is successful
+                # =============================================
                 self.log_message("validating leader election")
                 result = kafka_system_test_utils.validate_leader_election_successful( \
                              self.testcaseEnv, leaderDict, self.testcaseEnv.validationStatusDict)
     
-                # checking to see if leader bouncing is required in this testcase
+                # =============================================
+                # get leader re-election latency
+                # =============================================
                 bounceLeaderFlag = self.testcaseEnv.testcaseArgumentsDict["bounce_leader"]
                 self.log_message("bounce_leader flag : " + bounceLeaderFlag)
-    
                 if (bounceLeaderFlag.lower() == "true"):
-                    if self.testcaseEnv.validationStatusDict["Validate leader election successful"] == "FAILED":
-                        # no leader available for testing => skip this round
-                        self.log_message("stopping all entities")
-                        for entityId, parentPid in self.testcaseEnv.entityParentPidDict.items():
-                            kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, entityId, parentPid)
-    
-                        continue
-                    else:
-                        # leader elected => stop leader
-                        try:
-                            leaderEntityId = leaderDict["entity_id"]
-                            leaderBrokerId = leaderDict["brokerid"]
-                            leaderPPid     = self.testcaseEnv.entityParentPidDict[leaderEntityId]
-                        except:
-                            self.log_message("leader details unavailable")
-    
-                        self.log_message("stopping leader in entity "+leaderEntityId+" with pid "+leaderPPid)
-                 
-                        kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, leaderEntityId, leaderPPid)
-                        self.testcaseEnv.entityParentPidDict[leaderEntityId] = ""
-    
-                    self.logger.info("sleeping for 5s for leader re-election to complete", extra=self.d)
-                    time.sleep(5)
-    
+                    reelectionLatency = kafka_system_test_utils.get_reelection_latency(self.systemTestEnv, self.testcaseEnv, leaderDict)
+
+                # =============================================
                 # starting producer 
-                self.log_message("starting producer")
+                # =============================================
+                self.log_message("starting producer in the background")
                 kafka_system_test_utils.start_producer_performance(self.systemTestEnv, self.testcaseEnv)
                 self.anonLogger.info("sleeping for 10s")
                 time.sleep(10)
-                kafka_system_test_utils.stop_producer()
     
+                # =============================================
                 # starting previously terminated broker 
-                if (bounceLeaderFlag.lower() == "true" and not self.testcaseEnv.entityParentPidDict[leaderEntityId]):
+                # =============================================
+                if bounceLeaderFlag.lower() == "true":
                     self.log_message("starting the previously terminated broker")
-    
-                    stoppedLeaderEntityId = leaderDict["entity_id"]
-                    kafka_system_test_utils.start_entity_in_background(
-                        self.systemTestEnv, self.testcaseEnv, stoppedLeaderEntityId)
-    
+                    stoppedLeaderEntityId  = leaderDict["entity_id"]
+                    kafka_system_test_utils.start_entity_in_background(self.systemTestEnv, self.testcaseEnv, stoppedLeaderEntityId)
                     self.anonLogger.info("sleeping for 5s")
                     time.sleep(5)
 
+                # =============================================
                 # starting consumer
-                self.log_message("starting consumer")
+                # =============================================
+                self.log_message("starting consumer in the background")
                 kafka_system_test_utils.start_console_consumer(self.systemTestEnv, self.testcaseEnv)
+                self.anonLogger.info("sleeping for 10s")
                 time.sleep(10)
-                kafka_system_test_utils.stop_consumer()
                 
                 # this testcase is completed - so stopping all entities
                 self.log_message("stopping all entities")
@@ -260,6 +247,7 @@ class ReplicaBasicTest(SetupUtils):
                     kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, entityId, parentPid)
                     
                 # validate the data matched
+                # =============================================
                 self.log_message("validating data matched")
                 result = kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
                 
@@ -287,9 +275,27 @@ class ReplicaBasicTest(SetupUtils):
             except Exception as e:
                 self.log_message("Exception while running test {0}".format(e))
                 traceback.print_exc()
+                traceback.print_exc()
+
+            finally:
                 self.log_message("stopping all entities")
+
                 for entityId, parentPid in self.testcaseEnv.entityParentPidDict.items():
-                    kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, entityId, parentPid)
+                    kafka_system_test_utils.force_stop_remote_entity(self.systemTestEnv, entityId, parentPid)
 
+                for entityId, jmxParentPidList in self.testcaseEnv.entityJmxParentPidDict.items():
+                    for jmxParentPid in jmxParentPidList:
+                        kafka_system_test_utils.force_stop_remote_entity(self.systemTestEnv, entityId, jmxParentPid)
 
- 
+                for hostname, consumerPPid in self.testcaseEnv.consumerHostParentPidDict.items():
+                    consumerEntityId = system_test_utils.get_data_by_lookup_keyval( \
+                        self.systemTestEnv.clusterEntityConfigDictList, "hostname", hostname, "entity_id")
+                    kafka_system_test_utils.force_stop_remote_entity(self.systemTestEnv, consumerEntityId, consumerPPid)
+
+                for hostname, producerPPid in self.testcaseEnv.producerHostParentPidDict.items():
+                    producerEntityId = system_test_utils.get_data_by_lookup_keyval( \
+                        self.systemTestEnv.clusterEntityConfigDictList, "hostname", hostname, "entity_id")
+                    kafka_system_test_utils.force_stop_remote_entity(self.systemTestEnv, producerEntityId, producerPPid)
+
+                #kafka_system_test_utils.ps_grep_terminate_running_entity(self.systemTestEnv)
+
