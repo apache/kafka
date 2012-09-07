@@ -162,7 +162,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     val producer2 = new Producer[String, String](producerConfig2)
     // Available partition ids should be 0.
     producer1.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-    producer1.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
+    producer1.send(new ProducerData[String, String]("new-topic", "test", Array("test2")))
     // get the leader
     val leaderOpt = ZkUtils.getLeaderForPartition(zkClient, "new-topic", 0)
     assertTrue("Leader for topic new-topic partition 0 should exist", leaderOpt.isDefined)
@@ -179,8 +179,10 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     assertEquals(new Message("test1".getBytes), messageSet.next.message)
     assertTrue("Message set should have 1 message", messageSet.hasNext)
-    assertEquals(new Message("test1".getBytes), messageSet.next.message)
-    assertFalse("Message set should not have any more messages", messageSet.hasNext)
+    assertEquals(new Message("test2".getBytes), messageSet.next.message)
+    if (messageSet.hasNext)
+      fail("Message set should not have any more messages, but received a message of %s"
+            .format(Utils.toString(messageSet.next.message.payload, "UTF-8")))
     producer1.close()
 
     try {
