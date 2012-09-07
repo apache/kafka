@@ -102,4 +102,7 @@ class KafkaConfig(props: Properties) extends ZKConfig(props) {
 
    /* the number of partitions for selected topics, e.g., topic1:8,topic2:16 */
   val topicPartitionsMap = Utils.getTopicPartitions(Utils.getString(props, "topic.partition.count.map", ""))
+
+  /* the maximum length of topic name*/
+  val maxTopicNameLength = Utils.getIntInRange(props, "max.topic.name.length", 255, (1, Int.MaxValue))
 }

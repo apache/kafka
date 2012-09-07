@@ -23,7 +23,8 @@ import kafka.server.KafkaConfig
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 import kafka.utils.{Utils, MockTime, TestUtils}
-import kafka.common.OffsetOutOfRangeException
+import kafka.common.{InvalidTopicException, OffsetOutOfRangeException}
+import collection.mutable.ArrayBuffer
 
 class LogManagerTest extends JUnitSuite {
 
@@ -68,6 +69,30 @@ class LogManagerTest extends JUnitSuite {
     val log = logManager.getLog(name, 0)
     val logFile = new File(config.logDir, name + "-0")
     assertTrue(!logFile.exists)
+  }
+
+  @Test
+  def testInvalidTopicName() {
+    val invalidTopicNames = new ArrayBuffer[String]()
+    invalidTopicNames += ("", ".", "..")
+    var longName = "ATCG"
+    for (i <- 3 to 8)
+      longName += longName
+    invalidTopicNames += longName
+    val badChars = Array('/', '\u0000', '\u0001', '\u0018', '\u001F', '\u008F', '\uD805', '\uFFFA')
+    for (weirdChar <- badChars) {
+      invalidTopicNames += "Is" + weirdChar + "funny"
+    }
+
+    for (i <- 0 until invalidTopicNames.size) {
+      try {
+        logManager.getOrCreateLog(invalidTopicNames(i), 0)
+        fail("Should throw InvalidTopicException.")
+      }
+      catch {
+        case e: InvalidTopicException => "This is good."
+      }
+    }
   }
 
   @Test

@@ -49,6 +49,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private var zkActor: Actor = null
   private val startupLatch: CountDownLatch = if (config.enableZookeeper) new CountDownLatch(1) else null
   private val logFlusherScheduler = new KafkaScheduler(1, "kafka-logflusher-", false)
+  private val topicNameValidator = new TopicNameValidator(config)
   private val logFlushIntervalMap = config.flushIntervalMap
   private val logRetentionSizeMap = config.logRetentionSizeMap
   private val logRetentionMsMap = getMsMap(config.logRetentionHoursMap)
@@ -157,14 +158,13 @@ private[kafka] class LogManager(val config: KafkaConfig,
       new Log(d, time, maxLogFileSize, config.maxMessageSize, flushInterval, rollIntervalMs, false)
     }
   }
-  
+
   /**
    * Return the Pool (partitions) for a specific log
    */
   private def getLogPool(topic: String, partition: Int): Pool[Int, Log] = {
     awaitStartup
-    if (topic.length <= 0)
-      throw new InvalidTopicException("topic name can't be empty")
+    topicNameValidator.validate(topic)
     if (partition < 0 || partition >= topicPartitionsMap.getOrElse(topic, numPartitions)) {
       warn("Wrong partition " + partition + " valid partitions (0," +
               (topicPartitionsMap.getOrElse(topic, numPartitions) - 1) + ")")
