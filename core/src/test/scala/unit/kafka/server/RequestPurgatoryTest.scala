@@ -69,10 +69,9 @@ class RequestPurgatoryTest extends JUnit3Suite {
     purgatory.watch(r2)
     purgatory.awaitExpiration(r1)
     val elapsed = System.currentTimeMillis - start
-    println(elapsed)
     assertTrue("r1 expired", purgatory.expired.contains(r1))
     assertTrue("r2 hasn't expired", !purgatory.expired.contains(r2))
-    assertTrue("Time for expiration was about 20ms", (elapsed - expiration).abs < 10L)
+    assertTrue("Time for expiration %d should at least %d".format(elapsed, expiration), elapsed >= expiration)
   }
   
   class MockRequestPurgatory extends RequestPurgatory[DelayedRequest, ProducerRequest] {

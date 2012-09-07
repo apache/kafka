@@ -452,6 +452,7 @@ object TestUtils extends Logging {
         return true
       if (System.currentTimeMillis() > startTime + waitTime)
         return false
+      Thread.sleep(waitTime.min(100L))
     }
     // should never hit here
     throw new RuntimeException("unexpected error")
