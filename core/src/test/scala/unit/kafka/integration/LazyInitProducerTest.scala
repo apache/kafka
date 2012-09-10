@@ -25,7 +25,7 @@ import org.scalatest.junit.JUnit3Suite
 import scala.collection._
 import kafka.producer.ProducerData
 import kafka.utils.TestUtils
-import kafka.common.{KafkaException, OffsetOutOfRangeException}
+import kafka.common.{ErrorMapping, KafkaException, OffsetOutOfRangeException}
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -72,7 +72,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
     // send an invalid offset
     try {
       val fetchedWithError = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, -1, 10000).build())
-      fetchedWithError.messageSet(topic, 0).iterator
+      fetchedWithError.data.foreach(_.partitionDataArray.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error)))
       fail("Expected an OffsetOutOfRangeException exception to be thrown")
     } catch {
       case e: OffsetOutOfRangeException => 
@@ -109,9 +109,9 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
 
       val request = builder.build()
       val responses = consumer.fetch(request)
-      for( (topic, offset) <- topicOffsets ) {
+      for(topicData <- responses.data) {
         try {
-          responses.messageSet(topic, offset).iterator
+          topicData.partitionDataArray.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
           fail("Expected an OffsetOutOfRangeException exception to be thrown")
         } catch {
           case e: OffsetOutOfRangeException =>

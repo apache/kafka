@@ -189,8 +189,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        for( (topic, partition) <- topics)
-          response.messageSet(topic, partition).iterator
+        response.data.foreach(_.partitionDataArray.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error)))
         fail("Expected exception when fetching message with invalid offset")
       } catch {
         case e: OffsetOutOfRangeException => "this is good"
@@ -206,9 +205,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        for( (topic, partition) <- topics) {
-          response.messageSet(topic, -1).iterator
-        }
+        response.data.foreach(_.partitionDataArray.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error)))
         fail("Expected exception when fetching message with invalid partition")
       } catch {
         case e: UnknownTopicOrPartitionException => "this is good"
@@ -256,8 +253,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        for( (topic, partition) <- topics)
-          response.messageSet(topic, partition).iterator
+        response.data.foreach(_.partitionDataArray.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error)))
         fail("Expected exception when fetching message with invalid offset")
       } catch {
         case e: OffsetOutOfRangeException => "this is good"
@@ -273,8 +269,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        for( (topic, _) <- topics)
-          response.messageSet(topic, -1).iterator
+        response.data.foreach(_.partitionDataArray.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error)))
         fail("Expected exception when fetching message with invalid partition")
       } catch {
         case e: UnknownTopicOrPartitionException => "this is good"

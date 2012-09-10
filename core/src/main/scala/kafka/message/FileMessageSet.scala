@@ -40,8 +40,6 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
   
   private val setSize = new AtomicLong()
 
-  def getSerialized(): ByteBuffer = throw new java.lang.UnsupportedOperationException()
-
   if(mutable) {
     if(limit < Long.MaxValue || offset > 0)
       throw new KafkaException("Attempt to open a mutable message set with a view or offset, which is not allowed.")

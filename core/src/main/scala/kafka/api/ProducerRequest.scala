@@ -76,9 +76,9 @@ case class ProducerRequest( versionId: Short,
       buffer.putInt(topicData.partitionDataArray.size) //the number of partitions
       for(partitionData <- topicData.partitionDataArray) {
         buffer.putInt(partitionData.partition)
-        buffer.putInt(partitionData.messages.getSerialized().limit)
-        buffer.put(partitionData.messages.getSerialized())
-        partitionData.messages.getSerialized().rewind
+        buffer.putInt(partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer.limit)
+        buffer.put(partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer)
+        partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer.rewind
       }
     }
   }

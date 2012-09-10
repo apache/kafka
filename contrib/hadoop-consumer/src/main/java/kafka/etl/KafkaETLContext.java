@@ -24,7 +24,6 @@ import java.util.Iterator;
 import kafka.api.FetchRequest;
 import kafka.api.FetchRequestBuilder;
 import kafka.api.OffsetRequest;
-import kafka.common.ErrorMapping;
 import kafka.javaapi.FetchResponse;
 import kafka.javaapi.consumer.SimpleConsumer;
 import kafka.javaapi.message.ByteBufferMessageSet;
@@ -136,7 +135,6 @@ public class KafkaETLContext {
 
             while ( !gotNext && _respIterator.hasNext()) {
                 ByteBufferMessageSet msgSet = _respIterator.next();
-                if ( hasError(msgSet)) return false;
                 _messageIt = msgSet.iterator();
                 gotNext = get(key, value);
             }
@@ -247,36 +245,6 @@ public class KafkaETLContext {
         }
         System.out.println("Using offset range [" + range[0] + ", " + range[1] + "]");
         return range;
-    }
-    
-    /**
-     * Called by the default implementation of {@link #map} to check error code
-     * to determine whether to continue.
-     */
-    protected boolean hasError(ByteBufferMessageSet messages)
-            throws IOException {
-        short errorCode = messages.getErrorCode();
-        if (errorCode == ErrorMapping.OffsetOutOfRangeCode()) {
-            /* offset cannot cross the maximum offset (guaranteed by Kafka protocol).
-               Kafka server may delete old files from time to time */
-            System.err.println("WARNING: current offset=" + _offset + ". It is out of range.");
-
-            if (_retry >= MAX_RETRY_TIME)  return true;
-            _retry++;
-            // get the current offset range
-            _offsetRange = getOffsetRange();
-            _offset =  _offsetRange[0];
-            return false;
-        } else if (errorCode == ErrorMapping.InvalidMessageCode()) {
-            throw new IOException(_input + " current offset=" + _offset
-                    + " : invalid offset.");
-        } else if (errorCode == ErrorMapping.UnknownTopicOrPartitionCode()) {
-            throw new IOException(_input + " : wrong partition");
-        } else if (errorCode != ErrorMapping.NoError()) {
-            throw new IOException(_input + " current offset=" + _offset
-                    + " error:" + errorCode);
-        } else
-            return false;
     }
     
     public static int getClientBufferSize(Props props) throws Exception {

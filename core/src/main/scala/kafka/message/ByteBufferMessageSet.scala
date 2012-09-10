@@ -21,7 +21,7 @@ import kafka.utils.Logging
 import java.nio.ByteBuffer
 import java.nio.channels._
 import kafka.utils.IteratorTemplate
-import kafka.common.{MessageSizeTooLargeException, InvalidMessageSizeException, ErrorMapping}
+import kafka.common.{MessageSizeTooLargeException, InvalidMessageSizeException}
 
 /**
  * A sequence of messages stored in a byte buffer
@@ -33,28 +33,18 @@ import kafka.common.{MessageSizeTooLargeException, InvalidMessageSizeException, 
  * Option 2: Give it a list of messages along with instructions relating to serialization format. Producers will use this method.
  * 
  */
-class ByteBufferMessageSet(private val buffer: ByteBuffer,
-                           private val initialOffset: Long = 0L,
-                           private val errorCode: Short = ErrorMapping.NoError) extends MessageSet with Logging {
+class ByteBufferMessageSet(val buffer: ByteBuffer, val initialOffset: Long = 0L) extends MessageSet with Logging {
   private var shallowValidByteCount = -1L
   if(sizeInBytes > Int.MaxValue)
     throw new InvalidMessageSizeException("Message set cannot be larger than " + Int.MaxValue)
 
   def this(compressionCodec: CompressionCodec, messages: Message*) {
-    this(MessageSet.createByteBuffer(compressionCodec, messages:_*), 0L, ErrorMapping.NoError)
+    this(MessageSet.createByteBuffer(compressionCodec, messages:_*), 0L)
   }
 
   def this(messages: Message*) {
     this(NoCompressionCodec, messages: _*)
   }
-
-  def getInitialOffset = initialOffset
-
-  def getBuffer = buffer
-
-  def getErrorCode = errorCode
-
-  def getSerialized(): ByteBuffer = buffer
 
   def validBytes: Long = shallowValidBytes
 
@@ -96,7 +86,6 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
 
   /** When flag isShallow is set to be true, we do a shallow iteration: just traverse the first level of messages. This is used in verifyMessageSize() function **/
   private def internalIterator(isShallow: Boolean = false): Iterator[MessageAndOffset] = {
-    ErrorMapping.maybeThrowException(errorCode)
     new IteratorTemplate[MessageAndOffset] {
       var topIter = buffer.slice()
       var currValidBytes = initialOffset
@@ -192,12 +181,18 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
   override def equals(other: Any): Boolean = {
     other match {
       case that: ByteBufferMessageSet =>
-        (that canEqual this) && errorCode == that.errorCode && buffer.equals(that.buffer) && initialOffset == that.initialOffset
+        (that canEqual this) && buffer.equals(that.buffer) && initialOffset == that.initialOffset
       case _ => false
     }
   }
 
   override def canEqual(other: Any): Boolean = other.isInstanceOf[ByteBufferMessageSet]
 
-  override def hashCode: Int = 31 + (17 * errorCode) + buffer.hashCode + initialOffset.hashCode
+  override def hashCode: Int = {
+    var hash = 17
+    hash = hash * 31 + buffer.hashCode
+    hash = hash * 31 + initialOffset.hashCode
+    hash
+  }
+
 }

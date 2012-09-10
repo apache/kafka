@@ -110,10 +110,5 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
       if(!messageAndOffset.message.isValid)
         throw new InvalidMessageException
   }
-  
-  /**
-   * Used to allow children to have serialization on implementation
-   */
-  def getSerialized(): ByteBuffer
 
 }

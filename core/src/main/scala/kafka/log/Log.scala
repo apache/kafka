@@ -247,7 +247,7 @@ private[kafka] class Log( val dir: File, val maxSize: Long,
     logStats.recordAppendedMessages(numberOfMessages)
 
     // truncate the message set's buffer upto validbytes, before appending it to the on-disk log
-    val validByteBuffer = messages.getBuffer.duplicate()
+    val validByteBuffer = messages.buffer.duplicate()
     val messageSetValidBytes = messages.validBytes
     if(messageSetValidBytes > Int.MaxValue || messageSetValidBytes < 0)
       throw new InvalidMessageSizeException("Illegal length of message set " + messageSetValidBytes + " Message set cannot be appended to log. Possible causes are corrupted produce requests")

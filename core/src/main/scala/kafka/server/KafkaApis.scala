@@ -317,15 +317,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       val (partitions, offsets, fetchSizes) = (offsetDetail.partitions, offsetDetail.offsets, offsetDetail.fetchSizes)
       for( (partition, offset, fetchSize) <- (partitions, offsets, fetchSizes).zipped.map((_,_,_)) ) {
         val isFetchFromFollower = fetchRequest.replicaId != FetchRequest.NonFollowerId
-        val partitionInfo = readMessageSet(topic, partition, offset, fetchSize, isFetchFromFollower) match {
-          case Left(err) =>
-            BrokerTopicStat.getBrokerTopicStat(topic).recordFailedFetchRequest
-            BrokerTopicStat.getBrokerAllTopicStat.recordFailedFetchRequest
-            new PartitionData(partition, err, offset, -1L, MessageSet.Empty)
-          case Right((messages, highWatermark)) =>
+        val partitionInfo =
+          try {
+            val (messages, highWatermark) = readMessageSet(topic, partition, offset, fetchSize, isFetchFromFollower)
             BrokerTopicStat.getBrokerTopicStat(topic).recordBytesOut(messages.sizeInBytes)
             BrokerTopicStat.getBrokerAllTopicStat.recordBytesOut(messages.sizeInBytes)
-            if(!isFetchFromFollower) {
+            if (!isFetchFromFollower) {
               new PartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
             } else {
               debug("Leader %d for topic %s partition %d received fetch request from follower %d"
@@ -334,7 +331,15 @@ class KafkaApis(val requestChannel: RequestChannel,
                 .format(brokerId, messages.sizeInBytes, topic, partition, fetchRequest.replicaId))
               new PartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
             }
-        }
+          }
+          catch {
+            case e =>
+              BrokerTopicStat.getBrokerTopicStat(topic).recordFailedFetchRequest
+              BrokerTopicStat.getBrokerAllTopicStat.recordFailedFetchRequest
+              error("error when processing request " + (topic, partition, offset, fetchSize), e)
+              new PartitionData(partition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]),
+                                offset, -1L, MessageSet.Empty)
+          }
         info.append(partitionInfo)
       }
       fetchedData.append(new TopicData(topic, info.toArray))
@@ -346,31 +351,23 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Read from a single topic/partition at the given offset upto maxSize bytes
    */
   private def readMessageSet(topic: String, partition: Int, offset: Long,
-                             maxSize: Int, fromFollower: Boolean): Either[Short, (MessageSet, Long)] = {
-    var response: Either[Short, (MessageSet, Long)] = null
-    try {
-      // check if the current broker is the leader for the partitions
-      val leader = replicaManager.getLeaderReplicaIfLocal(topic, partition)
-      trace("Fetching log segment for topic, partition, offset, size = " + (topic, partition, offset, maxSize))
-      val actualSize = if (!fromFollower) {
-        min(leader.highWatermark - offset, maxSize).toInt
-      } else {
-        maxSize
-      }
-      val messages = leader.log match {
-        case Some(log) =>
-          log.read(offset, actualSize)
-        case None =>
-          error("Leader for topic %s partition %d on broker %d does not have a local log".format(topic, partition, brokerId))
-          MessageSet.Empty
-      }
-      response = Right(messages, leader.highWatermark)
-    } catch {
-      case e =>
-        error("error when processing request " + (topic, partition, offset, maxSize), e)
-        response = Left(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+                             maxSize: Int, fromFollower: Boolean): (MessageSet, Long) = {
+    // check if the current broker is the leader for the partitions
+    val leader = replicaManager.getLeaderReplicaIfLocal(topic, partition)
+    trace("Fetching log segment for topic, partition, offset, size = " + (topic, partition, offset, maxSize))
+    val actualSize = if (!fromFollower) {
+      min(leader.highWatermark - offset, maxSize).toInt
+    } else {
+      maxSize
     }
-    response
+    val messages = leader.log match {
+      case Some(log) =>
+        log.read(offset, actualSize)
+      case None =>
+        error("Leader for topic %s partition %d on broker %d does not have a local log".format(topic, partition, brokerId))
+        MessageSet.Empty
+    }
+    (messages, leader.highWatermark)
   }
 
   /**

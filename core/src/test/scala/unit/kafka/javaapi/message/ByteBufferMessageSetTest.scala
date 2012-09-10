@@ -17,7 +17,6 @@
 
 package kafka.javaapi.message
 
-import java.nio._
 import junit.framework.Assert._
 import org.junit.Test
 import kafka.message.{DefaultCompressionCodec, CompressionCodec, NoCompressionCodec, Message}
@@ -29,34 +28,10 @@ class ByteBufferMessageSetTest extends kafka.javaapi.message.BaseMessageSetTestC
     new ByteBufferMessageSet(compressed, getMessageList(messages: _*))
   
   @Test
-  def testValidBytes() {
-    val messageList = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                               messages = getMessageList(new Message("hello".getBytes()),
-                                                                      new Message("there".getBytes())))
-    val buffer = ByteBuffer.allocate(messageList.sizeInBytes.toInt + 2)
-    buffer.put(messageList.getBuffer)
-    buffer.putShort(4)
-    val messageListPlus = new ByteBufferMessageSet(buffer)
-    assertEquals("Adding invalid bytes shouldn't change byte count", messageList.validBytes, messageListPlus.validBytes)
-  }
-
-  @Test
-  def testValidBytesWithCompression () {
-    val messageList = new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec,
-                                               messages = getMessageList(new Message("hello".getBytes()),
-                                                                         new Message("there".getBytes())))
-    val buffer = ByteBuffer.allocate(messageList.sizeInBytes.toInt + 2)
-    buffer.put(messageList.getBuffer)
-    buffer.putShort(4)
-    val messageListPlus = new ByteBufferMessageSet(buffer, 0, 0)
-    assertEquals("Adding invalid bytes shouldn't change byte count", messageList.validBytes, messageListPlus.validBytes)
-  }
-
-  @Test
   def testEquals() {
     val messageList = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                            messages = getMessageList(new Message("hello".getBytes()),
-                                                                      new Message("there".getBytes())))
+                                               messages = getMessageList(new Message("hello".getBytes()),
+                                                                         new Message("there".getBytes())))
     val moreMessages = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
                                                 messages = getMessageList(new Message("hello".getBytes()),
                                                                           new Message("there".getBytes())))
