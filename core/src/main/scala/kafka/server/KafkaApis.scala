@@ -238,8 +238,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           satisfiedProduceRequests ++= producerRequestPurgatory.update(key, key)
         })
       })
-      debug("Replica %d fetch unblocked %d producer requests."
-        .format(fetchRequest.replicaId, satisfiedProduceRequests.size))
+      debug("Replica %d fetch unblocked %d producer requests.".format(fetchRequest.replicaId, satisfiedProduceRequests.size))
       satisfiedProduceRequests.foreach(_.respond())
     }
 
@@ -269,17 +268,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     var totalBytes = 0L
     for(offsetDetail <- fetchRequest.offsetInfo) {
       for(i <- 0 until offsetDetail.partitions.size) {
+        debug("Fetching log for topic %s partition %d".format(offsetDetail.topic, offsetDetail.partitions(i)))
         try {
-          val localReplica = replicaManager.getReplica(offsetDetail.topic, offsetDetail.partitions(i))
-          val available = localReplica match {
-            case Some(replica) => max(0, replica.log.get.logEndOffset - offsetDetail.offsets(i))
-            case None => 0
+          val leader = replicaManager.getLeaderReplicaIfLocal(offsetDetail.topic, offsetDetail.partitions(i))
+          val end = if(fetchRequest.replicaId == FetchRequest.NonFollowerId) {
+            leader.highWatermark
+          } else {
+            leader.logEndOffset
           }
+          val available = max(0, end - offsetDetail.offsets(i))
           totalBytes += math.min(offsetDetail.fetchSizes(i), available)
         } catch {
           case e: UnknownTopicOrPartitionException =>
             info("Invalid partition %d in fetch request from client %d."
               .format(offsetDetail.partitions(i), fetchRequest.clientId))
+          case e =>
+            error("Error determining available fetch bytes for topic %s partition %s on broker %s for client %s"
+              .format(offsetDetail.topic, offsetDetail.partitions(i), brokerId, fetchRequest.clientId), e)
         }
       }
     }
@@ -311,26 +316,24 @@ class KafkaApis(val requestChannel: RequestChannel,
       val topic = offsetDetail.topic
       val (partitions, offsets, fetchSizes) = (offsetDetail.partitions, offsetDetail.offsets, offsetDetail.fetchSizes)
       for( (partition, offset, fetchSize) <- (partitions, offsets, fetchSizes).zipped.map((_,_,_)) ) {
-        val partitionInfo = readMessageSet(topic, partition, offset, fetchSize) match {
+        val isFetchFromFollower = fetchRequest.replicaId != FetchRequest.NonFollowerId
+        val partitionInfo = readMessageSet(topic, partition, offset, fetchSize, isFetchFromFollower) match {
           case Left(err) =>
             BrokerTopicStat.getBrokerTopicStat(topic).recordFailedFetchRequest
             BrokerTopicStat.getBrokerAllTopicStat.recordFailedFetchRequest
-            fetchRequest.replicaId match {
-              case -1 => new PartitionData(partition, err, offset, -1L, MessageSet.Empty)
-              case _ =>
-                new PartitionData(partition, err, offset, -1L, MessageSet.Empty)
-            }
-          case Right(messages) =>
+            new PartitionData(partition, err, offset, -1L, MessageSet.Empty)
+          case Right((messages, highWatermark)) =>
             BrokerTopicStat.getBrokerTopicStat(topic).recordBytesOut(messages.sizeInBytes)
             BrokerTopicStat.getBrokerAllTopicStat.recordBytesOut(messages.sizeInBytes)
-            val leaderReplica = replicaManager.getReplica(topic, partition).get
-            if (fetchRequest.replicaId != FetchRequest.NonFollowerId) {
-              debug("Leader for topic [%s] partition [%d] received fetch request from follower [%d]"
-                .format(topic, partition, fetchRequest.replicaId))
-              debug("Leader returning %d messages for topic %s partition %d to follower %d"
-                .format(messages.sizeInBytes, topic, partition, fetchRequest.replicaId))
+            if(!isFetchFromFollower) {
+              new PartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
+            } else {
+              debug("Leader %d for topic %s partition %d received fetch request from follower %d"
+                .format(brokerId, topic, partition, fetchRequest.replicaId))
+              debug("Leader %d returning %d messages for topic %s partition %d to follower %d"
+                .format(brokerId, messages.sizeInBytes, topic, partition, fetchRequest.replicaId))
+              new PartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
             }
-            new PartitionData(partition, ErrorMapping.NoError, offset, leaderReplica.highWatermark, messages)
         }
         info.append(partitionInfo)
       }
@@ -340,16 +343,28 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   /**
-   * Read from a single topic/partition at the given offset
+   * Read from a single topic/partition at the given offset upto maxSize bytes
    */
-  private def readMessageSet(topic: String, partition: Int, offset: Long, maxSize: Int): Either[Short, MessageSet] = {
-    var response: Either[Short, MessageSet] = null
+  private def readMessageSet(topic: String, partition: Int, offset: Long,
+                             maxSize: Int, fromFollower: Boolean): Either[Short, (MessageSet, Long)] = {
+    var response: Either[Short, (MessageSet, Long)] = null
     try {
       // check if the current broker is the leader for the partitions
-      val localReplica = replicaManager.getLeaderReplicaIfLocal(topic, partition)
+      val leader = replicaManager.getLeaderReplicaIfLocal(topic, partition)
       trace("Fetching log segment for topic, partition, offset, size = " + (topic, partition, offset, maxSize))
-      val log = localReplica.log.get
-      response = Right(log.read(offset, maxSize))
+      val actualSize = if (!fromFollower) {
+        min(leader.highWatermark - offset, maxSize).toInt
+      } else {
+        maxSize
+      }
+      val messages = leader.log match {
+        case Some(log) =>
+          log.read(offset, actualSize)
+        case None =>
+          error("Leader for topic %s partition %d on broker %d does not have a local log".format(topic, partition, brokerId))
+          MessageSet.Empty
+      }
+      response = Right(messages, leader.highWatermark)
     } catch {
       case e =>
         error("error when processing request " + (topic, partition, offset, maxSize), e)
@@ -373,13 +388,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       replicaManager.getLeaderReplicaIfLocal(offsetRequest.topic, offsetRequest.partition)
       val offsets = replicaManager.logManager.getOffsets(offsetRequest)
       response = new OffsetResponse(offsetRequest.versionId, offsets)
-    }catch {
+    } catch {
       case ioe: IOException =>
         fatal("Halting due to unrecoverable I/O error while handling producer request: " + ioe.getMessage, ioe)
         System.exit(1)
       case e =>
         warn("Error while responding to offset request", e)
-        response = new OffsetResponse(offsetRequest.versionId, Array.empty[Long],ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]).toShort)
+        response = new OffsetResponse(offsetRequest.versionId, Array.empty[Long],
+          ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]).toShort)
     }
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
   }
@@ -420,7 +436,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                             ErrorMapping.exceptionFor(topicAndMetadata._2.errorCode).getCause)
           }
         })
-    }catch {
+    } catch {
       case e => error("Error while retrieving topic metadata", e)
       // convert exception type to error code
       errorCode = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])

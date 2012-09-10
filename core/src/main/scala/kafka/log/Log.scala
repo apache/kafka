@@ -280,7 +280,11 @@ private[kafka] class Log( val dir: File, val maxSize: Long,
     trace("Reading %d bytes from offset %d in log %s of length %s bytes".format(length, offset, name, size))
     val view = segments.view
     Log.findRange(view, offset, view.length) match {
-      case Some(segment) => segment.messageSet.read((offset - segment.start), length)
+      case Some(segment) =>
+        if(length <= 0)
+          MessageSet.Empty
+        else
+          segment.messageSet.read((offset - segment.start), length)
       case _ => MessageSet.Empty
     }
   }
