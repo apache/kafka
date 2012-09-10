@@ -38,7 +38,7 @@ object ErrorMapping {
   val LeaderNotAvailableCode : Short = 6
   val NotLeaderForPartitionCode : Short = 7
   val RequestTimedOutCode: Short = 8
-  val BrokerNotExistInZookeeperCode: Short = 9
+  val BrokerNotAvailableCode: Short = 9
   val ReplicaNotAvailableCode: Short = 10
 
   private val exceptionToCode = 
@@ -51,7 +51,7 @@ object ErrorMapping {
       classOf[NotLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NotLeaderForPartitionCode,
       classOf[LeaderNotAvailableException].asInstanceOf[Class[Throwable]] -> LeaderNotAvailableCode,
       classOf[RequestTimedOutException].asInstanceOf[Class[Throwable]] -> RequestTimedOutCode,
-      classOf[BrokerNotExistException].asInstanceOf[Class[Throwable]] -> BrokerNotExistInZookeeperCode,
+      classOf[BrokerNotAvailableException].asInstanceOf[Class[Throwable]] -> BrokerNotAvailableCode,
       classOf[ReplicaNotAvailableException].asInstanceOf[Class[Throwable]] -> ReplicaNotAvailableCode
     ).withDefaultValue(UnknownCode)
   

@@ -60,7 +60,7 @@ class RequestPurgatoryTest extends JUnit3Suite {
   }
 
   @Test
-  def testRequestExpirey() {
+  def testRequestExpiry() {
     val expiration = 20L
     val r1 = new DelayedRequest(Array("test1"), null, expiration)
     val r2 = new DelayedRequest(Array("test1"), null, 200000L)

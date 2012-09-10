@@ -23,10 +23,10 @@ import org.I0Itec.zkclient.{IZkDataListener, ZkClient}
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException, ZkMarshallingError}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import scala.collection._
-import kafka.api.LeaderAndISR
-import kafka.common.NoEpochForPartitionException
+import kafka.api.LeaderAndIsr
 import org.apache.zookeeper.data.Stat
 import java.util.concurrent.locks.{ReentrantLock, Condition}
+import kafka.common.{KafkaException, NoEpochForPartitionException}
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -43,15 +43,17 @@ object ZkUtils extends Logging {
   }
 
   def getController(zkClient: ZkClient): Int= {
-    val controller = readDataMaybeNull(zkClient, ControllerPath)._1
-    controller.toInt
+    readDataMaybeNull(zkClient, ControllerPath)._1 match {
+      case Some(controller) => controller.toInt
+      case None => throw new KafkaException("Controller doesn't exist")
+    }
   }
 
   def getTopicPartitionPath(topic: String, partitionId: Int): String ={
     getTopicPartitionsPath(topic) + "/" + partitionId
   }
 
-  def getTopicPartitionLeaderAndISRPath(topic: String, partitionId: Int): String ={
+  def getTopicPartitionLeaderAndIsrPath(topic: String, partitionId: Int): String ={
     getTopicPartitionPath(topic, partitionId) + "/" + "leaderAndISR"
   }
 
@@ -65,41 +67,42 @@ object ZkUtils extends Logging {
 
   def getAllBrokersInCluster(zkClient: ZkClient): Seq[Broker] = {
     val brokerIds = ZkUtils.getChildren(zkClient, ZkUtils.BrokerIdsPath).sorted
-    getBrokerInfoFromIds(zkClient, brokerIds.map(_.toInt))
+    brokerIds.map(_.toInt).map(getBrokerInfo(zkClient, _)).filter(_.isDefined).map(_.get)
   }
 
-
-  def getLeaderAndISRForPartition(zkClient: ZkClient, topic: String, partition: Int):Option[LeaderAndISR] = {
-    val leaderAndISRPath = getTopicPartitionLeaderAndISRPath(topic, partition)
-    val ret = readDataMaybeNull(zkClient, leaderAndISRPath)
-    val leaderAndISRStr: String = ret._1
-    val stat = ret._2
-    if(leaderAndISRStr == null) None
-    else {
-      SyncJSON.parseFull(leaderAndISRStr) match {
-        case Some(m) =>
-          val leader = m.asInstanceOf[Map[String, String]].get("leader").get.toInt
-          val epoch = m.asInstanceOf[Map[String, String]].get("leaderEpoch").get.toInt
-          val ISRString = m.asInstanceOf[Map[String, String]].get("ISR").get
-          val ISR = Utils.getCSVList(ISRString).map(r => r.toInt)
-          val zkPathVersion = stat.getVersion
-          debug("Leader %d, Epoch %d, isr %s, zk path version %d for topic %s and partition %d".format(leader, epoch, ISR.toString(), zkPathVersion, topic, partition))
-          Some(LeaderAndISR(leader, epoch, ISR.toList, zkPathVersion))
-        case None => None
-      }
+  def getLeaderAndIsrForPartition(zkClient: ZkClient, topic: String, partition: Int):Option[LeaderAndIsr] = {
+    val leaderAndISRPath = getTopicPartitionLeaderAndIsrPath(topic, partition)
+    val leaderAndIsrInfo = readDataMaybeNull(zkClient, leaderAndISRPath)
+    val leaderAndIsrOpt = leaderAndIsrInfo._1
+    val stat = leaderAndIsrInfo._2
+    leaderAndIsrOpt match {
+      case Some(leaderAndIsrStr) =>
+        SyncJSON.parseFull(leaderAndIsrStr) match {
+          case Some(m) =>
+            val leader = m.asInstanceOf[Map[String, String]].get("leader").get.toInt
+            val epoch = m.asInstanceOf[Map[String, String]].get("leaderEpoch").get.toInt
+            val isrString = m.asInstanceOf[Map[String, String]].get("ISR").get
+            val isr = Utils.getCSVList(isrString).map(r => r.toInt)
+            val zkPathVersion = stat.getVersion
+            debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for topic %s and partition %d".format(leader, epoch,
+              isr.toString(), zkPathVersion, topic, partition))
+            Some(LeaderAndIsr(leader, epoch, isr.toList, zkPathVersion))
+          case None => None
+        }
+      case None => None // TODO: Handle if leader and isr info is not available in zookeeper
     }
   }
 
-
   def getLeaderForPartition(zkClient: ZkClient, topic: String, partition: Int): Option[Int] = {
-    val leaderAndISR = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndISRPath(topic, partition))._1
-    if(leaderAndISR == null) None
-    else {
-      SyncJSON.parseFull(leaderAndISR) match {
-        case Some(m) =>
-          Some(m.asInstanceOf[Map[String, String]].get("leader").get.toInt)
-        case None => None
-      }
+    val leaderAndIsrOpt = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndIsrPath(topic, partition))._1
+    leaderAndIsrOpt match {
+      case Some(leaderAndIsr) =>
+        SyncJSON.parseFull(leaderAndIsr) match {
+          case Some(m) =>
+            Some(m.asInstanceOf[Map[String, String]].get("leader").get.toInt)
+          case None => None
+        }
+      case None => None
     }
   }
 
@@ -109,32 +112,32 @@ object ZkUtils extends Logging {
    * other broker will retry becoming leader with the same new epoch value.
    */
   def getEpochForPartition(zkClient: ZkClient, topic: String, partition: Int): Int = {
-    val leaderAndISR = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndISRPath(topic, partition))._1
-    if(leaderAndISR != null) {
-      val epoch = SyncJSON.parseFull(leaderAndISR) match {
-        case None => throw new NoEpochForPartitionException("No epoch, leaderAndISR data for topic %s partition %d is invalid".format(topic, partition))
-        case Some(m) =>
-          m.asInstanceOf[Map[String, String]].get("leaderEpoch").get.toInt
-      }
-      epoch
+    val leaderAndIsrOpt = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndIsrPath(topic, partition))._1
+    leaderAndIsrOpt match {
+      case Some(leaderAndIsr) =>
+        SyncJSON.parseFull(leaderAndIsr) match {
+          case None => throw new NoEpochForPartitionException("No epoch, leaderAndISR data for topic %s partition %d is invalid".format(topic, partition))
+          case Some(m) => m.asInstanceOf[Map[String, String]].get("leaderEpoch").get.toInt
+        }
+      case None => throw new NoEpochForPartitionException("No epoch, ISR path for topic %s partition %d is empty"
+        .format(topic, partition))
     }
-    else
-      throw new NoEpochForPartitionException("No epoch, ISR path for topic %s partition %d is empty".format(topic, partition))
   }
 
   /**
    * Gets the in-sync replicas (ISR) for a specific topic and partition
    */
   def getInSyncReplicasForPartition(zkClient: ZkClient, topic: String, partition: Int): Seq[Int] = {
-    val leaderAndISR = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndISRPath(topic, partition))._1
-    if(leaderAndISR == null) Seq.empty[Int]
-    else {
-      SyncJSON.parseFull(leaderAndISR) match {
-        case Some(m) =>
-          val ISRString = m.asInstanceOf[Map[String, String]].get("ISR").get
-          Utils.getCSVList(ISRString).map(r => r.toInt)
-        case None => Seq.empty[Int]
-      }
+    val leaderAndIsrOpt = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndIsrPath(topic, partition))._1
+    leaderAndIsrOpt match {
+      case Some(leaderAndIsr) =>
+        SyncJSON.parseFull(leaderAndIsr) match {
+          case Some(m) =>
+            val ISRString = m.asInstanceOf[Map[String, String]].get("ISR").get
+            Utils.getCSVList(ISRString).map(r => r.toInt)
+          case None => Seq.empty[Int]
+        }
+      case None => Seq.empty[Int]
     }
   }
 
@@ -142,19 +145,18 @@ object ZkUtils extends Logging {
    * Gets the assigned replicas (AR) for a specific topic and partition
    */
   def getReplicasForPartition(zkClient: ZkClient, topic: String, partition: Int): Seq[Int] = {
-    val jsonPartitionMap = readDataMaybeNull(zkClient, getTopicPath(topic))._1
-    val assignedReplicas = if (jsonPartitionMap == null) {
-      Seq.empty[Int]
-    } else {
-      SyncJSON.parseFull(jsonPartitionMap) match {
-        case Some(m) => m.asInstanceOf[Map[String, List[String]]].get(partition.toString) match {
+    val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
+    jsonPartitionMapOpt match {
+      case Some(jsonPartitionMap) =>
+        SyncJSON.parseFull(jsonPartitionMap) match {
+          case Some(m) => m.asInstanceOf[Map[String, List[String]]].get(partition.toString) match {
+            case None => Seq.empty[Int]
+            case Some(seq) => seq.map(_.toInt)
+          }
           case None => Seq.empty[Int]
-          case Some(seq) => seq.map(_.toInt)
         }
-        case None => Seq.empty[Int]
-      }
+      case None => Seq.empty[Int]
     }
-    assignedReplicas
   }
 
   def isPartitionOnBroker(zkClient: ZkClient, topic: String, partition: Int, brokerId: Int): Boolean = {
@@ -347,17 +349,16 @@ object ZkUtils extends Logging {
     (dataStr, stat)
   }
 
-  def readDataMaybeNull(client: ZkClient, path: String): (String, Stat) = {
+  def readDataMaybeNull(client: ZkClient, path: String): (Option[String], Stat) = {
     val stat: Stat = new Stat()
-    var dataStr: String = null
-    try{
-      dataStr = client.readData(path, stat)
-      return (dataStr, stat)
-    } catch {
-      case e: ZkNoNodeException =>
-        return (null, stat)
-      case e2 => throw e2
-    }
+    val dataAndStat = try {
+                        (Some(client.readData(path, stat)), stat)
+                      } catch {
+                        case e: ZkNoNodeException =>
+                          (None, stat)
+                        case e2 => throw e2
+                      }
+    dataAndStat
   }
 
   def getChildren(client: ZkClient, path: String): Seq[String] = {
@@ -396,59 +397,66 @@ object ZkUtils extends Logging {
     cluster
   }
 
-  def getReplicaAssignmentForTopics(zkClient: ZkClient, topics: Iterator[String]): mutable.Map[(String, Int), Seq[Int]] = {
+  def getReplicaAssignmentForTopics(zkClient: ZkClient, topics: Iterator[String]):
+  mutable.Map[(String, Int), Seq[Int]] = {
     val ret = new mutable.HashMap[(String, Int), Seq[Int]]
-    topics.foreach{ topic =>
-      val jsonPartitionMap = readDataMaybeNull(zkClient, getTopicPath(topic))._1
-      if (jsonPartitionMap != null) {
-        SyncJSON.parseFull(jsonPartitionMap) match {
-          case Some(m) =>
-            val replicaMap = m.asInstanceOf[Map[String, Seq[String]]]
-            for((partition, replicas) <- replicaMap){
-              ret.put((topic, partition.toInt), replicas.map(_.toInt))
-              debug("Replicas assigned to topic [%s], partition [%s] are [%s]".format(topic, partition, replicas))
-            }
-          case None =>
-        }
-      }
-                  }
-    ret
-  }
-
-  def getPartitionLeaderAndISRForTopics(zkClient: ZkClient, topics: Iterator[String]): mutable.Map[(String, Int), LeaderAndISR] = {
-    val ret = new mutable.HashMap[(String, Int), LeaderAndISR]
-    val partitionsForTopics = getPartitionsForTopics(zkClient, topics)
-    for((topic, partitions) <- partitionsForTopics){
-      for(partition <- partitions){
-        val leaderAndISROpt = ZkUtils.getLeaderAndISRForPartition(zkClient, topic, partition.toInt)
-        if(leaderAndISROpt.isDefined)
-          ret.put((topic, partition.toInt), leaderAndISROpt.get)
+    topics.foreach { topic =>
+      val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
+      jsonPartitionMapOpt match {
+        case Some(jsonPartitionMap) =>
+          SyncJSON.parseFull(jsonPartitionMap) match {
+            case Some(m) =>
+              val replicaMap = m.asInstanceOf[Map[String, Seq[String]]]
+              for((partition, replicas) <- replicaMap){
+                ret.put((topic, partition.toInt), replicas.map(_.toInt))
+                debug("Replicas assigned to topic [%s], partition [%s] are [%s]".format(topic, partition, replicas))
+              }
+            case None =>
+          }
+        case None =>
       }
     }
     ret
   }
 
-  def getPartitionAssignmentForTopics(zkClient: ZkClient, topics: Iterator[String]): mutable.Map[String, collection.Map[Int, Seq[Int]]] = {
-    val ret = new mutable.HashMap[String, Map[Int, Seq[Int]]]()
-    topics.foreach{ topic =>
-      val jsonPartitionMap = readDataMaybeNull(zkClient, getTopicPath(topic))._1
-      val partitionMap = if (jsonPartitionMap == null) {
-        Map[Int, Seq[Int]]()
-      } else {
-        SyncJSON.parseFull(jsonPartitionMap) match {
-          case Some(m) =>
-            val m1 = m.asInstanceOf[Map[String, Seq[String]]]
-            m1.map(p => (p._1.toInt, p._2.map(_.toInt)))
-          case None => Map[Int, Seq[Int]]()
+  def getPartitionLeaderAndIsrForTopics(zkClient: ZkClient, topics: Iterator[String]):
+  mutable.Map[(String, Int), LeaderAndIsr] = {
+    val ret = new mutable.HashMap[(String, Int), LeaderAndIsr]
+    val partitionsForTopics = getPartitionsForTopics(zkClient, topics)
+    for((topic, partitions) <- partitionsForTopics) {
+      for(partition <- partitions) {
+        ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition.toInt) match {
+          case Some(leaderAndIsr) => ret.put((topic, partition.toInt), leaderAndIsr)
+          case None =>
         }
       }
-      debug("partition map for /brokers/topics/%s is %s".format(topic, partitionMap))
-      ret += (topic -> partitionMap)
-                  }
+    }
     ret
   }
 
-  def getReplicaAssignmentFromPartitionAssignment(topicPartitionAssignment: mutable.Map[String, collection.Map[Int, Seq[Int]]]): mutable.Map[(String, Int), Seq[Int]] = {
+  def getPartitionAssignmentForTopics(zkClient: ZkClient, topics: Iterator[String]):
+  mutable.Map[String, collection.Map[Int, Seq[Int]]] = {
+    val ret = new mutable.HashMap[String, Map[Int, Seq[Int]]]()
+    topics.foreach{ topic =>
+      val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
+      val partitionMap = jsonPartitionMapOpt match {
+        case Some(jsonPartitionMap) =>
+          SyncJSON.parseFull(jsonPartitionMap) match {
+            case Some(m) =>
+              val m1 = m.asInstanceOf[Map[String, Seq[String]]]
+              m1.map(p => (p._1.toInt, p._2.map(_.toInt)))
+            case None => Map[Int, Seq[Int]]()
+          }
+        case None => Map[Int, Seq[Int]]()
+      }
+      debug("Partition map for /brokers/topics/%s is %s".format(topic, partitionMap))
+      ret += (topic -> partitionMap)
+    }
+    ret
+  }
+
+  def getReplicaAssignmentFromPartitionAssignment(topicPartitionAssignment: mutable.Map[String, collection.Map[Int, Seq[Int]]]):
+  mutable.Map[(String, Int), Seq[Int]] = {
     val ret = new mutable.HashMap[(String, Int), Seq[Int]]
     for((topic, partitionAssignment) <- topicPartitionAssignment){
       for((partition, replicaAssignment) <- partitionAssignment){
@@ -468,7 +476,8 @@ object ZkUtils extends Logging {
     }
   }
 
-  def getPartitionsAssignedToBroker(zkClient: ZkClient, topics: Seq[String], brokerId: Int): Map[(String, Int), Seq[Int]] = {
+  def getPartitionsAssignedToBroker(zkClient: ZkClient, topics: Seq[String], brokerId: Int):
+  Map[(String, Int), Seq[Int]] = {
     val ret = new mutable.HashMap[(String, Int), Seq[Int]]
     val topicsAndPartitions = getPartitionAssignmentForTopics(zkClient, topics.iterator)
     topicsAndPartitions.map
@@ -499,7 +508,8 @@ object ZkUtils extends Logging {
   def getConsumerTopicMaps(zkClient: ZkClient, group: String): Map[String, TopicCount] = {
     val dirs = new ZKGroupDirs(group)
     val consumersInGroup = getConsumersInGroup(zkClient, group)
-    val topicCountMaps = consumersInGroup.map(consumerId => TopicCount.constructTopicCount(consumerId,ZkUtils.readData(zkClient, dirs.consumerRegistryDir + "/" + consumerId)._1, zkClient))
+    val topicCountMaps = consumersInGroup.map(consumerId => TopicCount.constructTopicCount(consumerId,
+      ZkUtils.readData(zkClient, dirs.consumerRegistryDir + "/" + consumerId)._1, zkClient))
     consumersInGroup.zip(topicCountMaps).toMap
   }
 
@@ -522,7 +532,19 @@ object ZkUtils extends Logging {
     consumersPerTopicMap
   }
 
-  def getBrokerInfoFromIds(zkClient: ZkClient, brokerIds: Seq[Int]): Seq[Broker] = brokerIds.map( bid => Broker.createBroker(bid, ZkUtils.readDataMaybeNull(zkClient, ZkUtils.BrokerIdsPath + "/" + bid)._1))
+  /**
+   * This API takes in a broker id, queries zookeeper for the broker metadata and returns the metadata for that broker
+   * or throws an exception if the broker dies before the query to zookeeper finishes
+   * @param brokerId The broker id
+   * @param zkClient The zookeeper client connection
+   * @returns An optional Broker object encapsulating the broker metadata
+   */
+  def getBrokerInfo(zkClient: ZkClient, brokerId: Int): Option[Broker] = {
+    ZkUtils.readDataMaybeNull(zkClient, ZkUtils.BrokerIdsPath + "/" + brokerId)._1 match {
+      case Some(brokerInfo) => Some(Broker.createBroker(brokerId, brokerInfo))
+      case None => None
+    }
+  }
 
   def getAllTopics(zkClient: ZkClient): Seq[String] = {
     val topics = ZkUtils.getChildrenParentMayNotExist(zkClient, BrokerTopicsPath)

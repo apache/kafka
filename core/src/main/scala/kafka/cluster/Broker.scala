@@ -19,7 +19,7 @@ package kafka.cluster
 
 import kafka.utils.Utils._
 import java.nio.ByteBuffer
-import kafka.common.BrokerNotExistException
+import kafka.common.BrokerNotAvailableException
 
 /**
  * A Kafka broker
@@ -28,7 +28,7 @@ private[kafka] object Broker {
 
   def createBroker(id: Int, brokerInfoString: String): Broker = {
     if(brokerInfoString == null)
-      throw new BrokerNotExistException("Broker id %s does not exist".format(id))
+      throw new BrokerNotAvailableException("Broker id %s does not exist".format(id))
     val brokerInfo = brokerInfoString.split(":")
     new Broker(id, brokerInfo(0), brokerInfo(1), brokerInfo(2).toInt)
   }

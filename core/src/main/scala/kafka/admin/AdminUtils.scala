@@ -24,7 +24,7 @@ import kafka.utils.{Logging, Utils, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import scala.collection.mutable
-import kafka.common.{LeaderNotAvailableException, ReplicaNotAvailableException, ErrorMapping}
+import kafka.common.{BrokerNotAvailableException, LeaderNotAvailableException, ReplicaNotAvailableException, ErrorMapping}
 
 object AdminUtils extends Logging {
   val rand = new Random
@@ -148,13 +148,11 @@ object AdminUtils extends Logging {
       optionalBrokerInfo match {
         case Some(brokerInfo) => brokerInfo // return broker info from the cache
         case None => // fetch it from zookeeper
-          try {
-            val brokerInfo = ZkUtils.getBrokerInfoFromIds(zkClient, List(id)).head
-            cachedBrokerInfo += (id -> brokerInfo)
-            brokerInfo
-          }catch {
-            case e => error("Failed to fetch broker info for broker id " + id)
-            throw e
+          ZkUtils.getBrokerInfo(zkClient, id) match {
+            case Some(brokerInfo) =>
+              cachedBrokerInfo += (id -> brokerInfo)
+              brokerInfo
+            case None => throw new BrokerNotAvailableException("Failed to fetch broker info for broker " + id)
           }
       }
     }

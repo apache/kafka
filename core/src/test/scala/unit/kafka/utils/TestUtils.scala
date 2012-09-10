@@ -33,9 +33,7 @@ import collection.mutable.ListBuffer
 import kafka.consumer.ConsumerConfig
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.TimeUnit
-import kafka.common.ErrorMapping
 import kafka.api._
-import collection.mutable.{Map, Set}
 import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
 
 
@@ -397,17 +395,17 @@ object TestUtils extends Logging {
         val partition = leaderForPartition._1
         val leader = leaderForPartition._2
         try{
-          val currentLeaderAndISROpt = ZkUtils.getLeaderAndISRForPartition(zkClient, topic, partition)
-          var newLeaderAndISR: LeaderAndISR = null
+          val currentLeaderAndISROpt = ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition)
+          var newLeaderAndISR: LeaderAndIsr = null
           if(currentLeaderAndISROpt == None)
-            newLeaderAndISR = new LeaderAndISR(leader, List(leader))
+            newLeaderAndISR = new LeaderAndIsr(leader, List(leader))
           else{
             newLeaderAndISR = currentLeaderAndISROpt.get
             newLeaderAndISR.leader = leader
             newLeaderAndISR.leaderEpoch += 1
             newLeaderAndISR.zkVersion += 1
           }
-          ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicPartitionLeaderAndISRPath( topic, partition), newLeaderAndISR.toString)
+          ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicPartitionLeaderAndIsrPath( topic, partition), newLeaderAndISR.toString)
         } catch {
           case oe => error("Error while electing leader for topic %s partition %d".format(topic, partition), oe)
         }
@@ -426,7 +424,7 @@ object TestUtils extends Logging {
 
     leaderLock.lock()
     try {
-      zkClient.subscribeDataChanges(ZkUtils.getTopicPartitionLeaderAndISRPath(topic, partition), new LeaderExistsOrChangedListener(topic, partition, leaderLock, leaderExistsOrChanged, oldLeaderOpt, zkClient))
+      zkClient.subscribeDataChanges(ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), new LeaderExistsOrChangedListener(topic, partition, leaderLock, leaderExistsOrChanged, oldLeaderOpt, zkClient))
       leaderExistsOrChanged.await(timeoutMs, TimeUnit.MILLISECONDS)
       // check if leader is elected
       val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)

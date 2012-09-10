@@ -26,7 +26,6 @@ import java.util.zip.CRC32
 import javax.management._
 import scala.collection._
 import scala.collection.mutable
-import kafka.message.{NoCompressionCodec, CompressionCodec}
 import org.I0Itec.zkclient.ZkClient
 import java.util.{Random, Properties}
 import joptsimple.{OptionSpec, OptionSet, OptionParser}

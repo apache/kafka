@@ -62,18 +62,17 @@ object UpdateOffsetsInZK {
           "getOffsetsBefore request")
       }
 
-      val brokerInfos = ZkUtils.getBrokerInfoFromIds(zkClient, List(broker))
-      if(brokerInfos.size == 0)
-        throw new KafkaException("Broker information for broker id %d does not exist in ZK".format(broker))
+      ZkUtils.getBrokerInfo(zkClient, broker) match {
+        case Some(brokerInfo) =>
+          val consumer = new SimpleConsumer(brokerInfo.host, brokerInfo.port, 10000, 100 * 1024)
+          val offsets = consumer.getOffsetsBefore(topic, partition, offsetOption, 1)
+          val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
 
-      val brokerInfo = brokerInfos.head
-      val consumer = new SimpleConsumer(brokerInfo.host, brokerInfo.port, 10000, 100 * 1024)
-      val offsets = consumer.getOffsetsBefore(topic, partition, offsetOption, 1)
-      val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
-
-      println("updating partition " + partition + " with new offset: " + offsets(0))
-      ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + partition, offsets(0).toString)
-      numParts += 1
+          println("updating partition " + partition + " with new offset: " + offsets(0))
+          ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + partition, offsets(0).toString)
+          numParts += 1
+        case None => throw new KafkaException("Broker information for broker id %d does not exist in ZK".format(broker))
+      }
     }
     println("updated the offset for " + numParts + " partitions")
   }

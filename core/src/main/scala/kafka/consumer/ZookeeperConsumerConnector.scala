@@ -292,21 +292,21 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         return partitionInfo.getConsumeOffset
     }
 
-    //otherwise, try to get it from zookeeper
+    // otherwise, try to get it from zookeeper
     try {
       val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
       val znode = topicDirs.consumerOffsetDir + "/" + partitionId
       val offsetString = readDataMaybeNull(zkClient, znode)._1
-      if (offsetString != null)
-        return offsetString.toLong
-      else
-        return -1
+      offsetString match {
+        case Some(offset) => offset.toLong
+        case None => -1L
+      }
     }
     catch {
       case e =>
         error("error in getConsumedOffset JMX ", e)
+        -2L
     }
-    return -2
   }
 
   def getLatestOffset(topic: String, brokerId: Int, partitionId: Int): Long =
@@ -649,18 +649,19 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val znode = topicDirs.consumerOffsetDir + "/" + partition
       val offsetString = readDataMaybeNull(zkClient, znode)._1
       // If first time starting a consumer, set the initial offset based on the config
-      var offset : Long = 0L
-      if (offsetString == null)
-        offset = config.autoOffsetReset match {
+      val offset =
+        offsetString match {
+          case Some(offsetStr) => offsetStr.toLong
+          case None =>
+            config.autoOffsetReset match {
               case OffsetRequest.SmallestTimeString =>
-                  earliestOrLatestOffset(topic, leader, partition, OffsetRequest.EarliestTime)
+                earliestOrLatestOffset(topic, leader, partition, OffsetRequest.EarliestTime)
               case OffsetRequest.LargestTimeString =>
-                  earliestOrLatestOffset(topic, leader, partition, OffsetRequest.LatestTime)
+                earliestOrLatestOffset(topic, leader, partition, OffsetRequest.LatestTime)
               case _ =>
-                  throw new InvalidConfigException("Wrong value in autoOffsetReset in ConsumerConfig")
+                throw new InvalidConfigException("Wrong value in autoOffsetReset in ConsumerConfig")
+            }
         }
-      else
-        offset = offsetString.toLong
       val queue = topicThreadIdAndQueues.get((topic, consumerThreadId))
       val consumedOffset = new AtomicLong(offset)
       val fetchedOffset = new AtomicLong(offset)

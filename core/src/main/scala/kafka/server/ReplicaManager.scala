@@ -22,7 +22,7 @@ import org.I0Itec.zkclient.ZkClient
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.utils._
 import kafka.log.LogManager
-import kafka.api.{LeaderAndISRRequest, LeaderAndISR}
+import kafka.api.{LeaderAndIsrRequest, LeaderAndIsr}
 import kafka.common.{UnknownTopicOrPartitionException, LeaderNotAvailableException, ErrorMapping}
 
 object ReplicaManager {
@@ -114,7 +114,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
     }
   }
 
-  def becomeLeaderOrFollower(leaderAndISRRequest: LeaderAndISRRequest): collection.Map[(String, Int), Short] = {
+  def becomeLeaderOrFollower(leaderAndISRRequest: LeaderAndIsrRequest): collection.Map[(String, Int), Short] = {
     info("Handling leader and isr request %s".format(leaderAndISRRequest))
     val responseMap = new collection.mutable.HashMap[(String, Int), Short]
 
@@ -141,7 +141,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
      *  If IsInit flag is on, this means that the controller wants to treat topics not in the request
      *  as deleted.
      */
-    if(leaderAndISRRequest.isInit == LeaderAndISRRequest.IsInit){
+    if(leaderAndISRRequest.isInit == LeaderAndIsrRequest.IsInit){
       startHighWaterMarksCheckPointThread
       val partitionsToRemove = allPartitions.filter(p => !leaderAndISRRequest.leaderAndISRInfos.contains(p._1)).map(entry => entry._1)
       info("Init flag is set in leaderAndISR request, partitions to remove: %s".format(partitionsToRemove))
@@ -151,7 +151,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
     responseMap
   }
 
-  private def makeLeader(topic: String, partitionId: Int, leaderAndISR: LeaderAndISR) = {
+  private def makeLeader(topic: String, partitionId: Int, leaderAndISR: LeaderAndIsr) = {
     info("Becoming Leader for topic [%s] partition [%d]".format(topic, partitionId))
     val partition = getOrCreatePartition(topic, partitionId)
     if (partition.makeLeaderOrFollower(topic, partitionId, leaderAndISR, true)) {
@@ -163,7 +163,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
     info("Completed the leader state transition for topic %s partition %d".format(topic, partitionId))
   }
 
-  private def makeFollower(topic: String, partitionId: Int, leaderAndISR: LeaderAndISR) {
+  private def makeFollower(topic: String, partitionId: Int, leaderAndISR: LeaderAndIsr) {
     val leaderBrokerId: Int = leaderAndISR.leader
     info("Starting the follower state transition to follow leader %d for topic %s partition %d"
                  .format(leaderBrokerId, topic, partitionId))

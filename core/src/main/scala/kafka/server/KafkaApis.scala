@@ -66,7 +66,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleLeaderAndISRRequest(request: RequestChannel.Request){
-    val leaderAndISRRequest = LeaderAndISRRequest.readFrom(request.request.buffer)
+    val leaderAndISRRequest = LeaderAndIsrRequest.readFrom(request.request.buffer)
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Handling leader and isr request " + leaderAndISRRequest)
     trace("Handling leader and isr request " + leaderAndISRRequest)

@@ -53,12 +53,12 @@ object RpcDataSerializationTestUtils{
   private val topicmetaData1 = new TopicMetadata(topic1, partitionMetaDataSeq)
   private val topicmetaData2 = new TopicMetadata(topic2, partitionMetaDataSeq)
 
-  def createTestLeaderAndISRRequest() : LeaderAndISRRequest = {
-    val leaderAndISR1 = new LeaderAndISR(leader1, 1, isr1, 1)
-    val leaderAndISR2 = new LeaderAndISR(leader2, 1, isr2, 2)
+  def createTestLeaderAndISRRequest() : LeaderAndIsrRequest = {
+    val leaderAndISR1 = new LeaderAndIsr(leader1, 1, isr1, 1)
+    val leaderAndISR2 = new LeaderAndIsr(leader2, 1, isr2, 2)
     val map = Map(((topic1, 0), leaderAndISR1),
                   ((topic2, 0), leaderAndISR2))
-    new LeaderAndISRRequest( LeaderAndISRRequest.NotInit, map)
+    new LeaderAndIsrRequest( LeaderAndIsrRequest.NotInit, map)
   }
 
   def createTestLeaderAndISRResponse() : LeaderAndISRResponse = {
@@ -129,7 +129,7 @@ class RpcDataSerializationTest extends JUnitSuite {
     var buffer: ByteBuffer = ByteBuffer.allocate(leaderAndISRRequest.sizeInBytes())
     leaderAndISRRequest.writeTo(buffer)
     buffer.rewind()
-    val deserializedLeaderAndISRRequest = LeaderAndISRRequest.readFrom(buffer)
+    val deserializedLeaderAndISRRequest = LeaderAndIsrRequest.readFrom(buffer)
     assertEquals("The original and deserialzed leaderAndISRRequest should be the same", leaderAndISRRequest,
                  deserializedLeaderAndISRRequest)
 
