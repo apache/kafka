@@ -78,6 +78,7 @@ class SimpleFetchTest extends JUnit3Suite {
     partition.getReplica(configs(1).brokerId).get.logEndOffset = leo - 5L
 
     EasyMock.reset(replicaManager)
+    EasyMock.expect(replicaManager.config).andReturn(configs.head)
     EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(topic, partitionId)).andReturn(partition.leaderReplicaIfLocal().get).anyTimes()
     EasyMock.replay(replicaManager)
 
@@ -151,6 +152,7 @@ class SimpleFetchTest extends JUnit3Suite {
     partition.getReplica(followerReplicaId).get.logEndOffset = followerLEO.asInstanceOf[Long]
 
     EasyMock.reset(replicaManager)
+    EasyMock.expect(replicaManager.config).andReturn(configs.head)
     EasyMock.expect(replicaManager.recordFollowerPosition(topic, partitionId, followerReplicaId, followerLEO))
     EasyMock.expect(replicaManager.getReplica(topic, partitionId, followerReplicaId)).andReturn(partition.inSyncReplicas.find(_.brokerId == configs(1).brokerId))
     EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(topic, partitionId)).andReturn(partition.leaderReplicaIfLocal().get).anyTimes()

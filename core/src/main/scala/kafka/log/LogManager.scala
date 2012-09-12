@@ -23,7 +23,7 @@ import scala.collection._
 import kafka.server.KafkaConfig
 import kafka.api.OffsetRequest
 import kafka.log.Log._
-import kafka.common.{KafkaException, InvalidTopicException, UnknownTopicOrPartitionException}
+import kafka.common.{KafkaException, UnknownTopicOrPartitionException}
 
 /**
  * The guy who creates and hands out logs
@@ -95,8 +95,6 @@ private[kafka] class LogManager(val config: KafkaConfig,
    * Create a log for the given topic and the given partition
    */
   private def createLog(topic: String, partition: Int): Log = {
-    if (topic.length <= 0)
-      throw new InvalidTopicException("Topic name can't be emtpy")
     if (partition < 0 || partition >= config.topicPartitionsMap.getOrElse(topic, numPartitions)) {
       val error = "Wrong partition %d, valid partitions (0, %d)."
               .format(partition, (config.topicPartitionsMap.getOrElse(topic, numPartitions) - 1))

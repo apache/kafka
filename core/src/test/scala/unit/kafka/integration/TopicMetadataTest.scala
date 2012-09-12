@@ -100,7 +100,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   private def mockLogManagerAndTestTopic(topic: String): Seq[TopicMetadata] = {
     // topic metadata request only requires 1 call from the replica manager
     val replicaManager = EasyMock.createMock(classOf[ReplicaManager])
-    EasyMock.expect(replicaManager.config).andReturn(configs.head)
+    EasyMock.expect(replicaManager.config).andReturn(configs.head).times(2)
     EasyMock.replay(replicaManager)
 
     // create a topic metadata request
