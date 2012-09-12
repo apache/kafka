@@ -128,9 +128,9 @@ class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long
  * An append-only log for storing messages. 
  */
 @threadsafe
-private[kafka] class Log( val dir: File, val maxSize: Long,
-                          val flushInterval: Int, val rollIntervalMs: Long, val needRecovery: Boolean,
-                          time: Time, brokerId: Int = 0) extends Logging {
+private[kafka] class Log( val dir: File, val maxLogFileSize: Long, val maxMessageSize: Int, val flushInterval: Int,
+                          val rollIntervalMs: Long, val needRecovery: Boolean, time: Time,
+                          brokerId: Int = 0) extends Logging {
   this.logIdent = "[Kafka Log on Broker " + brokerId + "], "
 
   import kafka.log.Log._
@@ -235,6 +235,7 @@ private[kafka] class Log( val dir: File, val maxSize: Long,
    */
   def append(messages: ByteBufferMessageSet): Unit = {
     // validate the messages
+    messages.verifyMessageSize(maxMessageSize)
     var numberOfMessages = 0
     for(messageAndOffset <- messages) {
       if(!messageAndOffset.message.isValid)
@@ -328,7 +329,7 @@ private[kafka] class Log( val dir: File, val maxSize: Long,
    * Roll the log over if necessary
    */
   private def maybeRoll(segment: LogSegment) {
-    if ((segment.messageSet.sizeInBytes > maxSize) ||
+    if ((segment.messageSet.sizeInBytes > maxLogFileSize) ||
        ((segment.firstAppendTime.isDefined) && (time.milliseconds - segment.firstAppendTime.get > rollIntervalMs)))
       roll()
   }

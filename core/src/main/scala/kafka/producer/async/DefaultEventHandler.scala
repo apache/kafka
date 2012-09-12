@@ -192,8 +192,12 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         val errors = new ListBuffer[(String, Int)]
         for( topic <- topicData; partition <- topic.partitionDataArray ) {
           msgIdx += 1
-          if(msgIdx > response.errors.size || response.errors(msgIdx) != ErrorMapping.NoError)
+          if (msgIdx >= response.errors.size || response.errors(msgIdx) != ErrorMapping.NoError) {
             errors.append((topic.topic, partition.partition))
+            if (msgIdx < response.errors.size)
+              warn("Received error " + ErrorMapping.exceptionFor(response.errors(msgIdx)) +
+                   "from broker %d on %s:%d".format(brokerId, topic.topic, partition.partition))
+          }
         }
         errors
       } catch {

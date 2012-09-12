@@ -127,13 +127,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val response = produceToLocalLog(produceRequest)
     debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
+    val partitionsInError = response.errors.count(_ != ErrorMapping.NoError)
     
     for (topicData <- produceRequest.data)
       maybeUnblockDelayedFetchRequests(topicData.topic, topicData.partitionDataArray)
     
-    if (produceRequest.requiredAcks == 0 ||
-        produceRequest.requiredAcks == 1 ||
-        produceRequest.data.size <= 0)
+    if (produceRequest.requiredAcks == 0 || produceRequest.requiredAcks == 1 ||
+        produceRequest.data.size <= 0 || partitionsInError == response.errors.size)
       requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
     else {
       // create a list of (topic, partition) pairs to use as keys for this delayed request

@@ -66,7 +66,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
         val topic = Utils.getTopicPartition(dir.getName)._1
         val rollIntervalMs = logRollMsMap.get(topic).getOrElse(this.logRollDefaultIntervalMs)
         val maxLogFileSize = logFileSizeMap.get(topic).getOrElse(config.logFileSize)
-        val log = new Log(dir, maxLogFileSize, flushInterval, rollIntervalMs, needRecovery, time, config.brokerId)
+        val log = new Log(dir, maxLogFileSize, config.maxMessageSize, flushInterval, rollIntervalMs, needRecovery, time, config.brokerId)
         val topicPartition = Utils.getTopicPartition(dir.getName)
         logs.putIfNotExists(topicPartition._1, new Pool[Int, Log]())
         val parts = logs.get(topicPartition._1)
@@ -108,7 +108,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
       d.mkdirs()
       val rollIntervalMs = logRollMsMap.get(topic).getOrElse(this.logRollDefaultIntervalMs)
       val maxLogFileSize = logFileSizeMap.get(topic).getOrElse(config.logFileSize)
-      new Log(d, maxLogFileSize, flushInterval, rollIntervalMs, false, time, config.brokerId)
+      new Log(d, maxLogFileSize, config.maxMessageSize, flushInterval, rollIntervalMs, false, time, config.brokerId)
     }
   }
 

@@ -19,6 +19,7 @@ package kafka.log
 
 import kafka.message._
 import kafka.utils.{SystemTime, TestUtils, Utils}
+import kafka.server.KafkaConfig
 
 object TestLogPerformance {
 
@@ -29,8 +30,10 @@ object TestLogPerformance {
     val messageSize = args(1).toInt
     val batchSize = args(2).toInt
     val compressionCodec = CompressionCodec.getCompressionCodec(args(3).toInt)
+    val props = TestUtils.createBrokerConfig(0, -1)
+    val config = new KafkaConfig(props)
     val dir = TestUtils.tempDir()
-    val log = new Log(dir, 50*1024*1024, 5000000, 24*7*60*60*1000L, false, SystemTime)
+    val log = new Log(dir, 50*1024*1024, config.maxMessageSize, 5000000, config.logRollHours*60*60*1000L, false, SystemTime)
     val bytes = new Array[Byte](messageSize)
     new java.util.Random().nextBytes(bytes)
     val message = new Message(bytes)

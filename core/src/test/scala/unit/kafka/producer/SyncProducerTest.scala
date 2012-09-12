@@ -93,7 +93,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   }
 
   @Test
-  def testSingleMessageSizeTooLarge() {
+  def testMessageSizeTooLarge() {
     val server = servers.head
     val props = new Properties()
     props.put("host", "localhost")
@@ -101,35 +101,25 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     props.put("buffer.size", "102400")
     props.put("connect.timeout.ms", "300")
     props.put("reconnect.interval", "500")
-    props.put("max.message.size", "100")
     val producer = new SyncProducer(new SyncProducerConfig(props))
-    val bytes = new Array[Byte](101)
-    try {
-      producer.send(TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(bytes))))
-      Assert.fail("Message was too large to send, SyncProducer should have thrown exception.")
-    } catch {
-      case e: MessageSizeTooLargeException => /* success */
-    }
-  }
+    CreateTopicCommand.createTopic(zkClient, "test", 1, 1)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0, 500)
 
-  @Test
-  def testCompressedMessageSizeTooLarge() {
-    val server = servers.head
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", server.socketServer.port.toString)
-    props.put("buffer.size", "102400")
-    props.put("connect.timeout.ms", "300")
-    props.put("reconnect.interval", "500")
-    props.put("max.message.size", "100")
-    val producer = new SyncProducer(new SyncProducerConfig(props))
-    val bytes = new Array[Byte](101)
-    try {
-      producer.send(TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec, messages = new Message(bytes))))
-      Assert.fail("Message was too large to send, SyncProducer should have thrown exception for DefaultCompressionCodec.")
-    } catch {
-      case e: MessageSizeTooLargeException => /* success */
-    }
+    val message1 = new Message(new Array[Byte](1000001))
+    val messageSet1 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message1)
+    val response1 = producer.send(TestUtils.produceRequest("test", 0, messageSet1))
+
+    Assert.assertEquals(1, response1.errors.length)
+    Assert.assertEquals(ErrorMapping.MessageSizeTooLargeCode, response1.errors(0))
+    Assert.assertEquals(-1L, response1.offsets(0))
+
+    val message2 = new Message(new Array[Byte](1000000))
+    val messageSet2 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message2)
+    val response2 = producer.send(TestUtils.produceRequest("test", 0, messageSet2))
+
+    Assert.assertEquals(1, response2.errors.length)
+    Assert.assertEquals(ErrorMapping.NoError, response2.errors(0))
+    Assert.assertEquals(messageSet2.sizeInBytes, response2.offsets(0))
   }
 
   @Test

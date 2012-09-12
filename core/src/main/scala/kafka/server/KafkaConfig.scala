@@ -51,6 +51,9 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   
   /* the maximum number of bytes in a socket request */
   val maxSocketRequestSize: Int = props.getIntInRange("max.socket.request.bytes", 100*1024*1024, (1, Int.MaxValue))
+
+  /* the maximum size of message that the server can receive */
+  val maxMessageSize = props.getIntInRange("max.message.size", 1000000, (0, Int.MaxValue))
   
   /* the number of network threads that the server uses for handling network requests */
   val numNetworkThreads = props.getIntInRange("network.threads", 3, (1, Int.MaxValue))

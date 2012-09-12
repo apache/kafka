@@ -101,13 +101,6 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
    * Send a message
    */
   def send(producerRequest: ProducerRequest): ProducerResponse = {
-    for( topicData <- producerRequest.data ) {
-      for( partitionData <- topicData.partitionDataArray ) {
-	      verifyMessageSize(partitionData.messages)
-        val setSize = partitionData.messages.sizeInBytes.asInstanceOf[Int]
-        trace("Got message set with " + setSize + " bytes to send")
-      }
-    }
     val response = doSend(producerRequest)
     ProducerResponse.readFrom(response.buffer)
   }
@@ -125,12 +118,6 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
       disconnect()
       shutdown = true
     }
-  }
-
-  private def verifyMessageSize(messages: MessageSet) {
-    for (messageAndOffset <- messages)
-      if (messageAndOffset.message.payloadSize > config.maxMessageSize)
-        throw new MessageSizeTooLargeException
   }
 
   private def reconnect() {
