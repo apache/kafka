@@ -33,7 +33,6 @@ import kafka.metrics.KafkaMetricsGroup
  * for example a key could be a (topic, partition) pair.
  */
 class DelayedRequest(val keys: Seq[Any], val request: RequestChannel.Request, delayMs: Long) extends DelayedItem[RequestChannel.Request](request, delayMs) {
-  val creationTimeNs = SystemTime.nanoseconds
   val satisfied = new AtomicBoolean(false)
 }
 
@@ -67,30 +66,11 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0) exten
   /* a list of requests watching each key */
   private val watchersForKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers))
 
-  private val numDelayedRequestsBeanName = "NumDelayedRequests"
-  private val timeToSatisfyHistogramBeanName = "TimeToSatisfyInNs"
-  private val satisfactionRateBeanName = "SatisfactionRate"
-  private val expirationRateBeanName = "ExpirationRate"
-
-  val satisfactionRateMeter = newMeter(
-      satisfactionRateBeanName,
-      "requests",
-      TimeUnit.SECONDS
-    )
-
-  val timeToSatisfyHistogram = newHistogram(timeToSatisfyHistogramBeanName, biased = true)
-
   newGauge(
-    numDelayedRequestsBeanName,
+    "NumDelayedRequests",
     new Gauge[Int] {
       def value() = expiredRequestReaper.unsatisfied.get()
     }
-  )
-
-  val expirationRateMeter = newMeter(
-    expirationRateBeanName,
-    "requests",
-    TimeUnit.SECONDS
   )
 
   /* background thread expiring requests that have been waiting too long */
@@ -196,10 +176,6 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0) exten
               iter.remove()
               val updated = curr.satisfied.compareAndSet(false, true)
               if(updated == true) {
-                val requestNs = SystemTime.nanoseconds - curr.creationTimeNs
-                satisfactionRateMeter.mark()
-                timeToSatisfyHistogram.update(requestNs)
-
                 response += curr
                 liveCount -= 1
                 expiredRequestReaper.satisfyRequest()
@@ -282,7 +258,6 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0) exten
         val curr = delayed.take()
         val updated = curr.satisfied.compareAndSet(false, true)
         if(updated) {
-          expirationRateMeter.mark()
           unsatisfied.getAndDecrement()
           for(key <- curr.keys)
             watchersFor(key).decLiveCount()

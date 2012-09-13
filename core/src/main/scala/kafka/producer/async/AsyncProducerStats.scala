@@ -17,22 +17,9 @@
 
 package kafka.producer.async
 
-import java.util.concurrent.atomic.AtomicInteger
-import kafka.utils.Utils
+import kafka.metrics.KafkaMetricsGroup
+import java.util.concurrent.TimeUnit
 
-class AsyncProducerStats extends AsyncProducerStatsMBean {
-  val droppedEvents = new AtomicInteger(0)
-
-  def getAsyncProducerDroppedEvents: Int = droppedEvents.get
-
-  def recordDroppedEvents = droppedEvents.getAndAdd(1)
-}
-
-object AsyncProducerStats {
-  private val stats = new AsyncProducerStats
-  val ProducerMBeanName = "kafka.producer.Producer:type=AsyncProducerStats"
-
-  Utils.registerMBean(stats, ProducerMBeanName)
-
-  def recordDroppedEvents = stats.recordDroppedEvents
+object AsyncProducerStats extends KafkaMetricsGroup {
+  val droppedMessageRate = newMeter("DroppedMessagesPerSec",  "drops", TimeUnit.SECONDS)
 }

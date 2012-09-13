@@ -468,6 +468,14 @@ object TestUtils extends Logging {
         }
     }
   }
+
+  def createRequestByteBuffer(request: RequestOrResponse): ByteBuffer = {
+    val byteBuffer = ByteBuffer.allocate(request.sizeInBytes + 2)
+    byteBuffer.putShort(request.requestId.get)
+    request.writeTo(byteBuffer)
+    byteBuffer.rewind()
+    byteBuffer
+  }
 }
 
 object TestZKUtils {

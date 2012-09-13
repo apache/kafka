@@ -28,8 +28,10 @@ import org.apache.zookeeper.Watcher.Event.KeeperState
 import collection.JavaConversions._
 import kafka.utils.{ShutdownableThread, ZkUtils, Logging}
 import java.lang.Object
-import java.util.concurrent.{LinkedBlockingQueue, BlockingQueue}
-import kafka.common.{KafkaException, PartitionOfflineException}
+import com.yammer.metrics.core.Gauge
+import java.util.concurrent.{TimeUnit, LinkedBlockingQueue, BlockingQueue}
+import kafka.common.{PartitionOfflineException, KafkaException}
+import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 
 
 class RequestSendThread(val controllerId: Int,
@@ -52,9 +54,9 @@ class RequestSendThread(val controllerId: Int,
         receive = channel.receive()
         var response: RequestOrResponse = null
         request.requestId.get match {
-          case RequestKeys.LeaderAndISRRequest =>
+          case RequestKeys.LeaderAndIsrKey =>
             response = LeaderAndISRResponse.readFrom(receive.buffer)
-          case RequestKeys.StopReplicaRequest =>
+          case RequestKeys.StopReplicaKey =>
             response = StopReplicaResponse.readFrom(receive.buffer)
         }
         trace("got a response %s".format(controllerId, response, toBrokerId))
@@ -144,7 +146,7 @@ case class ControllerBrokerStateInfo(channel: BlockingChannel,
                                      messageQueue: BlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)],
                                      requestSendThread: RequestSendThread)
 
-class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging {
+class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging with KafkaMetricsGroup{
   this.logIdent = "[Controller " + config.brokerId + "], "
   private var isRunning = true
   private val controllerLock = new Object
@@ -154,6 +156,13 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
   private var allTopics: Set[String] = null
   private var allPartitionReplicaAssignment: mutable.Map[(String, Int), Seq[Int]] = null
   private var allLeaders: mutable.Map[(String, Int), Int] = null
+
+  newGauge(
+    "ActiveControllerCount",
+    new Gauge[Int] {
+      def value() = if (isActive) 1 else 0
+    }
+  )
 
   // Return true if this controller succeeds in the controller leader election
   private def tryToBecomeController(): Boolean = {
@@ -369,6 +378,7 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
       }
       else{
         warn("during initializing leader of parition (%s, %d), assigned replicas are [%s], live brokers are [%s], no assigned replica is alive".format(topicPartition._1, topicPartition._2, replicaAssignment.mkString(","), liveBrokerIds))
+        ControllerStat.offlinePartitionRate.mark()
       }
     }
 
@@ -479,10 +489,13 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
           debug("No broker is ISR is alive, picking the leader from the alive assigned replicas: %s"
             .format(liveAssignedReplicasToThisPartition.mkString(",")))
           liveAssignedReplicasToThisPartition.isEmpty match {
-            case true => throw new PartitionOfflineException(("No replica for partition " +
-              "([%s, %d]) is alive. Live brokers are: [%s],".format(topic, partition, liveBrokerIds)) +
-              " Assigned replicas are: [%s]".format(assignedReplicas))
+            case true =>
+              ControllerStat.offlinePartitionRate.mark()
+              throw new PartitionOfflineException(("No replica for partition " +
+                "([%s, %d]) is alive. Live brokers are: [%s],".format(topic, partition, liveBrokerIds)) +
+                " Assigned replicas are: [%s]".format(assignedReplicas))
             case false =>
+              ControllerStat.uncleanLeaderElectionRate.mark()
               val newLeader = liveAssignedReplicasToThisPartition.head
               warn("No broker in ISR is alive, elected leader from the alive replicas is [%s], ".format(newLeader) +
                 "There's potential data loss")
@@ -509,18 +522,20 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
   class BrokerChangeListener() extends IZkChildListener with Logging {
     this.logIdent = "[Controller " + config.brokerId + "], "
     def handleChildChange(parentPath : String, currentBrokerList : java.util.List[String]) {
-      controllerLock synchronized {
-        val curBrokerIds = currentBrokerList.map(_.toInt).toSet
-        val newBrokerIds = curBrokerIds -- liveBrokerIds
-        val newBrokers = newBrokerIds.map(ZkUtils.getBrokerInfo(zkClient, _)).filter(_.isDefined).map(_.get)
-        val deletedBrokerIds = liveBrokerIds -- curBrokerIds
-        liveBrokers = curBrokerIds.map(ZkUtils.getBrokerInfo(zkClient, _)).filter(_.isDefined).map(_.get)
-        liveBrokerIds = liveBrokers.map(_.id)
-        info("Newly added brokers: %s, deleted brokers: %s, all brokers: %s"
-          .format(newBrokerIds.mkString(","), deletedBrokerIds.mkString(","), liveBrokerIds.mkString(",")))
-        newBrokers.foreach(controllerChannelManager.addBroker(_))
-        deletedBrokerIds.foreach(controllerChannelManager.removeBroker(_))
-        onBrokerChange(newBrokerIds)
+      ControllerStat.leaderElectionTimer.time {
+        controllerLock synchronized {
+          val curBrokerIds = currentBrokerList.map(_.toInt).toSet
+          val newBrokerIds = curBrokerIds -- liveBrokerIds
+          val newBrokers = newBrokerIds.map(ZkUtils.getBrokerInfo(zkClient, _)).filter(_.isDefined).map(_.get)
+          val deletedBrokerIds = liveBrokerIds -- curBrokerIds
+          liveBrokers = curBrokerIds.map(ZkUtils.getBrokerInfo(zkClient, _)).filter(_.isDefined).map(_.get)
+          liveBrokerIds = liveBrokers.map(_.id)
+          info("Newly added brokers: %s, deleted brokers: %s, all brokers: %s"
+            .format(newBrokerIds.mkString(","), deletedBrokerIds.mkString(","), liveBrokerIds.mkString(",")))
+          newBrokers.foreach(controllerChannelManager.addBroker(_))
+          deletedBrokerIds.foreach(controllerChannelManager.removeBroker(_))
+          onBrokerChange(newBrokerIds)
+        }
       }
     }
   }
@@ -591,4 +606,10 @@ class KafkaController(config : KafkaConfig, zkClient: ZkClient) extends Logging 
       }
     }
   }
+}
+
+object ControllerStat extends KafkaMetricsGroup {
+  val offlinePartitionRate = newMeter("OfflinePartitionsPerSec",  "partitions", TimeUnit.SECONDS)
+  val uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec",  "elections", TimeUnit.SECONDS)
+  val leaderElectionTimer = new KafkaTimer(newTimer("LeaderElectionRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
 }

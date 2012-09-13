@@ -21,15 +21,24 @@ import kafka.utils.{SystemTime, Logging}
 import java.util.concurrent.{TimeUnit, CountDownLatch, BlockingQueue}
 import collection.mutable.ListBuffer
 import kafka.producer.ProducerData
+import kafka.metrics.KafkaMetricsGroup
+import com.yammer.metrics.core.Gauge
 
 class ProducerSendThread[K,V](val threadName: String,
                               val queue: BlockingQueue[ProducerData[K,V]],
                               val handler: EventHandler[K,V],
                               val queueTime: Long,
-                              val batchSize: Int) extends Thread(threadName) with Logging {
+                              val batchSize: Int) extends Thread(threadName) with Logging with KafkaMetricsGroup {
 
   private val shutdownLatch = new CountDownLatch(1)
   private val shutdownCommand = new ProducerData[K,V](null, null.asInstanceOf[K], null.asInstanceOf[Seq[V]])
+
+  newGauge(
+    "ProducerQueueSize-" + getId,
+    new Gauge[Int] {
+      def value() = queue.size
+    }
+  )
 
   override def run {
 

@@ -24,13 +24,16 @@ import kafka.utils._
 import kafka.log.LogManager
 import kafka.api.{LeaderAndIsrRequest, LeaderAndIsr}
 import kafka.common.{UnknownTopicOrPartitionException, LeaderNotAvailableException, ErrorMapping}
+import kafka.metrics.KafkaMetricsGroup
+import com.yammer.metrics.core.Gauge
+import java.util.concurrent.TimeUnit
 
 object ReplicaManager {
   val UnknownLogEndOffset = -1L
 }
 
 class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient, kafkaScheduler: KafkaScheduler,
-                     val logManager: LogManager) extends Logging {
+                     val logManager: LogManager) extends Logging with KafkaMetricsGroup {
   private val allPartitions = new Pool[(String, Int), Partition]
   private var leaderPartitions = new mutable.HashSet[Partition]()
   private val leaderPartitionsLock = new Object
@@ -40,6 +43,26 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   val highWatermarkCheckpoint = new HighwaterMarkCheckpoint(config.logDir)
   info("Created highwatermark file %s".format(highWatermarkCheckpoint.name))
+
+  newGauge(
+    "LeaderCount",
+    new Gauge[Int] {
+      def value() = leaderPartitions.size
+    }
+  )
+  newGauge(
+    "UnderReplicatedPartitions",
+    new Gauge[Int] {
+      def value() = {
+        leaderPartitionsLock synchronized {
+          leaderPartitions.count(_.isUnderReplicated)
+        }
+      }
+    }
+  )
+  val isrExpandRate = newMeter("IsrExpandsPerSec",  "expands", TimeUnit.SECONDS)
+  val isrShrinkRate = newMeter("ISRShrinksPerSec",  "shrinks", TimeUnit.SECONDS)
+
 
   def startHighWaterMarksCheckPointThread() = {
     if(highWatermarkCheckPointThreadStarted.compareAndSet(false, true))

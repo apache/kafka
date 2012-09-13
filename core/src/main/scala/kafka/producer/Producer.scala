@@ -20,8 +20,9 @@ import async.{AsyncProducerStats, DefaultEventHandler, ProducerSendThread, Event
 import kafka.utils._
 import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
 import kafka.serializer.Encoder
-import java.util.concurrent.atomic.{AtomicLong, AtomicBoolean}
+import java.util.concurrent.atomic.AtomicBoolean
 import kafka.common.{QueueFullException, InvalidConfigException}
+import kafka.metrics.KafkaMetricsGroup
 
 class Producer[K,V](config: ProducerConfig,
                     private val eventHandler: EventHandler[K,V]) // for testing only
@@ -68,8 +69,10 @@ extends Logging {
   }
 
   private def recordStats(producerData: ProducerData[K,V]*) {
-    for (data <- producerData)
-      ProducerTopicStat.getProducerTopicStat(data.getTopic).recordMessagesPerTopic(data.getData.size)
+    for (data <- producerData) {
+      ProducerTopicStat.getProducerTopicStat(data.getTopic).messageRate.mark(data.getData.size)
+      ProducerTopicStat.getProducerAllTopicStat.messageRate.mark(data.getData.size)
+    }
   }
 
   private def asyncSend(producerData: ProducerData[K,V]*) {
@@ -93,7 +96,7 @@ extends Logging {
           }
       }
       if(!added) {
-        AsyncProducerStats.recordDroppedEvents
+        AsyncProducerStats.droppedMessageRate.mark()
         error("Event queue is full of unsent messages, could not send event: " + data.toString)
         throw new QueueFullException("Event queue is full of unsent messages, could not send event: " + data.toString)
       }else {
@@ -118,31 +121,27 @@ extends Logging {
   }
 }
 
-trait ProducerTopicStatMBean {
-  def getMessagesPerTopic: Long
-}
-
 @threadsafe
-class ProducerTopicStat extends ProducerTopicStatMBean {
-  private val numCumulatedMessagesPerTopic = new AtomicLong(0)
-
-  def getMessagesPerTopic: Long = numCumulatedMessagesPerTopic.get
-
-  def recordMessagesPerTopic(nMessages: Int) = numCumulatedMessagesPerTopic.getAndAdd(nMessages)
+class ProducerTopicStat(name: String) extends KafkaMetricsGroup {
+  val messageRate = newMeter(name + "MessagesPerSec",  "messages", TimeUnit.SECONDS)
+  val byteRate = newMeter(name + "BytesPerSec",  "bytes", TimeUnit.SECONDS)
 }
 
-object ProducerTopicStat extends Logging {
-  private val stats = new Pool[String, ProducerTopicStat]
+object ProducerTopicStat {
+  private val valueFactory = (k: String) => new ProducerTopicStat(k)
+  private val stats = new Pool[String, ProducerTopicStat](Some(valueFactory))
+  private val allTopicStat = new ProducerTopicStat("AllTopics")
+
+  def getProducerAllTopicStat(): ProducerTopicStat = allTopicStat
 
   def getProducerTopicStat(topic: String): ProducerTopicStat = {
-    var stat = stats.get(topic)
-    if (stat == null) {
-      stat = new ProducerTopicStat
-      if (stats.putIfNotExists(topic, stat) == null)
-        Utils.registerMBean(stat, "kafka.producer.Producer:type=kafka.ProducerTopicStat." + topic)
-      else
-        stat = stats.get(topic)
-    }
-    return stat
+    stats.getAndMaybePut(topic + "-")
   }
 }
+
+object ProducerStats extends KafkaMetricsGroup {
+  val serializationErrorRate = newMeter("SerializationErrorsPerSec",  "errors", TimeUnit.SECONDS)
+  val resendRate = newMeter( "ResendsPerSec",  "resends", TimeUnit.SECONDS)
+  val failedSendRate = newMeter("FailedSendsPerSec",  "failed sends", TimeUnit.SECONDS)
+}
+

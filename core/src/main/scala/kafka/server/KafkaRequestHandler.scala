@@ -19,7 +19,8 @@ package kafka.server
 
 import kafka.network._
 import kafka.utils._
-import java.util.concurrent.atomic.AtomicLong
+import kafka.metrics.KafkaMetricsGroup
+import java.util.concurrent.TimeUnit
 
 /**
  * A thread that answers kafka requests.
@@ -30,10 +31,11 @@ class KafkaRequestHandler(id: Int, brokerId: Int, val requestChannel: RequestCha
   def run() { 
     while(true) { 
       val req = requestChannel.receiveRequest()
-      if(req == RequestChannel.AllDone){
+      if(req eq RequestChannel.AllDone){
         trace("receives shut down command, shut down".format(brokerId, id))
         return
       }
+      req.dequeueTimeNs = SystemTime.nanoseconds
       debug("handles request " + req)
       apis.handle(req)
     }
@@ -63,62 +65,24 @@ class KafkaRequestHandlerPool(val brokerId: Int,
       thread.join
     info("shutted down completely")
   }
-  
 }
 
-trait BrokerTopicStatMBean {
-  def getMessagesIn: Long
-  def getBytesIn: Long
-  def getBytesOut: Long
-  def getFailedProduceRequest: Long
-  def getFailedFetchRequest: Long
-}
-
-@threadsafe
-class BrokerTopicStat extends BrokerTopicStatMBean {
-  private val numCumulatedMessagesIn = new AtomicLong(0)
-  private val numCumulatedBytesIn = new AtomicLong(0)
-  private val numCumulatedBytesOut = new AtomicLong(0)
-  private val numCumulatedFailedProduceRequests = new AtomicLong(0)
-  private val numCumulatedFailedFetchRequests = new AtomicLong(0)
-
-  def getMessagesIn: Long = numCumulatedMessagesIn.get
-
-  def recordMessagesIn(nMessages: Int) = numCumulatedMessagesIn.getAndAdd(nMessages)
-
-  def getBytesIn: Long = numCumulatedBytesIn.get
-
-  def recordBytesIn(nBytes: Long) = numCumulatedBytesIn.getAndAdd(nBytes)
-
-  def getBytesOut: Long = numCumulatedBytesOut.get
-
-  def recordBytesOut(nBytes: Long) = numCumulatedBytesOut.getAndAdd(nBytes)
-
-  def recordFailedProduceRequest = numCumulatedFailedProduceRequests.getAndIncrement
-
-  def getFailedProduceRequest = numCumulatedFailedProduceRequests.get()
-
-  def recordFailedFetchRequest = numCumulatedFailedFetchRequests.getAndIncrement
-
-  def getFailedFetchRequest = numCumulatedFailedFetchRequests.get()
+class BrokerTopicMetrics(name: String) extends KafkaMetricsGroup {
+  val messagesInRate = newMeter(name + "MessagesInPerSec",  "messages", TimeUnit.SECONDS)
+  val bytesInRate = newMeter(name + "BytesInPerSec",  "bytes", TimeUnit.SECONDS)
+  val bytesOutRate = newMeter(name + "BytesOutPerSec",  "bytes", TimeUnit.SECONDS)
+  val failedProduceRequestRate = newMeter(name + "FailedProduceRequestsPerSec",  "requests", TimeUnit.SECONDS)
+  val failedFetchRequestRate = newMeter(name + "FailedFetchRequestsPerSec",  "requests", TimeUnit.SECONDS)
 }
 
 object BrokerTopicStat extends Logging {
-  private val stats = new Pool[String, BrokerTopicStat]
-  private val allTopicStat = new BrokerTopicStat
-  Utils.registerMBean(allTopicStat, "kafka:type=kafka.BrokerAllTopicStat")
+  private val valueFactory = (k: String) => new BrokerTopicMetrics(k)
+  private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
+  private val allTopicStat = new BrokerTopicMetrics("AllTopics")
 
-  def getBrokerAllTopicStat(): BrokerTopicStat = allTopicStat
+  def getBrokerAllTopicStat(): BrokerTopicMetrics = allTopicStat
 
-  def getBrokerTopicStat(topic: String): BrokerTopicStat = {
-    var stat = stats.get(topic)
-    if (stat == null) {
-      stat = new BrokerTopicStat
-      if (stats.putIfNotExists(topic, stat) == null)
-        Utils.registerMBean(stat, "kafka:type=kafka.BrokerTopicStat." + topic)
-      else
-        stat = stats.get(topic)
-    }
-    return stat
+  def getBrokerTopicStat(topic: String): BrokerTopicMetrics = {
+    stats.getAndMaybePut(topic + "-")
   }
 }

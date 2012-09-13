@@ -45,7 +45,7 @@ case class OffsetRequest(versionId: Short = OffsetRequest.CurrentVersion,
                     topic: String,
                     partition: Int,
                     time: Long,
-                    maxNumOffsets: Int) extends RequestOrResponse(Some(RequestKeys.Offsets)) {
+                    maxNumOffsets: Int) extends RequestOrResponse(Some(RequestKeys.OffsetsKey)) {
   def this(topic: String, partition: Int, time: Long, maxNumOffsets: Int) =
     this(OffsetRequest.CurrentVersion, OffsetRequest.DefaultClientId, topic, partition, time, maxNumOffsets)
 

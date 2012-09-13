@@ -105,7 +105,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
                         replicaId: Int = FetchRequest.DefaultReplicaId,
                         maxWait: Int = FetchRequest.DefaultMaxWait,
                         minBytes: Int = FetchRequest.DefaultMinBytes,
-                        offsetInfo: Seq[OffsetDetail] ) extends RequestOrResponse(Some(RequestKeys.Fetch)) {
+                        offsetInfo: Seq[OffsetDetail] ) extends RequestOrResponse(Some(RequestKeys.FetchKey)) {
 
   // ensure that a topic "X" appears in at most one OffsetDetail
   def validate() {
@@ -144,6 +144,8 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
   def sizeInBytes: Int = 2 + 4 + (2 + clientId.length()) + 4 + 4 + 4 + offsetInfo.foldLeft(4)(_ + _.sizeInBytes())
 
   def numPartitions: Int = offsetInfo.foldLeft(0)(_ + _.offsets.size)
+
+  def isFromFollower(): Boolean = replicaId != FetchRequest.NonFollowerId
 }
 
 

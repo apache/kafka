@@ -18,11 +18,12 @@
 package kafka.producer
 
 import kafka.api._
-import kafka.message.MessageSet
 import kafka.network.{BlockingChannel, BoundedByteBufferSend, Receive}
 import kafka.utils._
 import java.util.Random
-import kafka.common.{ErrorMapping, MessageSizeTooLargeException}
+import kafka.common.ErrorMapping
+import java.util.concurrent.TimeUnit
+import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 
 object SyncProducer {
   val RequestKey: Short = 0
@@ -57,7 +58,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
       val buffer = new BoundedByteBufferSend(request).buffer
       trace("verifying sendbuffer of size " + buffer.limit)
       val requestTypeId = buffer.getShort()
-      if(requestTypeId == RequestKeys.Produce) {
+      if(requestTypeId == RequestKeys.ProduceKey) {
         val request = ProducerRequest.readFrom(buffer)
         trace(request.toString)
       }
@@ -92,7 +93,6 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
         sentOnConnection = 0
         lastConnectionTime = System.currentTimeMillis
       }
-      SyncProducerStats.recordProduceRequest(SystemTime.nanoseconds - startTime)
       response
     }
   }
@@ -101,7 +101,11 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
    * Send a message
    */
   def send(producerRequest: ProducerRequest): ProducerResponse = {
-    val response = doSend(producerRequest)
+    ProducerRequestStat.requestSizeHist.update(producerRequest.sizeInBytes)
+    var response: Receive = null
+    ProducerRequestStat.requestTimer.time {
+      response = doSend(producerRequest)
+    }
     ProducerResponse.readFrom(response.buffer)
   }
 
@@ -171,34 +175,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   }
 }
 
-trait SyncProducerStatsMBean {
-  def getProduceRequestsPerSecond: Double
-  def getAvgProduceRequestMs: Double
-  def getMaxProduceRequestMs: Double
-  def getNumProduceRequests: Long
-}
-
-@threadsafe
-class SyncProducerStats(monitoringDurationNs: Long) extends SyncProducerStatsMBean {
-  private val produceRequestStats = new SnapshotStats(monitoringDurationNs)
-
-  def recordProduceRequest(requestNs: Long) = produceRequestStats.recordRequestMetric(requestNs)
-
-  def getProduceRequestsPerSecond: Double = produceRequestStats.getRequestsPerSecond
-
-  def getAvgProduceRequestMs: Double = produceRequestStats.getAvgMetric / (1000.0 * 1000.0)
-
-  def getMaxProduceRequestMs: Double = produceRequestStats.getMaxMetric / (1000.0 * 1000.0)
-
-  def getNumProduceRequests: Long = produceRequestStats.getNumRequests
-}
-
-object SyncProducerStats extends Logging {
-  private val kafkaProducerstatsMBeanName = "kafka:type=kafka.KafkaProducerStats"
-  private val stats = new SyncProducerStats(1L * 1000 * 1000 * 1000)
-  swallow(Utils.registerMBean(stats, kafkaProducerstatsMBeanName))
-
-  def recordProduceRequest(requestMs: Long) = {
-    stats.recordProduceRequest(requestMs)
-  }
+object ProducerRequestStat extends KafkaMetricsGroup {
+  val requestTimer = new KafkaTimer(newTimer("ProduceRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+  val requestSizeHist = newHistogram("ProducerRequestSize")
 }

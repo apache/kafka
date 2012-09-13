@@ -16,16 +16,15 @@
  */
 package kafka.server
 
-import java.nio.ByteBuffer
-import kafka.api.{FetchRequest, FetchRequestBuilder}
 import kafka.cluster.{Partition, Replica}
 import kafka.log.Log
 import kafka.message.{ByteBufferMessageSet, Message}
-import kafka.network.{BoundedByteBufferReceive, RequestChannel}
+import kafka.network.RequestChannel
 import kafka.utils.{Time, TestUtils, MockTime}
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
 import org.scalatest.junit.JUnit3Suite
+import kafka.api.{FetchRequest, FetchRequestBuilder}
 
 class SimpleFetchTest extends JUnit3Suite {
 
@@ -92,16 +91,10 @@ class SimpleFetchTest extends JUnit3Suite {
       .replicaId(FetchRequest.NonFollowerId)
       .addFetch(topic, partitionId, 0, hw*2)
       .build()
-    val goodFetchBB = ByteBuffer.allocate(goodFetch.sizeInBytes)
-    goodFetch.writeTo(goodFetchBB)
-    goodFetchBB.rewind()
-
-    val receivedRequest = EasyMock.createMock(classOf[BoundedByteBufferReceive])
-    EasyMock.expect(receivedRequest.buffer).andReturn(goodFetchBB)
-    EasyMock.replay(receivedRequest)
+    val goodFetchBB = TestUtils.createRequestByteBuffer(goodFetch)
 
     // send the request
-    apis.handleFetchRequest(new RequestChannel.Request(processor=1, requestKey=5, request=receivedRequest, start=1))
+    apis.handleFetchRequest(new RequestChannel.Request(processor=1, requestKey=5, buffer=goodFetchBB, startTimeNs=1))
 
     // make sure the log only reads bytes between 0->HW (5)
     EasyMock.verify(log)
@@ -170,16 +163,10 @@ class SimpleFetchTest extends JUnit3Suite {
       .addFetch(topic, partitionId, followerLEO, Integer.MAX_VALUE)
       .build()
 
-    val fetchRequest = ByteBuffer.allocate(bigFetch.sizeInBytes)
-    bigFetch.writeTo(fetchRequest)
-    fetchRequest.rewind()
-
-    val receivedRequest = EasyMock.createMock(classOf[BoundedByteBufferReceive])
-    EasyMock.expect(receivedRequest.buffer).andReturn(fetchRequest)
-    EasyMock.replay(receivedRequest)
+    val fetchRequestBB = TestUtils.createRequestByteBuffer(bigFetch)
 
     // send the request
-    apis.handleFetchRequest(new RequestChannel.Request(processor=0, requestKey=5, request=receivedRequest, start=1))
+    apis.handleFetchRequest(new RequestChannel.Request(processor=0, requestKey=5, buffer=fetchRequestBB, startTimeNs=1))
 
     /**
      * Make sure the log satisfies the fetch from a follower by reading data beyond the HW, mainly all bytes after

@@ -24,7 +24,7 @@ import kafka.utils._
 
 object ProducerRequest {
   val CurrentVersion: Short = 0
-
+  
   def readFrom(buffer: ByteBuffer): ProducerRequest = {
     val versionId: Short = buffer.getShort
     val correlationId: Int = buffer.getInt
@@ -58,7 +58,7 @@ case class ProducerRequest( versionId: Short,
                             clientId: String,
                             requiredAcks: Short,
                             ackTimeoutMs: Int,
-                            data: Array[TopicData] ) extends RequestOrResponse(Some(RequestKeys.Produce)) {
+                            data: Array[TopicData] ) extends RequestOrResponse(Some(RequestKeys.ProduceKey)) {
 
   def this(correlationId: Int, clientId: String, requiredAcks: Short, ackTimeoutMs: Int, data: Array[TopicData]) =
     this(ProducerRequest.CurrentVersion, correlationId, clientId, requiredAcks, ackTimeoutMs, data)

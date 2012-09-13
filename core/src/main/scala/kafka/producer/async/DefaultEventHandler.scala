@@ -24,7 +24,7 @@ import kafka.serializer.Encoder
 import kafka.utils.{Utils, Logging}
 import scala.collection.Map
 import scala.collection.mutable.{ListBuffer, HashMap}
-import kafka.api.{TopicMetadata, ProducerRequest, TopicData, PartitionData}
+import kafka.api._
 
 
 class DefaultEventHandler[K,V](config: ProducerConfig,
@@ -33,6 +33,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
                                private val producerPool: ProducerPool,
                                private val topicPartitionInfos: HashMap[String, TopicMetadata] = new HashMap[String, TopicMetadata])
   extends EventHandler[K,V] with Logging {
+  val isSync = ("sync" == config.producerType)
 
   val brokerPartitionInfo = new BrokerPartitionInfo(config, producerPool, topicPartitionInfos)
 
@@ -41,6 +42,11 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   def handle(events: Seq[ProducerData[K,V]]) {
     lock synchronized {
       val serializedData = serialize(events)
+      serializedData.foreach{
+        pd => val dataSize = pd.data.foldLeft(0)(_ + _.payloadSize)
+              ProducerTopicStat.getProducerTopicStat(pd.topic).byteRate.mark(dataSize)
+              ProducerTopicStat.getProducerAllTopicStat.byteRate.mark(dataSize)
+      }
       var outstandingProduceRequests = serializedData
       var remainingRetries = config.producerRetries + 1
       while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {
@@ -51,9 +57,11 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           // get topics of the outstanding produce requests and refresh metadata for those
           Utils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.getTopic)))
           remainingRetries -= 1
+          ProducerStats.resendRate.mark()
         }
       }
       if(outstandingProduceRequests.size > 0) {
+        ProducerStats.failedSendRate.mark()
         error("Failed to send the following requests: " + outstandingProduceRequests)
         throw new FailedToSendMessageException("Failed to send messages after " + config.producerRetries + " tries.", null)
       }
@@ -90,7 +98,28 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   }
 
   def serialize(events: Seq[ProducerData[K,V]]): Seq[ProducerData[K,Message]] = {
-    events.map(e => new ProducerData[K,Message](e.getTopic, e.getKey, e.getData.map(m => encoder.toMessage(m))))
+    val serializedProducerData = new ListBuffer[ProducerData[K,Message]]
+    events.foreach {e =>
+      val serializedMessages = new ListBuffer[Message]
+      for (d <- e.getData) {
+        try {
+          serializedMessages += encoder.toMessage(d)
+        } catch {
+          case t =>
+            ProducerStats.serializationErrorRate.mark()
+            if (isSync)
+              throw t
+            else {
+              // currently, if in async mode, we just log the serialization error. We need to revisit
+              // this when doing kafka-496
+              error("Error serializing message " + t)
+            }
+        }
+      }
+      if (serializedMessages.size > 0)
+        serializedProducerData += new ProducerData[K,Message](e.getTopic, e.getKey, serializedMessages)
+    }
+    serializedProducerData
   }
 
   def partitionAndCollate(events: Seq[ProducerData[K,Message]]): Option[Map[Int, Map[(String, Int), Seq[ProducerData[K,Message]]]]] = {

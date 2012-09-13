@@ -21,7 +21,6 @@ import java.util.concurrent._
 import java.util.concurrent.atomic._
 import kafka.message._
 import kafka.utils.Logging
-import kafka.common.ErrorMapping
 
 private[consumer] class PartitionTopicInfo(val topic: String,
                                            val brokerId: Int,
@@ -59,8 +58,8 @@ private[consumer] class PartitionTopicInfo(val topic: String,
       chunkQueue.put(new FetchedDataChunk(messages, this, fetchedOffset.get))
       val newOffset = fetchedOffset.addAndGet(size)
       debug("updated fetch offset of ( %s ) to %d".format(this, newOffset))
-      ConsumerTopicStat.getConsumerTopicStat(topic).recordBytesPerTopic(size)
-      ConsumerTopicStat.getConsumerAllTopicStat().recordBytesPerTopic(size)
+      ConsumerTopicStat.getConsumerTopicStat(topic).byteRate.mark(size)
+      ConsumerTopicStat.getConsumerAllTopicStat().byteRate.mark(size)
     }
   }
 

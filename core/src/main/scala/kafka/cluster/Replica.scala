@@ -36,7 +36,7 @@ class Replica(val brokerId: Int,
   val topic = partition.topic
   val partitionId = partition.partitionId
 
-  def logEndOffset_=(newLogEndOffset: Long) = {
+  def logEndOffset_=(newLogEndOffset: Long) {
     if (!isLocal) {
       logEndOffsetValue.set(newLogEndOffset)
       logEndOffsetUpdateTimeMsValue.set(time.milliseconds)

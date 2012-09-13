@@ -29,8 +29,7 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.server.{ReplicaManager, KafkaApis, KafkaConfig}
 import kafka.common.ErrorMapping
-import kafka.api.{TopicMetadata, TopicMetaDataResponse, TopicMetadataRequest}
-
+import kafka.api.{RequestKeys, TopicMetadata, TopicMetaDataResponse, TopicMetadataRequest}
 
 class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
@@ -106,28 +105,19 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     // create a topic metadata request
     val topicMetadataRequest = new TopicMetadataRequest(List(topic))
 
-    val serializedMetadataRequest = ByteBuffer.allocate(topicMetadataRequest.sizeInBytes + 2)
-    topicMetadataRequest.writeTo(serializedMetadataRequest)
-    serializedMetadataRequest.rewind()
+    val serializedMetadataRequest = TestUtils.createRequestByteBuffer(topicMetadataRequest)
 
     // create the kafka request handler
     val requestChannel = new RequestChannel(2, 5)
     val apis = new KafkaApis(requestChannel, replicaManager, zkClient, 1)
 
-    // mock the receive API to return the request buffer as created above
-    val receivedRequest = EasyMock.createMock(classOf[BoundedByteBufferReceive])
-    EasyMock.expect(receivedRequest.buffer).andReturn(serializedMetadataRequest)
-    EasyMock.replay(receivedRequest)
-
     // call the API (to be tested) to get metadata
-    apis.handleTopicMetadataRequest(new RequestChannel.Request(processor=0, requestKey=5, request=receivedRequest, start=1))
-    val metadataResponse = requestChannel.receiveResponse(0).response.asInstanceOf[BoundedByteBufferSend].buffer
+    apis.handleTopicMetadataRequest(new RequestChannel.Request
+      (processor=0, requestKey=RequestKeys.MetadataKey, buffer=serializedMetadataRequest, startTimeNs=1))
+    val metadataResponse = requestChannel.receiveResponse(0).responseSend.asInstanceOf[BoundedByteBufferSend].buffer
     
     // check assertions
     val topicMetadata = TopicMetaDataResponse.readFrom(metadataResponse).topicsMetadata
-
-    // verify the expected calls to log manager occurred in the right order
-    EasyMock.verify(receivedRequest)
 
     topicMetadata
   }

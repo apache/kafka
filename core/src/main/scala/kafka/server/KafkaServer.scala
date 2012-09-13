@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.io.File
-import kafka.network.{SocketServerStats, SocketServer}
+import kafka.network.SocketServer
 import kafka.log.LogManager
 import kafka.utils._
 import java.util.concurrent._
@@ -34,7 +34,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   val CleanShutdownFile = ".kafka_cleanshutdown"
   private var isShuttingDown = new AtomicBoolean(false)
   private var shutdownLatch = new CountDownLatch(1)
-  private val statsMBeanName = "kafka:type=kafka.SocketServerStats"
   var socketServer: SocketServer = null
   var requestHandlerPool: KafkaRequestHandlerPool = null
   var logManager: LogManager = null
@@ -82,8 +81,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
     socketServer.startup
 
-    Utils.registerMBean(socketServer.stats, statsMBeanName)
-
     /* start client */
     kafkaZookeeper = new KafkaZooKeeper(config)
     // starting relevant replicas and leader election for partitions assigned to this broker
@@ -123,7 +120,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         replicaManager.shutdown()
       if (socketServer != null)
         socketServer.shutdown()
-      Utils.unregisterMBean(statsMBeanName)
       if(logManager != null)
         logManager.shutdown()
 
@@ -144,8 +140,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   def awaitShutdown(): Unit = shutdownLatch.await()
 
   def getLogManager(): LogManager = logManager
-
-  def getStats(): SocketServerStats = socketServer.stats
 }
 
 

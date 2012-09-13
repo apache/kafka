@@ -24,7 +24,7 @@ class ProducerRequest(val correlationId: Int,
                       val clientId: String,
                       val requiredAcks: Short,
                       val ackTimeoutMs: Int,
-                      val data: Array[TopicData]) extends RequestOrResponse(Some(RequestKeys.Produce)) {
+                      val data: Array[TopicData]) extends RequestOrResponse(Some(RequestKeys.ProduceKey)) {
 	
   val underlying = new kafka.api.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeoutMs, data)
 

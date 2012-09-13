@@ -20,7 +20,6 @@ package kafka.utils
 import java.io._
 import java.nio._
 import java.nio.channels._
-import java.util.concurrent.atomic._
 import java.lang.management._
 import java.util.zip.CRC32
 import javax.management._
@@ -684,100 +683,6 @@ object Utils extends Logging {
     val stream: Stream[T] =
       for (forever <- Stream.continually(1); t <- coll) yield t
     stream.iterator
-  }
-
-}
-
-class SnapshotStats(private val monitorDurationNs: Long = 600L * 1000L * 1000L * 1000L) {
-  private val time: Time = SystemTime
-
-  private val complete = new AtomicReference(new Stats())
-  private val current = new AtomicReference(new Stats())
-  private val total = new AtomicLong(0)
-  private val numCumulatedRequests = new AtomicLong(0)
-
-  def recordRequestMetric(requestNs: Long) {
-    val stats = current.get
-    stats.add(requestNs)
-    total.getAndAdd(requestNs)
-    numCumulatedRequests.getAndAdd(1)
-    val ageNs = time.nanoseconds - stats.start
-    // if the current stats are too old it is time to swap
-    if(ageNs >= monitorDurationNs) {
-      val swapped = current.compareAndSet(stats, new Stats())
-      if(swapped) {
-        complete.set(stats)
-        stats.end.set(time.nanoseconds)
-      }
-    }
-  }
-
-  def recordThroughputMetric(data: Long) {
-    val stats = current.get
-    stats.addData(data)
-    val ageNs = time.nanoseconds - stats.start
-    // if the current stats are too old it is time to swap
-    if(ageNs >= monitorDurationNs) {
-      val swapped = current.compareAndSet(stats, new Stats())
-      if(swapped) {
-        complete.set(stats)
-        stats.end.set(time.nanoseconds)
-      }
-    }
-  }
-
-  def getNumRequests(): Long = numCumulatedRequests.get
-
-  def getRequestsPerSecond: Double = {
-    val stats = complete.get
-    stats.numRequests / stats.durationSeconds
-  }
-
-  def getThroughput: Double = {
-    val stats = complete.get
-    stats.totalData / stats.durationSeconds
-  }
-
-  def getAvgMetric: Double = {
-    val stats = complete.get
-    if (stats.numRequests == 0) {
-      0
-    }
-    else {
-      stats.totalRequestMetric / stats.numRequests
-    }
-  }
-
-  def getTotalMetric: Long = total.get
-
-  def getMaxMetric: Double = complete.get.maxRequestMetric
-
-  class Stats {
-    val start = time.nanoseconds
-    var end = new AtomicLong(-1)
-    var numRequests = 0
-    var totalRequestMetric: Long = 0L
-    var maxRequestMetric: Long = 0L
-    var totalData: Long = 0L
-    private val lock = new Object()
-
-    def addData(data: Long) {
-      lock synchronized {
-        totalData += data
-      }
-    }
-
-    def add(requestNs: Long) {
-      lock synchronized {
-        numRequests +=1
-        totalRequestMetric += requestNs
-        maxRequestMetric = scala.math.max(maxRequestMetric, requestNs)
-      }
-    }
-
-    def durationSeconds: Double = (end.get - start) / (1000.0 * 1000.0 * 1000.0)
-
-    def durationMs: Double = (end.get - start) / (1000.0 * 1000.0)
   }
 }
 

@@ -78,7 +78,7 @@ case class TopicMetadataRequest(val versionId: Short,
                                 val topics: Seq[String],
                                 val detailedMetadata: DetailedMetadataRequest = NoSegmentMetadata,
                                 val timestamp: Option[Long] = None, val count: Option[Int] = None)
- extends RequestOrResponse(Some(RequestKeys.TopicMetadata)){
+ extends RequestOrResponse(Some(RequestKeys.MetadataKey)){
 
 def this(topics: Seq[String]) =
   this(TopicMetadataRequest.CurrentVersion, TopicMetadataRequest.DefaultClientId, topics, NoSegmentMetadata, None, None)

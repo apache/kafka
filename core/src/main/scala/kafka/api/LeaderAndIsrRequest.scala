@@ -94,7 +94,7 @@ case class LeaderAndIsrRequest (versionId: Short,
                                 isInit: Boolean,
                                 ackTimeoutMs: Int,
                                 leaderAndISRInfos: Map[(String, Int), LeaderAndIsr])
-        extends RequestOrResponse(Some(RequestKeys.LeaderAndISRRequest)) {
+        extends RequestOrResponse(Some(RequestKeys.LeaderAndIsrKey)) {
   def this(isInit: Boolean, leaderAndISRInfos: Map[(String, Int), LeaderAndIsr]) = {
     this(LeaderAndIsrRequest.CurrentVersion, LeaderAndIsrRequest.DefaultClientId, isInit, LeaderAndIsrRequest.DefaultAckTimeout, leaderAndISRInfos)
   }

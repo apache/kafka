@@ -18,7 +18,7 @@
 package kafka.consumer
 
 import scala.collection._
-import kafka.utils.{Utils, Logging}
+import kafka.utils.Logging
 import kafka.serializer.{DefaultDecoder, Decoder}
 
 /**
@@ -64,8 +64,6 @@ trait ConsumerConnector {
 }
 
 object Consumer extends Logging {
-  private val consumerStatsMBeanName = "kafka:type=kafka.ConsumerStats"
-
   /**
    *  Create a ConsumerConnector
    *
@@ -74,7 +72,6 @@ object Consumer extends Logging {
    */
   def create(config: ConsumerConfig): ConsumerConnector = {
     val consumerConnect = new ZookeeperConsumerConnector(config)
-    Utils.registerMBean(consumerConnect, consumerStatsMBeanName)
     consumerConnect
   }
 
@@ -86,7 +83,6 @@ object Consumer extends Logging {
    */
   def createJavaConsumerConnector(config: ConsumerConfig): kafka.javaapi.consumer.ConsumerConnector = {
     val consumerConnect = new kafka.javaapi.consumer.ZookeeperConsumerConnector(config)
-    Utils.registerMBean(consumerConnect.underlying, consumerStatsMBeanName)
     consumerConnect
   }
 }

@@ -23,7 +23,11 @@ import kafka.common.ErrorMapping
 import collection.mutable
 import kafka.message.ByteBufferMessageSet
 import kafka.api.{FetchResponse, PartitionData, FetchRequestBuilder}
-import kafka.utils.ShutdownableThread
+import kafka.metrics.KafkaMetricsGroup
+import com.yammer.metrics.core.Gauge
+import java.util.concurrent.atomic.AtomicLong
+import kafka.utils.{Pool, ShutdownableThread}
+import java.util.concurrent.TimeUnit
 
 
 /**
@@ -35,6 +39,8 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
   private val fetchMap = new mutable.HashMap[Tuple2[String,Int], Long] // a (topic, partitionId) -> offset map
   private val fetchMapLock = new Object
   val simpleConsumer = new SimpleConsumer(sourceBroker.host, sourceBroker.port, socketTimeout, socketBufferSize)
+  val fetcherMetrics = FetcherStat.getFetcherStat(name + "-" + sourceBroker.id)
+  
   // callbacks to be defined in subclass
 
   // process fetched data
@@ -79,6 +85,7 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
           }
         }
     }
+    fetcherMetrics.requestRate.mark()
 
     if (response != null) {
       // process fetched data
@@ -93,8 +100,11 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
               partitionData.error match {
                 case ErrorMapping.NoError =>
                   processPartitionData(topic, currentOffset.get, partitionData)
-                  val newOffset = currentOffset.get + partitionData.messages.asInstanceOf[ByteBufferMessageSet].validBytes
+                  val validBytes = partitionData.messages.asInstanceOf[ByteBufferMessageSet].validBytes
+                  val newOffset = currentOffset.get + validBytes
                   fetchMap.put(key, newOffset)
+                  FetcherLagMetrics.getFetcherLagMetrics(topic, partitionId).lag = partitionData.hw - newOffset
+                  fetcherMetrics.byteRate.mark(validBytes)
                 case ErrorMapping.OffsetOutOfRangeCode =>
                   val newOffset = handleOffsetOutOfRange(topic, partitionId)
                   fetchMap.put(key, newOffset)
@@ -139,5 +149,44 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
     fetchMapLock synchronized {
       fetchMap.size
     }
+  }
+}
+
+class FetcherLagMetrics(name: (String, Int)) extends KafkaMetricsGroup {
+  private[this] var lagVal = new AtomicLong(-1L)
+  newGauge(
+    name._1 + "-" + name._2 + "-ConsumerLag",
+    new Gauge[Long] {
+      def value() = lagVal.get
+    }
+  )
+
+  def lag_=(newLag: Long) {
+    lagVal.set(newLag)
+  }
+
+  def lag = lagVal.get
+}
+
+object FetcherLagMetrics {
+  private val valueFactory = (k: (String, Int)) => new FetcherLagMetrics(k)
+  private val stats = new Pool[(String, Int), FetcherLagMetrics](Some(valueFactory))
+
+  def getFetcherLagMetrics(topic: String, partitionId: Int): FetcherLagMetrics = {
+    stats.getAndMaybePut( (topic, partitionId) )
+  }
+}
+
+class FetcherStat(name: String) extends KafkaMetricsGroup {
+  val requestRate = newMeter(name + "RequestsPerSec",  "requests", TimeUnit.SECONDS)
+  val byteRate = newMeter(name + "BytesPerSec",  "bytes", TimeUnit.SECONDS)
+}
+
+object FetcherStat {
+  private val valueFactory = (k: String) => new FetcherStat(k)
+  private val stats = new Pool[String, FetcherStat](Some(valueFactory))
+
+  def getFetcherStat(name: String): FetcherStat = {
+    stats.getAndMaybePut(name)
   }
 }

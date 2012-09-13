@@ -41,7 +41,6 @@ class SocketServer(val brokerId: Int,
   private val time = SystemTime
   private val processors = new Array[Processor](numProcessorThreads)
   private var acceptor: Acceptor = new Acceptor(port, processors)
-  val stats: SocketServerStats = new SocketServerStats(1000L * 1000L * 1000L * monitoringPeriodSecs)
   val requestChannel = new RequestChannel(numProcessorThreads, maxQueuedRequests)
 
   /**
@@ -49,7 +48,7 @@ class SocketServer(val brokerId: Int,
    */
   def startup() {
     for(i <- 0 until numProcessorThreads) {
-      processors(i) = new Processor(i, time, maxRequestSize, requestChannel, stats)
+      processors(i) = new Processor(i, time, maxRequestSize, requestChannel)
       Utils.newThread("kafka-processor-%d-%d".format(port, i), processors(i), false).start()
     }
     // register the processor threads for notification of responses
@@ -187,8 +186,7 @@ private[kafka] class Acceptor(val port: Int, private val processors: Array[Proce
 private[kafka] class Processor(val id: Int,
                                val time: Time, 
                                val maxRequestSize: Int,
-                               val requestChannel: RequestChannel,
-                               val stats: SocketServerStats) extends AbstractServerThread {
+                               val requestChannel: RequestChannel) extends AbstractServerThread {
   
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]();
 
@@ -240,10 +238,10 @@ private[kafka] class Processor(val id: Int,
     var curr = requestChannel.receiveResponse(id)
     while(curr != null) {
       trace("Socket server received response to send, registering for write: " + curr)
-      val key = curr.requestKey.asInstanceOf[SelectionKey]
+      val key = curr.request.requestKey.asInstanceOf[SelectionKey]
       try {
         key.interestOps(SelectionKey.OP_WRITE)
-        key.attach(curr.response)
+        key.attach(curr)
       } catch {
         case e: CancelledKeyException => {
           debug("Ignoring response for closed socket.")
@@ -288,18 +286,17 @@ private[kafka] class Processor(val id: Int,
    */
   def read(key: SelectionKey) {
     val socketChannel = channelFor(key)
-    var request = key.attachment.asInstanceOf[Receive]
+    var receive = key.attachment.asInstanceOf[Receive]
     if(key.attachment == null) {
-      request = new BoundedByteBufferReceive(maxRequestSize)
-      key.attach(request)
+      receive = new BoundedByteBufferReceive(maxRequestSize)
+      key.attach(receive)
     }
-    val read = request.readFrom(socketChannel)
-    stats.recordBytesRead(read)
+    val read = receive.readFrom(socketChannel)
     trace(read + " bytes read from " + socketChannel.socket.getRemoteSocketAddress())
     if(read < 0) {
       close(key)
-    } else if(request.complete) {
-      val req = RequestChannel.Request(processor = id, requestKey = key, request = request, start = time.nanoseconds)
+    } else if(receive.complete) {
+      val req = RequestChannel.Request(processor = id, requestKey = key, buffer = receive.buffer, startTimeNs = time.nanoseconds)
       requestChannel.sendRequest(req)
       trace("Recieved request, sending for processing by handler: " + req)
       key.attach(null)
@@ -315,13 +312,14 @@ private[kafka] class Processor(val id: Int,
    */
   def write(key: SelectionKey) {
     val socketChannel = channelFor(key)
-    var response = key.attachment().asInstanceOf[Send]
-    if(response == null)
+    val response = key.attachment().asInstanceOf[RequestChannel.Response]
+    val responseSend = response.responseSend
+    if(responseSend == null)
       throw new IllegalStateException("Registered for write interest but no response attached to key.")
-    val written = response.writeTo(socketChannel)
-    stats.recordBytesWritten(written)
+    val written = responseSend.writeTo(socketChannel)
     trace(written + " bytes written to " + socketChannel.socket.getRemoteSocketAddress())
-    if(response.complete) {
+    if(responseSend.complete) {
+      response.request.updateRequestMetrics()
       key.attach(null)
       key.interestOps(SelectionKey.OP_READ)
     } else {

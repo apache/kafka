@@ -45,7 +45,7 @@ case class StopReplicaRequest(versionId: Short,
                               clientId: String,
                               ackTimeoutMs: Int,
                               stopReplicaSet: Set[(String, Int)])
-        extends RequestOrResponse(Some(RequestKeys.StopReplicaRequest)) {
+        extends RequestOrResponse(Some(RequestKeys.StopReplicaKey)) {
   def this(stopReplicaSet: Set[(String, Int)]) = {
     this(StopReplicaRequest.CurrentVersion, StopReplicaRequest.DefaultClientId, StopReplicaRequest.DefaultAckTimeout, stopReplicaSet)
   }

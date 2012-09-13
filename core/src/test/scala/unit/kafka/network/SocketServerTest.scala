@@ -24,6 +24,9 @@ import org.scalatest.junit.JUnitSuite
 import kafka.utils.TestUtils
 import java.util.Random
 import junit.framework.Assert._
+import kafka.producer.SyncProducerConfig
+import kafka.api.{TopicData, ProducerRequest}
+import java.nio.ByteBuffer
 
 class SocketServerTest extends JUnitSuite {
 
@@ -54,9 +57,9 @@ class SocketServerTest extends JUnitSuite {
   /* A simple request handler that just echos back the response */
   def processRequest(channel: RequestChannel) {
     val request = channel.receiveRequest
-    val id = request.request.buffer.getShort
-    val send = new BoundedByteBufferSend(request.request.buffer.slice)
-    channel.sendResponse(new RequestChannel.Response(request.processor, request.requestKey, send, request.start, 15))
+    val id = request.buffer.getShort
+    val send = new BoundedByteBufferSend(request.buffer.slice)
+    channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
   }
 
   def connect() = new Socket("localhost", server.port)
@@ -69,10 +72,21 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def simpleRequest() {
     val socket = connect()
-    sendRequest(socket, 0, "hello".getBytes)
+    val correlationId = SyncProducerConfig.DefaultCorrelationId
+    val clientId = SyncProducerConfig.DefaultClientId
+    val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
+    val ack = SyncProducerConfig.DefaultRequiredAcks
+    val emptyRequest = new ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, Array[TopicData]())
+
+    val byteBuffer = ByteBuffer.allocate(emptyRequest.sizeInBytes())
+    emptyRequest.writeTo(byteBuffer)
+    byteBuffer.rewind()
+    val serializedBytes = new Array[Byte](byteBuffer.remaining)
+    byteBuffer.get(serializedBytes)
+
+    sendRequest(socket, 0, serializedBytes)
     processRequest(server.requestChannel)
-    val response = new String(receiveResponse(socket))
-    assertEquals("hello", response)
+    assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
   }
 
   @Test(expected=classOf[IOException])

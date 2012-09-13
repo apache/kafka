@@ -21,12 +21,14 @@ import java.util.ArrayList
 import java.util.concurrent._
 import collection.JavaConversions
 import kafka.common.KafkaException
+import java.lang.Object
 
 
 class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] {
 
   private val pool = new ConcurrentHashMap[K, V]
-  
+  private val createLock = new Object
+
   def this(m: collection.Map[K, V]) {
     this()
     m.foreach(kv => pool.put(kv._1, kv._2))
@@ -52,8 +54,12 @@ class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] 
       throw new KafkaException("Empty value factory in pool.")
     val curr = pool.get(key)
     if (curr == null) {
-      pool.putIfAbsent(key, valueFactory.get(key))
-      pool.get(key)
+      createLock synchronized {
+        val curr = pool.get(key)
+        if (curr == null)
+          pool.put(key, valueFactory.get(key))
+        pool.get(key)
+      }
     }
     else
       curr

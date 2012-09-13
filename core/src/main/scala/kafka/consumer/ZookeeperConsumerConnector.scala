@@ -32,6 +32,8 @@ import java.util.UUID
 import kafka.serializer.Decoder
 import kafka.utils.ZkUtils._
 import kafka.common.{KafkaException, NoBrokersForPartitionException, ConsumerRebalanceFailedException, InvalidConfigException}
+import com.yammer.metrics.core.Gauge
+import kafka.metrics.KafkaMetricsGroup
 
 
 /**
@@ -73,21 +75,9 @@ private[kafka] object ZookeeperConsumerConnector {
   val shutdownCommand: FetchedDataChunk = new FetchedDataChunk(null, null, -1L)
 }
 
-/**
- *  JMX interface for monitoring consumer
- */
-trait ZookeeperConsumerConnectorMBean {
-  def getPartOwnerStats: String
-  def getConsumerGroup: String
-  def getOffsetLag(topic: String, brokerId: Int, partitionId: Int): Long
-  def getConsumedOffset(topic: String, brokerId: Int, partitionId: Int): Long
-  def getLatestOffset(topic: String, brokerId: Int, partitionId: Int): Long
-}
-
 private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                                 val enableFetcher: Boolean) // for testing only
-        extends ConsumerConnector with ZookeeperConsumerConnectorMBean
-        with Logging {
+        extends ConsumerConnector with Logging with KafkaMetricsGroup {
   private val isShuttingDown = new AtomicBoolean(false)
   private val rebalanceLock = new Object
   private var fetcher: Option[ConsumerFetcherManager] = None
@@ -259,58 +249,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       }
     }
   }
-
-  // for JMX
-  def getPartOwnerStats(): String = {
-    val builder = new StringBuilder
-    for ((topic, infos) <- topicRegistry) {
-      builder.append("\n" + topic + ": [")
-      val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
-      for(partition <- infos.values) {
-        builder.append("\n    {")
-        builder.append{partition}
-        builder.append(",fetch offset:" + partition.getFetchOffset)
-        builder.append(",consumer offset:" + partition.getConsumeOffset)
-        builder.append("}")
-      }
-      builder.append("\n        ]")
-    }
-    builder.toString
-  }
-
-  // for JMX
-  def getConsumerGroup(): String = config.groupId
-
-  def getOffsetLag(topic: String, brokerId: Int, partitionId: Int): Long =
-    getLatestOffset(topic, brokerId, partitionId) - getConsumedOffset(topic, brokerId, partitionId)
-
-  def getConsumedOffset(topic: String, brokerId: Int, partitionId: Int): Long = {
-    val partitionInfos = topicRegistry.get(topic)
-    if (partitionInfos != null) {
-      val partitionInfo = partitionInfos.get(partitionId)
-      if (partitionInfo != null)
-        return partitionInfo.getConsumeOffset
-    }
-
-    // otherwise, try to get it from zookeeper
-    try {
-      val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
-      val znode = topicDirs.consumerOffsetDir + "/" + partitionId
-      val offsetString = readDataMaybeNull(zkClient, znode)._1
-      offsetString match {
-        case Some(offset) => offset.toLong
-        case None => -1L
-      }
-    }
-    catch {
-      case e =>
-        error("error in getConsumedOffset JMX ", e)
-        -2L
-    }
-  }
-
-  def getLatestOffset(topic: String, brokerId: Int, partitionId: Int): Long =
-    earliestOrLatestOffset(topic, brokerId, partitionId, OffsetRequest.LatestTime)
 
   private def earliestOrLatestOffset(topic: String, brokerId: Int, partitionId: Int, earliestOrLatest: Long): Long = {
     var simpleConsumer: SimpleConsumer = null
@@ -728,6 +666,12 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val topicThreadId = e._1
       val q = e._2._1
       topicThreadIdAndQueues.put(topicThreadId, q)
+      newGauge(
+        config.groupId + "-" + topicThreadId._1 + "-" + topicThreadId._2 + "-FetchQueueSize",
+        new Gauge[Int] {
+          def value() = q.size
+        }
+      )
     })
 
     val groupedByTopic = threadQueueStreamPairs.groupBy(_._1._1)

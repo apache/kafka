@@ -24,6 +24,8 @@ import java.util.concurrent.atomic._
 
 import kafka.utils._
 import kafka.common.KafkaException
+import java.util.concurrent.TimeUnit
+import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 
 /**
  * An on-disk message set. The set can be opened either mutably or immutably. Mutation attempts
@@ -157,10 +159,9 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
    */
   def flush() = {
     checkMutable()
-    val startTime = SystemTime.milliseconds
-    channel.force(true)
-    val elapsedTime = SystemTime.milliseconds - startTime
-    LogFlushStats.recordFlushRequest(elapsedTime)
+    LogFlushStats.logFlushTimer.time {
+      channel.force(true)
+    }
   }
   
   /**
@@ -238,38 +239,8 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
     else
       next
   }
-  
 }
 
-trait LogFlushStatsMBean {
-  def getFlushesPerSecond: Double
-  def getAvgFlushMs: Double
-  def getTotalFlushMs: Long
-  def getMaxFlushMs: Double
-  def getNumFlushes: Long
-}
-
-@threadsafe
-class LogFlushStats(monitorDurationNs: Long) extends LogFlushStatsMBean {
-  private val flushRequestStats = new SnapshotStats(monitorDurationNs)
-
-  def recordFlushRequest(requestMs: Long) = flushRequestStats.recordRequestMetric(requestMs)
-
-  def getFlushesPerSecond: Double = flushRequestStats.getRequestsPerSecond
-
-  def getAvgFlushMs: Double = flushRequestStats.getAvgMetric
-
-  def getTotalFlushMs: Long = flushRequestStats.getTotalMetric
-
-  def getMaxFlushMs: Double = flushRequestStats.getMaxMetric
-
-  def getNumFlushes: Long = flushRequestStats.getNumRequests
-}
-
-object LogFlushStats extends Logging {
-  private val LogFlushStatsMBeanName = "kafka:type=kafka.LogFlushStats"
-  private val stats = new LogFlushStats(1L * 1000 * 1000 * 1000)
-  Utils.registerMBean(stats, LogFlushStatsMBeanName)
-
-  def recordFlushRequest(requestMs: Long) = stats.recordFlushRequest(requestMs)
+object LogFlushStats extends KafkaMetricsGroup {
+  val logFlushTimer = new KafkaTimer(newTimer("LogFlushRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
 }

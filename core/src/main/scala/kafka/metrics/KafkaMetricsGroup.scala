@@ -27,38 +27,14 @@ import com.yammer.metrics.Metrics
 trait KafkaMetricsGroup extends Logging {
 
   /**
-   * This method enables the user to form logical sub-groups of this
-   * KafkaMetricsGroup by inserting a sub-group identifier in the package
-   * string.
-   *
-   * @return The sub-group identifier.
-   */
-  def metricsGroupIdent: String = ""
-
-  /**
    * Creates a new MetricName object for gauges, meters, etc. created for this
-   * metrics group. It uses the metricsGroupIdent to create logical sub-groups.
-   * This is currently specifically of use to classes under kafka, with
-   * broker-id being the most common metrics grouping strategy.
-   *
+   * metrics group.
    * @param name Descriptive name of the metric.
    * @return Sanitized metric name object.
    */
   private def metricName(name: String) = {
-    val ident = metricsGroupIdent
     val klass = this.getClass
-    val pkg = {
-      val actualPkg = if (klass.getPackage == null) "" else klass.getPackage.getName
-      if (ident.nonEmpty) {
-        // insert the sub-group identifier after the top-level package
-        if (actualPkg.contains("."))
-          actualPkg.replaceFirst("""\.""", ".%s.".format(ident))
-        else
-          actualPkg + "." + ident
-      }
-      else
-        actualPkg
-    }
+    val pkg = if (klass.getPackage == null) "" else klass.getPackage.getName
     val simpleName = klass.getSimpleName.replaceAll("\\$$", "")
     new MetricName(pkg, simpleName, name)
   }

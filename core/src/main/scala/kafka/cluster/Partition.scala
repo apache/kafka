@@ -22,6 +22,8 @@ import java.lang.Object
 import kafka.api.LeaderAndIsr
 import kafka.server.ReplicaManager
 import kafka.common.ErrorMapping
+import com.yammer.metrics.core.Gauge
+import kafka.metrics.KafkaMetricsGroup
 
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
@@ -29,7 +31,7 @@ import kafka.common.ErrorMapping
 class Partition(val topic: String,
                 val partitionId: Int,
                 time: Time,
-                val replicaManager: ReplicaManager) extends Logging {
+                val replicaManager: ReplicaManager) extends Logging with KafkaMetricsGroup {
   private val localBrokerId = replicaManager.config.brokerId
   private val logManager = replicaManager.logManager
   private val replicaFetcherManager = replicaManager.replicaFetcherManager
@@ -44,6 +46,20 @@ class Partition(val topic: String,
   this.logIdent = "Partition [%s, %d] on broker %d, ".format(topic, partitionId, localBrokerId)
 
   private def isReplicaLocal(replicaId: Int) : Boolean = (replicaId == localBrokerId)
+
+  newGauge(
+    topic + "-" + partitionId + "UnderReplicated",
+    new Gauge[Int] {
+      def value() = {
+        if (isUnderReplicated) 1 else 0
+      }
+    }
+  )
+
+  def isUnderReplicated(): Boolean = {
+    // TODO: need to pass in replication factor from controller
+    inSyncReplicas.size < replicaManager.config.defaultReplicationFactor
+  }
 
   def getOrCreateReplica(replicaId: Int = localBrokerId): Replica = {
     val replicaOpt = getReplica(replicaId)
@@ -182,6 +198,7 @@ class Partition(val topic: String,
             info("Expanding ISR for topic %s partition %d to %s".format(topic, partitionId, newInSyncReplicas.map(_.brokerId).mkString(",")))
             // update ISR in ZK and cache
             updateISR(newInSyncReplicas)
+            replicaManager.isrExpandRate.mark()
           }
           maybeIncrementLeaderHW(leaderReplica)
         case None => // nothing to do if no longer leader
@@ -240,6 +257,7 @@ class Partition(val topic: String,
             updateISR(newInSyncReplicas)
             // we may need to increment high watermark since ISR could be down to 1
             maybeIncrementLeaderHW(leaderReplica)
+            replicaManager.isrShrinkRate.mark()
           }
         case None => // do nothing if no longer leader
       }

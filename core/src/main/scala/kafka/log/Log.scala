@@ -26,6 +26,8 @@ import java.text.NumberFormat
 import kafka.server.BrokerTopicStat
 import kafka.message.{ByteBufferMessageSet, MessageSet, InvalidMessageException, FileMessageSet}
 import kafka.common.{KafkaException, InvalidMessageSizeException, OffsetOutOfRangeException}
+import kafka.metrics.KafkaMetricsGroup
+import com.yammer.metrics.core.Gauge
 
 object Log {
   val FileSuffix = ".kafka"
@@ -130,7 +132,7 @@ class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long
 @threadsafe
 private[kafka] class Log( val dir: File, val maxLogFileSize: Long, val maxMessageSize: Int, val flushInterval: Int,
                           val rollIntervalMs: Long, val needRecovery: Boolean, time: Time,
-                          brokerId: Int = 0) extends Logging {
+                          brokerId: Int = 0) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Kafka Log on Broker " + brokerId + "], "
 
   import kafka.log.Log._
@@ -147,9 +149,19 @@ private[kafka] class Log( val dir: File, val maxLogFileSize: Long, val maxMessag
   /* The actual segments of the log */
   private[log] val segments: SegmentList[LogSegment] = loadSegments()
 
-  private val logStats = new LogStats(this)
+  newGauge(
+    name + "-" + "NumLogSegments",
+    new Gauge[Int] {
+      def value() = numberOfSegments
+    }
+  )
 
-  Utils.registerMBean(logStats, "kafka:type=kafka.logs." + dir.getName)
+  newGauge(
+    name + "-" + "LogEndOffset",
+    new Gauge[Long] {
+      def value() = logEndOffset
+    }
+  )
 
   /* The name of this log */
   def name  = dir.getName()
@@ -243,9 +255,8 @@ private[kafka] class Log( val dir: File, val maxLogFileSize: Long, val maxMessag
       numberOfMessages += 1;
     }
 
-    BrokerTopicStat.getBrokerTopicStat(topicName).recordMessagesIn(numberOfMessages)
-    BrokerTopicStat.getBrokerAllTopicStat.recordMessagesIn(numberOfMessages)
-    logStats.recordAppendedMessages(numberOfMessages)
+    BrokerTopicStat.getBrokerTopicStat(topicName).messagesInRate.mark(numberOfMessages)
+    BrokerTopicStat.getBrokerAllTopicStat.messagesInRate.mark(numberOfMessages)
 
     // truncate the message set's buffer upto validbytes, before appending it to the on-disk log
     val validByteBuffer = messages.buffer.duplicate()

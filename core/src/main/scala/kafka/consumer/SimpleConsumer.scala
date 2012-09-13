@@ -21,6 +21,8 @@ import kafka.api._
 import kafka.network._
 import kafka.utils._
 import kafka.common.ErrorMapping
+import java.util.concurrent.TimeUnit
+import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 
 /**
  * A consumer of kafka messages
@@ -91,15 +93,13 @@ class SimpleConsumer( val host: String,
    *  @return a set of fetched messages
    */
   def fetch(request: FetchRequest): FetchResponse = {
-    val startTime = SystemTime.nanoseconds
-    val response = sendRequest(request)
+    var response: Receive = null
+    FetchRequestAndResponseStat.requestTimer.time {
+      response = sendRequest(request)
+    }
     val fetchResponse = FetchResponse.readFrom(response.buffer)
     val fetchedSize = fetchResponse.sizeInBytes
-
-    val endTime = SystemTime.nanoseconds
-    SimpleConsumerStats.recordFetchRequest(endTime - startTime)
-    SimpleConsumerStats.recordConsumptionThroughput(fetchedSize)
-
+    FetchRequestAndResponseStat.respondSizeHist.update(fetchedSize)
     fetchResponse
   }
 
@@ -125,39 +125,7 @@ class SimpleConsumer( val host: String,
   }
 }
 
-trait SimpleConsumerStatsMBean {
-  def getFetchRequestsPerSecond: Double
-  def getAvgFetchRequestMs: Double
-  def getMaxFetchRequestMs: Double
-  def getNumFetchRequests: Long  
-  def getConsumerThroughput: Double
+object FetchRequestAndResponseStat extends KafkaMetricsGroup {
+  val requestTimer = new KafkaTimer(newTimer("FetchRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+  val respondSizeHist = newHistogram("FetchResponseSize")
 }
-
-@threadsafe
-class SimpleConsumerStats(monitoringDurationNs: Long) extends SimpleConsumerStatsMBean {
-  private val fetchRequestStats = new SnapshotStats(monitoringDurationNs)
-
-  def recordFetchRequest(requestNs: Long) = fetchRequestStats.recordRequestMetric(requestNs)
-
-  def recordConsumptionThroughput(data: Long) = fetchRequestStats.recordThroughputMetric(data)
-
-  def getFetchRequestsPerSecond: Double = fetchRequestStats.getRequestsPerSecond
-
-  def getAvgFetchRequestMs: Double = fetchRequestStats.getAvgMetric / (1000.0 * 1000.0)
-
-  def getMaxFetchRequestMs: Double = fetchRequestStats.getMaxMetric / (1000.0 * 1000.0)
-
-  def getNumFetchRequests: Long = fetchRequestStats.getNumRequests
-
-  def getConsumerThroughput: Double = fetchRequestStats.getThroughput
-}
-
-object SimpleConsumerStats extends Logging {
-  private val simpleConsumerstatsMBeanName = "kafka:type=kafka.SimpleConsumerStats"
-  private val stats = new SimpleConsumerStats(1 * 1000L * 1000L * 1000L)
-  Utils.registerMBean(stats, simpleConsumerstatsMBeanName)
-
-  def recordFetchRequest(requestMs: Long) = stats.recordFetchRequest(requestMs)
-  def recordConsumptionThroughput(data: Long) = stats.recordConsumptionThroughput(data)
-}
-

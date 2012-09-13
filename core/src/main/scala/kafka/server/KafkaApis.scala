@@ -40,8 +40,6 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val replicaManager: ReplicaManager,
                 val zkClient: ZkClient,
                 brokerId: Int) extends Logging {
-
-  private val metricsGroup = brokerId.toString
   private val producerRequestPurgatory = new ProducerRequestPurgatory(brokerId)
   private val fetchRequestPurgatory = new FetchRequestPurgatory(brokerId, requestChannel)
   private val delayedRequestMetrics = new DelayedRequestMetrics
@@ -54,20 +52,20 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Top-level method that handles all requests and multiplexes to the right api
    */
   def handle(request: RequestChannel.Request) {
-    val apiId = request.request.buffer.getShort()
-    apiId match {
-      case RequestKeys.Produce => handleProducerRequest(request)
-      case RequestKeys.Fetch => handleFetchRequest(request)
-      case RequestKeys.Offsets => handleOffsetRequest(request)
-      case RequestKeys.TopicMetadata => handleTopicMetadataRequest(request)
-      case RequestKeys.LeaderAndISRRequest => handleLeaderAndISRRequest(request)
-      case RequestKeys.StopReplicaRequest => handleStopReplicaRequest(request)
-      case _ => throw new KafkaException("No mapping found for handler id " + apiId)
+    request.requestId match {
+      case RequestKeys.ProduceKey => handleProducerRequest(request)
+      case RequestKeys.FetchKey => handleFetchRequest(request)
+      case RequestKeys.OffsetsKey => handleOffsetRequest(request)
+      case RequestKeys.MetadataKey => handleTopicMetadataRequest(request)
+      case RequestKeys.LeaderAndIsrKey => handleLeaderAndISRRequest(request)
+      case RequestKeys.StopReplicaKey => handleStopReplicaRequest(request)
+      case requestId => throw new KafkaException("No mapping found for handler id " + requestId)
     }
+    request.apiLocalCompleteTimeNs = SystemTime.nanoseconds
   }
 
   def handleLeaderAndISRRequest(request: RequestChannel.Request){
-    val leaderAndISRRequest = LeaderAndIsrRequest.readFrom(request.request.buffer)
+    val leaderAndISRRequest = request.requestObj.asInstanceOf[LeaderAndIsrRequest]
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Handling leader and isr request " + leaderAndISRRequest)
     trace("Handling leader and isr request " + leaderAndISRRequest)
@@ -79,7 +77,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
 
   def handleStopReplicaRequest(request: RequestChannel.Request){
-    val stopReplicaRequest = StopReplicaRequest.readFrom(request.request.buffer)
+    val stopReplicaRequest = request.requestObj.asInstanceOf[StopReplicaRequest]
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Handling stop replica request " + stopReplicaRequest)
     trace("Handling stop replica request " + stopReplicaRequest)
@@ -107,11 +105,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     for(fetchReq <- satisfied) {
       val topicData = readMessageSets(fetchReq.fetch)
       val response = new FetchResponse(FetchRequest.CurrentVersion, fetchReq.fetch.correlationId, topicData)
-
-      val fromFollower = fetchReq.fetch.replicaId != FetchRequest.NonFollowerId
-      delayedRequestMetrics.recordDelayedFetchSatisfied(
-        fromFollower, SystemTime.nanoseconds - fetchReq.creationTimeNs, response)
-
       requestChannel.sendResponse(new RequestChannel.Response(fetchReq.request, new FetchResponseSend(response)))
     }
   }
@@ -120,7 +113,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle a produce request
    */
   def handleProducerRequest(request: RequestChannel.Request) {
-    val produceRequest = ProducerRequest.readFrom(request.request.buffer)
+    val produceRequest = request.requestObj.asInstanceOf[ProducerRequest]
     val sTime = SystemTime.milliseconds
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Handling producer request " + request.toString)
@@ -179,8 +172,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     for(topicData <- request.data) {
       for(partitionData <- topicData.partitionDataArray) {
         msgIndex += 1
-        BrokerTopicStat.getBrokerTopicStat(topicData.topic).recordBytesIn(partitionData.messages.sizeInBytes)
-        BrokerTopicStat.getBrokerAllTopicStat.recordBytesIn(partitionData.messages.sizeInBytes)
+        BrokerTopicStat.getBrokerTopicStat(topicData.topic).bytesInRate.mark(partitionData.messages.sizeInBytes)
+        BrokerTopicStat.getBrokerAllTopicStat.bytesInRate.mark(partitionData.messages.sizeInBytes)
         try {
           val localReplica = replicaManager.getLeaderReplicaIfLocal(topicData.topic, partitionData.partition)
           val log = localReplica.log.get
@@ -193,8 +186,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             .format(partitionData.messages.sizeInBytes, offsets(msgIndex)))
         } catch {
           case e =>
-            BrokerTopicStat.getBrokerTopicStat(topicData.topic).recordFailedProduceRequest
-            BrokerTopicStat.getBrokerAllTopicStat.recordFailedProduceRequest
+            BrokerTopicStat.getBrokerTopicStat(topicData.topic).failedProduceRequestRate.mark()
+            BrokerTopicStat.getBrokerAllTopicStat.failedProduceRequestRate.mark()
             error("Error processing ProducerRequest on %s:%d".format(topicData.topic, partitionData.partition), e)
             e match {
               case _: IOException =>
@@ -214,7 +207,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Handle a fetch request
    */
   def handleFetchRequest(request: RequestChannel.Request) {
-    val fetchRequest = FetchRequest.readFrom(request.request.buffer)
+    val fetchRequest = request.requestObj.asInstanceOf[FetchRequest]
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Handling fetch request " + fetchRequest.toString)
     trace("Handling fetch request " + fetchRequest.toString)
@@ -229,7 +222,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestChannel.sendResponse(channelResponse)
     }
 
-    if(fetchRequest.replicaId != FetchRequest.NonFollowerId) {
+    if(fetchRequest.isFromFollower) {
       maybeUpdatePartitionHW(fetchRequest)
       // after updating HW, some delayed produce requests may be unblocked
       var satisfiedProduceRequests = new mutable.ArrayBuffer[DelayedProduce]
@@ -272,7 +265,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         debug("Fetching log for topic %s partition %d".format(offsetDetail.topic, offsetDetail.partitions(i)))
         try {
           val leader = replicaManager.getLeaderReplicaIfLocal(offsetDetail.topic, offsetDetail.partitions(i))
-          val end = if(fetchRequest.replicaId == FetchRequest.NonFollowerId) {
+          val end = if (!fetchRequest.isFromFollower) {
             leader.highWatermark
           } else {
             leader.logEndOffset
@@ -317,12 +310,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       val topic = offsetDetail.topic
       val (partitions, offsets, fetchSizes) = (offsetDetail.partitions, offsetDetail.offsets, offsetDetail.fetchSizes)
       for( (partition, offset, fetchSize) <- (partitions, offsets, fetchSizes).zipped.map((_,_,_)) ) {
-        val isFetchFromFollower = fetchRequest.replicaId != FetchRequest.NonFollowerId
+        val isFetchFromFollower = fetchRequest.isFromFollower()
         val partitionInfo =
           try {
             val (messages, highWatermark) = readMessageSet(topic, partition, offset, fetchSize, isFetchFromFollower)
-            BrokerTopicStat.getBrokerTopicStat(topic).recordBytesOut(messages.sizeInBytes)
-            BrokerTopicStat.getBrokerAllTopicStat.recordBytesOut(messages.sizeInBytes)
+            BrokerTopicStat.getBrokerTopicStat(topic).bytesOutRate.mark(messages.sizeInBytes)
+            BrokerTopicStat.getBrokerAllTopicStat.bytesOutRate.mark(messages.sizeInBytes)
             if (!isFetchFromFollower) {
               new PartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
             } else {
@@ -335,8 +328,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
           catch {
             case e =>
-              BrokerTopicStat.getBrokerTopicStat(topic).recordFailedFetchRequest
-              BrokerTopicStat.getBrokerAllTopicStat.recordFailedFetchRequest
+              BrokerTopicStat.getBrokerTopicStat(topic).failedFetchRequestRate.mark()
+              BrokerTopicStat.getBrokerAllTopicStat.failedFetchRequestRate.mark()
               error("error when processing request " + (topic, partition, offset, fetchSize), e)
               new PartitionData(partition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]),
                                 offset, -1L, MessageSet.Empty)
@@ -375,7 +368,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Service the offset request API 
    */
   def handleOffsetRequest(request: RequestChannel.Request) {
-    val offsetRequest = OffsetRequest.readFrom(request.request.buffer)
+    val offsetRequest = request.requestObj.asInstanceOf[OffsetRequest]
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Handling offset request " + offsetRequest.toString)
     trace("Handling offset request " + offsetRequest.toString)
@@ -402,7 +395,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Service the topic metadata request API
    */
   def handleTopicMetadataRequest(request: RequestChannel.Request) {
-    val metadataRequest = TopicMetadataRequest.readFrom(request.request.buffer)
+    val metadataRequest = request.requestObj.asInstanceOf[TopicMetadataRequest]
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Handling topic metadata request " + metadataRequest.toString())
     trace("Handling topic metadata request " + metadataRequest.toString())
@@ -456,7 +449,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def keyLabel: String
   }
   private [kafka] object MetricKey {
-    val globalLabel = "all"
+    val globalLabel = "All"
   }
 
   private [kafka] case class RequestKey(topic: String, partition: Int)
@@ -476,7 +469,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     this.logIdent = "[FetchRequestPurgatory-%d], ".format(brokerId)
 
-
     /**
      * A fetch request is satisfied when it has accumulated enough data to meet the min_bytes field
      */
@@ -489,8 +481,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     def expire(delayed: DelayedFetch) {
       val topicData = readMessageSets(delayed.fetch)
       val response = new FetchResponse(FetchRequest.CurrentVersion, delayed.fetch.correlationId, topicData)
-      val fromFollower = delayed.fetch.replicaId != FetchRequest.NonFollowerId
-      delayedRequestMetrics.recordDelayedFetchExpired(fromFollower, response)
+      val fromFollower = delayed.fetch.isFromFollower
+      delayedRequestMetrics.recordDelayedFetchExpired(fromFollower)
       requestChannel.sendResponse(new RequestChannel.Response(delayed.request, new FetchResponseSend(response)))
     }
   }
@@ -560,7 +552,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       val partitionId = followerFetchRequestKey.partition
       val key = RequestKey(topic, partitionId)
       val fetchPartitionStatus = partitionStatus(key)
-      val durationNs = SystemTime.nanoseconds - creationTimeNs
       trace("Checking producer request satisfaction for %s-%d, acksPending = %b"
         .format(topic, partitionId, fetchPartitionStatus.acksPending))
       if (fetchPartitionStatus.acksPending) {
@@ -576,17 +567,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (!fetchPartitionStatus.acksPending) {
           val topicData = produce.data.find(_.topic == topic).get
           val partitionData = topicData.partitionDataArray.find(_.partition == partitionId).get
-          delayedRequestMetrics.recordDelayedProducerKeyCaughtUp(key,
-                                                                 durationNs,
-                                                                 partitionData.sizeInBytes)
           maybeUnblockDelayedFetchRequests(topic, Array(partitionData))
         }
       }
 
       // unblocked if there are no partitions with pending acks
       val satisfied = ! partitionStatus.exists(p => p._2.acksPending)
-      if (satisfied)
-        delayedRequestMetrics.recordDelayedProduceSatisfied(durationNs)
       satisfied
     }
 
@@ -629,53 +615,18 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private class DelayedRequestMetrics {
     private class DelayedProducerRequestMetrics(keyLabel: String = MetricKey.globalLabel) extends KafkaMetricsGroup {
-      val caughtUpFollowerFetchRequestMeter =
-        newMeter("CaughtUpFollowerFetchRequestsPerSecond-" + keyLabel, "requests", TimeUnit.SECONDS)
-      val followerCatchUpTimeHistogram = if (keyLabel == MetricKey.globalLabel)
-        Some(newHistogram("FollowerCatchUpTimeInNs", biased = true))
-      else None
-
-      /*
-       * Note that throughput is updated on individual key satisfaction.
-       * Therefore, it is an upper bound on throughput since the
-       * DelayedProducerRequest may get expired.
-       */
-      val throughputMeter = newMeter("Throughput-" + keyLabel, "bytes", TimeUnit.SECONDS)
-      val expiredRequestMeter = newMeter("ExpiredRequestsPerSecond-" + keyLabel, "requests", TimeUnit.SECONDS)
-
-      val satisfiedRequestMeter = if (keyLabel == MetricKey.globalLabel)
-        Some(newMeter("SatisfiedRequestsPerSecond", "requests", TimeUnit.SECONDS))
-      else None
-      val satisfactionTimeHistogram = if (keyLabel == MetricKey.globalLabel)
-        Some(newHistogram("SatisfactionTimeInNs", biased = true))
-      else None
+      val expiredRequestMeter = newMeter(keyLabel + "ExpiresPerSecond", "requests", TimeUnit.SECONDS)
     }
 
 
-    private class DelayedFetchRequestMetrics(forFollower: Boolean,
-                                             keyLabel: String = MetricKey.globalLabel) extends KafkaMetricsGroup {
-      private val metricPrefix = if (forFollower) "Follower" else "NonFollower"
+    private class DelayedFetchRequestMetrics(forFollower: Boolean) extends KafkaMetricsGroup {
+      private val metricPrefix = if (forFollower) "Follower" else "Consumer"
 
-      val satisfiedRequestMeter = if (keyLabel == MetricKey.globalLabel)
-        Some(newMeter(metricPrefix + "-SatisfiedRequestsPerSecond",
-          "requests", TimeUnit.SECONDS))
-      else None
-
-      val satisfactionTimeHistogram = if (keyLabel == MetricKey.globalLabel)
-        Some(newHistogram(metricPrefix + "-SatisfactionTimeInNs", biased = true))
-      else None
-
-      val expiredRequestMeter = if (keyLabel == MetricKey.globalLabel)
-        Some(newMeter(metricPrefix + "-ExpiredRequestsPerSecond",
-          "requests", TimeUnit.SECONDS))
-      else None
-
-      val throughputMeter = newMeter("%s-Throughput-%s".format(metricPrefix, keyLabel),
-        "bytes", TimeUnit.SECONDS)
+      val expiredRequestMeter = newMeter(metricPrefix + "ExpiresPerSecond", "requests", TimeUnit.SECONDS)
     }
 
     private val producerRequestMetricsForKey = {
-      val valueFactory = (k: MetricKey) => new DelayedProducerRequestMetrics(k.keyLabel)
+      val valueFactory = (k: MetricKey) => new DelayedProducerRequestMetrics(k.keyLabel + "-")
       new Pool[MetricKey, DelayedProducerRequestMetrics](Some(valueFactory))
     }
 
@@ -684,74 +635,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     private val aggregateFollowerFetchRequestMetrics = new DelayedFetchRequestMetrics(forFollower = true)
     private val aggregateNonFollowerFetchRequestMetrics = new DelayedFetchRequestMetrics(forFollower = false)
 
-    private val followerFetchRequestMetricsForKey = {
-      val valueFactory = (k: MetricKey) => new DelayedFetchRequestMetrics(forFollower = true, k.keyLabel)
-      new Pool[MetricKey, DelayedFetchRequestMetrics](Some(valueFactory))
-    }
-
-    private val nonFollowerFetchRequestMetricsForKey = {
-      val valueFactory = (k: MetricKey) => new DelayedFetchRequestMetrics(forFollower = false, k.keyLabel)
-      new Pool[MetricKey, DelayedFetchRequestMetrics](Some(valueFactory))
-    }
-
     def recordDelayedProducerKeyExpired(key: MetricKey) {
       val keyMetrics = producerRequestMetricsForKey.getAndMaybePut(key)
       List(keyMetrics, aggregateProduceRequestMetrics).foreach(_.expiredRequestMeter.mark())
     }
 
-
-    def recordDelayedProducerKeyCaughtUp(key: MetricKey, timeToCatchUpNs: Long, bytes: Int) {
-      val keyMetrics = producerRequestMetricsForKey.getAndMaybePut(key)
-      List(keyMetrics, aggregateProduceRequestMetrics).foreach(m => {
-        m.caughtUpFollowerFetchRequestMeter.mark()
-        m.followerCatchUpTimeHistogram.foreach(_.update(timeToCatchUpNs))
-        m.throughputMeter.mark(bytes)
-      })
-    }
-
-
-    def recordDelayedProduceSatisfied(timeToSatisfyNs: Long) {
-      aggregateProduceRequestMetrics.satisfiedRequestMeter.foreach(_.mark())
-      aggregateProduceRequestMetrics.satisfactionTimeHistogram.foreach(_.update(timeToSatisfyNs))
-    }
-
-    private def recordDelayedFetchThroughput(forFollower: Boolean, response: FetchResponse) {
-      val metrics = if (forFollower) aggregateFollowerFetchRequestMetrics
-        else aggregateNonFollowerFetchRequestMetrics
-      metrics.throughputMeter.mark(response.sizeInBytes)
-
-      response.topicMap.foreach(topicAndData => {
-        val topic = topicAndData._1
-        topicAndData._2.partitionDataArray.foreach(partitionData => {
-          val key = RequestKey(topic, partitionData.partition)
-          val keyMetrics = if (forFollower)
-            followerFetchRequestMetricsForKey.getAndMaybePut(key)
-          else
-            nonFollowerFetchRequestMetricsForKey.getAndMaybePut(key)
-          keyMetrics.throughputMeter.mark(partitionData.sizeInBytes)
-        })
-      })
-    }
-
-
-    def recordDelayedFetchExpired(forFollower: Boolean, response: FetchResponse) {
+    def recordDelayedFetchExpired(forFollower: Boolean) {
       val metrics = if (forFollower) aggregateFollowerFetchRequestMetrics
         else aggregateNonFollowerFetchRequestMetrics
       
-      metrics.expiredRequestMeter.foreach(_.mark())
-
-      recordDelayedFetchThroughput(forFollower, response)
-    }
-
-
-    def recordDelayedFetchSatisfied(forFollower: Boolean, timeToSatisfyNs: Long, response: FetchResponse) {
-      val aggregateMetrics = if (forFollower) aggregateFollowerFetchRequestMetrics
-        else aggregateNonFollowerFetchRequestMetrics
-
-      aggregateMetrics.satisfactionTimeHistogram.foreach(_.update(timeToSatisfyNs))
-      aggregateMetrics.satisfiedRequestMeter.foreach(_.mark())
-
-      recordDelayedFetchThroughput(forFollower, response)
+      metrics.expiredRequestMeter.mark()
     }
   }
 }
