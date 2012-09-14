@@ -23,6 +23,7 @@
 import json
 import os
 import sys
+import thread
 
 class TestcaseEnv():
 
@@ -83,11 +84,11 @@ class TestcaseEnv():
         self.testCaseBaseDir       = ""
         self.testCaseLogsDir       = ""
         self.testCaseDashboardsDir = ""
+
         # ================================
         # dictionary to keep track of
         # user-defined environment variables
         # ================================
-
         # LEADER_ELECTION_COMPLETED_MSG = "completed the leader state transition"
         # REGX_LEADER_ELECTION_PATTERN  = "\[(.*?)\] .* Broker (.*?) " + \
         #                            LEADER_ELECTION_COMPLETED_MSG + \
@@ -97,6 +98,9 @@ class TestcaseEnv():
         # consumerConfigPathName = ""
         # producerLogPathName    = ""
         # producerConfigPathName = ""
-
         self.userDefinedEnvVarDict = {}
+
+        # Lock object for producer threads synchronization
+        self.lock = thread.allocate_lock()
+
 

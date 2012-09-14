@@ -29,6 +29,7 @@ import os
 import re
 import subprocess
 import sys
+import thread
 import time
 import traceback
 
@@ -370,7 +371,7 @@ def get_broker_shutdown_log_line(systemTestEnv, testcaseEnv):
             line = line.rstrip('\n')
 
             if testcaseEnv.userDefinedEnvVarDict["BROKER_SHUT_DOWN_COMPLETED_MSG"] in line:
-                logger.info("found the log line : " + line, extra=d)
+                logger.debug("found the log line : " + line, extra=d)
                 try:
                     matchObj    = re.match(testcaseEnv.userDefinedEnvVarDict["REGX_BROKER_SHUT_DOWN_COMPLETED_PATTERN"], line)
                     datetimeStr = matchObj.group(1)
@@ -379,7 +380,7 @@ def get_broker_shutdown_log_line(systemTestEnv, testcaseEnv):
                     #print "{0:.3f}".format(unixTs)
                     shutdownBrokerDict["timestamp"] = unixTs
                     shutdownBrokerDict["brokerid"]  = matchObj.group(2)
-                    logger.info("brokerid: [" + shutdownBrokerDict["brokerid"] + "] entity_id: [" + shutdownBrokerDict["entity_id"] + "]", extra=d)
+                    logger.debug("brokerid: [" + shutdownBrokerDict["brokerid"] + "] entity_id: [" + shutdownBrokerDict["entity_id"] + "]", extra=d)
                     return shutdownBrokerDict
                 except:
                     logger.error("ERROR [unable to find matching leader details: Has the matching pattern changed?]", extra=d)
@@ -423,7 +424,7 @@ def get_leader_elected_log_line(systemTestEnv, testcaseEnv):
             line = line.rstrip('\n')
 
             if testcaseEnv.userDefinedEnvVarDict["LEADER_ELECTION_COMPLETED_MSG"] in line:
-                logger.info("found the log line : " + line, extra=d)
+                logger.debug("found the log line : " + line, extra=d)
                 try:
                     matchObj    = re.match(testcaseEnv.userDefinedEnvVarDict["REGX_LEADER_ELECTION_PATTERN"], line)
                     datetimeStr = matchObj.group(1)
@@ -441,7 +442,7 @@ def get_leader_elected_log_line(systemTestEnv, testcaseEnv):
                         leaderDict["partition"] = matchObj.group(4)
                         leaderDict["entity_id"] = brokerEntityId
                         leaderDict["hostname"]  = hostname
-                    logger.info("brokerid: [" + leaderDict["brokerid"] + "] entity_id: [" + leaderDict["entity_id"] + "]", extra=d)
+                    logger.debug("brokerid: [" + leaderDict["brokerid"] + "] entity_id: [" + leaderDict["entity_id"] + "]", extra=d)
                 except:
                     logger.error("ERROR [unable to find matching leader details: Has the matching pattern changed?]", extra=d)
                     raise
@@ -504,7 +505,7 @@ def start_entity_in_background(systemTestEnv, testcaseEnv, entityId):
     system_test_utils.async_sys_call(cmdStr)
     time.sleep(5)
 
-    pidCmdStr = "ssh " + hostname + " 'cat " + logPathName + "/entity_" + entityId + "_pid'"
+    pidCmdStr = "ssh " + hostname + " 'cat " + logPathName + "/entity_" + entityId + "_pid' 2> /dev/null"
     logger.debug("executing command: [" + pidCmdStr + "]", extra=d)
     subproc = system_test_utils.sys_call_return_subproc(pidCmdStr)
 
@@ -551,7 +552,7 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
                    "'JAVA_HOME=" + javaHome,
                    "JMX_PORT=" + jmxPort,
                    kafkaRunClassBin + " kafka.consumer.ConsoleConsumer",
-                   commandArgs + " &> " + consumerLogPathName,
+                   commandArgs + " >> " + consumerLogPathName,
                    " & echo pid:$! > " + consumerLogPath + "/entity_" + entityId + "_pid'"]
 
         cmdStr = " ".join(cmdList)
@@ -573,75 +574,98 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
                 tokens = line.split(':')
                 testcaseEnv.consumerHostParentPidDict[host] = tokens[1]
 
-
 def start_producer_performance(systemTestEnv, testcaseEnv):
 
-    clusterEntityConfigDictList = systemTestEnv.clusterEntityConfigDictList
-    testcaseConfigsList         = testcaseEnv.testcaseConfigsList
+    entityConfigList     = systemTestEnv.clusterEntityConfigDictList
+    testcaseConfigsList  = testcaseEnv.testcaseConfigsList
     brokerListStr = ""
 
     # construct "broker-list" for producer
-    for clusterEntityConfigDict in clusterEntityConfigDictList:
-        entityRole = clusterEntityConfigDict["role"]
+    for entityConfig in entityConfigList:
+        entityRole = entityConfig["role"]
         if entityRole == "broker":
-            hostname = clusterEntityConfigDict["hostname"]
-            entityId = clusterEntityConfigDict["entity_id"]
+            hostname = entityConfig["hostname"]
+            entityId = entityConfig["entity_id"]
             port     = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "port")
 
             if len(brokerListStr) == 0:
                 brokerListStr = hostname + ":" + port
             else:
                 brokerListStr = brokerListStr + "," + hostname + ":" + port
- 
 
-    producerConfigList = system_test_utils.get_dict_from_list_of_dicts( \
-                             clusterEntityConfigDictList, "role", "producer_performance")
+    producerConfigList = system_test_utils.get_dict_from_list_of_dicts(entityConfigList, "role", "producer_performance")
     for producerConfig in producerConfigList:
         host              = producerConfig["hostname"]
         entityId          = producerConfig["entity_id"]
         jmxPort           = producerConfig["jmx_port"] 
         role              = producerConfig["role"] 
-        kafkaHome         = system_test_utils.get_data_by_lookup_keyval( \
-                                clusterEntityConfigDictList, "entity_id", entityId, "kafka_home")
-        javaHome          = system_test_utils.get_data_by_lookup_keyval( \
-                                clusterEntityConfigDictList, "entity_id", entityId, "java_home")
-        jmxPort           = system_test_utils.get_data_by_lookup_keyval( \
-                                clusterEntityConfigDictList, "entity_id", entityId, "jmx_port")
-        kafkaRunClassBin  = kafkaHome + "/bin/kafka-run-class.sh"
 
-        logger.info("starting producer preformance", extra=d)
-
-        producerLogPath     = get_testcase_config_log_dir_pathname(testcaseEnv, "producer_performance", entityId, "default")
-        producerLogPathName = producerLogPath + "/producer_performance.log"
-
-        testcaseEnv.userDefinedEnvVarDict["producerLogPathName"] = producerLogPathName
-
-        commandArgs = system_test_utils.convert_keyval_to_cmd_args(testcaseEnv.userDefinedEnvVarDict["producerConfigPathName"])
-        cmdList = ["ssh " + host,
-                   "'JAVA_HOME=" + javaHome,
-                   "JMX_PORT=" + jmxPort,
-                   kafkaRunClassBin + " kafka.perf.ProducerPerformance",
-                   "--broker-list " +brokerListStr,
-                   commandArgs + " &> " + producerLogPathName,
-                   " & echo pid:$! > " + producerLogPath + "/entity_" + entityId + "_pid'"]
-
-        cmdStr = " ".join(cmdList)
-        logger.debug("executing command: [" + cmdStr + "]", extra=d)
-        system_test_utils.async_sys_call(cmdStr)
+        thread.start_new_thread(start_producer_in_thread, (testcaseEnv, entityConfigList, producerConfig, brokerListStr))
         time.sleep(1)
         metrics.start_metrics_collection(host, jmxPort, role, entityId, systemTestEnv, testcaseEnv)
 
-        pidCmdStr = "ssh " + host + " 'cat " + producerLogPath + "/entity_" + entityId + "_pid'"
-        logger.debug("executing command: [" + pidCmdStr + "]", extra=d)
-        subproc = system_test_utils.sys_call_return_subproc(pidCmdStr)
+def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, brokerListStr):
+    host              = producerConfig["hostname"]
+    entityId          = producerConfig["entity_id"]
+    jmxPort           = producerConfig["jmx_port"] 
+    role              = producerConfig["role"] 
+    kafkaHome         = system_test_utils.get_data_by_lookup_keyval(entityConfigList, "entity_id", entityId, "kafka_home")
+    javaHome          = system_test_utils.get_data_by_lookup_keyval(entityConfigList, "entity_id", entityId, "java_home")
+    jmxPort           = system_test_utils.get_data_by_lookup_keyval(entityConfigList, "entity_id", entityId, "jmx_port")
+    kafkaRunClassBin  = kafkaHome + "/bin/kafka-run-class.sh"
 
-        # keep track of the remote entity pid in a dictionary
-        for line in subproc.stdout.readlines():
-            if line.startswith("pid"):
-                line = line.rstrip('\n')
-                logger.debug("found pid line: [" + line + "]", extra=d)
-                tokens = line.split(':')
-                testcaseEnv.producerHostParentPidDict[host] = tokens[1]
+    logger.info("starting producer preformance", extra=d)
+
+    producerLogPath     = get_testcase_config_log_dir_pathname(testcaseEnv, "producer_performance", entityId, "default")
+    producerLogPathName = producerLogPath + "/producer_performance.log"
+
+    testcaseEnv.userDefinedEnvVarDict["producerLogPathName"] = producerLogPathName
+    commandArgs = system_test_utils.convert_keyval_to_cmd_args(testcaseEnv.userDefinedEnvVarDict["producerConfigPathName"])
+
+    counter = 0
+    noMsgPerBatch    = int(testcaseEnv.testcaseArgumentsDict["num_messages_to_produce_per_producer_call"])
+    producerSleepSec = int(testcaseEnv.testcaseArgumentsDict["sleep_seconds_between_producer_calls"])
+
+    # keep calling producer until signaled by:
+    # testcaseEnv.userDefinedEnvVarDict["stopBackgroundProducer"]
+    while 1:
+        testcaseEnv.lock.acquire()
+        if not testcaseEnv.userDefinedEnvVarDict["stopBackgroundProducer"]:
+            initMsgId = counter * noMsgPerBatch
+
+            logger.info("#### [producer thread] status of stopBackgroundProducer : [False] => producing [" + str(noMsgPerBatch) + \
+                        "] messages with starting message id : [" + str(initMsgId) + "]", extra=d)
+
+            cmdList = ["ssh " + host,
+                       "'JAVA_HOME=" + javaHome,
+                       "JMX_PORT=" + jmxPort,
+                       kafkaRunClassBin + " kafka.perf.ProducerPerformance",
+                       "--broker-list " + brokerListStr,
+                       "--initial-message-id " + str(initMsgId),
+                       "--messages " + str(noMsgPerBatch),
+                       commandArgs + " >> " + producerLogPathName,
+                       " & echo pid:$! > " + producerLogPath + "/entity_" + entityId + "_pid'"]
+
+            cmdStr = " ".join(cmdList)
+            logger.debug("executing command: [" + cmdStr + "]", extra=d)
+
+            subproc = system_test_utils.sys_call_return_subproc(cmdStr)
+            for line in subproc.stdout.readlines():
+                pass    # dummy loop to wait until producer is completed
+        else:
+            testcaseEnv.lock.release()
+            break
+
+        counter += 1
+        testcaseEnv.lock.release()
+        time.sleep(int(producerSleepSec))
+
+    # let the main testcase know producer has stopped
+    testcaseEnv.lock.acquire()
+    testcaseEnv.userDefinedEnvVarDict["backgroundProducerStopped"] = True
+    time.sleep(1)
+    testcaseEnv.lock.release()
+    time.sleep(1)
 
 
 def stop_remote_entity(systemTestEnv, entityId, parentPid):
@@ -650,7 +674,7 @@ def stop_remote_entity(systemTestEnv, entityId, parentPid):
     hostname  = system_test_utils.get_data_by_lookup_keyval(clusterEntityConfigDictList, "entity_id", entityId, "hostname")
     pidStack  = system_test_utils.get_remote_child_processes(hostname, parentPid)
 
-    logger.info("terminating process id: " + parentPid + " in host: " + hostname, extra=d)
+    logger.debug("terminating process id: " + parentPid + " in host: " + hostname, extra=d)
     system_test_utils.sigterm_remote_process(hostname, pidStack)
 #    time.sleep(1)
 #    system_test_utils.sigkill_remote_process(hostname, pidStack)
@@ -662,7 +686,7 @@ def force_stop_remote_entity(systemTestEnv, entityId, parentPid):
     hostname  = system_test_utils.get_data_by_lookup_keyval(clusterEntityConfigDictList, "entity_id", entityId, "hostname")
     pidStack  = system_test_utils.get_remote_child_processes(hostname, parentPid)
 
-    logger.info("terminating process id: " + parentPid + " in host: " + hostname, extra=d)
+    logger.debug("terminating process id: " + parentPid + " in host: " + hostname, extra=d)
     system_test_utils.sigkill_remote_process(hostname, pidStack)
 
 
@@ -737,7 +761,9 @@ def validate_data_matched(systemTestEnv, testcaseEnv):
     outfile.close()
 
     logger.info("no. of unique messages sent from publisher  : " + str(len(producerMsgIdSet)), extra=d)
-    logger.info("no. of unique messages received by consumer : " + str(len(producerMsgIdSet)), extra=d)
+    logger.info("no. of unique messages received by consumer : " + str(len(consumerMsgIdSet)), extra=d)
+    validationStatusDict["Unique messages from producer"] = str(len(producerMsgIdSet))
+    validationStatusDict["Unique messages from consumer"] = str(len(consumerMsgIdSet))
 
     if ( len(missingMsgIdInConsumer) == 0 and len(producerMsgIdSet) > 0 ):
         validationStatusDict["Validate for data matched"] = "PASSED"
@@ -892,15 +918,15 @@ def get_reelection_latency(systemTestEnv, testcaseEnv, leaderDict):
     # get broker shut down completed timestamp
     shutdownBrokerDict = get_broker_shutdown_log_line(systemTestEnv, testcaseEnv)
     #print shutdownBrokerDict
-    logger.info("unix timestamp of shut down completed: " + str("{0:.6f}".format(shutdownBrokerDict["timestamp"])), extra=d)
+    logger.debug("unix timestamp of shut down completed: " + str("{0:.6f}".format(shutdownBrokerDict["timestamp"])), extra=d)
 
-    logger.info("looking up new leader", extra=d)
+    logger.debug("looking up new leader", extra=d)
     leaderDict2 = get_leader_elected_log_line(systemTestEnv, testcaseEnv)
     #print leaderDict2
-    logger.info("unix timestamp of new elected leader: " + str("{0:.6f}".format(leaderDict2["timestamp"])), extra=d)
+    logger.debug("unix timestamp of new elected leader: " + str("{0:.6f}".format(leaderDict2["timestamp"])), extra=d)
     leaderReElectionLatency = float(leaderDict2["timestamp"]) - float(shutdownBrokerDict["timestamp"])
     logger.info("leader Re-election Latency: " + str(leaderReElectionLatency) + " sec", extra=d)
-    testcaseEnv.validationStatusDict["Leader Election Latency"] = str("{0:.2f}".format(leaderReElectionLatency * 1000)) + " ms"
+    #testcaseEnv.validationStatusDict["Leader Election Latency"] = str("{0:.2f}".format(leaderReElectionLatency * 1000)) + " ms"
  
     return leaderReElectionLatency
 

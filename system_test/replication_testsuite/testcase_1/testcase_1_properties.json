@@ -3,7 +3,10 @@
   "testcase_args": {
     "bounce_leader": "true",
     "replica_factor": "3",
-    "num_partition": "1"
+    "num_partition": "2",
+    "num_iteration": "2",
+    "sleep_seconds_between_producer_calls": "1",
+    "num_messages_to_produce_per_producer_call": "50"
   },
   "entities": [
     {
