@@ -33,7 +33,6 @@ class SocketServerTest extends JUnitSuite {
   val server: SocketServer = new SocketServer(0,
                                               port = TestUtils.choosePort,
                                               numProcessorThreads = 1,
-                                              monitoringPeriodSecs = 30,
                                               maxQueuedRequests = 50,
                                               maxRequestSize = 50)
   server.startup()

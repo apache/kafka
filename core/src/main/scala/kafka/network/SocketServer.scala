@@ -34,7 +34,6 @@ import kafka.utils._
 class SocketServer(val brokerId: Int,
                    val port: Int,
                    val numProcessorThreads: Int, 
-                   val monitoringPeriodSecs: Int,
                    val maxQueuedRequests: Int,
                    val maxRequestSize: Int = Int.MaxValue) extends Logging {
   this.logIdent = "[Socket Server on Broker " + brokerId + "], "

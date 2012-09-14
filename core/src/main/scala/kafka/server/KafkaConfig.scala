@@ -64,9 +64,6 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the number of queued requests allowed before blocking the network threads */
   val numQueuedRequests = props.getIntInRange("max.queued.requests", 500, (1, Int.MaxValue))
 
-  /* the interval in which to measure performance statistics */
-  val monitoringPeriodSecs = props.getIntInRange("monitoring.period.secs", 600, (1, Int.MaxValue))
-  
   /* the default number of log partitions per topic */
   val numPartitions = props.getIntInRange("num.partitions", 1, (1, Int.MaxValue))
   
@@ -112,9 +109,6 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the maximum time in ms that a message in any topic is kept in memory before flushed to disk */
   val defaultFlushIntervalMs = props.getInt("log.default.flush.interval.ms", flushSchedulerThreadRate)
 
-   /* the number of partitions for selected topics, e.g., topic1:8,topic2:16 */
-  val topicPartitionsMap = Utils.getTopicPartitions(props.getString("topic.partition.count.map", ""))
-
   /* enable auto creation of topic on the server */
   val autoCreateTopics = props.getBoolean("auto.create.topics", true)
 
@@ -142,9 +136,6 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val replicaMaxLagTimeMs = props.getLong("replica.max.lag.time.ms", 10000)
 
   val replicaMaxLagBytes = props.getLong("replica.max.lag.bytes", 4000)
-
-  /* size of the state change request queue in Zookeeper */
-  val stateChangeQSize = props.getInt("state.change.queue.size", 1000)
 
   /**
    * Config options relevant to a follower for a replica

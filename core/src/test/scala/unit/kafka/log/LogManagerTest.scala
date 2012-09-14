@@ -179,33 +179,4 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue("The last flush time has to be within defaultflushInterval of current time ",
                      (System.currentTimeMillis - log.getLastFlushedTime) < 100)
   }
-
-  @Test
-  def testConfigurablePartitions() {
-    val props = TestUtils.createBrokerConfig(0, -1)
-    logManager.shutdown()
-    config = new KafkaConfig(props) {
-                   override val logFileSize = 256
-                   override val topicPartitionsMap = Utils.getTopicPartitions("testPartition:2")
-                   override val flushInterval = 100
-                 }
-    logManager = new LogManager(config, scheduler, time, maxRollInterval, veryLargeLogFlushInterval, maxLogAge, false)
-    logManager.startup
-
-    for(i <- 0 until 1) {
-      val log = logManager.getOrCreateLog(name, i)
-      for(i <- 0 until 250) {
-        var set = TestUtils.singleMessageSet("test".getBytes())
-        log.append(set)
-      }
-    }
-
-    try
-    {
-      val log = logManager.getOrCreateLog(name, 2)
-      assertTrue("Should not come here", log != null)
-    } catch {
-       case _ =>
-    }
-  }
 }
