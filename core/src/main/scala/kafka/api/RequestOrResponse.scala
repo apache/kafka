@@ -19,6 +19,12 @@ package kafka.api
 
 import java.nio._
 
+
+object RequestOrResponse {
+  val DefaultCharset = "UTF-8"
+}
+
+
 private[kafka] abstract class RequestOrResponse(val requestId: Option[Short] = None) {
 
   def sizeInBytes: Int

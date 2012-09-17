@@ -34,7 +34,9 @@ import kafka.consumer.ConsumerConfig
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.TimeUnit
 import kafka.api._
+import collection.mutable.Map
 import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
+import kafka.common.TopicAndPartition
 
 
 /**
@@ -364,28 +366,10 @@ object TestUtils extends Logging {
     val correlationId = SyncProducerConfig.DefaultCorrelationId
     val clientId = SyncProducerConfig.DefaultClientId
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
-    val data = topics.map(new TopicData(_, partitions.map(new PartitionData(_, message)).toArray))
-    new kafka.api.ProducerRequest(correlationId, clientId, acks.toShort, ackTimeoutMs, data.toArray)
-  }
-
-  def produceJavaRequest(topic: String, message: kafka.javaapi.message.ByteBufferMessageSet): kafka.javaapi.ProducerRequest = {
-    produceJavaRequest(-1,topic,-1,message)
-  }
-
-  def produceJavaRequest(topic: String, partition: Int, message: kafka.javaapi.message.ByteBufferMessageSet): kafka.javaapi.ProducerRequest = {
-    produceJavaRequest(-1,topic,partition,message)
-  }
-
-  def produceJavaRequest(correlationId: Int, topic: String, partition: Int, message: kafka.javaapi.message.ByteBufferMessageSet): kafka.javaapi.ProducerRequest = {
-    val clientId = "test"
-    val requiredAcks: Short = 0
-    val ackTimeoutMs = 0
-    var data = new Array[TopicData](1)
-    var partitionData = new Array[PartitionData](1)
-    partitionData(0) = new PartitionData(partition,message.underlying)
-    data(0) = new TopicData(topic,partitionData)
-    val pr = new kafka.javaapi.ProducerRequest(correlationId, clientId, requiredAcks, ackTimeoutMs, data)
-    pr
+    val data = topics.flatMap(topic =>
+      partitions.map(partition => (TopicAndPartition(topic,  partition), new PartitionData(partition, message)))
+    )
+    new kafka.api.ProducerRequest(correlationId, clientId, acks.toShort, ackTimeoutMs, Map(data:_*))
   }
 
   def makeLeaderForPartition(zkClient: ZkClient, topic: String, leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int]) {

@@ -18,60 +18,13 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.utils.Utils
-import scala.collection.mutable.{HashMap, Buffer, ListBuffer}
-import kafka.common.{KafkaException, FetchRequestFormatException}
+import kafka.utils.{nonthreadsafe, Utils}
+import scala.collection.immutable.Map
+import kafka.common.TopicAndPartition
 
-object OffsetDetail {
 
-  def readFrom(buffer: ByteBuffer): OffsetDetail = {
-    val topic = Utils.readShortString(buffer, "UTF-8")
+case class PartitionFetchInfo(offset: Long, fetchSize: Int)
 
-    val partitionsCount = buffer.getInt
-    val partitions = new Array[Int](partitionsCount)
-    for (i <- 0 until partitions.length)
-      partitions(i) = buffer.getInt
-
-    val offsetsCount = buffer.getInt
-    val offsets = new Array[Long](offsetsCount)
-    for (i <- 0 until offsets.length)
-      offsets(i) = buffer.getLong
-
-    val fetchesCount = buffer.getInt
-    val fetchSizes = new Array[Int](fetchesCount)
-    for (i <- 0 until fetchSizes.length)
-      fetchSizes(i) = buffer.getInt
-
-    new OffsetDetail(topic, partitions, offsets, fetchSizes)
-  }
-
-}
-
-case class OffsetDetail(topic: String, partitions: Seq[Int], offsets: Seq[Long], fetchSizes: Seq[Int]) {
-
-  def writeTo(buffer: ByteBuffer) {
-    Utils.writeShortString(buffer, topic, "UTF-8")
-
-    if(partitions.size > Int.MaxValue || offsets.size > Int.MaxValue || fetchSizes.size > Int.MaxValue)
-      throw new KafkaException("Number of fetches in FetchRequest exceeds " + Int.MaxValue + ".")
-
-    buffer.putInt(partitions.length)
-    partitions.foreach(buffer.putInt(_))
-
-    buffer.putInt(offsets.length)
-    offsets.foreach(buffer.putLong(_))
-
-    buffer.putInt(fetchSizes.length)
-    fetchSizes.foreach(buffer.putInt(_))
-  }
-
-  def sizeInBytes(): Int = {
-    2 + topic.length() +                              // topic string
-      partitions.foldLeft(4)((s, _) => s + 4) +       // each request partition (int)
-      offsets.foldLeft(4)((s, _) => s + 8) +          // each request offset (long)
-      fetchSizes.foldLeft(4)((s,_) => s + 4)          // each request fetch size
-  }
-}
 
 object FetchRequest {
   val CurrentVersion = 1.shortValue()
@@ -85,18 +38,23 @@ object FetchRequest {
   def readFrom(buffer: ByteBuffer): FetchRequest = {
     val versionId = buffer.getShort
     val correlationId = buffer.getInt
-    val clientId = Utils.readShortString(buffer, "UTF-8")
+    val clientId = Utils.readShortString(buffer, RequestOrResponse.DefaultCharset)
     val replicaId = buffer.getInt
     val maxWait = buffer.getInt
     val minBytes = buffer.getInt
-    val offsetsCount = buffer.getInt
-    val offsetInfo = new Array[OffsetDetail](offsetsCount)
-    for(i <- 0 until offsetInfo.length)
-      offsetInfo(i) = OffsetDetail.readFrom(buffer)
-
-    new FetchRequest(versionId, correlationId, clientId, replicaId, maxWait, minBytes, offsetInfo)
+    val topicCount = buffer.getInt
+    val pairs = (1 to topicCount).flatMap(_ => {
+      val topic = Utils.readShortString(buffer, RequestOrResponse.DefaultCharset)
+      val partitionCount = buffer.getInt
+      (1 to partitionCount).map(_ => {
+        val partitionId = buffer.getInt
+        val offset = buffer.getLong
+        val fetchSize = buffer.getInt
+        (TopicAndPartition(topic, partitionId), PartitionFetchInfo(offset, fetchSize))
+      })
+    })
+    FetchRequest(versionId, correlationId, clientId, replicaId, maxWait, minBytes, Map(pairs:_*))
   }
-
 }
 
 case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
@@ -105,50 +63,63 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
                         replicaId: Int = FetchRequest.DefaultReplicaId,
                         maxWait: Int = FetchRequest.DefaultMaxWait,
                         minBytes: Int = FetchRequest.DefaultMinBytes,
-                        offsetInfo: Seq[OffsetDetail] ) extends RequestOrResponse(Some(RequestKeys.FetchKey)) {
+                        requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
+        extends RequestOrResponse(Some(RequestKeys.FetchKey)) {
 
-  // ensure that a topic "X" appears in at most one OffsetDetail
-  def validate() {
-    if(offsetInfo == null)
-      throw new FetchRequestFormatException("FetchRequest has null offsetInfo")
-
-    // We don't want to get fancy with groupBy's and filter's since we just want the first occurrence
-    var topics = Set[String]()
-    val iter = offsetInfo.iterator
-    while(iter.hasNext) {
-      val offsetData = iter.next()
-      val topic = offsetData.topic
-      if(topics.contains(topic))
-        throw new FetchRequestFormatException("FetchRequest has multiple OffsetDetails for topic: " + topic)
-      else
-        topics += topic
-    }
-  }
+  /**
+   * Partitions the request info into a map of maps (one for each topic).
+   */
+  lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
 
   def writeTo(buffer: ByteBuffer) {
-    // validate first
-    validate()
-
     buffer.putShort(versionId)
     buffer.putInt(correlationId)
-    Utils.writeShortString(buffer, clientId, "UTF-8")
+    Utils.writeShortString(buffer, clientId, RequestOrResponse.DefaultCharset)
     buffer.putInt(replicaId)
     buffer.putInt(maxWait)
     buffer.putInt(minBytes)
-    buffer.putInt(offsetInfo.size)
-    for(topicDetail <- offsetInfo) {
-      topicDetail.writeTo(buffer)
+    buffer.putInt(requestInfoGroupedByTopic.size) // topic count
+    requestInfoGroupedByTopic.foreach {
+      case (topic, partitionFetchInfos) =>
+        Utils.writeShortString(buffer, topic, RequestOrResponse.DefaultCharset)
+        buffer.putInt(partitionFetchInfos.size) // partition count
+        partitionFetchInfos.foreach {
+          case (TopicAndPartition(_, partition), PartitionFetchInfo(offset, fetchSize)) =>
+            buffer.putInt(partition)
+            buffer.putLong(offset)
+            buffer.putInt(fetchSize)
+        }
     }
   }
 
-  def sizeInBytes: Int = 2 + 4 + (2 + clientId.length()) + 4 + 4 + 4 + offsetInfo.foldLeft(4)(_ + _.sizeInBytes())
+  def sizeInBytes: Int = {
+    2 + /* versionId */
+    4 + /* correlationId */
+    Utils.shortStringLength(clientId, RequestOrResponse.DefaultCharset) +
+    4 + /* replicaId */
+    4 + /* maxWait */
+    4 + /* minBytes */
+    4 + /* topic count */
+    requestInfoGroupedByTopic.foldLeft(0)((foldedTopics, currTopic) => {
+      val (topic, partitionFetchInfos) = currTopic
+      foldedTopics +
+      Utils.shortStringLength(topic, RequestOrResponse.DefaultCharset) +
+      4 + /* partition count */
+      partitionFetchInfos.size * (
+        4 + /* partition id */
+        8 + /* offset */
+        4 /* fetch size */
+      )
+    })
+  }
 
-  def numPartitions: Int = offsetInfo.foldLeft(0)(_ + _.offsets.size)
+  def isFromFollower = replicaId != FetchRequest.NonFollowerId
 
-  def isFromFollower(): Boolean = replicaId != FetchRequest.NonFollowerId
+  def numPartitions = requestInfo.size
 }
 
 
+@nonthreadsafe
 class FetchRequestBuilder() {
   private var correlationId = FetchRequest.DefaultCorrelationId
   private val versionId = FetchRequest.CurrentVersion
@@ -156,13 +127,10 @@ class FetchRequestBuilder() {
   private var replicaId = FetchRequest.DefaultReplicaId
   private var maxWait = FetchRequest.DefaultMaxWait
   private var minBytes = FetchRequest.DefaultMinBytes
-  private val requestMap = new HashMap[String, Tuple3[Buffer[Int], Buffer[Long], Buffer[Int]]]
+  private val requestMap = new collection.mutable.HashMap[TopicAndPartition, PartitionFetchInfo]
 
   def addFetch(topic: String, partition: Int, offset: Long, fetchSize: Int) = {
-    val topicData = requestMap.getOrElseUpdate(topic, (ListBuffer[Int](), ListBuffer[Long](), ListBuffer[Int]()))
-    topicData._1.append(partition)
-    topicData._2.append(offset)
-    topicData._3.append(fetchSize)
+    requestMap.put(TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize))
     this
   }
 
@@ -191,10 +159,5 @@ class FetchRequestBuilder() {
     this
   }
 
-  def build() = {
-    val offsetDetails = requestMap.map{ topicData =>
-      new OffsetDetail(topicData._1, topicData._2._1.toArray, topicData._2._2.toArray, topicData._2._3.toArray)
-    }
-    new FetchRequest(versionId, correlationId, clientId, replicaId, maxWait, minBytes, offsetDetails.toArray[OffsetDetail])
-  }
+  def build() = FetchRequest(versionId, correlationId, clientId, replicaId, maxWait, minBytes, requestMap.toMap)
 }

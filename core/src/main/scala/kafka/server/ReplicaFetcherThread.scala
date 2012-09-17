@@ -20,6 +20,8 @@ package kafka.server
 import kafka.api.{OffsetRequest, PartitionData}
 import kafka.cluster.Broker
 import kafka.message.ByteBufferMessageSet
+import kafka.common.TopicAndPartition
+
 
 class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: KafkaConfig, replicaMgr: ReplicaManager)
   extends AbstractFetcherThread(name = name, sourceBroker = sourceBroker, socketTimeout = brokerConfig.replicaSocketTimeoutMs,
@@ -56,7 +58,7 @@ class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: Kafk
   }
 
   // any logic for partitions whose leader has changed
-  def handlePartitionsWithErrors(partitions: Iterable[(String, Int)]) {
+  def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition]) {
     // no handler needed since the controller will make the changes accordingly
   }
 }

@@ -19,7 +19,7 @@ package kafka.integration
 
 import java.nio.ByteBuffer
 import junit.framework.Assert._
-import kafka.api.{OffsetDetail, FetchRequest, FetchRequestBuilder}
+import kafka.api.{PartitionFetchInfo, FetchRequest, FetchRequestBuilder}
 import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import java.util.Properties
 import kafka.producer.{ProducerData, Producer, ProducerConfig}
@@ -31,8 +31,8 @@ import org.I0Itec.zkclient.ZkClient
 import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
 import scala.collection._
-import kafka.common.{ErrorMapping, UnknownTopicOrPartitionException, FetchRequestFormatException, OffsetOutOfRangeException}
 import kafka.admin.{AdminUtils, CreateTopicCommand}
+import kafka.common.{TopicAndPartition, ErrorMapping, UnknownTopicOrPartitionException, OffsetOutOfRangeException}
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -77,27 +77,11 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     assertEquals(request, deserializedRequest)
   }
 
-  def testFetchRequestEnforcesUniqueTopicsForOffsetDetails() {
-    val offsets = Array(
-      new OffsetDetail("topic1", Array(0, 1, 2), Array(0L, 0L, 0L), Array(1000, 1000, 1000)),
-      new OffsetDetail("topic2", Array(0, 1, 2), Array(0L, 0L, 0L), Array(1000, 1000, 1000)),
-      new OffsetDetail("topic1", Array(3, 4, 5), Array(0L, 0L, 0L), Array(1000, 1000, 1000)),
-      new OffsetDetail("topic2", Array(3, 4, 5), Array(0L, 0L, 0L), Array(1000, 1000, 1000))
-    )
-    val request = new FetchRequest(offsetInfo = offsets)
-    try {
-      consumer.fetch(request)
-      fail("FetchRequest should throw FetchRequestFormatException due to duplicate topics")
-    } catch {
-      case e: FetchRequestFormatException => "success"
-    }
-  }
-
   def testEmptyFetchRequest() {
-    val offsets = Array[OffsetDetail]()
-    val request = new FetchRequest(offsetInfo = offsets)
+    val partitionRequests = immutable.Map[TopicAndPartition, PartitionFetchInfo]()
+    val request = new FetchRequest(requestInfo = partitionRequests)
     val fetched = consumer.fetch(request)
-    assertTrue(fetched.errorCode == ErrorMapping.NoError && fetched.data.size == 0)
+    assertTrue(!fetched.hasError && fetched.data.size == 0)
   }
 
   def testDefaultEncoderProducerAndFetch() {
@@ -189,7 +173,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        response.data.foreach(_.partitionDataArray.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error)))
+        response.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
         fail("Expected exception when fetching message with invalid offset")
       } catch {
         case e: OffsetOutOfRangeException => "this is good"
@@ -205,7 +189,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        response.data.foreach(_.partitionDataArray.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error)))
+        response.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
         fail("Expected exception when fetching message with invalid partition")
       } catch {
         case e: UnknownTopicOrPartitionException => "this is good"
@@ -253,7 +237,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        response.data.foreach(_.partitionDataArray.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error)))
+        response.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
         fail("Expected exception when fetching message with invalid offset")
       } catch {
         case e: OffsetOutOfRangeException => "this is good"
@@ -269,7 +253,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       try {
         val request = builder.build()
         val response = consumer.fetch(request)
-        response.data.foreach(_.partitionDataArray.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error)))
+        response.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
         fail("Expected exception when fetching message with invalid partition")
       } catch {
         case e: UnknownTopicOrPartitionException => "this is good"

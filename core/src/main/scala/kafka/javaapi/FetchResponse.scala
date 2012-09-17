@@ -17,17 +17,33 @@
 
 package kafka.javaapi
 
-import kafka.api.TopicData
+import kafka.api.PartitionData
+import kafka.common.TopicAndPartition
 
 
 class FetchResponse( val versionId: Short,
                      val correlationId: Int,
-                     private val data: Array[TopicData] ) {
+                     private val data: Map[TopicAndPartition, PartitionData] ) {
 
-  private val underlying = new kafka.api.FetchResponse(versionId, correlationId, data)
+  private val underlying = kafka.api.FetchResponse(versionId, correlationId, data)
 
   def messageSet(topic: String, partition: Int): kafka.javaapi.message.ByteBufferMessageSet = {
     import Implicits._
     underlying.messageSet(topic, partition)
   }
+
+  def highWatermark(topic: String, partition: Int) = underlying.highWatermark(topic, partition)
+
+  def hasError = underlying.hasError
+
+  def errorCode(topic: String, partition: Int) = underlying.errorCode(topic, partition)
+
+  override def equals(other: Any) = canEqual(other) && {
+    val otherFetchResponse = other.asInstanceOf[kafka.javaapi.FetchResponse]
+    this.underlying.equals(otherFetchResponse.underlying)
+  }
+
+  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.FetchResponse]
+
+  override def hashCode = underlying.hashCode
 }

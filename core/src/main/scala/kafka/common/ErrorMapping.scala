@@ -34,13 +34,12 @@ object ErrorMapping {
   val InvalidMessageCode : Short = 2
   val UnknownTopicOrPartitionCode : Short = 3
   val InvalidFetchSizeCode  : Short = 4
-  val InvalidFetchRequestFormatCode : Short = 5
-  val LeaderNotAvailableCode : Short = 6
-  val NotLeaderForPartitionCode : Short = 7
-  val RequestTimedOutCode: Short = 8
-  val BrokerNotAvailableCode: Short = 9
-  val ReplicaNotAvailableCode: Short = 10
-  val MessageSizeTooLargeCode: Short = 11
+  val LeaderNotAvailableCode : Short = 5
+  val NotLeaderForPartitionCode : Short = 6
+  val RequestTimedOutCode: Short = 7
+  val BrokerNotAvailableCode: Short = 8
+  val ReplicaNotAvailableCode: Short = 9
+  val MessageSizeTooLargeCode: Short = 10
 
   private val exceptionToCode = 
     Map[Class[Throwable], Short](
@@ -48,7 +47,6 @@ object ErrorMapping {
       classOf[InvalidMessageException].asInstanceOf[Class[Throwable]] -> InvalidMessageCode,
       classOf[UnknownTopicOrPartitionException].asInstanceOf[Class[Throwable]] -> UnknownTopicOrPartitionCode,
       classOf[InvalidMessageSizeException].asInstanceOf[Class[Throwable]] -> InvalidFetchSizeCode,
-      classOf[FetchRequestFormatException].asInstanceOf[Class[Throwable]] -> InvalidFetchRequestFormatCode,
       classOf[NotLeaderForPartitionException].asInstanceOf[Class[Throwable]] -> NotLeaderForPartitionCode,
       classOf[LeaderNotAvailableException].asInstanceOf[Class[Throwable]] -> LeaderNotAvailableCode,
       classOf[RequestTimedOutException].asInstanceOf[Class[Throwable]] -> RequestTimedOutCode,

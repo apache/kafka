@@ -1,3 +1,5 @@
+package kafka.common
+
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -14,8 +16,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.common
 
-class FetchRequestFormatException(val message: String) extends RuntimeException(message) {
-  def this() = this(null)
+/**
+ * Convenience case class since (topic, partition) pairs are ubiquitous.
+ */
+case class TopicAndPartition(topic: String, partition: Int) {
+
+  def this(tuple: (String, Int)) = this(tuple._1, tuple._2)
+
+  def asTuple = (topic, partition)
 }
+

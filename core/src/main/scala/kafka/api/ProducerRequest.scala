@@ -20,96 +20,105 @@ package kafka.api
 import java.nio._
 import kafka.message._
 import kafka.utils._
+import scala.collection.Map
+import kafka.common.TopicAndPartition
 
 
 object ProducerRequest {
   val CurrentVersion: Short = 0
-  
+
   def readFrom(buffer: ByteBuffer): ProducerRequest = {
     val versionId: Short = buffer.getShort
     val correlationId: Int = buffer.getInt
-    val clientId: String = Utils.readShortString(buffer, "UTF-8")
+    val clientId: String = Utils.readShortString(buffer, RequestOrResponse.DefaultCharset)
     val requiredAcks: Short = buffer.getShort
     val ackTimeoutMs: Int = buffer.getInt
     //build the topic structure
     val topicCount = buffer.getInt
-    val data = new Array[TopicData](topicCount)
-    for(i <- 0 until topicCount) {
-      val topic = Utils.readShortString(buffer, "UTF-8")
-      		
+    val partitionDataPairs = (1 to topicCount).flatMap(_ => {
+      // process topic
+      val topic = Utils.readShortString(buffer, RequestOrResponse.DefaultCharset)
       val partitionCount = buffer.getInt
-      //build the partition structure within this topic
-      val partitionData = new Array[PartitionData](partitionCount)
-      for (j <- 0 until partitionCount) {
+      (1 to partitionCount).map(_ => {
         val partition = buffer.getInt
         val messageSetSize = buffer.getInt
         val messageSetBuffer = new Array[Byte](messageSetSize)
         buffer.get(messageSetBuffer,0,messageSetSize)
-        partitionData(j) = new PartitionData(partition,new ByteBufferMessageSet(ByteBuffer.wrap(messageSetBuffer)))
-      }
-      data(i) = new TopicData(topic,partitionData)
-    }
-    new ProducerRequest(versionId, correlationId, clientId, requiredAcks, ackTimeoutMs, data)
+        (TopicAndPartition(topic, partition),
+         new PartitionData(partition,new ByteBufferMessageSet(ByteBuffer.wrap(messageSetBuffer))))
+      })
+    })
+
+    ProducerRequest(versionId, correlationId, clientId, requiredAcks, ackTimeoutMs, Map(partitionDataPairs:_*))
   }
 }
 
-case class ProducerRequest( versionId: Short,
+case class ProducerRequest( versionId: Short = ProducerRequest.CurrentVersion,
                             correlationId: Int,
                             clientId: String,
                             requiredAcks: Short,
                             ackTimeoutMs: Int,
-                            data: Array[TopicData] ) extends RequestOrResponse(Some(RequestKeys.ProduceKey)) {
+                            data: Map[TopicAndPartition, PartitionData])
+    extends RequestOrResponse(Some(RequestKeys.ProduceKey)) {
 
-  def this(correlationId: Int, clientId: String, requiredAcks: Short, ackTimeoutMs: Int, data: Array[TopicData]) =
+  /**
+   * Partitions the data into a map of maps (one for each topic).
+   */
+  private lazy val dataGroupedByTopic = data.groupBy(_._1.topic)
+
+  def this(correlationId: Int,
+           clientId: String,
+           requiredAcks: Short,
+           ackTimeoutMs: Int,
+           data: Map[TopicAndPartition, PartitionData]) =
     this(ProducerRequest.CurrentVersion, correlationId, clientId, requiredAcks, ackTimeoutMs, data)
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     buffer.putInt(correlationId)
-    Utils.writeShortString(buffer, clientId, "UTF-8")
+    Utils.writeShortString(buffer, clientId, RequestOrResponse.DefaultCharset)
     buffer.putShort(requiredAcks)
     buffer.putInt(ackTimeoutMs)
+
     //save the topic structure
-    buffer.putInt(data.size) //the number of topics
-    for(topicData <- data) {
-      Utils.writeShortString(buffer, topicData.topic, "UTF-8") //write the topic
-      buffer.putInt(topicData.partitionDataArray.size) //the number of partitions
-      for(partitionData <- topicData.partitionDataArray) {
-        buffer.putInt(partitionData.partition)
-        buffer.putInt(partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer.limit)
-        buffer.put(partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer)
-        partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer.rewind
+    buffer.putInt(dataGroupedByTopic.size) //the number of topics
+    dataGroupedByTopic.foreach {
+      case (topic, topicAndPartitionData) =>
+        Utils.writeShortString(buffer, topic, RequestOrResponse.DefaultCharset) //write the topic
+        buffer.putInt(topicAndPartitionData.size) //the number of partitions
+        topicAndPartitionData.foreach(partitionAndData => {
+          val partitionData = partitionAndData._2
+          buffer.putInt(partitionData.partition)
+          buffer.putInt(partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer.limit)
+          buffer.put(partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer)
+          partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer.rewind
+        })
+    }
+  }
+
+  def sizeInBytes: Int = {
+    2 + /* versionId */
+    4 + /* correlationId */
+    Utils.shortStringLength(clientId, RequestOrResponse.DefaultCharset) + /* client id */
+    2 + /* requiredAcks */
+    4 + /* ackTimeoutMs */
+    4 + /* number of topics */
+    dataGroupedByTopic.foldLeft(0)((foldedTopics, currTopic) => {
+      foldedTopics +
+      Utils.shortStringLength(currTopic._1, RequestOrResponse.DefaultCharset) +
+      4 + /* the number of partitions */
+      {
+        currTopic._2.foldLeft(0)((foldedPartitions, currPartition) => {
+          foldedPartitions +
+          4 + /* partition id */
+          4 + /* byte-length of serialized messages */
+          currPartition._2.messages.sizeInBytes.toInt
+        })
       }
-    }
+    })
   }
 
-  def sizeInBytes(): Int = {
-    var size = 0 
-    //size, request_type_id, version_id, correlation_id, client_id, required_acks, ack_timeout, data.size
-    size = 2 + 4 + 2 + clientId.length + 2 + 4 + 4
-    for(topicData <- data) {
-	    size += 2 + topicData.topic.length + 4
-      for(partitionData <- topicData.partitionDataArray) {
-        size += 4 + 4 + partitionData.messages.sizeInBytes.asInstanceOf[Int]
-      }
-    }
-    size
-  }
-
-  // need to override case-class equals due to broken java-array equals()
-  override def equals(other: Any): Boolean = {
-   other match {
-      case that: ProducerRequest =>
-        ( correlationId == that.correlationId &&
-          clientId == that.clientId &&
-          requiredAcks == that.requiredAcks &&
-          ackTimeoutMs == that.ackTimeoutMs &&
-          data.toSeq == that.data.toSeq )
-      case _ => false
-    }
-  }
-
-  def topicPartitionCount = data.foldLeft(0)(_ + _.partitionDataArray.length)
+  def numPartitions = data.size
 
 }
 

@@ -72,7 +72,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
     // send an invalid offset
     try {
       val fetchedWithError = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, -1, 10000).build())
-      fetchedWithError.data.foreach(_.partitionDataArray.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error)))
+      fetchedWithError.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
       fail("Expected an OffsetOutOfRangeException exception to be thrown")
     } catch {
       case e: OffsetOutOfRangeException => 
@@ -101,23 +101,22 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       }
     }
 
-    {
-      // send some invalid offsets
-      val builder = new FetchRequestBuilder()
-      for( (topic, offset) <- topicOffsets )
-        builder.addFetch(topic, offset, -1, 10000)
+    // send some invalid offsets
+    val builder = new FetchRequestBuilder()
+    for( (topic, offset) <- topicOffsets )
+      builder.addFetch(topic, offset, -1, 10000)
 
-      val request = builder.build()
-      val responses = consumer.fetch(request)
-      for(topicData <- responses.data) {
-        try {
-          topicData.partitionDataArray.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
-          fail("Expected an OffsetOutOfRangeException exception to be thrown")
-        } catch {
-          case e: OffsetOutOfRangeException =>
-        }
+    val request = builder.build()
+    val responses = consumer.fetch(request)
+    responses.data.values.foreach(pd => {
+      try {
+        ErrorMapping.maybeThrowException(pd.error)
+        fail("Expected an OffsetOutOfRangeException exception to be thrown")
+      } catch {
+        case e: OffsetOutOfRangeException =>
+
       }
-    }
+    })
   }
 
   def testMultiProduce() {

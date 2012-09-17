@@ -17,9 +17,8 @@
 
 package kafka.javaapi.consumer
 
-import kafka.api.FetchRequest
-import kafka.javaapi.FetchResponse
 import kafka.utils.threadsafe
+import kafka.javaapi.FetchResponse
 
 /**
  * A consumer of kafka messages
@@ -32,14 +31,27 @@ class SimpleConsumer(val host: String,
   val underlying = new kafka.consumer.SimpleConsumer(host, port, soTimeout, bufferSize)
 
   /**
-   *  Fetch a set of messages from a topic.
+   *  Fetch a set of messages from a topic. This version of the fetch method
+   *  takes the Scala version of a fetch request (i.e.,
+   *  [[kafka.api.FetchRequest]] and is intended for use with the
+   *  [[kafka.api.FetchRequestBuilder]].
    *
    *  @param request  specifies the topic name, topic partition, starting byte offset, maximum bytes to be fetched.
    *  @return a set of fetched messages
    */
-  def fetch(request: FetchRequest): FetchResponse = {
+  def fetch(request: kafka.api.FetchRequest): FetchResponse = {
     import kafka.javaapi.Implicits._
     underlying.fetch(request)
+  }
+  
+  /**
+   *  Fetch a set of messages from a topic.
+   *
+   *  @param request specifies the topic name, topic partition, starting byte offset, maximum bytes to be fetched.
+   *  @return a set of fetched messages
+   */
+  def fetch(request: kafka.javaapi.FetchRequest): FetchResponse = {
+    fetch(request.underlying)
   }
 
   /**

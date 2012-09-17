@@ -201,11 +201,11 @@ class AsyncProducerTest extends JUnit3Suite {
     topic2Broker2Data.appendAll(List(new ProducerData[Int,Message]("topic2", 1, new Message("msg2".getBytes))))
     val expectedResult = Some(Map(
         0 -> Map(
-              ("topic1", 0) -> topic1Broker1Data,
-              ("topic2", 0) -> topic2Broker1Data),
+              TopicAndPartition("topic1", 0) -> topic1Broker1Data,
+              TopicAndPartition("topic2", 0) -> topic2Broker1Data),
         1 -> Map(
-              ("topic1", 1) -> topic1Broker2Data,
-              ("topic2", 1) -> topic2Broker2Data)
+              TopicAndPartition("topic1", 1) -> topic1Broker2Data,
+              TopicAndPartition("topic2", 1) -> topic2Broker2Data)
       ))
 
     val actualResult = handler.partitionAndCollate(producerDataList)
@@ -344,7 +344,7 @@ class AsyncProducerTest extends JUnit3Suite {
     partitionedDataOpt match {
       case Some(partitionedData) =>
         for ((brokerId, dataPerBroker) <- partitionedData) {
-          for ( ((topic, partitionId), dataPerTopic) <- dataPerBroker)
+          for ( (TopicAndPartition(topic, partitionId), dataPerTopic) <- dataPerBroker)
             assertTrue(partitionId == 0)
         }
       case None =>
@@ -408,10 +408,12 @@ class AsyncProducerTest extends JUnit3Suite {
     // entirely.  The second request will succeed for partition 1 but fail for partition 0.
     // On the third try for partition 0, let it succeed.
     val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), TestUtils.messagesToSet(msgs), 0)
-    val response1 =
-      new ProducerResponse(ProducerRequest.CurrentVersion, 0, Array(ErrorMapping.NotLeaderForPartitionCode.toShort, 0.toShort), Array(0L, 0L))
+    val response1 = ProducerResponse(ProducerRequest.CurrentVersion, 0,
+      Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(ErrorMapping.NotLeaderForPartitionCode.toShort, 0L)),
+          (TopicAndPartition("topic1", 1), ProducerResponseStatus(ErrorMapping.NoError, 0L))))
     val request2 = TestUtils.produceRequest(topic1, 0, TestUtils.messagesToSet(msgs))
-    val response2 = new ProducerResponse(ProducerRequest.CurrentVersion, 0, Array(0.toShort), Array(0L))
+    val response2 = ProducerResponse(ProducerRequest.CurrentVersion, 0,
+      Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(ErrorMapping.NoError, 0L))))
     val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
     EasyMock.expect(mockSyncProducer.send(request1)).andThrow(new RuntimeException) // simulate SocketTimeoutException
     EasyMock.expect(mockSyncProducer.send(request1)).andReturn(response1)

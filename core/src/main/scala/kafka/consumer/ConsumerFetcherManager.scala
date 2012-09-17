@@ -25,6 +25,7 @@ import scala.collection.mutable
 import java.util.concurrent.locks.ReentrantLock
 import kafka.utils.ZkUtils._
 import kafka.utils.{ShutdownableThread, SystemTime}
+import kafka.common.TopicAndPartition
 
 
 /**
@@ -38,7 +39,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
         extends AbstractFetcherManager("ConsumerFetcherManager-%d".format(SystemTime.milliseconds), 1) {
   private var partitionMap: immutable.Map[(String, Int), PartitionTopicInfo] = null
   private var cluster: Cluster = null
-  private val noLeaderPartitionSet = new mutable.HashSet[(String, Int)]
+  private val noLeaderPartitionSet = new mutable.HashSet[TopicAndPartition]
   private val lock = new ReentrantLock
   private val cond = lock.newCondition()
   private val leaderFinderThread = new ShutdownableThread(consumerIdString + "-leader-finder-thread"){
@@ -48,21 +49,22 @@ class ConsumerFetcherManager(private val consumerIdString: String,
       try {
         if (noLeaderPartitionSet.isEmpty)
           cond.await()
-        for ((topic, partitionId) <- noLeaderPartitionSet) {
-          // find the leader for this partition
-          getLeaderForPartition(zkClient, topic, partitionId) match {
-            case Some(leaderId) =>
-              cluster.getBroker(leaderId) match {
-                case Some(broker) =>
-                  val pti = partitionMap((topic, partitionId))
-                  addFetcher(topic, partitionId, pti.getFetchOffset(), broker)
-                  noLeaderPartitionSet.remove((topic, partitionId))
-                case None =>
-                  error("Broker %d is unavailable, fetcher for topic %s partition %d could not be started"
-                                .format(leaderId, topic, partitionId))
-              }
-            case None => // let it go since we will keep retrying
-          }
+        noLeaderPartitionSet.foreach {
+          case(TopicAndPartition(topic, partitionId)) =>
+            // find the leader for this partition
+            getLeaderForPartition(zkClient, topic, partitionId) match {
+              case Some(leaderId) =>
+                cluster.getBroker(leaderId) match {
+                  case Some(broker) =>
+                    val pti = partitionMap((topic, partitionId))
+                    addFetcher(topic, partitionId, pti.getFetchOffset(), broker)
+                    noLeaderPartitionSet.remove(TopicAndPartition(topic, partitionId))
+                  case None =>
+                    error("Broker %d is unavailable, fetcher for topic %s partition %d could not be started"
+                                  .format(leaderId, topic, partitionId))
+                }
+              case None => // let it go since we will keep retrying
+            }
         }
       } finally {
         lock.unlock()
@@ -84,7 +86,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     try {
       partitionMap = topicInfos.map(tpi => ((tpi.topic, tpi.partitionId), tpi)).toMap
       this.cluster = cluster
-      noLeaderPartitionSet ++= topicInfos.map(tpi => (tpi.topic, tpi.partitionId))
+      noLeaderPartitionSet ++= topicInfos.map(tpi => TopicAndPartition(tpi.topic, tpi.partitionId))
       cond.signalAll()
     } finally {
       lock.unlock()
@@ -117,7 +119,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     pti      
   }
 
-  def addPartitionsWithError(partitionList: Iterable[(String, Int)]) {
+  def addPartitionsWithError(partitionList: Iterable[TopicAndPartition]) {
     debug("adding partitions with error %s".format(partitionList))
     lock.lock()
     try {

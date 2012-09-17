@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.cluster.Broker
 import kafka.consumer.SimpleConsumer
-import kafka.common.ErrorMapping
+import kafka.common.{TopicAndPartition, ErrorMapping}
 import collection.mutable
 import kafka.message.ByteBufferMessageSet
 import kafka.api.{FetchResponse, PartitionData, FetchRequestBuilder}
@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit
 abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socketTimeout: Int, socketBufferSize: Int,
                                      fetchSize: Int, fetcherBrokerId: Int = -1, maxWait: Int = 0, minBytes: Int = 1)
   extends ShutdownableThread(name) {
-  private val fetchMap = new mutable.HashMap[Tuple2[String,Int], Long] // a (topic, partitionId) -> offset map
+  private val fetchMap = new mutable.HashMap[TopicAndPartition, Long] // a (topic, partition) -> offset map
   private val fetchMapLock = new Object
   val simpleConsumer = new SimpleConsumer(sourceBroker.host, sourceBroker.port, socketTimeout, socketBufferSize)
   val fetcherMetrics = FetcherStat.getFetcherStat(name + "-" + sourceBroker.id)
@@ -50,7 +50,7 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
   def handleOffsetOutOfRange(topic: String, partitionId: Int): Long
 
   // deal with partitions with errors, potentially due to leadership changes
-  def handlePartitionsWithErrors(partitions: Iterable[(String, Int)])
+  def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition])
 
   override def shutdown(){
     super.shutdown()
@@ -65,12 +65,15 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
             minBytes(minBytes)
 
     fetchMapLock synchronized {
-      for ( ((topic, partitionId), offset) <- fetchMap )
-        builder.addFetch(topic, partitionId, offset.longValue, fetchSize)
+      fetchMap.foreach {
+        case((topicAndPartition, offset)) =>
+          builder.addFetch(topicAndPartition.topic, topicAndPartition.partition,
+                           offset, fetchSize)
+      }
     }
 
     val fetchRequest = builder.build()
-    val partitionsWithError = new mutable.HashSet[(String, Int)]
+    val partitionsWithError = new mutable.HashSet[TopicAndPartition]
     var response: FetchResponse = null
     try {
       trace("issuing to broker %d of fetch request %s".format(sourceBroker.id, fetchRequest))
@@ -90,37 +93,35 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
     if (response != null) {
       // process fetched data
       fetchMapLock synchronized {
-        for ( topicData <- response.data ) {
-          for ( partitionData <- topicData.partitionDataArray) {
-            val topic = topicData.topic
-            val partitionId = partitionData.partition
-            val key = (topic, partitionId)
-            val currentOffset = fetchMap.get(key)
+        response.data.foreach {
+          case(topicAndPartition, partitionData) =>
+            val (topic, partitionId) = topicAndPartition.asTuple
+            val currentOffset = fetchMap.get(topicAndPartition)
             if (currentOffset.isDefined) {
               partitionData.error match {
                 case ErrorMapping.NoError =>
                   processPartitionData(topic, currentOffset.get, partitionData)
                   val validBytes = partitionData.messages.asInstanceOf[ByteBufferMessageSet].validBytes
-                  val newOffset = currentOffset.get + validBytes
-                  fetchMap.put(key, newOffset)
+                  val newOffset = currentOffset.get + partitionData.messages.asInstanceOf[ByteBufferMessageSet].validBytes
+                  fetchMap.put(topicAndPartition, newOffset)
                   FetcherLagMetrics.getFetcherLagMetrics(topic, partitionId).lag = partitionData.hw - newOffset
                   fetcherMetrics.byteRate.mark(validBytes)
                 case ErrorMapping.OffsetOutOfRangeCode =>
                   val newOffset = handleOffsetOutOfRange(topic, partitionId)
-                  fetchMap.put(key, newOffset)
+                  fetchMap.put(topicAndPartition, newOffset)
                   warn("current offset %d for topic %s partition %d out of range; reset offset to %d"
-                               .format(currentOffset.get, topic, partitionId, newOffset))
+                    .format(currentOffset.get, topic, partitionId, newOffset))
                 case _ =>
                   error("error for %s %d to broker %d".format(topic, partitionId, sourceBroker.host),
-                        ErrorMapping.exceptionFor(partitionData.error))
-                  partitionsWithError += key
-                  fetchMap.remove(key)
+                    ErrorMapping.exceptionFor(partitionData.error))
+                  partitionsWithError += topicAndPartition
+                  fetchMap.remove(topicAndPartition)
               }
             }
-          }
         }
       }
     }
+
     if (partitionsWithError.size > 0) {
       debug("handling partitions with error for %s".format(partitionsWithError))
       handlePartitionsWithErrors(partitionsWithError)
@@ -129,19 +130,19 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
 
   def addPartition(topic: String, partitionId: Int, initialOffset: Long) {
     fetchMapLock synchronized {
-      fetchMap.put((topic, partitionId), initialOffset)
+      fetchMap.put(TopicAndPartition(topic, partitionId), initialOffset)
     }
   }
 
   def removePartition(topic: String, partitionId: Int) {
     fetchMapLock synchronized {
-      fetchMap.remove((topic, partitionId))
+      fetchMap.remove(TopicAndPartition(topic, partitionId))
     }
   }
 
   def hasPartition(topic: String, partitionId: Int): Boolean = {
     fetchMapLock synchronized {
-      fetchMap.get((topic, partitionId)).isDefined
+      fetchMap.get(TopicAndPartition(topic, partitionId)).isDefined
     }
   }
 

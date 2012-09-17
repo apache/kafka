@@ -18,57 +18,81 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.common.ErrorMapping
+import kafka.utils.Utils
+import scala.collection.Map
+import kafka.common.{TopicAndPartition, ErrorMapping}
 
 
 object ProducerResponse {
   def readFrom(buffer: ByteBuffer): ProducerResponse = {
     val versionId = buffer.getShort
     val correlationId = buffer.getInt
-    val errorCode = buffer.getShort
-    val errorsSize = buffer.getInt
-    val errors = new Array[Short](errorsSize)
-    for( i <- 0 until errorsSize) {
-      errors(i) = buffer.getShort
-    }
-    val offsetsSize = buffer.getInt
-    val offsets = new Array[Long](offsetsSize)
-    for( i <- 0 until offsetsSize) {
-      offsets(i) = buffer.getLong
-    }
-    new ProducerResponse(versionId, correlationId, errors, offsets, errorCode)
+    val topicCount = buffer.getInt
+    val statusPairs = (1 to topicCount).flatMap(_ => {
+      val topic = Utils.readShortString(buffer, RequestOrResponse.DefaultCharset)
+      val partitionCount = buffer.getInt
+      (1 to partitionCount).map(_ => {
+        val partition = buffer.getInt
+        val error = buffer.getShort
+        val offset = buffer.getLong
+        (TopicAndPartition(topic, partition), ProducerResponseStatus(error, offset))
+      })
+    })
+
+    ProducerResponse(versionId, correlationId, Map(statusPairs:_*))
   }
 }
 
-case class ProducerResponse(versionId: Short, correlationId: Int, errors: Array[Short],
-                            offsets: Array[Long], errorCode: Short = ErrorMapping.NoError) extends RequestOrResponse{
-  val sizeInBytes = 2 + 2 + 4 + (4 + 2 * errors.length) + (4 + 8 * offsets.length)
+case class ProducerResponseStatus(error: Short, nextOffset: Long)
+
+
+case class ProducerResponse(versionId: Short,
+                            correlationId: Int,
+                            status: Map[TopicAndPartition, ProducerResponseStatus]) extends RequestOrResponse {
+
+  /**
+   * Partitions the status map into a map of maps (one for each topic).
+   */
+  private lazy val statusGroupedByTopic = status.groupBy(_._1.topic)
+
+  def hasError = status.values.exists(_.error != ErrorMapping.NoError)
+
+  val sizeInBytes = {
+    val groupedStatus = statusGroupedByTopic
+    2 + /* version id */
+    4 + /* correlation id */
+    4 + /* topic count */
+    groupedStatus.foldLeft (0) ((foldedTopics, currTopic) => {
+      foldedTopics +
+      Utils.shortStringLength(currTopic._1, RequestOrResponse.DefaultCharset) +
+      4 + /* partition count for this topic */
+      currTopic._2.foldLeft (0) ((foldedPartitions, currPartition) => {
+        foldedPartitions +
+        4 + /* partition id */
+        2 + /* error code */
+        8 /* offset */
+      })
+    })
+  }
 
   def writeTo(buffer: ByteBuffer) {
-    /* version id */
-    buffer.putShort(versionId)
-    /* correlation id */
-    buffer.putInt(correlationId)
-    /* error code */
-    buffer.putShort(errorCode)
-    /* errors */
-    buffer.putInt(errors.length)
-    errors.foreach(buffer.putShort(_))
-    /* offsets */
-    buffer.putInt(offsets.length)
-    offsets.foreach(buffer.putLong(_))
-  }
+    val groupedStatus = statusGroupedByTopic
 
-  // need to override case-class equals due to broken java-array equals()
-  override def equals(other: Any): Boolean = {
-   other match {
-      case that: ProducerResponse =>
-        ( correlationId == that.correlationId &&
-          versionId == that.versionId &&
-          errorCode == that.errorCode &&
-          errors.toSeq == that.errors.toSeq &&
-          offsets.toSeq == that.offsets.toSeq)
-      case _ => false
-    }
+    buffer.putShort(versionId)
+    buffer.putInt(correlationId)
+    buffer.putInt(groupedStatus.size) // topic count
+
+    groupedStatus.foreach(topicStatus => {
+      val (topic, errorsAndOffsets) = topicStatus
+      Utils.writeShortString(buffer, topic, RequestOrResponse.DefaultCharset)
+      buffer.putInt(errorsAndOffsets.size) // partition count
+      errorsAndOffsets.foreach {
+        case((TopicAndPartition(_, partition), ProducerResponseStatus(error, nextOffset))) =>
+          buffer.putInt(partition)
+          buffer.putShort(error)
+          buffer.putLong(nextOffset)
+      }
+    })
   }
 }
+

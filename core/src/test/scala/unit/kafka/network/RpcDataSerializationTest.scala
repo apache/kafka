@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.network;
+package kafka.network
 
 import org.junit._
 import org.scalatest.junit.JUnitSuite
@@ -24,31 +24,45 @@ import java.nio.ByteBuffer
 import kafka.api._
 import kafka.message.{Message, ByteBufferMessageSet}
 import kafka.cluster.Broker
-import kafka.common.ErrorMapping
 import collection.mutable._
+import kafka.common.{TopicAndPartition, ErrorMapping}
+
 
 object RpcDataSerializationTestUtils{
   private val topic1 = "test1"
   private val topic2 = "test2"
-  private val leader1 = 0;
+  private val leader1 = 0
   private val isr1 = List(0, 1, 2)
-  private val leader2 = 0;
+  private val leader2 = 0
   private val isr2 = List(0, 2, 3)
   private val partitionData0 = new PartitionData(0, new ByteBufferMessageSet(new Message("first message".getBytes)))
   private val partitionData1 = new PartitionData(1, new ByteBufferMessageSet(new Message("second message".getBytes)))
   private val partitionData2 = new PartitionData(2, new ByteBufferMessageSet(new Message("third message".getBytes)))
   private val partitionData3 = new PartitionData(3, new ByteBufferMessageSet(new Message("fourth message".getBytes)))
   private val partitionDataArray = Array(partitionData0, partitionData1, partitionData2, partitionData3)
-  private val topicData1 = new TopicData(topic1, partitionDataArray)
-  private val topicData2 = new TopicData(topic2, partitionDataArray)
-  private val topicDataArray = Array(topicData1, topicData2)
-  private val offsetDetail1 = new OffsetDetail(topic1, Seq(0, 1, 2, 3), Seq(1000, 2000, 3000, 4000), Seq(100, 100, 100, 100))
-  private val offsetDetail2 = new OffsetDetail(topic2, Seq(0, 1, 2, 3), Seq(1000, 2000, 3000, 4000), Seq(100, 100, 100, 100))
-  private val offsetDetailSeq = Seq(offsetDetail1, offsetDetail2)
-  private val partitionMetaData0 = new PartitionMetadata(0, Some(new Broker(0, "creator", "localhost", 1011)), Seq.empty)
-  private val partitionMetaData1 = new PartitionMetadata(1, Some(new Broker(0, "creator", "localhost", 1011)), Seq.empty)
-  private val partitionMetaData2 = new PartitionMetadata(2, Some(new Broker(0, "creator", "localhost", 1011)), Seq.empty)
-  private val partitionMetaData3 = new PartitionMetadata(3, Some(new Broker(0, "creator", "localhost", 1011)), Seq.empty)
+
+  private val topicData = {
+    val groupedData = Array(topic1, topic2).flatMap(topic =>
+      partitionDataArray.map(partitionData =>
+        (TopicAndPartition(topic, partitionData.partition), partitionData)))
+    collection.immutable.Map(groupedData:_*)
+  }
+
+  private val requestInfos = collection.immutable.Map(
+    TopicAndPartition(topic1, 0) -> PartitionFetchInfo(1000, 100),
+    TopicAndPartition(topic1, 1) -> PartitionFetchInfo(2000, 100),
+    TopicAndPartition(topic1, 2) -> PartitionFetchInfo(3000, 100),
+    TopicAndPartition(topic1, 3) -> PartitionFetchInfo(4000, 100),
+    TopicAndPartition(topic2, 0) -> PartitionFetchInfo(1000, 100),
+    TopicAndPartition(topic2, 1) -> PartitionFetchInfo(2000, 100),
+    TopicAndPartition(topic2, 2) -> PartitionFetchInfo(3000, 100),
+    TopicAndPartition(topic2, 3) -> PartitionFetchInfo(4000, 100)
+  )
+
+  private val partitionMetaData0 = new PartitionMetadata(0, Some(new Broker(0, "creator", "localhost", 1011)), collection.immutable.Seq.empty)
+  private val partitionMetaData1 = new PartitionMetadata(1, Some(new Broker(0, "creator", "localhost", 1011)), collection.immutable.Seq.empty)
+  private val partitionMetaData2 = new PartitionMetadata(2, Some(new Broker(0, "creator", "localhost", 1011)), collection.immutable.Seq.empty)
+  private val partitionMetaData3 = new PartitionMetadata(3, Some(new Broker(0, "creator", "localhost", 1011)), collection.immutable.Seq.empty)
   private val partitionMetaDataSeq = Seq(partitionMetaData0, partitionMetaData1, partitionMetaData2, partitionMetaData3)
   private val topicmetaData1 = new TopicMetadata(topic1, partitionMetaDataSeq)
   private val topicmetaData2 = new TopicMetadata(topic2, partitionMetaDataSeq)
@@ -78,19 +92,21 @@ object RpcDataSerializationTestUtils{
   }
 
   def createTestProducerRequest: ProducerRequest = {
-    new ProducerRequest(1, "client 1", 0, 1000, topicDataArray)
+    new ProducerRequest(1, "client 1", 0, 1000, topicData)
   }
 
-  def createTestProducerResponse: ProducerResponse = {
-    new ProducerResponse(1, 1, Array(0.toShort, 0.toShort), Array(1000l, 2000l), 0)
-  }
+  def createTestProducerResponse: ProducerResponse =
+    ProducerResponse(1, 1, Map(
+      TopicAndPartition(topic1, 0) -> ProducerResponseStatus(0.toShort, 10001),
+      TopicAndPartition(topic2, 0) -> ProducerResponseStatus(0.toShort, 20001)
+    ))
 
   def createTestFetchRequest: FetchRequest = {
-    new FetchRequest(offsetInfo = offsetDetailSeq)
+    new FetchRequest(requestInfo = requestInfos)
   }
 
   def createTestFetchResponse: FetchResponse = {
-    new FetchResponse(1, 1, topicDataArray)
+    FetchResponse(1, 1, topicData)
   }
 
   def createTestOffsetRequest: OffsetRequest = {
@@ -154,7 +170,7 @@ class RpcDataSerializationTest extends JUnitSuite {
     assertEquals("The original and deserialzed stopReplicaResponse should be the same", stopReplicaResponse,
                  deserializedStopReplicaResponse)
 
-    buffer = ByteBuffer.allocate(producerRequest.sizeInBytes())
+    buffer = ByteBuffer.allocate(producerRequest.sizeInBytes)
     producerRequest.writeTo(buffer)
     buffer.rewind()
     val deserializedProducerRequest = ProducerRequest.readFrom(buffer)

@@ -367,7 +367,7 @@ object Utils extends Logging {
   /**
    * Read an unsigned integer from the given position without modifying the buffers
    * position
-   * @param The buffer to read from
+   * @param buffer the buffer to read from
    * @param index the index from which to read the integer
    * @return The integer read, as a long to avoid signedness
    */

@@ -21,6 +21,8 @@ import kafka.cluster.Broker
 import kafka.server.AbstractFetcherThread
 import kafka.message.ByteBufferMessageSet
 import kafka.api.{FetchRequest, OffsetRequest, PartitionData}
+import kafka.common.TopicAndPartition
+
 
 class ConsumerFetcherThread(name: String,
                             val config: ConsumerConfig,
@@ -57,7 +59,7 @@ class ConsumerFetcherThread(name: String,
   }
 
   // any logic for partitions whose leader has changed
-  def handlePartitionsWithErrors(partitions: Iterable[(String, Int)]) {
+  def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition]) {
     consumerFetcherManager.addPartitionsWithError(partitions)
   }
 }
