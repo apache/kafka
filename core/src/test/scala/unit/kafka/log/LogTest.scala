@@ -279,6 +279,56 @@ class LogTest extends JUnitSuite {
     assert(ret, "Second message set should throw MessageSizeTooLargeException.")
   }
 
+  @Test
+  def testTruncateTo() {
+    val set = TestUtils.singleMessageSet("test".getBytes())
+    val setSize = set.sizeInBytes
+    val msgPerSeg = 10
+    val logFileSize = msgPerSeg * (setSize - 1).asInstanceOf[Int] // each segment will be 10 messages
+
+    // create a log
+    val log = new Log(logDir, logFileSize, config.maxMessageSize, 1000, 10000, false, time)
+    assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
+
+    for (i<- 1 to msgPerSeg) {
+      log.append(set)
+    }
+    assertEquals("There should be exactly 1 segments.", 1, log.numberOfSegments)
+
+    val lastOffset = log.logEndOffset
+    val size = log.size
+    log.truncateTo(log.logEndOffset) // keep the entire log
+    assertEquals("Should not change offset", lastOffset, log.logEndOffset)
+    assertEquals("Should not change log size", size, log.size)
+    log.truncateTo(log.logEndOffset + 1) // try to truncate beyond lastOffset
+    assertEquals("Should not change offset but should log error", lastOffset, log.logEndOffset)
+    assertEquals("Should not change log size", size, log.size)
+    log.truncateTo(log.logEndOffset - 10) // truncate somewhere in between
+    assertEquals("Should change offset", lastOffset, log.logEndOffset + 10)
+    assertEquals("Should change log size", size, log.size + 10)
+    log.truncateTo(log.logEndOffset - log.size) // truncate the entire log
+    assertEquals("Should change offset", log.logEndOffset, lastOffset - size)
+    assertEquals("Should change log size", log.size, 0)
+
+    for (i<- 1 to msgPerSeg) {
+      log.append(set)
+    }
+    assertEquals("Should be back to original offset", log.logEndOffset, lastOffset)
+    assertEquals("Should be back to original size", log.size, size)
+    log.truncateAndStartWithNewOffset(log.logEndOffset - (msgPerSeg - 1)*setSize)
+    assertEquals("Should change offset", log.logEndOffset, lastOffset - (msgPerSeg - 1)*setSize)
+    assertEquals("Should change log size", log.size, 0)
+
+    for (i<- 1 to msgPerSeg) {
+      log.append(set)
+    }
+    assertEquals("Should be ahead of to original offset", log.logEndOffset, lastOffset + setSize)
+    assertEquals("log size should be same as before", size, log.size)
+    log.truncateTo(log.logEndOffset - log.size - setSize) // truncate before first start offset in the log
+    assertEquals("Should change offset", log.logEndOffset, lastOffset - size)
+    assertEquals("Should change log size", log.size, 0)
+  }
+
   def assertContains(ranges: Array[Range], offset: Long) = {
     Log.findRange(ranges, offset) match {
       case Some(range) => 

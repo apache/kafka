@@ -91,7 +91,7 @@ object Log {
 
 
 /**
- * A segment file in the log directory. Each log semgment consists of an open message set, a start offset and a size 
+ * A segment file in the log directory. Each log segment consists of an open message set, a start offset and a size
  */
 class LogSegment(val file: File, val messageSet: FileMessageSet, val start: Long, time: Time) extends Range {
   var firstAppendTime: Option[Long] = None
@@ -345,20 +345,23 @@ private[kafka] class Log( val dir: File, val maxLogFileSize: Long, val maxMessag
       roll()
   }
 
+  private def rollSegment(newOffset: Long) {
+    val newFile = new File(dir, nameFromOffset(newOffset))
+    if (newFile.exists) {
+      warn("newly rolled logsegment " + newFile.getName + " already exists; deleting it first")
+      newFile.delete()
+    }
+    debug("Rolling log '" + name + "' to " + newFile.getName())
+    segments.append(new LogSegment(newFile, new FileMessageSet(newFile, true), newOffset, time))
+  }
+
   /**
    * Create a new segment and make it active
    */
   def roll() {
     lock synchronized {
       flush
-      val newOffset = logEndOffset
-      val newFile = new File(dir, nameFromOffset(newOffset))
-      if (newFile.exists) {
-        warn("newly rolled logsegment " + newFile.getName + " already exists; deleting it first")
-        newFile.delete()
-      }
-      debug("Rolling log '" + name + "' to " + newFile.getName())
-      segments.append(new LogSegment(newFile, new FileMessageSet(newFile, true), newOffset, time))
+      rollSegment(logEndOffset)
     }
   }
 
@@ -432,17 +435,9 @@ private[kafka] class Log( val dir: File, val maxLogFileSize: Long, val maxMessag
   def truncateAndStartWithNewOffset(newOffset: Long) {
     lock synchronized {
       val deletedSegments = segments.trunc(segments.view.size)
-      val newFile = new File(dir, Log.nameFromOffset(newOffset))
-      debug("Truncate and start log '" + name + "' to " + newFile.getName())
-      segments.append(new LogSegment(newFile, new FileMessageSet(newFile, true), newOffset, time))
+      rollSegment(newOffset)
       deleteSegments(deletedSegments)
     }
-  }
-
-
-  def deleteWholeLog():Unit = {
-    deleteSegments(segments.contents.get())
-    Utils.rm(dir)
   }
 
   /* Attempts to delete all provided segments from a log and returns how many it was able to */
@@ -461,26 +456,34 @@ private[kafka] class Log( val dir: File, val maxLogFileSize: Long, val maxMessag
   }
 
   def truncateTo(targetOffset: Long) {
-    // find the log segment that has this hw
-    val segmentToBeTruncated = segments.view.find(
-      segment => targetOffset >= segment.start && targetOffset < segment.absoluteEndOffset)
-
-    segmentToBeTruncated match {
-      case Some(segment) =>
-        val truncatedSegmentIndex = segments.view.indexOf(segment)
-        segments.truncLast(truncatedSegmentIndex)
-        segment.truncateTo(targetOffset)
-        info("Truncated log segment %s to highwatermark %d".format(segment.file.getAbsolutePath, targetOffset))
-      case None =>
-        if(targetOffset > segments.view.last.absoluteEndOffset)
-         error("Last checkpointed hw %d cannot be greater than the latest message offset %d in the log %s".format(targetOffset, segments.view.last.absoluteEndOffset, segments.view.last.file.getAbsolutePath))
-    }
-
-    val segmentsToBeDeleted = segments.view.filter(segment => segment.start > targetOffset)
-    if(segmentsToBeDeleted.size < segments.view.size) {
+    lock synchronized {
+      val segmentsToBeDeleted = segments.view.filter(segment => segment.start > targetOffset)
+      val viewSize = segments.view.size
       val numSegmentsDeleted = deleteSegments(segmentsToBeDeleted)
+
+      /* We should not hit this error because segments.view is locked in markedDeletedWhile() */
       if(numSegmentsDeleted != segmentsToBeDeleted.size)
-        error("Failed to delete some segments during log recovery")
+        error("Failed to delete some segments during log recovery during truncateTo(" + targetOffset +")")
+
+      if (numSegmentsDeleted == viewSize) {
+        segments.trunc(segments.view.size)
+        rollSegment(targetOffset)
+      } else {
+        // find the log segment that has this hw
+        val segmentToBeTruncated =
+          segments.view.find(segment => targetOffset >= segment.start && targetOffset < segment.absoluteEndOffset)
+        segmentToBeTruncated match {
+          case Some(segment) =>
+            val truncatedSegmentIndex = segments.view.indexOf(segment)
+            segments.truncLast(truncatedSegmentIndex)
+            segment.truncateTo(targetOffset)
+            info("Truncated log segment %s to target offset %d".format(segment.file.getAbsolutePath, targetOffset))
+          case None =>
+            if(targetOffset > segments.view.last.absoluteEndOffset)
+              error("Target offset %d cannot be greater than the last message offset %d in the log %s".
+                format(targetOffset, segments.view.last.absoluteEndOffset, segments.view.last.file.getAbsolutePath))
+        }
+      }
     }
   }
 

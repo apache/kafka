@@ -40,15 +40,12 @@ private[log] class SegmentList[T](seq: Seq[T])(implicit m: ClassManifest[T]) {
    * Append the given items to the end of the list
    */
   def append(ts: T*)(implicit m: ClassManifest[T]) {
-    while(true){
-      val curr = contents.get()
-      val updated = new Array[T](curr.length + ts.length)
-      Array.copy(curr, 0, updated, 0, curr.length)
-      for(i <- 0 until ts.length)
-        updated(curr.length + i) = ts(i)
-      if(contents.compareAndSet(curr, updated))
-        return
-    }
+    val curr = contents.get()
+    val updated = new Array[T](curr.length + ts.length)
+    Array.copy(curr, 0, updated, 0, curr.length)
+    for(i <- 0 until ts.length)
+      updated(curr.length + i) = ts(i)
+    contents.set(updated)
   }
   
   
@@ -59,39 +56,33 @@ private[log] class SegmentList[T](seq: Seq[T])(implicit m: ClassManifest[T]) {
     if(newStart < 0)
       throw new KafkaException("Starting index must be positive.");
     var deleted: Array[T] = null
-    var done = false
-    while(!done) {
-      val curr = contents.get()
+    val curr = contents.get()
+    if (curr.length > 0) {
       val newLength = max(curr.length - newStart, 0)
       val updated = new Array[T](newLength)
       Array.copy(curr, min(newStart, curr.length - 1), updated, 0, newLength)
-      if(contents.compareAndSet(curr, updated)) {
-        deleted = new Array[T](newStart)
-        Array.copy(curr, 0, deleted, 0, curr.length - newLength)
-        done = true
-      }
+      contents.set(updated)
+      deleted = new Array[T](newStart)
+      Array.copy(curr, 0, deleted, 0, curr.length - newLength)
     }
     deleted
   }
 
   /**
-   * Delete the items from position newEnd until end of list
+   * Delete the items from position (newEnd + 1) until end of list
    */
   def truncLast(newEnd: Int): Seq[T] = {
-    if(newEnd >= contents.get().size-1)
-      throw new KafkaException("End index must be segment list size - 1");
+    if (newEnd < 0 || newEnd > contents.get().length-1)
+      throw new KafkaException("End index must be positive and less than segment list size.");
     var deleted: Array[T] = null
-    var done = false
-    while(!done) {
-      val curr = contents.get()
+    val curr = contents.get()
+    if (curr.length > 0) {
       val newLength = newEnd + 1
       val updated = new Array[T](newLength)
       Array.copy(curr, 0, updated, 0, newLength)
-      if(contents.compareAndSet(curr, updated)) {
-        deleted = new Array[T](curr.length - newLength)
-        Array.copy(curr, newEnd + 1, deleted, 0, curr.length - newLength)
-        done = true
-      }
+      contents.set(updated)
+      deleted = new Array[T](curr.length - newLength)
+      Array.copy(curr, min(newEnd + 1, curr.length - 1), deleted, 0, curr.length - newLength)
     }
     deleted
   }
