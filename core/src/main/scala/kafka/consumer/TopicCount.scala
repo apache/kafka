@@ -18,10 +18,9 @@
 package kafka.consumer
 
 import scala.collection._
-import scala.util.parsing.json.JSON
 import org.I0Itec.zkclient.ZkClient
 import java.util.regex.Pattern
-import kafka.utils.{ZKGroupDirs, ZkUtils, Logging}
+import kafka.utils.{SyncJSON, ZKGroupDirs, ZkUtils, Logging}
 
 
 private[kafka] trait TopicCount {
@@ -60,9 +59,6 @@ private[kafka] object TopicCount extends Logging {
   private val BLACKLIST_PATTERN =
     Pattern.compile("""!(\p{Digit}+)!(.*)""")
 
-  val myConversionFunc = {input : String => input.toInt}
-  JSON.globalNumberParser = myConversionFunc
-
   def constructTopicCount(group: String,
                           consumerId: String,
                           zkClient: ZkClient) : TopicCount = {
@@ -94,7 +90,7 @@ private[kafka] object TopicCount extends Logging {
     else {
       var topMap : Map[String,Int] = null
       try {
-        JSON.parseFull(topicCountString) match {
+        SyncJSON.parseFull(topicCountString) match {
           case Some(m) => topMap = m.asInstanceOf[Map[String,Int]]
           case None => throw new RuntimeException("error constructing TopicCount : " + topicCountString)
         }

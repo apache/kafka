@@ -30,7 +30,7 @@ import scala.collection.mutable
 import kafka.message.{NoCompressionCodec, CompressionCodec}
 import org.I0Itec.zkclient.ZkClient
 import joptsimple.{OptionSpec, OptionSet, OptionParser}
-
+import util.parsing.json.JSON
 
 /**
  * Helper functions!
@@ -817,5 +817,25 @@ class SnapshotStats(private val monitorDurationNs: Long = 600L * 1000L * 1000L *
     def durationSeconds: Double = (end.get - start) / (1000.0 * 1000.0 * 1000.0)
 
     def durationMs: Double = (end.get - start) / (1000.0 * 1000.0)
+  }
+}
+
+/**
+ *  A wrapper that synchronizes JSON in scala, which is not threadsafe.
+ */
+object SyncJSON extends Logging {
+  val myConversionFunc = {input : String => input.toInt}
+  JSON.globalNumberParser = myConversionFunc
+  val lock = new Object
+
+  def parseFull(input: String): Option[Any] = {
+    lock synchronized {
+      try {
+        JSON.parseFull(input)
+      } catch {
+        case t =>
+          throw new RuntimeException("Can't parse json string: %s".format(input), t)
+      }
+    }
   }
 }
