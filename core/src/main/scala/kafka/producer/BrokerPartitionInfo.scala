@@ -77,7 +77,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
     var t: Throwable = null
     while(i < brokers.size && !fetchMetaDataSucceeded) {
       val producer: SyncProducer = ProducerPool.createSyncProducer(producerConfig, brokers(i))
-      info("Fetching metadata for topic %s".format(brokers))
+      info("Fetching metadata for topic %s".format(topics))
       try {
         topicMetaDataResponse = producer.send(topicMetadataRequest)
         fetchMetaDataSucceeded = true
