@@ -99,7 +99,6 @@ object CreateTopicCommand extends Logging {
       AdminUtils.assignReplicasToBrokers(brokerList, numPartitions, replicationFactor)
     else
       getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet)
-
     debug("Replica assignment list for %s is %s".format(topic, partitionReplicaAssignment))
     AdminUtils.createTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment, zkClient)
   }

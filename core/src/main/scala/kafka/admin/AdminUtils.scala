@@ -89,8 +89,8 @@ object AdminUtils extends Logging {
   def getTopicMetaDataFromZK(topics: Seq[String], zkClient: ZkClient): Seq[TopicMetadata] = {
     val cachedBrokerInfo = new mutable.HashMap[Int, Broker]()
     topics.map { topic =>
-      if (ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic))) {
-        val topicPartitionAssignment = ZkUtils.getPartitionAssignmentForTopics(zkClient, List(topic).iterator).get(topic).get
+      if(ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic))) {
+        val topicPartitionAssignment = ZkUtils.getPartitionAssignmentForTopics(zkClient, List(topic)).get(topic).get
         val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
 
         val partitionMetadata = sortedPartitions.map { partitionMap =>

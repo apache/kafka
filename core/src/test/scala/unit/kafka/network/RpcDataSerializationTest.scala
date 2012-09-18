@@ -72,7 +72,7 @@ object RpcDataSerializationTestUtils{
     val leaderAndISR2 = new LeaderAndIsr(leader2, 1, isr2, 2)
     val map = Map(((topic1, 0), leaderAndISR1),
                   ((topic2, 0), leaderAndISR2))
-    new LeaderAndIsrRequest( LeaderAndIsrRequest.NotInit, map)
+    new LeaderAndIsrRequest(map)
   }
 
   def createTestLeaderAndISRResponse() : LeaderAndISRResponse = {

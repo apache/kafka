@@ -24,6 +24,7 @@ import kafka.utils._
 import java.util.concurrent._
 import atomic.AtomicBoolean
 import org.I0Itec.zkclient.ZkClient
+import kafka.controller.KafkaController
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required

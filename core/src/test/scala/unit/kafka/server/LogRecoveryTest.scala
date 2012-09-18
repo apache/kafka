@@ -1,3 +1,19 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+*/
 package kafka.server
 
 import org.scalatest.junit.JUnit3Suite
@@ -111,7 +127,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     server1.startup()
 
     leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500)
-    assertEquals("Leader must remain on broker 1", 1, leader.getOrElse(-1))
+    assertTrue("Leader must remain on broker 1, in case of zookeeper session expiration it can move to broker 0",
+      leader.isDefined && (leader.get == 0 || leader.get == 1))
 
     assertEquals(30L, hwFile1.read(topic, 0))
     // since server 2 was never shut down, the hw value of 30 is probably not checkpointed to disk yet
@@ -120,7 +137,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     server2.startup()
     leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500, leader)
-    assertEquals("Leader must remain on broker 0", 0, leader.getOrElse(-1))
+    assertTrue("Leader must remain on broker 0, in case of zookeeper session expiration it can move to broker 1",
+      leader.isDefined && (leader.get == 0 || leader.get == 1))
 
     sendMessages()
     // give some time for follower 1 to record leader HW of 60

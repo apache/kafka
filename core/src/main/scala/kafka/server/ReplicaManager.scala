@@ -163,13 +163,14 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
     /**
      *  If IsInit flag is on, this means that the controller wants to treat topics not in the request
      *  as deleted.
+     *  TODO: Handle this properly as part of KAFKA-330
      */
-    if(leaderAndISRRequest.isInit == LeaderAndIsrRequest.IsInit){
-      startHighWaterMarksCheckPointThread
-      val partitionsToRemove = allPartitions.filter(p => !leaderAndISRRequest.leaderAndISRInfos.contains(p._1)).map(entry => entry._1)
-      info("Init flag is set in leaderAndISR request, partitions to remove: %s".format(partitionsToRemove))
-      partitionsToRemove.foreach(p => stopReplica(p._1, p._2))
-    }
+//    if(leaderAndISRRequest.isInit == LeaderAndIsrRequest.IsInit){
+//      startHighWaterMarksCheckPointThread
+//      val partitionsToRemove = allPartitions.filter(p => !leaderAndISRRequest.leaderAndISRInfos.contains(p._1)).map(entry => entry._1)
+//      info("Init flag is set in leaderAndISR request, partitions to remove: %s".format(partitionsToRemove))
+//      partitionsToRemove.foreach(p => stopReplica(p._1, p._2))
+//    }
 
     responseMap
   }

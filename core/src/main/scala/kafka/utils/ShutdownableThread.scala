@@ -33,7 +33,7 @@ abstract class ShutdownableThread(val name: String)
     isRunning.set(false)
     interrupt()
     shutdownLatch.await()
-    info("Shutted down completed")
+    info("Shutdown completed")
   }
 
     /**

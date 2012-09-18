@@ -419,7 +419,7 @@ object ZkUtils extends Logging {
     ret
   }
 
-  def getPartitionLeaderAndIsrForTopics(zkClient: ZkClient, topics: Iterator[String]):
+  def getPartitionLeaderAndIsrForTopics(zkClient: ZkClient, topics: Seq[String]):
   mutable.Map[(String, Int), LeaderAndIsr] = {
     val ret = new mutable.HashMap[(String, Int), LeaderAndIsr]
     val partitionsForTopics = getPartitionsForTopics(zkClient, topics)
@@ -434,7 +434,28 @@ object ZkUtils extends Logging {
     ret
   }
 
-  def getPartitionAssignmentForTopics(zkClient: ZkClient, topics: Iterator[String]):
+  def getReplicaAssignmentForTopics(zkClient: ZkClient, topics: Seq[String]): mutable.Map[(String, Int), Seq[Int]] = {
+    val ret = new mutable.HashMap[(String, Int), Seq[Int]]
+    topics.foreach { topic =>
+      val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
+      jsonPartitionMapOpt match {
+        case Some(jsonPartitionMap) =>
+          SyncJSON.parseFull(jsonPartitionMap) match {
+            case Some(m) =>
+              val replicaMap = m.asInstanceOf[Map[String, Seq[String]]]
+              for((partition, replicas) <- replicaMap){
+                ret.put((topic, partition.toInt), replicas.map(_.toInt))
+                debug("Replicas assigned to topic [%s], partition [%s] are [%s]".format(topic, partition, replicas))
+              }
+            case None =>
+          }
+        case None =>
+      }
+    }
+    ret
+  }
+
+  def getPartitionAssignmentForTopics(zkClient: ZkClient, topics: Seq[String]):
   mutable.Map[String, collection.Map[Int, Seq[Int]]] = {
     val ret = new mutable.HashMap[String, Map[Int, Seq[Int]]]()
     topics.foreach{ topic =>
@@ -466,7 +487,7 @@ object ZkUtils extends Logging {
     ret
   }
 
-  def getPartitionsForTopics(zkClient: ZkClient, topics: Iterator[String]): mutable.Map[String, Seq[Int]] = {
+  def getPartitionsForTopics(zkClient: ZkClient, topics: Seq[String]): mutable.Map[String, Seq[Int]] = {
     getPartitionAssignmentForTopics(zkClient, topics).map
     { topicAndPartitionMap =>
       val topic = topicAndPartitionMap._1
@@ -477,20 +498,17 @@ object ZkUtils extends Logging {
   }
 
   def getPartitionsAssignedToBroker(zkClient: ZkClient, topics: Seq[String], brokerId: Int):
-  Map[(String, Int), Seq[Int]] = {
-    val ret = new mutable.HashMap[(String, Int), Seq[Int]]
-    val topicsAndPartitions = getPartitionAssignmentForTopics(zkClient, topics.iterator)
-    topicsAndPartitions.map
-    {
-      topicAndPartitionMap =>
-        val topic = topicAndPartitionMap._1
-        val partitionMap = topicAndPartitionMap._2
-        val relevantPartitionsMap = partitionMap.filter( m => m._2.contains(brokerId) )
-        for((relevantPartition, replicaAssignment) <- relevantPartitionsMap){
-          ret.put((topic, relevantPartition), replicaAssignment)
-        }
-    }
-    ret
+    Seq[(String, Int)] = {
+    val topicsAndPartitions = getPartitionAssignmentForTopics(zkClient, topics)
+    topicsAndPartitions.map { topicAndPartitionMap =>
+      val topic = topicAndPartitionMap._1
+      val partitionMap = topicAndPartitionMap._2
+      val relevantPartitionsMap = partitionMap.filter( m => m._2.contains(brokerId) )
+      val relevantPartitions = relevantPartitionsMap.map(_._1)
+      for(relevantPartition <- relevantPartitions) yield {
+        (topic, relevantPartition)
+      }
+    }.flatten[(String, Int)].toSeq
   }
 
   def deletePartition(zkClient : ZkClient, brokerId: Int, topic: String) {
