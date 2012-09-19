@@ -21,7 +21,6 @@ import kafka.api._
 import kafka.network.{BlockingChannel, BoundedByteBufferSend, Receive}
 import kafka.utils._
 import java.util.Random
-import kafka.common.ErrorMapping
 import java.util.concurrent.TimeUnit
 import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 
@@ -109,12 +108,9 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     ProducerResponse.readFrom(response.buffer)
   }
 
-  def send(request: TopicMetadataRequest): Seq[TopicMetadata] = {
+  def send(request: TopicMetadataRequest): TopicMetadataResponse = {
     val response = doSend(request)
-    val topicMetaDataResponse = TopicMetaDataResponse.readFrom(response.buffer)
-    // try to throw exception based on global error codes
-    ErrorMapping.maybeThrowException(topicMetaDataResponse.errorCode)
-    topicMetaDataResponse.topicsMetadata
+    TopicMetadataResponse.readFrom(response.buffer)
   }
 
   def close() = {

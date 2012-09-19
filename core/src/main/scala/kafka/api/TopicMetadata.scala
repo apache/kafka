@@ -51,10 +51,6 @@ sealed trait LeaderRequest { def requestId: Byte }
 case object LeaderExists extends LeaderRequest { val requestId: Byte = 1 }
 case object LeaderDoesNotExist extends LeaderRequest { val requestId: Byte = 0 }
 
-sealed trait LogSegmentMetadataRequest { def requestId: Byte }
-case object LogSegmentMetadataExists extends LogSegmentMetadataRequest { val requestId: Byte = 1 }
-case object LogSegmentMetadataDoesNotExist extends LogSegmentMetadataRequest { val requestId: Byte = 0 }
-
 object TopicMetadata {
 
   def readFrom(buffer: ByteBuffer): TopicMetadata = {
@@ -114,28 +110,7 @@ object PartitionMetadata {
       isr(i) = Broker.readFrom(buffer)
     }
 
-    val doesLogMetadataExist = getLogSegmentMetadataRequest(buffer.get)
-    val logMetadata = doesLogMetadataExist match {
-      case LogSegmentMetadataExists =>
-        val numLogSegments = getIntInRange(buffer, "total number of log segments", (0, Int.MaxValue))
-        val totalDataSize = getLongInRange(buffer, "total data size", (0, Long.MaxValue))
-        val numSegmentMetadata = getIntInRange(buffer, "number of log segment metadata", (0, Int.MaxValue))
-        val segmentMetadata = numSegmentMetadata match {
-          case 0 => None
-          case _ =>
-            val metadata = new ListBuffer[LogSegmentMetadata]()
-            for(i <- 0 until numSegmentMetadata) {
-              val beginningOffset = getLongInRange(buffer, "beginning offset", (0, Long.MaxValue))
-              val lastModified = getLongInRange(buffer, "last modified time", (0, Long.MaxValue))
-              val size = getLongInRange(buffer, "size of log segment", (0, Long.MaxValue))
-              metadata += new LogSegmentMetadata(beginningOffset, lastModified, size)
-            }
-            Some(metadata)
-        }
-        Some(new LogMetadata(numLogSegments, totalDataSize, segmentMetadata))
-      case LogSegmentMetadataDoesNotExist => None
-    }
-    new PartitionMetadata(partitionId, leader, replicas, isr, errorCode, logMetadata)
+    new PartitionMetadata(partitionId, leader, replicas, isr, errorCode)
   }
 
   private def getLeaderRequest(requestId: Byte): LeaderRequest = {
@@ -145,17 +120,10 @@ object PartitionMetadata {
       case _ => throw new KafkaException("Unknown leader request id " + requestId)
     }
   }
-
-  private def getLogSegmentMetadataRequest(requestId: Byte): LogSegmentMetadataRequest = {
-    requestId match {
-      case LogSegmentMetadataExists.requestId => LogSegmentMetadataExists
-      case LogSegmentMetadataDoesNotExist.requestId => LogSegmentMetadataDoesNotExist
-    }
-  }
 }
 
 case class PartitionMetadata(partitionId: Int, val leader: Option[Broker], replicas: Seq[Broker], isr: Seq[Broker] = Seq.empty,
-                             errorCode: Short = ErrorMapping.NoError, logMetadata: Option[LogMetadata] = None) {
+                             errorCode: Short = ErrorMapping.NoError) {
   def sizeInBytes: Int = {
     var size: Int = 2 /* error code */ + 4 /* partition id */ + 1 /* if leader exists*/
 
@@ -169,11 +137,6 @@ case class PartitionMetadata(partitionId: Int, val leader: Option[Broker], repli
     size += 2 /* number of in sync replicas */
     size += isr.foldLeft(0)(_ + _.sizeInBytes)
 
-    size += 1 /* if log segment metadata exists */
-    logMetadata match {
-      case Some(metadata) => size += metadata.sizeInBytes
-      case None =>
-    }
     debug("Size of partition metadata = " + size)
     size
   }
@@ -198,53 +161,6 @@ case class PartitionMetadata(partitionId: Int, val leader: Option[Broker], repli
     /* number of in-sync replicas */
     buffer.putShort(isr.size.toShort)
     isr.foreach(r => r.writeTo(buffer))
-
-    /* if log segment metadata exists */
-    logMetadata match {
-      case Some(metadata) =>
-        buffer.put(LogSegmentMetadataExists.requestId)
-        metadata.writeTo(buffer)
-      case None => buffer.put(LogSegmentMetadataDoesNotExist.requestId)
-    }
-
-  }
-}
-
-case class LogMetadata(numLogSegments: Int, totalSize: Long, logSegmentMetadata: Option[Seq[LogSegmentMetadata]]) {
-  def sizeInBytes: Int = {
-    var size: Int = 4 /* num log segments */ + 8 /* total data size */ + 4 /* number of log segment metadata */
-    logSegmentMetadata match {
-      case Some(segmentMetadata) => size += segmentMetadata.foldLeft(0)(_ + _.sizeInBytes)
-      case None =>
-    }
-    debug("Size of log metadata = " + size)
-    size
-  }
-
-  def writeTo(buffer: ByteBuffer) {
-    buffer.putInt(numLogSegments)
-    buffer.putLong(totalSize)
-    /* if segment metadata exists */
-    logSegmentMetadata match {
-      case Some(segmentMetadata) =>
-        /* number of log segments */
-        buffer.putInt(segmentMetadata.size)
-        segmentMetadata.foreach(m => m.writeTo(buffer))
-      case None =>
-        buffer.putInt(0)
-    }
-  }
-}
-
-case class LogSegmentMetadata(beginningOffset: Long, lastModified: Long, size: Long) {
-  def sizeInBytes: Int = {
-    8 /* beginning offset */ + 8 /* last modified timestamp */ + 8 /* log segment size in bytes */
-  }
-
-  def writeTo(buffer: ByteBuffer) {
-    buffer.putLong(beginningOffset)
-    buffer.putLong(lastModified)
-    buffer.putLong(size)
   }
 }
 

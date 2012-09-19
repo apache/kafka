@@ -18,34 +18,27 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.common.ErrorMapping
 
+object TopicMetadataResponse {
 
-object TopicMetaDataResponse {
-
-  def readFrom(buffer: ByteBuffer): TopicMetaDataResponse = {
+  def readFrom(buffer: ByteBuffer): TopicMetadataResponse = {
     val versionId = buffer.getShort
-    val errorCode = buffer.getShort
-
     val topicCount = buffer.getInt
     val topicsMetadata = new Array[TopicMetadata](topicCount)
     for( i <- 0 until topicCount) {
       topicsMetadata(i) = TopicMetadata.readFrom(buffer)
     }
-    new TopicMetaDataResponse(versionId, topicsMetadata.toSeq, errorCode)
+    new TopicMetadataResponse(versionId, topicsMetadata.toSeq)
   }
 }
 
-case class TopicMetaDataResponse(versionId: Short,
-                                 topicsMetadata: Seq[TopicMetadata],
-                                 errorCode: Short = ErrorMapping.NoError) extends RequestOrResponse
+case class TopicMetadataResponse(versionId: Short,
+                                 topicsMetadata: Seq[TopicMetadata]) extends RequestOrResponse
 {
-  val sizeInBytes = 2 + topicsMetadata.foldLeft(4)(_ + _.sizeInBytes) + 2
+  val sizeInBytes = 2 + topicsMetadata.foldLeft(4)(_ + _.sizeInBytes)
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
-    /* error code */
-    buffer.putShort(errorCode)
     /* topic metadata */
     buffer.putInt(topicsMetadata.length)
     topicsMetadata.foreach(_.writeTo(buffer))

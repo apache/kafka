@@ -14,28 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package kafka.javaapi
 
-class FetchResponse(private val underlying: kafka.api.FetchResponse) {
+import kafka.api._
+import java.nio.ByteBuffer
+import scala.collection.JavaConversions.asBuffer
 
-  def messageSet(topic: String, partition: Int): kafka.javaapi.message.ByteBufferMessageSet = {
-    import Implicits._
-    underlying.messageSet(topic, partition)
-  }
+class TopicMetadataRequest(val versionId: Short,
+                           val clientId: String,
+                           val topics: java.util.List[String]) extends RequestOrResponse(Some(kafka.api.RequestKeys.MetadataKey)) {
+  val underlying: kafka.api.TopicMetadataRequest =
+    new kafka.api.TopicMetadataRequest(versionId, clientId, topics)
 
-  def highWatermark(topic: String, partition: Int) = underlying.highWatermark(topic, partition)
+  def this(topics: java.util.List[String]) =
+    this(kafka.api.TopicMetadataRequest.CurrentVersion, kafka.api.TopicMetadataRequest.DefaultClientId, topics)
 
-  def hasError = underlying.hasError
+  def writeTo(buffer: ByteBuffer) = underlying.writeTo(buffer)
 
-  def errorCode(topic: String, partition: Int) = underlying.errorCode(topic, partition)
-
-  override def equals(other: Any) = canEqual(other) && {
-    val otherFetchResponse = other.asInstanceOf[kafka.javaapi.FetchResponse]
-    this.underlying.equals(otherFetchResponse.underlying)
-  }
-
-  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.FetchResponse]
-
-  override def hashCode = underlying.hashCode
+  def sizeInBytes: Int = underlying.sizeInBytes()
 }

@@ -62,7 +62,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                  val enableFetcher: Boolean) // for testing only
     extends ConsumerConnector {
 
-  val underlying = new kafka.consumer.ZookeeperConsumerConnector(config, enableFetcher)
+  private val underlying = new kafka.consumer.ZookeeperConsumerConnector(config, enableFetcher)
 
   def this(config: ConsumerConfig) = this(config, true)
 

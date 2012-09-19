@@ -19,7 +19,7 @@ package kafka.server
 import kafka.utils.ZkUtils._
 import kafka.utils.Logging
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import org.I0Itec.zkclient.{IZkDataListener}
+import org.I0Itec.zkclient.IZkDataListener
 import kafka.controller.ControllerContext
 
 /**

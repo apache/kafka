@@ -22,40 +22,24 @@ import org.junit.Test
 import kafka.message.{DefaultCompressionCodec, CompressionCodec, NoCompressionCodec, Message}
 
 class ByteBufferMessageSetTest extends kafka.javaapi.message.BaseMessageSetTestCases {
+  override def createMessageSet(messages: Seq[Message], compressed: CompressionCodec = NoCompressionCodec): ByteBufferMessageSet =
+    new ByteBufferMessageSet(new kafka.message.ByteBufferMessageSet(compressed, messages: _*))
 
-  override def createMessageSet(messages: Seq[Message],
-                                compressed: CompressionCodec = NoCompressionCodec): ByteBufferMessageSet =
-    new ByteBufferMessageSet(compressed, getMessageList(messages: _*))
-  
+  val msgSeq: Seq[Message] = Seq(new Message("hello".getBytes()), new Message("there".getBytes()))
+
   @Test
   def testEquals() {
-    val messageList = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                               messages = getMessageList(new Message("hello".getBytes()),
-                                                                         new Message("there".getBytes())))
-    val moreMessages = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                                messages = getMessageList(new Message("hello".getBytes()),
-                                                                          new Message("there".getBytes())))
-
+    val messageList = createMessageSet(msgSeq, NoCompressionCodec)
+    val moreMessages = createMessageSet(msgSeq, NoCompressionCodec)
     assertEquals(messageList, moreMessages)
     assertTrue(messageList.equals(moreMessages))
   }
 
   @Test
   def testEqualsWithCompression () {
-    val messageList = new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec,
-                                            messages = getMessageList(new Message("hello".getBytes()),
-                                                                      new Message("there".getBytes())))
-    val moreMessages = new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec,
-                                                messages = getMessageList(new Message("hello".getBytes()),
-                                                                          new Message("there".getBytes())))
-
+    val messageList = createMessageSet(msgSeq, DefaultCompressionCodec)
+    val moreMessages = createMessageSet(msgSeq, DefaultCompressionCodec)
     assertEquals(messageList, moreMessages)
     assertTrue(messageList.equals(moreMessages))
-  }
-
-  private def getMessageList(messages: Message*): java.util.List[Message] = {
-    val messageList = new java.util.ArrayList[Message]()
-    messages.foreach(m => messageList.add(m))
-    messageList
   }
 }

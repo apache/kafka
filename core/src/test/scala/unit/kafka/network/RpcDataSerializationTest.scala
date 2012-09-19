@@ -121,8 +121,8 @@ object RpcDataSerializationTestUtils{
     new TopicMetadataRequest(1, "client 1", Seq(topic1, topic2))
   }
 
-  def createTestTopicMetadataResponse: TopicMetaDataResponse = {
-    new TopicMetaDataResponse(1, Seq(topicmetaData1, topicmetaData2))
+  def createTestTopicMetadataResponse: TopicMetadataResponse = {
+    new TopicMetadataResponse(1, Seq(topicmetaData1, topicmetaData2))
   }
 }
 
@@ -215,7 +215,7 @@ class RpcDataSerializationTest extends JUnitSuite {
     buffer = ByteBuffer.allocate(topicMetadataResponse.sizeInBytes)
     topicMetadataResponse.writeTo(buffer)
     buffer.rewind()
-    val deserializedTopicMetadataResponse = TopicMetaDataResponse.readFrom(buffer)
+    val deserializedTopicMetadataResponse = TopicMetadataResponse.readFrom(buffer)
     assertEquals("The original and deserialzed topicMetadataResponse should be the same", topicMetadataResponse,
                  deserializedTopicMetadataResponse)
   }

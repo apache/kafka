@@ -29,7 +29,7 @@ import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.server.{ReplicaManager, KafkaApis, KafkaConfig}
 import kafka.common.ErrorMapping
-import kafka.api.{RequestKeys, TopicMetadata, TopicMetaDataResponse, TopicMetadataRequest}
+import kafka.api.{RequestKeys, TopicMetadata, TopicMetadataResponse, TopicMetadataRequest}
 
 class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
@@ -76,7 +76,6 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     val partitionMetadata = topicMetadata.head.partitionsMetadata
     assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
     assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
-    assertNull("Not expecting log metadata", partitionMetadata.head.logMetadata.getOrElse(null))
     assertEquals(1, partitionMetadata.head.replicas.size)
   }
 
@@ -90,7 +89,6 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     val partitionMetadata = topicMetadata.head.partitionsMetadata
     assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
     assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
-    assertNull("Not expecting log metadata", partitionMetadata.head.logMetadata.getOrElse(null))
     assertEquals(0, partitionMetadata.head.replicas.size)
     assertEquals(None, partitionMetadata.head.leader)
     assertEquals(ErrorMapping.LeaderNotAvailableCode, partitionMetadata.head.errorCode)
@@ -117,7 +115,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     val metadataResponse = requestChannel.receiveResponse(0).responseSend.asInstanceOf[BoundedByteBufferSend].buffer
     
     // check assertions
-    val topicMetadata = TopicMetaDataResponse.readFrom(metadataResponse).topicsMetadata
+    val topicMetadata = TopicMetadataResponse.readFrom(metadataResponse).topicsMetadata
 
     topicMetadata
   }

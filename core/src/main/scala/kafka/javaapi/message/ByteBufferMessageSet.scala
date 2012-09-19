@@ -16,20 +16,9 @@
 */
 package kafka.javaapi.message
 
-import java.nio.ByteBuffer
 import kafka.message._
 
-class ByteBufferMessageSet(private val buffer: ByteBuffer, val initialOffset: Long = 0L) extends MessageSet {
-  val underlying: kafka.message.ByteBufferMessageSet = new kafka.message.ByteBufferMessageSet(buffer, initialOffset)
-  def this(buffer: ByteBuffer) = this(buffer, 0L)
-
-  def this(compressionCodec: CompressionCodec, messages: java.util.List[Message]) {
-    this(MessageSet.createByteBuffer(compressionCodec, scala.collection.JavaConversions.asBuffer(messages): _*), 0L)
-  }
-
-  def this(messages: java.util.List[Message]) {
-    this(NoCompressionCodec, messages)
-  }
+class ByteBufferMessageSet(private val underlying: kafka.message.ByteBufferMessageSet) extends MessageSet {
 
   def validBytes: Long = underlying.validBytes
 
@@ -53,12 +42,10 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer, val initialOffset: Lo
   override def equals(other: Any): Boolean = {
     other match {
       case that: ByteBufferMessageSet =>
-        (that canEqual this) && buffer.equals(that.buffer) && initialOffset == that.initialOffset
+        underlying.equals(that.underlying)
       case _ => false
     }
   }
-
-  def canEqual(other: Any): Boolean = other.isInstanceOf[ByteBufferMessageSet]
 
   override def hashCode: Int = underlying.hashCode
 

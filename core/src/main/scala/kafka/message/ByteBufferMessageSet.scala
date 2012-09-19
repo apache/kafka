@@ -181,12 +181,10 @@ class ByteBufferMessageSet(val buffer: ByteBuffer, val initialOffset: Long = 0L)
   override def equals(other: Any): Boolean = {
     other match {
       case that: ByteBufferMessageSet =>
-        (that canEqual this) && buffer.equals(that.buffer) && initialOffset == that.initialOffset
+        buffer.equals(that.buffer) && initialOffset == that.initialOffset
       case _ => false
     }
   }
-
-  override def canEqual(other: Any): Boolean = other.isInstanceOf[ByteBufferMessageSet]
 
   override def hashCode: Int = {
     var hash = 17

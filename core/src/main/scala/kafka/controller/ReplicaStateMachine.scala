@@ -22,7 +22,7 @@ import collection.JavaConversions._
 import kafka.api.LeaderAndIsr
 import kafka.common.StateChangeFailedException
 import java.util.concurrent.atomic.AtomicBoolean
-import org.I0Itec.zkclient.{IZkChildListener}
+import org.I0Itec.zkclient.IZkChildListener
 
 /**
  * This class represents the state machine for replicas. It defines the states that a replica can be in, and

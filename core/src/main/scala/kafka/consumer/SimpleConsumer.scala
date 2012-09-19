@@ -86,6 +86,11 @@ class SimpleConsumer( val host: String,
     }
   }
 
+  def send(request: TopicMetadataRequest): TopicMetadataResponse = {
+    val response = sendRequest(request)
+    TopicMetadataResponse.readFrom(response.buffer)
+  }
+
   /**
    *  Fetch a set of messages from a topic.
    *

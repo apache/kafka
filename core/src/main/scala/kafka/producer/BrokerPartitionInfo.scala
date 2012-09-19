@@ -73,16 +73,16 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
     var fetchMetaDataSucceeded: Boolean = false
     var i: Int = 0
     val topicMetadataRequest = new TopicMetadataRequest(topics)
-    var topicMetaDataResponse: Seq[TopicMetadata] = Nil
+    var topicsMetadata: Seq[TopicMetadata] = Nil
     var t: Throwable = null
     while(i < brokers.size && !fetchMetaDataSucceeded) {
       val producer: SyncProducer = ProducerPool.createSyncProducer(producerConfig, brokers(i))
       info("Fetching metadata for topic %s".format(topics))
       try {
-        topicMetaDataResponse = producer.send(topicMetadataRequest)
+        topicsMetadata = producer.send(topicMetadataRequest).topicsMetadata
         fetchMetaDataSucceeded = true
         // throw partition specific exception
-        topicMetaDataResponse.foreach(tmd =>{
+        topicsMetadata.foreach(tmd =>{
           trace("Metadata for topic %s is %s".format(tmd.topic, tmd))
           if(tmd.errorCode == ErrorMapping.NoError){
             topicPartitionInfo.put(tmd.topic, tmd)
@@ -94,7 +94,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
             }
           })
         })
-        producerPool.updateProducer(topicMetaDataResponse)
+        producerPool.updateProducer(topicsMetadata)
       } catch {
         case e =>
           warn("fetching broker partition metadata for topics [%s] from broker [%s] failed".format(topics, brokers(i).toString), e)

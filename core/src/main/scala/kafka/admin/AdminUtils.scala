@@ -121,15 +121,14 @@ object AdminUtils extends Logging {
               case e => throw new ReplicaNotAvailableException(e)
             }
 
-            new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError,
-              None /* Return log segment metadata when getOffsetsBefore will be replaced with this API */)
+            new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
           }catch {
-            case e: ReplicaNotAvailableException => new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo,
-              ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]),
-              None /* Return log segment metadata when getOffsetsBefore will be replaced with this API */)
-            case le: LeaderNotAvailableException => new PartitionMetadata(partition, None, replicaInfo, isrInfo,
-              ErrorMapping.codeFor(le.getClass.asInstanceOf[Class[Throwable]]),
-              None /* Return log segment metadata when getOffsetsBefore will be replaced with this API */)
+            case e: ReplicaNotAvailableException =>
+              new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo,
+                                    ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+            case le: LeaderNotAvailableException =>
+              new PartitionMetadata(partition, None, replicaInfo, isrInfo,
+                                    ErrorMapping.codeFor(le.getClass.asInstanceOf[Class[Throwable]]))
           }
         }
         new TopicMetadata(topic, partitionMetadata)

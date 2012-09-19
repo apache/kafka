@@ -28,7 +28,7 @@ class SimpleConsumer(val host: String,
                      val port: Int,
                      val soTimeout: Int,
                      val bufferSize: Int) {
-  val underlying = new kafka.consumer.SimpleConsumer(host, port, soTimeout, bufferSize)
+  private val underlying = new kafka.consumer.SimpleConsumer(host, port, soTimeout, bufferSize)
 
   /**
    *  Fetch a set of messages from a topic. This version of the fetch method
@@ -52,6 +52,17 @@ class SimpleConsumer(val host: String,
    */
   def fetch(request: kafka.javaapi.FetchRequest): FetchResponse = {
     fetch(request.underlying)
+  }
+
+  /**
+   *  Fetch metadata for a sequence of topics.
+   *  
+   *  @param request specifies the versionId, clientId, sequence of topics.
+   *  @return metadata for each topic in the request.
+   */
+  def send(request: kafka.javaapi.TopicMetadataRequest): kafka.javaapi.TopicMetadataResponse = {
+    import kafka.javaapi.Implicits._
+    underlying.send(request.underlying)
   }
 
   /**
