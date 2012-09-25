@@ -824,7 +824,7 @@ def cleanup_data_at_remote_hosts(systemTestEnv, testcaseEnv):
             logger.info("skipping role [" + role + "] on host : [" + hostname + "]", extra=d)
             continue
 
-        cmdStr  = "ssh " + hostname + " 'rm -r " + dataDir + "/*'"
+        cmdStr  = "ssh " + hostname + " 'rm -rf " + dataDir + "'"
 
         if not dataDir.startswith("/tmp"):
             logger.warn("possible destructive command [" + cmdStr + "]", extra=d)

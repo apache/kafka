@@ -387,7 +387,7 @@ def remove_kafka_home_dir_at_remote_hosts(hostname, kafkaHome):
         logger.info("executing command [" + cmdStr + "]", extra=d)
         system_test_utils.sys_call(cmdStr)
 
-        cmdStr  = "ssh " + hostname + " 'rm -r " + kafkaHome + "'"
+        cmdStr  = "ssh " + hostname + " 'rm -rf " + kafkaHome + "'"
         logger.info("executing command [" + cmdStr + "]", extra=d)
         #system_test_utils.sys_call(cmdStr)
     else:
