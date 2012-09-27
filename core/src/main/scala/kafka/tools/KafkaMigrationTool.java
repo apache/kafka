@@ -17,6 +17,15 @@
 
 package kafka.tools;
 
+import joptsimple.*;
+import kafka.javaapi.producer.Producer;
+import kafka.javaapi.producer.ProducerData;
+import kafka.message.Message;
+import kafka.producer.ProducerConfig;
+import kafka.utils.Utils;
+import scala.collection.Iterator;
+import scala.collection.JavaConversions;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -28,18 +37,6 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import joptsimple.ArgumentAcceptingOptionSpec;
-import joptsimple.OptionParser;
-import joptsimple.OptionSet;
-import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
-import kafka.javaapi.producer.Producer;
-import kafka.javaapi.producer.ProducerData;
-import kafka.message.Message;
-import kafka.producer.ProducerConfig;
-import kafka.utils.Utils;
-import scala.collection.JavaConversions;
-import scala.collection.Iterator;
 
 
 /**

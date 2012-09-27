@@ -112,9 +112,6 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* enable auto creation of topic on the server */
   val autoCreateTopics = props.getBoolean("auto.create.topics", true)
 
-  /* the maximum length of topic name*/
-  val maxTopicNameLength = props.getIntInRange("max.topic.name.length", Topic.maxNameLength, (1, Int.MaxValue))
-
   /**
    * Following properties are relevant to Kafka replication
    */

@@ -21,24 +21,21 @@ import kafka.common.InvalidTopicException
 import util.matching.Regex
 
 object Topic {
+  val legalChars = "[a-zA-Z0-9_-]"
   val maxNameLength = 255
-  val illegalChars = "/" + '\u0000' + '\u0001' + "-" + '\u001F' + '\u007F' + "-" + '\u009F' +
-                     '\uD800' + "-" + '\uF8FF' + '\uFFF0' + "-" + '\uFFFF'
-}
-
-class TopicNameValidator(maxLen: Int) {
-  // Regex checks for illegal chars and "." and ".." filenames
-  private val rgx = new Regex("(^\\.{1,2}$)|[" + Topic.illegalChars + "]")
+  private val rgx = new Regex(legalChars + "+")
 
   def validate(topic: String) {
     if (topic.length <= 0)
       throw new InvalidTopicException("topic name is illegal, can't be empty")
-    else if (topic.length > maxLen)
-      throw new InvalidTopicException("topic name is illegal, can't be longer than " + maxLen + " characters")
+    else if (topic.length > maxNameLength)
+      throw new InvalidTopicException("topic name is illegal, can't be longer than " + maxNameLength + " characters")
 
     rgx.findFirstIn(topic) match {
-      case Some(t) => throw new InvalidTopicException("topic name " + topic + " is illegal, doesn't match expected regular expression")
-      case None =>
+      case Some(t) =>
+        if (!t.equals(topic))
+          throw new InvalidTopicException("topic name " + topic + " is illegal, contains a character other than ASCII alphanumerics, _ and -")
+      case None => throw new InvalidTopicException("topic name " + topic + " is illegal,  contains a character other than ASCII alphanumerics, _ and -")
     }
   }
 }

@@ -51,11 +51,6 @@ object CreateTopicCommand extends Logging {
                                         "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
                            .ofType(classOf[String])
                            .defaultsTo("")
-    val maxTopicNameLenOpt = parser.accepts("max-name-len", "maximum length of the topic name")
-                           .withRequiredArg
-                           .describedAs("max topic name length")
-                           .ofType(classOf[java.lang.Integer])
-                           .defaultsTo(Topic.maxNameLength)
 
     val options = parser.parse(args : _*)
 
@@ -68,7 +63,6 @@ object CreateTopicCommand extends Logging {
     }
 
     val topic = options.valueOf(topicOpt)
-    val maxTopicNameLength = options.valueOf(maxTopicNameLenOpt).intValue
     val zkConnect = options.valueOf(zkConnectOpt)
     val nPartitions = options.valueOf(nPartitionsOpt).intValue
     val replicationFactor = options.valueOf(replicationFactorOpt).intValue
@@ -76,8 +70,7 @@ object CreateTopicCommand extends Logging {
     var zkClient: ZkClient = null
     try {
       zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
-      val topicNameValidator = new TopicNameValidator(maxTopicNameLength)
-      createTopic(zkClient, topic, nPartitions, replicationFactor, replicaAssignmentStr, topicNameValidator)
+      createTopic(zkClient, topic, nPartitions, replicationFactor, replicaAssignmentStr)
       println("creation succeeded!")
     } catch {
       case e =>
@@ -89,9 +82,8 @@ object CreateTopicCommand extends Logging {
     }
   }
 
-  def createTopic(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicationFactor: Int = 1, replicaAssignmentStr: String = "",
-                  topicNameValidator: TopicNameValidator = new TopicNameValidator(Topic.maxNameLength)) {
-    topicNameValidator.validate(topic)
+  def createTopic(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicationFactor: Int = 1, replicaAssignmentStr: String = "") {
+    Topic.validate(topic)
 
     val brokerList = ZkUtils.getSortedBrokerList(zkClient)
 

@@ -32,20 +32,29 @@ class TopicTest {
     for (i <- 1 to 6)
       longName += longName
     invalidTopicNames += longName
-    val badChars = Array('/', '\u0000', '\u0001', '\u0018', '\u001F', '\u008F', '\uD805', '\uFFFA')
+    val badChars = Array('/', '\\', ',', '\0', ':', "\"", '\'', ';', '*', '?', '.')
     for (weirdChar <- badChars) {
       invalidTopicNames += "Is" + weirdChar + "funny"
     }
 
-    val topicNameValidator = new TopicNameValidator(Topic.maxNameLength)
-
     for (i <- 0 until invalidTopicNames.size) {
       try {
-        topicNameValidator.validate(invalidTopicNames(i))
+        Topic.validate(invalidTopicNames(i))
         fail("Should throw InvalidTopicException.")
       }
       catch {
         case e: InvalidTopicException => "This is good."
+      }
+    }
+
+    val validTopicNames = new ArrayBuffer[String]()
+    validTopicNames += ("valid", "TOPIC", "nAmEs", "ar6", "VaL1d", "_0-9_")
+    for (i <- 0 until validTopicNames.size) {
+      try {
+        Topic.validate(validTopicNames(i))
+      }
+      catch {
+        case e: Exception => fail("Should not throw exception.")
       }
     }
   }
