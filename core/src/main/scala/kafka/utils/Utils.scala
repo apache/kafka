@@ -31,6 +31,8 @@ import joptsimple.{OptionSpec, OptionSet, OptionParser}
 import kafka.common.KafkaException
 import kafka.cluster.Broker
 import util.parsing.json.JSON
+import kafka.api.{TopicMetadataRequest, TopicMetadataResponse}
+import kafka.producer.{ProducerPool, SyncProducer}
 
 
 /**
@@ -672,6 +674,34 @@ object Utils extends Logging {
         System.exit(1)
       }
     }
+  }
+
+  def getTopicMetadata(topics: Seq[String], brokers: Seq[Broker]): TopicMetadataResponse = {
+    var fetchMetaDataSucceeded: Boolean = false
+    var i: Int = 0
+    val topicMetadataRequest = new TopicMetadataRequest(topics)
+    var topicMetadataResponse: TopicMetadataResponse = null
+    var t: Throwable = null
+    while(i < brokers.size && !fetchMetaDataSucceeded) {
+      val producer: SyncProducer = ProducerPool.createSyncProducer(None, brokers(i))
+      info("Fetching metadata for topic %s".format(topics))
+      try {
+        topicMetadataResponse = producer.send(topicMetadataRequest)
+        fetchMetaDataSucceeded = true
+      }
+      catch {
+        case e =>
+          warn("fetching topic metadata for topics [%s] from broker [%s] failed".format(topics, brokers(i).toString), e)
+          t = e
+      } finally {
+        i = i + 1
+        producer.close()
+      }
+    }
+    if(!fetchMetaDataSucceeded){
+      throw new KafkaException("fetching topic metadata for topics [%s] from broker [%s] failed".format(topics, brokers), t)
+    }
+    return topicMetadataResponse
   }
 
   /**

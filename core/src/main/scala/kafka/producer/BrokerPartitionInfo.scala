@@ -70,43 +70,23 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
    * @param topic the topic for which the metadata is to be fetched
    */
   def updateInfo(topics: Seq[String]) = {
-    var fetchMetaDataSucceeded: Boolean = false
-    var i: Int = 0
-    val topicMetadataRequest = new TopicMetadataRequest(topics)
     var topicsMetadata: Seq[TopicMetadata] = Nil
-    var t: Throwable = null
-    while(i < brokers.size && !fetchMetaDataSucceeded) {
-      val producer: SyncProducer = ProducerPool.createSyncProducer(producerConfig, brokers(i))
-      info("Fetching metadata for topic %s".format(topics))
-      try {
-        topicsMetadata = producer.send(topicMetadataRequest).topicsMetadata
-        fetchMetaDataSucceeded = true
-        // throw partition specific exception
-        topicsMetadata.foreach(tmd =>{
-          trace("Metadata for topic %s is %s".format(tmd.topic, tmd))
-          if(tmd.errorCode == ErrorMapping.NoError){
-            topicPartitionInfo.put(tmd.topic, tmd)
-          } else
-            warn("Metadata for topic [%s] is erronous: [%s]".format(tmd.topic, tmd), ErrorMapping.exceptionFor(tmd.errorCode))
-          tmd.partitionsMetadata.foreach(pmd =>{
-            if (pmd.errorCode != ErrorMapping.NoError){
-              debug("Metadata for topic partition [%s, %d] is errornous: [%s]".format(tmd.topic, pmd.partitionId, pmd), ErrorMapping.exceptionFor(pmd.errorCode))
-            }
-          })
-        })
-        producerPool.updateProducer(topicsMetadata)
-      } catch {
-        case e =>
-          warn("fetching broker partition metadata for topics [%s] from broker [%s] failed".format(topics, brokers(i).toString), e)
-          t = e
-      } finally {
-        i = i + 1
-        producer.close()
-      }
-    }
-    if(!fetchMetaDataSucceeded){
-      throw new KafkaException("fetching broker partition metadata for topics [%s] from broker [%s] failed".format(topics, brokers), t)
-    }
+    val topicMetadataResponse = Utils.getTopicMetadata(topics, brokers)
+    topicsMetadata = topicMetadataResponse.topicsMetadata
+    // throw partition specific exception
+    topicsMetadata.foreach(tmd =>{
+      trace("Metadata for topic %s is %s".format(tmd.topic, tmd))
+      if(tmd.errorCode == ErrorMapping.NoError){
+        topicPartitionInfo.put(tmd.topic, tmd)
+      } else
+        warn("Metadata for topic [%s] is erronous: [%s]".format(tmd.topic, tmd), ErrorMapping.exceptionFor(tmd.errorCode))
+      tmd.partitionsMetadata.foreach(pmd =>{
+        if (pmd.errorCode != ErrorMapping.NoError){
+          debug("Metadata for topic partition [%s, %d] is errornous: [%s]".format(tmd.topic, pmd.partitionId, pmd), ErrorMapping.exceptionFor(pmd.errorCode))
+        }
+      })
+    })
+    producerPool.updateProducer(topicsMetadata)
   }
 }
 

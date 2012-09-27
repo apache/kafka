@@ -27,13 +27,14 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import java.net.InetAddress
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
-import kafka.api.OffsetRequest
 import java.util.UUID
 import kafka.serializer.Decoder
 import kafka.utils.ZkUtils._
 import kafka.common.{KafkaException, NoBrokersForPartitionException, ConsumerRebalanceFailedException, InvalidConfigException}
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
+import kafka.utils.Utils._
+import kafka.api.OffsetRequest
 
 
 /**
@@ -410,8 +411,21 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     private def rebalance(cluster: Cluster): Boolean = {
       val myTopicThreadIdsMap = TopicCount.constructTopicCount(group, consumerIdString, zkClient).getConsumerThreadIdsPerTopic
       val consumersPerTopicMap = getConsumersPerTopic(zkClient, group)
-      val partitionsPerTopicMap = getPartitionsForTopics(zkClient, myTopicThreadIdsMap.keySet.toSeq)
-
+      val brokers = getAllBrokersInCluster(zkClient)
+      val topicsMetadata = getTopicMetadata(myTopicThreadIdsMap.keySet.toSeq, brokers).topicsMetadata
+      val partitionsPerTopicMap = new mutable.HashMap[String, Seq[Int]]
+      val leaderIdForPartitionsMap = new mutable.HashMap[(String, Int), Int]
+      topicsMetadata.foreach(m =>{
+        val topic = m.topic
+        val partitions = m.partitionsMetadata.map(m1 => m1.partitionId)
+        partitionsPerTopicMap.put(topic, partitions)
+        m.partitionsMetadata.foreach(pmd =>{
+          val partitionId = pmd.partitionId
+          val leaderOpt = pmd.leader
+          if(leaderOpt.isDefined)
+            leaderIdForPartitionsMap.put((topic, partitionId), leaderOpt.get.id)
+        })
+      })
       /**
        * fetchers must be stopped to avoid data duplication, since if the current
        * rebalancing attempt fails, the partitions that are released could be owned by another consumer.
@@ -423,14 +437,14 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       releasePartitionOwnership(topicRegistry)
 
       var partitionOwnershipDecision = new collection.mutable.HashMap[(String, Int), String]()
-      var currentTopicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]]
+      val currentTopicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]]
 
       for ((topic, consumerThreadIdSet) <- myTopicThreadIdsMap) {
         currentTopicRegistry.put(topic, new Pool[Int, PartitionTopicInfo])
 
         val topicDirs = new ZKGroupTopicDirs(group, topic)
         val curConsumers = consumersPerTopicMap.get(topic).get
-        var curPartitions: Seq[Int] = partitionsPerTopicMap.get(topic).get
+        val curPartitions: Seq[Int] = partitionsPerTopicMap.get(topic).get
 
         val nPartsPerConsumer = curPartitions.size / curConsumers.size
         val nConsumersWithExtraPart = curPartitions.size % curConsumers.size
@@ -454,7 +468,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             for (i <- startPart until startPart + nParts) {
               val partition = curPartitions(i)
               info(consumerThreadId + " attempting to claim partition " + partition)
-              addPartitionTopicInfo(currentTopicRegistry, topicDirs, partition, topic, consumerThreadId)
+              addPartitionTopicInfo(currentTopicRegistry, leaderIdForPartitionsMap, topicDirs, partition, topic, consumerThreadId)
               // record the partition ownership decision
               partitionOwnershipDecision += ((topic, partition) -> consumerThreadId)
             }
@@ -481,7 +495,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     private def closeFetchersForQueues(cluster: Cluster,
                                        messageStreams: Map[String,List[KafkaStream[_]]],
                                        queuesToBeCleared: Iterable[BlockingQueue[FetchedDataChunk]]) {
-      var allPartitionInfos = topicRegistry.values.map(p => p.values).flatten
+      val allPartitionInfos = topicRegistry.values.map(p => p.values).flatten
       fetcher match {
         case Some(f) =>
           f.stopAllConnections
@@ -571,12 +585,13 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     }
 
     private def addPartitionTopicInfo(currentTopicRegistry: Pool[String, Pool[Int, PartitionTopicInfo]],
+                                      leaderIdForPartitionsMap: Map[(String, Int), Int],
                                       topicDirs: ZKGroupTopicDirs, partition: Int,
                                       topic: String, consumerThreadId: String) {
       val partTopicInfoMap = currentTopicRegistry.get(topic)
 
       // find the leader for this partition
-      val leaderOpt = getLeaderForPartition(zkClient, topic, partition)
+      val leaderOpt = leaderIdForPartitionsMap.get((topic, partition))
       leaderOpt match {
         case None => throw new NoBrokersForPartitionException("No leader available for partition %d on topic %s".
           format(partition, topic))

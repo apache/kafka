@@ -21,12 +21,13 @@ import org.I0Itec.zkclient.ZkClient
 import kafka.server.{AbstractFetcherThread, AbstractFetcherManager}
 import kafka.cluster.{Cluster, Broker}
 import scala.collection.immutable
+import collection.mutable.HashMap
 import scala.collection.mutable
 import java.util.concurrent.locks.ReentrantLock
 import kafka.utils.ZkUtils._
 import kafka.utils.{ShutdownableThread, SystemTime}
+import kafka.utils.Utils._
 import kafka.common.TopicAndPartition
-
 
 /**
  *  Usage:
@@ -49,21 +50,31 @@ class ConsumerFetcherManager(private val consumerIdString: String,
       try {
         if (noLeaderPartitionSet.isEmpty)
           cond.await()
-        noLeaderPartitionSet.foreach {
+
+        val brokers = getAllBrokersInCluster(zkClient)
+        val topicsMetadata = getTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSeq, brokers).topicsMetadata
+        val leaderForPartitionsMap = new HashMap[(String, Int), Broker]
+        topicsMetadata.foreach(
+          tmd => {
+            val topic = tmd.topic
+            tmd.partitionsMetadata.foreach(
+            pmd => {
+              if(pmd.leader.isDefined){
+                val partition = pmd.partitionId
+                val leaderBroker = pmd.leader.get
+                leaderForPartitionsMap.put((topic, partition), leaderBroker)
+              }
+            })
+          })
+        noLeaderPartitionSet.foreach
+        {
           case(TopicAndPartition(topic, partitionId)) =>
             // find the leader for this partition
-            getLeaderForPartition(zkClient, topic, partitionId) match {
-              case Some(leaderId) =>
-                cluster.getBroker(leaderId) match {
-                  case Some(broker) =>
-                    val pti = partitionMap((topic, partitionId))
-                    addFetcher(topic, partitionId, pti.getFetchOffset(), broker)
-                    noLeaderPartitionSet.remove(TopicAndPartition(topic, partitionId))
-                  case None =>
-                    error("Broker %d is unavailable, fetcher for topic %s partition %d could not be started"
-                                  .format(leaderId, topic, partitionId))
-                }
-              case None => // let it go since we will keep retrying
+            val leaderBrokerOpt = leaderForPartitionsMap.get((topic, partitionId))
+            if(leaderBrokerOpt.isDefined){
+              val pti = partitionMap((topic, partitionId))
+              addFetcher(topic, partitionId, pti.getFetchOffset(), leaderBrokerOpt.get)
+              noLeaderPartitionSet.remove(TopicAndPartition(topic, partitionId))
             }
         }
       } finally {

@@ -21,23 +21,18 @@ import kafka.cluster.Broker
 import java.util.Properties
 import collection.mutable.HashMap
 import java.lang.Object
-import kafka.common.UnavailableProducerException
 import kafka.utils.{Utils, Logging}
 import kafka.api.TopicMetadata
+import kafka.common.UnavailableProducerException
 
 
 object ProducerPool{
-  def createSyncProducer(config: ProducerConfig): SyncProducer = {
-    val brokerList = config.brokerList
-    val brokers = Utils.getAllBrokersFromBrokerList(brokerList)
-    createSyncProducer(config, brokers.head)
-  }
-
-  def createSyncProducer(config: ProducerConfig, broker: Broker): SyncProducer = {
+  def createSyncProducer(configOpt: Option[ProducerConfig], broker: Broker): SyncProducer = {
     val props = new Properties()
     props.put("host", broker.host)
     props.put("port", broker.port.toString)
-    props.putAll(config.props.props)
+    if(configOpt.isDefined)
+      props.putAll(configOpt.get.props.props)
     new SyncProducer(new SyncProducerConfig(props))
   }
 }
@@ -58,9 +53,9 @@ class ProducerPool(val config: ProducerConfig) extends Logging {
       newBrokers.foreach(b => {
         if(syncProducers.contains(b.id)){
           syncProducers(b.id).close()
-          syncProducers.put(b.id, ProducerPool.createSyncProducer(config, b))
+          syncProducers.put(b.id, ProducerPool.createSyncProducer(Some(config), b))
         } else
-          syncProducers.put(b.id, ProducerPool.createSyncProducer(config, b))
+          syncProducers.put(b.id, ProducerPool.createSyncProducer(Some(config), b))
       })
     }
   }
