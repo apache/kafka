@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.api.{OffsetRequest, PartitionData}
+import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest, PartitionData}
 import kafka.cluster.Broker
 import kafka.message.ByteBufferMessageSet
 import kafka.common.TopicAndPartition
@@ -51,10 +51,15 @@ class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: Kafk
   // handle a partition whose offset is out of range and return a new fetch offset
   def handleOffsetOutOfRange(topic: String, partitionId: Int): Long = {
     // This means the local replica is out of date. Truncate the log and catch up from beginning.
-    val offsets = simpleConsumer.getOffsetsBefore(topic, partitionId, OffsetRequest.EarliestTime, 1)
+    val topicAndPartition = TopicAndPartition(topic, partitionId)
+    val request = OffsetRequest(
+      replicaId = brokerConfig.brokerId,
+      requestInfo = Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.EarliestTime, 1))
+    )
+    val offset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
     val replica = replicaMgr.getReplica(topic, partitionId).get
-    replica.log.get.truncateAndStartWithNewOffset(offsets(0))
-    return offsets(0)
+    replica.log.get.truncateAndStartWithNewOffset(offset)
+    offset
   }
 
   // any logic for partitions whose leader has changed

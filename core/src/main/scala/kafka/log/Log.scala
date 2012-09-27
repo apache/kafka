@@ -81,12 +81,10 @@ object Log {
     nf.format(offset) + FileSuffix
   }
 
-  def getEmptyOffsets(request: OffsetRequest): Array[Long] = {
-    if (request.time == OffsetRequest.LatestTime || request.time == OffsetRequest.EarliestTime)
-      return Array(0L)
-    else
-      return Array()
-  }
+  def getEmptyOffsets(timestamp: Long): Seq[Long] =
+    if (timestamp == OffsetRequest.LatestTime || timestamp == OffsetRequest.EarliestTime)
+      Seq(0L)
+    else Nil
 }
 
 
@@ -389,7 +387,7 @@ private[kafka] class Log( val dir: File, val maxLogFileSize: Long, val maxMessag
      }
   }
 
-  def getOffsetsBefore(request: OffsetRequest): Array[Long] = {
+  def getOffsetsBefore(timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
     val segsArray = segments.view
     var offsetTimeArray: Array[(Long, Long)] = null
     if (segsArray.last.size > 0)
@@ -403,7 +401,7 @@ private[kafka] class Log( val dir: File, val maxLogFileSize: Long, val maxMessag
       offsetTimeArray(segsArray.length) = (segsArray.last.start + segsArray.last.messageSet.sizeInBytes(), time.milliseconds)
 
     var startIndex = -1
-    request.time match {
+    timestamp match {
       case OffsetRequest.LatestTime =>
         startIndex = offsetTimeArray.length - 1
       case OffsetRequest.EarliestTime =>
@@ -413,20 +411,21 @@ private[kafka] class Log( val dir: File, val maxLogFileSize: Long, val maxMessag
         debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
         startIndex = offsetTimeArray.length - 1
         while (startIndex >= 0 && !isFound) {
-          if (offsetTimeArray(startIndex)._2 <= request.time)
+          if (offsetTimeArray(startIndex)._2 <= timestamp)
             isFound = true
           else
             startIndex -=1
         }
     }
 
-    val retSize = request.maxNumOffsets.min(startIndex + 1)
+    val retSize = maxNumOffsets.min(startIndex + 1)
     val ret = new Array[Long](retSize)
     for (j <- 0 until retSize) {
       ret(j) = offsetTimeArray(startIndex)._1
       startIndex -= 1
     }
-    ret
+    // ensure that the returned seq is in descending order of offsets
+    ret.toSeq.sortBy(- _)
   }
 
   /**

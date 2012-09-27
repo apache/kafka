@@ -109,12 +109,15 @@ object RpcDataSerializationTestUtils{
     FetchResponse(1, 1, topicData)
   }
 
-  def createTestOffsetRequest: OffsetRequest = {
-    new OffsetRequest(topic1, 1, 1000, 200)
-  }
+  def createTestOffsetRequest = new OffsetRequest(
+      collection.immutable.Map(TopicAndPartition(topic1, 1) -> PartitionOffsetRequestInfo(1000, 200)),
+      replicaId = 0
+  )
 
   def createTestOffsetResponse: OffsetResponse = {
-    new OffsetResponse(1, Array(1000l, 2000l, 3000l, 4000l))
+    new OffsetResponse(OffsetRequest.CurrentVersion, collection.immutable.Map(
+      TopicAndPartition(topic1, 1) -> PartitionOffsetsResponse(ErrorMapping.NoError, Seq(1000l, 2000l, 3000l, 4000l)))
+    )
   }
 
   def createTestTopicMetadataRequest: TopicMetadataRequest = {
@@ -191,7 +194,7 @@ class RpcDataSerializationTest extends JUnitSuite {
     assertEquals("The original and deserialzed fetchRequest should be the same", fetchRequest,
                  deserializedFetchRequest)
 
-    buffer = ByteBuffer.allocate(offsetRequest.sizeInBytes())
+    buffer = ByteBuffer.allocate(offsetRequest.sizeInBytes)
     offsetRequest.writeTo(buffer)
     buffer.rewind()
     val deserializedOffsetRequest = OffsetRequest.readFrom(buffer)

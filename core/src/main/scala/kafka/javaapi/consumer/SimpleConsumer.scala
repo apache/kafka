@@ -19,6 +19,8 @@ package kafka.javaapi.consumer
 
 import kafka.utils.threadsafe
 import kafka.javaapi.FetchResponse
+import kafka.javaapi.OffsetRequest
+
 
 /**
  * A consumer of kafka messages
@@ -67,13 +69,14 @@ class SimpleConsumer(val host: String,
 
   /**
    *  Get a list of valid offsets (up to maxSize) before the given time.
-   *  The result is a list of offsets, in descending order.
    *
-   *  @param time: time in millisecs (-1, from the latest offset available, -2 from the smallest offset available)
-   *  @return an array of offsets
+   *  @param request a [[kafka.javaapi.OffsetRequest]] object.
+   *  @return a [[kafka.javaapi.OffsetResponse]] object.
    */
-  def getOffsetsBefore(topic: String, partition: Int, time: Long, maxNumOffsets: Int): Array[Long] =
-    underlying.getOffsetsBefore(topic, partition, time, maxNumOffsets)
+  def getOffsetsBefore(request: OffsetRequest): kafka.javaapi.OffsetResponse = {
+    import kafka.javaapi.Implicits._
+    underlying.getOffsetsBefore(request.underlying)
+  }
 
   def close() {
     underlying.close

@@ -20,7 +20,7 @@ package kafka.consumer
 import kafka.cluster.Broker
 import kafka.server.AbstractFetcherThread
 import kafka.message.ByteBufferMessageSet
-import kafka.api.{FetchRequest, OffsetRequest, PartitionData}
+import kafka.api.{PartitionOffsetRequestInfo, Request, OffsetRequest, PartitionData}
 import kafka.common.TopicAndPartition
 
 
@@ -30,7 +30,7 @@ class ConsumerFetcherThread(name: String,
                             val consumerFetcherManager: ConsumerFetcherManager)
         extends AbstractFetcherThread(name = name, sourceBroker = sourceBroker, socketTimeout = config.socketTimeoutMs,
           socketBufferSize = config.socketBufferSize, fetchSize = config.fetchSize,
-          fetcherBrokerId = FetchRequest.NonFollowerId, maxWait = config.maxFetchWaitMs,
+          fetcherBrokerId = Request.NonFollowerId, maxWait = config.maxFetchWaitMs,
           minBytes = config.minFetchBytes) {
 
   // process fetched data
@@ -50,12 +50,13 @@ class ConsumerFetcherThread(name: String,
       case OffsetRequest.LargestTimeString => startTimestamp = OffsetRequest.LatestTime
       case _ => startTimestamp = OffsetRequest.LatestTime
     }
-    val newOffset = simpleConsumer.getOffsetsBefore(topic, partitionId, startTimestamp, 1)(0)
-
+    val topicAndPartition = TopicAndPartition(topic, partitionId)
+    val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(startTimestamp, 1)))
+    val newOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
     val pti = consumerFetcherManager.getPartitionTopicInfo((topic, partitionId))
     pti.resetFetchOffset(newOffset)
     pti.resetConsumeOffset(newOffset)
-    return newOffset
+    newOffset
   }
 
   // any logic for partitions whose leader has changed

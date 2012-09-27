@@ -349,21 +349,36 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestLogger.trace("Handling offset request " + offsetRequest.toString)
     trace("Handling offset request " + offsetRequest.toString)
 
-    var response: OffsetResponse = null
-    try {
-      // ensure leader exists
-      replicaManager.getLeaderReplicaIfLocal(offsetRequest.topic, offsetRequest.partition)
-      val offsets = replicaManager.logManager.getOffsets(offsetRequest)
-      response = new OffsetResponse(offsetRequest.versionId, offsets)
-    } catch {
-      case ioe: IOException =>
-        fatal("Halting due to unrecoverable I/O error while handling producer request: " + ioe.getMessage, ioe)
-        System.exit(1)
-      case e =>
-        warn("Error while responding to offset request", e)
-        response = new OffsetResponse(offsetRequest.versionId, Array.empty[Long],
-          ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]).toShort)
-    }
+    val responseMap = offsetRequest.requestInfo.map(elem => {
+      val (topicAndPartition, partitionOffsetRequestInfo) = elem
+      try {
+        // ensure leader exists
+        val leader = replicaManager.getLeaderReplicaIfLocal(
+          topicAndPartition.topic, topicAndPartition.partition)
+        val offsets = {
+          val allOffsets = replicaManager.logManager.getOffsets(topicAndPartition,
+                                                                partitionOffsetRequestInfo.time,
+                                                                partitionOffsetRequestInfo.maxNumOffsets)
+          if (offsetRequest.isFromFollower) allOffsets
+          else {
+            val hw = leader.highWatermark
+            if (allOffsets.exists(_ > hw))
+              hw +: allOffsets.dropWhile(_ > hw)
+            else allOffsets
+          }
+        }
+        (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.NoError, offsets))
+      } catch {
+        case ioe: IOException =>
+          fatal("Halting due to unrecoverable I/O error while handling offset request: " + ioe.getMessage, ioe)
+          // compiler requires scala.sys.exit (not System.exit).
+          exit(1)
+        case e =>
+          warn("Error while responding to offset request", e)
+          (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), Nil) )
+      }
+    })
+    val response = OffsetResponse(OffsetRequest.CurrentVersion, responseMap)
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
   }
 

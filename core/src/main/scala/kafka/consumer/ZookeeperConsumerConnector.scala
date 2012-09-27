@@ -27,10 +27,11 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import java.net.InetAddress
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
+import kafka.api.PartitionOffsetRequestInfo
 import java.util.UUID
 import kafka.serializer.Decoder
 import kafka.utils.ZkUtils._
-import kafka.common.{KafkaException, NoBrokersForPartitionException, ConsumerRebalanceFailedException, InvalidConfigException}
+import kafka.common._
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Utils._
@@ -263,8 +264,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       }
       simpleConsumer = new SimpleConsumer(broker.host, broker.port, ConsumerConfig.SocketTimeout,
                                             ConsumerConfig.SocketBufferSize)
-      val offsets = simpleConsumer.getOffsetsBefore(topic, partitionId, earliestOrLatest, 1)
-      producedOffset = offsets(0)
+      val topicAndPartition = TopicAndPartition(topic, partitionId)
+      val request = OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)))
+      producedOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
     } catch {
       case e =>
         error("error in earliestOrLatestOffset() ", e)

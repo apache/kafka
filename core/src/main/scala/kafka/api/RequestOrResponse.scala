@@ -25,6 +25,12 @@ object RequestOrResponse {
 }
 
 
+object Request {
+  val DefaultReplicaId = -1
+  val NonFollowerId = DefaultReplicaId
+}
+
+
 private[kafka] abstract class RequestOrResponse(val requestId: Option[Short] = None) {
 
   def sizeInBytes: Int

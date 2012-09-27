@@ -19,6 +19,8 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import kafka.utils.Utils
+import kafka.common.TopicAndPartition
+
 
 object OffsetRequest {
   val CurrentVersion = 1.shortValue()
@@ -32,36 +34,67 @@ object OffsetRequest {
   def readFrom(buffer: ByteBuffer): OffsetRequest = {
     val versionId = buffer.getShort
     val clientId = Utils.readShortString(buffer)
-    val topic = Utils.readShortString(buffer, "UTF-8")
-    val partition = buffer.getInt()
-    val offset = buffer.getLong
-    val maxNumOffsets = buffer.getInt
-    new OffsetRequest(versionId, clientId, topic, partition, offset, maxNumOffsets)
+    val replicaId = buffer.getInt
+    val topicCount = buffer.getInt
+    val pairs = (1 to topicCount).flatMap(_ => {
+      val topic = Utils.readShortString(buffer)
+      val partitionCount = buffer.getInt
+      (1 to partitionCount).map(_ => {
+        val partitionId = buffer.getInt
+        val time = buffer.getLong
+        val maxNumOffsets = buffer.getInt
+        (TopicAndPartition(topic, partitionId), PartitionOffsetRequestInfo(time, maxNumOffsets))
+      })
+    })
+    OffsetRequest(Map(pairs:_*), versionId = versionId, clientId = clientId, replicaId = replicaId)
   }
 }
 
-case class OffsetRequest(versionId: Short = OffsetRequest.CurrentVersion,
-                    clientId: String = OffsetRequest.DefaultClientId,
-                    topic: String,
-                    partition: Int,
-                    time: Long,
-                    maxNumOffsets: Int) extends RequestOrResponse(Some(RequestKeys.OffsetsKey)) {
-  def this(topic: String, partition: Int, time: Long, maxNumOffsets: Int) =
-    this(OffsetRequest.CurrentVersion, OffsetRequest.DefaultClientId, topic, partition, time, maxNumOffsets)
+case class PartitionOffsetRequestInfo(time: Long, maxNumOffsets: Int)
 
+case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo],
+                         versionId: Short = OffsetRequest.CurrentVersion,
+                         clientId: String = OffsetRequest.DefaultClientId,
+                         replicaId: Int = Request.DefaultReplicaId)
+        extends RequestOrResponse(Some(RequestKeys.OffsetsKey)) {
 
+  lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     Utils.writeShortString(buffer, clientId)
-    Utils.writeShortString(buffer, topic)
-    buffer.putInt(partition)
-    buffer.putLong(time)
-    buffer.putInt(maxNumOffsets)
+    buffer.putInt(replicaId)
+
+    buffer.putInt(requestInfoGroupedByTopic.size) // topic count
+    requestInfoGroupedByTopic.foreach {
+      case((topic, partitionInfos)) =>
+        Utils.writeShortString(buffer, topic)
+        buffer.putInt(partitionInfos.size) // partition count
+        partitionInfos.foreach {
+          case (TopicAndPartition(_, partition), partitionInfo) =>
+            buffer.putInt(partition)
+            buffer.putLong(partitionInfo.time)
+            buffer.putInt(partitionInfo.maxNumOffsets)
+        }
+    }
   }
 
-  def sizeInBytes(): Int = 2 + (2 + clientId.length()) + (2 + topic.length) + 4 + 8 + 4
+  def sizeInBytes =
+    2 + /* versionId */
+    Utils.shortStringLength(clientId, RequestOrResponse.DefaultCharset) +
+    4 + /* replicaId */
+    4 + /* topic count */
+    requestInfoGroupedByTopic.foldLeft(0)((foldedTopics, currTopic) => {
+      val (topic, partitionInfos) = currTopic
+      foldedTopics +
+      Utils.shortStringLength(topic, RequestOrResponse.DefaultCharset) +
+      4 + /* partition count */
+      partitionInfos.size * (
+        4 + /* partition */
+        8 + /* time */
+        4 /* maxNumOffsets */
+      )
+    })
 
-  override def toString(): String= "OffsetRequest(version:" + versionId + ", client id:" + clientId +
-          ", topic:" + topic + ", part:" + partition + ", time:" + time + ", maxNumOffsets:" + maxNumOffsets + ")"
+  def isFromFollower = replicaId != Request.NonFollowerId
 }

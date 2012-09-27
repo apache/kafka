@@ -22,16 +22,15 @@ import kafka.utils._
 import kafka.server.{KafkaConfig, KafkaServer}
 import junit.framework.Assert._
 import java.util.{Random, Properties}
-import collection.mutable.WrappedArray
 import kafka.consumer.SimpleConsumer
 import org.junit.{After, Before, Test}
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
 import kafka.admin.CreateTopicCommand
-import kafka.api.{FetchRequestBuilder, OffsetRequest}
+import kafka.api.{PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
 import kafka.utils.TestUtils._
-import kafka.common.UnknownTopicOrPartitionException
+import kafka.common.{ErrorMapping, TopicAndPartition, UnknownTopicOrPartitionException}
 
 object LogOffsetTest {
   val random = new Random()  
@@ -67,12 +66,12 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testGetOffsetsForUnknownTopic() {
-    try {
-      simpleConsumer.getOffsetsBefore("foo", 0, OffsetRequest.LatestTime, 10)
-      fail("Should fail with UnknownTopicException since topic foo was never created")
-    }catch {
-      case e: UnknownTopicOrPartitionException => // this is ok
-    }
+    val topicAndPartition = TopicAndPartition("foo", 0)
+    val request = OffsetRequest(
+      Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 10)))
+    val offsetResponse = simpleConsumer.getOffsetsBefore(request)
+    assertEquals(ErrorMapping.UnknownTopicOrPartitionCode,
+                 offsetResponse.partitionErrorAndOffsets(topicAndPartition).error)
   }
 
   @Test
@@ -92,16 +91,17 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
-
-    val offsetRequest = new OffsetRequest(topic, part, OffsetRequest.LatestTime, 10)
-
-    val offsets = log.getOffsetsBefore(offsetRequest)
-    assertTrue((Array(240L, 216L, 108L, 0L): WrappedArray[Long]) == (offsets: WrappedArray[Long]))
+    val offsets = log.getOffsetsBefore(OffsetRequest.LatestTime, 10)
+    assertEquals(Seq(240L, 216L, 108L, 0L), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
-    val consumerOffsets = simpleConsumer.getOffsetsBefore(topic, part,
-                                                          OffsetRequest.LatestTime, 10)
-    assertTrue((Array(240L, 216L, 108L, 0L): WrappedArray[Long]) == (consumerOffsets: WrappedArray[Long]))
+    val topicAndPartition = TopicAndPartition(topic, part)
+    val offsetRequest = OffsetRequest(
+      Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 10)),
+      replicaId = 0)
+    val consumerOffsets =
+      simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
+    assertEquals(Seq(240L, 216L, 108L, 0L), consumerOffsets)
 
     // try to fetch using latest offset
     val fetchResponse = simpleConsumer.fetch(
@@ -124,8 +124,11 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     var offsetChanged = false
     for(i <- 1 to 14) {
-      val consumerOffsets = simpleConsumer.getOffsetsBefore(topic, 0,
-        OffsetRequest.EarliestTime, 1)
+      val topicAndPartition = TopicAndPartition(topic, 0)
+      val offsetRequest =
+        OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.EarliestTime, 1)))
+      val consumerOffsets =
+        simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
 
       if(consumerOffsets(0) == 1) {
         offsetChanged = true
@@ -153,14 +156,15 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     time.sleep(20)
     val now = time.milliseconds
 
-    val offsetRequest = new OffsetRequest(topic, part, now, 10)
-    val offsets = log.getOffsetsBefore(offsetRequest)
-    println("Offsets = " + offsets.mkString(","))
-    assertTrue((Array(240L, 216L, 108L, 0L): WrappedArray[Long]) == (offsets: WrappedArray[Long]))
+    val offsets = log.getOffsetsBefore(now, 10)
+    assertEquals(Seq(240L, 216L, 108L, 0L), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
-    val consumerOffsets = simpleConsumer.getOffsetsBefore(topic, part, now, 10)
-    assertTrue((Array(240L, 216L, 108L, 0L): WrappedArray[Long]) == (consumerOffsets: WrappedArray[Long]))
+    val topicAndPartition = TopicAndPartition(topic, part)
+    val offsetRequest = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(now, 10)), replicaId = 0)
+    val consumerOffsets =
+      simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
+    assertEquals(Seq(240L, 216L, 108L, 0L), consumerOffsets)
   }
 
   @Test
@@ -179,16 +183,17 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
-    val offsetRequest = new OffsetRequest(topic, part,
-                                          OffsetRequest.EarliestTime, 10)
-    val offsets = log.getOffsetsBefore(offsetRequest)
+    val offsets = log.getOffsetsBefore(OffsetRequest.EarliestTime, 10)
 
-    assertTrue( (Array(0L): WrappedArray[Long]) == (offsets: WrappedArray[Long]) )
+    assertEquals(Seq(0L), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
-    val consumerOffsets = simpleConsumer.getOffsetsBefore(topic, part,
-                                                          OffsetRequest.EarliestTime, 10)
-    assertTrue( (Array(0L): WrappedArray[Long]) == (offsets: WrappedArray[Long]) )
+    val topicAndPartition = TopicAndPartition(topic, part)
+    val offsetRequest =
+      OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.EarliestTime, 10)))
+    val consumerOffsets =
+      simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
+    assertEquals(Seq(0L), consumerOffsets)
   }
 
   private def createBrokerConfig(nodeId: Int, port: Int): Properties = {

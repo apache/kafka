@@ -18,43 +18,77 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.common.ErrorMapping
+import kafka.common.{ErrorMapping, TopicAndPartition}
+import kafka.utils.Utils
 
 
 object OffsetResponse {
+
   def readFrom(buffer: ByteBuffer): OffsetResponse = {
     val versionId = buffer.getShort
-    val errorCode = buffer.getShort
-    val offsetsSize = buffer.getInt
-    val offsets = new Array[Long](offsetsSize)
-    for( i <- 0 until offsetsSize) {
-      offsets(i) = buffer.getLong
-    }
-    new OffsetResponse(versionId, offsets, errorCode)
+    val numTopics = buffer.getInt
+    val pairs = (1 to numTopics).flatMap(_ => {
+      val topic = Utils.readShortString(buffer)
+      val numPartitions = buffer.getInt
+      (1 to numPartitions).map(_ => {
+        val partition = buffer.getInt
+        val error = buffer.getShort
+        val numOffsets = buffer.getInt
+        val offsets = (1 to numOffsets).map(_ => buffer.getLong)
+        (TopicAndPartition(topic, partition), PartitionOffsetsResponse(error, offsets))
+      })
+    })
+    OffsetResponse(versionId, Map(pairs:_*))
   }
+
 }
 
+
+case class PartitionOffsetsResponse(error: Short, offsets: Seq[Long])
+
+
 case class OffsetResponse(versionId: Short,
-                          offsets: Array[Long],
-                          errorCode: Short = ErrorMapping.NoError) extends RequestOrResponse{
-  val sizeInBytes = 2 + 2 + offsets.foldLeft(4)((sum, _) => sum + 8)
+                          partitionErrorAndOffsets: Map[TopicAndPartition, PartitionOffsetsResponse])
+        extends RequestOrResponse {
+
+  lazy val offsetsGroupedByTopic = partitionErrorAndOffsets.groupBy(_._1.topic)
+
+  def hasError = partitionErrorAndOffsets.values.exists(_.error != ErrorMapping.NoError)
+
+  val sizeInBytes = {
+    2 + /* versionId */
+    4 + /* topic count */
+    offsetsGroupedByTopic.foldLeft(0)((foldedTopics, currTopic) => {
+      val (topic, errorAndOffsetsMap) = currTopic
+      foldedTopics +
+      Utils.shortStringLength(topic) +
+      4 + /* partition count */
+      errorAndOffsetsMap.foldLeft(0)((foldedPartitions, currPartition) => {
+        foldedPartitions +
+        4 + /* partition id */
+        2 + /* partition error */
+        4 + /* offset array length */
+        currPartition._2.offsets.size * 8 /* offset */
+      })
+    })
+  }
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
-    /* error code */
-    buffer.putShort(errorCode)
-    buffer.putInt(offsets.length)
-    offsets.foreach(buffer.putLong(_))
-  }
-
-    // need to override case-class equals due to broken java-array equals()
-  override def equals(other: Any): Boolean = {
-   other match {
-      case that: OffsetResponse =>
-        ( versionId == that.versionId &&
-          errorCode == that.errorCode &&
-          offsets.toSeq == that.offsets.toSeq)
-      case _ => false
+    buffer.putInt(offsetsGroupedByTopic.size) // topic count
+    offsetsGroupedByTopic.foreach {
+      case((topic, errorAndOffsetsMap)) =>
+        Utils.writeShortString(buffer, topic)
+        buffer.putInt(errorAndOffsetsMap.size) // partition count
+        errorAndOffsetsMap.foreach {
+          case((TopicAndPartition(_, partition), errorAndOffsets)) =>
+            buffer.putInt(partition)
+            buffer.putShort(errorAndOffsets.error)
+            buffer.putInt(errorAndOffsets.offsets.size) // offset array length
+            errorAndOffsets.offsets.foreach(buffer.putLong(_))
+        }
     }
   }
+
 }
+

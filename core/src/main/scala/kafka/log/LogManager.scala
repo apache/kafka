@@ -23,7 +23,7 @@ import scala.collection._
 import kafka.server.KafkaConfig
 import kafka.api.OffsetRequest
 import kafka.log.Log._
-import kafka.common.KafkaException
+import kafka.common.{TopicAndPartition, KafkaException}
 
 /**
  * The guy who creates and hands out logs
@@ -104,11 +104,11 @@ private[kafka] class LogManager(val config: KafkaConfig,
     }
   }
 
-  def getOffsets(offsetRequest: OffsetRequest): Array[Long] = {
-    val log = getLog(offsetRequest.topic, offsetRequest.partition)
+  def getOffsets(topicAndPartition: TopicAndPartition, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
+    val log = getLog(topicAndPartition.topic, topicAndPartition.partition)
     log match {
-      case Some(l) => l.getOffsetsBefore(offsetRequest)
-      case None => getEmptyOffsets(offsetRequest)
+      case Some(l) => l.getOffsetsBefore(timestamp, maxNumOffsets)
+      case None => getEmptyOffsets(timestamp)
     }
   }
 

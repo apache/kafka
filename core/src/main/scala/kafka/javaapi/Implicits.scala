@@ -30,6 +30,9 @@ private[javaapi] object Implicits extends Logging {
   implicit def toJavaTopicMetadataResponse(response: kafka.api.TopicMetadataResponse): kafka.javaapi.TopicMetadataResponse =
     new kafka.javaapi.TopicMetadataResponse(response)
 
+  implicit def toJavaOffsetResponse(response: kafka.api.OffsetResponse): kafka.javaapi.OffsetResponse =
+    new kafka.javaapi.OffsetResponse(response)
+
   implicit def optionToJavaRef[T](opt: Option[T]): T = {
     opt match {
       case Some(obj) => obj

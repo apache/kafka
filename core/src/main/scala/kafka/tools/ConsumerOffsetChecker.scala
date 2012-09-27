@@ -23,9 +23,14 @@ import org.I0Itec.zkclient.ZkClient
 import kafka.utils.{ZkUtils, ZKStringSerializer, Logging}
 import kafka.consumer.SimpleConsumer
 import collection.mutable.Map
+import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest}
+import kafka.common.TopicAndPartition
+import scala.collection._
+
+
 object ConsumerOffsetChecker extends Logging {
 
-  private val consumerMap: Map[String, Option[SimpleConsumer]] = Map()
+  private val consumerMap: mutable.Map[String, Option[SimpleConsumer]] = mutable.Map()
 
   private val BidPidPattern = """(\d+)-(\d+)""".r
 
@@ -61,8 +66,10 @@ object ConsumerOffsetChecker extends Logging {
           bid, getConsumer(zkClient, bid))
         consumerOpt match {
           case Some(consumer) =>
-            val logSize =
-              consumer.getOffsetsBefore(topic, pid.toInt, -1, 1).last.toLong
+            val topicAndPartition = TopicAndPartition(topic, pid.toInt)
+            val request =
+              OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
+            val logSize = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
             println("%20s%d".format("Log size = ", logSize))
             println("%20s%,d (%,.2fG)".format("= ", logSize, logSize / math.pow(1024, 3)))
 

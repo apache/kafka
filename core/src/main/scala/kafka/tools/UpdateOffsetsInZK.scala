@@ -15,12 +15,14 @@
  * limitations under the License.
  */
 
-package kafka.utils
+package kafka.tools
 
 import org.I0Itec.zkclient.ZkClient
 import kafka.consumer.{SimpleConsumer, ConsumerConfig}
-import kafka.api.OffsetRequest
-import kafka.common.KafkaException
+import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest}
+import kafka.common.{TopicAndPartition, KafkaException}
+import kafka.utils.{ZKGroupTopicDirs, ZkUtils, ZKStringSerializer, Utils}
+
 
 /**
  *  A utility that updates the offset of every broker partition to the offset of earliest or latest log segment file, in ZK.
@@ -43,7 +45,6 @@ object UpdateOffsetsInZK {
   }
 
   private def getAndSetOffsets(zkClient: ZkClient, offsetOption: Long, config: ConsumerConfig, topic: String): Unit = {
-    val cluster = ZkUtils.getCluster(zkClient)
     val partitionsPerTopicMap = ZkUtils.getPartitionsForTopics(zkClient, List(topic))
     var partitions: Seq[Int] = Nil
 
@@ -65,11 +66,13 @@ object UpdateOffsetsInZK {
       ZkUtils.getBrokerInfo(zkClient, broker) match {
         case Some(brokerInfo) =>
           val consumer = new SimpleConsumer(brokerInfo.host, brokerInfo.port, 10000, 100 * 1024)
-          val offsets = consumer.getOffsetsBefore(topic, partition, offsetOption, 1)
+          val topicAndPartition = TopicAndPartition(topic, partition)
+          val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(offsetOption, 1)))
+          val offset = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
           val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
 
-          println("updating partition " + partition + " with new offset: " + offsets(0))
-          ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + partition, offsets(0).toString)
+          println("updating partition " + partition + " with new offset: " + offset)
+          ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + partition, offset.toString)
           numParts += 1
         case None => throw new KafkaException("Broker information for broker id %d does not exist in ZK".format(broker))
       }

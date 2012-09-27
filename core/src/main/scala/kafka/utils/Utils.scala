@@ -31,6 +31,7 @@ import joptsimple.{OptionSpec, OptionSet, OptionParser}
 import kafka.common.KafkaException
 import kafka.cluster.Broker
 import util.parsing.json.JSON
+import kafka.api.RequestOrResponse
 import kafka.api.{TopicMetadataRequest, TopicMetadataResponse}
 import kafka.producer.{ProducerPool, SyncProducer}
 
@@ -155,7 +156,7 @@ object Utils extends Logging {
    * @param buffer The buffer to read from
    * @param encoding The encoding in which to read the string
    */
-  def readShortString(buffer: ByteBuffer, encoding: String = "UTF-8"): String = {
+  def readShortString(buffer: ByteBuffer, encoding: String = RequestOrResponse.DefaultCharset): String = {
     val size: Int = buffer.getShort()
     if(size < 0)
       return null
@@ -170,7 +171,7 @@ object Utils extends Logging {
    * @param string The string to write
    * @param encoding The encoding in which to write the string
    */
-  def writeShortString(buffer: ByteBuffer, string: String, encoding: String = "UTF-8"): Unit = {
+  def writeShortString(buffer: ByteBuffer, string: String, encoding: String = RequestOrResponse.DefaultCharset) {
     if(string == null) {
       buffer.putShort(-1)
     } else if(string.length > Short.MaxValue) {
@@ -186,7 +187,7 @@ object Utils extends Logging {
    * @param string The string to write
    * @param encoding The encoding in which to write the string
    */
-  def shortStringLength(string: String, encoding: String = "UTF-8"): Int = {
+  def shortStringLength(string: String, encoding: String = RequestOrResponse.DefaultCharset): Int = {
     if(string == null) {
       2
     } else {

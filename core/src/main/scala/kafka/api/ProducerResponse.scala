@@ -66,12 +66,11 @@ case class ProducerResponse(versionId: Short,
       foldedTopics +
       Utils.shortStringLength(currTopic._1, RequestOrResponse.DefaultCharset) +
       4 + /* partition count for this topic */
-      currTopic._2.foldLeft (0) ((foldedPartitions, currPartition) => {
-        foldedPartitions +
+      currTopic._2.size * {
         4 + /* partition id */
         2 + /* error code */
         8 /* offset */
-      })
+      }
     })
   }
 

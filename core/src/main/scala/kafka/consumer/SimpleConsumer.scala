@@ -20,9 +20,9 @@ package kafka.consumer
 import kafka.api._
 import kafka.network._
 import kafka.utils._
-import kafka.common.ErrorMapping
 import java.util.concurrent.TimeUnit
 import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
+
 
 /**
  * A consumer of kafka messages
@@ -110,18 +110,10 @@ class SimpleConsumer( val host: String,
 
   /**
    *  Get a list of valid offsets (up to maxSize) before the given time.
-   *  The result is a list of offsets, in descending order.
-   *
-   *  @param time: time in millisecs (-1, from the latest offset available, -2 from the smallest offset available)
-   *  @return an array of offsets
+   *  @param request a [[kafka.api.OffsetRequest]] object.
+   *  @return a [[kafka.api.OffsetResponse]] object.
    */
-  def getOffsetsBefore(topic: String, partition: Int, time: Long, maxNumOffsets: Int): Array[Long] = {
-    val request = new OffsetRequest(topic, partition, time, maxNumOffsets)
-    val offsetResponse = OffsetResponse.readFrom(sendRequest(request).buffer)
-    // try to throw exception based on global error codes
-    ErrorMapping.maybeThrowException(offsetResponse.errorCode)
-    offsetResponse.offsets
-  }
+  def getOffsetsBefore(request: OffsetRequest) = OffsetResponse.readFrom(sendRequest(request).buffer)
 
   private def getOrMakeConnection() {
     if(!blockingChannel.isConnected) {

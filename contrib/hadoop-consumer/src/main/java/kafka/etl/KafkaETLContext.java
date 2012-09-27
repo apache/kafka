@@ -16,15 +16,20 @@
  */
 package kafka.etl;
 
+
 import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Map;
 import kafka.api.FetchRequest;
 import kafka.api.FetchRequestBuilder;
-import kafka.api.OffsetRequest;
+import kafka.api.PartitionOffsetRequestInfo;
+import kafka.common.TopicAndPartition;
 import kafka.javaapi.FetchResponse;
+import kafka.javaapi.OffsetRequest;
 import kafka.javaapi.consumer.SimpleConsumer;
 import kafka.javaapi.message.ByteBufferMessageSet;
 import kafka.message.MessageAndOffset;
@@ -144,7 +149,7 @@ public class KafkaETLContext {
     
     public boolean fetchMore () throws IOException {
         if (!hasMore()) return false;
-        
+
         FetchRequest fetchRequest = new FetchRequestBuilder()
                 .correlationId(requestId)
                 .clientId(_request.clientId())
@@ -216,15 +221,23 @@ public class KafkaETLContext {
         /* get smallest and largest offsets*/
         long[] range = new long[2];
 
-        long[] startOffsets = _consumer.getOffsetsBefore(_request.getTopic(), _request.getPartition(),
-                OffsetRequest.EarliestTime(), 1);
+        TopicAndPartition topicAndPartition = new TopicAndPartition(_request.getTopic(), _request.getPartition());
+        Map<TopicAndPartition, PartitionOffsetRequestInfo> requestInfo =
+                new HashMap<TopicAndPartition, PartitionOffsetRequestInfo>();
+        requestInfo.put(topicAndPartition, new PartitionOffsetRequestInfo(kafka.api.OffsetRequest.EarliestTime(), 1));
+        OffsetRequest request = new OffsetRequest(
+            requestInfo, kafka.api.OffsetRequest.CurrentVersion(), kafka.api.OffsetRequest.DefaultClientId());
+        long[] startOffsets = _consumer.getOffsetsBefore(request).offsets(_request.getTopic(), _request.getPartition());
         if (startOffsets.length != 1)
             throw new IOException("input:" + _input + " Expect one smallest offset but get "
                                             + startOffsets.length);
         range[0] = startOffsets[0];
         
-        long[] endOffsets = _consumer.getOffsetsBefore(_request.getTopic(), _request.getPartition(),
-                                        OffsetRequest.LatestTime(), 1);
+        requestInfo.clear();
+        requestInfo.put(topicAndPartition, new PartitionOffsetRequestInfo(kafka.api.OffsetRequest.LatestTime(), 1));
+        request = new OffsetRequest(
+            requestInfo, kafka.api.OffsetRequest.CurrentVersion(), kafka.api.OffsetRequest.DefaultClientId());
+        long[] endOffsets = _consumer.getOffsetsBefore(request).offsets(_request.getTopic(), _request.getPartition());
         if (endOffsets.length != 1)
             throw new IOException("input:" + _input + " Expect one latest offset but get " 
                                             + endOffsets.length);

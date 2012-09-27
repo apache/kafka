@@ -19,11 +19,12 @@ package kafka.perf
 
 import java.net.URI
 import java.text.SimpleDateFormat
-import kafka.api.{FetchRequestBuilder, OffsetRequest}
+import kafka.api.{PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
 import org.apache.log4j.Logger
-import kafka.message.ByteBufferMessageSet
+import kafka.common.TopicAndPartition
+
 
 /**
  * Performance test for the simple consumer
@@ -44,8 +45,11 @@ object SimpleConsumerPerformance {
     val consumer = new SimpleConsumer(config.url.getHost, config.url.getPort, 30*1000, 2*config.fetchSize)
 
     // reset to latest or smallest offset
-    var offset: Long = if(config.fromLatest) consumer.getOffsetsBefore(config.topic, config.partition, OffsetRequest.LatestTime, 1).head
-                       else consumer.getOffsetsBefore(config.topic, config.partition, OffsetRequest.EarliestTime, 1).head
+    val topicAndPartition = TopicAndPartition(config.topic, config.partition)
+    val request = OffsetRequest(Map(
+      topicAndPartition -> PartitionOffsetRequestInfo(if (config.fromLatest) OffsetRequest.LatestTime else OffsetRequest.EarliestTime, 1)
+      ))
+    var offset: Long = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
 
     val startMs = System.currentTimeMillis
     var done = false

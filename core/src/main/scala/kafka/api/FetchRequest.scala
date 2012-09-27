@@ -30,8 +30,6 @@ object FetchRequest {
   val CurrentVersion = 1.shortValue()
   val DefaultCorrelationId = -1
   val DefaultClientId = ""
-  val DefaultReplicaId = -1
-  val NonFollowerId = DefaultReplicaId
   val DefaultMaxWait = 0
   val DefaultMinBytes = 0
 
@@ -60,7 +58,7 @@ object FetchRequest {
 case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
                         correlationId: Int = FetchRequest.DefaultCorrelationId,
                         clientId: String = FetchRequest.DefaultClientId,
-                        replicaId: Int = FetchRequest.DefaultReplicaId,
+                        replicaId: Int = Request.DefaultReplicaId,
                         maxWait: Int = FetchRequest.DefaultMaxWait,
                         minBytes: Int = FetchRequest.DefaultMinBytes,
                         requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
@@ -113,7 +111,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
     })
   }
 
-  def isFromFollower = replicaId != FetchRequest.NonFollowerId
+  def isFromFollower = replicaId != Request.NonFollowerId
 
   def numPartitions = requestInfo.size
 }
@@ -124,7 +122,7 @@ class FetchRequestBuilder() {
   private var correlationId = FetchRequest.DefaultCorrelationId
   private val versionId = FetchRequest.CurrentVersion
   private var clientId = FetchRequest.DefaultClientId
-  private var replicaId = FetchRequest.DefaultReplicaId
+  private var replicaId = Request.DefaultReplicaId
   private var maxWait = FetchRequest.DefaultMaxWait
   private var minBytes = FetchRequest.DefaultMinBytes
   private val requestMap = new collection.mutable.HashMap[TopicAndPartition, PartitionFetchInfo]
