@@ -37,8 +37,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   
   private val MaxConnectBackoffMs = 60000
   private var sentOnConnection = 0
-  /** make time-based reconnect starting at a random time **/
-  private var lastConnectionTime = System.currentTimeMillis - SyncProducer.randomGenerator.nextDouble() * config.reconnectInterval
+  private var lastConnectionTime = -1L
 
   private val lock = new Object()
   @volatile private var shutdown: Boolean = false
@@ -90,7 +89,6 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
       if(sentOnConnection >= config.reconnectInterval || (config.reconnectTimeInterval >= 0 && System.currentTimeMillis - lastConnectionTime >= config.reconnectTimeInterval)) {
         reconnect()
         sentOnConnection = 0
-        lastConnectionTime = System.currentTimeMillis
       }
       response
     }
@@ -146,6 +144,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     while(!blockingChannel.isConnected && !shutdown) {
       try {
         blockingChannel.connect()
+        lastConnectionTime = System.currentTimeMillis
         info("Connected to " + config.host + ":" + config.port + " for producing")
       } catch {
         case e: Exception => {

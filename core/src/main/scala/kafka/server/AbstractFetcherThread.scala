@@ -112,7 +112,7 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
                   warn("current offset %d for topic %s partition %d out of range; reset offset to %d"
                     .format(currentOffset.get, topic, partitionId, newOffset))
                 case _ =>
-                  error("error for %s %d to broker %d".format(topic, partitionId, sourceBroker.host),
+                  error("error for %s %d to broker %d".format(topic, partitionId, sourceBroker.id),
                     ErrorMapping.exceptionFor(partitionData.error))
                   partitionsWithError += topicAndPartition
                   fetchMap.remove(topicAndPartition)

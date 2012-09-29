@@ -100,7 +100,7 @@ class Replica(val brokerId: Int,
     val replicaString = new StringBuilder
     replicaString.append("ReplicaId: " + brokerId)
     replicaString.append("; Topic: " + topic)
-    replicaString.append("; Partition: " + partition.toString)
+    replicaString.append("; Partition: " + partition.partitionId)
     replicaString.append("; isLocal: " + isLocal)
     if(isLocal) replicaString.append("; Highwatermark: " + highWatermark)
     replicaString.toString()

@@ -163,7 +163,7 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
       val broker = m._1
       val leaderAndIsr = m._2
       val leaderAndIsrRequest = new LeaderAndIsrRequest(leaderAndIsr)
-      debug(("The leaderAndIsr request sent to broker %d is %s").format(broker, leaderAndIsrRequest))
+      info("Sending to broker %d leaderAndIsr request of %s".format(broker, leaderAndIsrRequest))
       sendRequest(broker, leaderAndIsrRequest, null)
     }
     brokerRequestMap.clear()

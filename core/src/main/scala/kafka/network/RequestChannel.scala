@@ -18,15 +18,15 @@
 package kafka.network
 
 import java.util.concurrent._
-import kafka.utils.SystemTime
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 import java.nio.ByteBuffer
 import kafka.api._
 import kafka.common.TopicAndPartition
+import kafka.utils.{Logging, SystemTime}
 
 
-object RequestChannel {
+object RequestChannel extends Logging {
   val AllDone = new Request(1, 2, getShutdownReceive(), 0)
 
   def getShutdownReceive() = {
@@ -45,6 +45,7 @@ object RequestChannel {
     val requestId = buffer.getShort()
     val requestObj: RequestOrResponse = RequestKeys.deserializerForKey(requestId)(buffer)
     buffer.rewind()
+    trace("Received request: %s".format(requestObj))
 
     def updateRequestMetrics() {
       val endTimeNs = SystemTime.nanoseconds
@@ -70,6 +71,7 @@ object RequestChannel {
              m.totalTimeHist.update(totalTime)
       }
     }
+    trace("Completed request: %s".format(requestObj))
   }
   
   case class Response(processor: Int, request: Request, responseSend: Send) {

@@ -192,7 +192,7 @@ class Partition(val topic: String,
         case Some(leaderReplica) =>
           val replica = getReplica(replicaId).get
           val leaderHW = leaderReplica.highWatermark
-          if (replica.logEndOffset >= leaderHW) {
+          if (!inSyncReplicas.contains(replica) && replica.logEndOffset >= leaderHW) {
             // expand ISR
             val newInSyncReplicas = inSyncReplicas + replica
             info("Expanding ISR for topic %s partition %d to %s".format(topic, partitionId, newInSyncReplicas.map(_.brokerId).mkString(",")))
@@ -237,8 +237,10 @@ class Partition(val topic: String,
     val allLogEndOffsets = inSyncReplicas.map(_.logEndOffset)
     val newHighWatermark = allLogEndOffsets.min
     val oldHighWatermark = leaderReplica.highWatermark
-    if(newHighWatermark > oldHighWatermark)
+    if(newHighWatermark > oldHighWatermark) {
       leaderReplica.highWatermark = newHighWatermark
+      debug("Highwatermark for topic %s partition %d updated to %d".format(topic, partitionId, newHighWatermark))
+    }
     else
       debug("Old hw for topic %s partition %d is %d. New hw is %d. All leo's are %s"
         .format(topic, partitionId, oldHighWatermark, newHighWatermark, allLogEndOffsets.mkString(",")))

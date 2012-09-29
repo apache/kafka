@@ -265,7 +265,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                          .format(partition, fetchRequest.clientId))
             0
           case e =>
-            error("Error determining available fetch bytes for topic %s partition %s on broker %s for client %s"
+            warn("Error determining available fetch bytes for topic %s partition %s on broker %s for client %s"
                           .format(topic, partition, brokerId, fetchRequest.clientId), e)
             0
         }
@@ -562,6 +562,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       // unblocked if there are no partitions with pending acks
       val satisfied = ! partitionStatus.exists(p => p._2.acksPending)
+      trace("Producer request satisfaction for %s-%d = %b".format(topic, partitionId, satisfied))
       satisfied
     }
 

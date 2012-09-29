@@ -187,10 +187,7 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
       if(next >= 0)
         validUpTo = next
     } while(next >= 0)
-    channel.truncate(validUpTo)
-    setSize.set(validUpTo)
-    /* This should not be necessary, but fixes bug 6191269 on some OSs. */
-    channel.position(validUpTo)
+    truncateTo(validUpTo)
     needRecover.set(false)    
     len - validUpTo
   }
@@ -201,6 +198,8 @@ class FileMessageSet private[kafka](private[message] val channel: FileChannel,
         " size of this log segment is only %d bytes".format(sizeInBytes()))
     channel.truncate(targetSize)
     setSize.set(targetSize)
+    /* This should not be necessary, but fixes bug 6191269 on some OSs. */
+    channel.position(targetSize)
   }
 
   /**

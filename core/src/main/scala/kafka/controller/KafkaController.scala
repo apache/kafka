@@ -116,7 +116,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     updateLeaderAndIsrCache()
     // trigger OfflinePartition state for all partitions whose current leader is one amongst the dead brokers
     val partitionsWithoutLeader = controllerContext.allLeaders.filter(partitionAndLeader =>
-      deadBrokers.contains(partitionAndLeader._2)).map(_._1).toSeq
+      deadBrokers.contains(partitionAndLeader._2)).keySet.toSeq
     partitionStateMachine.handleStateChanges(partitionsWithoutLeader, OfflinePartition)
     // trigger OnlinePartition state changes for offline or new partitions
     partitionStateMachine.triggerOnlinePartitionStateChange()
