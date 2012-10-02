@@ -45,12 +45,7 @@ class HighwaterMarkCheckpoint(val path: String) extends Logging {
     try {
       // write to temp file and then swap with the highwatermark file
       val tempHwFile = new File(hwFile + ".tmp")
-      // it is an error for this file to be present. It could mean that the previous rename operation failed
-      if(tempHwFile.exists()) {
-        fatal("Temporary high watermark %s file exists. This could mean that the ".format(tempHwFile.getAbsolutePath) +
-          "previous high watermark checkpoint operation has failed.")
-        System.exit(1)
-      }
+
       val hwFileWriter = new BufferedWriter(new FileWriter(tempHwFile))
       // checkpoint highwatermark for all partitions
       // write the current version
@@ -69,7 +64,6 @@ class HighwaterMarkCheckpoint(val path: String) extends Logging {
       hwFileWriter.flush()
       hwFileWriter.close()
       // swap new high watermark file with previous one
-      hwFile.delete()
       if(!tempHwFile.renameTo(hwFile)) {
         fatal("Attempt to swap the new high watermark file with the old one failed")
         System.exit(1)

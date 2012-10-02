@@ -20,10 +20,10 @@ package kafka.log
 import java.io._
 import kafka.utils._
 import scala.collection._
-import kafka.server.KafkaConfig
-import kafka.api.OffsetRequest
 import kafka.log.Log._
 import kafka.common.{TopicAndPartition, KafkaException}
+import kafka.server.{HighwaterMarkCheckpoint, KafkaConfig}
+
 
 /**
  * The guy who creates and hands out logs
@@ -59,7 +59,10 @@ private[kafka] class LogManager(val config: KafkaConfig,
   val subDirs = logDir.listFiles()
   if(subDirs != null) {
     for(dir <- subDirs) {
-      if(!dir.isDirectory()) {
+      if(dir.getName.equals(HighwaterMarkCheckpoint.highWatermarkFileName)){
+        // skip valid metadata file
+      }
+      else if(!dir.isDirectory()) {
         warn("Skipping unexplainable file '" + dir.getAbsolutePath() + "'--should it be there?")
       } else {
         info("Loading log '" + dir.getName() + "'")
