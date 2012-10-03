@@ -26,14 +26,34 @@ object CompressionCodec {
       case _ => throw new kafka.common.UnknownCodecException("%d is an unknown compression codec".format(codec))
     }
   }
+  def getCompressionCodec(name: String): CompressionCodec = {
+    name.toLowerCase match {
+      case NoCompressionCodec.name => NoCompressionCodec
+      case GZIPCompressionCodec.name => GZIPCompressionCodec
+      case SnappyCompressionCodec.name => SnappyCompressionCodec
+      case _ => throw new kafka.common.UnknownCodecException("%s is an unknown compression codec".format(name))
+    }
+  }
 }
 
-sealed trait CompressionCodec { def codec: Int }
+sealed trait CompressionCodec { def codec: Int; def name: String }
 
-case object DefaultCompressionCodec extends CompressionCodec { val codec = GZIPCompressionCodec.codec }
+case object DefaultCompressionCodec extends CompressionCodec {
+  val codec = GZIPCompressionCodec.codec
+  val name = GZIPCompressionCodec.name
+}
 
-case object GZIPCompressionCodec extends CompressionCodec { val codec = 1 }
+case object GZIPCompressionCodec extends CompressionCodec {
+  val codec = 1
+  val name = "gzip"
+}
 
-case object SnappyCompressionCodec extends CompressionCodec { val codec = 2 }
+case object SnappyCompressionCodec extends CompressionCodec {
+  val codec = 2
+  val name = "snappy"
+}
 
-case object NoCompressionCodec extends CompressionCodec { val codec = 0 }
+case object NoCompressionCodec extends CompressionCodec {
+  val codec = 0
+  val name = "none"
+}
