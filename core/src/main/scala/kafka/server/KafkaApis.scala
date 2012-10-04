@@ -183,14 +183,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           BrokerTopicStat.getBrokerAllTopicStat.failedProduceRequestRate.mark()
           error("Error processing ProducerRequest on %s:%d".format(topic, partitionData.partition), e)
           e match {
-            case _: IOException =>
-              fatal("Halting due to unrecoverable I/O error while handling producer request: " + e.getMessage, e)
-              // compiler requires scala.sys.exit (not System.exit).
-              exit(1)
+            case _: KafkaStorageException =>
+              fatal("Halting due to unrecoverable I/O error while handling producer request", e)
+              Runtime.getRuntime.halt(1)
             case _ =>
-              val (error, offset) = (ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1L)
-              (TopicAndPartition(topic, partitionData.partition), ProducerResponseStatus(error, offset))
           }
+          val (errorCode, offset) = (ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1L)
+          (TopicAndPartition(topic, partitionData.partition), ProducerResponseStatus(errorCode, offset))
       }
     }
     )
@@ -369,10 +368,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
         (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.NoError, offsets))
       } catch {
-        case ioe: IOException =>
-          fatal("Halting due to unrecoverable I/O error while handling offset request: " + ioe.getMessage, ioe)
-          // compiler requires scala.sys.exit (not System.exit).
-          exit(1)
         case e =>
           warn("Error while responding to offset request", e)
           (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), Nil) )

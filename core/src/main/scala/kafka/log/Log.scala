@@ -25,9 +25,9 @@ import kafka.utils._
 import java.text.NumberFormat
 import kafka.server.BrokerTopicStat
 import kafka.message.{ByteBufferMessageSet, MessageSet, InvalidMessageException, FileMessageSet}
-import kafka.common.{KafkaException, InvalidMessageSizeException, OffsetOutOfRangeException}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
+import kafka.common.{KafkaStorageException, KafkaException, InvalidMessageSizeException, OffsetOutOfRangeException}
 
 object Log {
   val FileSuffix = ".kafka"
@@ -276,8 +276,7 @@ private[kafka] class Log( val dir: File, val maxLogFileSize: Long, val maxMessag
       }
       catch {
         case e: IOException =>
-          fatal("Halting due to unrecoverable I/O error while handling producer request", e)
-          Runtime.getRuntime.halt(1)
+          throw new KafkaStorageException("IO exception in log append", e)
         case e2 => throw e2
       }
     }
