@@ -99,12 +99,13 @@ class ProducerSendThread[K,V](val threadName: String,
   }
 
   def tryToHandle(events: Seq[ProducerData[K,V]]) {
+    val size = events.size
     try {
-      debug("Handling " + events.size + " events")
-      if(events.size > 0)
+      debug("Handling " + size + " events")
+      if(size > 0)
         handler.handle(events)
     }catch {
-      case e => error("Error in handling batch of " + events.size + " events", e)
+      case e => error("Error in handling batch of " + size + " events", e)
     }
   }
 
