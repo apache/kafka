@@ -35,15 +35,28 @@ object RpcDataSerializationTestUtils{
   private val isr1 = List(0, 1, 2)
   private val leader2 = 0
   private val isr2 = List(0, 2, 3)
-  private val partitionData0 = new PartitionData(0, new ByteBufferMessageSet(new Message("first message".getBytes)))
-  private val partitionData1 = new PartitionData(1, new ByteBufferMessageSet(new Message("second message".getBytes)))
-  private val partitionData2 = new PartitionData(2, new ByteBufferMessageSet(new Message("third message".getBytes)))
-  private val partitionData3 = new PartitionData(3, new ByteBufferMessageSet(new Message("fourth message".getBytes)))
-  private val partitionDataArray = Array(partitionData0, partitionData1, partitionData2, partitionData3)
+  private val partitionDataFetchResponse0 = new FetchResponsePartitionData(0, new ByteBufferMessageSet(new Message("first message".getBytes)))
+  private val partitionDataFetchResponse1 = new FetchResponsePartitionData(1, new ByteBufferMessageSet(new Message("second message".getBytes)))
+  private val partitionDataFetchResponse2 = new FetchResponsePartitionData(2, new ByteBufferMessageSet(new Message("third message".getBytes)))
+  private val partitionDataFetchResponse3 = new FetchResponsePartitionData(3, new ByteBufferMessageSet(new Message("fourth message".getBytes)))
+  private val partitionDataFetchResponseArray = Array(partitionDataFetchResponse0, partitionDataFetchResponse1, partitionDataFetchResponse2, partitionDataFetchResponse3)
 
-  private val topicData = {
+  private val topicDataFetchResponse = {
     val groupedData = Array(topic1, topic2).flatMap(topic =>
-      partitionDataArray.map(partitionData =>
+      partitionDataFetchResponseArray.map(partitionData =>
+        (TopicAndPartition(topic, partitionData.partition), partitionData)))
+    collection.immutable.Map(groupedData:_*)
+  }
+
+  private val partitionDataProducerRequest0 = new ProducerRequestPartitionData(0, new ByteBufferMessageSet(new Message("first message".getBytes)))
+  private val partitionDataProducerRequest1 = new ProducerRequestPartitionData(1, new ByteBufferMessageSet(new Message("second message".getBytes)))
+  private val partitionDataProducerRequest2 = new ProducerRequestPartitionData(2, new ByteBufferMessageSet(new Message("third message".getBytes)))
+  private val partitionDataProducerRequest3 = new ProducerRequestPartitionData(3, new ByteBufferMessageSet(new Message("fourth message".getBytes)))
+  private val partitionDataProducerRequestArray = Array(partitionDataProducerRequest0, partitionDataProducerRequest1, partitionDataProducerRequest2, partitionDataProducerRequest3)
+
+  private val topicDataProducerRequest = {
+    val groupedData = Array(topic1, topic2).flatMap(topic =>
+      partitionDataProducerRequestArray.map(partitionData =>
         (TopicAndPartition(topic, partitionData.partition), partitionData)))
     collection.immutable.Map(groupedData:_*)
   }
@@ -92,7 +105,7 @@ object RpcDataSerializationTestUtils{
   }
 
   def createTestProducerRequest: ProducerRequest = {
-    new ProducerRequest(1, "client 1", 0, 1000, topicData)
+    new ProducerRequest(1, "client 1", 0, 1000, topicDataProducerRequest)
   }
 
   def createTestProducerResponse: ProducerResponse =
@@ -106,7 +119,7 @@ object RpcDataSerializationTestUtils{
   }
 
   def createTestFetchResponse: FetchResponse = {
-    FetchResponse(1, 1, topicData)
+    FetchResponse(1, 1, topicDataFetchResponse)
   }
 
   def createTestOffsetRequest = new OffsetRequest(

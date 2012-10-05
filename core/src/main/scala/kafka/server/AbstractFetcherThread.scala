@@ -22,7 +22,7 @@ import kafka.consumer.SimpleConsumer
 import kafka.common.{TopicAndPartition, ErrorMapping}
 import collection.mutable
 import kafka.message.ByteBufferMessageSet
-import kafka.api.{FetchResponse, PartitionData, FetchRequestBuilder}
+import kafka.api.{FetchResponse, FetchResponsePartitionData, FetchRequestBuilder}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 import java.util.concurrent.atomic.AtomicLong
@@ -44,7 +44,7 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
   // callbacks to be defined in subclass
 
   // process fetched data
-  def processPartitionData(topic: String, fetchOffset: Long, partitionData: PartitionData)
+  def processPartitionData(topic: String, fetchOffset: Long, partitionData: FetchResponsePartitionData)
 
   // handle a partition whose offset is out of range and return a new fetch offset
   def handleOffsetOutOfRange(topic: String, partitionId: Int): Long

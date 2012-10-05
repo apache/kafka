@@ -96,7 +96,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    * Check if a partitionData from a produce request can unblock any
    * DelayedFetch requests.
    */
-  def maybeUnblockDelayedFetchRequests(topic: String, partitionData: PartitionData) {
+  def maybeUnblockDelayedFetchRequests(topic: String, partitionData: ProducerRequestPartitionData) {
     val partition = partitionData.partition
     val satisfied =  fetchRequestPurgatory.update(RequestKey(topic, partition), null)
     trace("Producer request to (%s-%d) unblocked %d fetch requests.".format(topic, partition, satisfied.size))
@@ -284,7 +284,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   /**
    * Read from all the offset details given and return a map of
-   * (topic, partition) -> PartitionData
+   * (topic, partition) -> FetchResponsePartitionData
    */
   private def readMessageSets(fetchRequest: FetchRequest) = {
     val isFetchFromFollower = fetchRequest.isFromFollower
@@ -295,13 +295,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           BrokerTopicStat.getBrokerTopicStat(topic).bytesOutRate.mark(messages.sizeInBytes)
           BrokerTopicStat.getBrokerAllTopicStat.bytesOutRate.mark(messages.sizeInBytes)
           if (!isFetchFromFollower) {
-            new PartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
+            new FetchResponsePartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
           } else {
             debug("Leader %d for topic %s partition %d received fetch request from follower %d"
                           .format(brokerId, topic, partition, fetchRequest.replicaId))
             debug("Leader %d returning %d messages for topic %s partition %d to follower %d"
                           .format(brokerId, messages.sizeInBytes, topic, partition, fetchRequest.replicaId))
-            new PartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
+            new FetchResponsePartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
           }
         }
         catch {
@@ -309,7 +309,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             BrokerTopicStat.getBrokerTopicStat(topic).failedFetchRequestRate.mark()
             BrokerTopicStat.getBrokerAllTopicStat.failedFetchRequestRate.mark()
             error("error when processing request " + (topic, partition, offset, fetchSize), t)
-            new PartitionData(partition, ErrorMapping.codeFor(t.getClass.asInstanceOf[Class[Throwable]]),
+            new FetchResponsePartitionData(partition, ErrorMapping.codeFor(t.getClass.asInstanceOf[Class[Throwable]]),
                               offset, -1L, MessageSet.Empty)
         }
         (TopicAndPartition(topic, partition), partitionData)

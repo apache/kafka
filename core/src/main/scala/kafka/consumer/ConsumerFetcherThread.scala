@@ -20,7 +20,7 @@ package kafka.consumer
 import kafka.cluster.Broker
 import kafka.server.AbstractFetcherThread
 import kafka.message.ByteBufferMessageSet
-import kafka.api.{PartitionOffsetRequestInfo, Request, OffsetRequest, PartitionData}
+import kafka.api.{PartitionOffsetRequestInfo, Request, OffsetRequest, FetchResponsePartitionData}
 import kafka.common.TopicAndPartition
 
 
@@ -34,7 +34,7 @@ class ConsumerFetcherThread(name: String,
           minBytes = config.minFetchBytes) {
 
   // process fetched data
-  def processPartitionData(topic: String, fetchOffset: Long, partitionData: PartitionData) {
+  def processPartitionData(topic: String, fetchOffset: Long, partitionData: FetchResponsePartitionData) {
     val pti = consumerFetcherManager.getPartitionTopicInfo((topic, partitionData.partition))
     if (pti.getFetchOffset != fetchOffset)
       throw new RuntimeException("offset doesn't match for topic %s partition: %d pti offset: %d fetch ofset: %d"

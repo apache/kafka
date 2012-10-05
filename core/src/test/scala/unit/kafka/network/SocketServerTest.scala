@@ -25,7 +25,7 @@ import kafka.utils.TestUtils
 import java.util.Random
 import junit.framework.Assert._
 import kafka.producer.SyncProducerConfig
-import kafka.api.{PartitionData, ProducerRequest}
+import kafka.api.{ProducerRequestPartitionData, ProducerRequest}
 import java.nio.ByteBuffer
 import kafka.common.TopicAndPartition
 
@@ -78,7 +78,7 @@ class SocketServerTest extends JUnitSuite {
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
     val ack = SyncProducerConfig.DefaultRequiredAcks
     val emptyRequest =
-      new ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, Map[TopicAndPartition, PartitionData]())
+      new ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, Map[TopicAndPartition, ProducerRequestPartitionData]())
 
     val byteBuffer = ByteBuffer.allocate(emptyRequest.sizeInBytes)
     emptyRequest.writeTo(byteBuffer)

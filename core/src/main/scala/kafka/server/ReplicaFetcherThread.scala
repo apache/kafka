@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest, PartitionData}
+import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest, FetchResponsePartitionData}
 import kafka.cluster.Broker
 import kafka.message.ByteBufferMessageSet
 import kafka.common.TopicAndPartition
@@ -30,7 +30,7 @@ class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: Kafk
     minBytes = brokerConfig.replicaMinBytes) {
 
   // process fetched data
-  def processPartitionData(topic: String, fetchOffset: Long, partitionData: PartitionData) {
+  def processPartitionData(topic: String, fetchOffset: Long, partitionData: FetchResponsePartitionData) {
     val partitionId = partitionData.partition
     val replica = replicaMgr.getReplica(topic, partitionId).get
     val messageSet = partitionData.messages.asInstanceOf[ByteBufferMessageSet]
