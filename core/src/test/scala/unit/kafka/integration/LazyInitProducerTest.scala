@@ -103,7 +103,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
 
     // send some invalid offsets
     val builder = new FetchRequestBuilder()
-    for( (topic, offset) <- topicOffsets )
+    for((topic, offset) <- topicOffsets)
       builder.addFetch(topic, offset, -1, 10000)
 
     val request = builder.build()
@@ -113,8 +113,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
         ErrorMapping.maybeThrowException(pd.error)
         fail("Expected an OffsetOutOfRangeException exception to be thrown")
       } catch {
-        case e: OffsetOutOfRangeException =>
-
+        case e: OffsetOutOfRangeException => // this is good
       }
     })
   }

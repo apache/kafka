@@ -155,8 +155,8 @@ object TestUtils extends Logging {
    * Wrap the message in a message set
    * @param payload The bytes of the message
    */
-  def singleMessageSet(payload: Array[Byte]) =
-    new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(payload))
+  def singleMessageSet(payload: Array[Byte], codec: CompressionCodec = NoCompressionCodec) =
+    new ByteBufferMessageSet(compressionCodec = codec, messages = new Message(payload))
 
   /**
    * Generate an array of random bytes
@@ -426,7 +426,29 @@ object TestUtils extends Logging {
       leaderLock.unlock()
     }
   }
+  
+  /**
+   * Execute the given block. If it throws an assert error, retry. Repeat
+   * until no error is thrown or the time limit ellapses
+   */
+  def retry(waitTime: Long, block: () => Unit) {
+    val startTime = System.currentTimeMillis()
+    while(true) {
+      try {
+        block()
+      } catch {
+        case e: AssertionError =>
+          if(System.currentTimeMillis - startTime > waitTime)
+            throw e
+          else
+            Thread.sleep(100)
+      }
+    }
+  }
 
+  /**
+   * Wait until the given condition is true or the given wait time ellapses
+   */
   def waitUntilTrue(condition: () => Boolean, waitTime: Long): Boolean = {
     val startTime = System.currentTimeMillis()
     while (true) {

@@ -59,7 +59,7 @@ object ConsumerPerformance {
         threadList ::= new ConsumerPerfThread(i, "kafka-zk-consumer-" + i, streamList(i), config,
                                               totalMessagesRead, totalBytesRead)
 
-    logger.info("Sleeping for 1000 seconds.")
+    logger.info("Sleeping for 1 second.")
     Thread.sleep(1000)
     logger.info("starting threads")
     val startMs = System.currentTimeMillis

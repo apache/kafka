@@ -170,19 +170,14 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     val messageSet = if(leader == server1.config.brokerId) {
       val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
-      response1.messageSet("new-topic", 0).iterator
+      response1.messageSet("new-topic", 0).iterator.toBuffer
     }else {
       val response2 = consumer2.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
-      response2.messageSet("new-topic", 0).iterator
+      response2.messageSet("new-topic", 0).iterator.toBuffer
     }
-    assertTrue("Message set should have 1 message", messageSet.hasNext)
-
-    assertEquals(new Message("test1".getBytes), messageSet.next.message)
-    assertTrue("Message set should have 1 message", messageSet.hasNext)
-    assertEquals(new Message("test2".getBytes), messageSet.next.message)
-    if (messageSet.hasNext)
-      fail("Message set should not have any more messages, but received a message of %s"
-            .format(Utils.toString(messageSet.next.message.payload, "UTF-8")))
+    assertEquals("Should have fetched 2 messages", 2, messageSet.size)
+    assertEquals(new Message("test1".getBytes), messageSet(0).message)
+    assertEquals(new Message("test2".getBytes), messageSet(1).message)
     producer1.close()
 
     try {

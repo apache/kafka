@@ -80,7 +80,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
         fetchedMessage = fetched.messageSet(topic, 0)
       }
       TestUtils.checkEquals(sent1.iterator, fetchedMessage.map(m => m.message).iterator)
-      val newOffset = fetchedMessage.validBytes
+      val newOffset = fetchedMessage.last.nextOffset
 
       // send some more messages
       producer.send(new ProducerData[Int, Message](topic, 0, sent2))

@@ -99,8 +99,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1, 500)
 
     // create a consumer
-    val consumerConfig1 = new ConsumerConfig(
-      TestUtils.createConsumerProperties(zkConnect, group, consumer1))
+    val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer1))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Predef.Map(topic -> 1))
 
@@ -348,7 +347,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
 
     val receivedMessages1 = getMessages(nMessages, topicMessageStreams1)
     assertEquals(nMessages, receivedMessages1.size)
-    assertEquals(sentMessages1, receivedMessages1)
+    assertEquals(sentMessages1.sortWith((s,t) => s.checksum < t.checksum), receivedMessages1)
   }
 
   def sendMessagesToBrokerPartition(config: KafkaConfig, topic: String, partition: Int, numMessages: Int, compression: CompressionCodec = NoCompressionCodec): List[Message] = {
@@ -395,10 +394,10 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
 
   def getMessages(nMessagesPerThread: Int, topicMessageStreams: Map[String,List[KafkaStream[Message]]]): List[Message]= {
     var messages: List[Message] = Nil
-    for ((topic, messageStreams) <- topicMessageStreams) {
+    for((topic, messageStreams) <- topicMessageStreams) {
       for (messageStream <- messageStreams) {
         val iterator = messageStream.iterator
-        for (i <- 0 until nMessagesPerThread) {
+        for(i <- 0 until nMessagesPerThread) {
           assertTrue(iterator.hasNext)
           val message = iterator.next.message
           messages ::= message

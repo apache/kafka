@@ -22,11 +22,11 @@ import scala.collection.JavaConversions.asList
 private[javaapi] object MetadataListImplicits {
   implicit def toJavaTopicMetadataList(topicMetadataSeq: Seq[kafka.api.TopicMetadata]):
   java.util.List[kafka.javaapi.TopicMetadata] =
-    topicMetadataSeq.map(new kafka.javaapi.TopicMetadata(_))
+    asList(topicMetadataSeq.map(new kafka.javaapi.TopicMetadata(_)))
 
   implicit def toPartitionMetadataList(partitionMetadataSeq: Seq[kafka.api.PartitionMetadata]):
   java.util.List[kafka.javaapi.PartitionMetadata] =
-    partitionMetadataSeq.map(new kafka.javaapi.PartitionMetadata(_))
+    asList(partitionMetadataSeq.map(new kafka.javaapi.PartitionMetadata(_)))
 }
 
 class TopicMetadata(private val underlying: kafka.api.TopicMetadata) {
@@ -51,9 +51,9 @@ class PartitionMetadata(private val underlying: kafka.api.PartitionMetadata) {
     underlying.leader
   }
 
-  def replicas: java.util.List[Broker] = underlying.replicas
+  def replicas: java.util.List[Broker] = asList(underlying.replicas)
 
-  def isr: java.util.List[Broker] = underlying.isr
+  def isr: java.util.List[Broker] = asList(underlying.isr)
 
   def errorCode: Short = underlying.errorCode
 

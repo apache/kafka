@@ -22,7 +22,7 @@ import java.util.ArrayList
 import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
-import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
+import kafka.message._
 import kafka.common.{MessageSizeTooLargeException, KafkaException, OffsetOutOfRangeException}
 import kafka.utils._
 import scala.Some
@@ -46,9 +46,11 @@ class LogTest extends JUnitSuite {
     Utils.rm(logDir)
   }
   
-  def createEmptyLogs(dir: File, offsets: Int*) = {
-    for(offset <- offsets)
-      new File(dir, Integer.toString(offset) + Log.FileSuffix).createNewFile()
+  def createEmptyLogs(dir: File, offsets: Int*) {
+    for(offset <- offsets) {
+      Log.logFilename(dir, offset).createNewFile()
+      Log.indexFilename(dir, offset).createNewFile()
+    }
   }
 
   /** Test that the size and time based log segment rollout works. */
@@ -59,7 +61,7 @@ class LogTest extends JUnitSuite {
     val time: MockTime = new MockTime()
 
     // create a log
-    val log = new Log(logDir, 1000, config.maxMessageSize, 1000, rollMs, false, time)
+    val log = new Log(logDir, 1000, config.maxMessageSize, 1000, rollMs, needsRecovery = false, time = time)
     time.currentMs += rollMs + 1
 
     // segment age is less than its limit
@@ -76,12 +78,12 @@ class LogTest extends JUnitSuite {
 
     time.currentMs += rollMs + 1
     val blank = Array[Message]()
-    log.append(new ByteBufferMessageSet(blank:_*))
+    log.append(new ByteBufferMessageSet(new Message("blah".getBytes)))
     assertEquals("There should be exactly 3 segments.", 3, log.numberOfSegments)
 
     time.currentMs += rollMs + 1
     // the last segment expired in age, but was blank. So new segment should not be generated
-    log.append(set)
+    log.append(new ByteBufferMessageSet())
     assertEquals("There should be exactly 3 segments.", 3, log.numberOfSegments)
   }
 
@@ -93,7 +95,7 @@ class LogTest extends JUnitSuite {
     val logFileSize = msgPerSeg * (setSize - 1).asInstanceOf[Int] // each segment will be 10 messages
 
     // create a log
-    val log = new Log(logDir, logFileSize, config.maxMessageSize, 1000, 10000, false, time)
+    val log = new Log(logDir, logFileSize, config.maxMessageSize, 1000, 10000, needsRecovery = false, time = time)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
 
     // segments expire in size
@@ -106,23 +108,12 @@ class LogTest extends JUnitSuite {
   @Test
   def testLoadEmptyLog() {
     createEmptyLogs(logDir, 0)
-    new Log(logDir, 1024, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false, time)
-  }
-
-  @Test
-  def testLoadInvalidLogsFails() {
-    createEmptyLogs(logDir, 0, 15)
-    try {
-      new Log(logDir, 1024, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false, time)
-      fail("Allowed load of corrupt logs without complaint.")
-    } catch {
-      case e: KafkaException => "This is good"
-    }
+    new Log(logDir, 1024, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, time = time)
   }
 
   @Test
   def testAppendAndRead() {
-    val log = new Log(logDir, 1024, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false, time)
+    val log = new Log(logDir, 1024, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, time = time)
     val message = new Message(Integer.toString(42).getBytes())
     for(i <- 0 until 10)
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
@@ -139,7 +130,7 @@ class LogTest extends JUnitSuite {
   @Test
   def testReadOutOfRange() {
     createEmptyLogs(logDir, 1024)
-    val log = new Log(logDir, 1024, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false, time)
+    val log = new Log(logDir, 1024, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, time = time)
     assertEquals("Reading just beyond end of log should produce 0 byte read.", 0L, log.read(1024, 1000).sizeInBytes)
     try {
       log.read(0, 1024)
@@ -159,95 +150,96 @@ class LogTest extends JUnitSuite {
   @Test
   def testLogRolls() {
     /* create a multipart log with 100 messages */
-    val log = new Log(logDir, 100, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false, time)
+    val log = new Log(logDir, 100, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, time = time)
     val numMessages = 100
-    for(i <- 0 until numMessages)
-      log.append(TestUtils.singleMessageSet(Integer.toString(i).getBytes()))
+    val messageSets = (0 until numMessages).map(i => TestUtils.singleMessageSet(i.toString.getBytes))
+    val offsets = messageSets.map(log.append(_)._1)
     log.flush
 
-    /* now do successive reads and iterate over the resulting message sets counting the messages
-     * we should find exact 100 messages.
-     */
-    var reads = 0
-    var current = 0
+    /* do successive reads to ensure all our messages are there */
     var offset = 0L
-    var readOffset = 0L
-    while(current < numMessages) {
-      val messages = log.read(readOffset, 1024*1024)
-      readOffset += messages.last.offset
-      current += messages.size
-      if(reads > 2*numMessages)
-        fail("Too many read attempts.")
-      reads += 1
+    for(i <- 0 until numMessages) {
+      val messages = log.read(offset, 1024*1024)
+      assertEquals("Offsets not equal", offset, messages.head.offset)
+      assertEquals("Messages not equal at offset " + offset, messageSets(i).head.message, messages.head.message)
+      offset = messages.head.offset + 1
     }
-    assertEquals("We did not find all the messages we put in", numMessages, current)
+    val lastRead = log.read(startOffset = numMessages, maxLength = 1024*1024, maxOffset = Some(numMessages + 1))
+    assertEquals("Should be no more messages", 0, lastRead.size)
+  }
+  
+  /** Test the case where we have compressed batches of messages */
+  @Test
+  def testCompressedMessages() {
+    /* this log should roll after every messageset */
+    val log = new Log(logDir, 10, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, time = time)
+    
+    /* append 2 compressed message sets, each with two messages giving offsets 0, 1, 2, 3 */
+    log.append(new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes)))
+    log.append(new ByteBufferMessageSet(DefaultCompressionCodec, new Message("alpha".getBytes), new Message("beta".getBytes)))
+    
+    def read(offset: Int) = ByteBufferMessageSet.decompress(log.read(offset, 4096).head.message)
+    
+    /* we should always get the first message in the compressed set when reading any offset in the set */
+    assertEquals("Read at offset 0 should produce 0", 0, read(0).head.offset)
+    assertEquals("Read at offset 1 should produce 0", 0, read(1).head.offset)
+    assertEquals("Read at offset 2 should produce 2", 2, read(2).head.offset)
+    assertEquals("Read at offset 3 should produce 2", 2, read(3).head.offset)
   }
 
   @Test
   def testFindSegment() {
     assertEquals("Search in empty segments list should find nothing", None, Log.findRange(makeRanges(), 45))
-    assertEquals("Search in segment list just outside the range of the last segment should find nothing",
-                 None, Log.findRange(makeRanges(5, 9, 12), 12))
-    try {
-      Log.findRange(makeRanges(35), 36)
-      fail("expect exception")
-    }
-    catch {
-      case e: OffsetOutOfRangeException => "this is good"
-    }
-
-    try {
-      Log.findRange(makeRanges(35,35), 36)
-    }
-    catch {
-      case e: OffsetOutOfRangeException => "this is good"
-    }
-
+    assertEquals("Search in segment list just outside the range of the last segment should find last segment",
+                 9, Log.findRange(makeRanges(5, 9, 12), 12).get.start)
+    assertEquals("Search in segment list far outside the range of the last segment should find last segment",
+                 9, Log.findRange(makeRanges(5, 9, 12), 100).get.start)
+    assertEquals("Search in segment list far outside the range of the last segment should find last segment",
+                 None, Log.findRange(makeRanges(5, 9, 12), -1))
     assertContains(makeRanges(5, 9, 12), 11)
     assertContains(makeRanges(5), 4)
     assertContains(makeRanges(5,8), 5)
     assertContains(makeRanges(5,8), 6)
   }
   
-  /** Test corner cases of rolling logs */
   @Test
-  def testEdgeLogRolls() {
-    {
-      // first test a log segment starting at 0
-      val log = new Log(logDir, 100, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false, time)
-      val curOffset = log.logEndOffset
-      assertEquals(curOffset, 0)
+  def testEdgeLogRollsStartingAtZero() {
+    // first test a log segment starting at 0
+    val log = new Log(logDir, 100, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, time = time)
+    val curOffset = log.logEndOffset
+    assertEquals(curOffset, 0)
 
-      // time goes by; the log file is deleted
-      log.markDeletedWhile(_ => true)
+    // time goes by; the log file is deleted
+    log.markDeletedWhile(_ => true)
 
-      // we now have a new log; the starting offset of the new log should remain 0
-      assertEquals(curOffset, log.logEndOffset)
-    }
+    // we now have a new log; the starting offset of the new log should remain 0
+    assertEquals(curOffset, log.logEndOffset)
+    log.delete()
+  }
 
-    {
-      // second test an empty log segment starting at none-zero
-      val log = new Log(logDir, 100, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, false, time)
-      val numMessages = 1
-      for(i <- 0 until numMessages)
-        log.append(TestUtils.singleMessageSet(Integer.toString(i).getBytes()))
+  @Test
+  def testEdgeLogRollsStartingAtNonZero() {
+    // second test an empty log segment starting at non-zero
+    val log = new Log(logDir, 100, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, time = time)
+    val numMessages = 1
+    for(i <- 0 until numMessages)
+      log.append(TestUtils.singleMessageSet(i.toString.getBytes))
+    val curOffset = log.logEndOffset
+    
+    // time goes by; the log file is deleted
+    log.markDeletedWhile(_ => true)
 
-      val curOffset = log.logEndOffset
-      // time goes by; the log file is deleted
-      log.markDeletedWhile(_ => true)
+    // we now have a new log
+    assertEquals(curOffset, log.logEndOffset)
 
-      // we now have a new log
-      assertEquals(curOffset, log.logEndOffset)
+    // time goes by; the log file (which is empty) is deleted again
+    val deletedSegments = log.markDeletedWhile(_ => true)
 
-      // time goes by; the log file (which is empty) is deleted again
-      val deletedSegments = log.markDeletedWhile(_ => true)
+    // we shouldn't delete the last empty log segment.
+    assertTrue("We shouldn't delete the last empty log segment", deletedSegments.size == 0)
 
-      // we shouldn't delete the last empty log segment.
-      assertTrue("We shouldn't delete the last empty log segment", deletedSegments.size == 0)
-
-      // we now have a new log
-      assertEquals(curOffset, log.logEndOffset)
-    }
+    // we now have a new log
+    assertEquals(curOffset, log.logEndOffset)
   }
 
   @Test
@@ -256,27 +248,47 @@ class LogTest extends JUnitSuite {
     val second = new ByteBufferMessageSet(NoCompressionCodec, new Message("change".getBytes()))
 
     // append messages to log
-    val log = new Log(logDir, 100, 5, 1000, config.logRollHours*60*60*1000L, false, time)
+    val maxMessageSize = second.sizeInBytes - 1
+    val log = new Log(logDir, 100, maxMessageSize.toInt, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, time = time)
 
-    var ret =
-      try {
-        log.append(first)
-        true
-      }
-      catch {
-        case e: MessageSizeTooLargeException => false
-      }
-    assert(ret, "First messageset should pass.")
+    // should be able to append the small message
+    log.append(first)
 
-    ret =
-      try {
-        log.append(second)
-        false
-      }
-      catch {
-        case e:MessageSizeTooLargeException => true
-      }
-    assert(ret, "Second message set should throw MessageSizeTooLargeException.")
+    try {
+      log.append(second)
+      fail("Second message set should throw MessageSizeTooLargeException.")
+    } catch {
+        case e:MessageSizeTooLargeException => // this is good
+    }
+  }
+  
+  @Test
+  def testLogRecoversToCorrectOffset() {
+    val numMessages = 100
+    val messageSize = 100
+    val segmentSize = 7 * messageSize
+    val indexInterval = 3 * messageSize
+    var log = new Log(logDir, segmentSize, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, indexIntervalBytes = indexInterval, maxIndexSize = 4096)
+    for(i <- 0 until numMessages)
+      log.append(TestUtils.singleMessageSet(TestUtils.randomBytes(messageSize)))
+    assertEquals("After appending %d messages to an empty log, the log end offset should be %d".format(numMessages, numMessages), numMessages, log.logEndOffset)
+    val lastIndexOffset = log.segments.view.last.index.lastOffset
+    val numIndexEntries = log.segments.view.last.index.entries
+    log.close()
+    
+    // test non-recovery case
+    log = new Log(logDir, segmentSize, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, indexIntervalBytes = indexInterval, maxIndexSize = 4096)
+    assertEquals("Should have %d messages when log is reopened w/o recovery".format(numMessages), numMessages, log.logEndOffset)
+    assertEquals("Should have same last index offset as before.", lastIndexOffset, log.segments.view.last.index.lastOffset)
+    assertEquals("Should have same number of index entries as before.", numIndexEntries, log.segments.view.last.index.entries)
+    log.close()
+    
+    // test 
+    log = new Log(logDir, segmentSize, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, needsRecovery = true, indexIntervalBytes = indexInterval, maxIndexSize = 4096)
+    assertEquals("Should have %d messages when log is reopened with recovery".format(numMessages), numMessages, log.logEndOffset)
+    assertEquals("Should have same last index offset as before.", lastIndexOffset, log.segments.view.last.index.lastOffset)
+    assertEquals("Should have same number of index entries as before.", numIndexEntries, log.segments.view.last.index.entries)
+    log.close()
   }
 
   @Test
@@ -287,14 +299,15 @@ class LogTest extends JUnitSuite {
     val logFileSize = msgPerSeg * (setSize - 1).asInstanceOf[Int] // each segment will be 10 messages
 
     // create a log
-    val log = new Log(logDir, logFileSize, config.maxMessageSize, 1000, 10000, false, time)
+    val log = new Log(logDir, logFileSize, config.maxMessageSize, 1000, 10000, needsRecovery = false, time = time)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
 
-    for (i<- 1 to msgPerSeg) {
+    for (i<- 1 to msgPerSeg)
       log.append(set)
-    }
+    
     assertEquals("There should be exactly 1 segments.", 1, log.numberOfSegments)
-
+    assertEquals("Log end offset should be equal to number of messages", msgPerSeg, log.logEndOffset)
+    
     val lastOffset = log.logEndOffset
     val size = log.size
     log.truncateTo(log.logEndOffset) // keep the entire log
@@ -303,29 +316,29 @@ class LogTest extends JUnitSuite {
     log.truncateTo(log.logEndOffset + 1) // try to truncate beyond lastOffset
     assertEquals("Should not change offset but should log error", lastOffset, log.logEndOffset)
     assertEquals("Should not change log size", size, log.size)
-    log.truncateTo(log.logEndOffset - 10) // truncate somewhere in between
-    assertEquals("Should change offset", lastOffset, log.logEndOffset + 10)
-    assertEquals("Should change log size", size, log.size + 10)
-    log.truncateTo(log.logEndOffset - log.size) // truncate the entire log
-    assertEquals("Should change offset", log.logEndOffset, lastOffset - size)
-    assertEquals("Should change log size", log.size, 0)
+    log.truncateTo(msgPerSeg/2) // truncate somewhere in between
+    assertEquals("Should change offset", log.logEndOffset, msgPerSeg/2)
+    assertTrue("Should change log size", log.size < size)
+    log.truncateTo(0) // truncate the entire log
+    assertEquals("Should change offset", 0, log.logEndOffset)
+    assertEquals("Should change log size", 0, log.size)
 
-    for (i<- 1 to msgPerSeg) {
+    for (i<- 1 to msgPerSeg)
       log.append(set)
-    }
+    
     assertEquals("Should be back to original offset", log.logEndOffset, lastOffset)
     assertEquals("Should be back to original size", log.size, size)
-    log.truncateAndStartWithNewOffset(log.logEndOffset - (msgPerSeg - 1)*setSize)
-    assertEquals("Should change offset", log.logEndOffset, lastOffset - (msgPerSeg - 1)*setSize)
+    log.truncateAndStartWithNewOffset(log.logEndOffset - (msgPerSeg - 1))
+    assertEquals("Should change offset", log.logEndOffset, lastOffset - (msgPerSeg - 1))
     assertEquals("Should change log size", log.size, 0)
 
-    for (i<- 1 to msgPerSeg) {
+    for (i<- 1 to msgPerSeg)
       log.append(set)
-    }
-    assertEquals("Should be ahead of to original offset", log.logEndOffset, lastOffset + setSize)
+
+    assertTrue("Should be ahead of to original offset", log.logEndOffset > msgPerSeg)
     assertEquals("log size should be same as before", size, log.size)
-    log.truncateTo(log.logEndOffset - log.size - setSize) // truncate before first start offset in the log
-    assertEquals("Should change offset", log.logEndOffset, lastOffset - size)
+    log.truncateTo(0) // truncate before first start offset in the log
+    assertEquals("Should change offset", 0, log.logEndOffset)
     assertEquals("Should change log size", log.size, 0)
   }
 

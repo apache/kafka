@@ -19,38 +19,64 @@ package kafka.tools
 
 import java.io._
 import kafka.message._
+import kafka.log._
 import kafka.utils._
 
 object DumpLogSegments {
 
   def main(args: Array[String]) {
-    var isNoPrint = false;
-    for(arg <- args)
-      if ("-noprint".compareToIgnoreCase(arg) == 0)
-        isNoPrint = true;
+    val print = args.contains("--print")
+    val files = args.filter(_ != "--print")
 
-    for(arg <- args) {
-      if (! ("-noprint".compareToIgnoreCase(arg) == 0) ) {
-        val file = new File(arg)
+    for(arg <- files) {
+      val file = new File(arg)
+      if(file.getName.endsWith(Log.LogFileSuffix)) {
         println("Dumping " + file)
-        val startOffset = file.getName().split("\\.")(0).toLong
-        var offset = 0L
-        println("Starting offset: " + startOffset)
-        val messageSet = new FileMessageSet(file, false)
-        for(messageAndOffset <- messageSet) {
-          val msg = messageAndOffset.message
-          println("offset: " + (startOffset + offset) + " isvalid: " + msg.isValid +
-                  " payloadsize: " + msg.payloadSize + " magic: " + msg.magic + " compresscodec: " + msg.compressionCodec)
-          if (!isNoPrint)
-            println("payload:\t" + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
-          offset = messageAndOffset.offset
-        }
-        val endOffset = startOffset + offset
-        println("Tail of the log is at offset: " + endOffset)
-        if (messageSet.sizeInBytes != endOffset)
-          println("Log corrupted from " + endOffset + " to " + messageSet.sizeInBytes + "!!!")
+        dumpLog(file, print)
+      } else if(file.getName.endsWith(Log.IndexFileSuffix)){
+        println("Dumping " + file)
+        dumpIndex(file)
       }
     }
+  }
+  
+  /* print out the contents of the index */
+  def dumpIndex(file: File) {
+    val startOffset = file.getName().split("\\.")(0).toLong
+    val index = new OffsetIndex(file = file, baseOffset = startOffset, mutable = false)
+    for(i <- 0 until index.entries) {
+      val entry = index.entry(i)
+      // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
+      if(entry.offset <= startOffset)
+        return
+      println("offset: %d position: %d".format(entry.offset, entry.position))
+    }
+  }
+  
+  /* print out the contents of the log */
+  def dumpLog(file: File, printContents: Boolean) {
+    val startOffset = file.getName().split("\\.")(0).toLong
+    println("Starting offset: " + startOffset)
+    val messageSet = new FileMessageSet(file, false)
+    var validBytes = 0L
+    for(messageAndOffset <- messageSet) {
+      val msg = messageAndOffset.message
+      validBytes += MessageSet.entrySize(msg)
+      print("offset: " + messageAndOffset.offset + " isvalid: " + msg.isValid +
+            " payloadsize: " + msg.payloadSize + " magic: " + msg.magic + 
+            " compresscodec: " + msg.compressionCodec + " crc: " + msg.checksum)
+      if(msg.hasKey)
+        print(" keysize: " + msg.keySize)
+      if(printContents) {
+        if(msg.hasKey)
+          print(" key: " + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
+        print(" payload: " + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
+      }
+      println()
+    }
+    val trailingBytes = messageSet.sizeInBytes - validBytes
+    if(trailingBytes > 0)
+      println("Found %d invalid bytes at the end of %s".format(trailingBytes, file.getName))
   }
   
 }

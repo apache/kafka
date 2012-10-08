@@ -16,9 +16,21 @@
 */
 package kafka.javaapi.message
 
+import java.util.concurrent.atomic.AtomicLong
+import scala.reflect.BeanProperty
+import java.nio.ByteBuffer
 import kafka.message._
 
-class ByteBufferMessageSet(private val underlying: kafka.message.ByteBufferMessageSet) extends MessageSet {
+class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends MessageSet {
+  private val underlying: kafka.message.ByteBufferMessageSet = new kafka.message.ByteBufferMessageSet(buffer)
+  
+  def this(compressionCodec: CompressionCodec, messages: java.util.List[Message]) {
+    this(new kafka.message.ByteBufferMessageSet(compressionCodec, new AtomicLong(0), scala.collection.JavaConversions.asBuffer(messages): _*).buffer)
+  }
+
+  def this(messages: java.util.List[Message]) {
+    this(NoCompressionCodec, messages)
+  }
 
   def validBytes: Long = underlying.validBytes
 
@@ -41,12 +53,11 @@ class ByteBufferMessageSet(private val underlying: kafka.message.ByteBufferMessa
 
   override def equals(other: Any): Boolean = {
     other match {
-      case that: ByteBufferMessageSet =>
-        underlying.equals(that.underlying)
+      case that: ByteBufferMessageSet => buffer.equals(that.buffer)
       case _ => false
     }
   }
 
-  override def hashCode: Int = underlying.hashCode
 
+  override def hashCode: Int = buffer.hashCode
 }

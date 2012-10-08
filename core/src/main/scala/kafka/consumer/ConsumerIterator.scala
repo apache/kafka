@@ -22,7 +22,7 @@ import java.util.concurrent.{TimeUnit, BlockingQueue}
 import kafka.serializer.Decoder
 import java.util.concurrent.atomic.AtomicReference
 import kafka.message.{MessageAndOffset, MessageAndMetadata}
-import kafka.common.KafkaException
+import kafka.common.{KafkaException, MessageSizeTooLargeException}
 
 
 /**
@@ -82,9 +82,16 @@ class ConsumerIterator[T](private val channel: BlockingQueue[FetchedDataChunk],
                        else currentDataChunk.messages.iterator
         current.set(localCurrent)
       }
+      // if we just updated the current chunk and it is empty that means the fetch size is too small!
+      if(currentDataChunk.messages.validBytes == 0)
+        throw new MessageSizeTooLargeException("Found a message larger than the maximum fetch size of this consumer on topic " +
+                                               "%s partition %d at fetch offset %d. Increase the fetch size, or decrease the maximum message size the broker will allow."
+                                               .format(currentDataChunk.topicInfo.topic, currentDataChunk.topicInfo.partitionId, currentDataChunk.fetchOffset))
     }
     val item = localCurrent.next()
-    consumedOffset = item.offset
+    consumedOffset = item.nextOffset
+    
+    item.message.ensureValid() // validate checksum of message to ensure it is valid
 
     new MessageAndMetadata(decoder.toEvent(item.message), currentTopicInfo.topic)
   }

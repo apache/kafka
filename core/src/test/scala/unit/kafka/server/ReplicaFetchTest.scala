@@ -60,7 +60,7 @@ class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
                   new ProducerData[String, String](topic2, testMessageList2))
     producer.close()
 
-    def condition(): Boolean = {
+    def logsMatch(): Boolean = {
       var result = true
       for (topic <- List(topic1, topic2)) {
         val expectedOffset = brokers.head.getLogManager().getLog(topic, partition).get.logEndOffset
@@ -69,6 +69,6 @@ class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
       }
       result
     }
-    assertTrue("broker logs should be identical", waitUntilTrue(condition, 6000))
+    assertTrue("Broker logs should be identical", waitUntilTrue(logsMatch, 6000))
   }
 }

@@ -22,6 +22,7 @@ import kafka.consumer.SimpleConsumer
 import kafka.common.{TopicAndPartition, ErrorMapping}
 import collection.mutable
 import kafka.message.ByteBufferMessageSet
+import kafka.message.MessageAndOffset
 import kafka.api.{FetchResponse, FetchResponsePartitionData, FetchRequestBuilder}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
@@ -36,12 +37,13 @@ import java.util.concurrent.TimeUnit
 abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socketTimeout: Int, socketBufferSize: Int,
                                      fetchSize: Int, fetcherBrokerId: Int = -1, maxWait: Int = 0, minBytes: Int = 1)
   extends ShutdownableThread(name) {
+
   private val fetchMap = new mutable.HashMap[TopicAndPartition, Long] // a (topic, partition) -> offset map
   private val fetchMapLock = new Object
   val simpleConsumer = new SimpleConsumer(sourceBroker.host, sourceBroker.port, socketTimeout, socketBufferSize)
   val fetcherMetrics = FetcherStat.getFetcherStat(name + "-" + sourceBroker.id)
   
-  // callbacks to be defined in subclass
+  /* callbacks to be defined in subclass */
 
   // process fetched data
   def processPartitionData(topic: String, fetchOffset: Long, partitionData: FetchResponsePartitionData)
@@ -100,12 +102,17 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
             if (currentOffset.isDefined) {
               partitionData.error match {
                 case ErrorMapping.NoError =>
-                  processPartitionData(topic, currentOffset.get, partitionData)
-                  val validBytes = partitionData.messages.asInstanceOf[ByteBufferMessageSet].validBytes
-                  val newOffset = currentOffset.get + partitionData.messages.asInstanceOf[ByteBufferMessageSet].validBytes
+                  val messages = partitionData.messages.asInstanceOf[ByteBufferMessageSet]
+                  val validBytes = messages.validBytes
+                  val newOffset = messages.lastOption match {
+                    case Some(m: MessageAndOffset) => m.nextOffset
+                    case None => currentOffset.get
+                  }
                   fetchMap.put(topicAndPartition, newOffset)
                   FetcherLagMetrics.getFetcherLagMetrics(topic, partitionId).lag = partitionData.hw - newOffset
                   fetcherMetrics.byteRate.mark(validBytes)
+                  // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
+                  processPartitionData(topic, currentOffset.get, partitionData)
                 case ErrorMapping.OffsetOutOfRangeCode =>
                   val newOffset = handleOffsetOutOfRange(topic, partitionId)
                   fetchMap.put(topicAndPartition, newOffset)
@@ -122,7 +129,7 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
       }
     }
 
-    if (partitionsWithError.size > 0) {
+    if(partitionsWithError.size > 0) {
       debug("handling partitions with error for %s".format(partitionsWithError))
       handlePartitionsWithErrors(partitionsWithError)
     }

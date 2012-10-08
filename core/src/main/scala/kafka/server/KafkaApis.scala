@@ -29,6 +29,7 @@ import mutable.HashMap
 import scala.math._
 import kafka.network.RequestChannel.Response
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic._
 import kafka.metrics.KafkaMetricsGroup
 import org.I0Itec.zkclient.ZkClient
 import kafka.common._
@@ -98,7 +99,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def maybeUnblockDelayedFetchRequests(topic: String, partitionData: ProducerRequestPartitionData) {
     val partition = partitionData.partition
-    val satisfied =  fetchRequestPurgatory.update(RequestKey(topic, partition), null)
+    val satisfied =  fetchRequestPurgatory.update(RequestKey(topic, partition), partitionData)
     trace("Producer request to (%s-%d) unblocked %d fetch requests.".format(topic, partition, satisfied.size))
 
     // send any newly unblocked responses
@@ -119,26 +120,30 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestLogger.trace("Handling producer request " + request.toString)
     trace("Handling producer request " + request.toString)
 
-    val localProduceResponse = produceToLocalLog(produceRequest)
+    val localProduceResults = appendToLocalLog(produceRequest.data)
     debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
 
-    val numPartitionsInError = localProduceResponse.status.count(_._2.error != ErrorMapping.NoError)
+    val numPartitionsInError = localProduceResults.count(_.error.isDefined)
     produceRequest.data.foreach(partitionAndData =>
       maybeUnblockDelayedFetchRequests(partitionAndData._1.topic, partitionAndData._2))
 
     if (produceRequest.requiredAcks == 0 ||
         produceRequest.requiredAcks == 1 ||
         produceRequest.numPartitions <= 0 ||
-        numPartitionsInError == produceRequest.numPartitions)
-      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(localProduceResponse)))
-    else {
+        numPartitionsInError == produceRequest.numPartitions) {
+      val statuses = localProduceResults.map(r => r.key -> ProducerResponseStatus(r.errorCode, r.start)).toMap
+      val response = ProducerResponse(produceRequest.versionId, produceRequest.correlationId, statuses)
+      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+    } else {
       // create a list of (topic, partition) pairs to use as keys for this delayed request
       val producerRequestKeys = produceRequest.data.keys.map(
         topicAndPartition => new RequestKey(topicAndPartition)).toSeq
-
-      val delayedProduce = new DelayedProduce(
-        producerRequestKeys, request, localProduceResponse,
-        produceRequest, produceRequest.ackTimeoutMs.toLong)
+      val statuses = localProduceResults.map(r => r.key -> ProducerResponseStatus(r.errorCode, r.end + 1)).toMap
+      val delayedProduce = new DelayedProduce(producerRequestKeys, 
+                                              request,
+                                              statuses,
+                                              produceRequest, 
+                                              produceRequest.ackTimeoutMs.toLong)
       producerRequestPurgatory.watch(delayedProduce)
 
       /*
@@ -155,46 +160,48 @@ class KafkaApis(val requestChannel: RequestChannel,
       satisfiedProduceRequests.foreach(_.respond())
     }
   }
+  
+  case class ProduceResult(key: TopicAndPartition, start: Long, end: Long, error: Option[Throwable] = None) {
+    def this(key: TopicAndPartition, throwable: Throwable) = 
+      this(key, -1L, -1L, Some(throwable))
+    
+    def errorCode = error match {
+      case None => ErrorMapping.NoError
+      case Some(error) => ErrorMapping.codeFor(error.getClass.asInstanceOf[Class[Throwable]])
+    }
+  }
 
   /**
    * Helper method for handling a parsed producer request
    */
-  private def produceToLocalLog(request: ProducerRequest): ProducerResponse = {
-    trace("Produce [%s] to local log ".format(request.toString))
-
-    val localErrorsAndOffsets = request.data.map (topicAndPartitionData => {
-      val (topic, partitionData) = (topicAndPartitionData._1.topic, topicAndPartitionData._2)
-      BrokerTopicStat.getBrokerTopicStat(topic).bytesInRate.mark(partitionData.messages.sizeInBytes)
+  private def appendToLocalLog(messages: Map[TopicAndPartition, ProducerRequestPartitionData]): Iterable[ProduceResult] = {
+    trace("Append [%s] to local log ".format(messages.toString))
+    messages.map (data => {
+      val (key, partitionData) = data
+      BrokerTopicStat.getBrokerTopicStat(key.topic).bytesInRate.mark(partitionData.messages.sizeInBytes)
       BrokerTopicStat.getBrokerAllTopicStat.bytesInRate.mark(partitionData.messages.sizeInBytes)
-
+ 
       try {
-        val localReplica = replicaManager.getLeaderReplicaIfLocal(topic, partitionData.partition)
+        val localReplica = replicaManager.getLeaderReplicaIfLocal(key.topic, key.partition)
         val log = localReplica.log.get
-        log.append(partitionData.messages.asInstanceOf[ByteBufferMessageSet])
+        val (start, end) = log.append(partitionData.messages.asInstanceOf[ByteBufferMessageSet])
         // we may need to increment high watermark since ISR could be down to 1
         localReplica.partition.maybeIncrementLeaderHW(localReplica)
-        val responseStatus = ProducerResponseStatus(ErrorMapping.NoError, log.logEndOffset)
-        trace("%d bytes written to logs, nextAppendOffset = %d"
-                      .format(partitionData.messages.sizeInBytes, responseStatus.nextOffset))
-        (TopicAndPartition(topic, partitionData.partition), responseStatus)
+        trace("%d bytes written to log %s-%d beginning at offset %d and ending at offset %d"
+              .format(partitionData.messages.sizeInBytes, key.topic, key.partition, start, end))
+        ProduceResult(key, start, end)
       } catch {
-        case e: Throwable =>
-          BrokerTopicStat.getBrokerTopicStat(topic).failedProduceRequestRate.mark()
+        case e: KafkaStorageException =>
+          fatal("Halting due to unrecoverable I/O error while handling produce request: ", e)
+          Runtime.getRuntime.halt(1)
+          null
+        case e => 
+          BrokerTopicStat.getBrokerTopicStat(key.topic).failedProduceRequestRate.mark()
           BrokerTopicStat.getBrokerAllTopicStat.failedProduceRequestRate.mark()
-          error("Error processing ProducerRequest on %s:%d".format(topic, partitionData.partition), e)
-          e match {
-            case _: KafkaStorageException =>
-              fatal("Halting due to unrecoverable I/O error while handling producer request", e)
-              Runtime.getRuntime.halt(1)
-            case _ =>
-          }
-          val (errorCode, offset) = (ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1L)
-          (TopicAndPartition(topic, partitionData.partition), ProducerResponseStatus(errorCode, offset))
-      }
-    }
-    )
-
-    ProducerResponse(request.versionId, request.correlationId, localErrorsAndOffsets)
+          error("Error processing ProducerRequest on %s:%d".format(key.topic, key.partition), e)
+          new ProduceResult(key, e)
+       }
+    })
   }
 
   /**
@@ -207,7 +214,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     trace("Handling fetch request " + fetchRequest.toString)
 
     if(fetchRequest.isFromFollower) {
-      maybeUpdatePartitionHW(fetchRequest)
+      maybeUpdatePartitionHw(fetchRequest)
       // after updating HW, some delayed produce requests may be unblocked
       var satisfiedProduceRequests = new mutable.ArrayBuffer[DelayedProduce]
       fetchRequest.requestInfo.foreach {
@@ -220,61 +227,24 @@ class KafkaApis(val requestChannel: RequestChannel,
       satisfiedProduceRequests.foreach(_.respond())
     }
 
-    // if there are enough bytes available right now we can answer the request, otherwise we have to punt
-    val availableBytes = availableFetchBytes(fetchRequest)
+    val dataRead = readMessageSets(fetchRequest)
+    val bytesReadable = dataRead.values.map(_.messages.sizeInBytes).sum
     if(fetchRequest.maxWait <= 0 ||
-       availableBytes >= fetchRequest.minBytes ||
+       bytesReadable >= fetchRequest.minBytes ||
        fetchRequest.numPartitions <= 0) {
-      val topicData = readMessageSets(fetchRequest)
-      debug("Returning fetch response %s for fetch request with correlation id %d".format(
-        topicData.values.map(_.error).mkString(","), fetchRequest.correlationId))
-      val response = FetchResponse(FetchRequest.CurrentVersion, fetchRequest.correlationId, topicData)
+      debug("Returning fetch response %s for fetch request with correlation id %d".format(dataRead.values.map(_.error).mkString(","), fetchRequest.correlationId))
+      val response = new FetchResponse(FetchRequest.CurrentVersion, fetchRequest.correlationId, dataRead)
       requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(response)))
     } else {
       debug("Putting fetch request into purgatory")
       // create a list of (topic, partition) pairs to use as keys for this delayed request
       val delayedFetchKeys = fetchRequest.requestInfo.keys.toSeq.map(new RequestKey(_))
-      val delayedFetch = new DelayedFetch(delayedFetchKeys, request, fetchRequest, fetchRequest.maxWait)
+      val delayedFetch = new DelayedFetch(delayedFetchKeys, request, fetchRequest, fetchRequest.maxWait, bytesReadable)
       fetchRequestPurgatory.watch(delayedFetch)
     }
   }
 
-  /**
-   * Calculate the number of available bytes for the given fetch request
-   */
-  private def availableFetchBytes(fetchRequest: FetchRequest): Long = {
-    val totalBytes = fetchRequest.requestInfo.foldLeft(0L)((folded, curr) => {
-      folded +
-      {
-        val (topic, partition) = (curr._1.topic, curr._1.partition)
-        val (offset, fetchSize) = (curr._2.offset, curr._2.fetchSize)
-        debug("Fetching log for topic %s partition %d".format(topic, partition))
-        try {
-          val leader = replicaManager.getLeaderReplicaIfLocal(topic, partition)
-          val end = if (!fetchRequest.isFromFollower) {
-            leader.highWatermark
-          } else {
-            leader.logEndOffset
-          }
-          val available = max(0, end - offset)
-          math.min(fetchSize, available)
-        } catch {
-          case e: UnknownTopicOrPartitionException =>
-            info("Invalid partition %d in fetch request from client %s."
-                         .format(partition, fetchRequest.clientId))
-            0
-          case e =>
-            warn("Error determining available fetch bytes for topic %s partition %s on broker %s for client %s"
-                          .format(topic, partition, brokerId, fetchRequest.clientId), e)
-            0
-        }
-      }
-    })
-    trace(totalBytes + " available bytes for fetch request.")
-    totalBytes
-  }
-
-  private def maybeUpdatePartitionHW(fetchRequest: FetchRequest) {
+  private def maybeUpdatePartitionHw(fetchRequest: FetchRequest) {
     debug("Maybe update partition HW due to fetch request: %s ".format(fetchRequest))
     fetchRequest.requestInfo.foreach(info => {
       val (topic, partition, offset) = (info._1.topic, info._1.partition, info._2.offset)
@@ -290,21 +260,20 @@ class KafkaApis(val requestChannel: RequestChannel,
     val isFetchFromFollower = fetchRequest.isFromFollower
     fetchRequest.requestInfo.map {
       case (TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize)) =>
-        val partitionData = try {
-          val (messages, highWatermark) = readMessageSet(topic, partition, offset, fetchSize, isFetchFromFollower)
-          BrokerTopicStat.getBrokerTopicStat(topic).bytesOutRate.mark(messages.sizeInBytes)
-          BrokerTopicStat.getBrokerAllTopicStat.bytesOutRate.mark(messages.sizeInBytes)
-          if (!isFetchFromFollower) {
-            new FetchResponsePartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
-          } else {
-            debug("Leader %d for topic %s partition %d received fetch request from follower %d"
+        val partitionData = 
+          try {
+            val (messages, highWatermark) = readMessageSet(topic, partition, offset, fetchSize, isFetchFromFollower)
+            BrokerTopicStat.getBrokerTopicStat(topic).bytesOutRate.mark(messages.sizeInBytes)
+            BrokerTopicStat.getBrokerAllTopicStat.bytesOutRate.mark(messages.sizeInBytes)
+            if (!isFetchFromFollower) {
+              new FetchResponsePartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
+            } else {
+              debug("Leader %d for topic %s partition %d received fetch request from follower %d"
                           .format(brokerId, topic, partition, fetchRequest.replicaId))
-            debug("Leader %d returning %d messages for topic %s partition %d to follower %d"
-                          .format(brokerId, messages.sizeInBytes, topic, partition, fetchRequest.replicaId))
+
             new FetchResponsePartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
           }
-        }
-        catch {
+        } catch {
           case t: Throwable =>
             BrokerTopicStat.getBrokerTopicStat(topic).failedFetchRequestRate.mark()
             BrokerTopicStat.getBrokerAllTopicStat.failedFetchRequestRate.mark()
@@ -319,19 +288,20 @@ class KafkaApis(val requestChannel: RequestChannel,
   /**
    * Read from a single topic/partition at the given offset upto maxSize bytes
    */
-  private def readMessageSet(topic: String, partition: Int, offset: Long,
-                             maxSize: Int, fromFollower: Boolean): (MessageSet, Long) = {
+  private def readMessageSet(topic: String, 
+                             partition: Int, 
+                             offset: Long,
+                             maxSize: Int, 
+                             fromFollower: Boolean): (MessageSet, Long) = {
     // check if the current broker is the leader for the partitions
     val leader = replicaManager.getLeaderReplicaIfLocal(topic, partition)
     trace("Fetching log segment for topic, partition, offset, size = " + (topic, partition, offset, maxSize))
-    val actualSize = if (!fromFollower) {
-      min(leader.highWatermark - offset, maxSize).toInt
-    } else {
-      maxSize
-    }
     val messages = leader.log match {
       case Some(log) =>
-        log.read(offset, actualSize)
+        if(fromFollower)
+          log.read(startOffset = offset, maxLength = maxSize, maxOffset = None)
+        else
+          log.read(startOffset = offset, maxLength = maxSize, maxOffset = Some(leader.highWatermark))
       case None =>
         error("Leader for topic %s partition %d on broker %d does not have a local log".format(topic, partition, brokerId))
         MessageSet.Empty
@@ -449,21 +419,24 @@ class KafkaApis(val requestChannel: RequestChannel,
   /**
    * A delayed fetch request
    */
-  class DelayedFetch(keys: Seq[RequestKey], request: RequestChannel.Request, val fetch: FetchRequest, delayMs: Long)
-    extends DelayedRequest(keys, request, delayMs)
+  class DelayedFetch(keys: Seq[RequestKey], request: RequestChannel.Request, val fetch: FetchRequest, delayMs: Long, initialSize: Long)
+    extends DelayedRequest(keys, request, delayMs) {
+    val bytesAccumulated = new AtomicLong(initialSize)
+  }
 
   /**
    * A holding pen for fetch requests waiting to be satisfied
    */
-  class FetchRequestPurgatory(requestChannel: RequestChannel) extends RequestPurgatory[DelayedFetch, Null](brokerId) {
-
+  class FetchRequestPurgatory(requestChannel: RequestChannel) extends RequestPurgatory[DelayedFetch, ProducerRequestPartitionData](brokerId) {
     this.logIdent = "[FetchRequestPurgatory-%d] ".format(brokerId)
 
     /**
      * A fetch request is satisfied when it has accumulated enough data to meet the min_bytes field
      */
-    def checkSatisfied(n: Null, delayedFetch: DelayedFetch): Boolean =
-      availableFetchBytes(delayedFetch.fetch) >= delayedFetch.fetch.minBytes
+    def checkSatisfied(partitionData: ProducerRequestPartitionData, delayedFetch: DelayedFetch): Boolean = {
+      val accumulatedSize = delayedFetch.bytesAccumulated.addAndGet(partitionData.messages.sizeInBytes)
+      accumulatedSize >= delayedFetch.fetch.minBytes
+    }
 
     /**
      * When a request expires just answer it with whatever data is present
@@ -479,12 +452,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   class DelayedProduce(keys: Seq[RequestKey],
                        request: RequestChannel.Request,
-                       localProduceResponse: ProducerResponse,
+                       initialErrorsAndOffsets: Map[TopicAndPartition, ProducerResponseStatus],
                        val produce: ProducerRequest,
                        delayMs: Long)
           extends DelayedRequest(keys, request, delayMs) with Logging {
 
-    private val initialErrorsAndOffsets = localProduceResponse.status
     /**
      * Map of (topic, partition) -> partition status
      * The values in this map don't need to be synchronized since updates to the
@@ -498,9 +470,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       val (acksPending, error, nextOffset) =
         if (producerResponseStatus.error == ErrorMapping.NoError) {
           // Timeout error state will be cleared when requiredAcks are received
-          (true, ErrorMapping.RequestTimedOutCode, producerResponseStatus.nextOffset)
+          (true, ErrorMapping.RequestTimedOutCode, producerResponseStatus.offset)
         }
-        else (false, producerResponseStatus.error, producerResponseStatus.nextOffset)
+        else (false, producerResponseStatus.error, producerResponseStatus.offset)
 
       val initialStatus = PartitionStatus(acksPending, error, nextOffset)
       trace("Initial partition status for %s = %s".format(requestKey.keyLabel, initialStatus))
@@ -579,8 +551,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   /**
    * A holding pen for produce requests waiting to be satisfied.
    */
-  private [kafka] class ProducerRequestPurgatory extends RequestPurgatory[DelayedProduce, RequestKey](brokerId) {
-
+  private [kafka] class ProducerRequestPurgatory extends RequestPurgatory[DelayedProduce, RequestKey] {
     this.logIdent = "[ProducerRequestPurgatory-%d] ".format(brokerId)
 
     protected def checkSatisfied(followerFetchRequestKey: RequestKey,

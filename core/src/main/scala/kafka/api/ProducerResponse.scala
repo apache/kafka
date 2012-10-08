@@ -43,7 +43,7 @@ object ProducerResponse {
   }
 }
 
-case class ProducerResponseStatus(error: Short, nextOffset: Long)
+case class ProducerResponseStatus(error: Short, offset: Long)
 
 
 case class ProducerResponse(versionId: Short,

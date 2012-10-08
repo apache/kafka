@@ -54,6 +54,7 @@ class SimpleFetchTest extends JUnit3Suite {
     val time = new MockTime
     val leo = 20
     val hw = 5
+    val fetchSize = 100
     val messages = new Message("test-message".getBytes())
 
     val zkClient = EasyMock.createMock(classOf[ZkClient])
@@ -61,7 +62,7 @@ class SimpleFetchTest extends JUnit3Suite {
 
     val log = EasyMock.createMock(classOf[kafka.log.Log])
     EasyMock.expect(log.logEndOffset).andReturn(leo).anyTimes()
-    EasyMock.expect(log.read(0, hw)).andReturn(new ByteBufferMessageSet(messages))
+    EasyMock.expect(log.read(0, fetchSize, Some(hw))).andReturn(new ByteBufferMessageSet(messages))
     EasyMock.replay(log)
 
     val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
@@ -92,9 +93,9 @@ class SimpleFetchTest extends JUnit3Suite {
 
     // This request (from a follower) wants to read up to 2*HW but should only get back up to HW bytes into the log
     val goodFetch = new FetchRequestBuilder()
-      .replicaId(Request.NonFollowerId)
-      .addFetch(topic, partitionId, 0, hw*2)
-      .build()
+          .replicaId(Request.NonFollowerId)
+          .addFetch(topic, partitionId, 0, fetchSize)
+          .build()
     val goodFetchBB = TestUtils.createRequestByteBuffer(goodFetch)
 
     // send the request
@@ -156,7 +157,7 @@ class SimpleFetchTest extends JUnit3Suite {
 
     val log = EasyMock.createMock(classOf[kafka.log.Log])
     EasyMock.expect(log.logEndOffset).andReturn(leo).anyTimes()
-    EasyMock.expect(log.read(followerLEO, Integer.MAX_VALUE)).andReturn(new ByteBufferMessageSet(messages))
+    EasyMock.expect(log.read(followerLEO, Integer.MAX_VALUE, None)).andReturn(new ByteBufferMessageSet(messages))
     EasyMock.replay(log)
 
     val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])

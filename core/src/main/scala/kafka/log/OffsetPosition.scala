@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -15,10 +15,11 @@
  * limitations under the License.
  */
 
-package kafka.consumer
+package kafka.log
 
-import kafka.message.ByteBufferMessageSet
-
-case class FetchedDataChunk(messages: ByteBufferMessageSet,
-                            topicInfo: PartitionTopicInfo,
-                            fetchOffset: Long)
+/**
+ * The mapping between a logical log offset and the physical position
+ * in some log file of the beginning of the message set entry with the
+ * given offset.
+ */
+case class OffsetPosition(val offset: Long, val position: Int)

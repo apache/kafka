@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.consumer
+package kafka.integration
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
@@ -26,7 +26,7 @@ import kafka.cluster._
 import kafka.message._
 import kafka.server._
 import org.scalatest.junit.JUnit3Suite
-import kafka.integration.KafkaServerTestHarness
+import kafka.consumer._
 import kafka.producer.{ProducerData, Producer}
 import kafka.utils.TestUtils._
 import kafka.utils.TestUtils

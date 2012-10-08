@@ -43,7 +43,7 @@ class Partition(val topic: String,
   private val leaderISRUpdateLock = new Object
   private var zkVersion: Int = LeaderAndIsr.initialZKVersion
   private var leaderEpoch: Int = LeaderAndIsr.initialLeaderEpoch - 1
-  this.logIdent = "Partition [%s, %d] on broker %d, ".format(topic, partitionId, localBrokerId)
+  this.logIdent = "Partition [%s, %d] on broker %d: ".format(topic, partitionId, localBrokerId)
 
   private def isReplicaLocal(replicaId: Int) : Boolean = (replicaId == localBrokerId)
 
@@ -116,7 +116,7 @@ class Partition(val topic: String,
   def makeLeaderOrFollower(topic: String, partitionId: Int, leaderAndISR: LeaderAndIsr, isMakingLeader: Boolean): Boolean = {
     leaderISRUpdateLock synchronized {
       if (leaderEpoch >= leaderAndISR.leaderEpoch){
-        info("Current leaderEpoch [%d] is larger or equal to the requested leaderEpoch [%d], discard the become %s request"
+        info("Current leader epoch [%d] is larger or equal to the requested leader epoch [%d], discard the become %s request"
           .format(leaderEpoch, leaderAndISR.leaderEpoch, if(isMakingLeader) "leader" else "follower"))
         return false
       }
@@ -183,7 +183,7 @@ class Partition(val topic: String,
 
   def updateLeaderHWAndMaybeExpandISR(replicaId: Int, offset: Long) {
     leaderISRUpdateLock synchronized {
-      debug("Recording follower %d position %d for topic %s partition %d".format(replicaId, offset, topic, partitionId))
+      debug("Recording follower %d position %d for topic %s partition %d.".format(replicaId, offset, topic, partitionId))
       val replica = getOrCreateReplica(replicaId)
       replica.logEndOffset = offset
 
@@ -195,7 +195,7 @@ class Partition(val topic: String,
           if (!inSyncReplicas.contains(replica) && replica.logEndOffset >= leaderHW) {
             // expand ISR
             val newInSyncReplicas = inSyncReplicas + replica
-            info("Expanding ISR for topic %s partition %d to %s".format(topic, partitionId, newInSyncReplicas.map(_.brokerId).mkString(",")))
+            info("Expanding ISR for topic %s partition %d to %s".format(topic, partitionId, newInSyncReplicas.map(_.brokerId).mkString(", ")))
             // update ISR in ZK and cache
             updateISR(newInSyncReplicas)
             replicaManager.isrExpandRate.mark()
@@ -289,7 +289,7 @@ class Partition(val topic: String,
   }
 
   private def updateISR(newISR: Set[Replica]) {
-    info("Updated ISR for topic %s partition %d to %s".format(topic, partitionId, newISR.mkString(",")))
+    info("Updated ISR for topic %s partition %d to %s".format(topic, partitionId, newISR.mkString(", ")))
     val newLeaderAndISR = new LeaderAndIsr(localBrokerId, leaderEpoch, newISR.map(r => r.brokerId).toList, zkVersion)
     val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(zkClient,
       ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partitionId), newLeaderAndISR.toString, zkVersion)

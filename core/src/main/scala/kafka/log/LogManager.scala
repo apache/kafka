@@ -46,7 +46,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private val logRetentionSizeMap = config.logRetentionSizeMap
   private val logRetentionMsMap = config.logRetentionHoursMap.map(e => (e._1, e._2 * 60 * 60 * 1000L)) // convert hours to ms
   private val logRollMsMap = config.logRollHoursMap.map(e => (e._1, e._2 * 60 * 60 * 1000L))
-  this.logIdent = "[Log Manager on Broker " + config.brokerId + "], "
+  this.logIdent = "[Log Manager on Broker " + config.brokerId + "] "
 
   /* Initialize a log for each subdirectory of the main log directory */
   private val logs = new Pool[String, Pool[Int, Log]]()
@@ -69,7 +69,16 @@ private[kafka] class LogManager(val config: KafkaConfig,
         val topic = Utils.getTopicPartition(dir.getName)._1
         val rollIntervalMs = logRollMsMap.get(topic).getOrElse(this.logRollDefaultIntervalMs)
         val maxLogFileSize = logFileSizeMap.get(topic).getOrElse(config.logFileSize)
-        val log = new Log(dir, maxLogFileSize, config.maxMessageSize, flushInterval, rollIntervalMs, needRecovery, time, config.brokerId)
+        val log = new Log(dir, 
+                          maxLogFileSize, 
+                          config.maxMessageSize, 
+                          flushInterval, 
+                          rollIntervalMs, 
+                          needRecovery, 
+                          config.logIndexMaxSizeBytes,
+                          config.logIndexIntervalBytes,
+                          time, 
+                          config.brokerId)
         val topicPartition = Utils.getTopicPartition(dir.getName)
         logs.putIfNotExists(topicPartition._1, new Pool[Int, Log]())
         val parts = logs.get(topicPartition._1)
@@ -88,7 +97,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
       scheduler.scheduleWithRate(cleanupLogs, "kafka-logcleaner-", 60 * 1000, logCleanupIntervalMs, false)
       info("Starting log flusher every " + config.flushSchedulerThreadRate +
                    " ms with the following overrides " + logFlushIntervals)
-      scheduler.scheduleWithRate(flushAllLogs, "kafka-logflusher-",
+      scheduler.scheduleWithRate(flushDirtyLogs, "kafka-logflusher-",
                                  config.flushSchedulerThreadRate, config.flushSchedulerThreadRate, false)
     }
   }
@@ -103,7 +112,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
       d.mkdirs()
       val rollIntervalMs = logRollMsMap.get(topic).getOrElse(this.logRollDefaultIntervalMs)
       val maxLogFileSize = logFileSizeMap.get(topic).getOrElse(config.logFileSize)
-      new Log(d, maxLogFileSize, config.maxMessageSize, flushInterval, rollIntervalMs, false, time, config.brokerId)
+      new Log(d, maxLogFileSize, config.maxMessageSize, flushInterval, rollIntervalMs, needsRecovery = false, config.logIndexMaxSizeBytes, config.logIndexIntervalBytes, time, config.brokerId)
     }
   }
 
@@ -162,7 +171,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
     val startMs = time.milliseconds
     val topic = Utils.getTopicPartition(log.name)._1
     val logCleanupThresholdMs = logRetentionMsMap.get(topic).getOrElse(this.logCleanupDefaultAgeMs)
-    val toBeDeleted = log.markDeletedWhile(startMs - _.file.lastModified > logCleanupThresholdMs)
+    val toBeDeleted = log.markDeletedWhile(startMs - _.messageSet.file.lastModified > logCleanupThresholdMs)
     val total = log.deleteSegments(toBeDeleted)
     total
   }
@@ -208,9 +217,9 @@ private[kafka] class LogManager(val config: KafkaConfig,
    * Close all the logs
    */
   def shutdown() {
-    info("shut down")
+    debug("Shutting down.")
     allLogs.foreach(_.close())
-    info("shutted down completedly")
+    debug("Shutdown complete.")
   }
 
   /**
@@ -218,21 +227,22 @@ private[kafka] class LogManager(val config: KafkaConfig,
    */
   def allLogs() = logs.values.flatMap(_.values)
 
-  private def flushAllLogs() = {
-    debug("Flushing the high watermark of all logs")
-    for (log <- allLogs)
-    {
-      try{
+  /**
+   * Flush any log which has exceeded its flush interval and has unwritten messages.
+   */
+  private def flushDirtyLogs() = {
+    debug("Checking for dirty logs to flush...")
+    for (log <- allLogs) {
+      try {
         val timeSinceLastFlush = System.currentTimeMillis - log.getLastFlushedTime
         var logFlushInterval = config.defaultFlushIntervalMs
         if(logFlushIntervals.contains(log.topicName))
           logFlushInterval = logFlushIntervals(log.topicName)
         debug(log.topicName + " flush interval  " + logFlushInterval +
-                      " last flushed " + log.getLastFlushedTime + " timesincelastFlush: " + timeSinceLastFlush)
+                      " last flushed " + log.getLastFlushedTime + " time since last flush: " + timeSinceLastFlush)
         if(timeSinceLastFlush >= logFlushInterval)
           log.flush
-      }
-      catch {
+      } catch {
         case e =>
           error("Error flushing topic " + log.topicName, e)
           e match {

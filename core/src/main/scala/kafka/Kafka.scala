@@ -24,7 +24,6 @@ import utils.{Utils, Logging}
 object Kafka extends Logging {
 
   def main(args: Array[String]): Unit = {
-
     if (args.length != 1) {
       println("USAGE: java [options] %s server.properties".format(classOf[KafkaServer].getSimpleName()))
       System.exit(1)

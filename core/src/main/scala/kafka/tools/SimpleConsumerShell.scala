@@ -108,7 +108,7 @@ object SimpleConsumerShell extends Logging {
           for(messageAndOffset <- messageSet) {
             if(printMessages)
               info("consumed: " + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
-            offset = messageAndOffset.offset
+            offset = messageAndOffset.nextOffset
             if(printOffsets)
               info("next offset = " + offset)
             consumed += 1

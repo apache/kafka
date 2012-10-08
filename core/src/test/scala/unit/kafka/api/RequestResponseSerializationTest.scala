@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.network
+package kafka.api
 
 import org.junit._
 import org.scalatest.junit.JUnitSuite
@@ -28,7 +28,7 @@ import collection.mutable._
 import kafka.common.{TopicAndPartition, ErrorMapping}
 
 
-object RpcDataSerializationTestUtils{
+object SerializationTestUtils{
   private val topic1 = "test1"
   private val topic2 = "test2"
   private val leader1 = 0
@@ -142,18 +142,18 @@ object RpcDataSerializationTestUtils{
   }
 }
 
-class RpcDataSerializationTest extends JUnitSuite {
-  private val leaderAndISRRequest = RpcDataSerializationTestUtils.createTestLeaderAndISRRequest
-  private val leaderAndISRResponse = RpcDataSerializationTestUtils.createTestLeaderAndISRResponse
-  private val stopReplicaRequest = RpcDataSerializationTestUtils.createTestStopReplicaRequest
-  private val stopReplicaResponse = RpcDataSerializationTestUtils.createTestStopReplicaResponse
-  private val producerRequest = RpcDataSerializationTestUtils.createTestProducerRequest
-  private val producerResponse = RpcDataSerializationTestUtils.createTestProducerResponse
-  private val fetchRequest = RpcDataSerializationTestUtils.createTestFetchRequest
-  private val offsetRequest = RpcDataSerializationTestUtils.createTestOffsetRequest
-  private val offsetResponse = RpcDataSerializationTestUtils.createTestOffsetResponse
-  private val topicMetadataRequest = RpcDataSerializationTestUtils.createTestTopicMetadataRequest
-  private val topicMetadataResponse = RpcDataSerializationTestUtils.createTestTopicMetadataResponse
+class RequestResponseSerializationTest extends JUnitSuite {
+  private val leaderAndISRRequest = SerializationTestUtils.createTestLeaderAndISRRequest
+  private val leaderAndISRResponse = SerializationTestUtils.createTestLeaderAndISRResponse
+  private val stopReplicaRequest = SerializationTestUtils.createTestStopReplicaRequest
+  private val stopReplicaResponse = SerializationTestUtils.createTestStopReplicaResponse
+  private val producerRequest = SerializationTestUtils.createTestProducerRequest
+  private val producerResponse = SerializationTestUtils.createTestProducerResponse
+  private val fetchRequest = SerializationTestUtils.createTestFetchRequest
+  private val offsetRequest = SerializationTestUtils.createTestOffsetRequest
+  private val offsetResponse = SerializationTestUtils.createTestOffsetResponse
+  private val topicMetadataRequest = SerializationTestUtils.createTestTopicMetadataRequest
+  private val topicMetadataResponse = SerializationTestUtils.createTestTopicMetadataResponse
 
 
   @Test

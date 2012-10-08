@@ -18,13 +18,13 @@ package kafka.javaapi
 
 import kafka.api._
 import java.nio.ByteBuffer
-import scala.collection.JavaConversions.asBuffer
+import scala.collection.JavaConversions
 
 class TopicMetadataRequest(val versionId: Short,
                            val clientId: String,
                            val topics: java.util.List[String]) extends RequestOrResponse(Some(kafka.api.RequestKeys.MetadataKey)) {
   val underlying: kafka.api.TopicMetadataRequest =
-    new kafka.api.TopicMetadataRequest(versionId, clientId, topics)
+    new kafka.api.TopicMetadataRequest(versionId, clientId, JavaConversions.asBuffer(topics))
 
   def this(topics: java.util.List[String]) =
     this(kafka.api.TopicMetadataRequest.CurrentVersion, kafka.api.TopicMetadataRequest.DefaultClientId, topics)

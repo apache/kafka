@@ -34,7 +34,7 @@ object FetchResponsePartitionData {
     val messageSetBuffer = buffer.slice()
     messageSetBuffer.limit(messageSetSize)
     buffer.position(buffer.position + messageSetSize)
-    new FetchResponsePartitionData(partition, error, initialOffset, hw, new ByteBufferMessageSet(messageSetBuffer, initialOffset))
+    new FetchResponsePartitionData(partition, error, initialOffset, hw, new ByteBufferMessageSet(messageSetBuffer))
   }
 
   val headerSize =
@@ -50,6 +50,7 @@ case class FetchResponsePartitionData(partition: Int, error: Short = ErrorMappin
   val sizeInBytes = FetchResponsePartitionData.headerSize + messages.sizeInBytes.intValue()
 
   def this(partition: Int, messages: MessageSet) = this(partition, ErrorMapping.NoError, 0L, -1L, messages)
+  
 }
 
 // SENDS

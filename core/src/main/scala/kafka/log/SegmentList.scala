@@ -72,8 +72,8 @@ private[log] class SegmentList[T](seq: Seq[T])(implicit m: ClassManifest[T]) {
    * Delete the items from position (newEnd + 1) until end of list
    */
   def truncLast(newEnd: Int): Seq[T] = {
-    if (newEnd < 0 || newEnd > contents.get().length-1)
-      throw new KafkaException("End index must be positive and less than segment list size.");
+    if (newEnd < 0 || newEnd >= contents.get().length)
+      throw new KafkaException("Attempt to truncate segment list of length %d to %d.".format(contents.get().size, newEnd));
     var deleted: Array[T] = null
     val curr = contents.get()
     if (curr.length > 0) {
@@ -95,6 +95,6 @@ private[log] class SegmentList[T](seq: Seq[T])(implicit m: ClassManifest[T]) {
   /**
    * Nicer toString method
    */
-  override def toString(): String = view.toString
+  override def toString(): String = "SegmentList(%s)".format(view.mkString(", "))
   
 }

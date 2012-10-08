@@ -17,8 +17,10 @@
 
 package kafka.message
 
+import java.io.RandomAccessFile
 import junit.framework.Assert._
 import kafka.utils.TestUtils._
+import kafka.log.FileMessageSet
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 
@@ -59,11 +61,15 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   }
 
   def testWriteToWithMessageSet(set: MessageSet) {
-    val channel = tempChannel()
-    val written = set.writeTo(channel, 0, 1024)
-    assertEquals("Expect to write the number of bytes in the set.", set.sizeInBytes, written)
-    val newSet = new FileMessageSet(channel, false)
-    checkEquals(set.iterator, newSet.iterator)
+    // do the write twice to ensure the message set is restored to its orginal state
+    for(i <- List(0,1)) {
+      val file = tempFile()
+      val channel = new RandomAccessFile(file, "rw").getChannel()
+      val written = set.writeTo(channel, 0, 1024)
+      assertEquals("Expect to write the number of bytes in the set.", set.sizeInBytes, written)
+      val newSet = new FileMessageSet(file, channel, false)
+      checkEquals(set.iterator, newSet.iterator)
+    }
   }
   
 }

@@ -33,24 +33,11 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   }
 
   def verify() = props.verify()
-
-  /* the port to listen and accept connections on */
-  val port: Int = props.getInt("port", 6667)
-
-  /* hostname of broker. If not set, will pick up from the value returned from getLocalHost. If there are multiple interfaces getLocalHost may not be what you want. */
-  val hostName: String = props.getString("hostname", InetAddress.getLocalHost.getHostAddress)
-
+  
+  /*********** General Configuration ***********/
+  
   /* the broker id for this server */
   val brokerId: Int = props.getIntInRange("brokerid", (0, Int.MaxValue))
-
-  /* the SO_SNDBUFF buffer of the socket sever sockets */
-  val socketSendBuffer: Int = props.getInt("socket.send.buffer", 100*1024)
-  
-  /* the SO_RCVBUFF buffer of the socket sever sockets */
-  val socketReceiveBuffer: Int = props.getInt("socket.receive.buffer", 100*1024)
-  
-  /* the maximum number of bytes in a socket request */
-  val maxSocketRequestSize: Int = props.getIntInRange("max.socket.request.bytes", 100*1024*1024, (1, Int.MaxValue))
 
   /* the maximum size of message that the server can receive */
   val maxMessageSize = props.getIntInRange("max.message.size", 1000000, (0, Int.MaxValue))
@@ -63,6 +50,25 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   
   /* the number of queued requests allowed before blocking the network threads */
   val numQueuedRequests = props.getIntInRange("max.queued.requests", 500, (1, Int.MaxValue))
+  
+  /*********** Socket Server Configuration ***********/
+  
+  /* the port to listen and accept connections on */
+  val port: Int = props.getInt("port", 6667)
+
+  /* hostname of broker. If not set, will pick up from the value returned from getLocalHost. If there are multiple interfaces getLocalHost may not be what you want. */
+  val hostName: String = props.getString("hostname", InetAddress.getLocalHost.getHostAddress)
+
+  /* the SO_SNDBUFF buffer of the socket sever sockets */
+  val socketSendBuffer: Int = props.getInt("socket.send.buffer", 100*1024)
+  
+  /* the SO_RCVBUFF buffer of the socket sever sockets */
+  val socketReceiveBuffer: Int = props.getInt("socket.receive.buffer", 100*1024)
+  
+  /* the maximum number of bytes in a socket request */
+  val maxSocketRequestSize: Int = props.getIntInRange("max.socket.request.bytes", 100*1024*1024, (1, Int.MaxValue))
+  
+  /*********** Log Configuration ***********/
 
   /* the default number of log partitions per topic */
   val numPartitions = props.getIntInRange("num.partitions", 1, (1, Int.MaxValue))
@@ -96,6 +102,12 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
 
   /* the frequency in minutes that the log cleaner checks whether any log is eligible for deletion */
   val logCleanupIntervalMinutes = props.getIntInRange("log.cleanup.interval.mins", 10, (1, Int.MaxValue))
+  
+  /* the maximum size in bytes of the offset index */
+  val logIndexMaxSizeBytes = props.getIntInRange("log.index.max.size", 10*1024*1024, (4, Int.MaxValue))
+  
+  /* the interval with which we add an entry to the offset index */
+  val logIndexIntervalBytes = props.getIntInRange("log.index.interval.bytes", 4096, (0, Int.MaxValue))
 
   /* the number of messages accumulated on a log partition before messages are flushed to disk */
   val flushInterval = props.getIntInRange("log.flush.interval", 500, (1, Int.MaxValue))
@@ -112,16 +124,13 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* enable auto creation of topic on the server */
   val autoCreateTopics = props.getBoolean("auto.create.topics", true)
 
-  /**
-   * Following properties are relevant to Kafka replication
-   */
+  /*********** Replication configuration ***********/
 
   /* the socket timeout for controller-to-broker channels */
   val controllerSocketTimeoutMs = props.getInt("controller.socket.timeout.ms", 30000)
 
   /* the buffer size for controller-to-broker-channels */
   val controllerMessageQueueSize= props.getInt("controller.message.queue.size", 10)
-
 
   /* default replication factors for automatically created topics */
   val defaultReplicationFactor = props.getInt("default.replication.factor", 1)
@@ -134,25 +143,22 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
 
   val replicaMaxLagBytes = props.getLong("replica.max.lag.bytes", 4000)
 
-  /**
-   * Config options relevant to a follower for a replica
-   */
-  /** the socket timeout for network requests */
+  /* the socket timeout for network requests */
   val replicaSocketTimeoutMs = props.getInt("replica.socket.timeout.ms", ConsumerConfig.SocketTimeout)
 
-  /** the socket receive buffer for network requests */
+  /* the socket receive buffer for network requests */
   val replicaSocketBufferSize = props.getInt("replica.socket.buffersize", ConsumerConfig.SocketBufferSize)
 
-  /** the number of byes of messages to attempt to fetch */
+  /* the number of byes of messages to attempt to fetch */
   val replicaFetchSize = props.getInt("replica.fetch.size", ConsumerConfig.FetchSize)
 
-  /** max wait time for each fetcher request issued by follower replicas*/
+  /* max wait time for each fetcher request issued by follower replicas*/
   val replicaMaxWaitTimeMs = props.getInt("replica.fetch.wait.time.ms", 500)
 
-  /** minimum bytes expected for each fetch response. If not enough bytes, wait up to replicaMaxWaitTimeMs */
+  /* minimum bytes expected for each fetch response. If not enough bytes, wait up to replicaMaxWaitTimeMs */
   val replicaMinBytes = props.getInt("replica.fetch.min.bytes", 4096)
 
   /* number of fetcher threads used to replicate messages from a source broker.
-  *  Increasing this value can increase the degree of I/O parallelism in the follower broker. */
+   * Increasing this value can increase the degree of I/O parallelism in the follower broker. */
   val numReplicaFetchers = props.getInt("replica.fetchers", 1)
  }

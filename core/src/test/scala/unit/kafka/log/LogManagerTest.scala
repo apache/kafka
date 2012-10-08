@@ -27,7 +27,7 @@ import kafka.admin.CreateTopicCommand
 import kafka.server.KafkaConfig
 import kafka.utils._
 
-class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
+class LogManagerTest extends JUnit3Suite {
 
   val time: MockTime = new MockTime()
   val maxRollInterval = 100
@@ -35,15 +35,13 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
   var logDir: File = null
   var logManager: LogManager = null
   var config:KafkaConfig = null
-  val zookeeperConnect = TestZKUtils.zookeeperConnect
   val name = "kafka"
   val veryLargeLogFlushInterval = 10000000L
   val scheduler = new KafkaScheduler(2)
 
   override def setUp() {
     super.setUp()
-    val props = TestUtils.createBrokerConfig(0, -1)
-    config = new KafkaConfig(props) {
+    config = new KafkaConfig(TestUtils.createBrokerConfig(0, -1)) {
                    override val logFileSize = 1024
                    override val flushInterval = 100
                  }
@@ -51,11 +49,6 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     logManager = new LogManager(config, scheduler, time, maxRollInterval, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup
     logDir = logManager.logDir
-
-    TestUtils.createBrokersInZk(zkClient, List(config.brokerId))
-
-    // setup brokers in zookeeper as owners of partitions for this test
-    CreateTopicCommand.createTopic(zkClient, name, 3, 1, "0,0,0")
   }
 
   override def tearDown() {
@@ -87,8 +80,8 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     var offset = 0L
     for(i <- 0 until 1000) {
       var set = TestUtils.singleMessageSet("test".getBytes())
-      log.append(set)
-      offset += set.sizeInBytes
+      val (start, end) = log.append(set)
+      offset = end
     }
     log.flush
 
@@ -96,12 +89,12 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // update the last modified time of all log segments
     val logSegments = log.segments.view
-    logSegments.foreach(s => s.file.setLastModified(time.currentMs))
+    logSegments.foreach(s => s.messageSet.file.setLastModified(time.currentMs))
 
     time.currentMs += maxLogAge + 3000
     logManager.cleanupLogs()
     assertEquals("Now there should only be only one segment.", 1, log.numberOfSegments)
-    assertEquals("Should get empty fetch off new log.", 0L, log.read(offset, 1024).sizeInBytes)
+    assertEquals("Should get empty fetch off new log.", 0L, log.read(offset+1, 1024).sizeInBytes)
     try {
       log.read(0, 1024)
       fail("Should get exception from fetching earlier.")
@@ -135,8 +128,8 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     // add a bunch of messages that should be larger than the retentionSize
     for(i <- 0 until 1000) {
       val set = TestUtils.singleMessageSet("test".getBytes())
-      log.append(set)
-      offset += set.sizeInBytes
+      val (start, end) = log.append(set)
+      offset = start
     }
     // flush to make sure it's written to disk
     log.flush
@@ -147,7 +140,7 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
     // this cleanup shouldn't find any expired segments but should delete some to reduce size
     logManager.cleanupLogs()
     assertEquals("Now there should be exactly 6 segments", 6, log.numberOfSegments)
-    assertEquals("Should get empty fetch off new log.", 0L, log.read(offset, 1024).sizeInBytes)
+    assertEquals("Should get empty fetch off new log.", 0L, log.read(offset + 1, 1024).sizeInBytes)
     try {
       log.read(0, 1024)
       fail("Should get exception from fetching earlier.")
@@ -175,8 +168,8 @@ class LogManagerTest extends JUnit3Suite with ZooKeeperTestHarness {
       var set = TestUtils.singleMessageSet("test".getBytes())
       log.append(set)
     }
-
+    println("now = " + System.currentTimeMillis + " last flush = " + log.getLastFlushedTime)
     assertTrue("The last flush time has to be within defaultflushInterval of current time ",
-                     (System.currentTimeMillis - log.getLastFlushedTime) < 100)
+                     (System.currentTimeMillis - log.getLastFlushedTime) < 150)
   }
 }

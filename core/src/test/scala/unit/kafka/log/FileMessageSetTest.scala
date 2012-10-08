@@ -15,11 +15,13 @@
  * limitations under the License.
  */
 
-package kafka.message
+package kafka.log
 
 import java.nio._
+import java.util.concurrent.atomic._
 import junit.framework.Assert._
 import kafka.utils.TestUtils._
+import kafka.message._
 import org.junit.Test
 
 class FileMessageSetTest extends BaseMessageSetTestCases {
@@ -58,10 +60,6 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     messageSet.channel.write(buffer)
     // appending those bytes should not change the contents
     checkEquals(messages.iterator, messageSet.map(m => m.message).iterator)
-    assertEquals("Unexpected number of bytes truncated", size.longValue, messageSet.recover())
-    assertEquals("File pointer should now be at the end of the file.", originalPosition, messageSet.channel.position)
-    // nor should recovery change the contents
-    checkEquals(messages.iterator, messageSet.map(m => m.message).iterator)
   }
   
   @Test
@@ -76,9 +74,34 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     val read = messageSet.read(0, messageSet.sizeInBytes)
     checkEquals(messageSet.iterator, read.iterator)
     val items = read.iterator.toList
-    val first = items.head
-    val read2 = messageSet.read(first.offset, messageSet.sizeInBytes)
+    val sec = items.tail.head
+    val read2 = messageSet.read(MessageSet.entrySize(sec.message), messageSet.sizeInBytes)
     checkEquals(items.tail.iterator, read2.iterator)
+  }
+  
+  @Test
+  def testSearch() {
+    // append a new message with a high offset
+    val lastMessage = new Message("test".getBytes)
+    messageSet.append(new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(50), lastMessage))
+    var physicalOffset = 0
+    assertEquals("Should be able to find the first message by its offset", 
+                 OffsetPosition(0L, physicalOffset), 
+                 messageSet.searchFor(0, 0))
+    physicalOffset += MessageSet.entrySize(messageSet.head.message)
+    assertEquals("Should be able to find second message when starting from 0", 
+                 OffsetPosition(1L, physicalOffset), 
+                 messageSet.searchFor(1, 0))
+    assertEquals("Should be able to find second message starting from its offset", 
+                 OffsetPosition(1L, physicalOffset), 
+                 messageSet.searchFor(1, physicalOffset))
+    physicalOffset += MessageSet.entrySize(messageSet.tail.head.message)
+    assertEquals("Should be able to find third message from a non-existant offset", 
+                 OffsetPosition(50L, physicalOffset), 
+                 messageSet.searchFor(3, physicalOffset))
+    assertEquals("Should be able to find third message by correct offset", 
+                 OffsetPosition(50L, physicalOffset), 
+                 messageSet.searchFor(50, physicalOffset))
   }
   
 }

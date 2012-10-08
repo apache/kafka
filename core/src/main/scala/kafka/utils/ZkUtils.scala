@@ -295,11 +295,11 @@ object ZkUtils extends Logging {
   def conditionalUpdatePersistentPath(client: ZkClient, path: String, data: String, expectVersion: Int): (Boolean, Int) = {
     try {
       val stat = client.writeData(path, data, expectVersion)
-      info("Conditional update the zkPath %s with expected version %d succeed and return the new version: %d".format(path, expectVersion, stat.getVersion))
+      debug("Conditional update to the zookeeper path %s with expected version %d succeeded and returned the new version: %d".format(path, expectVersion, stat.getVersion))
       (true, stat.getVersion)
     } catch {
       case e: Exception =>
-        info("Conditional update the zkPath %s with expected version %d failed".format(path, expectVersion))
+        debug("Conditional update to the zookeeper path %s with expected version %d failed".format(path, expectVersion), e)
         (false, -1)
     }
   }

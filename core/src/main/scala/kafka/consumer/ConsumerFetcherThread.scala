@@ -28,16 +28,20 @@ class ConsumerFetcherThread(name: String,
                             val config: ConsumerConfig,
                             sourceBroker: Broker,
                             val consumerFetcherManager: ConsumerFetcherManager)
-        extends AbstractFetcherThread(name = name, sourceBroker = sourceBroker, socketTimeout = config.socketTimeoutMs,
-          socketBufferSize = config.socketBufferSize, fetchSize = config.fetchSize,
-          fetcherBrokerId = Request.NonFollowerId, maxWait = config.maxFetchWaitMs,
-          minBytes = config.minFetchBytes) {
+        extends AbstractFetcherThread(name = name, 
+                                      sourceBroker = sourceBroker, 
+                                      socketTimeout = config.socketTimeoutMs,
+                                      socketBufferSize = config.socketBufferSize, 
+                                      fetchSize = config.fetchSize,
+                                      fetcherBrokerId = Request.NonFollowerId, 
+                                      maxWait = config.maxFetchWaitMs,
+                                      minBytes = config.minFetchBytes) {
 
   // process fetched data
   def processPartitionData(topic: String, fetchOffset: Long, partitionData: FetchResponsePartitionData) {
     val pti = consumerFetcherManager.getPartitionTopicInfo((topic, partitionData.partition))
     if (pti.getFetchOffset != fetchOffset)
-      throw new RuntimeException("offset doesn't match for topic %s partition: %d pti offset: %d fetch ofset: %d"
+      throw new RuntimeException("Offset doesn't match for topic %s partition: %d pti offset: %d fetch offset: %d"
                                 .format(topic, partitionData.partition, pti.getFetchOffset, fetchOffset))
     pti.enqueue(partitionData.messages.asInstanceOf[ByteBufferMessageSet])
   }

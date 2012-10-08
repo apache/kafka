@@ -88,7 +88,8 @@ object ConsoleProducer {
 
     val props = new Properties()
     props.put("broker.list", brokerList)
-    props.put("compression.codec", DefaultCompressionCodec.codec.toString)
+    val codec = if(compress) DefaultCompressionCodec.codec else NoCompressionCodec.codec
+    props.put("compression.codec", codec.toString)
     props.put("producer.type", if(sync) "sync" else "async")
     if(options.has(batchSizeOpt))
       props.put("batch.size", batchSize.toString)

@@ -72,12 +72,12 @@ object ProducerRequest {
   }
 }
 
-case class ProducerRequest( versionId: Short = ProducerRequest.CurrentVersion,
-                            correlationId: Int,
-                            clientId: String,
-                            requiredAcks: Short,
-                            ackTimeoutMs: Int,
-                            data: Map[TopicAndPartition, ProducerRequestPartitionData])
+case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
+                           correlationId: Int,
+                           clientId: String,
+                           requiredAcks: Short,
+                           ackTimeoutMs: Int,
+                           data: Map[TopicAndPartition, ProducerRequestPartitionData])
     extends RequestOrResponse(Some(RequestKeys.ProduceKey)) {
 
   /**
@@ -107,10 +107,11 @@ case class ProducerRequest( versionId: Short = ProducerRequest.CurrentVersion,
         buffer.putInt(topicAndPartitionData.size) //the number of partitions
         topicAndPartitionData.foreach(partitionAndData => {
           val partitionData = partitionAndData._2
+          val bytes = partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer
           buffer.putInt(partitionData.partition)
-          buffer.putInt(partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer.limit)
-          buffer.put(partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer)
-          partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer.rewind
+          buffer.putInt(bytes.limit)
+          buffer.put(bytes)
+          bytes.rewind
         })
     }
   }

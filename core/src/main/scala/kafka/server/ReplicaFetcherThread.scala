@@ -36,11 +36,11 @@ class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: Kafk
     val messageSet = partitionData.messages.asInstanceOf[ByteBufferMessageSet]
 
     if (fetchOffset != replica.logEndOffset)
-      throw new RuntimeException("offset mismatch: fetchOffset=%d, logEndOffset=%d".format(fetchOffset, replica.logEndOffset))
+      throw new RuntimeException("Offset mismatch: fetched offset = %d, log end offset = %d.".format(fetchOffset, replica.logEndOffset))
     trace("Follower %d has replica log end offset %d. Received %d messages and leader hw %d".format(replica.brokerId,
       replica.logEndOffset, messageSet.sizeInBytes, partitionData.hw))
     replica.log.get.append(messageSet)
-    trace("Follower %d has replica log end offset %d after appending %d messages"
+    trace("Follower %d has replica log end offset %d after appending %d bytes of messages"
       .format(replica.brokerId, replica.logEndOffset, messageSet.sizeInBytes))
     val followerHighWatermark = replica.logEndOffset.min(partitionData.hw)
     replica.highWatermark = followerHighWatermark

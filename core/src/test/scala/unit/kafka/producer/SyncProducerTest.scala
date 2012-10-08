@@ -21,10 +21,11 @@ import java.net.SocketTimeoutException
 import java.util.Properties
 import junit.framework.Assert
 import kafka.admin.CreateTopicCommand
+import kafka.common.{ErrorMapping}
 import kafka.integration.KafkaServerTestHarness
-import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
+import kafka.message._
 import kafka.server.KafkaConfig
-import kafka.utils.{TestZKUtils, SystemTime, TestUtils}
+import kafka.utils._
 import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
 import kafka.api.{ProducerResponseStatus, ProducerRequestPartitionData}
@@ -105,21 +106,22 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     CreateTopicCommand.createTopic(zkClient, "test", 1, 1)
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0, 500)
 
-    val message1 = new Message(new Array[Byte](1000001))
+    val message1 = new Message(new Array[Byte](configs(0).maxMessageSize + 1))
     val messageSet1 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message1)
     val response1 = producer.send(TestUtils.produceRequest("test", 0, messageSet1))
 
     Assert.assertEquals(1, response1.status.count(_._2.error != ErrorMapping.NoError))
     Assert.assertEquals(ErrorMapping.MessageSizeTooLargeCode, response1.status(TopicAndPartition("test", 0)).error)
-    Assert.assertEquals(-1L, response1.status(TopicAndPartition("test", 0)).nextOffset)
+    Assert.assertEquals(-1L, response1.status(TopicAndPartition("test", 0)).offset)
 
-    val message2 = new Message(new Array[Byte](1000000))
+    val safeSize = configs(0).maxMessageSize - Message.MessageOverhead - MessageSet.LogOverhead - 1
+    val message2 = new Message(new Array[Byte](safeSize))
     val messageSet2 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message2)
     val response2 = producer.send(TestUtils.produceRequest("test", 0, messageSet2))
 
     Assert.assertEquals(1, response1.status.count(_._2.error != ErrorMapping.NoError))
     Assert.assertEquals(ErrorMapping.NoError, response2.status(TopicAndPartition("test", 0)).error)
-    Assert.assertEquals(messageSet2.sizeInBytes, response2.status(TopicAndPartition("test", 0)).nextOffset)
+    Assert.assertEquals(0, response2.status(TopicAndPartition("test", 0)).offset)
   }
 
   @Test
@@ -163,13 +165,13 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     // the first and last message should have been accepted by broker
     Assert.assertEquals(ErrorMapping.NoError, response2.status(TopicAndPartition("topic1", 0)).error)
     Assert.assertEquals(ErrorMapping.NoError, response2.status(TopicAndPartition("topic3", 0)).error)
-    Assert.assertEquals(messages.sizeInBytes, response2.status(TopicAndPartition("topic1", 0)).nextOffset)
-    Assert.assertEquals(messages.sizeInBytes, response2.status(TopicAndPartition("topic3", 0)).nextOffset)
+    Assert.assertEquals(0, response2.status(TopicAndPartition("topic1", 0)).offset)
+    Assert.assertEquals(0, response2.status(TopicAndPartition("topic3", 0)).offset)
 
     // the middle message should have been rejected because broker doesn't lead partition
     Assert.assertEquals(ErrorMapping.UnknownTopicOrPartitionCode.toShort,
                         response2.status(TopicAndPartition("topic2", 0)).error)
-    Assert.assertEquals(-1, response2.status(TopicAndPartition("topic2", 0)).nextOffset)
+    Assert.assertEquals(-1, response2.status(TopicAndPartition("topic2", 0)).offset)
   }
 
   @Test

@@ -22,7 +22,7 @@ import kafka.admin.CreateTopicCommand
 import kafka.utils.TestUtils._
 import kafka.utils.{Utils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
-import kafka.message.Message
+import kafka.message.{Message, MessageSet, ByteBufferMessageSet}
 import kafka.producer.{ProducerConfig, ProducerData, Producer}
 
 class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
@@ -36,20 +36,13 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   val topic = "new-topic"
   val partitionId = 0
 
-  val brokerId1 = 0
-  val brokerId2 = 1
-
-  val port1 = TestUtils.choosePort()
-  val port2 = TestUtils.choosePort()
-
   var server1: KafkaServer = null
   var server2: KafkaServer = null
 
   val configProps1 = configs.head
   val configProps2 = configs.last
 
-  val sent1 = List(new Message("hello".getBytes()), new Message("there".getBytes()))
-  val sent2 = List( new Message("more".getBytes()), new Message("messages".getBytes()))
+  val message = new Message("hello".getBytes())
 
   var producer: Producer[Int, Message] = null
   var hwFile1: HighwaterMarkCheckpoint = new HighwaterMarkCheckpoint(configProps1.logDir)
@@ -76,18 +69,20 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
 
-    sendMessages(2)
+    val numMessages = 2L
+    sendMessages(numMessages.toInt)
 
-    // give some time for the follower 1 to record leader HW of 60
-    assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark == 60L, 1000))
+    // give some time for the follower 1 to record leader HW
+    assertTrue("Failed to update highwatermark for follower after 1000 ms", 
+               TestUtils.waitUntilTrue(() =>
+                 server2.replicaManager.getReplica(topic, 0).get.highWatermark == numMessages, 10000))
 
     servers.foreach(server => server.replicaManager.checkpointHighWatermarks())
     producer.close()
     val leaderHW = hwFile1.read(topic, 0)
-    assertEquals(60L, leaderHW)
+    assertEquals(numMessages, leaderHW)
     val followerHW = hwFile2.read(topic, 0)
-    assertEquals(60L, followerHW)
+    assertEquals(numMessages, followerHW)
     servers.foreach(server => { server.shutdown(); Utils.rm(server.config.logDir)})
   }
 
@@ -110,14 +105,16 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue("Leader should get elected", leader.isDefined)
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
-
+    
     assertEquals(0L, hwFile1.read(topic, 0))
 
-    sendMessages()
+    sendMessages(1)
+    Thread.sleep(1000)
+    var hw = 1L
 
     // kill the server hosting the preferred replica
     server1.shutdown()
-    assertEquals(30L, hwFile1.read(topic, 0))
+    assertEquals(hw, hwFile1.read(topic, 0))
 
     // check if leader moves to the other server
     leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500, leader)
@@ -130,25 +127,27 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue("Leader must remain on broker 1, in case of zookeeper session expiration it can move to broker 0",
       leader.isDefined && (leader.get == 0 || leader.get == 1))
 
-    assertEquals(30L, hwFile1.read(topic, 0))
+    assertEquals(hw, hwFile1.read(topic, 0))
     // since server 2 was never shut down, the hw value of 30 is probably not checkpointed to disk yet
     server2.shutdown()
-    assertEquals(30L, hwFile2.read(topic, 0))
+    assertEquals(hw, hwFile2.read(topic, 0))
 
     server2.startup()
     leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500, leader)
     assertTrue("Leader must remain on broker 0, in case of zookeeper session expiration it can move to broker 1",
       leader.isDefined && (leader.get == 0 || leader.get == 1))
 
-    sendMessages()
+    sendMessages(1)
+    hw += 1
+      
     // give some time for follower 1 to record leader HW of 60
     assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark == 60L, 1000))
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 2000))
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(server => server.shutdown())
     producer.close()
-    assertEquals(60L, hwFile1.read(topic, 0))
-    assertEquals(60L, hwFile2.read(topic, 0))
+    assertEquals(hw, hwFile1.read(topic, 0))
+    assertEquals(hw, hwFile2.read(topic, 0))
     servers.foreach(server => Utils.rm(server.config.logDir))
   }
 
@@ -183,16 +182,17 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
     sendMessages(20)
+    var hw = 20L
     // give some time for follower 1 to record leader HW of 600
     assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark == 600L, 1000))
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 1000))
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(server => server.shutdown())
     producer.close()
     val leaderHW = hwFile1.read(topic, 0)
-    assertEquals(600L, leaderHW)
+    assertEquals(hw, leaderHW)
     val followerHW = hwFile2.read(topic, 0)
-    assertEquals(600L, followerHW)
+    assertEquals(hw, followerHW)
     servers.foreach(server => Utils.rm(server.config.logDir))
   }
 
@@ -228,43 +228,46 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
 
     sendMessages(2)
+    var hw = 2L
+    
     // allow some time for the follower to get the leader HW
     assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark == 60L, 1000))
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 1000))
     // kill the server hosting the preferred replica
     server1.shutdown()
     server2.shutdown()
-    assertEquals(60L, hwFile1.read(topic, 0))
-    assertEquals(60L, hwFile2.read(topic, 0))
+    assertEquals(hw, hwFile1.read(topic, 0))
+    assertEquals(hw, hwFile2.read(topic, 0))
 
     server2.startup()
     // check if leader moves to the other server
     leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500, leader)
     assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
 
-    assertEquals(60L, hwFile1.read(topic, 0))
+    assertEquals(hw, hwFile1.read(topic, 0))
 
     // bring the preferred replica back
     server1.startup()
 
-    assertEquals(60L, hwFile1.read(topic, 0))
-    assertEquals(60L, hwFile2.read(topic, 0))
+    assertEquals(hw, hwFile1.read(topic, 0))
+    assertEquals(hw, hwFile2.read(topic, 0))
 
     sendMessages(2)
+    hw += 2
+    
     // allow some time for the follower to get the leader HW
     assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server1.replicaManager.getReplica(topic, 0).get.highWatermark == 120L, 1000))
+      server1.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 1000))
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(server => server.shutdown())
     producer.close()
-    assertEquals(120L, hwFile1.read(topic, 0))
-    assertEquals(120L, hwFile2.read(topic, 0))
+    assertEquals(hw, hwFile1.read(topic, 0))
+    assertEquals(hw, hwFile2.read(topic, 0))
     servers.foreach(server => Utils.rm(server.config.logDir))
   }
 
-  private def sendMessages(numMessages: Int = 1) {
-    for(i <- 0 until numMessages) {
-      producer.send(new ProducerData[Int, Message](topic, 0, sent1))
-    }
+  private def sendMessages(n: Int = 1) {
+    for(i <- 0 until n)
+      producer.send(new ProducerData[Int, Message](topic, 0, message))
   }
 }

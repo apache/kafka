@@ -1,4 +1,4 @@
-package unit.kafka.metrics
+package kafka.metrics
 
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
@@ -21,7 +21,6 @@ import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
 import java.util.concurrent.TimeUnit
 import junit.framework.Assert._
-import kafka.metrics.KafkaTimer
 import com.yammer.metrics.core.{MetricsRegistry, Clock}
 
 class KafkaTimerTest extends JUnit3Suite {

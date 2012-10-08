@@ -28,10 +28,10 @@ import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
  * A consumer of kafka messages
  */
 @threadsafe
-class SimpleConsumer( val host: String,
-                      val port: Int,
-                      val soTimeout: Int,
-                      val bufferSize: Int ) extends Logging {
+class SimpleConsumer(val host: String,
+                     val port: Int,
+                     val soTimeout: Int,
+                     val bufferSize: Int) extends Logging {
 
   private val lock = new Object()
   private val blockingChannel = new BlockingChannel(host, port, bufferSize, BlockingChannel.UseDefaultBufferSize, soTimeout)
