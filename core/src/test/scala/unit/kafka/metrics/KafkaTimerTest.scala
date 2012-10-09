@@ -35,20 +35,20 @@ class KafkaTimerTest extends JUnit3Suite {
     timer.time {
       clock.addMillis(1000)
     }
-    assertEquals(1, metric.count())
-    assertTrue((metric.max() - 1000).abs <= Double.Epsilon)
-    assertTrue((metric.min() - 1000).abs <= Double.Epsilon)
+    assertEquals(1, metric.getCount())
+    assertTrue((metric.getMax() - 1000).abs <= Double.Epsilon)
+    assertTrue((metric.getMin() - 1000).abs <= Double.Epsilon)
   }
 
   private class ManualClock extends Clock {
 
     private var ticksInNanos = 0L
 
-    override def tick() = {
+    override def getTick() = {
       ticksInNanos
     }
 
-    override def time() = {
+    override def getTime() = {
       TimeUnit.NANOSECONDS.toMillis(ticksInNanos)
     }
 

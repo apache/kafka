@@ -66,17 +66,42 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
         <scope>compile</scope>
       </dependency>
 
+    def metricsDeps =
+      <dependencies>
+        <dependency>
+          <groupId>com.yammer.metrics</groupId>
+          <artifactId>metrics-core</artifactId>
+          <version>3.0.0-10ccc80c</version>
+          <scope>compile</scope>
+        </dependency>
+        <dependency>
+          <groupId>com.yammer.metrics</groupId>
+          <artifactId>metrics-annotations</artifactId>
+          <version>3.0.0-10ccc80c</version>
+          <scope>compile</scope>
+        </dependency>
+      </dependencies>
+
     object ZkClientDepAdder extends RuleTransformer(new RewriteRule() {
       override def transform(node: Node): Seq[Node] = node match {
         case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
-          Elem(prefix, "dependencies", attribs, scope, deps ++ zkClientDep :_*)
+          Elem(prefix, "dependencies", attribs, scope, deps ++ zkClientDep:_*)
+        }
+        case other => other
+      }
+    })
+
+    object MetricsDepAdder extends RuleTransformer(new RewriteRule() {
+      override def transform(node: Node): Seq[Node] = node match {
+        case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
+          Elem(prefix, "dependencies", attribs, scope, deps ++ metricsDeps:_*)
         }
         case other => other
       }
     })
 
     override def pomPostProcess(pom: Node): Node = {
-      ZkClientDepAdder(pom)
+      MetricsDepAdder(ZkClientDepAdder(pom))
     }
 
     override def artifactID = "kafka"
@@ -251,7 +276,6 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
   trait CoreDependencies {
     val log4j = "log4j" % "log4j" % "1.2.15"
     val jopt = "net.sf.jopt-simple" % "jopt-simple" % "3.2"
-    val metricsCore = "com.yammer.metrics" % "metrics-core" % "latest.release"
     val slf4jSimple = "org.slf4j" % "slf4j-simple" % "latest.release"
   }
   

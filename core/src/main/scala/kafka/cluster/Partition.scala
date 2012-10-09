@@ -50,7 +50,7 @@ class Partition(val topic: String,
   newGauge(
     topic + "-" + partitionId + "UnderReplicated",
     new Gauge[Int] {
-      def value() = {
+      def getValue = {
         if (isUnderReplicated) 1 else 0
       }
     }

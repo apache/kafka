@@ -165,7 +165,7 @@ class FetcherLagMetrics(name: (String, Int)) extends KafkaMetricsGroup {
   newGauge(
     name._1 + "-" + name._2 + "-ConsumerLag",
     new Gauge[Long] {
-      def value() = lagVal.get
+      def getValue = lagVal.get
     }
   )
 

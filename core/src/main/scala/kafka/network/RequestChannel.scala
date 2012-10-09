@@ -92,7 +92,7 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   newGauge(
     "RequestQueueSize",
     new Gauge[Int] {
-      def value() = requestQueue.size
+      def getValue = requestQueue.size
     }
   )
 

@@ -128,10 +128,10 @@ private[kafka] class Log(val dir: File,
   private var nextOffset: AtomicLong = new AtomicLong(segments.view.last.nextOffset())
 
   newGauge(name + "-" + "NumLogSegments",
-           new Gauge[Int] { def value() = numberOfSegments })
+           new Gauge[Int] { def getValue = numberOfSegments })
 
   newGauge(name + "-" + "LogEndOffset",
-           new Gauge[Long] { def value() = logEndOffset })
+           new Gauge[Long] { def getValue = logEndOffset })
 
   /* The name of this log */
   def name  = dir.getName()
