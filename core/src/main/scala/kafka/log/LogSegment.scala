@@ -28,9 +28,9 @@ class LogSegment(val messageSet: FileMessageSet,
   
   @volatile var deleted = false
   
-  def this(dir: File, startOffset: Long, mutable: Boolean, indexIntervalBytes: Int, maxIndexSize: Int) = 
-    this(new FileMessageSet(file = Log.logFilename(dir, startOffset), mutable = mutable), 
-         new OffsetIndex(file = Log.indexFilename(dir, startOffset), baseOffset = startOffset, mutable = mutable, maxIndexSize = maxIndexSize),
+  def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int) = 
+    this(new FileMessageSet(file = Log.logFilename(dir, startOffset)), 
+         new OffsetIndex(file = Log.indexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
          startOffset,
          indexIntervalBytes,
          SystemTime)

@@ -101,8 +101,8 @@ object Log {
 private[kafka] class Log(val dir: File, 
                          val maxLogFileSize: Long, 
                          val maxMessageSize: Int, 
-                         val flushInterval: Int,
-                         val rollIntervalMs: Long, 
+                         val flushInterval: Int = Int.MaxValue,
+                         val rollIntervalMs: Long = Long.MaxValue, 
                          val needsRecovery: Boolean, 
                          val maxIndexSize: Int = (10*1024*1024),
                          val indexIntervalBytes: Int = 4096,
@@ -151,8 +151,7 @@ private[kafka] class Log(val dir: File,
         if(!Log.indexFilename(dir, start).exists)
           throw new IllegalStateException("Found log file with no corresponding index file.")
         logSegments.add(new LogSegment(dir = dir, 
-                                       startOffset = start, 
-                                       mutable = false, 
+                                       startOffset = start,
                                        indexIntervalBytes = indexIntervalBytes, 
                                        maxIndexSize = maxIndexSize))
       }
@@ -161,8 +160,7 @@ private[kafka] class Log(val dir: File,
     if(logSegments.size == 0) {
       // no existing segments, create a new mutable segment
       logSegments.add(new LogSegment(dir = dir, 
-                                     startOffset = 0, 
-                                     mutable = true, 
+                                     startOffset = 0,
                                      indexIntervalBytes = indexIntervalBytes, 
                                      maxIndexSize = maxIndexSize))
     } else {
@@ -176,17 +174,9 @@ private[kafka] class Log(val dir: File,
         }
       })
 
-      //make the final section mutable and run recovery on it if necessary
-      val last = logSegments.remove(logSegments.size - 1)
-      last.close()
-      val mutableSegment = new LogSegment(dir = dir, 
-                                          startOffset = last.start, 
-                                          mutable = true, 
-                                          indexIntervalBytes = indexIntervalBytes, 
-                                          maxIndexSize = maxIndexSize)
+      // run recovery on the last segment if necessary
       if(needsRecovery)
-        recoverSegment(mutableSegment)
-      logSegments.add(mutableSegment)
+        recoverSegment(logSegments.get(logSegments.size - 1))
     }
     new SegmentList(logSegments.toArray(new Array[LogSegment](logSegments.size)))
   }
@@ -406,12 +396,11 @@ private[kafka] class Log(val dir: File,
     }
     debug("Rolling log '" + name + "' to " + logFile.getName + " and " + indexFile.getName)
     segments.view.lastOption match {
-      case Some(segment) => segment.index.makeReadOnly()
+      case Some(segment) => segment.index.trimToSize()
       case None => 
     }
     val segment = new LogSegment(dir, 
                                  startOffset = newOffset,
-                                 mutable = true, 
                                  indexIntervalBytes = indexIntervalBytes, 
                                  maxIndexSize = maxIndexSize)
     segments.append(segment)
@@ -546,8 +535,7 @@ private[kafka] class Log(val dir: File,
       val deletedSegments = segments.trunc(segments.view.size)
       debug("Truncate and start log '" + name + "' to " + newOffset)
       segments.append(new LogSegment(dir, 
-                                     newOffset, 
-                                     mutable = true, 
+                                     newOffset,
                                      indexIntervalBytes = indexIntervalBytes, 
                                      maxIndexSize = maxIndexSize))
       deleteSegments(deletedSegments)
