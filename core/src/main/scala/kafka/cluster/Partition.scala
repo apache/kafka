@@ -69,7 +69,7 @@ class Partition(val topic: String,
         if (isReplicaLocal(replicaId)) {
           val log = logManager.getOrCreateLog(topic, partitionId)
           val localReplica = new Replica(replicaId, this, time,
-            highwaterMarkCheckpoint.read(topic, partitionId), Some(log))
+            highwaterMarkCheckpoint.read(topic, partitionId).min(log.logEndOffset), Some(log))
           addReplicaIfNotExists(localReplica)
         }
         else {
