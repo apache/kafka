@@ -74,7 +74,7 @@ object Consumer extends Logging {
    */
   def create(config: ConsumerConfig): ConsumerConnector = {
     val consumerConnect = new ZookeeperConsumerConnector(config)
-    Utils.registerMBean(consumerConnect, consumerStatsMBeanName)
+    Utils.registerMBean(consumerConnect, consumerStatsMBeanName + ",groupid=" + config.groupId)
     consumerConnect
   }
 
@@ -86,7 +86,7 @@ object Consumer extends Logging {
    */
   def createJavaConsumerConnector(config: ConsumerConfig): kafka.javaapi.consumer.ConsumerConnector = {
     val consumerConnect = new kafka.javaapi.consumer.ZookeeperConsumerConnector(config)
-    Utils.registerMBean(consumerConnect.underlying, consumerStatsMBeanName)
+    Utils.registerMBean(consumerConnect.underlying, consumerStatsMBeanName + ",groupid=" + config.groupId)
     consumerConnect
   }
 }
