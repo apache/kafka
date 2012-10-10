@@ -21,7 +21,7 @@ import kafka.cluster.Broker
 import java.util.Properties
 import collection.mutable.HashMap
 import java.lang.Object
-import kafka.utils.{Utils, Logging}
+import kafka.utils.Logging
 import kafka.api.TopicMetadata
 import kafka.common.UnavailableProducerException
 

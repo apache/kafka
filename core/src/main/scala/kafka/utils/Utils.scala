@@ -19,6 +19,7 @@ package kafka.utils
 
 import java.io._
 import java.nio._
+import charset.Charset
 import java.nio.channels._
 import java.lang.management._
 import java.util.zip.CRC32
@@ -638,7 +639,7 @@ object Utils extends Logging {
     builder.toString
   }
 
-  def mapToJson[T <: Any](map: Map[String, List[String]]): String = {
+  def mapToJson[T <: Any](map: Map[String, Seq[String]]): String = {
     val builder = new StringBuilder
     builder.append("{ ")
     var numElements = 0
@@ -714,6 +715,18 @@ object Utils extends Logging {
     val stream: Stream[T] =
       for (forever <- Stream.continually(1); t <- coll) yield t
     stream.iterator
+  }
+
+  def readFileIntoString(path: String): String = {
+    val stream = new FileInputStream(new File(path))
+    try {
+      val fc = stream.getChannel()
+      val bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size())
+      Charset.defaultCharset().decode(bb).toString()
+    }
+    finally {
+      stream.close()
+    }
   }
 }
 

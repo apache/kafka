@@ -20,8 +20,6 @@ package kafka.api
 
 import java.nio._
 import kafka.utils._
-import collection.mutable.HashSet
-import collection.mutable.Set
 
 object StopReplicaRequest {
   val CurrentVersion = 1.shortValue()
@@ -33,29 +31,30 @@ object StopReplicaRequest {
     val clientId = Utils.readShortString(buffer)
     val ackTimeoutMs = buffer.getInt
     val topicPartitionPairCount = buffer.getInt
-    val topicPartitionPairSet = new HashSet[(String, Int)]()
-    for (i <- 0 until topicPartitionPairCount){
-      topicPartitionPairSet.add((Utils.readShortString(buffer, "UTF-8"), buffer.getInt))
+    val topicPartitionPairSet = new collection.mutable.HashSet[(String, Int)]()
+    for (i <- 0 until topicPartitionPairCount) {
+      topicPartitionPairSet.add(Utils.readShortString(buffer, "UTF-8"), buffer.getInt)
     }
-    new StopReplicaRequest(versionId, clientId, ackTimeoutMs, topicPartitionPairSet)
+    new StopReplicaRequest(versionId, clientId, ackTimeoutMs, topicPartitionPairSet.toSet)
   }
 }
 
 case class StopReplicaRequest(versionId: Short,
                               clientId: String,
                               ackTimeoutMs: Int,
-                              stopReplicaSet: Set[(String, Int)])
+                              partitions: Set[(String, Int)])
         extends RequestOrResponse(Some(RequestKeys.StopReplicaKey)) {
-  def this(stopReplicaSet: Set[(String, Int)]) = {
-    this(StopReplicaRequest.CurrentVersion, StopReplicaRequest.DefaultClientId, StopReplicaRequest.DefaultAckTimeout, stopReplicaSet)
+  def this(partitions: Set[(String, Int)]) = {
+    this(StopReplicaRequest.CurrentVersion, StopReplicaRequest.DefaultClientId, StopReplicaRequest.DefaultAckTimeout,
+        partitions)
   }
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     Utils.writeShortString(buffer, clientId)
     buffer.putInt(ackTimeoutMs)
-    buffer.putInt(stopReplicaSet.size)
-    for ((topic, partitionId) <- stopReplicaSet){
+    buffer.putInt(partitions.size)
+    for ((topic, partitionId) <- partitions){
       Utils.writeShortString(buffer, topic, "UTF-8")
       buffer.putInt(partitionId)
     }
@@ -63,7 +62,7 @@ case class StopReplicaRequest(versionId: Short,
 
   def sizeInBytes(): Int = {
     var size = 2 + (2 + clientId.length()) + 4 + 4
-    for ((topic, partitionId) <- stopReplicaSet){
+    for ((topic, partitionId) <- partitions){
       size += (2 + topic.length()) + 4
     }
     size

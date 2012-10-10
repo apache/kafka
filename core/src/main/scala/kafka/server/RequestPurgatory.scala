@@ -69,7 +69,7 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0) exten
   newGauge(
     "NumDelayedRequests",
     new Gauge[Int] {
-      def getValue = expiredRequestReaper.unsatisfied.get()
+      def value() = expiredRequestReaper.unsatisfied.get()
     }
   )
 

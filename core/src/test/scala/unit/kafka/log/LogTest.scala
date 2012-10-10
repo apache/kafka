@@ -342,33 +342,6 @@ class LogTest extends JUnitSuite {
     assertEquals("Should change log size", log.size, 0)
   }
 
-  @Test
-  def testReopenThenTruncate() {
-    val set = TestUtils.singleMessageSet("test".getBytes())
-
-    // create a log
-    var log = new Log(logDir, 
-                      maxLogFileSize = set.sizeInBytes * 5, 
-                      maxMessageSize = config.maxMessageSize, 
-                      maxIndexSize = 1000, 
-                      indexIntervalBytes = 10000, 
-                      needsRecovery = true)
-    
-    // add enough messages to roll over several segments then close and re-open and attempt to truncate
-    for(i <- 0 until 100)
-      log.append(set)
-    log.close()
-    log = new Log(logDir, 
-                  maxLogFileSize = set.sizeInBytes * 5, 
-                  maxMessageSize = config.maxMessageSize, 
-                  maxIndexSize = 1000, 
-                  indexIntervalBytes = 10000, 
-                  needsRecovery = true)
-    log.truncateTo(3)
-    assertEquals("All but one segment should be deleted.", 1, log.numberOfSegments)
-    assertEquals("Log end offset should be 3.", 3, log.logEndOffset)
-  }
-  
   def assertContains(ranges: Array[Range], offset: Long) = {
     Log.findRange(ranges, offset) match {
       case Some(range) => 

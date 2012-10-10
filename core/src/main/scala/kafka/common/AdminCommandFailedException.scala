@@ -15,21 +15,9 @@
  * limitations under the License.
  */
 
-package kafka.server
+package kafka.common
 
-import kafka.cluster.Broker
-
-class ReplicaFetcherManager(private val brokerConfig: KafkaConfig, private val replicaMgr: ReplicaManager)
-        extends AbstractFetcherManager("ReplicaFetcherManager on broker " + brokerConfig.brokerId + ", ",
-          brokerConfig.numReplicaFetchers) {
-
-  override def createFetcherThread(fetcherId: Int, sourceBroker: Broker): AbstractFetcherThread = {
-    new ReplicaFetcherThread("ReplicaFetcherThread-%d-%d-on-broker-%d".format(sourceBroker.id, fetcherId, brokerConfig.brokerId), sourceBroker, brokerConfig, replicaMgr)
-  }
-
-  def shutdown() {
-    info("shutting down")
-    closeAllFetchers()
-    info("shutdown completed")
-  }  
+class AdminCommandFailedException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
+  def this(message: String) = this(message, null)
+  def this() = this(null, null)
 }

@@ -60,7 +60,6 @@ class MessageCompressionTest extends JUnitSuite {
       true
     } catch {
       case e: UnsatisfiedLinkError => false
-      case e: org.xerial.snappy.SnappyError => false
     }
   }
 }

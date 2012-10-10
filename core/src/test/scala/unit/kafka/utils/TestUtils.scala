@@ -389,7 +389,8 @@ object TestUtils extends Logging {
             newLeaderAndISR.leaderEpoch += 1
             newLeaderAndISR.zkVersion += 1
           }
-          ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicPartitionLeaderAndIsrPath( topic, partition), newLeaderAndISR.toString)
+          ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
+            newLeaderAndISR.toString)
         } catch {
           case oe => error("Error while electing leader for topic %s partition %d".format(topic, partition), oe)
         }

@@ -67,7 +67,7 @@ trait BaseMessageSetTestCases extends JUnitSuite {
       val channel = new RandomAccessFile(file, "rw").getChannel()
       val written = set.writeTo(channel, 0, 1024)
       assertEquals("Expect to write the number of bytes in the set.", set.sizeInBytes, written)
-      val newSet = new FileMessageSet(file, channel)
+      val newSet = new FileMessageSet(file, channel, false)
       checkEquals(set.iterator, newSet.iterator)
     }
   }

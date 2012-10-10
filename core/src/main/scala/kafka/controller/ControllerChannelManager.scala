@@ -137,36 +137,49 @@ class RequestSendThread(val controllerId: Int,
   }
 }
 
-// TODO: When we add more types of requests, we can generalize this class a bit. Right now, it just handles LeaderAndIsr
-// request
 class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (RequestOrResponse) => Unit) => Unit)
   extends  Logging {
-  val brokerRequestMap = new mutable.HashMap[Int, mutable.HashMap[(String, Int), LeaderAndIsr]]
+  val leaderAndIsrRequestMap = new mutable.HashMap[Int, mutable.HashMap[(String, Int), LeaderAndIsr]]
+  val stopReplicaRequestMap = new mutable.HashMap[Int, Seq[(String, Int)]]
 
   def newBatch() {
     // raise error if the previous batch is not empty
-    if(brokerRequestMap.size > 0)
+    if(leaderAndIsrRequestMap.size > 0 || stopReplicaRequestMap.size > 0)
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating " +
-        "a new one. Some state changes %s might be lost ".format(brokerRequestMap.toString()))
-    brokerRequestMap.clear()
+        "a new one. Some state changes %s might be lost ".format(leaderAndIsrRequestMap.toString()))
+    leaderAndIsrRequestMap.clear()
+    stopReplicaRequestMap.clear()
   }
 
-  def addRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int, leaderAndIsr: LeaderAndIsr) {
+  def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int, leaderAndIsr: LeaderAndIsr) {
     brokerIds.foreach { brokerId =>
-      brokerRequestMap.getOrElseUpdate(brokerId, new mutable.HashMap[(String, Int), LeaderAndIsr])
-      brokerRequestMap(brokerId).put((topic, partition), leaderAndIsr)
+      leaderAndIsrRequestMap.getOrElseUpdate(brokerId, new mutable.HashMap[(String, Int), LeaderAndIsr])
+      leaderAndIsrRequestMap(brokerId).put((topic, partition), leaderAndIsr)
+    }
+  }
+
+  def addStopReplicaRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int) {
+    brokerIds.foreach { brokerId =>
+      stopReplicaRequestMap.getOrElseUpdate(brokerId, Seq.empty[(String, Int)])
+      stopReplicaRequestMap(brokerId) :+ (topic, partition)
     }
   }
 
   def sendRequestsToBrokers() {
-    brokerRequestMap.foreach { m =>
+    leaderAndIsrRequestMap.foreach { m =>
       val broker = m._1
       val leaderAndIsr = m._2
       val leaderAndIsrRequest = new LeaderAndIsrRequest(leaderAndIsr)
-      info("Sending to broker %d leaderAndIsr request of %s".format(broker, leaderAndIsrRequest))
+      debug("The leaderAndIsr request sent to broker %d is %s".format(broker, leaderAndIsrRequest))
       sendRequest(broker, leaderAndIsrRequest, null)
     }
-    brokerRequestMap.clear()
+    leaderAndIsrRequestMap.clear()
+    stopReplicaRequestMap.foreach { r =>
+      val broker = r._1
+      debug("The stop replica request sent to broker %d is %s".format(broker, r._2.mkString(",")))
+      sendRequest(broker, new StopReplicaRequest(Set.empty[(String, Int)] ++ r._2), null)
+    }
+    stopReplicaRequestMap.clear()
   }
 }
 

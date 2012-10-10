@@ -27,12 +27,15 @@ import kafka.api.LeaderAndIsr
 import org.apache.zookeeper.data.Stat
 import java.util.concurrent.locks.{ReentrantLock, Condition}
 import kafka.common.{KafkaException, NoEpochForPartitionException}
+import kafka.controller.{PartitionAndReplica, ReassignedPartitionsContext}
+import kafka.admin._
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
   val BrokerIdsPath = "/brokers/ids"
   val BrokerTopicsPath = "/brokers/topics"
   val ControllerPath = "/controller"
+  val ReassignPartitionsPath = "/admin/reassign_partitions"
 
   def getTopicPath(topic: String): String ={
     BrokerTopicsPath + "/" + topic
@@ -76,20 +79,23 @@ object ZkUtils extends Logging {
     val leaderAndIsrOpt = leaderAndIsrInfo._1
     val stat = leaderAndIsrInfo._2
     leaderAndIsrOpt match {
-      case Some(leaderAndIsrStr) =>
-        SyncJSON.parseFull(leaderAndIsrStr) match {
-          case Some(m) =>
-            val leader = m.asInstanceOf[Map[String, String]].get("leader").get.toInt
-            val epoch = m.asInstanceOf[Map[String, String]].get("leaderEpoch").get.toInt
-            val isrString = m.asInstanceOf[Map[String, String]].get("ISR").get
-            val isr = Utils.getCSVList(isrString).map(r => r.toInt)
-            val zkPathVersion = stat.getVersion
-            debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for topic %s and partition %d".format(leader, epoch,
-              isr.toString(), zkPathVersion, topic, partition))
-            Some(LeaderAndIsr(leader, epoch, isr.toList, zkPathVersion))
-          case None => None
-        }
-      case None => None // TODO: Handle if leader and isr info is not available in zookeeper
+      case Some(leaderAndIsrStr) => parseLeaderAndIsr(leaderAndIsrStr, topic, partition, stat)
+      case None => None
+    }
+  }
+
+  def parseLeaderAndIsr(leaderAndIsrStr: String, topic: String, partition: Int, stat: Stat): Option[LeaderAndIsr] = {
+    SyncJSON.parseFull(leaderAndIsrStr) match {
+      case Some(m) =>
+        val leader = m.asInstanceOf[Map[String, String]].get("leader").get.toInt
+        val epoch = m.asInstanceOf[Map[String, String]].get("leaderEpoch").get.toInt
+        val isrString = m.asInstanceOf[Map[String, String]].get("ISR").get
+        val isr = Utils.getCSVList(isrString).map(r => r.toInt)
+        val zkPathVersion = stat.getVersion
+        debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for topic %s and partition %d".format(leader, epoch,
+          isr.toString(), zkPathVersion, topic, partition))
+        Some(LeaderAndIsr(leader, epoch, isr.toList, zkPathVersion))
+      case None => None
     }
   }
 
@@ -295,11 +301,13 @@ object ZkUtils extends Logging {
   def conditionalUpdatePersistentPath(client: ZkClient, path: String, data: String, expectVersion: Int): (Boolean, Int) = {
     try {
       val stat = client.writeData(path, data, expectVersion)
-      debug("Conditional update to the zookeeper path %s with expected version %d succeeded and returned the new version: %d".format(path, expectVersion, stat.getVersion))
+      info("Conditional update of zkPath %s with value %s and expected version %d succeeded, returning the new version: %d"
+        .format(path, data, expectVersion, stat.getVersion))
       (true, stat.getVersion)
     } catch {
       case e: Exception =>
-        debug("Conditional update to the zookeeper path %s with expected version %d failed".format(path, expectVersion), e)
+        error("Conditional update of zkPath %s with data %s and expected version %d failed".format(path, data,
+          expectVersion), e)
         (false, -1)
     }
   }
@@ -510,6 +518,66 @@ object ZkUtils extends Logging {
       }
     }.flatten[(String, Int)].toSeq
   }
+
+  def getPartitionsBeingReassigned(zkClient: ZkClient): Map[(String, Int), ReassignedPartitionsContext] = {
+    // read the partitions and their new replica list
+    val jsonPartitionMapOpt = readDataMaybeNull(zkClient, ReassignPartitionsPath)._1
+    jsonPartitionMapOpt match {
+      case Some(jsonPartitionMap) =>
+        val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
+        reassignedPartitions.map { p =>
+          val newReplicas = p._2
+          (p._1 -> new ReassignedPartitionsContext(newReplicas))
+        }
+      case None => Map.empty[(String, Int), ReassignedPartitionsContext]
+    }
+  }
+
+  def parsePartitionReassignmentData(jsonData: String):Map[(String, Int), Seq[Int]] = {
+    SyncJSON.parseFull(jsonData) match {
+      case Some(m) =>
+        val replicaMap = m.asInstanceOf[Map[String, Seq[String]]]
+        replicaMap.map { reassignedPartitions =>
+          val topic = reassignedPartitions._1.split(",").head
+          val partition = reassignedPartitions._1.split(",").last.toInt
+          val newReplicas = reassignedPartitions._2.map(_.toInt)
+          (topic, partition) -> newReplicas
+        }
+      case None => Map.empty[(String, Int), Seq[Int]]
+    }
+  }
+
+  def updatePartitionReassignmentData(zkClient: ZkClient, partitionsToBeReassigned: Map[(String, Int), Seq[Int]]) {
+    val zkPath = ZkUtils.ReassignPartitionsPath
+    partitionsToBeReassigned.size match {
+      case 0 => // need to delete the /admin/reassign_partitions path
+        deletePath(zkClient, zkPath)
+        info("No more partitions need to be reassigned. Deleting zk path %s".format(zkPath))
+      case _ =>
+        val jsonData = Utils.mapToJson(partitionsToBeReassigned.map(p => ("%s,%s".format(p._1._1, p._1._2)) -> p._2.map(_.toString)))
+        try {
+          updatePersistentPath(zkClient, zkPath, jsonData)
+          info("Updated partition reassignment path with %s".format(jsonData))
+        }catch {
+          case nne: ZkNoNodeException =>
+            ZkUtils.createPersistentPath(zkClient, zkPath, jsonData)
+            debug("Created path %s with %s for partition reassignment".format(zkPath, jsonData))
+          case e2 => throw new AdministrationException(e2.toString)
+        }
+    }
+  }
+
+  def getAllReplicasOnBroker(zkClient: ZkClient, topics: Seq[String], brokerIds: Seq[Int]): Seq[PartitionAndReplica] = {
+    brokerIds.map { brokerId =>
+      // read all the partitions and their assigned replicas into a map organized by
+      // { replica id -> partition 1, partition 2...
+      val partitionsAssignedToThisBroker = getPartitionsAssignedToBroker(zkClient, topics, brokerId)
+      if(partitionsAssignedToThisBroker.size == 0)
+        info("No state transitions triggered since no partitions are assigned to brokers %s".format(brokerIds.mkString(",")))
+      partitionsAssignedToThisBroker.map(p => new PartitionAndReplica(p._1, p._2, brokerId))
+    }.flatten
+  }
+
 
   def deletePartition(zkClient : ZkClient, brokerId: Int, topic: String) {
     val brokerIdPath = BrokerIdsPath + "/" + brokerId

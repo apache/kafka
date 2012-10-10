@@ -33,7 +33,7 @@ class OffsetIndexTest extends JUnitSuite {
   
   @Before
   def setup() {
-    this.idx = new OffsetIndex(file = nonExistantTempFile(), baseOffset = 45L, maxIndexSize = 30 * 8)
+    this.idx = new OffsetIndex(file = nonExistantTempFile(), baseOffset = 45L, mutable = true, maxIndexSize = 30 * 8)
   }
   
   @After
@@ -41,7 +41,7 @@ class OffsetIndexTest extends JUnitSuite {
     if(this.idx != null)
       this.idx.file.delete()
   }
-  
+
   @Test
   def randomLookupTest() {
     assertEquals("Not present value should return physical offset 0.", OffsetPosition(idx.baseOffset, 0), idx.lookup(92L))
@@ -88,6 +88,25 @@ class OffsetIndexTest extends JUnitSuite {
     }
     assertWriteFails("Append should fail on a full index", idx, idx.maxEntries + 1, classOf[IllegalStateException])
   }
+
+  
+  @Test
+  def testReadOnly() {
+    /* add some random values */
+    val vals = List((49, 1), (52, 2), (55, 3))
+    for((logical, physical) <- vals)
+      idx.append(logical, physical)
+    
+    idx.makeReadOnly()
+    
+    assertEquals("File length should just contain added entries.", vals.size * 8L, idx.file.length())
+    assertEquals("Last offset field should be initialized", vals.last._1, idx.lastOffset)
+    
+    for((logical, physical) <- vals)
+    	assertEquals("Should still be able to find everything.", OffsetPosition(logical, physical), idx.lookup(logical))
+    	
+    assertWriteFails("Append should fail on read-only index", idx, 60, classOf[IllegalStateException])
+  }
   
   @Test(expected = classOf[IllegalArgumentException])
   def appendOutOfOrder() {
@@ -96,13 +115,13 @@ class OffsetIndexTest extends JUnitSuite {
   }
   
   @Test
-  def testReopen() {
+  def reopenAsReadonly() {
     val first = OffsetPosition(51, 0)
     val sec = OffsetPosition(52, 1)
     idx.append(first.offset, first.position)
     idx.append(sec.offset, sec.position)
     idx.close()
-    val idxRo = new OffsetIndex(file = idx.file, baseOffset = idx.baseOffset)
+    val idxRo = new OffsetIndex(file = idx.file, baseOffset = idx.baseOffset, mutable = false)
     assertEquals(first, idxRo.lookup(first.offset))
     assertEquals(sec, idxRo.lookup(sec.offset))
     assertWriteFails("Append should fail on read-only index", idxRo, 53, classOf[IllegalStateException])
@@ -110,8 +129,7 @@ class OffsetIndexTest extends JUnitSuite {
   
   @Test
   def truncate() {
-	val idx = new OffsetIndex(file = nonExistantTempFile(), baseOffset = 0L, maxIndexSize = 10 * 8)
-	idx.truncate()
+	val idx = new OffsetIndex(file = nonExistantTempFile(), baseOffset = 0L, mutable = true, maxIndexSize = 10 * 8)
     for(i <- 1 until 10)
       idx.append(i, i)
       
@@ -136,6 +154,13 @@ class OffsetIndexTest extends JUnitSuite {
     } catch {
       case e: Exception => assertEquals("Got an unexpected exception.", klass, e.getClass)
     }
+  }
+  
+  def makeIndex(baseOffset: Long, mutable: Boolean, vals: Seq[(Long, Int)]): OffsetIndex = {
+    val idx = new OffsetIndex(file = nonExistantTempFile(), baseOffset = baseOffset, mutable = mutable, maxIndexSize = 2 * vals.size * 8)
+    for ((logical, physical) <- vals)
+      idx.append(logical, physical)
+    idx
   }
 
   def monotonicSeq(base: Int, len: Int): Seq[Int] = {

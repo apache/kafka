@@ -101,8 +101,8 @@ object Log {
 private[kafka] class Log(val dir: File, 
                          val maxLogFileSize: Long, 
                          val maxMessageSize: Int, 
-                         val flushInterval: Int = Int.MaxValue,
-                         val rollIntervalMs: Long = Long.MaxValue, 
+                         val flushInterval: Int,
+                         val rollIntervalMs: Long, 
                          val needsRecovery: Boolean, 
                          val maxIndexSize: Int = (10*1024*1024),
                          val indexIntervalBytes: Int = 4096,
@@ -128,10 +128,10 @@ private[kafka] class Log(val dir: File,
   private var nextOffset: AtomicLong = new AtomicLong(segments.view.last.nextOffset())
 
   newGauge(name + "-" + "NumLogSegments",
-           new Gauge[Int] { def getValue = numberOfSegments })
+           new Gauge[Int] { def value() = numberOfSegments })
 
   newGauge(name + "-" + "LogEndOffset",
-           new Gauge[Long] { def getValue = logEndOffset })
+           new Gauge[Long] { def value() = logEndOffset })
 
   /* The name of this log */
   def name  = dir.getName()
@@ -151,7 +151,8 @@ private[kafka] class Log(val dir: File,
         if(!Log.indexFilename(dir, start).exists)
           throw new IllegalStateException("Found log file with no corresponding index file.")
         logSegments.add(new LogSegment(dir = dir, 
-                                       startOffset = start,
+                                       startOffset = start, 
+                                       mutable = false, 
                                        indexIntervalBytes = indexIntervalBytes, 
                                        maxIndexSize = maxIndexSize))
       }
@@ -160,7 +161,8 @@ private[kafka] class Log(val dir: File,
     if(logSegments.size == 0) {
       // no existing segments, create a new mutable segment
       logSegments.add(new LogSegment(dir = dir, 
-                                     startOffset = 0,
+                                     startOffset = 0, 
+                                     mutable = true, 
                                      indexIntervalBytes = indexIntervalBytes, 
                                      maxIndexSize = maxIndexSize))
     } else {
@@ -174,9 +176,17 @@ private[kafka] class Log(val dir: File,
         }
       })
 
-      // run recovery on the last segment if necessary
+      //make the final section mutable and run recovery on it if necessary
+      val last = logSegments.remove(logSegments.size - 1)
+      last.close()
+      val mutableSegment = new LogSegment(dir = dir, 
+                                          startOffset = last.start, 
+                                          mutable = true, 
+                                          indexIntervalBytes = indexIntervalBytes, 
+                                          maxIndexSize = maxIndexSize)
       if(needsRecovery)
-        recoverSegment(logSegments.get(logSegments.size - 1))
+        recoverSegment(mutableSegment)
+      logSegments.add(mutableSegment)
     }
     new SegmentList(logSegments.toArray(new Array[LogSegment](logSegments.size)))
   }
@@ -396,11 +406,12 @@ private[kafka] class Log(val dir: File,
     }
     debug("Rolling log '" + name + "' to " + logFile.getName + " and " + indexFile.getName)
     segments.view.lastOption match {
-      case Some(segment) => segment.index.trimToSize()
+      case Some(segment) => segment.index.makeReadOnly()
       case None => 
     }
     val segment = new LogSegment(dir, 
                                  startOffset = newOffset,
+                                 mutable = true, 
                                  indexIntervalBytes = indexIntervalBytes, 
                                  maxIndexSize = maxIndexSize)
     segments.append(segment)
@@ -535,7 +546,8 @@ private[kafka] class Log(val dir: File,
       val deletedSegments = segments.trunc(segments.view.size)
       debug("Truncate and start log '" + name + "' to " + newOffset)
       segments.append(new LogSegment(dir, 
-                                     newOffset,
+                                     newOffset, 
+                                     mutable = true, 
                                      indexIntervalBytes = indexIntervalBytes, 
                                      maxIndexSize = maxIndexSize))
       deleteSegments(deletedSegments)

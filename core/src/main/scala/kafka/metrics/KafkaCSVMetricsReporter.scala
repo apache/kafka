@@ -50,10 +50,9 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
         if (!csvDir.exists())
           csvDir.mkdirs()
         underlying = new CsvReporter(Metrics.defaultRegistry(), csvDir)
-        if (props.getBoolean("kafka.csv.metrics.reporter.enabled", default = false)) {
-          initialized = true
+        if (props.getBoolean("kafka.csv.metrics.reporter.enabled", false))
           startReporter(metricsConfig.pollingIntervalSecs)
-        }
+        initialized = true
       }
     }
   }
