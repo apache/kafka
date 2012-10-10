@@ -52,7 +52,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
           cond.await()
 
         val brokers = getAllBrokersInCluster(zkClient)
-        val topicsMetadata = getTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSeq, brokers).topicsMetadata
+        val topicsMetadata = getTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet, brokers).topicsMetadata
         val leaderForPartitionsMap = new HashMap[(String, Int), Broker]
         topicsMetadata.foreach(
           tmd => {

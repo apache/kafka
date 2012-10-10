@@ -677,10 +677,10 @@ object Utils extends Logging {
     }
   }
 
-  def getTopicMetadata(topics: Seq[String], brokers: Seq[Broker]): TopicMetadataResponse = {
+  def getTopicMetadata(topics: Set[String], brokers: Seq[Broker]): TopicMetadataResponse = {
     var fetchMetaDataSucceeded: Boolean = false
     var i: Int = 0
-    val topicMetadataRequest = new TopicMetadataRequest(topics)
+    val topicMetadataRequest = new TopicMetadataRequest(topics.toSeq)
     var topicMetadataResponse: TopicMetadataResponse = null
     var t: Throwable = null
     while(i < brokers.size && !fetchMetaDataSucceeded) {

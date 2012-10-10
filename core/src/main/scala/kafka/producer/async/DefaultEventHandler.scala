@@ -55,7 +55,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           // back off and update the topic metadata cache before attempting another send operation
           Thread.sleep(config.producerRetryBackoffMs)
           // get topics of the outstanding produce requests and refresh metadata for those
-          Utils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.getTopic)))
+          Utils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.getTopic).toSet))
           remainingRetries -= 1
           ProducerStats.resendRate.mark()
         }

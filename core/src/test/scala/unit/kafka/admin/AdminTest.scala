@@ -158,13 +158,11 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     AdminUtils.createTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
     // create leaders for all partitions
     TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap)
-    val actualReplicaAssignment = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
-                                  .partitionsMetadata.map(p => p.replicas)
+    val actualReplicaAssignment = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient).partitionsMetadata.map(p => p.replicas)
     val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id.toString).toList).toList
     assertEquals(expectedReplicaAssignment.size, actualReplicaList.size)
-    for( i <- 0 until actualReplicaList.size ) {
+    for(i <- 0 until actualReplicaList.size)
       assertEquals(expectedReplicaAssignment.get(i).get, actualReplicaList(i))
-    }
 
     try {
       AdminUtils.createTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
@@ -191,7 +189,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     // create leaders for all partitions
     TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap)
 
-    val newTopicMetadata = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
+    val newTopicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
     newTopicMetadata.errorCode match {
       case ErrorMapping.UnknownTopicOrPartitionCode =>
         fail("Topic " + topic + " should've been automatically created")

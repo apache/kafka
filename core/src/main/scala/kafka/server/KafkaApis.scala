@@ -358,33 +358,33 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val topicsMetadata = new mutable.ArrayBuffer[TopicMetadata]()
     val config = replicaManager.config
-    val topicMetadataList = AdminUtils.getTopicMetaDataFromZK(metadataRequest.topics, zkClient)
-    metadataRequest.topics.zip(topicMetadataList).foreach(
+    val uniqueTopics = metadataRequest.topics.toSet
+    val topicMetadataList = AdminUtils.fetchTopicMetadataFromZk(uniqueTopics, zkClient)
+    topicMetadataList.foreach(
       topicAndMetadata => {
-        val topic = topicAndMetadata._1
-        topicAndMetadata._2.errorCode match {
-          case ErrorMapping.NoError => topicsMetadata += topicAndMetadata._2
+        topicAndMetadata.errorCode match {
+          case ErrorMapping.NoError => topicsMetadata += topicAndMetadata
           case ErrorMapping.UnknownTopicOrPartitionCode =>
             try {
               /* check if auto creation of topics is turned on */
               if (config.autoCreateTopics) {
-                CreateTopicCommand.createTopic(zkClient, topic, config.numPartitions, config.defaultReplicationFactor)
+                CreateTopicCommand.createTopic(zkClient, topicAndMetadata.topic, config.numPartitions, config.defaultReplicationFactor)
                 info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
-                             .format(topic, config.numPartitions, config.defaultReplicationFactor))
-                val newTopicMetadata = AdminUtils.getTopicMetaDataFromZK(List(topic), zkClient).head
+                             .format(topicAndMetadata.topic, config.numPartitions, config.defaultReplicationFactor))
+                val newTopicMetadata = AdminUtils.fetchTopicMetadataFromZk(topicAndMetadata.topic, zkClient)
                 topicsMetadata += newTopicMetadata
                 newTopicMetadata.errorCode match {
                   case ErrorMapping.NoError =>
-                  case _ => throw new KafkaException("Topic metadata for automatically created topic %s does not exist".format(topic))
+                  case _ => throw new KafkaException("Topic metadata for automatically created topic %s does not exist".format(topicAndMetadata.topic))
                 }
               }
             } catch {
               case e => error("Error while retrieving topic metadata", e)
             }
           case _ => 
-            error("Error while fetching topic metadata for topic " + topic,
-                  ErrorMapping.exceptionFor(topicAndMetadata._2.errorCode).getCause)
-            topicsMetadata += topicAndMetadata._2
+            error("Error while fetching topic metadata for topic " + topicAndMetadata.topic,
+                  ErrorMapping.exceptionFor(topicAndMetadata.errorCode).getCause)
+            topicsMetadata += topicAndMetadata
         }
       })
     topicsMetadata.foreach(metadata => trace("Sending topic metadata " + metadata.toString))

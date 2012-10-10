@@ -45,7 +45,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
         case Some(m) => m
         case None =>
           // refresh the topic metadata cache
-          updateInfo(List(topic))
+          updateInfo(Set(topic))
           val topicMetadata = topicPartitionInfo.get(topic)
           topicMetadata match {
             case Some(m) => m
@@ -69,7 +69,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
    * It updates the cache by issuing a get topic metadata request to a random broker.
    * @param topic the topic for which the metadata is to be fetched
    */
-  def updateInfo(topics: Seq[String]) = {
+  def updateInfo(topics: Set[String]) = {
     var topicsMetadata: Seq[TopicMetadata] = Nil
     val topicMetadataResponse = Utils.getTopicMetadata(topics, brokers)
     topicsMetadata = topicMetadataResponse.topicsMetadata
