@@ -237,7 +237,7 @@ class SimpleFetchTest extends JUnit3Suite {
 
   private def getPartitionWithAllReplicasInISR(topic: String, partitionId: Int, time: Time, leaderId: Int,
                                                localLog: Log, leaderHW: Long, replicaManager: ReplicaManager): Partition = {
-    val partition = new Partition(topic, partitionId, time, replicaManager)
+    val partition = new Partition(topic, partitionId, 2, time, replicaManager)
     val leaderReplica = new Replica(leaderId, partition, time, 0, Some(localLog))
 
     val allReplicas = getFollowerReplicas(partition, leaderId, time) :+ leaderReplica

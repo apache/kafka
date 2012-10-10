@@ -37,7 +37,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   private val zkClient = controllerContext.zkClient
   var replicaState: mutable.Map[(String, Int, Int), ReplicaState] = mutable.Map.empty
   val brokerRequestBatch = new ControllerBrokerRequestBatch(controller.sendRequest)
-  private var isShuttingDown = new AtomicBoolean(false)
+  private val isShuttingDown = new AtomicBoolean(false)
 
   /**
    * Invoked on successful controller election. First registers a broker change listener since that triggers all
@@ -102,6 +102,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    */
   private def handleStateChange(topic: String, partition: Int, replicaId: Int, targetState: ReplicaState) {
     try {
+      val replicaAssignment = controllerContext.partitionReplicaAssignment((topic, partition))
       targetState match {
         case OnlineReplica =>
           assertValidPreviousStates(topic, partition, replicaId, List(OnlineReplica, OfflineReplica), targetState)
@@ -113,7 +114,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
             case Some(leaderAndIsr) =>
               controllerContext.liveBrokerIds.contains(leaderAndIsr.leader) match {
                 case true => // leader is alive
-                  brokerRequestBatch.addRequestForBrokers(List(replicaId), topic, partition, leaderAndIsr)
+                  brokerRequestBatch.addRequestForBrokers(List(replicaId), topic, partition, leaderAndIsr, replicaAssignment.size)
                   replicaState.put((topic, partition, replicaId), OnlineReplica)
                   info("Replica %d for partition [%s, %d] state changed to OnlineReplica".format(replicaId, topic, partition))
                 case false => // ignore partitions whose leader is not alive
@@ -135,7 +136,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                 info("New leader and ISR for partition [%s, %d] is %s".format(topic, partition, newLeaderAndIsr.toString()))
                 // update the new leadership decision in zookeeper or retry
                 val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(zkClient,
-                  ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), newLeaderAndIsr.toString,
+                  ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), newLeaderAndIsr.toString(),
                   leaderAndIsr.zkVersion)
                 newLeaderAndIsr.zkVersion = newVersion
                 zookeeperPathUpdateSucceeded = updateSucceeded
@@ -144,7 +145,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
             }
           }
           // send the shrunk ISR state change request only to the leader
-          brokerRequestBatch.addRequestForBrokers(List(newLeaderAndIsr.leader), topic, partition, newLeaderAndIsr)
+          brokerRequestBatch.addRequestForBrokers(List(newLeaderAndIsr.leader), topic, partition, newLeaderAndIsr, replicaAssignment.size)
           // update the local leader and isr cache
           controllerContext.allLeaders.put((topic, partition), newLeaderAndIsr.leader)
           replicaState.put((topic, partition, replicaId), OfflineReplica)

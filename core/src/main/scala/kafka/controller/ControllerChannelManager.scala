@@ -141,7 +141,7 @@ class RequestSendThread(val controllerId: Int,
 // request
 class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (RequestOrResponse) => Unit) => Unit)
   extends  Logging {
-  val brokerRequestMap = new mutable.HashMap[Int, mutable.HashMap[(String, Int), LeaderAndIsr]]
+  val brokerRequestMap = new mutable.HashMap[Int, mutable.HashMap[(String, Int), PartitionInfo]]
 
   def newBatch() {
     // raise error if the previous batch is not empty
@@ -151,18 +151,19 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
     brokerRequestMap.clear()
   }
 
-  def addRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int, leaderAndIsr: LeaderAndIsr) {
+  def addRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int, leaderAndIsr: LeaderAndIsr, replicationFactor: Int) {
+    val partitionInfo = PartitionInfo(leaderAndIsr, replicationFactor)
     brokerIds.foreach { brokerId =>
-      brokerRequestMap.getOrElseUpdate(brokerId, new mutable.HashMap[(String, Int), LeaderAndIsr])
-      brokerRequestMap(brokerId).put((topic, partition), leaderAndIsr)
+      brokerRequestMap.getOrElseUpdate(brokerId, new mutable.HashMap[(String, Int), PartitionInfo])
+      brokerRequestMap(brokerId).put((topic, partition), partitionInfo)
     }
   }
 
   def sendRequestsToBrokers() {
     brokerRequestMap.foreach { m =>
       val broker = m._1
-      val leaderAndIsr = m._2
-      val leaderAndIsrRequest = new LeaderAndIsrRequest(leaderAndIsr)
+      val partitionInfo = m._2
+      val leaderAndIsrRequest = new LeaderAndIsrRequest(partitionInfo)
       info("Sending to broker %d leaderAndIsr request of %s".format(broker, leaderAndIsrRequest))
       sendRequest(broker, leaderAndIsrRequest, null)
     }

@@ -21,15 +21,17 @@ import kafka.utils._
 import java.lang.Object
 import kafka.api.LeaderAndIsr
 import kafka.server.ReplicaManager
-import kafka.common.ErrorMapping
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
+import kafka.common.ErrorMapping
+
 
 /**
  * Data structure that represents a topic partition. The leader maintains the AR, ISR, CUR, RAR
  */
 class Partition(val topic: String,
                 val partitionId: Int,
+                var replicationFactor: Int,
                 time: Time,
                 val replicaManager: ReplicaManager) extends Logging with KafkaMetricsGroup {
   private val localBrokerId = replicaManager.config.brokerId
@@ -57,8 +59,7 @@ class Partition(val topic: String,
   )
 
   def isUnderReplicated(): Boolean = {
-    // TODO: need to pass in replication factor from controller
-    inSyncReplicas.size < replicaManager.config.defaultReplicationFactor
+    inSyncReplicas.size < replicationFactor
   }
 
   def getOrCreateReplica(replicaId: Int = localBrokerId): Replica = {
@@ -292,7 +293,7 @@ class Partition(val topic: String,
     info("Updated ISR for topic %s partition %d to %s".format(topic, partitionId, newISR.mkString(", ")))
     val newLeaderAndISR = new LeaderAndIsr(localBrokerId, leaderEpoch, newISR.map(r => r.brokerId).toList, zkVersion)
     val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(zkClient,
-      ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partitionId), newLeaderAndISR.toString, zkVersion)
+      ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partitionId), newLeaderAndISR.toString(), zkVersion)
     if (updateSucceeded){
       inSyncReplicas = newISR
       zkVersion = newVersion

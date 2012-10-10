@@ -21,7 +21,6 @@ import org.junit._
 import org.scalatest.junit.JUnitSuite
 import junit.framework.Assert._
 import java.nio.ByteBuffer
-import kafka.api._
 import kafka.message.{Message, ByteBufferMessageSet}
 import kafka.cluster.Broker
 import collection.mutable._
@@ -83,8 +82,8 @@ object SerializationTestUtils{
   def createTestLeaderAndISRRequest() : LeaderAndIsrRequest = {
     val leaderAndISR1 = new LeaderAndIsr(leader1, 1, isr1, 1)
     val leaderAndISR2 = new LeaderAndIsr(leader2, 1, isr2, 2)
-    val map = Map(((topic1, 0), leaderAndISR1),
-                  ((topic2, 0), leaderAndISR2))
+    val map = Map(((topic1, 0), PartitionInfo(leaderAndISR1, 3)),
+                  ((topic2, 0), PartitionInfo(leaderAndISR2, 3)))
     new LeaderAndIsrRequest(map)
   }
 
