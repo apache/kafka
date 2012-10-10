@@ -81,7 +81,7 @@ class ISRExpirationTest extends JUnit3Suite {
                                                localLog: Log): Partition = {
     val leaderId=config.brokerId
     val replicaManager = new ReplicaManager(config, time, null, null, null)
-    val partition = replicaManager.getOrCreatePartition(topic, partitionId, 1)
+    val partition = replicaManager.getOrCreatePartition(topic, partitionId)
     val leaderReplica = new Replica(leaderId, partition, time, 0, Some(localLog))
 
     val allReplicas = getFollowerReplicas(partition, leaderId, time) :+ leaderReplica

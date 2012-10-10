@@ -230,14 +230,14 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         debug("Live assigned replicas for partition [%s, %d] are: [%s]".format(topic, partition, liveAssignedReplicas))
         // make the first replica in the list of assigned replicas, the leader
         val leader = liveAssignedReplicas.head
-        val leaderAndIsr = new LeaderAndIsr(leader, liveAssignedReplicas.toList)
+        var leaderAndIsr = new LeaderAndIsr(leader, liveAssignedReplicas.toList)
         try {
           ZkUtils.createPersistentPath(controllerContext.zkClient,
-            ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), leaderAndIsr.toString())
+            ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), leaderAndIsr.toString)
           // TODO: the above write can fail only if the current controller lost its zk session and the new controller
           // took over and initialized this partition. This can happen if the current controller went into a long
           // GC pause
-          brokerRequestBatch.addRequestForBrokers(liveAssignedReplicas, topic, partition, leaderAndIsr, replicaAssignment.size)
+          brokerRequestBatch.addRequestForBrokers(liveAssignedReplicas, topic, partition, leaderAndIsr)
           controllerContext.allLeaders.put((topic, partition), leaderAndIsr.leader)
           partitionState.put((topic, partition), OnlinePartition)
         }catch {
@@ -271,7 +271,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             info("Elected leader %d for Offline partition [%s, %d]".format(newLeaderAndIsr.leader, topic, partition))
             // store new leader and isr info in cache
             brokerRequestBatch.addRequestForBrokers(liveAssignedReplicasToThisPartition, topic, partition,
-              newLeaderAndIsr, assignedReplicas.size)
+              newLeaderAndIsr)
           }catch {
             case e => throw new StateChangeFailedException(("Error while electing leader for partition" +
               " [%s, %d]").format(topic, partition), e)
@@ -338,7 +338,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           // update the new leadership decision in zookeeper or retry
           val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(zkClient,
             ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
-            newLeaderAndIsr.toString(), currentLeaderAndIsr.zkVersion)
+            newLeaderAndIsr.toString, currentLeaderAndIsr.zkVersion)
           newLeaderAndIsr.zkVersion = newVersion
           zookeeperPathUpdateSucceeded = updateSucceeded
           newLeaderAndIsr
