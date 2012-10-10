@@ -151,7 +151,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       if (wildcardTopicWatcher != null)
         wildcardTopicWatcher.shutdown()
       try {
-        scheduler.shutdownNow()
+        if (config.autoCommit)
+          scheduler.shutdownNow()
         fetcher match {
           case Some(f) => f.shutdown
           case None =>
