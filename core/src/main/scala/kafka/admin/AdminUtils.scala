@@ -51,7 +51,7 @@ object AdminUtils extends Logging {
    */
   def assignReplicasToBrokers(brokerList: Seq[String], nPartitions: Int, replicationFactor: Int,
                               fixedStartIndex: Int = -1)  // for testing only
-  : Map[Int, List[String]] = {
+  : Map[Int, Seq[String]] = {
     if (nPartitions <= 0)
       throw new AdministrationException("number of partitions must be larger than 0")
     if (replicationFactor <= 0)
@@ -75,7 +75,7 @@ object AdminUtils extends Logging {
     ret.toMap
   }
 
-  def createTopicPartitionAssignmentPathInZK(topic: String, replicaAssignment: Map[Int, List[String]], zkClient: ZkClient) {
+  def createTopicPartitionAssignmentPathInZK(topic: String, replicaAssignment: Map[Int, Seq[String]], zkClient: ZkClient) {
     try {
       val zkPath = ZkUtils.getTopicPath(topic)
       val jsonPartitionMap = Utils.mapToJson(replicaAssignment.map(e => (e._1.toString -> e._2)))

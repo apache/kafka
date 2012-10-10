@@ -70,20 +70,22 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     // kill the server hosting the preferred replica
     servers.last.shutdown()
     // check if leader moves to the other server
-    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 1500, if(leader1.get == 0) None else leader1)
+    val leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 1500,
+      if(leader1.get == 0) None else leader1)
     val leaderEpoch2 = ZkUtils.getEpochForPartition(zkClient, topic, partitionId)
     debug("Leader is elected to be: %s".format(leader1.getOrElse(-1)))
     debug("leader Epoc: " + leaderEpoch2)
     assertEquals("Leader must move to broker 0", 0, leader2.getOrElse(-1))
     if(leader1.get == leader2.get)
-      assertEquals("Second epoch value should be " + leaderEpoch1, leaderEpoch1, leaderEpoch2)
+      assertEquals("Second epoch value should be " + leaderEpoch1+1, leaderEpoch1+1, leaderEpoch2)
     else
       assertEquals("Second epoch value should be %d".format(leaderEpoch1+1) , leaderEpoch1+1, leaderEpoch2)
 
     servers.last.startup()
     servers.head.shutdown()
     Thread.sleep(zookeeper.tickTime)
-    val leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 1500, if(leader2.get == 1) None else leader2)
+    val leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 1500,
+      if(leader2.get == 1) None else leader2)
     val leaderEpoch3 = ZkUtils.getEpochForPartition(zkClient, topic, partitionId)
     debug("leader Epoc: " + leaderEpoch3)
     debug("Leader is elected to be: %s".format(leader3.getOrElse(-1)))

@@ -85,7 +85,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val responseMap = new HashMap[(String, Int), Short]
 
-    for((topic, partitionId) <- stopReplicaRequest.stopReplicaSet){
+    for((topic, partitionId) <- stopReplicaRequest.partitions) {
       val errorCode = replicaManager.stopReplica(topic, partitionId)
       responseMap.put((topic, partitionId), errorCode)
     }
