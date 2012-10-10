@@ -20,9 +20,12 @@
 # system_test_env.py
 # ===================================
 
+import copy
 import json
 import os
 import sys
+
+from   utils import system_test_utils
 
 class SystemTestEnv():
 
@@ -41,21 +44,82 @@ class SystemTestEnv():
     CLUSTER_CONFIG_PATHNAME   = os.path.abspath(SYSTEM_TEST_BASE_DIR + "/" + CLUSTER_CONFIG_FILENAME)
     METRICS_FILENAME          = "metrics.json"
     METRICS_PATHNAME          = os.path.abspath(SYSTEM_TEST_BASE_DIR + "/" + METRICS_FILENAME)
+    TESTCASE_TO_RUN_FILENAME  = "testcase_to_run.json"
+    TESTCASE_TO_RUN_PATHNAME  = os.path.abspath(SYSTEM_TEST_BASE_DIR + "/" + TESTCASE_TO_RUN_FILENAME)
+    TESTCASE_TO_SKIP_FILENAME = "testcase_to_skip.json"
+    TESTCASE_TO_SKIP_PATHNAME = os.path.abspath(SYSTEM_TEST_BASE_DIR + "/" + TESTCASE_TO_SKIP_FILENAME)
 
-    clusterEntityConfigDictList  = []
+    clusterEntityConfigDictList                      = []   # cluster entity config for current level
+    clusterEntityConfigDictListInSystemTestLevel     = []   # cluster entity config defined in system level
+    clusterEntityConfigDictListLastFoundInTestSuite  = []   # cluster entity config last found in testsuite level
+    clusterEntityConfigDictListLastFoundInTestCase   = []   # cluster entity config last found in testcase level
+
     systemTestResultsList        = []
+    testCaseToRunListDict        = {}
+    testCaseToSkipListDict       = {}
+
+    printTestDescriptionsOnly    = False
+    doNotValidateRemoteHost      = False
 
     def __init__(self):
         "Create an object with this system test session environment"
 
-        # retrieve each entity's data from cluster config json file
-        # as "dict" and enter them into a "list"
-        jsonFileContent = open(self.CLUSTER_CONFIG_PATHNAME, "r").read()
-        jsonData        = json.loads(jsonFileContent)
-        for key, cfgList in jsonData.items():
-            if key == "cluster_config":
-                for cfg in cfgList:
-                    self.clusterEntityConfigDictList.append(cfg)
+        # load the system level cluster config
+        system_test_utils.load_cluster_config(self.CLUSTER_CONFIG_PATHNAME, self.clusterEntityConfigDictList)
+
+        # save the system level cluster config
+        self.clusterEntityConfigDictListInSystemTestLevel = copy.deepcopy(self.clusterEntityConfigDictList)
+
+        # retrieve testcases to run from testcase_to_run.json
+        try:
+            testcaseToRunFileContent  = open(self.TESTCASE_TO_RUN_PATHNAME, "r").read()
+            testcaseToRunData        = json.loads(testcaseToRunFileContent)
+            for testClassName, caseList in testcaseToRunData.items():
+                self.testCaseToRunListDict[testClassName] = caseList
+        except:
+            pass
+
+        # retrieve testcases to skip from testcase_to_skip.json
+        try:
+            testcaseToSkipFileContent = open(self.TESTCASE_TO_SKIP_PATHNAME, "r").read()
+            testcaseToSkipData        = json.loads(testcaseToSkipFileContent)
+            for testClassName, caseList in testcaseToSkipData.items():
+                self.testCaseToSkipListDict[testClassName] = caseList
+        except:
+            pass
+
+    def isTestCaseToSkip(self, testClassName, testcaseDirName):
+        testCaseToRunList  = {}
+        testCaseToSkipList = {}
+
+        try:
+            testCaseToRunList  = self.testCaseToRunListDict[testClassName]
+        except:
+            # no 'testClassName' found => no need to run any cases for this test class
+            return True
+
+        try:
+            testCaseToSkipList = self.testCaseToSkipListDict[testClassName]
+        except:
+            pass
+
+        # if testCaseToRunList has elements, it takes precedence:
+        if len(testCaseToRunList) > 0:
+            #print "#### testClassName => ", testClassName
+            #print "#### testCaseToRunList => ", testCaseToRunList
+            #print "#### testcaseDirName => ", testcaseDirName
+            if not testcaseDirName in testCaseToRunList:
+                #self.log_message("Skipping : " + testcaseDirName)
+                return True
+        elif len(testCaseToSkipList) > 0:
+            #print "#### testClassName => ", testClassName
+            #print "#### testCaseToSkipList => ", testCaseToSkipList
+            #print "#### testcaseDirName => ", testcaseDirName
+            if testcaseDirName in testCaseToSkipList:
+                #self.log_message("Skipping : " + testcaseDirName)
+                return True
+
+        return False
 
 
     def getSystemTestEnvDict(self):

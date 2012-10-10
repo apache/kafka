@@ -31,7 +31,9 @@ import traceback
 
 from   system_test_env    import SystemTestEnv
 sys.path.append(SystemTestEnv.SYSTEM_TEST_UTIL_DIR)
+
 from   setup_utils        import SetupUtils
+from   replication_utils  import ReplicationUtils
 import system_test_utils
 from   testcase_env       import TestcaseEnv
 
@@ -39,12 +41,10 @@ from   testcase_env       import TestcaseEnv
 import kafka_system_test_utils
 import metrics
 
-class ReplicaBasicTest(SetupUtils):
+class ReplicaBasicTest(ReplicationUtils, SetupUtils):
 
     testModuleAbsPathName = os.path.realpath(__file__)
     testSuiteAbsPathName  = os.path.abspath(os.path.dirname(testModuleAbsPathName))
-    isLeaderLogPattern    = "Completed the leader state transition"
-    brokerShutDownCompletedPattern = "shut down completed"
 
     def __init__(self, systemTestEnv):
 
@@ -54,20 +54,24 @@ class ReplicaBasicTest(SetupUtils):
         #     "clusterEntityConfigDictList"
         self.systemTestEnv = systemTestEnv
 
+        super(ReplicaBasicTest, self).__init__(self)
+
         # dict to pass user-defined attributes to logger argument: "extra"
         d = {'name_of_class': self.__class__.__name__}
 
     def signal_handler(self, signal, frame):
         self.log_message("Interrupt detected - User pressed Ctrl+c")
 
-        for entityId, parentPid in self.testcaseEnv.entityParentPidDict.items():
-            kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, self.testcaseEnv, entityId, parentPid)
-
+        # perform the necessary cleanup here when user presses Ctrl+c and it may be product specific
+        self.log_message("stopping all entities - please wait ...")
+        kafka_system_test_utils.stop_all_remote_running_processes(self.systemTestEnv, self.testcaseEnv)
         sys.exit(1) 
 
     def runTest(self):
 
+        # ======================================================================
         # get all testcase directories under this testsuite
+        # ======================================================================
         testCasePathNameList = system_test_utils.get_dir_paths_with_prefix(
             self.testSuiteAbsPathName, SystemTestEnv.SYSTEM_TEST_CASE_PREFIX)
         testCasePathNameList.sort()
@@ -76,75 +80,48 @@ class ReplicaBasicTest(SetupUtils):
         # launch each testcase one by one: testcase_1, testcase_2, ...
         # =============================================================
         for testCasePathName in testCasePathNameList:
-   
+
+            skipThisTestCase = False
+
             try: 
-                # create a new instance of TestcaseEnv to keep track of this testcase's environment variables
+                # ======================================================================
+                # A new instance of TestcaseEnv to keep track of this testcase's env vars
+                # and initialize some env vars as testCasePathName is available now
+                # ======================================================================
                 self.testcaseEnv = TestcaseEnv(self.systemTestEnv, self)
                 self.testcaseEnv.testSuiteBaseDir = self.testSuiteAbsPathName
+                self.testcaseEnv.initWithKnownTestCasePathName(testCasePathName)
+                self.testcaseEnv.testcaseArgumentsDict = self.testcaseEnv.testcaseNonEntityDataDict["testcase_args"]
+
+                # ======================================================================
+                # SKIP if this case is IN testcase_to_skip.json or NOT IN testcase_to_run.json
+                # ======================================================================
+                testcaseDirName = self.testcaseEnv.testcaseResultsDict["_test_case_name"]
+
+                if self.systemTestEnv.printTestDescriptionsOnly:
+                    self.testcaseEnv.printTestCaseDescription(testcaseDirName)
+                    continue
+                elif self.systemTestEnv.isTestCaseToSkip(self.__class__.__name__, testcaseDirName):
+                    self.log_message("Skipping : " + testcaseDirName)
+                    skipThisTestCase = True
+                    continue
+                else:
+                    self.testcaseEnv.printTestCaseDescription(testcaseDirName)
+                    system_test_utils.setup_remote_hosts_with_testcase_level_cluster_config(self.systemTestEnv, testCasePathName)
+
+
+                # ============================================================================== #
+                # ============================================================================== #
+                #                   Product Specific Testing Code Starts Here:                   #
+                # ============================================================================== #
+                # ============================================================================== #
     
-                # ======================================================================
-                # initialize self.testcaseEnv with user-defined environment variables
-                # ======================================================================
-                self.testcaseEnv.userDefinedEnvVarDict["BROKER_SHUT_DOWN_COMPLETED_MSG"] = ReplicaBasicTest.brokerShutDownCompletedPattern
-                self.testcaseEnv.userDefinedEnvVarDict["REGX_BROKER_SHUT_DOWN_COMPLETED_PATTERN"] = \
-                    "\[(.*?)\] .* \[Kafka Server (.*?)\], " + ReplicaBasicTest.brokerShutDownCompletedPattern
-
-                self.testcaseEnv.userDefinedEnvVarDict["LEADER_ELECTION_COMPLETED_MSG"] = ReplicaBasicTest.isLeaderLogPattern
-                self.testcaseEnv.userDefinedEnvVarDict["REGX_LEADER_ELECTION_PATTERN"]  = \
-                    "\[(.*?)\] .* Broker (.*?): " + \
-                    self.testcaseEnv.userDefinedEnvVarDict["LEADER_ELECTION_COMPLETED_MSG"] + \
-                    " for topic (.*?) partition (.*?) \(.*"
-
+                # initialize self.testcaseEnv with user-defined environment variables (product specific)
                 self.testcaseEnv.userDefinedEnvVarDict["zkConnectStr"] = ""
                 self.testcaseEnv.userDefinedEnvVarDict["stopBackgroundProducer"]    = False
                 self.testcaseEnv.userDefinedEnvVarDict["backgroundProducerStopped"] = False
+                self.testcaseEnv.userDefinedEnvVarDict["leaderElectionLatencyList"] = []
 
-                # find testcase properties json file
-                testcasePropJsonPathName = system_test_utils.get_testcase_prop_json_pathname(testCasePathName)
-                self.logger.debug("testcasePropJsonPathName : " + testcasePropJsonPathName, extra=self.d)
-    
-                # get the dictionary that contains the testcase arguments and description
-                testcaseNonEntityDataDict = system_test_utils.get_json_dict_data(testcasePropJsonPathName)
-    
-                testcaseDirName = os.path.basename(testCasePathName)
-                self.testcaseEnv.testcaseResultsDict["test_case_name"] = testcaseDirName
-    
-                # update testcaseEnv
-                self.testcaseEnv.testCaseBaseDir = testCasePathName
-                self.testcaseEnv.testCaseLogsDir = self.testcaseEnv.testCaseBaseDir + "/logs"
-                self.testcaseEnv.testCaseDashboardsDir = self.testcaseEnv.testCaseBaseDir + "/dashboards"
-
-                # get testcase description
-                testcaseDescription = ""
-                for k,v in testcaseNonEntityDataDict.items():
-                    if ( k == "description" ): testcaseDescription = v
-    
-                # TestcaseEnv.testcaseArgumentsDict initialized, this dictionary keeps track of the
-                # "testcase_args" in the testcase_properties.json such as replica_factor, num_partition, ...
-                self.testcaseEnv.testcaseArgumentsDict = testcaseNonEntityDataDict["testcase_args"]
-    
-                # =================================================================
-                # TestcaseEnv environment settings initialization are completed here
-                # =================================================================
-                # self.testcaseEnv.systemTestBaseDir
-                # self.testcaseEnv.testSuiteBaseDir
-                # self.testcaseEnv.testCaseBaseDir
-                # self.testcaseEnv.testCaseLogsDir
-                # self.testcaseEnv.testcaseArgumentsDict
-    
-                print
-                # display testcase name and arguments
-                self.log_message("Test Case : " + testcaseDirName)
-                for k,v in self.testcaseEnv.testcaseArgumentsDict.items():
-                    self.anonLogger.info("    " + k + " : " + v)
-                self.log_message("Description : " + testcaseDescription)
-   
-                # ================================================================ #
-                # ================================================================ #
-                #            Product Specific Testing Code Starts Here:            #
-                # ================================================================ #
-                # ================================================================ #
-    
                 # initialize signal handler
                 signal.signal(signal.SIGINT, self.signal_handler)
     
@@ -154,11 +131,13 @@ class ReplicaBasicTest(SetupUtils):
     
                 # TestcaseEnv.testcaseConfigsList initialized by reading testcase properties file:
                 #   system_test/<suite_name>_testsuite/testcase_<n>/testcase_<n>_properties.json
-                self.testcaseEnv.testcaseConfigsList = system_test_utils.get_json_list_data(testcasePropJsonPathName)
+                self.testcaseEnv.testcaseConfigsList = system_test_utils.get_json_list_data(
+                    self.testcaseEnv.testcasePropJsonPathName)
     
                 # TestcaseEnv - initialize producer & consumer config / log file pathnames
                 kafka_system_test_utils.init_entity_props(self.systemTestEnv, self.testcaseEnv)
-    
+
+                
                 # clean up data directories specified in zookeeper.properties and kafka_server_<n>.properties
                 kafka_system_test_utils.cleanup_data_at_remote_hosts(self.systemTestEnv, self.testcaseEnv)
 
@@ -171,7 +150,8 @@ class ReplicaBasicTest(SetupUtils):
                 # 2. update all properties files in system_test/<suite_name>_testsuite/testcase_<n>/config
                 #    by overriding the settings specified in:
                 #    system_test/<suite_name>_testsuite/testcase_<n>/testcase_<n>_properties.json
-                kafka_system_test_utils.generate_overriden_props_files(self.testSuiteAbsPathName, self.testcaseEnv, self.systemTestEnv)
+                kafka_system_test_utils.generate_overriden_props_files(self.testSuiteAbsPathName,
+                    self.testcaseEnv, self.systemTestEnv)
    
                 # =============================================
                 # preparing all entities to start the test
@@ -183,30 +163,36 @@ class ReplicaBasicTest(SetupUtils):
         
                 self.log_message("starting brokers")
                 kafka_system_test_utils.start_brokers(self.systemTestEnv, self.testcaseEnv)
-                self.anonLogger.info("sleeping for 2s")
-                time.sleep(2)
-        
+                self.anonLogger.info("sleeping for 5s")
+                time.sleep(5)
+
                 self.log_message("creating topics")
                 kafka_system_test_utils.create_topic(self.systemTestEnv, self.testcaseEnv)
                 self.anonLogger.info("sleeping for 5s")
                 time.sleep(5)
-        
+                
                 # =============================================
                 # starting producer 
                 # =============================================
                 self.log_message("starting producer in the background")
-                kafka_system_test_utils.start_producer_performance(self.systemTestEnv, self.testcaseEnv)
-                self.anonLogger.info("sleeping for 5s")
-                time.sleep(5)
+                kafka_system_test_utils.start_producer_performance(self.systemTestEnv, self.testcaseEnv, False)
+                msgProducingFreeTimeSec = self.testcaseEnv.testcaseArgumentsDict["message_producing_free_time_sec"]
+                self.anonLogger.info("sleeping for " + msgProducingFreeTimeSec + " sec to produce some messages")
+                time.sleep(int(msgProducingFreeTimeSec))
 
+                # =============================================
+                # A while-loop to bounce leader as specified
+                # by "num_iterations" in testcase_n_properties.json
+                # =============================================
                 i = 1
                 numIterations = int(self.testcaseEnv.testcaseArgumentsDict["num_iteration"])
                 while i <= numIterations:
 
                     self.log_message("Iteration " + str(i) + " of " + str(numIterations))
 
-                    # looking up leader
-                    leaderDict = kafka_system_test_utils.get_leader_elected_log_line(self.systemTestEnv, self.testcaseEnv)
+                    self.log_message("looking up leader")
+                    leaderDict = kafka_system_test_utils.get_leader_elected_log_line(
+                        self.systemTestEnv, self.testcaseEnv, self.leaderAttributesDict)
         
                     # ==========================
                     # leaderDict looks like this:
@@ -226,15 +212,18 @@ class ReplicaBasicTest(SetupUtils):
                                  self.testcaseEnv, leaderDict, self.testcaseEnv.validationStatusDict)
         
                     # =============================================
-                    # get leader re-election latency by stopping leader
+                    # trigger leader re-election by stopping leader
+                    # to get re-election latency
                     # =============================================
                     bounceLeaderFlag = self.testcaseEnv.testcaseArgumentsDict["bounce_leader"]
                     self.log_message("bounce_leader flag : " + bounceLeaderFlag)
                     if (bounceLeaderFlag.lower() == "true"):
-                        reelectionLatency = kafka_system_test_utils.get_reelection_latency(self.systemTestEnv, self.testcaseEnv, leaderDict)
+                        reelectionLatency = kafka_system_test_utils.get_reelection_latency(
+                            self.systemTestEnv, self.testcaseEnv, leaderDict, self.leaderAttributesDict)
                         latencyKeyName = "Leader Election Latency - iter " + str(i) + " brokerid " + leaderDict["brokerid"]
                         self.testcaseEnv.validationStatusDict[latencyKeyName] = str("{0:.2f}".format(reelectionLatency * 1000)) + " ms"
-       
+                        self.testcaseEnv.userDefinedEnvVarDict["leaderElectionLatencyList"].append("{0:.2f}".format(reelectionLatency * 1000))
+
                     # =============================================
                     # starting previously terminated broker 
                     # =============================================
@@ -243,24 +232,45 @@ class ReplicaBasicTest(SetupUtils):
                         stoppedLeaderEntityId  = leaderDict["entity_id"]
                         kafka_system_test_utils.start_entity_in_background(self.systemTestEnv, self.testcaseEnv, stoppedLeaderEntityId)
 
-                    self.anonLogger.info("sleeping for 5s")
-                    time.sleep(5)
+                    self.anonLogger.info("sleeping for 15s")
+                    time.sleep(15)
                     i += 1
                 # while loop
 
+                self.testcaseEnv.validationStatusDict["Leader Election Latency MIN"] = None
+                try:
+                    self.testcaseEnv.validationStatusDict["Leader Election Latency MIN"] = \
+                        min(self.testcaseEnv.userDefinedEnvVarDict["leaderElectionLatencyList"])
+                except:
+                    pass
+
+                self.testcaseEnv.validationStatusDict["Leader Election Latency MAX"] = None
+                try:
+                    self.testcaseEnv.validationStatusDict["Leader Election Latency MAX"] = \
+                        max(self.testcaseEnv.userDefinedEnvVarDict["leaderElectionLatencyList"])
+                except:
+                    pass
+
+                # =============================================
                 # tell producer to stop
+                # =============================================
                 self.testcaseEnv.lock.acquire()
                 self.testcaseEnv.userDefinedEnvVarDict["stopBackgroundProducer"] = True
                 time.sleep(1)
                 self.testcaseEnv.lock.release()
                 time.sleep(1)
 
+                # =============================================
+                # wait for producer thread's update of
+                # "backgroundProducerStopped" to be "True"
+                # =============================================
                 while 1:
                     self.testcaseEnv.lock.acquire()
                     self.logger.info("status of backgroundProducerStopped : [" + \
                         str(self.testcaseEnv.userDefinedEnvVarDict["backgroundProducerStopped"]) + "]", extra=self.d)
                     if self.testcaseEnv.userDefinedEnvVarDict["backgroundProducerStopped"]:
                         time.sleep(1)
+                        self.logger.info("all producer threads completed", extra=self.d)
                         break
                     time.sleep(1)
                     self.testcaseEnv.lock.release()
@@ -274,27 +284,34 @@ class ReplicaBasicTest(SetupUtils):
                 self.anonLogger.info("sleeping for 10s")
                 time.sleep(10)
                     
-                # this testcase is completed - so stopping all entities
+                # =============================================
+                # this testcase is completed - stop all entities
+                # =============================================
                 self.log_message("stopping all entities")
-                for entityId, parentPid in self.testcaseEnv.entityParentPidDict.items():
+                for entityId, parentPid in self.testcaseEnv.entityBrokerParentPidDict.items():
+                    kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, entityId, parentPid)
+
+                for entityId, parentPid in self.testcaseEnv.entityZkParentPidDict.items():
                     kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, entityId, parentPid)
 
                 # make sure all entities are stopped
                 kafka_system_test_utils.ps_grep_terminate_running_entity(self.systemTestEnv)
 
-                # validate the data matched
-                # =============================================
-                self.log_message("validating data matched")
-                result = kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
-                
                 # =============================================
                 # collect logs from remote hosts
                 # =============================================
                 kafka_system_test_utils.collect_logs_from_remote_hosts(self.systemTestEnv, self.testcaseEnv)
     
-                # ==========================
+                # =============================================
+                # validate the data matched and checksum
+                # =============================================
+                self.log_message("validating data matched")
+                kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
+                kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv)
+
+                # =============================================
                 # draw graphs
-                # ==========================
+                # =============================================
                 metrics.draw_all_graphs(self.systemTestEnv.METRICS_PATHNAME, 
                                         self.testcaseEnv, 
                                         self.systemTestEnv.clusterEntityConfigDictList)
@@ -303,30 +320,12 @@ class ReplicaBasicTest(SetupUtils):
                 metrics.build_all_dashboards(self.systemTestEnv.METRICS_PATHNAME,
                                              self.testcaseEnv.testCaseDashboardsDir,
                                              self.systemTestEnv.clusterEntityConfigDictList)
-                
             except Exception as e:
                 self.log_message("Exception while running test {0}".format(e))
                 traceback.print_exc()
-                traceback.print_exc()
 
             finally:
-                self.log_message("stopping all entities")
-
-                for entityId, parentPid in self.testcaseEnv.entityParentPidDict.items():
-                    kafka_system_test_utils.force_stop_remote_entity(self.systemTestEnv, entityId, parentPid)
-
-                for entityId, jmxParentPidList in self.testcaseEnv.entityJmxParentPidDict.items():
-                    for jmxParentPid in jmxParentPidList:
-                        kafka_system_test_utils.force_stop_remote_entity(self.systemTestEnv, entityId, jmxParentPid)
-
-                for hostname, consumerPPid in self.testcaseEnv.consumerHostParentPidDict.items():
-                    consumerEntityId = system_test_utils.get_data_by_lookup_keyval( \
-                        self.systemTestEnv.clusterEntityConfigDictList, "hostname", hostname, "entity_id")
-                    kafka_system_test_utils.force_stop_remote_entity(self.systemTestEnv, consumerEntityId, consumerPPid)
-
-                for hostname, producerPPid in self.testcaseEnv.producerHostParentPidDict.items():
-                    producerEntityId = system_test_utils.get_data_by_lookup_keyval( \
-                        self.systemTestEnv.clusterEntityConfigDictList, "hostname", hostname, "entity_id")
-                    kafka_system_test_utils.force_stop_remote_entity(self.systemTestEnv, producerEntityId, producerPPid)
-
+                if not skipThisTestCase and not self.systemTestEnv.printTestDescriptionsOnly:
+                    self.log_message("stopping all entities - please wait ...")
+                    kafka_system_test_utils.stop_all_remote_running_processes(self.systemTestEnv, self.testcaseEnv)
 

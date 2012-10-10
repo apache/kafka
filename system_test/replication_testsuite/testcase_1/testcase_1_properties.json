@@ -1,11 +1,22 @@
 {
-  "description": "Basic test to produce and consume messages to a single topic partition. This test sends messages to n replicas and at the end verifies the log size and contents as well as using a consumer to verify no message loss. Optionally, the test bounces the leader periodically to introduce failures during the message replication.",
+  "description": {"01":"To Test : 'Leader Failure in Replication'",
+                  "02":"Produce and consume messages to a single topic - single partition.",
+                  "03":"This test sends messages to 3 replicas",
+                  "04":"To trigger leader election: find the leader and terminate by controlled failure (kill -15)",
+                  "05":"Restart the terminated broker",
+                  "06":"Lookup brokers' log4j messages and verify that leader is re-elected successfully",
+                  "07":"At the end it verifies the log size and contents",
+                  "08":"Use a consumer to verify no message loss.",
+                  "09":"Producer dimensions : mode:sync, acks:-1, comp:0",
+                  "10":"Log segment size    : 10240"
+  },
   "testcase_args": {
     "bounce_leader": "true",
     "replica_factor": "3",
     "num_partition": "2",
     "num_iteration": "2",
     "sleep_seconds_between_producer_calls": "1",
+    "message_producing_free_time_sec": "15",
     "num_messages_to_produce_per_producer_call": "50"
   },
   "entities": [
@@ -47,9 +58,11 @@
       "entity_id": "4",
       "topic": "test_1",
       "threads": "5",
-      "compression-codec": "1",
+      "compression-codec": "0",
       "message-size": "500",
       "message": "500",
+      "request-num-acks": "-1",
+      "async":"false",
       "log_filename": "producer_performance.log",
       "config_filename": "producer_performance.properties"
     },
@@ -58,6 +71,7 @@
       "topic": "test_1",
       "groupid": "mytestgroup",
       "consumer-timeout-ms": "10000",
+      "zookeeper": "localhost:2188",
       "log_filename": "console_consumer.log",
       "config_filename": "console_consumer.properties"
     }

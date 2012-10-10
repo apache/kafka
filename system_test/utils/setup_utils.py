@@ -16,11 +16,16 @@
 # under the License.
 #!/usr/bin/env python
 
+# =================================================================
+# setup_utils.py
+# - This module provides some basic helper functions.
+# =================================================================
+
 import logging
 import kafka_system_test_utils
 import sys
 
-class SetupUtils():
+class SetupUtils(object):
 
     # dict to pass user-defined attributes to logger argument: "extra"
     # to use: just update "thisClassName" to the appropriate value
@@ -32,8 +37,7 @@ class SetupUtils():
 
     def __init__(self):
         d = {'name_of_class': self.__class__.__name__}
-        self.logger.info("constructor", extra=SetUpUtils.d)
-
+        self.logger.debug("#### constructor inside SetupUtils", extra=self.d)
 
     def log_message(self, message):
         print

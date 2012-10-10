@@ -239,7 +239,7 @@ def start_metrics_collection(jmxHost, jmxPort, role, entityId, systemTestEnv, te
         system_test_utils.async_sys_call(startMetricsCommand)
         time.sleep(1)
 
-        pidCmdStr = "ssh " + jmxHost + " 'cat " + entityMetricsDir + "/entity_pid 2> /dev/null'"
+        pidCmdStr = "ssh " + jmxHost + " 'cat " + entityMetricsDir + "/entity_pid' 2> /dev/null"
         logger.debug("executing command: [" + pidCmdStr + "]", extra=d)
         subproc = system_test_utils.sys_call_return_subproc(pidCmdStr)
 

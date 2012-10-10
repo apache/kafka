@@ -20,6 +20,7 @@
 # system_test_utils.py
 # ===================================
 
+import copy
 import inspect
 import json
 import logging
@@ -31,7 +32,8 @@ import subprocess
 import sys
 import time
 
-logger = logging.getLogger("namedLogger")
+logger  = logging.getLogger("namedLogger")
+aLogger = logging.getLogger("anonymousLogger")
 thisClassName = '(system_test_utils)'
 d = {'name_of_class': thisClassName}
 
@@ -319,6 +321,14 @@ def remote_host_processes_stopped(hostname):
 
 
 def setup_remote_hosts(systemTestEnv):
+    # sanity check on remote hosts to make sure:
+    # - all directories (eg. java_home) specified in cluster_config.json exists in all hosts
+    # - no conflicting running processes in remote hosts
+
+    aLogger.info("=================================================")
+    aLogger.info("setting up remote hosts ...")
+    aLogger.info("=================================================")
+
     clusterEntityConfigDictList = systemTestEnv.clusterEntityConfigDictList
 
     localKafkaHome = os.path.abspath(systemTestEnv.SYSTEM_TEST_BASE_DIR + "/..")
@@ -353,19 +363,19 @@ def setup_remote_hosts(systemTestEnv):
         kafkaHome = clusterEntityConfigDict["kafka_home"]
         javaHome  = clusterEntityConfigDict["java_home"]
 
-        logger.info("checking java binary [" + localJavaBin + "] in host [" + hostname + "]", extra=d)
+        logger.debug("checking java binary [" + localJavaBin + "] in host [" + hostname + "]", extra=d)
         if not remote_host_directory_exists(hostname, javaHome):
             logger.error("Directory not found: [" + javaHome + "] in host [" + hostname + "]", extra=d)
             return False
 
-        logger.info("checking directory [" + kafkaHome + "] in host [" + hostname + "]", extra=d)
+        logger.debug("checking directory [" + kafkaHome + "] in host [" + hostname + "]", extra=d)
         if not remote_host_directory_exists(hostname, kafkaHome):
             logger.info("Directory not found: [" + kafkaHome + "] in host [" + hostname + "]", extra=d)
             if hostname == "localhost":
                 return False
             else:
                 localKafkaSourcePath = systemTestEnv.SYSTEM_TEST_BASE_DIR + "/.."
-                logger.info("copying local copy of [" + localKafkaSourcePath + "] to " + hostname + ":" + kafkaHome, extra=d)
+                logger.debug("copying local copy of [" + localKafkaSourcePath + "] to " + hostname + ":" + kafkaHome, extra=d)
                 copy_source_to_remote_hosts(hostname, localKafkaSourcePath, kafkaHome)
 
     return True
@@ -385,16 +395,135 @@ def remove_kafka_home_dir_at_remote_hosts(hostname, kafkaHome):
     if remote_host_file_exists(hostname, kafkaHome + "/bin/kafka-run-class.sh"):
         cmdStr  = "ssh " + hostname + " 'chmod -R 777 " + kafkaHome + "'"
         logger.info("executing command [" + cmdStr + "]", extra=d)
-        system_test_utils.sys_call(cmdStr)
+        sys_call(cmdStr)
 
         cmdStr  = "ssh " + hostname + " 'rm -rf " + kafkaHome + "'"
         logger.info("executing command [" + cmdStr + "]", extra=d)
-        #system_test_utils.sys_call(cmdStr)
+        #sys_call(cmdStr)
     else:
         logger.warn("possible destructive command [" + cmdStr + "]", extra=d)
         logger.warn("check config file: system_test/cluster_config.properties", extra=d)
         logger.warn("aborting test...", extra=d)
         sys.exit(1)
+
+def get_md5_for_file(filePathName, blockSize=8192):
+    md5 = hashlib.md5()
+    f   = open(filePathName, 'rb')
+
+    while True:
+        data = f.read(blockSize)
+        if not data:
+            break
+        md5.update(data)
+    return md5.digest()
+
+def load_cluster_config(clusterConfigPathName, clusterEntityConfigDictList):
+    # empty the list
+    clusterEntityConfigDictList[:] = []
+
+    # retrieve each entity's data from cluster config json file
+    # as "dict" and enter them into a "list"
+    jsonFileContent = open(clusterConfigPathName, "r").read()
+    jsonData        = json.loads(jsonFileContent)
+    for key, cfgList in jsonData.items():
+        if key == "cluster_config":
+            for cfg in cfgList:
+                clusterEntityConfigDictList.append(cfg)
+
+def setup_remote_hosts_with_testcase_level_cluster_config(systemTestEnv, testCasePathName):
+    # =======================================================================
+    # starting a new testcase, check for local cluster_config.json
+    # =======================================================================
+    # 1. if there is a xxxx_testsuite/testcase_xxxx/cluster_config.json
+    #    => load it into systemTestEnv.clusterEntityConfigDictList
+    # 2. if there is NO testcase_xxxx/cluster_config.json but has a xxxx_testsuite/cluster_config.json
+    #    => retore systemTestEnv.clusterEntityConfigDictListLastFoundInTestSuite
+    # 3. if there is NO testcase_xxxx/cluster_config.json NOR xxxx_testsuite/cluster_config.json
+    #    => restore system_test/cluster_config.json
+
+    testCaseLevelClusterConfigPathName = testCasePathName + "/cluster_config.json"
+
+    if os.path.isfile(testCaseLevelClusterConfigPathName):
+        # if there is a cluster_config.json in this directory, load it and use it for this testsuite
+        logger.info("found a new cluster_config : " + testCaseLevelClusterConfigPathName, extra=d)
+
+        # empty the current cluster config list
+        systemTestEnv.clusterEntityConfigDictList[:] = []
+
+        # load the cluster config for this testcase level
+        load_cluster_config(testCaseLevelClusterConfigPathName, systemTestEnv.clusterEntityConfigDictList)
+
+        # back up this testcase level cluster config
+        systemTestEnv.clusterEntityConfigDictListLastFoundInTestCase = copy.deepcopy(systemTestEnv.clusterEntityConfigDictList)
+
+    elif len(systemTestEnv.clusterEntityConfigDictListLastFoundInTestSuite) > 0:
+        # if there is NO testcase_xxxx/cluster_config.json, but has a xxxx_testsuite/cluster_config.json
+        # => restore the config in xxxx_testsuite/cluster_config.json
+
+        # empty the current cluster config list
+        systemTestEnv.clusterEntityConfigDictList[:] = []
+
+        # restore the system_test/cluster_config.json
+        systemTestEnv.clusterEntityConfigDictList = copy.deepcopy(systemTestEnv.clusterEntityConfigDictListLastFoundInTestSuite)
+
+    else:
+        # if there is NONE, restore the config in system_test/cluster_config.json
+
+        # empty the current cluster config list
+        systemTestEnv.clusterEntityConfigDictList[:] = []
+
+        # restore the system_test/cluster_config.json
+        systemTestEnv.clusterEntityConfigDictList = copy.deepcopy(systemTestEnv.clusterEntityConfigDictListInSystemTestLevel)
+
+    # set up remote hosts
+    if not setup_remote_hosts(systemTestEnv):
+        logger.error("Remote hosts sanity check failed. Aborting test ...", extra=d)
+        print
+        sys.exit(1)
+    print
+
+def setup_remote_hosts_with_testsuite_level_cluster_config(systemTestEnv, testModulePathName):
+    # =======================================================================
+    # starting a new testsuite, check for local cluster_config.json:
+    # =======================================================================
+    # 1. if there is a xxxx_testsuite/cluster_config.son
+    #    => load it into systemTestEnv.clusterEntityConfigDictList
+    # 2. if there is NO xxxx_testsuite/cluster_config.son
+    #    => restore system_test/cluster_config.json
+
+    testSuiteLevelClusterConfigPathName = testModulePathName + "/cluster_config.json"
+
+    if os.path.isfile(testSuiteLevelClusterConfigPathName):
+        # if there is a cluster_config.json in this directory, load it and use it for this testsuite
+        logger.info("found a new cluster_config : " + testSuiteLevelClusterConfigPathName, extra=d)
+
+        # empty the current cluster config list
+        systemTestEnv.clusterEntityConfigDictList[:] = []
+
+        # load the cluster config for this testsuite level
+        load_cluster_config(testSuiteLevelClusterConfigPathName, systemTestEnv.clusterEntityConfigDictList)
+
+        # back up this testsuite level cluster config
+        systemTestEnv.clusterEntityConfigDictListLastFoundInTestSuite = copy.deepcopy(systemTestEnv.clusterEntityConfigDictList)
+
+    else:
+        # if there is NONE, restore the config in system_test/cluster_config.json
+
+        # empty the last testsuite level cluster config list
+        systemTestEnv.clusterEntityConfigDictListLastFoundInTestSuite[:] = []
+
+        # empty the current cluster config list
+        systemTestEnv.clusterEntityConfigDictList[:] = []
+
+        # restore the system_test/cluster_config.json
+        systemTestEnv.clusterEntityConfigDictList = copy.deepcopy(systemTestEnv.clusterEntityConfigDictListInSystemTestLevel)
+
+    # set up remote hosts
+    if not setup_remote_hosts(systemTestEnv):
+        logger.error("Remote hosts sanity check failed. Aborting test ...", extra=d)
+        print
+        sys.exit(1)
+    print
 
 
 

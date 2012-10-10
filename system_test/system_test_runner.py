@@ -16,63 +16,66 @@
 # under the License.
 #!/usr/bin/evn python
 
-# ===================================
+# =================================================================
 # system_test_runner.py
-# ===================================
+#
+# - This script is the test driver for a distributed environment
+#   system testing framework. It is located at the top level of the
+#   framework hierachy (in this case - system_test/).
+#
+# - This test driver servers as an entry point to launch a series
+#   of test suites (module) with multiple functionally similar test
+#   cases which can be grouped together.
+#
+# - Please refer to system_test/README.txt for more details on
+#   how to add test suite and test case.
+#
+# - In most cases, it is not necessary to make any changes to this
+#   script.
+# =================================================================
 
+from optparse        import OptionParser
 from system_test_env import SystemTestEnv
-from utils import system_test_utils
+from utils           import system_test_utils
 
-import logging
+import logging.config
 import os
+import pprint
 import sys
 
 
-# ====================================================================
-# Two logging formats are defined in system_test/system_test_runner.py
-# ====================================================================
+# load the config file for logging
+logging.config.fileConfig('logging.conf')
 
-# 1. "namedLogger" is defined to log message in this format:
-#    "%(asctime)s - %(levelname)s - %(message)s %(name_of_class)s"
-# 
-# usage: to log message and showing the class name of the message
-
-namedLogger = logging.getLogger("namedLogger")
-namedLogger.setLevel(logging.INFO)
-#namedLogger.setLevel(logging.DEBUG)
-namedConsoleHandler = logging.StreamHandler()
-namedConsoleHandler.setLevel(logging.DEBUG)
-namedFormatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s %(name_of_class)s")
-namedConsoleHandler.setFormatter(namedFormatter)
-namedLogger.addHandler(namedConsoleHandler)
-
-# 2. "anonymousLogger" is defined to log message in this format:
-#    "%(asctime)s - %(levelname)s - %(message)s"
-# 
-# usage: to log message without showing class name and it's appropriate
-#        for logging generic message such as "sleeping for 5 seconds"
-
-anonymousLogger = logging.getLogger("anonymousLogger")
-anonymousLogger.setLevel(logging.INFO)
-#anonymousLogger.setLevel(logging.DEBUG)
-anonymousConsoleHandler = logging.StreamHandler()
-anonymousConsoleHandler.setLevel(logging.DEBUG)
-anonymousFormatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
-anonymousConsoleHandler.setFormatter(anonymousFormatter)
-anonymousLogger.addHandler(anonymousConsoleHandler)
-
+# 'd' is an argument to be merged into the log message (see Python doc for logging).
+# In this case, corresponding class name can be appended to the end of the logging
+# message to facilitate debugging.
 d = {'name_of_class': '(system_test_runner)'}
 
 def main():
+    nLogger = logging.getLogger('namedLogger')
+    aLogger = logging.getLogger('anonymousLogger')
 
-    print
-    print
-    print
-    anonymousLogger.info("=================================================")
-    anonymousLogger.info("        System Regression Test Framework")
-    anonymousLogger.info("=================================================")
-    print
-    print
+    optionParser = OptionParser()
+    optionParser.add_option("-p", "--print-test-descriptions-only",
+                            dest="printTestDescriptionsOnly",
+                            default=False,
+                            action="store_true",
+                            help="print test descriptions only - don't run the test")
+
+    optionParser.add_option("-n", "--do-not-validate-remote-host",
+                            dest="doNotValidateRemoteHost",
+                            default=False,
+                            action="store_true",
+                            help="do not validate remote host (due to different kafka versions are installed)")
+
+    (options, args) = optionParser.parse_args()
+
+    print "\n"
+    aLogger.info("=================================================")
+    aLogger.info("        System Regression Test Framework")
+    aLogger.info("=================================================")
+    print "\n"
 
     testSuiteClassDictList = []
 
@@ -80,47 +83,53 @@ def main():
     # such as the SYSTEM_TEST_BASE_DIR, SYSTEM_TEST_UTIL_DIR, ...
     systemTestEnv = SystemTestEnv()
 
-    # sanity check on remote hosts to make sure:
-    # - all directories (eg. java_home) specified in cluster_config.json exists in all hosts
-    # - no conflicting running processes in remote hosts
-    anonymousLogger.info("=================================================")
-    anonymousLogger.info("setting up remote hosts ...")
-    anonymousLogger.info("=================================================")
-    if not system_test_utils.setup_remote_hosts(systemTestEnv):
-        namedLogger.error("Remote hosts sanity check failed. Aborting test ...", extra=d)
+    if options.printTestDescriptionsOnly:
+        systemTestEnv.printTestDescriptionsOnly = True
+    if options.doNotValidateRemoteHost:
+        systemTestEnv.doNotValidateRemoteHost = True
+
+    if not systemTestEnv.printTestDescriptionsOnly:
+        if not systemTestEnv.doNotValidateRemoteHost:
+            if not system_test_utils.setup_remote_hosts(systemTestEnv):
+                nLogger.error("Remote hosts sanity check failed. Aborting test ...", extra=d)
+                print
+                sys.exit(1)
+        else:
+            nLogger.info("SKIPPING : checking remote machines", extra=d)
         print
-        sys.exit(1)
-    print
 
     # get all defined names within a module: 
     definedItemList = dir(SystemTestEnv)
-    anonymousLogger.debug("=================================================")
-    anonymousLogger.debug("SystemTestEnv keys:")
+    aLogger.debug("=================================================")
+    aLogger.debug("SystemTestEnv keys:")
     for item in definedItemList:
-        anonymousLogger.debug("    " + item)
-    anonymousLogger.debug("=================================================")
+        aLogger.debug("    " + item)
+    aLogger.debug("=================================================")
 
-    anonymousLogger.info("=================================================")
-    anonymousLogger.info("looking up test suites ...")
-    anonymousLogger.info("=================================================")
+    aLogger.info("=================================================")
+    aLogger.info("looking up test suites ...")
+    aLogger.info("=================================================")
     # find all test suites in SYSTEM_TEST_BASE_DIR
     for dirName in os.listdir(systemTestEnv.SYSTEM_TEST_BASE_DIR):
 
         # make sure this is a valid testsuite directory
         if os.path.isdir(dirName) and dirName.endswith(systemTestEnv.SYSTEM_TEST_SUITE_SUFFIX):
-            
-            namedLogger.info("found a testsuite : " + dirName, extra=d)
+            print
+            nLogger.info("found a testsuite : " + dirName, extra=d)
             testModulePathName = os.path.abspath(systemTestEnv.SYSTEM_TEST_BASE_DIR + "/" + dirName)
+
+            if not systemTestEnv.printTestDescriptionsOnly:
+                system_test_utils.setup_remote_hosts_with_testsuite_level_cluster_config(systemTestEnv, testModulePathName)
 
             # go through all test modules file in this testsuite
             for moduleFileName in os.listdir(testModulePathName):
 
                 # make sure it is a valid test module
                 if moduleFileName.endswith(systemTestEnv.SYSTEM_TEST_MODULE_EXT) \
-                   and not moduleFileName.startswith("__"):
+                    and not moduleFileName.startswith("__"):
 
                     # found a test module file
-                    namedLogger.info("found a test module file : " + moduleFileName, extra=d) 
+                    nLogger.info("found a test module file : " + moduleFileName, extra=d) 
 
                     testModuleClassName = system_test_utils.sys_call("grep ^class " + testModulePathName + "/" + \
                                           moduleFileName + " | sed 's/^class //g' | sed 's/(.*):.*//g'")
@@ -134,42 +143,44 @@ def main():
                     testSuiteClassDict["class"]  = testModuleClassName
                     testSuiteClassDictList.append(testSuiteClassDict)
 
-    # loop through testSuiteClassDictList and start the test class one by one
-    for testSuiteClassDict in testSuiteClassDictList:
+                    suiteName  = testSuiteClassDict["suite"]
+                    moduleName = testSuiteClassDict["module"]
+                    className  = testSuiteClassDict["class"]
 
-        suiteName  = testSuiteClassDict["suite"]
-        moduleName = testSuiteClassDict["module"]
-        className  = testSuiteClassDict["class"]
+                    # add testsuite directory to sys.path such that the module can be loaded
+                    sys.path.append(systemTestEnv.SYSTEM_TEST_BASE_DIR + "/" + suiteName)
+ 
+                    if not systemTestEnv.printTestDescriptionsOnly:
+                        aLogger.info("=================================================")
+                        aLogger.info("Running Test for : ")
+                        aLogger.info("    suite  : " + suiteName)
+                        aLogger.info("    module : " + moduleName)
+                        aLogger.info("    class  : " + className)
+                        aLogger.info("=================================================")
 
-        # add testsuite directory to sys.path such that the module can be loaded
-        sys.path.append(systemTestEnv.SYSTEM_TEST_BASE_DIR + "/" + suiteName)
+                    # dynamically loading a module and starting the test class
+                    mod      = __import__(moduleName)
+                    theClass = getattr(mod, className)
+                    instance = theClass(systemTestEnv)
+                    instance.runTest()
+                print
 
-        anonymousLogger.info("=================================================")
-        anonymousLogger.info("Running Test for : ")
-        anonymousLogger.info("    suite  : " + suiteName)
-        anonymousLogger.info("    module : " + moduleName)
-        anonymousLogger.info("    class  : " + className)
-        anonymousLogger.info("=================================================")
-
-        # dynamically loading a module and starting the test class
-        mod      = __import__(moduleName)
-        theClass = getattr(mod, className)
-        instance = theClass(systemTestEnv)
-        instance.runTest()
-
-    print
-    anonymousLogger.info("=================================================")
-    anonymousLogger.info("                 TEST REPORTS")
-    anonymousLogger.info("=================================================")
-    for systemTestResult in systemTestEnv.systemTestResultsList:
-        for key,val in systemTestResult.items():
-            if key == "validation_status":
-                anonymousLogger.info(key + " : ")
-                for validation, status in val.items():
-                     anonymousLogger.info("    " + validation + " : " + status)
-            else:
-                anonymousLogger.info(key + " : " + val)
+    if not systemTestEnv.printTestDescriptionsOnly:
         print
+        print "========================================================"
+        print "                 TEST REPORTS"
+        print "========================================================"
+        for systemTestResult in systemTestEnv.systemTestResultsList:
+            for key in sorted(systemTestResult.iterkeys()):
+                if key == "validation_status":
+                    print key, " : "
+                    for validatedItem in sorted(systemTestResult[key].iterkeys()):
+                         print "    ", validatedItem, " : ", systemTestResult[key][validatedItem]
+                else:
+                    print key, " : ", systemTestResult[key]
+            print
+            print "========================================================"
+            print
 
 # =========================
 # main entry point

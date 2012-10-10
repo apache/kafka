@@ -25,17 +25,31 @@ import os
 import sys
 import thread
 
+import system_test_utils
+
 class TestcaseEnv():
 
     # ================================
     # Generic testcase environment
     # ================================
 
-    # dictionary of entity_id to ppid for entities such as zookeepers & brokers
+    # dictionary of entity_id to ppid for Zookeeper entities
     # key: entity_id
-    # val: ppid of zk or broker associated to that entity_id
+    # val: ppid of Zookeeper associated to that entity_id
     # { 0: 12345, 1: 12389, ... }
-    entityParentPidDict = {}
+    entityZkParentPidDict = {}
+
+    # dictionary of entity_id to ppid for broker entities
+    # key: entity_id
+    # val: ppid of broker associated to that entity_id
+    # { 0: 12345, 1: 12389, ... }
+    entityBrokerParentPidDict = {}
+
+    # dictionary of entity_id to ppid for mirror-maker entities
+    # key: entity_id
+    # val: ppid of broker associated to that entity_id
+    # { 0: 12345, 1: 12389, ... }
+    entityMirrorMakerParentPidDict = {}
 
     # dictionary of entity_id to list of JMX ppid
     # key: entity_id
@@ -67,8 +81,8 @@ class TestcaseEnv():
 
         # gather the test case related info and add to an SystemTestEnv object
         self.testcaseResultsDict = {}
-        self.testcaseResultsDict["test_class_name"]    = classInstance.__class__.__name__
-        self.testcaseResultsDict["test_case_name"]     = ""
+        self.testcaseResultsDict["_test_class_name"] = classInstance.__class__.__name__
+        self.testcaseResultsDict["_test_case_name"]  = ""
         self.validationStatusDict                      = {}
         self.testcaseResultsDict["validation_status"]  = self.validationStatusDict
         self.systemTestEnv.systemTestResultsList.append(self.testcaseResultsDict)
@@ -84,6 +98,8 @@ class TestcaseEnv():
         self.testCaseBaseDir       = ""
         self.testCaseLogsDir       = ""
         self.testCaseDashboardsDir = ""
+        self.testcasePropJsonPathName = ""
+        self.testcaseNonEntityDataDict = {}
 
         # ================================
         # dictionary to keep track of
@@ -102,5 +118,40 @@ class TestcaseEnv():
 
         # Lock object for producer threads synchronization
         self.lock = thread.allocate_lock()
+
+        self.numProducerThreadsRunning = 0
+
+    def initWithKnownTestCasePathName(self, testCasePathName):
+        testcaseDirName = os.path.basename(testCasePathName)
+        self.testcaseResultsDict["_test_case_name"] = testcaseDirName
+        self.testCaseBaseDir = testCasePathName
+        self.testCaseLogsDir = self.testCaseBaseDir + "/logs"
+        self.testCaseDashboardsDir = self.testCaseBaseDir + "/dashboards"
+
+        # find testcase properties json file
+        self.testcasePropJsonPathName = system_test_utils.get_testcase_prop_json_pathname(testCasePathName)
+
+        # get the dictionary that contains the testcase arguments and description
+        self.testcaseNonEntityDataDict = system_test_utils.get_json_dict_data(self.testcasePropJsonPathName)
+
+    def printTestCaseDescription(self, testcaseDirName):
+        testcaseDescription = ""
+        for k,v in self.testcaseNonEntityDataDict.items():
+            if ( k == "description" ):
+                testcaseDescription = v
+
+        print "\n"
+        print "======================================================================================="
+        print "Test Case Name :", testcaseDirName
+        print "======================================================================================="
+        print "Description    :"
+        for step in sorted(testcaseDescription.iterkeys()):
+            print "   ", step, ":", testcaseDescription[step]
+        print "======================================================================================="
+        print "Test Case Args :"
+        for k,v in self.testcaseArgumentsDict.items():
+            print "   ", k, " : ", v
+            self.testcaseResultsDict["arg : " + k] = v
+        print "======================================================================================="
 
 
