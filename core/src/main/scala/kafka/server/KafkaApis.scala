@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.io.IOException
 import kafka.admin.{CreateTopicCommand, AdminUtils}
 import kafka.api._
 import kafka.message._
@@ -75,6 +76,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(leaderAndISRResponse)))
   }
 
+
   def handleStopReplicaRequest(request: RequestChannel.Request){
     val stopReplicaRequest = request.requestObj.asInstanceOf[StopReplicaRequest]
     if(requestLogger.isTraceEnabled)
@@ -83,7 +85,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val responseMap = new HashMap[(String, Int), Short]
 
-    for((topic, partitionId) <- stopReplicaRequest.partitions){
+    for((topic, partitionId) <- stopReplicaRequest.stopReplicaSet){
       val errorCode = replicaManager.stopReplica(topic, partitionId)
       responseMap.put((topic, partitionId), errorCode)
     }

@@ -31,45 +31,35 @@ import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 /**
  * An on-disk message set. The set can be opened either mutably or immutably. Mutation attempts
  * will fail on an immutable message set. An optional limit and start position can be applied to the message set
- * which will control the position in the file at which the set begins
+ * which will control the position in the file at which the set begins.
  */
 @nonthreadsafe
 class FileMessageSet private[kafka](val file: File,
                                     private[log] val channel: FileChannel,
-                                    private[log] val start: Long, // the starting position in the file
-                                    private[log] val limit: Long, // the length (may be less than the file length)
-                                    val mutable: Boolean) extends MessageSet with Logging {
+                                    private[log] val start: Long = 0L,
+                                    private[log] val limit: Long = Long.MaxValue) extends MessageSet with Logging {
   
-  private val setSize = new AtomicLong()
-
-  if(mutable) {
-    if(limit < Long.MaxValue || start > 0)
-      throw new KafkaException("Attempt to open a mutable message set with a view or offset, which is not allowed.")
-
-    setSize.set(channel.size())
-    channel.position(channel.size)
-  } else {
-    setSize.set(scala.math.min(channel.size(), limit) - start)
-  }
+  /* the size of the message set in bytes */
+  private val _size = new AtomicLong(scala.math.min(channel.size(), limit) - start)
+    
+  /* set the file position to the last byte in the file */
+  channel.position(channel.size)
   
   /**
    * Create a file message set with no limit or offset
    */
-  def this(file: File, channel: FileChannel, mutable: Boolean) = 
-    this(file, channel, 0, Long.MaxValue, mutable)
+  def this(file: File, channel: FileChannel) = this(file, channel, 0, Long.MaxValue)
   
   /**
    * Create a file message set with no limit or offset
    */
-  def this(file: File, mutable: Boolean) = 
-    this(file, Utils.openChannel(file, mutable), mutable)
+  def this(file: File) = this(file, Utils.openChannel(file, mutable = true))
   
   /**
    * Return a message set which is a view into this set starting from the given position and with the given size limit.
    */
   def read(position: Long, size: Long): FileMessageSet = {
-    new FileMessageSet(file, channel, this.start + position, scala.math.min(this.start + position + size, sizeInBytes()),
-      false)
+    new FileMessageSet(file, channel, this.start + position, scala.math.min(this.start + position + size, sizeInBytes()))
   }
   
   /**
@@ -79,7 +69,7 @@ class FileMessageSet private[kafka](val file: File,
   private[log] def searchFor(targetOffset: Long, startingPosition: Int): OffsetPosition = {
     var position = startingPosition
     val buffer = ByteBuffer.allocate(12)
-    val size = setSize.get()
+    val size = _size.get()
     while(position + 12 < size) {
       buffer.rewind()
       channel.read(buffer, position)
@@ -138,29 +128,22 @@ class FileMessageSet private[kafka](val file: File,
   /**
    * The number of bytes taken up by this file set
    */
-  def sizeInBytes(): Long = setSize.get()
-
-  def checkMutable(): Unit = {
-    if(!mutable)
-      throw new KafkaException("Attempt to invoke mutation on immutable message set.")
-  }
+  def sizeInBytes(): Long = _size.get()
   
   /**
    * Append this message to the message set
    */
   def append(messages: MessageSet): Unit = {
-    checkMutable()
     var written = 0L
     while(written < messages.sizeInBytes)
       written += messages.writeTo(channel, 0, messages.sizeInBytes)
-    setSize.getAndAdd(written)
+    _size.getAndAdd(written)
   }
  
   /**
    * Commit all written data to the physical disk
    */
   def flush() = {
-    checkMutable()
     LogFlushStats.logFlushTimer.time {
       channel.force(true)
     }
@@ -170,8 +153,7 @@ class FileMessageSet private[kafka](val file: File,
    * Close this message set
    */
   def close() {
-    if(mutable)
-      flush()
+    flush()
     channel.close()
   }
   
@@ -188,13 +170,12 @@ class FileMessageSet private[kafka](val file: File,
    * given size falls on a valid byte offset.
    */
   def truncateTo(targetSize: Long) = {
-    checkMutable()
     if(targetSize > sizeInBytes())
       throw new KafkaException("Attempt to truncate log segment to %d bytes failed since the current ".format(targetSize) +
         " size of this log segment is only %d bytes".format(sizeInBytes()))
     channel.truncate(targetSize)
     channel.position(targetSize)
-    setSize.set(targetSize)
+    _size.set(targetSize)
   }
   
 }

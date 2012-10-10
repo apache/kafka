@@ -43,7 +43,7 @@ object DumpLogSegments {
   /* print out the contents of the index */
   def dumpIndex(file: File) {
     val startOffset = file.getName().split("\\.")(0).toLong
-    val index = new OffsetIndex(file = file, baseOffset = startOffset, mutable = false)
+    val index = new OffsetIndex(file = file, baseOffset = startOffset)
     for(i <- 0 until index.entries) {
       val entry = index.entry(i)
       // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
@@ -57,7 +57,7 @@ object DumpLogSegments {
   def dumpLog(file: File, printContents: Boolean) {
     val startOffset = file.getName().split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
-    val messageSet = new FileMessageSet(file, false)
+    val messageSet = new FileMessageSet(file)
     var validBytes = 0L
     for(messageAndOffset <- messageSet) {
       val msg = messageAndOffset.message

@@ -27,15 +27,9 @@ import org.I0Itec.zkclient.IZkChildListener
 /**
  * This class represents the state machine for replicas. It defines the states that a replica can be in, and
  * transitions to move the replica to another legal state. The different states that a replica can be in are -
- * 1. NewReplica        : The controller can create new replicas during partition reassignment. In this state, a
- *                        replica can only get become follower state change request.  Valid previous
- *                        state is NonExistentReplica
- * 2. OnlineReplica     : Once a replica is started and part of the assigned replicas for its partition, it is in this
- *                        state. In this state, it can get either become leader or become follower state change requests.
- *                        Valid previous state are NewReplica, OnlineReplica or OfflineReplica
- * 3. OfflineReplica    : If a replica dies, it moves to this state. This happens when the broker hosting the replica
- *                        is down. Valid previous state are NewReplica, OnlineReplica
- * 4. NonExistentReplica: If a replica is deleted, it is moved to this state. Valid previous state is OfflineReplica
+ * 1. OnlineReplica     : Once a replica is started, it is in this state. Valid previous state are OnlineReplica or
+ *                        OfflineReplica
+ * 2. OfflineReplica    : If a replica dies, it moves to this state. Valid previous state is OnlineReplica
  */
 class ReplicaStateMachine(controller: KafkaController) extends Logging {
   this.logIdent = "[Replica state machine on Controller " + controller.config.brokerId + "]: "
@@ -55,8 +49,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     // initialize replica state
     initializeReplicaState()
     // move all Online replicas to Online
-    handleStateChanges(ZkUtils.getAllReplicasOnBroker(zkClient, controllerContext.allTopics.toSeq,
-      controllerContext.liveBrokerIds.toSeq), OnlineReplica)
+    handleStateChanges(controllerContext.liveBrokerIds.toSeq, OnlineReplica)
     info("Started replica state machine with initial state -> " + replicaState.toString())
   }
 
@@ -79,11 +72,20 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    * @param targetState  The state that the replicas should be moved to
    * The controller's allLeaders cache should have been updated before this
    */
-  def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState) {
-    info("Invoking state change to %s for replicas %s".format(targetState, replicas.mkString(",")))
+  def handleStateChanges(brokerIds: Seq[Int], targetState: ReplicaState) {
+    info("Invoking state change to %s for brokers %s".format(targetState, brokerIds.mkString(",")))
     try {
       brokerRequestBatch.newBatch()
-      replicas.foreach(r => handleStateChange(r.topic, r.partition, r.replica, targetState))
+      brokerIds.foreach { brokerId =>
+        // read all the partitions and their assigned replicas into a map organized by
+        // { replica id -> partition 1, partition 2...
+        val partitionsAssignedToThisBroker = getPartitionsAssignedToBroker(controllerContext.allTopics.toSeq, brokerId)
+        partitionsAssignedToThisBroker.foreach { topicAndPartition =>
+          handleStateChange(topicAndPartition._1, topicAndPartition._2, brokerId, targetState)
+        }
+        if(partitionsAssignedToThisBroker.size == 0)
+          info("No state transitions triggered since no partitions are assigned to brokers %s".format(brokerIds.mkString(",")))
+      }
       brokerRequestBatch.sendRequestsToBrokers()
     }catch {
       case e => error("Error while moving some replicas to %s state".format(targetState), e)
@@ -98,62 +100,28 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    * @param replicaId   The replica for which the state transition is invoked
    * @param targetState The end state that the replica should be moved to
    */
-  def handleStateChange(topic: String, partition: Int, replicaId: Int, targetState: ReplicaState) {
+  private def handleStateChange(topic: String, partition: Int, replicaId: Int, targetState: ReplicaState) {
     try {
-      replicaState.getOrElseUpdate((topic, partition, replicaId), NonExistentReplica)
       targetState match {
-        case NewReplica =>
-          assertValidPreviousStates(topic, partition, replicaId, List(NonExistentReplica), targetState)
-          // start replica as a follower to the current leader for its partition
+        case OnlineReplica =>
+          assertValidPreviousStates(topic, partition, replicaId, List(OnlineReplica, OfflineReplica), targetState)
+          // check if the leader for this partition is alive or even exists
+          // NOTE: technically, we could get the leader from the allLeaders cache, but we need to read zookeeper
+          // for the ISR anyways
           val leaderAndIsrOpt = ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition)
           leaderAndIsrOpt match {
             case Some(leaderAndIsr) =>
-              if(leaderAndIsr.leader == replicaId)
-                throw new StateChangeFailedException("Replica %d for partition [%s, %d] cannot be moved to NewReplica"
-                  .format(replicaId, topic, partition) + "state as it is being requested to become leader")
-              brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId), topic, partition, leaderAndIsr)
-            case None => // new leader request will be sent to this replica when one gets elected
-          }
-          replicaState.put((topic, partition, replicaId), NewReplica)
-          info("Replica %d for partition [%s, %d] state changed to NewReplica".format(replicaId, topic, partition))
-        case NonExistentReplica =>
-          assertValidPreviousStates(topic, partition, replicaId, List(OfflineReplica), targetState)
-          // send stop replica command
-          brokerRequestBatch.addStopReplicaRequestForBrokers(List(replicaId), topic, partition)
-          // remove this replica from the assigned replicas list for its partition
-          val currentAssignedReplicas = controllerContext.partitionReplicaAssignment((topic, partition))
-          controllerContext.partitionReplicaAssignment.put((topic, partition),
-            currentAssignedReplicas.filterNot(_ == replicaId))
-          info("Replica %d for partition [%s, %d] state changed to NonExistentReplica".format(replicaId, topic, partition))
-          replicaState.remove((topic, partition, replicaId))
-        case OnlineReplica =>
-          assertValidPreviousStates(topic, partition, replicaId, List(NewReplica, OnlineReplica, OfflineReplica), targetState)
-          replicaState((topic, partition, replicaId)) match {
-            case NewReplica =>
-              // add this replica to the assigned replicas list for its partition
-              val currentAssignedReplicas = controllerContext.partitionReplicaAssignment((topic, partition))
-              controllerContext.partitionReplicaAssignment.put((topic, partition), currentAssignedReplicas :+ replicaId)
-              info("Replica %d for partition [%s, %d] state changed to OnlineReplica".format(replicaId, topic, partition))
-            case _ =>
-              // check if the leader for this partition is alive or even exists
-              // NOTE: technically, we could get the leader from the allLeaders cache, but we need to read zookeeper
-              // for the ISR anyways
-              val leaderAndIsrOpt = ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition)
-              leaderAndIsrOpt match {
-                case Some(leaderAndIsr) =>
-                  controllerContext.liveBrokerIds.contains(leaderAndIsr.leader) match {
-                    case true => // leader is alive
-                      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId), topic, partition, leaderAndIsr)
-                      replicaState.put((topic, partition, replicaId), OnlineReplica)
-                      info("Replica %d for partition [%s, %d] state changed to OnlineReplica".format(replicaId, topic, partition))
-                    case false => // ignore partitions whose leader is not alive
-                  }
-                case None => // ignore partitions who don't have a leader yet
+              controllerContext.liveBrokerIds.contains(leaderAndIsr.leader) match {
+                case true => // leader is alive
+                  brokerRequestBatch.addRequestForBrokers(List(replicaId), topic, partition, leaderAndIsr)
+                  replicaState.put((topic, partition, replicaId), OnlineReplica)
+                  info("Replica %d for partition [%s, %d] state changed to OnlineReplica".format(replicaId, topic, partition))
+                case false => // ignore partitions whose leader is not alive
               }
+            case None => // ignore partitions who don't have a leader yet
           }
-          replicaState.put((topic, partition, replicaId), OnlineReplica)
         case OfflineReplica =>
-          assertValidPreviousStates(topic, partition, replicaId, List(NewReplica, OnlineReplica), targetState)
+          assertValidPreviousStates(topic, partition, replicaId, List(OnlineReplica), targetState)
           // As an optimization, the controller removes dead replicas from the ISR
           var zookeeperPathUpdateSucceeded: Boolean = false
           var newLeaderAndIsr: LeaderAndIsr = null
@@ -176,7 +144,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
             }
           }
           // send the shrunk ISR state change request only to the leader
-          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(newLeaderAndIsr.leader), topic, partition, newLeaderAndIsr)
+          brokerRequestBatch.addRequestForBrokers(List(newLeaderAndIsr.leader), topic, partition, newLeaderAndIsr)
           // update the local leader and isr cache
           controllerContext.allLeaders.put((topic, partition), newLeaderAndIsr.leader)
           replicaState.put((topic, partition, replicaId), OfflineReplica)
@@ -258,9 +226,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
 }
 
 sealed trait ReplicaState { def state: Byte }
-case object NewReplica extends ReplicaState { val state: Byte = 1 }
-case object OnlineReplica extends ReplicaState { val state: Byte = 2 }
-case object OfflineReplica extends ReplicaState { val state: Byte = 3 }
-case object NonExistentReplica extends ReplicaState { val state: Byte = 4 }
+case object OnlineReplica extends ReplicaState { val state: Byte = 1 }
+case object OfflineReplica extends ReplicaState { val state: Byte = 2 }
 
 

@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 
 package kafka.server
 
@@ -69,10 +69,9 @@ class RequestPurgatoryTest extends JUnit3Suite {
     purgatory.watch(r2)
     purgatory.awaitExpiration(r1)
     val elapsed = System.currentTimeMillis - start
-    println("Start = %d, Elapsed = %d".format(start, elapsed))
     assertTrue("r1 expired", purgatory.expired.contains(r1))
     assertTrue("r2 hasn't expired", !purgatory.expired.contains(r2))
-    assertTrue("Time for expiration was about 20ms", (elapsed - expiration).abs < 10L)
+    assertTrue("Time for expiration %d should at least %d".format(elapsed, expiration), elapsed >= expiration)
   }
   
   class MockRequestPurgatory extends RequestPurgatory[DelayedRequest, ProducerRequest] {

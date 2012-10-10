@@ -36,7 +36,7 @@ class ProducerSendThread[K,V](val threadName: String,
   newGauge(
     "ProducerQueueSize-" + getId,
     new Gauge[Int] {
-      def value() = queue.size
+      def getValue = queue.size
     }
   )
 

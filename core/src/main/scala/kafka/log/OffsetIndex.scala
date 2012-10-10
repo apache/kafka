@@ -49,39 +49,36 @@ import kafka.utils._
  * All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal 
  * storage format.
  */
-class OffsetIndex(val file: File, val baseOffset: Long, var mutable: Boolean, maxIndexSize: Int = -1) extends Logging {
-
+class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) extends Logging {
+  
   /* the memory mapping */
   private var mmap: MappedByteBuffer = 
     {
       val newlyCreated = file.createNewFile()
       val raf = new RandomAccessFile(file, "rw")
       try {
-        if(mutable) {
-          /* if mutable create and memory map a new sparse file */
+        /* pre-allocate the file if necessary */
+        if(newlyCreated) {
           if(maxIndexSize < 8)
             throw new IllegalArgumentException("Invalid max index size: " + maxIndexSize)
-          
-          /* pre-allocate the file if necessary */
-          if(newlyCreated)
-            raf.setLength(roundToExactMultiple(maxIndexSize, 8))
-          val idx = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, raf.length())
-          
-          /* set the position in the index for the next entry */
-          if(newlyCreated)
-            idx.position(0)
-          else
-            // if this is a pre-existing index, assume it is all valid and set position to last entry
-            idx.position(roundToExactMultiple(idx.limit, 8))
-          idx
-        } else {
-          /* if not mutable, just mmap what they gave us */
-          val len = raf.length()
-          if(len < 0 || len % 8 != 0)
-            throw new IllegalStateException("Index file " + file.getName + " is corrupt, found " + len + 
-                                            " bytes which is not positive or not a multiple of 8.")
-          raf.getChannel.map(FileChannel.MapMode.READ_ONLY, 0, len)
+          raf.setLength(roundToExactMultiple(maxIndexSize, 8))
         }
+          
+        val len = raf.length()  
+        if(len < 0 || len % 8 != 0)
+          throw new IllegalStateException("Index file " + file.getName + " is corrupt, found " + len + 
+                                          " bytes which is not positive or not a multiple of 8.")
+          
+        /* memory-map the file */
+        val idx = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
+          
+        /* set the position in the index for the next entry */
+        if(newlyCreated)
+          idx.position(0)
+        else
+          // if this is a pre-existing index, assume it is all valid and set position to last entry
+          idx.position(roundToExactMultiple(idx.limit, 8))
+        idx
       } finally {
         Utils.swallow(raf.close())
       }
@@ -91,7 +88,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, var mutable: Boolean, ma
   val maxEntries = mmap.limit / 8
   
   /* the number of entries in the index */
-  private var size = if(mutable) new AtomicInteger(mmap.position / 8) else new AtomicInteger(mmap.limit / 8)
+  private var size = new AtomicInteger(mmap.position / 8)
   
   /* the last offset in the index */
   var lastOffset = readLastOffset()
@@ -115,8 +112,6 @@ class OffsetIndex(val file: File, val baseOffset: Long, var mutable: Boolean, ma
    * the pair (baseOffset, 0) is returned.
    */
   def lookup(targetOffset: Long): OffsetPosition = {
-    if(entries == 0)
-      return OffsetPosition(baseOffset, 0)
     val idx = mmap.duplicate
     val slot = indexSlotFor(idx, targetOffset)
     if(slot == -1)
@@ -128,16 +123,20 @@ class OffsetIndex(val file: File, val baseOffset: Long, var mutable: Boolean, ma
   /**
    * Find the slot in which the largest offset less than or equal to the given
    * target offset is stored.
-   * Return -1 if the least entry in the index is larger than the target offset 
+   * Return -1 if the least entry in the index is larger than the target offset or the index is empty
    */
   private def indexSlotFor(idx: ByteBuffer, targetOffset: Long): Int = {
     // we only store the difference from the baseoffset so calculate that
     val relativeOffset = targetOffset - baseOffset
     
+    // check if the index is empty
+    if(entries == 0)
+      return -1
+    
     // check if the target offset is smaller than the least offset
     if(logical(idx, 0) > relativeOffset)
       return -1
-    
+      
     // binary search for the entry
     var lo = 0
     var hi = entries-1
@@ -175,8 +174,6 @@ class OffsetIndex(val file: File, val baseOffset: Long, var mutable: Boolean, ma
    */
   def append(logicalOffset: Long, position: Int) {
     this synchronized {
-      if(!mutable)
-        throw new IllegalStateException("Attempt to append to an immutable offset index " + file.getName)
       if(isFull)
         throw new IllegalStateException("Attempt to append to a full index (size = " + size + ").")
       if(size.get > 0 && logicalOffset <= lastOffset)
@@ -227,17 +224,17 @@ class OffsetIndex(val file: File, val baseOffset: Long, var mutable: Boolean, ma
   }
   
   /**
-   * Make this segment read-only, flush any unsaved changes, and truncate any excess bytes
+   * Trim this segment to fit just the valid entries, deleting all trailing unwritten bytes from
+   * the file.
    */
-  def makeReadOnly() {
+  def trimToSize() {
     this synchronized {
-      mutable = false
       flush()
       val raf = new RandomAccessFile(file, "rws")
       try {
         val newLength = entries * 8
         raf.setLength(newLength)
-        this.mmap = raf.getChannel().map(FileChannel.MapMode.READ_ONLY, 0, newLength)
+        this.mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, newLength)
       } finally {
         Utils.swallow(raf.close())
       }
@@ -265,8 +262,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, var mutable: Boolean, ma
   
   /** Close the index */
   def close() {
-    if(mutable)
-      makeReadOnly()
+    trimToSize()
   }
   
   /**

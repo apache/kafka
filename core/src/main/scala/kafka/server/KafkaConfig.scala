@@ -21,7 +21,7 @@ import java.util.Properties
 import kafka.message.Message
 import kafka.consumer.ConsumerConfig
 import java.net.InetAddress
-import kafka.utils.{Utils, VerifiableProperties, ZKConfig}
+import kafka.utils.{Topic, Utils, VerifiableProperties, ZKConfig}
 
 /**
  * Configuration settings for the kafka server

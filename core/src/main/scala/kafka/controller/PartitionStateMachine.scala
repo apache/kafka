@@ -21,7 +21,7 @@ import kafka.api.LeaderAndIsr
 import kafka.utils.{Logging, ZkUtils}
 import org.I0Itec.zkclient.IZkChildListener
 import collection.JavaConversions._
-import kafka.common.{StateChangeFailedException, PartitionOfflineException}
+import kafka.common.{StateChangeFailedException, PartitionOfflineException, KafkaException}
 import java.util.concurrent.atomic.AtomicBoolean
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 
@@ -43,7 +43,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   private val zkClient = controllerContext.zkClient
   var partitionState: mutable.Map[(String, Int), PartitionState] = mutable.Map.empty
   val brokerRequestBatch = new ControllerBrokerRequestBatch(controller.sendRequest)
-  val offlinePartitionSelector = new OfflinePartitionLeaderSelector(controllerContext)
   private var isShuttingDown = new AtomicBoolean(false)
 
   /**
@@ -83,8 +82,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       // try to move all partitions in NewPartition or OfflinePartition state to OnlinePartition state
       partitionState.filter(partitionAndState =>
         partitionAndState._2.equals(OfflinePartition) || partitionAndState._2.equals(NewPartition)).foreach {
-        partitionAndState => handleStateChange(partitionAndState._1._1, partitionAndState._1._2, OnlinePartition,
-                                               offlinePartitionSelector)
+        partitionAndState => handleStateChange(partitionAndState._1._1, partitionAndState._1._2, OnlinePartition)
       }
       brokerRequestBatch.sendRequestsToBrokers()
     }catch {
@@ -97,13 +95,12 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * @param partitions   The list of partitions that need to be transitioned to the target state
    * @param targetState  The state that the partitions should be moved to
    */
-  def handleStateChanges(partitions: Seq[(String, Int)], targetState: PartitionState,
-                         leaderSelector: PartitionLeaderSelector = offlinePartitionSelector) {
+  def handleStateChanges(partitions: Seq[(String, Int)], targetState: PartitionState) {
     info("Invoking state change to %s for partitions %s".format(targetState, partitions.mkString(",")))
     try {
       brokerRequestBatch.newBatch()
       partitions.foreach { topicAndPartition =>
-        handleStateChange(topicAndPartition._1, topicAndPartition._2, targetState, leaderSelector)
+        handleStateChange(topicAndPartition._1, topicAndPartition._2, targetState)
       }
       brokerRequestBatch.sendRequestsToBrokers()
     }catch {
@@ -118,8 +115,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * @param partition   The partition for which the state transition is invoked
    * @param targetState The end state that the partition should be moved to
    */
-  private def handleStateChange(topic: String, partition: Int, targetState: PartitionState,
-                                leaderSelector: PartitionLeaderSelector) {
+  private def handleStateChange(topic: String, partition: Int, targetState: PartitionState) {
     try {
       partitionState.getOrElseUpdate((topic, partition), NonExistentPartition)
       targetState match {
@@ -132,18 +128,17 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           info("Partition [%s, %d] state changed from NotExists to New with assigned replicas ".format(topic, partition) +
             "%s".format(controllerContext.partitionReplicaAssignment(topic, partition).mkString(",")))
         case OnlinePartition =>
-          assertValidPreviousStates(topic, partition, List(NewPartition, OnlinePartition, OfflinePartition), OnlinePartition)
+          // pre: partition should be in New state
+          assertValidPreviousStates(topic, partition, List(NewPartition, OfflinePartition), OnlinePartition)
           partitionState(topic, partition) match {
             case NewPartition =>
               // initialize leader and isr path for new partition
-              initializeLeaderAndIsrForPartition(topic, partition)
+              initializeLeaderAndIsrForPartition(topic, partition, brokerRequestBatch)
             case OfflinePartition =>
-              electLeaderForPartition(topic, partition, leaderSelector)
-            case OnlinePartition => // invoked when the leader needs to be re-elected
-              electLeaderForPartition(topic, partition, leaderSelector)
+              electLeaderForOfflinePartition(topic, partition, brokerRequestBatch)
             case _ => // should never come here since illegal previous states are checked above
           }
-          info("Partition [%s, %d] state changed from %s to OnlinePartition with leader %d".format(topic, partition,
+          info("Partition [%s, %d] state changed from %s to Online with leader %d".format(topic, partition,
             partitionState(topic, partition), controllerContext.allLeaders(topic, partition)))
           partitionState.put((topic, partition), OnlinePartition)
            // post: partition has a leader
@@ -220,7 +215,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * @brokerRequestBatch  The object that holds the leader and isr requests to be sent to each broker as a result of
    *                      this state change
    */
-  private def initializeLeaderAndIsrForPartition(topic: String, partition: Int) {
+  private def initializeLeaderAndIsrForPartition(topic: String, partition: Int,
+                                                 brokerRequestBatch: ControllerBrokerRequestBatch) {
     debug("Initializing leader and isr for partition [%s, %d]".format(topic, partition))
     val replicaAssignment = controllerContext.partitionReplicaAssignment((topic, partition))
     val liveAssignedReplicas = replicaAssignment.filter(r => controllerContext.liveBrokerIds.contains(r))
@@ -238,10 +234,10 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         try {
           ZkUtils.createPersistentPath(controllerContext.zkClient,
             ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), leaderAndIsr.toString)
-          // NOTE: the above write can fail only if the current controller lost its zk session and the new controller
+          // TODO: the above write can fail only if the current controller lost its zk session and the new controller
           // took over and initialized this partition. This can happen if the current controller went into a long
           // GC pause
-          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(liveAssignedReplicas, topic, partition, leaderAndIsr)
+          brokerRequestBatch.addRequestForBrokers(liveAssignedReplicas, topic, partition, leaderAndIsr)
           controllerContext.allLeaders.put((topic, partition), leaderAndIsr.leader)
           partitionState.put((topic, partition), OnlinePartition)
         }catch {
@@ -261,36 +257,99 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * @brokerRequestBatch  The object that holds the leader and isr requests to be sent to each broker as a result of
    *                      this state change
    */
-  def electLeaderForPartition(topic: String, partition: Int, leaderSelector: PartitionLeaderSelector) {
+  private def electLeaderForOfflinePartition(topic: String, partition: Int,
+                                             brokerRequestBatch: ControllerBrokerRequestBatch) {
     /** handle leader election for the partitions whose leader is no longer alive **/
-    info("Electing leader for partition [%s, %d]".format(topic, partition))
+    info("Electing leader for Offline partition [%s, %d]".format(topic, partition))
     try {
-      var zookeeperPathUpdateSucceeded: Boolean = false
-      var newLeaderAndIsr: LeaderAndIsr = null
-      var replicasForThisPartition: Seq[Int] = Seq.empty[Int]
-      while(!zookeeperPathUpdateSucceeded) {
-        val currentLeaderAndIsr = getLeaderAndIsrOrThrowException(topic, partition)
-        // elect new leader or throw exception
-        val (leaderAndIsr, replicas) = leaderSelector.selectLeader(topic, partition, currentLeaderAndIsr)
-        val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(zkClient,
-          ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), leaderAndIsr.toString, currentLeaderAndIsr.zkVersion)
-        newLeaderAndIsr = leaderAndIsr
-        newLeaderAndIsr.zkVersion = newVersion
-        zookeeperPathUpdateSucceeded = updateSucceeded
-        replicasForThisPartition = replicas
+      controllerContext.partitionReplicaAssignment.get((topic, partition)) match {
+        case Some(assignedReplicas) =>
+          val liveAssignedReplicasToThisPartition = assignedReplicas.filter(r => controllerContext.liveBrokerIds.contains(r))
+          try {
+            // elect new leader or throw exception
+            val newLeaderAndIsr = electLeaderForPartition(topic, partition, assignedReplicas)
+            info("Elected leader %d for Offline partition [%s, %d]".format(newLeaderAndIsr.leader, topic, partition))
+            // store new leader and isr info in cache
+            brokerRequestBatch.addRequestForBrokers(liveAssignedReplicasToThisPartition, topic, partition,
+              newLeaderAndIsr)
+          }catch {
+            case e => throw new StateChangeFailedException(("Error while electing leader for partition" +
+              " [%s, %d]").format(topic, partition), e)
+          }
+        case None => throw new KafkaException(("While handling broker changes, the " +
+          "partition [%s, %d] doesn't have assigned replicas. The replica assignment for other partitions is %s")
+          .format(topic, partition, controllerContext.partitionReplicaAssignment))
       }
-      // update the leader cache
-      controllerContext.allLeaders.put((topic, partition), newLeaderAndIsr.leader)
-      info("Elected leader %d for Offline partition [%s, %d]".format(newLeaderAndIsr.leader, topic, partition))
-      // store new leader and isr info in cache
-      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasForThisPartition, topic, partition, newLeaderAndIsr)
     }catch {
-      case poe: PartitionOfflineException => throw new PartitionOfflineException("All replicas for partition [%s, %d] are dead."
-        .format(topic, partition) + " Marking this partition offline", poe)
-      case sce => throw new StateChangeFailedException(("Error while electing leader for partition" +
-        " [%s, %d]").format(topic, partition), sce)
+      case e => throw new PartitionOfflineException("All replicas for partition [%s, %d] are dead."
+        .format(topic, partition) + " Marking this partition offline")
     }
     debug("After leader election, leader cache is updated to %s".format(controllerContext.allLeaders.map(l => (l._1, l._2))))
+  }
+
+  /**
+   * @param topic                      The topic of the partition whose leader needs to be elected
+   * @param partition                  The partition whose leader needs to be elected
+   * @param assignedReplicas           The list of replicas assigned to the input partition
+   * @throws PartitionOfflineException If no replica in the assigned replicas list is alive
+   * This API selects a new leader for the input partition -
+   * 1. If at least one broker from the isr is alive, it picks a broker from the isr as the new leader
+   * 2. Else, it picks some alive broker from the assigned replica list as the new leader
+   * 3. If no broker in the assigned replica list is alive, it throws PartitionOfflineException
+   * Once the leader is successfully registered in zookeeper, it updates the allLeaders cache
+   */
+  private def electLeaderForPartition(topic: String, partition: Int, assignedReplicas: Seq[Int]):LeaderAndIsr = {
+    var zookeeperPathUpdateSucceeded: Boolean = false
+    var newLeaderAndIsr: LeaderAndIsr = null
+    while(!zookeeperPathUpdateSucceeded) {
+      newLeaderAndIsr = ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition) match {
+        case Some(currentLeaderAndIsr) =>
+          var newLeaderAndIsr: LeaderAndIsr = currentLeaderAndIsr
+          val liveAssignedReplicasToThisPartition = assignedReplicas.filter(r => controllerContext.liveBrokerIds.contains(r))
+          val liveBrokersInIsr = currentLeaderAndIsr.isr.filter(r => controllerContext.liveBrokerIds.contains(r))
+          val currentLeaderEpoch = currentLeaderAndIsr.leaderEpoch
+          val currentLeaderIsrZkPathVersion = currentLeaderAndIsr.zkVersion
+          debug("Leader, epoch, ISR and zkPathVersion for partition (%s, %d) are: [%d], [%d], [%s], [%d]"
+            .format(topic, partition, currentLeaderAndIsr.leader, currentLeaderEpoch, currentLeaderAndIsr.isr,
+            currentLeaderIsrZkPathVersion))
+          newLeaderAndIsr = liveBrokersInIsr.isEmpty match {
+            case true =>
+              debug("No broker is ISR is alive, picking the leader from the alive assigned replicas: %s"
+                .format(liveAssignedReplicasToThisPartition.mkString(",")))
+              liveAssignedReplicasToThisPartition.isEmpty match {
+                case true =>
+                  ControllerStat.offlinePartitionRate.mark()
+                  throw new PartitionOfflineException(("No replica for partition " +
+                  "([%s, %d]) is alive. Live brokers are: [%s],".format(topic, partition, controllerContext.liveBrokerIds)) +
+                  " Assigned replicas are: [%s]".format(assignedReplicas))
+                case false =>
+                  ControllerStat.uncleanLeaderElectionRate.mark()
+                  val newLeader = liveAssignedReplicasToThisPartition.head
+                  warn("No broker in ISR is alive, elected leader from the alive replicas is [%s], ".format(newLeader) +
+                    "There's potential data loss")
+                  new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, List(newLeader), currentLeaderIsrZkPathVersion + 1)
+              }
+            case false =>
+              val newLeader = liveBrokersInIsr.head
+              debug("Some broker in ISR is alive, selecting the leader from the ISR: " + newLeader)
+              new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, liveBrokersInIsr.toList, currentLeaderIsrZkPathVersion + 1)
+          }
+          info("New leader and ISR for partition [%s, %d] is %s".format(topic, partition, newLeaderAndIsr.toString()))
+          // update the new leadership decision in zookeeper or retry
+          val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(zkClient,
+            ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
+            newLeaderAndIsr.toString, currentLeaderAndIsr.zkVersion)
+          newLeaderAndIsr.zkVersion = newVersion
+          zookeeperPathUpdateSucceeded = updateSucceeded
+          newLeaderAndIsr
+        case None =>
+          throw new StateChangeFailedException("On broker changes, " +
+            "there's no leaderAndISR information for partition (%s, %d) in zookeeper".format(topic, partition))
+      }
+    }
+    // update the leader cache
+    controllerContext.allLeaders.put((topic, partition), newLeaderAndIsr.leader)
+    newLeaderAndIsr
   }
 
   private def registerTopicChangeListener() = {
@@ -299,15 +358,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
   def registerPartitionChangeListener(topic: String) = {
     zkClient.subscribeChildChanges(ZkUtils.getTopicPath(topic), new PartitionChangeListener(topic))
-  }
-
-  private def getLeaderAndIsrOrThrowException(topic: String, partition: Int): LeaderAndIsr = {
-    ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition) match {
-      case Some(currentLeaderAndIsr) => currentLeaderAndIsr
-      case None =>
-        throw new StateChangeFailedException("Leader and ISR information doesn't exist for partition " +
-          "[%s, %d] in %s state".format(topic, partition, partitionState((topic, partition))))
-    }
   }
 
   /**

@@ -1,5 +1,6 @@
 {
-    "ReplicaBasicTest"   : [
+    "ReplicaBasicTest"  : [
+        "testcase_0001",
         "testcase_1"
     ]
 }

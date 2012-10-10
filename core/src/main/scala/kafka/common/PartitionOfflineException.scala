@@ -17,12 +17,10 @@
 
 package kafka.common
 
-
 /**
  * This exception is thrown by the leader elector in the controller when leader election fails for a partition since
  * all the replicas for a partition are offline
  */
-class PartitionOfflineException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
-  def this(message: String) = this(message, null)
-  def this() = this(null, null)
+class PartitionOfflineException(message: String) extends RuntimeException(message) {
+  def this() = this(null)
 }

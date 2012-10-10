@@ -95,7 +95,7 @@ object SerializationTestUtils{
   }
 
   def createTestStopReplicaRequest() : StopReplicaRequest = {
-    new StopReplicaRequest(collection.immutable.Set((topic1, 0), (topic2, 0)))
+    new StopReplicaRequest(Set((topic1, 0), (topic2, 0)))
   }
 
   def createTestStopReplicaResponse() : StopReplicaResponse = {
