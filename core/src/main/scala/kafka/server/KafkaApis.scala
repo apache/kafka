@@ -70,10 +70,15 @@ class KafkaApis(val requestChannel: RequestChannel,
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Handling leader and isr request " + leaderAndISRRequest)
     trace("Handling leader and isr request " + leaderAndISRRequest)
-
-    val responseMap = replicaManager.becomeLeaderOrFollower(leaderAndISRRequest)
-    val leaderAndISRResponse = new LeaderAndISRResponse(leaderAndISRRequest.versionId, responseMap)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(leaderAndISRResponse)))
+    try {
+      val responseMap = replicaManager.becomeLeaderOrFollower(leaderAndISRRequest)
+      val leaderAndISRResponse = new LeaderAndISRResponse(leaderAndISRRequest.versionId, responseMap)
+      requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(leaderAndISRResponse)))
+    } catch {
+      case e: KafkaStorageException =>
+        fatal("Disk error during leadership change.", e)
+        Runtime.getRuntime.halt(1)
+    }
   }
 
 

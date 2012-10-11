@@ -38,7 +38,6 @@ private[kafka] class LogManager(val config: KafkaConfig,
                                 needRecovery: Boolean) extends Logging {
 
   val logDir: File = new File(config.logDir)
-  private val numPartitions = config.numPartitions
   private val logFileSizeMap = config.logFileSizeMap
   private val flushInterval = config.flushInterval
   private val logCreationLock = new Object

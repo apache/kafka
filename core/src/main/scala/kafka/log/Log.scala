@@ -483,8 +483,10 @@ private[kafka] class Log(val dir: File,
     var total = 0
     for(segment <- segments) {
       info("Deleting log segment " + segment.start + " from " + name)
-      if(!segment.messageSet.delete() || !segment.index.delete()) {
-        warn("Delete of log segment " + segment.start + " failed.")
+      val deletedLog = segment.messageSet.delete()
+      val deletedIndex = segment.index.delete()
+      if(!deletedIndex || !deletedLog) {
+        throw new KafkaStorageException("Deleting log segment " + segment.start + " failed.")
       } else {
         total += 1
       }

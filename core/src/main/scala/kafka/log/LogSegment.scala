@@ -67,7 +67,7 @@ class LogSegment(val messageSet: FileMessageSet,
    * Find the physical file position for the least offset >= the given offset. If no offset is found
    * that meets this criteria before the end of the log, return null.
    */
-  def translateOffset(offset: Long): OffsetPosition = {
+  private def translateOffset(offset: Long): OffsetPosition = {
     val mapping = index.lookup(offset)
     messageSet.searchFor(offset, mapping.position)
   }

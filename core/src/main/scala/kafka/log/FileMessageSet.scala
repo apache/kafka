@@ -68,9 +68,9 @@ class FileMessageSet private[kafka](val file: File,
    */
   private[log] def searchFor(targetOffset: Long, startingPosition: Int): OffsetPosition = {
     var position = startingPosition
-    val buffer = ByteBuffer.allocate(12)
+    val buffer = ByteBuffer.allocate(MessageSet.LogOverhead)
     val size = _size.get()
-    while(position + 12 < size) {
+    while(position + MessageSet.LogOverhead < size) {
       buffer.rewind()
       channel.read(buffer, position)
       if(buffer.hasRemaining)

@@ -31,7 +31,7 @@ object ByteBufferMessageSet {
   
   private def create(offsetCounter: AtomicLong, compressionCodec: CompressionCodec, messages: Message*): ByteBuffer = {
     if(messages.size == 0) {
-      return MessageSet.Empty.buffer
+      MessageSet.Empty.buffer
     } else if(compressionCodec == NoCompressionCodec) {
       val buffer = ByteBuffer.allocate(MessageSet.messageSetSize(messages))
       for(message <- messages)

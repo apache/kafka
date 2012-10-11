@@ -141,7 +141,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) 
     var lo = 0
     var hi = entries-1
     while(lo < hi) {
-      val mid = ceil((hi + lo) / 2.0).toInt
+      val mid = ceil(hi/2.0 + lo/2.0).toInt
       val found = logical(idx, mid)
       if(found == relativeOffset)
         return mid
@@ -150,7 +150,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) 
       else
         hi = mid - 1
     }
-    return lo
+    lo
   }
   
   /* return the nth logical offset relative to the base offset */
