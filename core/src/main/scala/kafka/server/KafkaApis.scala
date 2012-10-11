@@ -189,7 +189,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       try {
         val localReplica = replicaManager.getLeaderReplicaIfLocal(key.topic, key.partition)
         val log = localReplica.log.get
-        val (start, end) = log.append(partitionData.messages.asInstanceOf[ByteBufferMessageSet])
+        val (start, end) = log.append(partitionData.messages.asInstanceOf[ByteBufferMessageSet], assignOffsets = true)
         // we may need to increment high watermark since ISR could be down to 1
         localReplica.partition.maybeIncrementLeaderHW(localReplica)
         trace("%d bytes written to log %s-%d beginning at offset %d and ending at offset %d"

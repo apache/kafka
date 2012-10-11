@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io._
 import java.util.ArrayList
+import java.util.concurrent.atomic._
 import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
@@ -340,6 +341,31 @@ class LogTest extends JUnitSuite {
     log.truncateTo(0) // truncate before first start offset in the log
     assertEquals("Should change offset", 0, log.logEndOffset)
     assertEquals("Should change log size", log.size, 0)
+  }
+  
+  @Test
+  def testAppendWithoutOffsetAssignment() {
+    for(codec <- List(NoCompressionCodec, DefaultCompressionCodec)) {
+      logDir.mkdir()
+      var log = new Log(logDir, 
+                        maxLogFileSize = 64*1024, 
+                        maxMessageSize = config.maxMessageSize, 
+                        maxIndexSize = 1000, 
+                        indexIntervalBytes = 10000, 
+                        needsRecovery = true)
+      val messages = List("one", "two", "three", "four", "five", "six")
+      val ms = new ByteBufferMessageSet(compressionCodec = codec, 
+                                        offsetCounter = new AtomicLong(5), 
+                                        messages = messages.map(s => new Message(s.getBytes)):_*)
+      val firstOffset = ms.shallowIterator.toList.head.offset
+      val lastOffset = ms.shallowIterator.toList.last.offset
+      val (first, last) = log.append(ms, assignOffsets = false)
+      assertEquals(last + 1, log.logEndOffset)
+      assertEquals(firstOffset, first)
+      assertEquals(lastOffset, last)
+      assertTrue(log.read(5, 64*1024).size > 0)
+      log.delete()
+    }
   }
 
   @Test

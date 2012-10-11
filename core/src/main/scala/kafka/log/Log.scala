@@ -227,67 +227,114 @@ private[kafka] class Log(val dir: File,
 
   /**
    * Append this message set to the active segment of the log, rolling over to a fresh segment if necessary.
+   * 
+   * This method will generally be responsible for assigning offsets to the messages, 
+   * however if the assignOffsets=false flag is passed we will only check that the existing offsets are valid.
+   * 
    * Returns a tuple containing (first_offset, last_offset) for the newly appended of the message set, 
    * or (-1,-1) if the message set is empty
    */
-  def append(messages: ByteBufferMessageSet): (Long, Long) = {
-    // check that all messages are valid and see if we have any compressed messages
-    var messageCount = 0
-    var codec: CompressionCodec = NoCompressionCodec
-    for(messageAndOffset <- messages.shallowIterator) {
-      val m = messageAndOffset.message
-      m.ensureValid()
-      if(MessageSet.entrySize(m) > maxMessageSize)
-        throw new MessageSizeTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d.".format(MessageSet.entrySize(m), maxMessageSize))
-      messageCount += 1;
-      val messageCodec = m.compressionCodec
-      if(messageCodec != NoCompressionCodec)
-        codec = messageCodec
-    }
-
+  def append(messages: ByteBufferMessageSet, assignOffsets: Boolean = true): (Long, Long) = {
+    val messageSetInfo = analyzeAndValidateMessageSet(messages)
+    
     // if we have any valid messages, append them to the log
-    if(messageCount == 0) {
+    if(messageSetInfo.count == 0) {
       (-1L, -1L)
     } else {
-      BrokerTopicStat.getBrokerTopicStat(topicName).messagesInRate.mark(messageCount)
-      BrokerTopicStat.getBrokerAllTopicStat.messagesInRate.mark(messageCount)
+      BrokerTopicStat.getBrokerTopicStat(topicName).messagesInRate.mark(messageSetInfo.count)
+      BrokerTopicStat.getBrokerAllTopicStat.messagesInRate.mark(messageSetInfo.count)
 
       // trim any invalid bytes or partial messages before appending it to the on-disk log
       var validMessages = trimInvalidBytes(messages)
 
-      // they are valid, insert them in the log
-      lock synchronized {
-        try {
-          val firstOffset = nextOffset.get
-          
-          // maybe roll the log
+      try {
+        // they are valid, insert them in the log
+        val offsets = lock synchronized {
+          // maybe roll the log if this segment is full
           val segment = maybeRoll(segments.view.last)
           
-          // assign offsets to the messages
-          validMessages = validMessages.assignOffsets(nextOffset, codec)
+          // assign offsets to the messageset
+          val offsets = 
+            if(assignOffsets) {
+              val firstOffset = nextOffset.get
+              validMessages = validMessages.assignOffsets(nextOffset, messageSetInfo.codec)
+              val lastOffset = nextOffset.get - 1
+              (firstOffset, lastOffset)
+            } else {
+              if(!messageSetInfo.offsetsMonotonic)
+                throw new IllegalArgumentException("Out of order offsets found in " + messages)
+              nextOffset.set(messageSetInfo.lastOffset + 1)
+              (messageSetInfo.firstOffset, messageSetInfo.lastOffset)
+            }
           
-          trace("Appending message set to " + this.name + ": " + validMessages)
-            
           // now append to the log
-          segment.append(firstOffset, validMessages)
-          val lastOffset = nextOffset.get - 1
-          
-          // maybe flush the log and index
-          maybeFlush(messageCount)
+          trace("Appending message set to " + this.name + ": " + validMessages)
+          segment.append(offsets._1, validMessages)
           
           // return the offset at which the messages were appended
-          (firstOffset, lastOffset)
-        } catch {
-          case e: IOException => throw new KafkaStorageException("I/O exception in append to log '%s'".format(name), e)
+          offsets
         }
+        
+        // maybe flush the log and index
+        maybeFlush(messageSetInfo.count)
+        
+        // return the first and last offset
+        offsets
+      } catch {
+        case e: IOException => throw new KafkaStorageException("I/O exception in append to log '%s'".format(name), e)
       }
     }
+  }
+  
+  /* struct to hold various quantities we compute about each message set before appending to the log */
+  case class MessageSetAppendInfo(firstOffset: Long, lastOffset: Long, codec: CompressionCodec, count: Int, offsetsMonotonic: Boolean)
+  
+  /**
+   * Validate the following:
+   * 1. each message is not too large
+   * 2. each message matches its CRC
+   * 
+   * Also compute the following quantities:
+   * 1. First offset in the message set
+   * 2. Last offset in the message set
+   * 3. Number of messages
+   * 4. Whether the offsets are monotonically increasing
+   * 5. Whether any compression codec is used (if many are used, then the last one is given)
+   */
+  private def analyzeAndValidateMessageSet(messages: ByteBufferMessageSet): MessageSetAppendInfo = {
+    var messageCount = 0
+    var firstOffset, lastOffset = -1L
+    var codec: CompressionCodec = NoCompressionCodec
+    var monotonic = true
+    for(messageAndOffset <- messages.shallowIterator) {
+      // update the first offset if on the first message
+      if(firstOffset < 0)
+        firstOffset = messageAndOffset.offset
+      // check that offsets are monotonically increasing
+      if(lastOffset >= messageAndOffset.offset)
+        monotonic = false
+      // update the last offset seen
+      lastOffset = messageAndOffset.offset
+      
+      // check the validity of the message by checking CRC and message size
+      val m = messageAndOffset.message
+      m.ensureValid()
+      if(MessageSet.entrySize(m) > maxMessageSize)
+        throw new MessageSizeTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d.".format(MessageSet.entrySize(m), maxMessageSize))
+      
+      messageCount += 1;
+      
+      val messageCodec = m.compressionCodec
+      if(messageCodec != NoCompressionCodec)
+        codec = messageCodec
+    }
+    MessageSetAppendInfo(firstOffset, lastOffset, codec, messageCount, monotonic)
   }
   
   /**
    * Trim any invalid bytes from the end of this message set (if there are any)
    */
-  def trimInvalidBytes(messages: ByteBufferMessageSet): ByteBufferMessageSet = {
+  private def trimInvalidBytes(messages: ByteBufferMessageSet): ByteBufferMessageSet = {
     val messageSetValidBytes = messages.validBytes
     if(messageSetValidBytes > Int.MaxValue || messageSetValidBytes < 0)
       throw new InvalidMessageSizeException("Illegal length of message set " + messageSetValidBytes + " Message set cannot be appended to log. Possible causes are corrupted produce requests")
