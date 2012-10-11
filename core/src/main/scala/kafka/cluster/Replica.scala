@@ -67,7 +67,7 @@ class Replica(val brokerId: Int,
   def highWatermark_=(newHighWatermark: Long) {
     if (isLocal) {
       trace("Setting hw for replica %d topic %s partition %d on broker %d to %d"
-              .format(brokerId, topic, partitionId, newHighWatermark))
+              .format(brokerId, topic, partitionId, brokerId, newHighWatermark))
       highWatermarkValue.set(newHighWatermark)
     } else
       throw new KafkaException("Unable to set highwatermark for replica %d topic %s partition %d since it's not local"

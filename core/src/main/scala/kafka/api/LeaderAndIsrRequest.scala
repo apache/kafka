@@ -27,30 +27,10 @@ import collection.mutable.HashMap
 object LeaderAndIsr {
   val initialLeaderEpoch: Int = 0
   val initialZKVersion: Int = 0
-  def readFrom(buffer: ByteBuffer): LeaderAndIsr = {
-    val leader = buffer.getInt
-    val leaderGenId = buffer.getInt
-    val ISRString = Utils.readShortString(buffer, "UTF-8")
-    val ISR = ISRString.split(",").map(_.toInt).toList
-    val zkVersion = buffer.getInt
-    new LeaderAndIsr(leader, leaderGenId, ISR, zkVersion)
-  }
 }
 
-case class LeaderAndIsr(var leader: Int, var leaderEpoch: Int, var isr: List[Int], var zkVersion: Int){
+case class LeaderAndIsr(var leader: Int, var leaderEpoch: Int, var isr: List[Int], var zkVersion: Int) {
   def this(leader: Int, ISR: List[Int]) = this(leader, LeaderAndIsr.initialLeaderEpoch, ISR, LeaderAndIsr.initialZKVersion)
-
-  def writeTo(buffer: ByteBuffer) {
-    buffer.putInt(leader)
-    buffer.putInt(leaderEpoch)
-    Utils.writeShortString(buffer, isr.mkString(","), "UTF-8")
-    buffer.putInt(zkVersion)
-  }
-
-  def sizeInBytes(): Int = {
-    val size = 4 + 4 + (2 + isr.mkString(",").length) + 4
-    size
-  }
 
   override def toString(): String = {
     val jsonDataMap = new HashMap[String, String]
@@ -58,6 +38,34 @@ case class LeaderAndIsr(var leader: Int, var leaderEpoch: Int, var isr: List[Int
     jsonDataMap.put("leaderEpoch", leaderEpoch.toString)
     jsonDataMap.put("ISR", isr.mkString(","))
     Utils.stringMapToJsonString(jsonDataMap)
+  }
+}
+
+
+object PartitionStateInfo {
+  def readFrom(buffer: ByteBuffer): PartitionStateInfo = {
+    val leader = buffer.getInt
+    val leaderGenId = buffer.getInt
+    val ISRString = Utils.readShortString(buffer, "UTF-8")
+    val ISR = ISRString.split(",").map(_.toInt).toList
+    val zkVersion = buffer.getInt
+    val replicationFactor = buffer.getInt
+    PartitionStateInfo(LeaderAndIsr(leader, leaderGenId, ISR, zkVersion), replicationFactor)
+  }
+}
+
+case class PartitionStateInfo(val leaderAndIsr: LeaderAndIsr, val replicationFactor: Int) {
+  def writeTo(buffer: ByteBuffer) {
+    buffer.putInt(leaderAndIsr.leader)
+    buffer.putInt(leaderAndIsr.leaderEpoch)
+    Utils.writeShortString(buffer, leaderAndIsr.isr.mkString(","), "UTF-8")
+    buffer.putInt(leaderAndIsr.zkVersion)
+    buffer.putInt(replicationFactor)
+  }
+
+  def sizeInBytes(): Int = {
+    val size = 4 + 4 + (2 + leaderAndIsr.isr.mkString(",").length) + 4 + 4
+    size
   }
 }
 
@@ -73,17 +81,17 @@ object LeaderAndIsrRequest {
     val versionId = buffer.getShort
     val clientId = Utils.readShortString(buffer)
     val ackTimeoutMs = buffer.getInt
-    val leaderAndISRRequestCount = buffer.getInt
-    val leaderAndISRInfos = new HashMap[(String, Int), LeaderAndIsr]
+    val partitionStateInfosCount = buffer.getInt
+    val partitionStateInfos = new HashMap[(String, Int), PartitionStateInfo]
 
-    for(i <- 0 until leaderAndISRRequestCount){
+    for(i <- 0 until partitionStateInfosCount){
       val topic = Utils.readShortString(buffer, "UTF-8")
       val partition = buffer.getInt
-      val leaderAndISRRequest = LeaderAndIsr.readFrom(buffer)
+      val partitionStateInfo = PartitionStateInfo.readFrom(buffer)
 
-      leaderAndISRInfos.put((topic, partition), leaderAndISRRequest)
+      partitionStateInfos.put((topic, partition), partitionStateInfo)
     }
-    new LeaderAndIsrRequest(versionId, clientId, ackTimeoutMs, leaderAndISRInfos)
+    new LeaderAndIsrRequest(versionId, clientId, ackTimeoutMs, partitionStateInfos)
   }
 }
 
@@ -91,19 +99,19 @@ object LeaderAndIsrRequest {
 case class LeaderAndIsrRequest (versionId: Short,
                                 clientId: String,
                                 ackTimeoutMs: Int,
-                                leaderAndISRInfos: Map[(String, Int), LeaderAndIsr])
+                                partitionStateInfos: Map[(String, Int), PartitionStateInfo])
         extends RequestOrResponse(Some(RequestKeys.LeaderAndIsrKey)) {
 
-  def this(leaderAndISRInfos: Map[(String, Int), LeaderAndIsr]) = {
-    this(LeaderAndIsrRequest.CurrentVersion, LeaderAndIsrRequest.DefaultClientId, LeaderAndIsrRequest.DefaultAckTimeout, leaderAndISRInfos)
+  def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo]) = {
+    this(LeaderAndIsrRequest.CurrentVersion, LeaderAndIsrRequest.DefaultClientId, LeaderAndIsrRequest.DefaultAckTimeout, partitionStateInfos)
   }
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     Utils.writeShortString(buffer, clientId)
     buffer.putInt(ackTimeoutMs)
-    buffer.putInt(leaderAndISRInfos.size)
-    for((key, value) <- leaderAndISRInfos){
+    buffer.putInt(partitionStateInfos.size)
+    for((key, value) <- partitionStateInfos){
       Utils.writeShortString(buffer, key._1, "UTF-8")
       buffer.putInt(key._2)
       value.writeTo(buffer)
@@ -112,7 +120,7 @@ case class LeaderAndIsrRequest (versionId: Short,
 
   def sizeInBytes(): Int = {
     var size = 1 + 2 + (2 + clientId.length) + 4 + 4
-    for((key, value) <- leaderAndISRInfos)
+    for((key, value) <- partitionStateInfos)
       size += (2 + key._1.length) + 4 + value.sizeInBytes
     size
   }

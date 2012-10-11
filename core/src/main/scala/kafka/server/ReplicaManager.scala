@@ -22,11 +22,12 @@ import org.I0Itec.zkclient.ZkClient
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.utils._
 import kafka.log.LogManager
-import kafka.api.{LeaderAndIsrRequest, LeaderAndIsr}
-import kafka.common.{UnknownTopicOrPartitionException, LeaderNotAvailableException, ErrorMapping}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 import java.util.concurrent.TimeUnit
+import kafka.common.{UnknownTopicOrPartitionException, LeaderNotAvailableException, ErrorMapping}
+import kafka.api.{PartitionStateInfo, LeaderAndIsrRequest}
+
 
 object ReplicaManager {
   val UnknownLogEndOffset = -1L
@@ -39,7 +40,6 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
   private val leaderPartitionsLock = new Object
   val replicaFetcherManager = new ReplicaFetcherManager(config, this)
   this.logIdent = "Replica Manager on Broker " + config.brokerId + ": "
-
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   val highWatermarkCheckpoint = new HighwaterMarkCheckpoint(config.logDir)
   info("Created highwatermark file %s".format(highWatermarkCheckpoint.name))
@@ -69,6 +69,20 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
       kafkaScheduler.scheduleWithRate(checkpointHighWatermarks, "highwatermark-checkpoint-thread", 0, config.defaultFlushIntervalMs)
   }
 
+  /**
+   * This function is only used in two places: in Partition.updateISR() and KafkaApis.handleProducerRequest().
+   * In the former case, the partition should have been created, in the latter case, return -1 will put the request into purgatory
+   */
+  def getReplicationFactorForPartition(topic: String, partitionId: Int) = {
+    val partitionOpt = getPartition(topic, partitionId)
+    partitionOpt match {
+      case Some(partition) =>
+        partition.replicationFactor
+      case None =>
+        -1
+    }
+  }
+
   def startup() {
     // start ISR expiration thread
     kafkaScheduler.scheduleWithRate(maybeShrinkISR, "isr-expiration-thread-", 0, config.replicaMaxLagTimeMs)
@@ -93,10 +107,10 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
     errorCode
   }
 
-  def getOrCreatePartition(topic: String, partitionId: Int): Partition = {
+  def getOrCreatePartition(topic: String, partitionId: Int, replicationFactor: Int): Partition = {
     var partition = allPartitions.get((topic, partitionId))
     if (partition == null) {
-      allPartitions.putIfNotExists((topic, partitionId), new Partition(topic, partitionId, time, this))
+      allPartitions.putIfNotExists((topic, partitionId), new Partition(topic, partitionId, replicationFactor, time, this))
       partition = allPartitions.get((topic, partitionId))
     }
     partition
@@ -125,10 +139,6 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
     }
   }
 
-  def getOrCreateReplica(topic: String, partitionId: Int, replicaId: Int = config.brokerId): Replica =  {
-    getOrCreatePartition(topic, partitionId).getOrCreateReplica(replicaId)
-  }
-
   def getReplica(topic: String, partitionId: Int, replicaId: Int = config.brokerId): Option[Replica] =  {
     val partitionOpt = getPartition(topic, partitionId)
     partitionOpt match {
@@ -141,23 +151,23 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
     info("Handling leader and isr request %s".format(leaderAndISRRequest))
     val responseMap = new collection.mutable.HashMap[(String, Int), Short]
 
-    for((partitionInfo, leaderAndISR) <- leaderAndISRRequest.leaderAndISRInfos){
+    for((topicAndPartition, partitionStateInfo) <- leaderAndISRRequest.partitionStateInfos){
       var errorCode = ErrorMapping.NoError
-      val topic = partitionInfo._1
-      val partitionId = partitionInfo._2
+      val topic = topicAndPartition._1
+      val partitionId = topicAndPartition._2
 
-      val requestedLeaderId = leaderAndISR.leader
+      val requestedLeaderId = partitionStateInfo.leaderAndIsr.leader
       try {
         if(requestedLeaderId == config.brokerId)
-          makeLeader(topic, partitionId, leaderAndISR)
+          makeLeader(topic, partitionId, partitionStateInfo)
         else
-          makeFollower(topic, partitionId, leaderAndISR)
+          makeFollower(topic, partitionId, partitionStateInfo)
       } catch {
         case e =>
           error("Error processing leaderAndISR request %s".format(leaderAndISRRequest), e)
           errorCode = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
       }
-      responseMap.put(partitionInfo, errorCode)
+      responseMap.put(topicAndPartition, errorCode)
     }
 
     /**
@@ -167,7 +177,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
      */
 //    if(leaderAndISRRequest.isInit == LeaderAndIsrRequest.IsInit){
 //      startHighWaterMarksCheckPointThread
-//      val partitionsToRemove = allPartitions.filter(p => !leaderAndISRRequest.leaderAndISRInfos.contains(p._1)).map(entry => entry._1)
+//      val partitionsToRemove = allPartitions.filter(p => !leaderAndISRRequest.partitionStateInfos.contains(p._1)).map(entry => entry._1)
 //      info("Init flag is set in leaderAndISR request, partitions to remove: %s".format(partitionsToRemove))
 //      partitionsToRemove.foreach(p => stopReplica(p._1, p._2))
 //    }
@@ -175,10 +185,11 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
     responseMap
   }
 
-  private def makeLeader(topic: String, partitionId: Int, leaderAndISR: LeaderAndIsr) = {
+  private def makeLeader(topic: String, partitionId: Int, partitionStateInfo: PartitionStateInfo) = {
+    val leaderAndIsr = partitionStateInfo.leaderAndIsr
     info("Becoming Leader for topic [%s] partition [%d]".format(topic, partitionId))
-    val partition = getOrCreatePartition(topic, partitionId)
-    if (partition.makeLeaderOrFollower(topic, partitionId, leaderAndISR, true)) {
+    val partition = getOrCreatePartition(topic, partitionId, partitionStateInfo.replicationFactor)
+    if (partition.makeLeaderOrFollower(topic, partitionId, leaderAndIsr, true)) {
       // also add this partition to the list of partitions for which the leader is the current broker
       leaderPartitionsLock synchronized {
         leaderPartitions += partition
@@ -187,13 +198,14 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
     info("Completed the leader state transition for topic %s partition %d".format(topic, partitionId))
   }
 
-  private def makeFollower(topic: String, partitionId: Int, leaderAndISR: LeaderAndIsr) {
-    val leaderBrokerId: Int = leaderAndISR.leader
+  private def makeFollower(topic: String, partitionId: Int, partitionStateInfo: PartitionStateInfo) {
+    val leaderAndIsr = partitionStateInfo.leaderAndIsr
+    val leaderBrokerId: Int = leaderAndIsr.leader
     info("Starting the follower state transition to follow leader %d for topic %s partition %d"
                  .format(leaderBrokerId, topic, partitionId))
 
-    val partition = getOrCreatePartition(topic, partitionId)
-    if (partition.makeLeaderOrFollower(topic, partitionId, leaderAndISR, false)) {
+    val partition = getOrCreatePartition(topic, partitionId, partitionStateInfo.replicationFactor)
+    if (partition.makeLeaderOrFollower(topic, partitionId, leaderAndIsr, false)) {
       // remove this replica's partition from the ISR expiration queue
       leaderPartitionsLock synchronized {
         leaderPartitions -= partition
@@ -209,8 +221,12 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
   }
 
   def recordFollowerPosition(topic: String, partitionId: Int, replicaId: Int, offset: Long) = {
-    val partition = getOrCreatePartition(topic, partitionId)
-    partition.updateLeaderHWAndMaybeExpandISR(replicaId, offset)
+    val partitionOpt = getPartition(topic, partitionId)
+    if(partitionOpt.isDefined){
+      partitionOpt.get.updateLeaderHWAndMaybeExpandISR(replicaId, offset)
+    } else {
+      warn("While recording the follower position, the partition [%s, %d] hasn't been created, skip updating leader HW".format(topic, partitionId))
+    }
   }
 
   /**

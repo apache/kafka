@@ -234,14 +234,14 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         debug("Live assigned replicas for partition [%s, %d] are: [%s]".format(topic, partition, liveAssignedReplicas))
         // make the first replica in the list of assigned replicas, the leader
         val leader = liveAssignedReplicas.head
-        var leaderAndIsr = new LeaderAndIsr(leader, liveAssignedReplicas.toList)
+        val leaderAndIsr = new LeaderAndIsr(leader, liveAssignedReplicas.toList)
         try {
           ZkUtils.createPersistentPath(controllerContext.zkClient,
-            ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), leaderAndIsr.toString)
+            ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), leaderAndIsr.toString())
           // NOTE: the above write can fail only if the current controller lost its zk session and the new controller
           // took over and initialized this partition. This can happen if the current controller went into a long
           // GC pause
-          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(liveAssignedReplicas, topic, partition, leaderAndIsr)
+          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(liveAssignedReplicas, topic, partition, leaderAndIsr, replicaAssignment.size)
           controllerContext.allLeaders.put((topic, partition), leaderAndIsr.leader)
           partitionState.put((topic, partition), OnlinePartition)
         }catch {
@@ -283,7 +283,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       controllerContext.allLeaders.put((topic, partition), newLeaderAndIsr.leader)
       info("Elected leader %d for Offline partition [%s, %d]".format(newLeaderAndIsr.leader, topic, partition))
       // store new leader and isr info in cache
-      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasForThisPartition, topic, partition, newLeaderAndIsr)
+      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasForThisPartition,
+                                                          topic, partition, newLeaderAndIsr, controllerContext.partitionReplicaAssignment((topic, partition)).size)
     }catch {
       case poe: PartitionOfflineException => throw new PartitionOfflineException("All replicas for partition [%s, %d] are dead."
         .format(topic, partition) + " Marking this partition offline", poe)

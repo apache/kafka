@@ -139,7 +139,7 @@ class RequestSendThread(val controllerId: Int,
 
 class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (RequestOrResponse) => Unit) => Unit)
   extends  Logging {
-  val leaderAndIsrRequestMap = new mutable.HashMap[Int, mutable.HashMap[(String, Int), LeaderAndIsr]]
+  val leaderAndIsrRequestMap = new mutable.HashMap[Int, mutable.HashMap[(String, Int), PartitionStateInfo]]
   val stopReplicaRequestMap = new mutable.HashMap[Int, Seq[(String, Int)]]
 
   def newBatch() {
@@ -151,10 +151,12 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
     stopReplicaRequestMap.clear()
   }
 
-  def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int, leaderAndIsr: LeaderAndIsr) {
+  def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int, leaderAndIsr: LeaderAndIsr, replicationFactor: Int) {
     brokerIds.foreach { brokerId =>
-      leaderAndIsrRequestMap.getOrElseUpdate(brokerId, new mutable.HashMap[(String, Int), LeaderAndIsr])
-      leaderAndIsrRequestMap(brokerId).put((topic, partition), leaderAndIsr)
+      leaderAndIsrRequestMap.getOrElseUpdate(brokerId,
+                                             new mutable.HashMap[(String, Int), PartitionStateInfo])
+      leaderAndIsrRequestMap(brokerId).put((topic, partition),
+                                           PartitionStateInfo(leaderAndIsr, replicationFactor))
     }
   }
 
@@ -168,8 +170,8 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
   def sendRequestsToBrokers() {
     leaderAndIsrRequestMap.foreach { m =>
       val broker = m._1
-      val leaderAndIsr = m._2
-      val leaderAndIsrRequest = new LeaderAndIsrRequest(leaderAndIsr)
+      val partitionStateInfos = m._2
+      val leaderAndIsrRequest = new LeaderAndIsrRequest(partitionStateInfos)
       debug("The leaderAndIsr request sent to broker %d is %s".format(broker, leaderAndIsrRequest))
       sendRequest(broker, leaderAndIsrRequest, null)
     }

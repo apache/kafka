@@ -45,7 +45,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     replicaManager.checkpointHighWatermarks()
     var fooPartition0Hw = replicaManager.highWatermarkCheckpoint.read(topic, 0)
     assertEquals(0L, fooPartition0Hw)
-    val partition0 = replicaManager.getOrCreatePartition(topic, 0)
+    val partition0 = replicaManager.getOrCreatePartition(topic, 0, 1)
     // create leader log
     val log0 = getMockLog
     // create leader and follower replicas
@@ -86,7 +86,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     replicaManager.checkpointHighWatermarks()
     var topic1Partition0Hw = replicaManager.highWatermarkCheckpoint.read(topic1, 0)
     assertEquals(0L, topic1Partition0Hw)
-    val topic1Partition0 = replicaManager.getOrCreatePartition(topic1, 0)
+    val topic1Partition0 = replicaManager.getOrCreatePartition(topic1, 0, 1)
     // create leader log
     val topic1Log0 = getMockLog
     // create a local replica for topic1
@@ -102,7 +102,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     assertEquals(5L, leaderReplicaTopic1Partition0.highWatermark)
     assertEquals(5L, topic1Partition0Hw)
     // add another partition and set highwatermark
-    val topic2Partition0 = replicaManager.getOrCreatePartition(topic2, 0)
+    val topic2Partition0 = replicaManager.getOrCreatePartition(topic2, 0, 1)
     // create leader log
     val topic2Log0 = getMockLog
     // create a local replica for topic2

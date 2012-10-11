@@ -44,7 +44,7 @@ object LeaderAndISRResponse {
 case class LeaderAndISRResponse(versionId: Short,
                                 responseMap: Map[(String, Int), Short],
                                 errorCode: Short = ErrorMapping.NoError)
-        extends RequestOrResponse{
+        extends RequestOrResponse {
   def sizeInBytes(): Int ={
     var size = 2 + 2 + 4
     for ((key, value) <- responseMap){

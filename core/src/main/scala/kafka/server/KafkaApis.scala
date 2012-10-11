@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.io.IOException
 import kafka.admin.{CreateTopicCommand, AdminUtils}
 import kafka.api._
 import kafka.message._
@@ -26,13 +25,13 @@ import kafka.utils.{Pool, SystemTime, Logging}
 import org.apache.log4j.Logger
 import scala.collection._
 import mutable.HashMap
-import scala.math._
 import kafka.network.RequestChannel.Response
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic._
 import kafka.metrics.KafkaMetricsGroup
 import org.I0Itec.zkclient.ZkClient
 import kafka.common._
+
 
 /**
  * Logic to handle the various Kafka requests
@@ -132,10 +131,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     produceRequest.data.foreach(partitionAndData =>
       maybeUnblockDelayedFetchRequests(partitionAndData._1.topic, partitionAndData._2))
 
+    val allPartitionHaveReplicationFactorOne =
+      !produceRequest.data.keySet.exists(
+        m => replicaManager.getReplicationFactorForPartition(m.topic, m.partition) != 1)
     if (produceRequest.requiredAcks == 0 ||
         produceRequest.requiredAcks == 1 ||
         produceRequest.numPartitions <= 0 ||
-        numPartitionsInError == produceRequest.numPartitions) {
+        allPartitionHaveReplicationFactorOne ||
+        numPartitionsInError == produceRequest.numPartitions){
       val statuses = localProduceResults.map(r => r.key -> ProducerResponseStatus(r.errorCode, r.start)).toMap
       val response = ProducerResponse(produceRequest.versionId, produceRequest.correlationId, statuses)
       requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
@@ -517,8 +520,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace("Checking producer request satisfaction for %s-%d, acksPending = %b"
         .format(topic, partitionId, fetchPartitionStatus.acksPending))
       if (fetchPartitionStatus.acksPending) {
-        val partition = replicaManager.getOrCreatePartition(topic, partitionId)
-        val (hasEnough, errorCode) = partition.checkEnoughReplicasReachOffset(fetchPartitionStatus.requiredOffset, produce.requiredAcks)
+        val partitionOpt = replicaManager.getPartition(topic, partitionId)
+        val (hasEnough, errorCode) = partitionOpt match {
+          case Some(partition) =>
+            partition.checkEnoughReplicasReachOffset(fetchPartitionStatus.requiredOffset, produce.requiredAcks)
+          case None =>
+            (false, ErrorMapping.UnknownTopicOrPartitionCode)
+        }
         if (errorCode != ErrorMapping.NoError) {
           fetchPartitionStatus.acksPending = false
           fetchPartitionStatus.error = errorCode
