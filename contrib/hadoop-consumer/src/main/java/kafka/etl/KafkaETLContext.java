@@ -205,7 +205,7 @@ public class KafkaETLContext {
             
             key.set(_index, _offset, messageAndOffset.message().checksum());
             
-            _offset = messageAndOffset.offset();  //increase offset
+            _offset = messageAndOffset.nextOffset();  //increase offset
             _count ++;  //increase count
             
             return true;
