@@ -55,8 +55,10 @@ case class PartitionOffsetRequestInfo(time: Long, maxNumOffsets: Int)
 case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo],
                          versionId: Short = OffsetRequest.CurrentVersion,
                          clientId: String = OffsetRequest.DefaultClientId,
-                         replicaId: Int = Request.DefaultReplicaId)
+                         replicaId: Int = Request.OrdinaryConsumerId)
         extends RequestOrResponse(Some(RequestKeys.OffsetsKey)) {
+
+  def this(requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo], replicaId: Int) = this(requestInfo, OffsetRequest.CurrentVersion, OffsetRequest.DefaultClientId, replicaId)
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
 
@@ -96,5 +98,6 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
       )
     })
 
-  def isFromFollower = replicaId != Request.NonFollowerId
+  def isFromOrdinaryClient = replicaId == Request.OrdinaryConsumerId
+  def isFromDebuggingClient = replicaId == Request.DebuggingConsumerId
 }

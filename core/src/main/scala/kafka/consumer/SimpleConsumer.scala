@@ -22,6 +22,47 @@ import kafka.network._
 import kafka.utils._
 import java.util.concurrent.TimeUnit
 import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
+import kafka.utils.ZkUtils._
+import collection.immutable
+import kafka.common.{TopicAndPartition, KafkaException}
+import org.I0Itec.zkclient.ZkClient
+import kafka.cluster.Broker
+
+
+object SimpleConsumer extends Logging {
+  def earliestOrLatestOffset(broker: Broker, topic: String, partitionId: Int, earliestOrLatest: Long, isFromOrdinaryConsumer: Boolean): Long = {
+    var simpleConsumer: SimpleConsumer = null
+    var producedOffset: Long = -1L
+    try {
+      simpleConsumer = new SimpleConsumer(broker.host, broker.port, ConsumerConfig.SocketTimeout,
+                                          ConsumerConfig.SocketBufferSize)
+      val topicAndPartition = TopicAndPartition(topic, partitionId)
+      val request = if(isFromOrdinaryConsumer)
+        OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)))
+      else
+        OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)), Request.DebuggingConsumerId.toShort)
+      producedOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
+    } catch {
+      case e =>
+        error("error in earliestOrLatestOffset() ", e)
+    }
+    finally {
+      if (simpleConsumer != null)
+        simpleConsumer.close()
+    }
+    producedOffset
+  }
+
+  def earliestOrLatestOffset(zkClient: ZkClient, topic: String, brokerId: Int, partitionId: Int, earliestOrLatest: Long, isFromOrdinaryConsumer: Boolean = true): Long = {
+    val cluster = getCluster(zkClient)
+    val broker = cluster.getBroker(brokerId) match {
+      case Some(b) => b
+      case None => throw new KafkaException("Broker " + brokerId + " is unavailable. Cannot issue " +
+                                                    "getOffsetsBefore request")
+    }
+    earliestOrLatestOffset(broker, topic, partitionId, earliestOrLatest, isFromOrdinaryConsumer)
+  }
+}
 
 
 /**

@@ -25,7 +25,7 @@ import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 import java.util.concurrent.TimeUnit
-import kafka.common.{UnknownTopicOrPartitionException, LeaderNotAvailableException, ErrorMapping}
+import kafka.common.{ReplicaNotAvailableException, UnknownTopicOrPartitionException, LeaderNotAvailableException, ErrorMapping}
 import kafka.api.{PartitionStateInfo, LeaderAndIsrRequest}
 
 
@@ -122,6 +122,14 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
       None
     else
       Some(partition)
+  }
+
+  def getReplicaOrException(topic: String, partition: Int): Replica = {
+    val replicaOpt = getReplica(topic, partition)
+    if(replicaOpt.isDefined)
+      return replicaOpt.get
+    else
+      throw new ReplicaNotAvailableException("Replica %d is not available for partiton [%s, %d] yet".format(config.brokerId, topic, partition))
   }
 
   def getLeaderReplicaIfLocal(topic: String, partitionId: Int): Replica =  {

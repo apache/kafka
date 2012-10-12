@@ -33,7 +33,7 @@ class OffsetRequest(requestInfo: java.util.Map[TopicAndPartition, PartitionOffse
       requestInfo = scalaMap,
       versionId = versionId,
       clientId = clientId,
-      replicaId = Request.NonFollowerId
+      replicaId = Request.OrdinaryConsumerId
     )
   }
 

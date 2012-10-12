@@ -93,7 +93,7 @@ class SimpleFetchTest extends JUnit3Suite {
 
     // This request (from a follower) wants to read up to 2*HW but should only get back up to HW bytes into the log
     val goodFetch = new FetchRequestBuilder()
-          .replicaId(Request.NonFollowerId)
+          .replicaId(Request.OrdinaryConsumerId)
           .addFetch(topic, partitionId, 0, fetchSize)
           .build()
     val goodFetchBB = TestUtils.createRequestByteBuffer(goodFetch)

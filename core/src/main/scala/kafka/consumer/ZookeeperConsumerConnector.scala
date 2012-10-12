@@ -27,7 +27,6 @@ import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import java.net.InetAddress
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
-import kafka.api.PartitionOffsetRequestInfo
 import java.util.UUID
 import kafka.serializer.Decoder
 import kafka.utils.ZkUtils._
@@ -253,31 +252,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     }
   }
 
-  private def earliestOrLatestOffset(topic: String, brokerId: Int, partitionId: Int, earliestOrLatest: Long): Long = {
-    var simpleConsumer: SimpleConsumer = null
-    var producedOffset: Long = -1L
-    try {
-      val cluster = getCluster(zkClient)
-      val broker = cluster.getBroker(brokerId) match {
-        case Some(b) => b
-        case None => throw new KafkaException("Broker " + brokerId + " is unavailable. Cannot issue " +
-          "getOffsetsBefore request")
-      }
-      simpleConsumer = new SimpleConsumer(broker.host, broker.port, ConsumerConfig.SocketTimeout,
-                                            ConsumerConfig.SocketBufferSize)
-      val topicAndPartition = TopicAndPartition(topic, partitionId)
-      val request = OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)))
-      producedOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
-    } catch {
-      case e =>
-        error("error in earliestOrLatestOffset() ", e)
-    }
-    finally {
-      if (simpleConsumer != null)
-        simpleConsumer.close
-    }
-    producedOffset
-  }
+
 
   class ZKSessionExpireListener(val dirs: ZKGroupDirs,
                                  val consumerIdString: String,
@@ -611,9 +586,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           case None =>
             config.autoOffsetReset match {
               case OffsetRequest.SmallestTimeString =>
-                earliestOrLatestOffset(topic, leader, partition, OffsetRequest.EarliestTime)
+                SimpleConsumer.earliestOrLatestOffset(zkClient, topic, leader, partition, OffsetRequest.EarliestTime)
               case OffsetRequest.LargestTimeString =>
-                earliestOrLatestOffset(topic, leader, partition, OffsetRequest.LatestTime)
+                SimpleConsumer.earliestOrLatestOffset(zkClient, topic, leader, partition, OffsetRequest.LatestTime)
               case _ =>
                 throw new InvalidConfigException("Wrong value in autoOffsetReset in ConsumerConfig")
             }

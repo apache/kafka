@@ -26,8 +26,8 @@ object RequestOrResponse {
 
 
 object Request {
-  val DefaultReplicaId = -1
-  val NonFollowerId = DefaultReplicaId
+  val OrdinaryConsumerId: Int = -1
+  val DebuggingConsumerId: Int = -2
 }
 
 

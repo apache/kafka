@@ -17,62 +17,81 @@
 
 package kafka.tools
 
-import java.net.URI
 import joptsimple._
-import kafka.api.FetchRequestBuilder
 import kafka.utils._
 import kafka.consumer._
+import kafka.api.{OffsetRequest, FetchRequestBuilder, Request}
+import kafka.cluster.Broker
+import scala.collection.JavaConversions._
+
 
 /**
  * Command line program to dump out messages to standard out using the simple consumer
  */
 object SimpleConsumerShell extends Logging {
 
+  def USE_LEADER_REPLICA = -1
+
   def main(args: Array[String]): Unit = {
 
     val parser = new OptionParser
-    val urlOpt = parser.accepts("server", "REQUIRED: The hostname of the server to connect to.")
+    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: The list of hostname and port of the server to connect to.")
                            .withRequiredArg
-                           .describedAs("kafka://hostname:port")
+                           .describedAs("hostname:port,...,hostname:port")
                            .ofType(classOf[String])
     val topicOpt = parser.accepts("topic", "REQUIRED: The topic to consume from.")
                            .withRequiredArg
                            .describedAs("topic")
                            .ofType(classOf[String])
-    val partitionOpt = parser.accepts("partition", "The partition to consume from.")
+    val partitionIdOpt = parser.accepts("partition", "The partition to consume from.")
                            .withRequiredArg
                            .describedAs("partition")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(0)
-    val offsetOpt = parser.accepts("offset", "The offset to start consuming from.")
+    val replicaIdOpt = parser.accepts("replica", "The replica id to consume from, default -1 means leader broker.")
                            .withRequiredArg
-                           .describedAs("offset")
-                           .ofType(classOf[java.lang.Long])
-                           .defaultsTo(0L)
-    val fetchsizeOpt = parser.accepts("fetchsize", "The fetch size of each request.")
-                           .withRequiredArg
-                           .describedAs("fetchsize")
+                           .describedAs("replica id")
                            .ofType(classOf[java.lang.Integer])
-                           .defaultsTo(1000000)
+                           .defaultsTo(USE_LEADER_REPLICA)
+    val offsetOpt = parser.accepts("offset", "The offset id to consume from, default to -2 which means from beginning; while value -1 means from end")
+                           .withOptionalArg()
+                           .describedAs("consume offset")
+                           .ofType(classOf[java.lang.Long])
+                           .defaultsTo(OffsetRequest.EarliestTime)
     val clientIdOpt = parser.accepts("clientId", "The ID of this client.")
                            .withOptionalArg
                            .describedAs("clientId")
                            .ofType(classOf[String])
                            .defaultsTo("SimpleConsumerShell")
+    val fetchSizeOpt = parser.accepts("fetchsize", "The fetch size of each request.")
+                           .withRequiredArg
+                           .describedAs("fetchsize")
+                           .ofType(classOf[java.lang.Integer])
+                           .defaultsTo(1024 * 1024)
+    val messageFormatterOpt = parser.accepts("formatter", "The name of a class to use for formatting kafka messages for display.")
+                           .withRequiredArg
+                           .describedAs("class")
+                           .ofType(classOf[String])
+                           .defaultsTo(classOf[NewlineMessageFormatter].getName)
+    val messageFormatterArgOpt = parser.accepts("property")
+                           .withRequiredArg
+                           .describedAs("prop")
+                           .ofType(classOf[String])
     val printOffsetOpt = parser.accepts("print-offsets", "Print the offsets returned by the iterator")
                            .withOptionalArg
                            .describedAs("print offsets")
                            .ofType(classOf[java.lang.Boolean])
                            .defaultsTo(false)
-    val printMessageOpt = parser.accepts("print-messages", "Print the messages returned by the iterator")
-                           .withOptionalArg
-                           .describedAs("print messages")
-                           .ofType(classOf[java.lang.Boolean])
-                           .defaultsTo(false)
+    val maxWaitMsOpt = parser.accepts("max-wait-ms", "The max amount of time each fetch request waits.")
+                           .withRequiredArg
+                           .describedAs("ms")
+                           .ofType(classOf[java.lang.Integer])
+                           .defaultsTo(1000)
+    val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
+        "skip it instead of halt.")
 
     val options = parser.parse(args : _*)
-    
-    for(arg <- List(urlOpt, topicOpt)) {
+    for(arg <- List(brokerListOpt, topicOpt, partitionIdOpt)) {
       if(!options.has(arg)) {
         error("Missing required argument \"" + arg + "\"")
         parser.printHelpOn(System.err)
@@ -80,45 +99,124 @@ object SimpleConsumerShell extends Logging {
       }
     }
 
-    val url = new URI(options.valueOf(urlOpt))
     val topic = options.valueOf(topicOpt)
-    val partition = options.valueOf(partitionOpt).intValue
-    val startingOffset = options.valueOf(offsetOpt).longValue
-    val fetchSize = options.valueOf(fetchsizeOpt).intValue
+    val partitionId = options.valueOf(partitionIdOpt).intValue()
+    val replicaId = options.valueOf(replicaIdOpt).intValue()
+    var startingOffset = options.valueOf(offsetOpt).longValue
+    val fetchSize = options.valueOf(fetchSizeOpt).intValue
     val clientId = options.valueOf(clientIdOpt).toString
-    val printOffsets = if(options.has(printOffsetOpt)) true else false
-    val printMessages = if(options.has(printMessageOpt)) true else false
+    val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
 
-    info("Starting consumer...")
-    val consumer = new SimpleConsumer(url.getHost, url.getPort, 10000, 64*1024)
-    val thread = Utils.newThread("kafka-consumer", new Runnable() {
+    val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
+    val printOffsets = if(options.has(printOffsetOpt)) true else false
+
+    val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
+    val formatterArgs = MessageFormatter.tryParseFormatterArgs(options.valuesOf(messageFormatterArgOpt))
+
+    // getting topic metadata
+    info("Getting topic metatdata...")
+    val metadataTargetBrokers = Utils.getAllBrokersFromBrokerList(options.valueOf(brokerListOpt))
+    val topicsMetadata = Utils.getTopicMetadata(Set(topic), metadataTargetBrokers).topicsMetadata
+    if(topicsMetadata.size != 1 || !topicsMetadata(0).topic.equals(topic)) {
+      System.err.println(("Error: no valid topic metadata for topic: %s, " + "what we get from server is only: %s").format(topic, topicsMetadata))
+      System.exit(1)
+    }
+
+    // validating partition id
+    val partitionsMetadata = topicsMetadata(0).partitionsMetadata
+    val partitionMetadataOpt = partitionsMetadata.find(p => p.partitionId == partitionId)
+    if(!partitionMetadataOpt.isDefined) {
+      System.err.println("Error: partition %d does not exist for topic %s".format(partitionId, topic))
+      System.exit(1)
+    }
+
+    // validating replica id and initializing target broker
+    var fetchTargetBroker: Broker = null
+    var replicaOpt: Option[Broker] = null
+    if(replicaId == USE_LEADER_REPLICA) {
+      replicaOpt = partitionMetadataOpt.get.leader
+      if(!replicaOpt.isDefined) {
+        System.err.println("Error: user speicifies to fetch from leader for partition (%s, %d) which has not been elected yet".format(replicaId, topic, partitionId))
+        System.exit(1)
+      }
+    }
+    else {
+      val replicasForPartition = partitionMetadataOpt.get.replicas
+      replicaOpt = replicasForPartition.find(r => r.id == replicaId)
+      if(!replicaOpt.isDefined) {
+        System.err.println("Error: replica %d does not exist for partition (%s, %d)".format(replicaId, topic, partitionId))
+        System.exit(1)
+      }
+    }
+    fetchTargetBroker = replicaOpt.get
+
+    // initializing starting offset
+    if(startingOffset < OffsetRequest.EarliestTime) {
+      System.err.println("Invalid starting offset: %d".format(startingOffset))
+      System.exit(1)
+    }
+    if(startingOffset < 0)
+      startingOffset = SimpleConsumer.earliestOrLatestOffset(fetchTargetBroker, topic, partitionId, startingOffset, false)
+
+    // initializing formatter
+    val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
+    formatter.init(formatterArgs)
+
+    info("Starting simple consumer shell to partition [%s, %d], replica [%d], host and port: [%s, %d], from offset [%d]"
+                 .format(topic, partitionId, replicaId, fetchTargetBroker.host, fetchTargetBroker.port, startingOffset))
+    val simpleConsumer = new SimpleConsumer(fetchTargetBroker.host, fetchTargetBroker.port, 10000, 64*1024)
+    val thread = Utils.newThread("kafka-simpleconsumer-shell", new Runnable() {
       def run() {
         var reqId = 0
         var offset = startingOffset
-        while(true) {
-          val fetchRequest = new FetchRequestBuilder()
-            .correlationId(reqId)
-            .clientId(clientId)
-            .addFetch(topic, partition, offset, fetchSize)
-            .build()
-          val fetchResponse = consumer.fetch(fetchRequest)
-          val messageSet = fetchResponse.messageSet(topic, partition)
-          debug("multi fetched " + messageSet.sizeInBytes + " bytes from offset " + offset)
-          var consumed = 0
-          for(messageAndOffset <- messageSet) {
-            if(printMessages)
-              info("consumed: " + Utils.toString(messageAndOffset.message.payload, "UTF-8"))
-            offset = messageAndOffset.nextOffset
-            if(printOffsets)
-              info("next offset = " + offset)
-            consumed += 1
+        try {
+          while(true) {
+            val fetchRequest = new FetchRequestBuilder()
+                    .correlationId(reqId)
+                    .clientId(clientId)
+                    .replicaId(Request.DebuggingConsumerId)
+                    .addFetch(topic, partitionId, offset, fetchSize)
+                    .maxWait(maxWaitMs)
+                    .minBytes(ConsumerConfig.MinFetchBytes)
+                    .build()
+            val fetchResponse = simpleConsumer.fetch(fetchRequest)
+            val messageSet = fetchResponse.messageSet(topic, partitionId)
+            debug("multi fetched " + messageSet.sizeInBytes + " bytes from offset " + offset)
+            var consumed = 0
+            for(messageAndOffset <- messageSet) {
+              try {
+                offset = messageAndOffset.offset
+                if(printOffsets)
+                  System.out.println("next offset = " + offset)
+                formatter.writeTo(messageAndOffset.message, System.out)
+              } catch {
+                case e =>
+                  if (skipMessageOnError)
+                    error("Error processing message, skipping this message: ", e)
+                  else
+                    throw e
+              }
+              if(System.out.checkError()) {
+                // This means no one is listening to our output stream any more, time to shutdown
+                System.err.println("Unable to write to standard out, closing consumer.")
+                formatter.close()
+                simpleConsumer.close()
+                System.exit(1)
+              }
+              consumed += 1
+            }
+            reqId += 1
           }
-          reqId += 1
+        } catch {
+          case e: Throwable =>
+            error("Error consuming topic, partition, replica (%s, %d, %d) with request id [%d] and offset [%d]".format(topic, partitionId, replicaId, reqId, offset), e)
         }
       }
-    }, false);
+    }, false)
     thread.start()
     thread.join()
+    System.out.flush()
+    formatter.close()
+    simpleConsumer.close()
   }
-
 }

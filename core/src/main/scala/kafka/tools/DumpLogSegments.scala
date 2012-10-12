@@ -33,7 +33,7 @@ object DumpLogSegments {
       if(file.getName.endsWith(Log.LogFileSuffix)) {
         println("Dumping " + file)
         dumpLog(file, print)
-      } else if(file.getName.endsWith(Log.IndexFileSuffix)){
+      } else if(file.getName.endsWith(Log.IndexFileSuffix)) {
         println("Dumping " + file)
         dumpIndex(file)
       }

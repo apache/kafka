@@ -64,7 +64,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     request.apiLocalCompleteTimeNs = SystemTime.nanoseconds
   }
 
-  def handleLeaderAndISRRequest(request: RequestChannel.Request){
+  def handleLeaderAndISRRequest(request: RequestChannel.Request) {
     val leaderAndISRRequest = request.requestObj.asInstanceOf[LeaderAndIsrRequest]
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Handling leader and isr request " + leaderAndISRRequest)
@@ -81,7 +81,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
 
-  def handleStopReplicaRequest(request: RequestChannel.Request){
+  def handleStopReplicaRequest(request: RequestChannel.Request) {
     val stopReplicaRequest = request.requestObj.asInstanceOf[StopReplicaRequest]
     if(requestLogger.isTraceEnabled)
       requestLogger.trace("Handling stop replica request " + stopReplicaRequest)
@@ -138,7 +138,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         produceRequest.requiredAcks == 1 ||
         produceRequest.numPartitions <= 0 ||
         allPartitionHaveReplicationFactorOne ||
-        numPartitionsInError == produceRequest.numPartitions){
+        numPartitionsInError == produceRequest.numPartitions) {
       val statuses = localProduceResults.map(r => r.key -> ProducerResponseStatus(r.errorCode, r.start)).toMap
       val response = ProducerResponse(produceRequest.versionId, produceRequest.correlationId, statuses)
       requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
@@ -262,21 +262,20 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   /**
    * Read from all the offset details given and return a map of
-   * (topic, partition) -> FetchResponsePartitionData
+   * (topic, partition) -> PartitionData
    */
   private def readMessageSets(fetchRequest: FetchRequest) = {
     val isFetchFromFollower = fetchRequest.isFromFollower
     fetchRequest.requestInfo.map {
       case (TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize)) =>
-        val partitionData = 
-          try {
-            val (messages, highWatermark) = readMessageSet(topic, partition, offset, fetchSize, isFetchFromFollower)
-            BrokerTopicStat.getBrokerTopicStat(topic).bytesOutRate.mark(messages.sizeInBytes)
-            BrokerTopicStat.getBrokerAllTopicStat.bytesOutRate.mark(messages.sizeInBytes)
-            if (!isFetchFromFollower) {
-              new FetchResponsePartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
-            } else {
-              debug("Leader %d for topic %s partition %d received fetch request from follower %d"
+        val partitionData = try {
+          val (messages, highWatermark) = readMessageSet(topic, partition, offset, fetchSize, fetchRequest.replicaId)
+          BrokerTopicStat.getBrokerTopicStat(topic).bytesOutRate.mark(messages.sizeInBytes)
+          BrokerTopicStat.getBrokerAllTopicStat.bytesOutRate.mark(messages.sizeInBytes)
+          if (!isFetchFromFollower) {
+            new FetchResponsePartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
+          } else {
+            debug("Leader %d for topic %s partition %d received fetch request from follower %d"
                           .format(brokerId, topic, partition, fetchRequest.replicaId))
 
             new FetchResponsePartitionData(partition, ErrorMapping.NoError, offset, highWatermark, messages)
@@ -296,25 +295,27 @@ class KafkaApis(val requestChannel: RequestChannel,
   /**
    * Read from a single topic/partition at the given offset upto maxSize bytes
    */
-  private def readMessageSet(topic: String, 
-                             partition: Int, 
-                             offset: Long,
-                             maxSize: Int, 
-                             fromFollower: Boolean): (MessageSet, Long) = {
+  private def readMessageSet(topic: String, partition: Int, offset: Long,
+                             maxSize: Int, fromReplicaId: Int): (MessageSet, Long) = {
     // check if the current broker is the leader for the partitions
-    val leader = replicaManager.getLeaderReplicaIfLocal(topic, partition)
+    val localReplica = if(fromReplicaId == Request.DebuggingConsumerId)
+      replicaManager.getReplicaOrException(topic, partition)
+    else
+      replicaManager.getLeaderReplicaIfLocal(topic, partition)
     trace("Fetching log segment for topic, partition, offset, size = " + (topic, partition, offset, maxSize))
-    val messages = leader.log match {
+    val maxOffsetOpt = if (fromReplicaId == Request.OrdinaryConsumerId) {
+      Some(localReplica.highWatermark)
+    } else {
+      None
+    }
+    val messages = localReplica.log match {
       case Some(log) =>
-        if(fromFollower)
-          log.read(startOffset = offset, maxLength = maxSize, maxOffset = None)
-        else
-          log.read(startOffset = offset, maxLength = maxSize, maxOffset = Some(leader.highWatermark))
+        log.read(offset, maxSize, maxOffsetOpt)
       case None =>
         error("Leader for topic %s partition %d on broker %d does not have a local log".format(topic, partition, brokerId))
         MessageSet.Empty
     }
-    (messages, leader.highWatermark)
+    (messages, localReplica.highWatermark)
   }
 
   /**
@@ -330,15 +331,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       val (topicAndPartition, partitionOffsetRequestInfo) = elem
       try {
         // ensure leader exists
-        val leader = replicaManager.getLeaderReplicaIfLocal(
-          topicAndPartition.topic, topicAndPartition.partition)
+        val localReplica = if(!offsetRequest.isFromDebuggingClient)
+          replicaManager.getLeaderReplicaIfLocal(topicAndPartition.topic, topicAndPartition.partition)
+        else
+          replicaManager.getReplicaOrException(topicAndPartition.topic, topicAndPartition.partition)
         val offsets = {
           val allOffsets = replicaManager.logManager.getOffsets(topicAndPartition,
                                                                 partitionOffsetRequestInfo.time,
                                                                 partitionOffsetRequestInfo.maxNumOffsets)
-          if (offsetRequest.isFromFollower) allOffsets
+          if (!offsetRequest.isFromOrdinaryClient) allOffsets
           else {
-            val hw = leader.highWatermark
+            val hw = localReplica.highWatermark
             if (allOffsets.exists(_ > hw))
               hw +: allOffsets.dropWhile(_ > hw)
             else allOffsets
@@ -488,7 +491,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     }).toMap
 
     def respond() {
-      
       val finalErrorsAndOffsets = initialErrorsAndOffsets.map(
         status => {
           val pstat = partitionStatus(new RequestKey(status._1))

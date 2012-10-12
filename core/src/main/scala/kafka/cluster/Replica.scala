@@ -41,7 +41,7 @@ class Replica(val brokerId: Int,
       logEndOffsetValue.set(newLogEndOffset)
       logEndOffsetUpdateTimeMsValue.set(time.milliseconds)
       trace("Setting log end offset for replica %d for topic %s partition %d to %d"
-            .format(brokerId, topic, partitionId, logEndOffsetValue))
+            .format(brokerId, topic, partitionId, logEndOffsetValue.get()))
     } else
       throw new KafkaException("Shouldn't set logEndOffset for replica %d topic %s partition %d since it's local"
           .format(brokerId, topic, partitionId))
