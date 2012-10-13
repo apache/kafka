@@ -15,4 +15,4 @@
 # limitations under the License.
 
 base_dir=$(dirname $0)
-$base_dir/kafka-run-class.sh kafka.admin.ReassignPartitionsCommand $@
+$base_dir/kafka-run-class.sh kafka.admin.PreferredReplicaLeaderElectionCommand $@

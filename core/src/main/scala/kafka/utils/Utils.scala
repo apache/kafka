@@ -631,7 +631,7 @@ object Utils extends Logging {
     for ( (key, value) <- jsonDataMap) {
       if (numElements > 0)
         builder.append(",")
-      builder.append("\"" + key + "\": ")
+      builder.append("\"" + key + "\":")
       builder.append("\"" + value + "\"")
       numElements += 1
     }
@@ -651,6 +651,20 @@ object Utils extends Logging {
       numElements += 1
     }
     builder.append(" }")
+    builder.toString
+  }
+
+  def arrayToJson[T <: Any](arr: Array[String]): String = {
+    val builder = new StringBuilder
+    builder.append("[ ")
+    var numElements = 0
+    for ( value <- arr ) {
+      if (numElements > 0)
+        builder.append(",")
+      builder.append(" " + value + "  ")
+      numElements += 1
+    }
+    builder.append(" ]")
     builder.toString
   }
 

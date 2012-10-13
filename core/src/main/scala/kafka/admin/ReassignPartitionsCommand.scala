@@ -19,8 +19,8 @@ package kafka.admin
 import joptsimple.OptionParser
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
-import kafka.common.AdminCommandFailedException
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
+import kafka.common.{TopicAndPartition, AdminCommandFailedException}
 
 object ReassignPartitionsCommand extends Logging {
 
@@ -63,7 +63,7 @@ object ReassignPartitionsCommand extends Logging {
             val partition = m.asInstanceOf[Map[String, String]].get("partition").get.toInt
             val replicasList = m.asInstanceOf[Map[String, String]].get("replicas").get
             val newReplicas = replicasList.split(",").map(_.toInt)
-            ((topic, partition), newReplicas.toSeq)
+            (TopicAndPartition(topic, partition), newReplicas.toSeq)
           }.toMap
         case None => throw new AdminCommandFailedException("Partition reassignment data file %s is empty".format(jsonFile))
       }
@@ -94,13 +94,13 @@ object ReassignPartitionsCommand extends Logging {
   }
 }
 
-class ReassignPartitionsCommand(zkClient: ZkClient, partitions: collection.immutable.Map[(String, Int), Seq[Int]])
+class ReassignPartitionsCommand(zkClient: ZkClient, partitions: collection.immutable.Map[TopicAndPartition, Seq[Int]])
   extends Logging {
   def reassignPartitions(): Boolean = {
     try {
-      val validPartitions = partitions.filter(p => validatePartition(zkClient, p._1._1, p._1._2))
+      val validPartitions = partitions.filter(p => validatePartition(zkClient, p._1.topic, p._1.partition))
       val jsonReassignmentData = Utils.mapToJson(validPartitions.map(p =>
-        ("%s,%s".format(p._1._1, p._1._2)) -> p._2.map(_.toString)))
+        ("%s,%s".format(p._1.topic, p._1.partition)) -> p._2.map(_.toString)))
       ZkUtils.createPersistentPath(zkClient, ZkUtils.ReassignPartitionsPath, jsonReassignmentData)
       true
     }catch {

@@ -26,9 +26,9 @@ import scala.collection._
 import kafka.api.LeaderAndIsr
 import org.apache.zookeeper.data.Stat
 import java.util.concurrent.locks.{ReentrantLock, Condition}
-import kafka.common.{KafkaException, NoEpochForPartitionException}
 import kafka.controller.{PartitionAndReplica, ReassignedPartitionsContext}
 import kafka.admin._
+import kafka.common.{TopicAndPartition, KafkaException, NoEpochForPartitionException}
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -36,6 +36,7 @@ object ZkUtils extends Logging {
   val BrokerTopicsPath = "/brokers/topics"
   val ControllerPath = "/controller"
   val ReassignPartitionsPath = "/admin/reassign_partitions"
+  val PreferredReplicaLeaderElectionPath = "/admin/preferred_replica_election"
 
   def getTopicPath(topic: String): String ={
     BrokerTopicsPath + "/" + topic
@@ -428,13 +429,13 @@ object ZkUtils extends Logging {
   }
 
   def getPartitionLeaderAndIsrForTopics(zkClient: ZkClient, topics: Seq[String]):
-  mutable.Map[(String, Int), LeaderAndIsr] = {
-    val ret = new mutable.HashMap[(String, Int), LeaderAndIsr]
+  mutable.Map[TopicAndPartition, LeaderAndIsr] = {
+    val ret = new mutable.HashMap[TopicAndPartition, LeaderAndIsr]
     val partitionsForTopics = getPartitionsForTopics(zkClient, topics)
     for((topic, partitions) <- partitionsForTopics) {
       for(partition <- partitions) {
         ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition.toInt) match {
-          case Some(leaderAndIsr) => ret.put((topic, partition.toInt), leaderAndIsr)
+          case Some(leaderAndIsr) => ret.put(TopicAndPartition(topic, partition.toInt), leaderAndIsr)
           case None =>
         }
       }
@@ -442,8 +443,8 @@ object ZkUtils extends Logging {
     ret
   }
 
-  def getReplicaAssignmentForTopics(zkClient: ZkClient, topics: Seq[String]): mutable.Map[(String, Int), Seq[Int]] = {
-    val ret = new mutable.HashMap[(String, Int), Seq[Int]]
+  def getReplicaAssignmentForTopics(zkClient: ZkClient, topics: Seq[String]): mutable.Map[TopicAndPartition, Seq[Int]] = {
+    val ret = new mutable.HashMap[TopicAndPartition, Seq[Int]]
     topics.foreach { topic =>
       val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
       jsonPartitionMapOpt match {
@@ -452,7 +453,7 @@ object ZkUtils extends Logging {
             case Some(m) =>
               val replicaMap = m.asInstanceOf[Map[String, Seq[String]]]
               for((partition, replicas) <- replicaMap){
-                ret.put((topic, partition.toInt), replicas.map(_.toInt))
+                ret.put(TopicAndPartition(topic, partition.toInt), replicas.map(_.toInt))
                 debug("Replicas assigned to topic [%s], partition [%s] are [%s]".format(topic, partition, replicas))
               }
             case None =>
@@ -519,7 +520,7 @@ object ZkUtils extends Logging {
     }.flatten[(String, Int)].toSeq
   }
 
-  def getPartitionsBeingReassigned(zkClient: ZkClient): Map[(String, Int), ReassignedPartitionsContext] = {
+  def getPartitionsBeingReassigned(zkClient: ZkClient): Map[TopicAndPartition, ReassignedPartitionsContext] = {
     // read the partitions and their new replica list
     val jsonPartitionMapOpt = readDataMaybeNull(zkClient, ReassignPartitionsPath)._1
     jsonPartitionMapOpt match {
@@ -529,11 +530,11 @@ object ZkUtils extends Logging {
           val newReplicas = p._2
           (p._1 -> new ReassignedPartitionsContext(newReplicas))
         }
-      case None => Map.empty[(String, Int), ReassignedPartitionsContext]
+      case None => Map.empty[TopicAndPartition, ReassignedPartitionsContext]
     }
   }
 
-  def parsePartitionReassignmentData(jsonData: String):Map[(String, Int), Seq[Int]] = {
+  def parsePartitionReassignmentData(jsonData: String):Map[TopicAndPartition, Seq[Int]] = {
     SyncJSON.parseFull(jsonData) match {
       case Some(m) =>
         val replicaMap = m.asInstanceOf[Map[String, Seq[String]]]
@@ -541,20 +542,21 @@ object ZkUtils extends Logging {
           val topic = reassignedPartitions._1.split(",").head
           val partition = reassignedPartitions._1.split(",").last.toInt
           val newReplicas = reassignedPartitions._2.map(_.toInt)
-          (topic, partition) -> newReplicas
+          TopicAndPartition(topic, partition) -> newReplicas
         }
-      case None => Map.empty[(String, Int), Seq[Int]]
+      case None => Map.empty[TopicAndPartition, Seq[Int]]
     }
   }
 
-  def updatePartitionReassignmentData(zkClient: ZkClient, partitionsToBeReassigned: Map[(String, Int), Seq[Int]]) {
+  def updatePartitionReassignmentData(zkClient: ZkClient, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]) {
     val zkPath = ZkUtils.ReassignPartitionsPath
     partitionsToBeReassigned.size match {
       case 0 => // need to delete the /admin/reassign_partitions path
         deletePath(zkClient, zkPath)
         info("No more partitions need to be reassigned. Deleting zk path %s".format(zkPath))
       case _ =>
-        val jsonData = Utils.mapToJson(partitionsToBeReassigned.map(p => ("%s,%s".format(p._1._1, p._1._2)) -> p._2.map(_.toString)))
+        val jsonData = Utils.mapToJson(partitionsToBeReassigned.map(p =>
+          ("%s,%s".format(p._1.topic, p._1.partition)) -> p._2.map(_.toString)))
         try {
           updatePersistentPath(zkClient, zkPath, jsonData)
           info("Updated partition reassignment path with %s".format(jsonData))
@@ -567,8 +569,8 @@ object ZkUtils extends Logging {
     }
   }
 
-  def getAllReplicasOnBroker(zkClient: ZkClient, topics: Seq[String], brokerIds: Seq[Int]): Seq[PartitionAndReplica] = {
-    brokerIds.map { brokerId =>
+  def getAllReplicasOnBroker(zkClient: ZkClient, topics: Seq[String], brokerIds: Seq[Int]): Set[PartitionAndReplica] = {
+    Set.empty[PartitionAndReplica] ++ brokerIds.map { brokerId =>
       // read all the partitions and their assigned replicas into a map organized by
       // { replica id -> partition 1, partition 2...
       val partitionsAssignedToThisBroker = getPartitionsAssignedToBroker(zkClient, topics, brokerId)
@@ -577,7 +579,30 @@ object ZkUtils extends Logging {
       partitionsAssignedToThisBroker.map(p => new PartitionAndReplica(p._1, p._2, brokerId))
     }.flatten
   }
+  
+  def getPartitionsUndergoingPreferredReplicaElection(zkClient: ZkClient): Set[TopicAndPartition] = {
+    // read the partitions and their new replica list
+    val jsonPartitionListOpt = readDataMaybeNull(zkClient, PreferredReplicaLeaderElectionPath)._1
+    jsonPartitionListOpt match {
+      case Some(jsonPartitionList) => parsePreferredReplicaElectionData(jsonPartitionList)
+      case None => Set.empty[TopicAndPartition]
+    }
+  }
 
+  def parsePreferredReplicaElectionData(jsonData: String):Set[TopicAndPartition] = {
+    SyncJSON.parseFull(jsonData) match {
+      case Some(m) =>
+        val topicAndPartitions = m.asInstanceOf[Array[Map[String, String]]]
+        val partitions = topicAndPartitions.map { p =>
+          val topicPartitionMap = p.asInstanceOf[Map[String, String]]
+          val topic = topicPartitionMap.get("topic").get
+          val partition = topicPartitionMap.get("partition").get.toInt
+          TopicAndPartition(topic, partition)
+        }
+        Set.empty[TopicAndPartition] ++ partitions
+      case None => Set.empty[TopicAndPartition]
+    }
+  }
 
   def deletePartition(zkClient : ZkClient, brokerId: Int, topic: String) {
     val brokerIdPath = BrokerIdsPath + "/" + brokerId
@@ -628,6 +653,16 @@ object ZkUtils extends Logging {
     val topics = ZkUtils.getChildrenParentMayNotExist(zkClient, BrokerTopicsPath)
     if(topics == null) Seq.empty[String]
     else topics
+  }
+
+  def getAllPartitions(zkClient: ZkClient): Set[TopicAndPartition] = {
+    val topics = ZkUtils.getChildrenParentMayNotExist(zkClient, BrokerTopicsPath)
+    if(topics == null) Set.empty[TopicAndPartition]
+    else {
+      topics.map { topic =>
+        getChildren(zkClient, getTopicPartitionsPath(topic)).map(_.toInt).map(TopicAndPartition(topic, _))
+      }.flatten.toSet
+    }
   }
 }
 

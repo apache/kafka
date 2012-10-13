@@ -5,6 +5,7 @@ import joptsimple.OptionParser
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils._
 import scala.collection.Map
+import kafka.common.TopicAndPartition
 
 object CheckReassignmentStatus extends Logging {
 
@@ -46,48 +47,45 @@ object CheckReassignmentStatus extends Logging {
             val partition = m.asInstanceOf[Map[String, String]].get("partition").get.toInt
             val replicasList = m.asInstanceOf[Map[String, String]].get("replicas").get
             val newReplicas = replicasList.split(",").map(_.toInt)
-            ((topic, partition), newReplicas.toSeq)
+            (TopicAndPartition(topic, partition), newReplicas.toSeq)
           }.toMap
-        case None => Map.empty[(String, Int), Seq[Int]]
+        case None => Map.empty[TopicAndPartition, Seq[Int]]
       }
 
       val reassignedPartitionsStatus = checkIfReassignmentSucceeded(zkClient, partitionsToBeReassigned)
       reassignedPartitionsStatus.foreach { partition =>
         partition._2 match {
           case ReassignmentCompleted =>
-            println("Partition [%s,%d] reassignment to %s completed successfully".format(partition._1, partition._2,
-            partitionsToBeReassigned((partition._1._1, partition._1._2))))
+            println("Partition %s reassignment completed successfully".format(partition._1))
           case ReassignmentFailed =>
-            println("Partition [%s,%d] reassignment to %s failed".format(partition._1, partition._2,
-            partitionsToBeReassigned((partition._1._1, partition._1._2))))
+            println("Partition %s reassignment failed".format(partition._1))
           case ReassignmentInProgress =>
-            println("Partition [%s,%d] reassignment to %s in progress".format(partition._1, partition._2,
-            partitionsToBeReassigned((partition._1._1, partition._1._2))))
+            println("Partition %s reassignment in progress".format(partition._1))
         }
       }
     }
   }
 
-  def checkIfReassignmentSucceeded(zkClient: ZkClient, partitionsToBeReassigned: Map[(String, Int), Seq[Int]])
-  :Map[(String, Int), ReassignmentStatus] = {
+  def checkIfReassignmentSucceeded(zkClient: ZkClient, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]])
+  :Map[TopicAndPartition, ReassignmentStatus] = {
     val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient).mapValues(_.newReplicas)
     // for all partitions whose replica reassignment is complete, check the status
     partitionsToBeReassigned.map { topicAndPartition =>
-      (topicAndPartition._1, checkIfPartitionReassignmentSucceeded(zkClient, topicAndPartition._1._1, topicAndPartition._1._2,
+      (topicAndPartition._1, checkIfPartitionReassignmentSucceeded(zkClient, topicAndPartition._1,
         topicAndPartition._2, partitionsToBeReassigned, partitionsBeingReassigned))
     }
   }
 
-  def checkIfPartitionReassignmentSucceeded(zkClient: ZkClient, topic: String, partition: Int,
+  def checkIfPartitionReassignmentSucceeded(zkClient: ZkClient, topicAndPartition: TopicAndPartition,
                                             reassignedReplicas: Seq[Int],
-                                            partitionsToBeReassigned: Map[(String, Int), Seq[Int]],
-                                            partitionsBeingReassigned: Map[(String, Int), Seq[Int]]): ReassignmentStatus = {
-    val newReplicas = partitionsToBeReassigned((topic, partition))
-    partitionsBeingReassigned.get((topic, partition)) match {
+                                            partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]],
+                                            partitionsBeingReassigned: Map[TopicAndPartition, Seq[Int]]): ReassignmentStatus = {
+    val newReplicas = partitionsToBeReassigned(topicAndPartition)
+    partitionsBeingReassigned.get(topicAndPartition) match {
       case Some(partition) => ReassignmentInProgress
       case None =>
         // check if AR == RAR
-        val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partition)
+        val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topicAndPartition.topic, topicAndPartition.partition)
         if(assignedReplicas == newReplicas)
           ReassignmentCompleted
         else

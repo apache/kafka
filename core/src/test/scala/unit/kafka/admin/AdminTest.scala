@@ -20,10 +20,9 @@ import junit.framework.Assert._
 import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
-import kafka.server.{KafkaServer, KafkaConfig}
-import collection.mutable.ListBuffer
-import kafka.common.ErrorMapping
-import kafka.utils.{Utils, ZkUtils, TestUtils}
+import kafka.server.KafkaConfig
+import kafka.utils.{ZkUtils, TestUtils}
+import kafka.common.{TopicAndPartition, ErrorMapping}
 
 class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
@@ -219,13 +218,14 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     // reassign partition 0
     val newReplicas = Seq(0, 2, 3)
     val partitionToBeReassigned = 0
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, Map((topic, partitionToBeReassigned) -> newReplicas))
+    val topicAndPartition = TopicAndPartition(topic, partitionToBeReassigned)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, Map(topicAndPartition -> newReplicas))
     assertTrue("Partition reassignment attempt failed for [test, 0]", reassignPartitionsCommand.reassignPartitions())
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
       val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient).mapValues(_.newReplicas);
-      CheckReassignmentStatus.checkIfPartitionReassignmentSucceeded(zkClient, topic, partitionToBeReassigned, newReplicas,
-      Map((topic, partitionToBeReassigned) -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted;
+      CheckReassignmentStatus.checkIfPartitionReassignmentSucceeded(zkClient, topicAndPartition, newReplicas,
+      Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted;
     }, 1000)
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
     assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
@@ -243,13 +243,14 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     // reassign partition 0
     val newReplicas = Seq(1, 2, 3)
     val partitionToBeReassigned = 0
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, Map((topic, partitionToBeReassigned) -> newReplicas))
+    val topicAndPartition = TopicAndPartition(topic, partitionToBeReassigned)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, Map(topicAndPartition -> newReplicas))
     assertTrue("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
       val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient).mapValues(_.newReplicas);
-      CheckReassignmentStatus.checkIfPartitionReassignmentSucceeded(zkClient, topic, partitionToBeReassigned, newReplicas,
-      Map((topic, partitionToBeReassigned) -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted;
+      CheckReassignmentStatus.checkIfPartitionReassignmentSucceeded(zkClient, topicAndPartition, newReplicas,
+        Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted;
     }, 1000)
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
     assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
@@ -268,13 +269,14 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     // reassign partition 0
     val newReplicas = Seq(2, 3)
     val partitionToBeReassigned = 0
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, Map((topic, partitionToBeReassigned) -> newReplicas))
+    val topicAndPartition = TopicAndPartition(topic, partitionToBeReassigned)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, Map(topicAndPartition -> newReplicas))
     assertTrue("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
     // wait until reassignment is completed
     TestUtils.waitUntilTrue(() => {
       val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient).mapValues(_.newReplicas);
-      CheckReassignmentStatus.checkIfPartitionReassignmentSucceeded(zkClient, topic, partitionToBeReassigned, newReplicas,
-      Map((topic, partitionToBeReassigned) -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted;
+      CheckReassignmentStatus.checkIfPartitionReassignmentSucceeded(zkClient, topicAndPartition, newReplicas,
+        Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted;
     }, 1000)
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
     assertEquals("Partition should have been reassigned to 2, 3", newReplicas, assignedReplicas)
@@ -290,10 +292,11 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     // reassign partition 0
     val newReplicas = Seq(2, 3)
     val partitionToBeReassigned = 0
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, Map((topic, partitionToBeReassigned) -> newReplicas))
+    val topicAndPartition = TopicAndPartition(topic, partitionToBeReassigned)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, Map(topicAndPartition -> newReplicas))
     assertTrue("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
     val reassignedPartitions = ZkUtils.getPartitionsBeingReassigned(zkClient)
-    assertFalse("Partition should not be reassigned", reassignedPartitions.contains((topic, partitionToBeReassigned)))
+    assertFalse("Partition should not be reassigned", reassignedPartitions.contains(topicAndPartition))
     // leader should be 2
     servers.foreach(_.shutdown())
   }
@@ -308,7 +311,8 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     // reassign partition 0
     val newReplicas = Seq(0, 1)
     val partitionToBeReassigned = 0
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, Map((topic, partitionToBeReassigned) -> newReplicas))
+    val topicAndPartition = TopicAndPartition(topic, partitionToBeReassigned)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, Map(topicAndPartition -> newReplicas))
     reassignPartitionsCommand.reassignPartitions
     // create brokers
     val servers = TestUtils.createBrokerConfigs(2).map(b => TestUtils.createServer(new KafkaConfig(b)))
@@ -319,70 +323,41 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   @Test
-  def testResumePartitionReassignmentAfterLeaderWasMoved() {
-    var expectedReplicaAssignment = Map(0  -> List(1, 0, 2, 3))
-    val leaderForPartitionMap = Map(0 -> 2)
+  def testPreferredReplicaJsonData() {
+    // write preferred replica json data to zk path
+    val partitionsForPreferredReplicaElection = Set(TopicAndPartition("test", 1), TopicAndPartition("test2", 1))
+    PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkClient, partitionsForPreferredReplicaElection)
+    // try to read it back and compare with what was written
+    val preferredReplicaElectionZkData = ZkUtils.readData(zkClient,
+        ZkUtils.PreferredReplicaLeaderElectionPath)._1
+    val partitionsUndergoingPreferredReplicaElection =
+      PreferredReplicaLeaderElectionCommand.parsePreferredReplicaJsonData(preferredReplicaElectionZkData)
+    assertEquals("Preferred replica election ser-de failed", partitionsForPreferredReplicaElection,
+      partitionsUndergoingPreferredReplicaElection)
+  }
+
+  @Test
+  def testBasicPreferredReplicaElection() {
+    val expectedReplicaAssignment = Map(1  -> List("0", "1", "2"))
     val topic = "test"
-    val serverConfigs = TestUtils.createBrokerConfigs(4).map(b => new KafkaConfig(b))
-    val servers = new ListBuffer[KafkaServer]
-    // create the topic
-    AdminUtils.createTopicPartitionAssignmentPathInZK(topic,
-      expectedReplicaAssignment.map(r => (r._1) -> r._2.map(_.toString)), zkClient)
-    // bring up just brokers 0 and 1
-    servers.append(TestUtils.createServer(serverConfigs(0)))
-    servers.append(TestUtils.createServer(serverConfigs(1)))
-    val newReplicas = Seq(2, 3)
-    val partitionToBeReassigned = 0
-    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, Map((topic, partitionToBeReassigned) -> newReplicas))
-    reassignPartitionsCommand.reassignPartitions
-    // this partition reassignment request should be ignored since replicas 2 and 3 are not online
-    // and the admin path should be deleted as well
-    TestUtils.waitUntilTrue(checkIfReassignmentPathIsDeleted, 1000)
-    var assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
-    assertEquals("Partition should not be reassigned to 2, 3 yet", expectedReplicaAssignment(0), assignedReplicas)
+    val partition = 1
+    val preferredReplica = 0
     // create brokers
-    servers.append(TestUtils.createServer(serverConfigs(2)))
-    servers.append(TestUtils.createServer(serverConfigs(3)))
-    // wait until new replicas catch up with leader
-    TestUtils.waitUntilTrue(checkIfNewReplicasInIsr, 2000)
-    // change the assigned replicas to 0 and 1
-    updateAssignedReplicasForPartition("test", 0, List(0, 1))
-    // reissue the partition reassignment
-    reassignPartitionsCommand.reassignPartitions
-    // create leaders for the partition to be reassigned
-    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap)
-    // bounce controller
-    servers.head.shutdown()
-    servers.head.startup()
-    TestUtils.waitUntilTrue(checkIfReassignPartitionPathExists, 1500)
-    assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
-    assertEquals("Partition should have been reassigned to 2, 3", newReplicas, assignedReplicas)
+    val serverConfigs = TestUtils.createBrokerConfigs(3).map(new KafkaConfig(_))
+    // create the topic
+    AdminUtils.createTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
+    val servers = serverConfigs.reverse.map(s => TestUtils.createServer(s))
+    // broker 2 should be the leader since it was started first
+    val currentLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, 1000, None).get
+    // trigger preferred replica election
+    val preferredReplicaElection = new PreferredReplicaLeaderElectionCommand(zkClient, Set(TopicAndPartition(topic, partition)))
+    preferredReplicaElection.moveLeaderToPreferredReplica()
+    val newLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, 1000, Some(currentLeader)).get
+    assertEquals("Preferred replica election failed", preferredReplica, newLeader)
     servers.foreach(_.shutdown())
   }
 
   private def checkIfReassignPartitionPathExists(): Boolean = {
     ZkUtils.pathExists(zkClient, ZkUtils.ReassignPartitionsPath)
-  }
-
-  private def checkIfReassignmentPathIsDeleted(): Boolean = {
-    !ZkUtils.pathExists(zkClient, ZkUtils.ReassignPartitionsPath)
-  }
-
-  private def checkIfNewReplicasInIsr(): Boolean = {
-    val leaderAndIsrOpt = ZkUtils.getLeaderAndIsrForPartition(zkClient, "test", 0)
-    leaderAndIsrOpt match {
-      case Some(leaderAndIsr) =>
-        if(leaderAndIsr.isr.contains(2) && leaderAndIsr.isr.contains(3))
-          true
-        else
-          false
-      case None => false
-    }
-  }
-
-  private def updateAssignedReplicasForPartition(topic: String, partition: Int, newAssignedReplicas: Seq[Int]) {
-    val zkPath = ZkUtils.getTopicPath(topic)
-    val jsonPartitionMap = Utils.mapToJson(Map(partition.toString -> newAssignedReplicas.map(_.toString)))
-    ZkUtils.updatePersistentPath(zkClient, zkPath, jsonPartitionMap)
   }
 }
