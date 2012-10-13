@@ -21,6 +21,7 @@ import java.nio.ByteBuffer
 import kafka.utils.Utils
 import scala.collection.Map
 import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.api.ApiUtils._
 
 
 object ProducerResponse {
@@ -29,7 +30,7 @@ object ProducerResponse {
     val correlationId = buffer.getInt
     val topicCount = buffer.getInt
     val statusPairs = (1 to topicCount).flatMap(_ => {
-      val topic = Utils.readShortString(buffer, RequestOrResponse.DefaultCharset)
+      val topic = readShortString(buffer)
       val partitionCount = buffer.getInt
       (1 to partitionCount).map(_ => {
         val partition = buffer.getInt
@@ -64,7 +65,7 @@ case class ProducerResponse(versionId: Short,
     4 + /* topic count */
     groupedStatus.foldLeft (0) ((foldedTopics, currTopic) => {
       foldedTopics +
-      Utils.shortStringLength(currTopic._1, RequestOrResponse.DefaultCharset) +
+      shortStringLength(currTopic._1) +
       4 + /* partition count for this topic */
       currTopic._2.size * {
         4 + /* partition id */
@@ -83,7 +84,7 @@ case class ProducerResponse(versionId: Short,
 
     groupedStatus.foreach(topicStatus => {
       val (topic, errorsAndOffsets) = topicStatus
-      Utils.writeShortString(buffer, topic, RequestOrResponse.DefaultCharset)
+      writeShortString(buffer, topic)
       buffer.putInt(errorsAndOffsets.size) // partition count
       errorsAndOffsets.foreach {
         case((TopicAndPartition(_, partition), ProducerResponseStatus(error, nextOffset))) =>

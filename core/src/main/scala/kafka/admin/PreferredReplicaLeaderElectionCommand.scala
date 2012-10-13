@@ -42,11 +42,11 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
     val options = parser.parse(args : _*)
 
-    Utils.checkRequiredArgs(parser, options, jsonFileOpt, zkConnectOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, jsonFileOpt, zkConnectOpt)
 
     val jsonFile = options.valueOf(jsonFileOpt)
     val zkConnect = options.valueOf(zkConnectOpt)
-    val jsonString = Utils.readFileIntoString(jsonFile)
+    val jsonString = Utils.readFileAsString(jsonFile)
     var zkClient: ZkClient = null
 
     try {
@@ -77,7 +77,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   }
 
   def parsePreferredReplicaJsonData(jsonString: String): Set[TopicAndPartition] = {
-    SyncJSON.parseFull(jsonString) match {
+    Json.parseFull(jsonString) match {
       case Some(partitionList) =>
         val partitions = (partitionList.asInstanceOf[List[Any]])
         Set.empty[TopicAndPartition] ++ partitions.map { m =>
@@ -93,7 +93,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
                                         partitionsUndergoingPreferredReplicaElection: scala.collection.Set[TopicAndPartition]) {
     val zkPath = ZkUtils.PreferredReplicaLeaderElectionPath
     val jsonData = Utils.arrayToJson(partitionsUndergoingPreferredReplicaElection.map { p =>
-      Utils.stringMapToJsonString(Map(("topic" -> p.topic), ("partition" -> p.partition.toString)))
+      Utils.stringMapToJson(Map(("topic" -> p.topic), ("partition" -> p.partition.toString)))
     }.toArray)
     try {
       ZkUtils.createPersistentPath(zkClient, zkPath, jsonData)

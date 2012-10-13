@@ -21,6 +21,8 @@ import kafka.api.{TopicMetadataRequest, TopicMetadata}
 import kafka.common.KafkaException
 import kafka.utils.{Logging, Utils}
 import kafka.common.ErrorMapping
+import kafka.cluster.Broker
+import kafka.client.ClientUtils
 
 
 class BrokerPartitionInfo(producerConfig: ProducerConfig,
@@ -28,7 +30,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
                           topicPartitionInfo: HashMap[String, TopicMetadata])
         extends Logging {
   val brokerList = producerConfig.brokerList
-  val brokers = Utils.getAllBrokersFromBrokerList(brokerList)
+  val brokers = ClientUtils.parseBrokerList(brokerList)
 
   /**
    * Return a sequence of (brokerId, numPartitions).
@@ -71,7 +73,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
    */
   def updateInfo(topics: Set[String]) = {
     var topicsMetadata: Seq[TopicMetadata] = Nil
-    val topicMetadataResponse = Utils.getTopicMetadata(topics, brokers)
+    val topicMetadataResponse = ClientUtils.fetchTopicMetadata(topics, brokers)
     topicsMetadata = topicMetadataResponse.topicsMetadata
     // throw partition specific exception
     topicsMetadata.foreach(tmd =>{
@@ -88,6 +90,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
     })
     producerPool.updateProducer(topicsMetadata)
   }
+  
 }
 
 case class PartitionAndLeader(topic: String, partitionId: Int, leaderBrokerIdOpt: Option[Int])

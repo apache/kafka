@@ -22,7 +22,7 @@ import java.nio.channels.GatheringByteChannel
 import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.message.{MessageSet, ByteBufferMessageSet}
 import kafka.network.{MultiSend, Send}
-import kafka.utils.Utils
+import kafka.api.ApiUtils._
 
 object FetchResponsePartitionData {
   def readFrom(buffer: ByteBuffer): FetchResponsePartitionData = {
@@ -85,7 +85,7 @@ class PartitionDataSend(val partitionId: Int,
 
 object TopicData {
   def readFrom(buffer: ByteBuffer): TopicData = {
-    val topic = Utils.readShortString(buffer, RequestOrResponse.DefaultCharset)
+    val topic = readShortString(buffer)
     val partitionCount = buffer.getInt
     val topicPartitionDataPairs = (1 to partitionCount).map(_ => {
       val partitionId = buffer.getInt
@@ -96,7 +96,7 @@ object TopicData {
   }
 
   def headerSize(topic: String) =
-    Utils.shortStringLength(topic, RequestOrResponse.DefaultCharset) +
+    shortStringLength(topic) +
     4 /* partition count */
 }
 
@@ -115,7 +115,7 @@ class TopicDataSend(val topicData: TopicData) extends Send {
   override def complete = sent >= size
 
   private val buffer = ByteBuffer.allocate(topicData.headerSize)
-  Utils.writeShortString(buffer, topicData.topic)
+  writeShortString(buffer, topicData.topic)
   buffer.putInt(topicData.partitionData.size)
   buffer.rewind()
 

@@ -116,7 +116,7 @@ class Message(val buffer: ByteBuffer) {
     buffer.rewind()
     
     // now compute the checksum and fill it in
-    Utils.putUnsignedInt(buffer, CrcOffset, computeChecksum)
+    Utils.writeUnsignedInt(buffer, CrcOffset, computeChecksum)
   }
   
   def this(bytes: Array[Byte], key: Array[Byte], codec: CompressionCodec) = 
@@ -140,7 +140,7 @@ class Message(val buffer: ByteBuffer) {
   /**
    * Retrieve the previously computed CRC for this message
    */
-  def checksum: Long = Utils.getUnsignedInt(buffer, CrcOffset)
+  def checksum: Long = Utils.readUnsignedInt(buffer, CrcOffset)
   
     /**
    * Returns true if the crc stored with the message matches the crc computed off the message contents

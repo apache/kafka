@@ -20,6 +20,7 @@ package kafka.tools
 import joptsimple._
 import kafka.utils._
 import kafka.consumer._
+import kafka.client.ClientUtils
 import kafka.api.{OffsetRequest, FetchRequestBuilder, Request}
 import kafka.cluster.Broker
 import scala.collection.JavaConversions._
@@ -30,7 +31,7 @@ import scala.collection.JavaConversions._
  */
 object SimpleConsumerShell extends Logging {
 
-  def USE_LEADER_REPLICA = -1
+  def UseLeaderReplica = -1
 
   def main(args: Array[String]): Unit = {
 
@@ -52,7 +53,7 @@ object SimpleConsumerShell extends Logging {
                            .withRequiredArg
                            .describedAs("replica id")
                            .ofType(classOf[java.lang.Integer])
-                           .defaultsTo(USE_LEADER_REPLICA)
+                           .defaultsTo(UseLeaderReplica)
     val offsetOpt = parser.accepts("offset", "The offset id to consume from, default to -2 which means from beginning; while value -1 means from end")
                            .withOptionalArg()
                            .describedAs("consume offset")
@@ -115,8 +116,8 @@ object SimpleConsumerShell extends Logging {
 
     // getting topic metadata
     info("Getting topic metatdata...")
-    val metadataTargetBrokers = Utils.getAllBrokersFromBrokerList(options.valueOf(brokerListOpt))
-    val topicsMetadata = Utils.getTopicMetadata(Set(topic), metadataTargetBrokers).topicsMetadata
+    val metadataTargetBrokers = ClientUtils.parseBrokerList(options.valueOf(brokerListOpt))
+    val topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic), metadataTargetBrokers).topicsMetadata
     if(topicsMetadata.size != 1 || !topicsMetadata(0).topic.equals(topic)) {
       System.err.println(("Error: no valid topic metadata for topic: %s, " + "what we get from server is only: %s").format(topic, topicsMetadata))
       System.exit(1)
@@ -133,7 +134,7 @@ object SimpleConsumerShell extends Logging {
     // validating replica id and initializing target broker
     var fetchTargetBroker: Broker = null
     var replicaOpt: Option[Broker] = null
-    if(replicaId == USE_LEADER_REPLICA) {
+    if(replicaId == UseLeaderReplica) {
       replicaOpt = partitionMetadataOpt.get.leader
       if(!replicaOpt.isDefined) {
         System.err.println("Error: user speicifies to fetch from leader for partition (%s, %d) which has not been elected yet".format(replicaId, topic, partitionId))

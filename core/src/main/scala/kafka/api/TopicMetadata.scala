@@ -19,7 +19,8 @@ package kafka.api
 
 import kafka.cluster.Broker
 import java.nio.ByteBuffer
-import kafka.utils.Utils._
+import kafka.api.ApiUtils._
+import kafka.utils.Logging
 import collection.mutable.ListBuffer
 import kafka.common.{KafkaException, ErrorMapping}
 
@@ -54,9 +55,9 @@ case object LeaderDoesNotExist extends LeaderRequest { val requestId: Byte = 0 }
 object TopicMetadata {
 
   def readFrom(buffer: ByteBuffer): TopicMetadata = {
-    val errorCode = getShortInRange(buffer, "error code", (-1, Short.MaxValue))
+    val errorCode = readShortInRange(buffer, "error code", (-1, Short.MaxValue))
     val topic = readShortString(buffer)
-    val numPartitions = getIntInRange(buffer, "number of partitions", (0, Int.MaxValue))
+    val numPartitions = readIntInRange(buffer, "number of partitions", (0, Int.MaxValue))
     val partitionsMetadata = new ListBuffer[PartitionMetadata]()
     for(i <- 0 until numPartitions)
       partitionsMetadata += PartitionMetadata.readFrom(buffer)
@@ -64,7 +65,7 @@ object TopicMetadata {
   }
 }
 
-case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadata], errorCode: Short = ErrorMapping.NoError) {
+case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadata], errorCode: Short = ErrorMapping.NoError) extends Logging {
   def sizeInBytes: Int = {
     var size: Int = 2   /* error code */
     size += shortStringLength(topic)
@@ -87,8 +88,8 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
 object PartitionMetadata {
 
   def readFrom(buffer: ByteBuffer): PartitionMetadata = {
-    val errorCode = getShortInRange(buffer, "error code", (-1, Short.MaxValue))
-    val partitionId = getIntInRange(buffer, "partition id", (0, Int.MaxValue)) /* partition id */
+    val errorCode = readShortInRange(buffer, "error code", (-1, Short.MaxValue))
+    val partitionId = readIntInRange(buffer, "partition id", (0, Int.MaxValue)) /* partition id */
     val doesLeaderExist = getLeaderRequest(buffer.get)
     val leader = doesLeaderExist match {
       case LeaderExists => /* leader exists */
@@ -97,14 +98,14 @@ object PartitionMetadata {
     }
 
     /* list of all replicas */
-    val numReplicas = getShortInRange(buffer, "number of all replicas", (0, Short.MaxValue))
+    val numReplicas = readShortInRange(buffer, "number of all replicas", (0, Short.MaxValue))
     val replicas = new Array[Broker](numReplicas)
     for(i <- 0 until numReplicas) {
       replicas(i) = Broker.readFrom(buffer)
     }
 
     /* list of in-sync replicas */
-    val numIsr = getShortInRange(buffer, "number of in-sync replicas", (0, Short.MaxValue))
+    val numIsr = readShortInRange(buffer, "number of in-sync replicas", (0, Short.MaxValue))
     val isr = new Array[Broker](numIsr)
     for(i <- 0 until numIsr) {
       isr(i) = Broker.readFrom(buffer)
@@ -122,8 +123,11 @@ object PartitionMetadata {
   }
 }
 
-case class PartitionMetadata(partitionId: Int, val leader: Option[Broker], replicas: Seq[Broker], isr: Seq[Broker] = Seq.empty,
-                             errorCode: Short = ErrorMapping.NoError) {
+case class PartitionMetadata(partitionId: Int, 
+                             val leader: Option[Broker], 
+                             replicas: Seq[Broker], 
+                             isr: Seq[Broker] = Seq.empty,
+                             errorCode: Short = ErrorMapping.NoError) extends Logging {
   def sizeInBytes: Int = {
     var size: Int = 2 /* error code */ + 4 /* partition id */ + 1 /* if leader exists*/
 

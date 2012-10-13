@@ -26,26 +26,22 @@ import java.util.zip.CRC32
 import javax.management._
 import scala.collection._
 import scala.collection.mutable
-import org.I0Itec.zkclient.ZkClient
-import java.util.{Random, Properties}
-import joptsimple.{OptionSpec, OptionSet, OptionParser}
+import java.util.Properties
 import kafka.common.KafkaException
-import kafka.cluster.Broker
-import util.parsing.json.JSON
-import kafka.api.RequestOrResponse
-import kafka.api.{TopicMetadataRequest, TopicMetadataResponse}
-import kafka.producer.{ProducerPool, SyncProducer}
 
 
 /**
- * Helper functions!
+ * General helper functions!
+ * 
+ * This is for general helper functions that aren't specific to Kafka logic. Things that should have been included in
+ * the standard library etc. 
+ * 
+ * If you are making a new helper function and want to add it to this class please ensure the following:
+ * 1. It has documentation
+ * 2. It is the most general possible utility, not just the thing you needed in one particular place
+ * 3. You have tests for it if it is nontrivial in any way
  */
 object Utils extends Logging {
-  val random = new Random
-
-  def getNextRandomInt(): Int = random.nextInt
-  
-  def getNextRandomInt(upper: Int): Int = random.nextInt(upper)
 
   /**
    * Wrap the given function in a java.lang.Runnable
@@ -151,55 +147,6 @@ object Utils extends Logging {
     }
     bytes
   }
-  
-  /**
-   * Read size prefixed string where the size is stored as a 2 byte short.
-   * @param buffer The buffer to read from
-   * @param encoding The encoding in which to read the string
-   */
-  def readShortString(buffer: ByteBuffer, encoding: String = RequestOrResponse.DefaultCharset): String = {
-    val size: Int = buffer.getShort()
-    if(size < 0)
-      return null
-    val bytes = new Array[Byte](size)
-    buffer.get(bytes)
-    new String(bytes, encoding)
-  }
-  
-  /**
-   * Write a size prefixed string where the size is stored as a 2 byte short
-   * @param buffer The buffer to write to
-   * @param string The string to write
-   * @param encoding The encoding in which to write the string
-   */
-  def writeShortString(buffer: ByteBuffer, string: String, encoding: String = RequestOrResponse.DefaultCharset) {
-    if(string == null) {
-      buffer.putShort(-1)
-    } else if(string.length > Short.MaxValue) {
-      throw new KafkaException("String exceeds the maximum size of " + Short.MaxValue + ".")
-    } else {
-      buffer.putShort(string.length.asInstanceOf[Short])
-      buffer.put(string.getBytes(encoding))
-    }
-  }
-  
-  /**
-   * Return size of a size prefixed string where the size is stored as a 2 byte short
-   * @param string The string to write
-   * @param encoding The encoding in which to write the string
-   */
-  def shortStringLength(string: String, encoding: String = RequestOrResponse.DefaultCharset): Int = {
-    if(string == null) {
-      2
-    } else {
-      val encodedString = string.getBytes(encoding)
-      if(encodedString.length > Short.MaxValue) {
-        throw new KafkaException("String exceeds the maximum size of " + Short.MaxValue + ".")
-      } else {
-        2 + encodedString.length
-      }
-    }
-  }
 
   /**
    * Read a properties file from the given path
@@ -210,27 +157,6 @@ object Utils extends Logging {
     val props = new Properties()
     props.load(propStream)
     props
-  }
-
-  def getIntInRange(buffer: ByteBuffer, name: String, range: (Int, Int)): Int = {
-    val value = buffer.getInt
-    if(value < range._1 || value > range._2)
-      throw new KafkaException(name + " has value " + value + " which is not in the range " + range + ".")
-    else value
-  }
-
-  def getShortInRange(buffer: ByteBuffer, name: String, range: (Short, Short)): Short = {
-    val value = buffer.getShort
-    if(value < range._1 || value > range._2)
-      throw new KafkaException(name + " has value " + value + " which is not in the range " + range + ".")
-    else value
-  }
-
-  def getLongInRange(buffer: ByteBuffer, name: String, range: (Long, Long)): Long = {
-    val value = buffer.getLong
-    if(value < range._1 || value > range._2)
-      throw new KafkaException(name + " has value " + value + " which is not in the range " + range + ".")
-    else value
   }
 
   /**
@@ -278,7 +204,7 @@ object Utils extends Logging {
    * @param buffer The buffer to translate
    * @param encoding The encoding to use in translating bytes to characters
    */
-  def toString(buffer: ByteBuffer, encoding: String): String = {
+  def readString(buffer: ByteBuffer, encoding: String): String = {
     val bytes = new Array[Byte](buffer.remaining)
     buffer.get(bytes)
     new String(bytes, encoding)
@@ -365,7 +291,7 @@ object Utils extends Logging {
    * @param buffer The buffer to read from
    * @return The integer read, as a long to avoid signedness
    */
-  def getUnsignedInt(buffer: ByteBuffer): Long = 
+  def readUnsignedInt(buffer: ByteBuffer): Long = 
     buffer.getInt() & 0xffffffffL
   
   /**
@@ -375,7 +301,7 @@ object Utils extends Logging {
    * @param index the index from which to read the integer
    * @return The integer read, as a long to avoid signedness
    */
-  def getUnsignedInt(buffer: ByteBuffer, index: Int): Long = 
+  def readUnsignedInt(buffer: ByteBuffer, index: Int): Long = 
     buffer.getInt(index) & 0xffffffffL
   
   /**
@@ -383,7 +309,7 @@ object Utils extends Logging {
    * @param buffer The buffer to write to
    * @param value The value to write
    */
-  def putUnsignedInt(buffer: ByteBuffer, value: Long): Unit = 
+  def writetUnsignedInt(buffer: ByteBuffer, value: Long): Unit = 
     buffer.putInt((value & 0xffffffffL).asInstanceOf[Int])
   
   /**
@@ -392,7 +318,7 @@ object Utils extends Logging {
    * @param index The position in the buffer at which to begin writing
    * @param value The value to write
    */
-  def putUnsignedInt(buffer: ByteBuffer, index: Int, value: Long): Unit = 
+  def writeUnsignedInt(buffer: ByteBuffer, index: Int, value: Long): Unit = 
     buffer.putInt(index, (value & 0xffffffffL).asInstanceOf[Int])
   
   /**
@@ -458,6 +384,10 @@ object Utils extends Logging {
     }
   } 
   
+  /**
+   * Throw an exception if the given value is null, else return it. You can use this like:
+   * val myValue = Utils.notNull(expressionThatShouldntBeNull)
+   */
   def notNull[V](v: V) = {
     if(v == null)
       throw new KafkaException("Value cannot be null.")
@@ -465,16 +395,17 @@ object Utils extends Logging {
       v
   }
 
-  def getHostPort(hostport: String) : (String, Int) = {
+  /**
+   * Parse a host and port out of a string
+   */
+  def parseHostPort(hostport: String) : (String, Int) = {
     val splits = hostport.split(":")
     (splits(0), splits(1).toInt)
   }
 
-  def getTopicPartition(topicPartition: String) : (String, Int) = {
-    val index = topicPartition.lastIndexOf('-')
-    (topicPartition.substring(0,index), topicPartition.substring(index+1).toInt)
-  }
-
+  /**
+   * Get the stack trace from an exception as a string
+   */
   def stackTrace(e: Throwable): String = {
     val sw = new StringWriter;
     val pw = new PrintWriter(sw);
@@ -486,113 +417,30 @@ object Utils extends Logging {
    * This method gets comma seperated values which contains key,value pairs and returns a map of
    * key value pairs. the format of allCSVal is key1:val1, key2:val2 ....
    */
-  private def getCSVMap[K, V](allCSVals: String, exceptionMsg:String, successMsg:String) :Map[K, V] = {
-    val map = new mutable.HashMap[K, V]
-    if("".equals(allCSVals))
-      return map
-    val csVals = allCSVals.split(",")
-    for(i <- 0 until csVals.length)
-    {
-     try{
-      val tempSplit = csVals(i).split(":")
-      info(successMsg + tempSplit(0) + " : " + Integer.parseInt(tempSplit(1).trim))
-      map += tempSplit(0).asInstanceOf[K] -> Integer.parseInt(tempSplit(1).trim).asInstanceOf[V]
-      } catch {
-          case _ =>  error(exceptionMsg + ": " + csVals(i))
-        }
-    }
-    map
+  def parseCsvMap(str: String): Map[String, String] = {
+    val map = new mutable.HashMap[String, String]
+    if("".equals(str))
+      return map    
+    val keyVals = str.split("\\s*,\\s*").map(s => s.split("\\s*:\\s*"))
+    keyVals.map(pair => (pair(0), pair(1))).toMap
   }
-
-  def getCSVList(csvList: String): Seq[String] = {
+  
+  /**
+   * Parse a comma separated string into a sequence of strings.
+   * Whitespace surrounding the comma will be removed.
+   */
+  def parseCsvList(csvList: String): Seq[String] = {
     if(csvList == null)
       Seq.empty[String]
     else {
-      csvList.split(",").filter(v => !v.equals(""))
+      csvList.split("\\s*,\\s*").filter(v => !v.equals(""))
     }
   }
 
-  def seqToCSV(seq: Seq[String]): String = {
-    var csvString = ""
-    for (i <- 0 until seq.size) {
-      if (i > 0)
-        csvString = csvString + ','
-      csvString = csvString + seq(i)
-    }
-    csvString
-  }
-
-  def getTopicRetentionHours(retentionHours: String) : Map[String, Int] = {
-    val exceptionMsg = "Malformed token for topic.log.retention.hours in server.properties: "
-    val successMsg =  "The retention hours for "
-    val map: Map[String, Int] = getCSVMap(retentionHours, exceptionMsg, successMsg)
-    map.foreach{case(topic, hrs) =>
-      require(hrs > 0, "Log retention hours value for topic " + topic + " is " + hrs +
-        " which is not greater than 0.")}
-    map
-  }
-
-  def getTopicRollHours(rollHours: String) : Map[String, Int] = {
-    val exceptionMsg = "Malformed token for topic.log.roll.hours in server.properties: "
-    val successMsg =  "The roll hours for "
-    val map: Map[String, Int] = getCSVMap(rollHours, exceptionMsg, successMsg)
-    map.foreach{case(topic, hrs) =>
-      require(hrs > 0, "Log roll hours value for topic " + topic + " is " + hrs +
-        " which is not greater than 0.")}
-    map
-  }
-
-  def getTopicFileSize(fileSizes: String): Map[String, Int] = {
-    val exceptionMsg = "Malformed token for topic.log.file.size in server.properties: "
-    val successMsg =  "The log file size for "
-    val map: Map[String, Int] = getCSVMap(fileSizes, exceptionMsg, successMsg)
-    map.foreach{case(topic, size) =>
-      require(size > 0, "Log file size value for topic " + topic + " is " + size +
-        " which is not greater than 0.")}
-    map
-  }
-
-  def getTopicRetentionSize(retentionSizes: String): Map[String, Long] = {
-    val exceptionMsg = "Malformed token for topic.log.retention.size in server.properties: "
-    val successMsg =  "The log retention size for "
-    val map: Map[String, Long] = getCSVMap(retentionSizes, exceptionMsg, successMsg)
-    map.foreach{case(topic, size) =>
-      require(size > 0, "Log retention size value for topic " + topic + " is " + size +
-        " which is not greater than 0.")}
-    map
-  }
-
-  def getTopicFlushIntervals(allIntervals: String) : Map[String, Int] = {
-    val exceptionMsg = "Malformed token for topic.flush.Intervals.ms in server.properties: "
-    val successMsg =  "The flush interval for "
-    val map: Map[String, Int] = getCSVMap(allIntervals, exceptionMsg, successMsg)
-    map.foreach{case(topic, interval) =>
-      require(interval > 0, "Flush interval value for topic " + topic + " is " + interval +
-        " ms which is not greater than 0.")}
-    map
-  }
-
-  def getTopicPartitions(allPartitions: String) : Map[String, Int] = {
-    val exceptionMsg = "Malformed token for topic.partition.counts in server.properties: "
-    val successMsg =  "The number of partitions for topic  "
-    val map: Map[String, Int] = getCSVMap(allPartitions, exceptionMsg, successMsg)
-    map.foreach{case(topic, count) =>
-      require(count > 0, "The number of partitions for topic " + topic + " is " + count +
-        " which is not greater than 0.")}
-    map
-  }
-
-  def getConsumerTopicMap(consumerTopicString: String) : Map[String, Int] = {
-    val exceptionMsg = "Malformed token for embeddedconsumer.topics in consumer.properties: "
-    val successMsg =  "The number of consumer threads for topic  "
-    val map: Map[String, Int] = getCSVMap(consumerTopicString, exceptionMsg, successMsg)
-    map.foreach{case(topic, count) =>
-      require(count > 0, "The number of consumer threads for topic " + topic + " is " + count +
-        " which is not greater than 0.")}
-    map
-  }
-
-  def getObject[T<:AnyRef](className: String): T = {
+  /**
+   * Create an instance of the class with the given class name
+   */
+  def createObject[T<:AnyRef](className: String): T = {
     className match {
       case null => null.asInstanceOf[T]
       case _ =>
@@ -604,27 +452,15 @@ object Utils extends Logging {
     }
   }
 
-  def propertyExists(prop: String): Boolean = {
-    if(prop == null)
-      false
-    else if(prop.compareTo("") == 0)
-      false
-    else true
-  }
+  /**
+   * Is the given string null or empty ("")?
+   */
+  def nullOrEmpty(s: String): Boolean = s == null || s.equals("")
 
-  def tryCleanupZookeeper(zkUrl: String, groupId: String) {
-    try {
-      val dir = "/consumers/" + groupId
-      info("Cleaning up temporary zookeeper data under " + dir + ".")
-      val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)
-      zk.deleteRecursive(dir)
-      zk.close()
-    } catch {
-      case _ => // swallow
-    }
-  }
-
-  def stringMapToJsonString(jsonDataMap: Map[String, String]): String = {
+  /**
+   * Format a Map[String, String] as JSON
+   */
+  def stringMapToJson(jsonDataMap: Map[String, String]): String = {
     val builder = new StringBuilder
     builder.append("{ ")
     var numElements = 0
@@ -639,6 +475,9 @@ object Utils extends Logging {
     builder.toString
   }
 
+  /**
+   * Format an arbitrary map as JSON
+   */
   def mapToJson[T <: Any](map: Map[String, Seq[String]]): String = {
     val builder = new StringBuilder
     builder.append("{ ")
@@ -654,6 +493,9 @@ object Utils extends Logging {
     builder.toString
   }
 
+  /**
+   * Format a string array as json
+   */
   def arrayToJson[T <: Any](arr: Array[String]): String = {
     val builder = new StringBuilder
     builder.append("[ ")
@@ -668,57 +510,6 @@ object Utils extends Logging {
     builder.toString
   }
 
-  def getAllBrokersFromBrokerList(brokerListStr: String): Seq[Broker] = {
-    val brokersStr = Utils.getCSVList(brokerListStr)
-
-    brokersStr.zipWithIndex.map(b =>{
-      val brokerStr = b._1
-      val brokerId = b._2
-      val brokerInfos = brokerStr.split(":")
-      val hostName = brokerInfos(0)
-      val port = brokerInfos(1).toInt
-      val creatorId = hostName + "-" + System.currentTimeMillis()
-      new Broker(brokerId, creatorId, hostName, port)
-    })
-  }
-
-  def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
-    for(arg <- required) {
-      if(!options.has(arg)) {
-        error("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
-  }
-
-  def getTopicMetadata(topics: Set[String], brokers: Seq[Broker]): TopicMetadataResponse = {
-    var fetchMetaDataSucceeded: Boolean = false
-    var i: Int = 0
-    val topicMetadataRequest = new TopicMetadataRequest(topics.toSeq)
-    var topicMetadataResponse: TopicMetadataResponse = null
-    var t: Throwable = null
-    while(i < brokers.size && !fetchMetaDataSucceeded) {
-      val producer: SyncProducer = ProducerPool.createSyncProducer(None, brokers(i))
-      info("Fetching metadata for topic %s".format(topics))
-      try {
-        topicMetadataResponse = producer.send(topicMetadataRequest)
-        fetchMetaDataSucceeded = true
-      }
-      catch {
-        case e =>
-          warn("fetching topic metadata for topics [%s] from broker [%s] failed".format(topics, brokers(i).toString), e)
-          t = e
-      } finally {
-        i = i + 1
-        producer.close()
-      }
-    }
-    if(!fetchMetaDataSucceeded){
-      throw new KafkaException("fetching topic metadata for topics [%s] from broker [%s] failed".format(topics, brokers), t)
-    }
-    return topicMetadataResponse
-  }
 
   /**
    * Create a circular (looping) iterator over a collection.
@@ -731,35 +522,25 @@ object Utils extends Logging {
     stream.iterator
   }
 
-  def readFileIntoString(path: String): String = {
+  /**
+   * Attempt to read a file as a string
+   */
+  def readFileAsString(path: String, charset: Charset = Charset.defaultCharset()): String = {
     val stream = new FileInputStream(new File(path))
     try {
       val fc = stream.getChannel()
       val bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size())
-      Charset.defaultCharset().decode(bb).toString()
+      charset.decode(bb).toString()
     }
     finally {
       stream.close()
     }
   }
-}
-
-/**
- *  A wrapper that synchronizes JSON in scala, which is not threadsafe.
- */
-object SyncJSON extends Logging {
-  val myConversionFunc = {input : String => input.toInt}
-  JSON.globalNumberParser = myConversionFunc
-  val lock = new Object
-
-  def parseFull(input: String): Option[Any] = {
-    lock synchronized {
-      try {
-        JSON.parseFull(input)
-      } catch {
-        case t =>
-          throw new KafkaException("Can't parse json string: %s".format(input), t)
-      }
-    }
-  }
+  
+  /**
+   * Get the absolute value of the given number. If the number is Int.MinValue return 0.
+   * This is different from java.lang.Math.abs or scala.math.abs in that they return Int.MinValue (!).
+   */
+  def abs(n: Int) = n & 0x7fffffff
+  
 }

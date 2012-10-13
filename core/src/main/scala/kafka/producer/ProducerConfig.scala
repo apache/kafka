@@ -78,7 +78,7 @@ class ProducerConfig private (val props: VerifiableProperties)
    *
    *  If the compression codec is NoCompressionCodec, compression is disabled for all topics
    */
-  val compressedTopics = Utils.getCSVList(props.getString("compressed.topics", null))
+  val compressedTopics = Utils.parseCsvList(props.getString("compressed.topics", null))
 
   /**
    * The producer using the zookeeper software load balancer maintains a ZK cache that gets

@@ -20,7 +20,7 @@ package kafka.consumer
 import scala.collection._
 import org.I0Itec.zkclient.ZkClient
 import java.util.regex.Pattern
-import kafka.utils.{SyncJSON, ZKGroupDirs, ZkUtils, Logging}
+import kafka.utils.{Json, ZKGroupDirs, ZkUtils, Logging}
 
 private[kafka] trait TopicCount {
   def getConsumerThreadIdsPerTopic: Map[String, Set[String]]
@@ -88,7 +88,7 @@ private[kafka] object TopicCount extends Logging {
     else {
       var topMap : Map[String,Int] = null
       try {
-        SyncJSON.parseFull(topicCountString) match {
+        Json.parseFull(topicCountString) match {
           case Some(m) => topMap = m.asInstanceOf[Map[String,Int]]
           case None => throw new RuntimeException("error constructing TopicCount : " + topicCountString)
         }

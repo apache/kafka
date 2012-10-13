@@ -18,11 +18,11 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.utils.Utils._
+import kafka.api.ApiUtils._
 import collection.mutable.ListBuffer
-import kafka.utils._
+import kafka.utils.Logging
 
-object TopicMetadataRequest {
+object TopicMetadataRequest extends Logging {
   val CurrentVersion = 1.shortValue()
   val DefaultClientId = ""
 
@@ -33,11 +33,11 @@ object TopicMetadataRequest {
 
   def readFrom(buffer: ByteBuffer): TopicMetadataRequest = {
     val versionId = buffer.getShort
-    val clientId = Utils.readShortString(buffer)
-    val numTopics = getIntInRange(buffer, "number of topics", (0, Int.MaxValue))
+    val clientId = readShortString(buffer)
+    val numTopics = readIntInRange(buffer, "number of topics", (0, Int.MaxValue))
     val topics = new ListBuffer[String]()
     for(i <- 0 until numTopics)
-      topics += readShortString(buffer, "UTF-8")
+      topics += readShortString(buffer)
     val topicsList = topics.toList
     debug("topic = %s".format(topicsList.head))
     new TopicMetadataRequest(versionId, clientId, topics.toList)
@@ -54,7 +54,7 @@ def this(topics: Seq[String]) =
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
-    Utils.writeShortString(buffer, clientId)
+    writeShortString(buffer, clientId)
     buffer.putInt(topics.size)
     topics.foreach(topic => writeShortString(buffer, topic))
   }

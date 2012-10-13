@@ -25,7 +25,7 @@ import java.util.Properties
 import java.util.Random
 import java.io.PrintStream
 import kafka.message._
-import kafka.utils.{Utils, Logging}
+import kafka.utils.{Utils, Logging, ZkUtils, CommandLineUtils}
 import kafka.utils.ZKStringSerializer
 import kafka.serializer.StringDecoder
 
@@ -109,8 +109,7 @@ object ConsoleConsumer extends Logging {
             "skip it instead of halt.")
 
     val options: OptionSet = tryParse(parser, args)
-    Utils.checkRequiredArgs(parser, options, zkConnectOpt)
-
+    CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
     val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
     if (topicOrFilterOpt.size != 1) {
       error("Exactly one of whitelist/blacklist/topic is required.")
@@ -145,14 +144,14 @@ object ConsoleConsumer extends Logging {
     val connector = Consumer.create(config)
 
     if(options.has(resetBeginningOpt))
-      tryCleanupZookeeper(options.valueOf(zkConnectOpt), options.valueOf(groupIdOpt))
+      ZkUtils.maybeDeletePath(options.valueOf(zkConnectOpt), "/consumers/" + options.valueOf(groupIdOpt))
 
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run() {
         connector.shutdown()
         // if there is no group specified then avoid polluting zookeeper with persistent group data, this is a hack
-        if(!options.has(groupIdOpt))
-          tryCleanupZookeeper(options.valueOf(zkConnectOpt), options.valueOf(groupIdOpt))
+        if(!options.has(groupIdOpt))  
+          ZkUtils.maybeDeletePath(options.valueOf(zkConnectOpt), "/consumers/" + options.valueOf(groupIdOpt))
       }
     })
 

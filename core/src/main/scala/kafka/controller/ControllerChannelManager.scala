@@ -119,7 +119,7 @@ class RequestSendThread(val controllerId: Int,
         var response: RequestOrResponse = null
         request.requestId.get match {
           case RequestKeys.LeaderAndIsrKey =>
-            response = LeaderAndISRResponse.readFrom(receive.buffer)
+            response = LeaderAndIsrResponse.readFrom(receive.buffer)
           case RequestKeys.StopReplicaKey =>
             response = StopReplicaResponse.readFrom(receive.buffer)
         }

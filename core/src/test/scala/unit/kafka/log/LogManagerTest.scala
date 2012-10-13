@@ -159,7 +159,7 @@ class LogManagerTest extends JUnit3Suite {
                    override val logFileSize = 1024 *1024 *1024
                    override val flushSchedulerThreadRate = 50
                    override val flushInterval = Int.MaxValue
-                   override val flushIntervalMap = Utils.getTopicFlushIntervals("timebasedflush:100")
+                   override val flushIntervalMap = Map("timebasedflush" -> 100)
                  }
     logManager = new LogManager(config, scheduler, time, maxRollInterval, veryLargeLogFlushInterval, maxLogAge, false)
     logManager.startup

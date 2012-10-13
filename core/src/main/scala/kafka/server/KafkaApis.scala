@@ -57,22 +57,22 @@ class KafkaApis(val requestChannel: RequestChannel,
       case RequestKeys.FetchKey => handleFetchRequest(request)
       case RequestKeys.OffsetsKey => handleOffsetRequest(request)
       case RequestKeys.MetadataKey => handleTopicMetadataRequest(request)
-      case RequestKeys.LeaderAndIsrKey => handleLeaderAndISRRequest(request)
+      case RequestKeys.LeaderAndIsrKey => handleLeaderAndIsrRequest(request)
       case RequestKeys.StopReplicaKey => handleStopReplicaRequest(request)
       case requestId => throw new KafkaException("No mapping found for handler id " + requestId)
     }
     request.apiLocalCompleteTimeNs = SystemTime.nanoseconds
   }
 
-  def handleLeaderAndISRRequest(request: RequestChannel.Request) {
-    val leaderAndISRRequest = request.requestObj.asInstanceOf[LeaderAndIsrRequest]
+  def handleLeaderAndIsrRequest(request: RequestChannel.Request) {
+    val leaderAndIsrRequest = request.requestObj.asInstanceOf[LeaderAndIsrRequest]
     if(requestLogger.isTraceEnabled)
-      requestLogger.trace("Handling leader and isr request " + leaderAndISRRequest)
-    trace("Handling leader and isr request " + leaderAndISRRequest)
+      requestLogger.trace("Handling leader and ISR request " + leaderAndIsrRequest)
+    trace("Handling leader and ISR request " + leaderAndIsrRequest)
     try {
-      val responseMap = replicaManager.becomeLeaderOrFollower(leaderAndISRRequest)
-      val leaderAndISRResponse = new LeaderAndISRResponse(leaderAndISRRequest.versionId, responseMap)
-      requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(leaderAndISRResponse)))
+      val responseMap = replicaManager.becomeLeaderOrFollower(leaderAndIsrRequest)
+      val leaderAndIsrResponse = new LeaderAndIsrResponse(leaderAndIsrRequest.versionId, responseMap)
+      requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(leaderAndIsrResponse)))
     } catch {
       case e: KafkaStorageException =>
         fatal("Disk error during leadership change.", e)

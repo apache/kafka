@@ -33,7 +33,10 @@ object ReplicaManager {
   val UnknownLogEndOffset = -1L
 }
 
-class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient, kafkaScheduler: KafkaScheduler,
+class ReplicaManager(val config: KafkaConfig, 
+                     time: Time, 
+                     val zkClient: ZkClient, 
+                     kafkaScheduler: KafkaScheduler,
                      val logManager: LogManager) extends Logging with KafkaMetricsGroup {
   private val allPartitions = new Pool[(String, Int), Partition]
   private var leaderPartitions = new mutable.HashSet[Partition]()
@@ -85,7 +88,7 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
 
   def startup() {
     // start ISR expiration thread
-    kafkaScheduler.scheduleWithRate(maybeShrinkISR, "isr-expiration-thread-", 0, config.replicaMaxLagTimeMs)
+    kafkaScheduler.scheduleWithRate(maybeShrinkIsr, "isr-expiration-thread-", 0, config.replicaMaxLagTimeMs)
   }
 
   def stopReplica(topic: String, partitionId: Int): Short  = {
@@ -221,17 +224,17 @@ class ReplicaManager(val config: KafkaConfig, time: Time, val zkClient: ZkClient
     }
   }
 
-  private def maybeShrinkISR(): Unit = {
+  private def maybeShrinkIsr(): Unit = {
     trace("Evaluating ISR list of partitions to see which replicas can be removed from the ISR")
     leaderPartitionsLock synchronized {
-      leaderPartitions.foreach(partition => partition.maybeShrinkISR(config.replicaMaxLagTimeMs, config.replicaMaxLagBytes))
+      leaderPartitions.foreach(partition => partition.maybeShrinkIsr(config.replicaMaxLagTimeMs, config.replicaMaxLagBytes))
     }
   }
 
   def recordFollowerPosition(topic: String, partitionId: Int, replicaId: Int, offset: Long) = {
     val partitionOpt = getPartition(topic, partitionId)
     if(partitionOpt.isDefined){
-      partitionOpt.get.updateLeaderHWAndMaybeExpandISR(replicaId, offset)
+      partitionOpt.get.updateLeaderHWAndMaybeExpandIsr(replicaId, offset)
     } else {
       warn("While recording the follower position, the partition [%s, %d] hasn't been created, skip updating leader HW".format(topic, partitionId))
     }

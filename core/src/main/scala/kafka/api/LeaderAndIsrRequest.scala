@@ -20,6 +20,7 @@ package kafka.api
 
 import java.nio._
 import kafka.utils._
+import kafka.api.ApiUtils._
 import collection.mutable.Map
 import collection.mutable.HashMap
 
@@ -30,14 +31,14 @@ object LeaderAndIsr {
 }
 
 case class LeaderAndIsr(var leader: Int, var leaderEpoch: Int, var isr: List[Int], var zkVersion: Int) {
-  def this(leader: Int, ISR: List[Int]) = this(leader, LeaderAndIsr.initialLeaderEpoch, ISR, LeaderAndIsr.initialZKVersion)
+  def this(leader: Int, isr: List[Int]) = this(leader, LeaderAndIsr.initialLeaderEpoch, isr, LeaderAndIsr.initialZKVersion)
 
   override def toString(): String = {
     val jsonDataMap = new HashMap[String, String]
     jsonDataMap.put("leader", leader.toString)
     jsonDataMap.put("leaderEpoch", leaderEpoch.toString)
     jsonDataMap.put("ISR", isr.mkString(","))
-    Utils.stringMapToJsonString(jsonDataMap)
+    Utils.stringMapToJson(jsonDataMap)
   }
 }
 
@@ -46,11 +47,11 @@ object PartitionStateInfo {
   def readFrom(buffer: ByteBuffer): PartitionStateInfo = {
     val leader = buffer.getInt
     val leaderGenId = buffer.getInt
-    val ISRString = Utils.readShortString(buffer, "UTF-8")
-    val ISR = ISRString.split(",").map(_.toInt).toList
+    val isrString = readShortString(buffer)
+    val isr = isrString.split(",").map(_.toInt).toList
     val zkVersion = buffer.getInt
     val replicationFactor = buffer.getInt
-    PartitionStateInfo(LeaderAndIsr(leader, leaderGenId, ISR, zkVersion), replicationFactor)
+    PartitionStateInfo(LeaderAndIsr(leader, leaderGenId, isr, zkVersion), replicationFactor)
   }
 }
 
@@ -58,7 +59,7 @@ case class PartitionStateInfo(val leaderAndIsr: LeaderAndIsr, val replicationFac
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(leaderAndIsr.leader)
     buffer.putInt(leaderAndIsr.leaderEpoch)
-    Utils.writeShortString(buffer, leaderAndIsr.isr.mkString(","), "UTF-8")
+    writeShortString(buffer, leaderAndIsr.isr.mkString(","))
     buffer.putInt(leaderAndIsr.zkVersion)
     buffer.putInt(replicationFactor)
   }
@@ -79,13 +80,13 @@ object LeaderAndIsrRequest {
 
   def readFrom(buffer: ByteBuffer): LeaderAndIsrRequest = {
     val versionId = buffer.getShort
-    val clientId = Utils.readShortString(buffer)
+    val clientId = readShortString(buffer)
     val ackTimeoutMs = buffer.getInt
     val partitionStateInfosCount = buffer.getInt
     val partitionStateInfos = new HashMap[(String, Int), PartitionStateInfo]
 
     for(i <- 0 until partitionStateInfosCount){
-      val topic = Utils.readShortString(buffer, "UTF-8")
+      val topic = readShortString(buffer)
       val partition = buffer.getInt
       val partitionStateInfo = PartitionStateInfo.readFrom(buffer)
 
@@ -108,11 +109,11 @@ case class LeaderAndIsrRequest (versionId: Short,
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
-    Utils.writeShortString(buffer, clientId)
+    writeShortString(buffer, clientId)
     buffer.putInt(ackTimeoutMs)
     buffer.putInt(partitionStateInfos.size)
     for((key, value) <- partitionStateInfos){
-      Utils.writeShortString(buffer, key._1, "UTF-8")
+      writeShortString(buffer, key._1)
       buffer.putInt(key._2)
       value.writeTo(buffer)
     }

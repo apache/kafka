@@ -18,6 +18,7 @@ package kafka.producer
 
 import async.{AsyncProducerStats, DefaultEventHandler, ProducerSendThread, EventHandler}
 import kafka.utils._
+import java.util.Random
 import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
 import kafka.serializer.Encoder
 import java.util.concurrent.atomic.AtomicBoolean
@@ -33,13 +34,14 @@ extends Logging {
 
   private val queue = new LinkedBlockingQueue[ProducerData[K,V]](config.queueSize)
 
+  private val random = new Random
   private var sync: Boolean = true
   private var producerSendThread: ProducerSendThread[K,V] = null
   config.producerType match {
     case "sync" =>
     case "async" =>
       sync = false
-      val asyncProducerID = Utils.getNextRandomInt
+      val asyncProducerID = random.nextInt(Int.MaxValue)
       producerSendThread = new ProducerSendThread[K,V]("ProducerSendThread-" + asyncProducerID, queue,
         eventHandler, config.queueTime, config.batchSize)
       producerSendThread.start
@@ -49,8 +51,8 @@ extends Logging {
   def this(config: ProducerConfig) =
     this(config,
          new DefaultEventHandler[K,V](config,
-                                      Utils.getObject[Partitioner[K]](config.partitionerClass),
-                                      Utils.getObject[Encoder[V]](config.serializerClass),
+                                      Utils.createObject[Partitioner[K]](config.partitionerClass),
+                                      Utils.createObject[Encoder[V]](config.serializerClass),
                                       new ProducerPool(config)))
 
   /**

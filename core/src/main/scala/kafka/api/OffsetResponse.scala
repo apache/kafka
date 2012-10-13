@@ -20,6 +20,7 @@ package kafka.api
 import java.nio.ByteBuffer
 import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.utils.Utils
+import kafka.api.ApiUtils._
 
 
 object OffsetResponse {
@@ -28,7 +29,7 @@ object OffsetResponse {
     val versionId = buffer.getShort
     val numTopics = buffer.getInt
     val pairs = (1 to numTopics).flatMap(_ => {
-      val topic = Utils.readShortString(buffer)
+      val topic = readShortString(buffer)
       val numPartitions = buffer.getInt
       (1 to numPartitions).map(_ => {
         val partition = buffer.getInt
@@ -61,7 +62,7 @@ case class OffsetResponse(versionId: Short,
     offsetsGroupedByTopic.foldLeft(0)((foldedTopics, currTopic) => {
       val (topic, errorAndOffsetsMap) = currTopic
       foldedTopics +
-      Utils.shortStringLength(topic) +
+      shortStringLength(topic) +
       4 + /* partition count */
       errorAndOffsetsMap.foldLeft(0)((foldedPartitions, currPartition) => {
         foldedPartitions +
@@ -78,7 +79,7 @@ case class OffsetResponse(versionId: Short,
     buffer.putInt(offsetsGroupedByTopic.size) // topic count
     offsetsGroupedByTopic.foreach {
       case((topic, errorAndOffsetsMap)) =>
-        Utils.writeShortString(buffer, topic)
+        writeShortString(buffer, topic)
         buffer.putInt(errorAndOffsetsMap.size) // partition count
         errorAndOffsetsMap.foreach {
           case((TopicAndPartition(_, partition), errorAndOffsets)) =>

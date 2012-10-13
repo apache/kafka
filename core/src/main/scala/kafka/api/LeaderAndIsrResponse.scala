@@ -20,28 +20,29 @@ package kafka.api
 import kafka.common.ErrorMapping
 import java.nio.ByteBuffer
 import kafka.utils.Utils
+import kafka.api.ApiUtils._
 import collection.mutable.HashMap
 import collection.Map
 
 
-object LeaderAndISRResponse {
-  def readFrom(buffer: ByteBuffer): LeaderAndISRResponse = {
+object LeaderAndIsrResponse {
+  def readFrom(buffer: ByteBuffer): LeaderAndIsrResponse = {
     val versionId = buffer.getShort
     val errorCode = buffer.getShort
     val numEntries = buffer.getInt
     val responseMap = new HashMap[(String, Int), Short]()
     for (i<- 0 until numEntries){
-      val topic = Utils.readShortString(buffer, "UTF-8")
+      val topic = readShortString(buffer)
       val partition = buffer.getInt
       val partitionErrorCode = buffer.getShort
       responseMap.put((topic, partition), partitionErrorCode)
     }
-    new LeaderAndISRResponse(versionId, responseMap, errorCode)
+    new LeaderAndIsrResponse(versionId, responseMap, errorCode)
   }
 }
 
 
-case class LeaderAndISRResponse(versionId: Short,
+case class LeaderAndIsrResponse(versionId: Short,
                                 responseMap: Map[(String, Int), Short],
                                 errorCode: Short = ErrorMapping.NoError)
         extends RequestOrResponse {
@@ -58,7 +59,7 @@ case class LeaderAndISRResponse(versionId: Short,
     buffer.putShort(errorCode)
     buffer.putInt(responseMap.size)
     for ((key:(String, Int), value) <- responseMap){
-      Utils.writeShortString(buffer, key._1, "UTF-8")
+      writeShortString(buffer, key._1)
       buffer.putInt(key._2)
       buffer.putShort(value)
     }

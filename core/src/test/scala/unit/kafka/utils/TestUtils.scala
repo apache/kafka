@@ -379,18 +379,18 @@ object TestUtils extends Logging {
         val partition = leaderForPartition._1
         val leader = leaderForPartition._2
         try{
-          val currentLeaderAndISROpt = ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition)
-          var newLeaderAndISR: LeaderAndIsr = null
-          if(currentLeaderAndISROpt == None)
-            newLeaderAndISR = new LeaderAndIsr(leader, List(leader))
+          val currentLeaderAndIsrOpt = ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition)
+          var newLeaderAndIsr: LeaderAndIsr = null
+          if(currentLeaderAndIsrOpt == None)
+            newLeaderAndIsr = new LeaderAndIsr(leader, List(leader))
           else{
-            newLeaderAndISR = currentLeaderAndISROpt.get
-            newLeaderAndISR.leader = leader
-            newLeaderAndISR.leaderEpoch += 1
-            newLeaderAndISR.zkVersion += 1
+            newLeaderAndIsr = currentLeaderAndIsrOpt.get
+            newLeaderAndIsr.leader = leader
+            newLeaderAndIsr.leaderEpoch += 1
+            newLeaderAndIsr.zkVersion += 1
           }
           ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
-            newLeaderAndISR.toString)
+            newLeaderAndIsr.toString)
         } catch {
           case oe => error("Error while electing leader for topic %s partition %d".format(topic, partition), oe)
         }

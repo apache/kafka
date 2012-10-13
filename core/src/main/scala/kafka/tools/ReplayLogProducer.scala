@@ -22,14 +22,14 @@ import java.util.concurrent.{Executors, CountDownLatch}
 import java.util.Properties
 import kafka.producer.{ProducerData, ProducerConfig, Producer}
 import kafka.consumer._
-import kafka.utils.{ZKStringSerializer, Logging}
+import kafka.utils.{ZKStringSerializer, Logging, ZkUtils}
 import kafka.api.OffsetRequest
 import org.I0Itec.zkclient._
 import kafka.message.{CompressionCodec, Message}
 
 object ReplayLogProducer extends Logging {
 
-  private val GROUPID: String = "replay-log-producer"
+  private val GroupId: String = "replay-log-producer"
 
   def main(args: Array[String]) {
     val config = new Config(args)
@@ -38,12 +38,12 @@ object ReplayLogProducer extends Logging {
     val allDone = new CountDownLatch(config.numThreads)
 
     // if there is no group specified then avoid polluting zookeeper with persistent group data, this is a hack
-    tryCleanupZookeeper(config.zkConnect, GROUPID)
+    ZkUtils.maybeDeletePath(config.zkConnect, "/consumers/" + GroupId)
     Thread.sleep(500)
 
     // consumer properties
     val consumerProps = new Properties
-    consumerProps.put("groupid", GROUPID)
+    consumerProps.put("groupid", GroupId)
     consumerProps.put("zk.connect", config.zkConnect)
     consumerProps.put("consumer.timeout.ms", "10000")
     consumerProps.put("autooffset.reset", OffsetRequest.SmallestTimeString)
@@ -135,18 +135,6 @@ object ReplayLogProducer extends Logging {
     val outputTopic = options.valueOf(outputTopicOpt)
     val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
     val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOption).intValue)
-  }
-
-  def tryCleanupZookeeper(zkUrl: String, groupId: String) {
-    try {
-      val dir = "/consumers/" + groupId
-      info("Cleaning up temporary zookeeper data under " + dir + ".")
-      val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)
-      zk.deleteRecursive(dir)
-      zk.close()
-    } catch {
-      case _ => // swallow
-    }
   }
 
   class ZKConsumerThread(config: Config, stream: KafkaStream[Message]) extends Thread with Logging {

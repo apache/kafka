@@ -19,7 +19,7 @@ package kafka.api
 
 
 import java.nio._
-import kafka.utils._
+import kafka.api.ApiUtils._
 
 object StopReplicaRequest {
   val CurrentVersion = 1.shortValue()
@@ -28,13 +28,12 @@ object StopReplicaRequest {
 
   def readFrom(buffer: ByteBuffer): StopReplicaRequest = {
     val versionId = buffer.getShort
-    val clientId = Utils.readShortString(buffer)
+    val clientId = readShortString(buffer)
     val ackTimeoutMs = buffer.getInt
     val topicPartitionPairCount = buffer.getInt
     val topicPartitionPairSet = new collection.mutable.HashSet[(String, Int)]()
-    for (i <- 0 until topicPartitionPairCount) {
-      topicPartitionPairSet.add(Utils.readShortString(buffer, "UTF-8"), buffer.getInt)
-    }
+    for (i <- 0 until topicPartitionPairCount)
+      topicPartitionPairSet.add(readShortString(buffer), buffer.getInt)
     new StopReplicaRequest(versionId, clientId, ackTimeoutMs, topicPartitionPairSet.toSet)
   }
 }
@@ -51,11 +50,11 @@ case class StopReplicaRequest(versionId: Short,
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
-    Utils.writeShortString(buffer, clientId)
+    writeShortString(buffer, clientId)
     buffer.putInt(ackTimeoutMs)
     buffer.putInt(partitions.size)
     for ((topic, partitionId) <- partitions){
-      Utils.writeShortString(buffer, topic, "UTF-8")
+      writeShortString(buffer, topic)
       buffer.putInt(partitionId)
     }
   }

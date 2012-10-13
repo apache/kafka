@@ -25,21 +25,21 @@ import kafka.log.Log
 import org.junit.Assert._
 import kafka.utils._
 
-class ISRExpirationTest extends JUnit3Suite {
+class IsrExpirationTest extends JUnit3Suite {
 
-  var topicPartitionISR: Map[(String, Int), Seq[Int]] = new HashMap[(String, Int), Seq[Int]]()
+  var topicPartitionIsr: Map[(String, Int), Seq[Int]] = new HashMap[(String, Int), Seq[Int]]()
   val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
     override val replicaMaxLagTimeMs = 100L
     override val replicaMaxLagBytes = 10L
   })
   val topic = "foo"
 
-  def testISRExpirationForStuckFollowers() {
+  def testIsrExpirationForStuckFollowers() {
     val time = new MockTime
     val log = getLogWithLogEndOffset(15L, 2) // set logEndOffset for leader to 15L
 
     // create one partition and all replicas
-    val partition0 = getPartitionWithAllReplicasInISR(topic, 0, time, configs.head, log)
+    val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
     assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas.map(_.brokerId))
     val leaderReplica = partition0.getReplica(configs.head.brokerId).get
 
@@ -58,12 +58,12 @@ class ISRExpirationTest extends JUnit3Suite {
     EasyMock.verify(log)
   }
 
-  def testISRExpirationForSlowFollowers() {
+  def testIsrExpirationForSlowFollowers() {
     val time = new MockTime
     // create leader replica
     val log = getLogWithLogEndOffset(15L, 1)
     // add one partition
-    val partition0 = getPartitionWithAllReplicasInISR(topic, 0, time, configs.head, log)
+    val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
     assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas.map(_.brokerId))
     val leaderReplica = partition0.getReplica(configs.head.brokerId).get
     // set remote replicas leo to something low, like 4
@@ -77,7 +77,7 @@ class ISRExpirationTest extends JUnit3Suite {
     EasyMock.verify(log)
   }
 
-  private def getPartitionWithAllReplicasInISR(topic: String, partitionId: Int, time: Time, config: KafkaConfig,
+  private def getPartitionWithAllReplicasInIsr(topic: String, partitionId: Int, time: Time, config: KafkaConfig,
                                                localLog: Log): Partition = {
     val leaderId=config.brokerId
     val replicaManager = new ReplicaManager(config, time, null, null, null)

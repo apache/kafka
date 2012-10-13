@@ -24,6 +24,7 @@ import kafka.serializer.Encoder
 import kafka.utils.{Utils, Logging}
 import scala.collection.{Seq, Map}
 import scala.collection.mutable.{ListBuffer, HashMap}
+import java.util.concurrent.atomic._
 import kafka.api.{TopicMetadata, ProducerRequest}
 
 
@@ -35,6 +36,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   extends EventHandler[K,V] with Logging {
   val isSync = ("sync" == config.producerType)
 
+  val counter = new AtomicInteger(0)
   val brokerPartitionInfo = new BrokerPartitionInfo(config, producerPool, topicPartitionInfos)
 
   private val lock = new Object()
@@ -185,8 +187,11 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     if(numPartitions <= 0)
       throw new UnknownTopicOrPartitionException("Invalid number of partitions: " + numPartitions +
         "\n Valid values are > 0")
-    val partition = if(key == null) Utils.getNextRandomInt(numPartitions)
-    else partitioner.partition(key, numPartitions)
+    val partition = 
+      if(key == null) 
+        Utils.abs(counter.getAndIncrement()) % numPartitions
+      else 
+        partitioner.partition(key, numPartitions)
     if(partition < 0 || partition >= numPartitions)
       throw new UnknownTopicOrPartitionException("Invalid partition id : " + partition +
         "\n Valid values are in the range inclusive [0, " + (numPartitions-1) + "]")

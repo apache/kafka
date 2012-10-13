@@ -66,7 +66,7 @@ class MessageTest extends JUnitSuite {
       assertTrue("Auto-computed checksum should be valid", v.message.isValid)
       // garble checksum
       val badChecksum: Int = (v.message.checksum + 1 % Int.MaxValue).toInt
-      Utils.putUnsignedInt(v.message.buffer, Message.CrcOffset, badChecksum)
+      Utils.writeUnsignedInt(v.message.buffer, Message.CrcOffset, badChecksum)
       assertFalse("Message with invalid checksum should be invalid", v.message.isValid)
     }
   }

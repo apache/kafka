@@ -62,7 +62,7 @@ private class ConsumerThread(stream: KafkaStream[Message]) extends Thread {
   override def run() {
     println("Starting consumer thread..")
     for (messageAndMetadata <- stream) {
-      println("consumed: " + Utils.toString(messageAndMetadata.message.payload, "UTF-8"))
+      println("consumed: " + Utils.readString(messageAndMetadata.message.payload, "UTF-8"))
     }
     shutdownLatch.countDown
     println("thread shutdown !" )

@@ -19,7 +19,7 @@ package kafka.tools
 
 import kafka.message.Message
 import joptsimple.OptionParser
-import kafka.utils.{Utils, Logging}
+import kafka.utils.{Utils, CommandLineUtils, Logging}
 import kafka.producer.{ProducerData, ProducerConfig, Producer}
 import scala.collection.JavaConversions._
 import java.util.concurrent.CountDownLatch
@@ -81,8 +81,7 @@ object MirrorMaker extends Logging {
       System.exit(0)
     }
 
-    Utils.checkRequiredArgs(
-      parser, options, consumerConfigOpt, producerConfigOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, consumerConfigOpt, producerConfigOpt)
     if (List(whitelistOpt, blacklistOpt).count(options.has) != 1) {
       println("Exactly one of whitelist or blacklist is required.")
       System.exit(1)

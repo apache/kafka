@@ -34,12 +34,12 @@ object CheckReassignmentStatus extends Logging {
 
     val jsonFile = options.valueOf(jsonFileOpt)
     val zkConnect = options.valueOf(zkConnectOpt)
-    val jsonString = Utils.readFileIntoString(jsonFile)
+    val jsonString = Utils.readFileAsString(jsonFile)
     val zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
 
     try {
       // read the json file into a string
-      val partitionsToBeReassigned = SyncJSON.parseFull(jsonString) match {
+      val partitionsToBeReassigned = Json.parseFull(jsonString) match {
         case Some(reassignedPartitions) =>
           val partitions = reassignedPartitions.asInstanceOf[Array[Map[String, String]]]
           partitions.map { m =>

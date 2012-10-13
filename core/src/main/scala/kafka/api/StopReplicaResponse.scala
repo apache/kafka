@@ -22,6 +22,7 @@ import kafka.utils.Utils
 import collection.mutable.HashMap
 import collection.mutable.Map
 import kafka.common.ErrorMapping
+import kafka.api.ApiUtils._
 
 
 object StopReplicaResponse {
@@ -32,7 +33,7 @@ object StopReplicaResponse {
 
     val responseMap = new HashMap[(String, Int), Short]()
     for (i<- 0 until numEntries){
-      val topic = Utils.readShortString(buffer, "UTF-8")
+      val topic = readShortString(buffer)
       val partition = buffer.getInt
       val partitionErrorCode = buffer.getShort()
       responseMap.put((topic, partition), partitionErrorCode)
@@ -58,7 +59,7 @@ case class StopReplicaResponse(val versionId: Short,
     buffer.putShort(errorCode)
     buffer.putInt(responseMap.size)
     for ((key:(String, Int), value) <- responseMap){
-      Utils.writeShortString(buffer, key._1, "UTF-8")
+      writeShortString(buffer, key._1)
       buffer.putInt(key._2)
       buffer.putShort(value)
     }

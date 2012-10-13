@@ -105,7 +105,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
           assertTrue(iterator.hasNext)
           val message = iterator.next.message
           messages ::= message
-          debug("received message: " + Utils.toString(message.payload, "UTF-8"))
+          debug("received message: " + Utils.readString(message.payload, "UTF-8"))
         }
       }
     }

@@ -75,8 +75,8 @@ object ZkUtils extends Logging {
   }
 
   def getLeaderAndIsrForPartition(zkClient: ZkClient, topic: String, partition: Int):Option[LeaderAndIsr] = {
-    val leaderAndISRPath = getTopicPartitionLeaderAndIsrPath(topic, partition)
-    val leaderAndIsrInfo = readDataMaybeNull(zkClient, leaderAndISRPath)
+    val leaderAndIsrPath = getTopicPartitionLeaderAndIsrPath(topic, partition)
+    val leaderAndIsrInfo = readDataMaybeNull(zkClient, leaderAndIsrPath)
     val leaderAndIsrOpt = leaderAndIsrInfo._1
     val stat = leaderAndIsrInfo._2
     leaderAndIsrOpt match {
@@ -86,12 +86,12 @@ object ZkUtils extends Logging {
   }
 
   def parseLeaderAndIsr(leaderAndIsrStr: String, topic: String, partition: Int, stat: Stat): Option[LeaderAndIsr] = {
-    SyncJSON.parseFull(leaderAndIsrStr) match {
+    Json.parseFull(leaderAndIsrStr) match {
       case Some(m) =>
         val leader = m.asInstanceOf[Map[String, String]].get("leader").get.toInt
         val epoch = m.asInstanceOf[Map[String, String]].get("leaderEpoch").get.toInt
         val isrString = m.asInstanceOf[Map[String, String]].get("ISR").get
-        val isr = Utils.getCSVList(isrString).map(r => r.toInt)
+        val isr = Utils.parseCsvList(isrString).map(r => r.toInt)
         val zkPathVersion = stat.getVersion
         debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for topic %s and partition %d".format(leader, epoch,
           isr.toString(), zkPathVersion, topic, partition))
@@ -104,7 +104,7 @@ object ZkUtils extends Logging {
     val leaderAndIsrOpt = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndIsrPath(topic, partition))._1
     leaderAndIsrOpt match {
       case Some(leaderAndIsr) =>
-        SyncJSON.parseFull(leaderAndIsr) match {
+        Json.parseFull(leaderAndIsr) match {
           case Some(m) =>
             Some(m.asInstanceOf[Map[String, String]].get("leader").get.toInt)
           case None => None
@@ -122,7 +122,7 @@ object ZkUtils extends Logging {
     val leaderAndIsrOpt = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndIsrPath(topic, partition))._1
     leaderAndIsrOpt match {
       case Some(leaderAndIsr) =>
-        SyncJSON.parseFull(leaderAndIsr) match {
+        Json.parseFull(leaderAndIsr) match {
           case None => throw new NoEpochForPartitionException("No epoch, leaderAndISR data for topic %s partition %d is invalid".format(topic, partition))
           case Some(m) => m.asInstanceOf[Map[String, String]].get("leaderEpoch").get.toInt
         }
@@ -138,10 +138,10 @@ object ZkUtils extends Logging {
     val leaderAndIsrOpt = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndIsrPath(topic, partition))._1
     leaderAndIsrOpt match {
       case Some(leaderAndIsr) =>
-        SyncJSON.parseFull(leaderAndIsr) match {
+        Json.parseFull(leaderAndIsr) match {
           case Some(m) =>
-            val ISRString = m.asInstanceOf[Map[String, String]].get("ISR").get
-            Utils.getCSVList(ISRString).map(r => r.toInt)
+            val isrString = m.asInstanceOf[Map[String, String]].get("ISR").get
+            Utils.parseCsvList(isrString).map(r => r.toInt)
           case None => Seq.empty[Int]
         }
       case None => Seq.empty[Int]
@@ -155,7 +155,7 @@ object ZkUtils extends Logging {
     val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
     jsonPartitionMapOpt match {
       case Some(jsonPartitionMap) =>
-        SyncJSON.parseFull(jsonPartitionMap) match {
+        Json.parseFull(jsonPartitionMap) match {
           case Some(m) => m.asInstanceOf[Map[String, List[String]]].get(partition.toString) match {
             case None => Seq.empty[Int]
             case Some(seq) => seq.map(_.toInt)
@@ -328,7 +328,7 @@ object ZkUtils extends Logging {
       case e2 => throw e2
     }
   }
-
+  
   def deletePath(client: ZkClient, path: String): Boolean = {
     try {
       client.delete(path)
@@ -349,6 +349,16 @@ object ZkUtils extends Logging {
         // this can happen during a connection loss event, return normally
         info(path + " deleted during connection loss; this is ok")
       case e2 => throw e2
+    }
+  }
+  
+  def maybeDeletePath(zkUrl: String, dir: String) {
+    try {
+      val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)
+      zk.deleteRecursive(dir)
+      zk.close()
+    } catch {
+      case _ => // swallow
     }
   }
 
@@ -413,7 +423,7 @@ object ZkUtils extends Logging {
       val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
       jsonPartitionMapOpt match {
         case Some(jsonPartitionMap) =>
-          SyncJSON.parseFull(jsonPartitionMap) match {
+          Json.parseFull(jsonPartitionMap) match {
             case Some(m) =>
               val replicaMap = m.asInstanceOf[Map[String, Seq[String]]]
               for((partition, replicas) <- replicaMap){
@@ -449,7 +459,7 @@ object ZkUtils extends Logging {
       val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
       jsonPartitionMapOpt match {
         case Some(jsonPartitionMap) =>
-          SyncJSON.parseFull(jsonPartitionMap) match {
+          Json.parseFull(jsonPartitionMap) match {
             case Some(m) =>
               val replicaMap = m.asInstanceOf[Map[String, Seq[String]]]
               for((partition, replicas) <- replicaMap){
@@ -471,7 +481,7 @@ object ZkUtils extends Logging {
       val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
       val partitionMap = jsonPartitionMapOpt match {
         case Some(jsonPartitionMap) =>
-          SyncJSON.parseFull(jsonPartitionMap) match {
+          Json.parseFull(jsonPartitionMap) match {
             case Some(m) =>
               val m1 = m.asInstanceOf[Map[String, Seq[String]]]
               m1.map(p => (p._1.toInt, p._2.map(_.toInt)))
@@ -535,7 +545,7 @@ object ZkUtils extends Logging {
   }
 
   def parsePartitionReassignmentData(jsonData: String):Map[TopicAndPartition, Seq[Int]] = {
-    SyncJSON.parseFull(jsonData) match {
+    Json.parseFull(jsonData) match {
       case Some(m) =>
         val replicaMap = m.asInstanceOf[Map[String, Seq[String]]]
         replicaMap.map { reassignedPartitions =>
@@ -590,7 +600,7 @@ object ZkUtils extends Logging {
   }
 
   def parsePreferredReplicaElectionData(jsonData: String):Set[TopicAndPartition] = {
-    SyncJSON.parseFull(jsonData) match {
+    Json.parseFull(jsonData) match {
       case Some(m) =>
         val topicAndPartitions = m.asInstanceOf[Array[Map[String, String]]]
         val partitions = topicAndPartitions.map { p =>

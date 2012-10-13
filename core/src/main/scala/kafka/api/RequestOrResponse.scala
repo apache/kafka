@@ -19,12 +19,6 @@ package kafka.api
 
 import java.nio._
 
-
-object RequestOrResponse {
-  val DefaultCharset = "UTF-8"
-}
-
-
 object Request {
   val OrdinaryConsumerId: Int = -1
   val DebuggingConsumerId: Int = -2

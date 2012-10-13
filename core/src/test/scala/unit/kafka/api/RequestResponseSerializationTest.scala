@@ -82,18 +82,18 @@ object SerializationTestUtils{
   private val topicmetaData1 = new TopicMetadata(topic1, partitionMetaDataSeq)
   private val topicmetaData2 = new TopicMetadata(topic2, partitionMetaDataSeq)
 
-  def createTestLeaderAndISRRequest() : LeaderAndIsrRequest = {
-    val leaderAndISR1 = new LeaderAndIsr(leader1, 1, isr1, 1)
-    val leaderAndISR2 = new LeaderAndIsr(leader2, 1, isr2, 2)
-    val map = Map(((topic1, 0), PartitionStateInfo(leaderAndISR1, 3)),
-                  ((topic2, 0), PartitionStateInfo(leaderAndISR2, 3)))
+  def createTestLeaderAndIsrRequest() : LeaderAndIsrRequest = {
+    val leaderAndIsr1 = new LeaderAndIsr(leader1, 1, isr1, 1)
+    val leaderAndIsr2 = new LeaderAndIsr(leader2, 1, isr2, 2)
+    val map = Map(((topic1, 0), PartitionStateInfo(leaderAndIsr1, 3)),
+                  ((topic2, 0), PartitionStateInfo(leaderAndIsr2, 3)))
     new LeaderAndIsrRequest(map)
   }
 
-  def createTestLeaderAndISRResponse() : LeaderAndISRResponse = {
+  def createTestLeaderAndIsrResponse() : LeaderAndIsrResponse = {
     val responseMap = Map(((topic1, 0), ErrorMapping.NoError),
                           ((topic2, 0), ErrorMapping.NoError))
-    new LeaderAndISRResponse(1, responseMap)
+    new LeaderAndIsrResponse(1, responseMap)
   }
 
   def createTestStopReplicaRequest() : StopReplicaRequest = {
@@ -145,8 +145,8 @@ object SerializationTestUtils{
 }
 
 class RequestResponseSerializationTest extends JUnitSuite {
-  private val leaderAndISRRequest = SerializationTestUtils.createTestLeaderAndISRRequest
-  private val leaderAndISRResponse = SerializationTestUtils.createTestLeaderAndISRResponse
+  private val leaderAndIsrRequest = SerializationTestUtils.createTestLeaderAndIsrRequest
+  private val leaderAndIsrResponse = SerializationTestUtils.createTestLeaderAndIsrResponse
   private val stopReplicaRequest = SerializationTestUtils.createTestStopReplicaRequest
   private val stopReplicaResponse = SerializationTestUtils.createTestStopReplicaResponse
   private val producerRequest = SerializationTestUtils.createTestProducerRequest
@@ -160,19 +160,19 @@ class RequestResponseSerializationTest extends JUnitSuite {
 
   @Test
   def testSerializationAndDeserialization() {
-    var buffer: ByteBuffer = ByteBuffer.allocate(leaderAndISRRequest.sizeInBytes())
-    leaderAndISRRequest.writeTo(buffer)
+    var buffer: ByteBuffer = ByteBuffer.allocate(leaderAndIsrRequest.sizeInBytes())
+    leaderAndIsrRequest.writeTo(buffer)
     buffer.rewind()
-    val deserializedLeaderAndISRRequest = LeaderAndIsrRequest.readFrom(buffer)
-    assertEquals("The original and deserialzed leaderAndISRRequest should be the same", leaderAndISRRequest,
-                 deserializedLeaderAndISRRequest)
+    val deserializedLeaderAndIsrRequest = LeaderAndIsrRequest.readFrom(buffer)
+    assertEquals("The original and deserialzed leaderAndISRRequest should be the same", leaderAndIsrRequest,
+                 deserializedLeaderAndIsrRequest)
 
-    buffer = ByteBuffer.allocate(leaderAndISRResponse.sizeInBytes())
-    leaderAndISRResponse.writeTo(buffer)
+    buffer = ByteBuffer.allocate(leaderAndIsrResponse.sizeInBytes())
+    leaderAndIsrResponse.writeTo(buffer)
     buffer.rewind()
-    val deserializedLeaderAndISRResponse = LeaderAndISRResponse.readFrom(buffer)
-    assertEquals("The original and deserialzed leaderAndISRResponse should be the same", leaderAndISRResponse,
-                 deserializedLeaderAndISRResponse)
+    val deserializedLeaderAndIsrResponse = LeaderAndIsrResponse.readFrom(buffer)
+    assertEquals("The original and deserialzed leaderAndISRResponse should be the same", leaderAndIsrResponse,
+                 deserializedLeaderAndIsrResponse)
 
     buffer = ByteBuffer.allocate(stopReplicaRequest.sizeInBytes())
     stopReplicaRequest.writeTo(buffer)

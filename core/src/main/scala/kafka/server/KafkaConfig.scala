@@ -22,6 +22,7 @@ import kafka.message.Message
 import kafka.consumer.ConsumerConfig
 import java.net.InetAddress
 import kafka.utils.{Topic, Utils, VerifiableProperties, ZKConfig}
+import scala.collection._
 
 /**
  * Configuration settings for the kafka server
@@ -73,32 +74,32 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the default number of log partitions per topic */
   val numPartitions = props.getIntInRange("num.partitions", 1, (1, Int.MaxValue))
   
-  /* the directory in which the log data is kept */
+  /* the directories in which the log data is kept */
   val logDir = props.getString("log.dir")
   
   /* the maximum size of a single log file */
   val logFileSize = props.getIntInRange("log.file.size", 1*1024*1024*1024, (Message.MinHeaderSize, Int.MaxValue))
 
   /* the maximum size of a single log file for some specific topic */
-  val logFileSizeMap = Utils.getTopicFileSize(props.getString("topic.log.file.size", ""))
+  val logFileSizeMap = props.getMap("topic.log.file.size", _.toInt > 0).mapValues(_.toInt)
 
   /* the maximum time before a new log segment is rolled out */
   val logRollHours = props.getIntInRange("log.roll.hours", 24*7, (1, Int.MaxValue))
 
   /* the number of hours before rolling out a new log segment for some specific topic */
-  val logRollHoursMap = Utils.getTopicRollHours(props.getString("topic.log.roll.hours", ""))
+  val logRollHoursMap = props.getMap("topic.log.roll.hours", _.toInt > 0).mapValues(_.toInt)  
 
   /* the number of hours to keep a log file before deleting it */
   val logRetentionHours = props.getIntInRange("log.retention.hours", 24*7, (1, Int.MaxValue))
 
   /* the number of hours to keep a log file before deleting it for some specific topic*/
-  val logRetentionHoursMap = Utils.getTopicRetentionHours(props.getString("topic.log.retention.hours", ""))
+  val logRetentionHoursMap = props.getMap("topic.log.retention.hours", _.toInt > 0).mapValues(_.toInt)
 
   /* the maximum size of the log before deleting it */
   val logRetentionSize = props.getLong("log.retention.size", -1)
 
   /* the maximum size of the log for some specific topic before deleting it */
-  val logRetentionSizeMap = Utils.getTopicRetentionSize(props.getString("topic.log.retention.size", ""))
+  val logRetentionSizeMap = props.getMap("topic.log.retention.size", _.toLong > 0).mapValues(_.toLong)
 
   /* the frequency in minutes that the log cleaner checks whether any log is eligible for deletion */
   val logCleanupIntervalMinutes = props.getIntInRange("log.cleanup.interval.mins", 10, (1, Int.MaxValue))
@@ -113,7 +114,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val flushInterval = props.getIntInRange("log.flush.interval", 500, (1, Int.MaxValue))
 
   /* the maximum time in ms that a message in selected topics is kept in memory before flushed to disk, e.g., topic1:3000,topic2: 6000  */
-  val flushIntervalMap = Utils.getTopicFlushIntervals(props.getString("topic.flush.intervals.ms", ""))
+  val flushIntervalMap = props.getMap("topic.flush.intervals.ms", _.toInt > 0).mapValues(_.toInt)
 
   /* the frequency in ms that the log flusher checks whether any log needs to be flushed to disk */
   val flushSchedulerThreadRate = props.getInt("log.default.flush.scheduler.interval.ms",  3000)
@@ -161,4 +162,5 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* number of fetcher threads used to replicate messages from a source broker.
    * Increasing this value can increase the degree of I/O parallelism in the follower broker. */
   val numReplicaFetchers = props.getInt("replica.fetchers", 1)
+  
  }

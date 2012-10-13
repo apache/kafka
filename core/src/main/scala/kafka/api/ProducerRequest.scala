@@ -22,6 +22,7 @@ import kafka.message._
 import kafka.utils._
 import scala.collection.Map
 import kafka.common.TopicAndPartition
+import kafka.api.ApiUtils._
 
 
 object ProducerRequest {
@@ -30,14 +31,14 @@ object ProducerRequest {
   def readFrom(buffer: ByteBuffer): ProducerRequest = {
     val versionId: Short = buffer.getShort
     val correlationId: Int = buffer.getInt
-    val clientId: String = Utils.readShortString(buffer, RequestOrResponse.DefaultCharset)
+    val clientId: String = readShortString(buffer)
     val requiredAcks: Short = buffer.getShort
     val ackTimeoutMs: Int = buffer.getInt
     //build the topic structure
     val topicCount = buffer.getInt
     val partitionDataPairs = (1 to topicCount).flatMap(_ => {
       // process topic
-      val topic = Utils.readShortString(buffer, RequestOrResponse.DefaultCharset)
+      val topic = readShortString(buffer)
       val partitionCount = buffer.getInt
       (1 to partitionCount).map(_ => {
         val partition = buffer.getInt
@@ -75,7 +76,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     buffer.putInt(correlationId)
-    Utils.writeShortString(buffer, clientId, RequestOrResponse.DefaultCharset)
+    writeShortString(buffer, clientId)
     buffer.putShort(requiredAcks)
     buffer.putInt(ackTimeoutMs)
 
@@ -83,7 +84,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
     buffer.putInt(dataGroupedByTopic.size) //the number of topics
     dataGroupedByTopic.foreach {
       case (topic, topicAndPartitionData) =>
-        Utils.writeShortString(buffer, topic, RequestOrResponse.DefaultCharset) //write the topic
+        writeShortString(buffer, topic) //write the topic
         buffer.putInt(topicAndPartitionData.size) //the number of partitions
         topicAndPartitionData.foreach(partitionAndData => {
           val partition = partitionAndData._1.partition
@@ -100,13 +101,13 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
   def sizeInBytes: Int = {
     2 + /* versionId */
     4 + /* correlationId */
-    Utils.shortStringLength(clientId, RequestOrResponse.DefaultCharset) + /* client id */
+    shortStringLength(clientId) + /* client id */
     2 + /* requiredAcks */
     4 + /* ackTimeoutMs */
     4 + /* number of topics */
     dataGroupedByTopic.foldLeft(0)((foldedTopics, currTopic) => {
       foldedTopics +
-      Utils.shortStringLength(currTopic._1, RequestOrResponse.DefaultCharset) +
+      shortStringLength(currTopic._1) +
       4 + /* the number of partitions */
       {
         currTopic._2.foldLeft(0)((foldedPartitions, currPartition) => {

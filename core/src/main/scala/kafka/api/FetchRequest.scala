@@ -18,7 +18,8 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.utils.{nonthreadsafe, Utils}
+import kafka.utils.nonthreadsafe
+import kafka.api.ApiUtils._
 import scala.collection.immutable.Map
 import kafka.common.TopicAndPartition
 import kafka.consumer.ConsumerConfig
@@ -35,13 +36,13 @@ object FetchRequest {
   def readFrom(buffer: ByteBuffer): FetchRequest = {
     val versionId = buffer.getShort
     val correlationId = buffer.getInt
-    val clientId = Utils.readShortString(buffer, RequestOrResponse.DefaultCharset)
+    val clientId = readShortString(buffer)
     val replicaId = buffer.getInt
     val maxWait = buffer.getInt
     val minBytes = buffer.getInt
     val topicCount = buffer.getInt
     val pairs = (1 to topicCount).flatMap(_ => {
-      val topic = Utils.readShortString(buffer, RequestOrResponse.DefaultCharset)
+      val topic = readShortString(buffer)
       val partitionCount = buffer.getInt
       (1 to partitionCount).map(_ => {
         val partitionId = buffer.getInt
@@ -71,14 +72,14 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     buffer.putInt(correlationId)
-    Utils.writeShortString(buffer, clientId, RequestOrResponse.DefaultCharset)
+    writeShortString(buffer, clientId)
     buffer.putInt(replicaId)
     buffer.putInt(maxWait)
     buffer.putInt(minBytes)
     buffer.putInt(requestInfoGroupedByTopic.size) // topic count
     requestInfoGroupedByTopic.foreach {
       case (topic, partitionFetchInfos) =>
-        Utils.writeShortString(buffer, topic, RequestOrResponse.DefaultCharset)
+        writeShortString(buffer, topic)
         buffer.putInt(partitionFetchInfos.size) // partition count
         partitionFetchInfos.foreach {
           case (TopicAndPartition(_, partition), PartitionFetchInfo(offset, fetchSize)) =>
@@ -92,7 +93,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
   def sizeInBytes: Int = {
     2 + /* versionId */
     4 + /* correlationId */
-    Utils.shortStringLength(clientId, RequestOrResponse.DefaultCharset) +
+    shortStringLength(clientId) +
     4 + /* replicaId */
     4 + /* maxWait */
     4 + /* minBytes */
@@ -100,7 +101,7 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
     requestInfoGroupedByTopic.foldLeft(0)((foldedTopics, currTopic) => {
       val (topic, partitionFetchInfos) = currTopic
       foldedTopics +
-      Utils.shortStringLength(topic, RequestOrResponse.DefaultCharset) +
+      shortStringLength(topic) +
       4 + /* partition count */
       partitionFetchInfos.size * (
         4 + /* partition id */

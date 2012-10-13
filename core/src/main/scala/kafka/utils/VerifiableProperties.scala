@@ -18,7 +18,7 @@
 package kafka.utils
 
 import java.util.Properties
-import collection.mutable
+import scala.collection._
 
 class VerifiableProperties(val props: Properties) extends Logging {
   private val referenceSet = mutable.HashSet[String]()
@@ -155,6 +155,23 @@ class VerifiableProperties(val props: Properties) extends Logging {
   def getString(name: String): String = {
     require(containsKey(name), "Missing required property '" + name + "'")
     getProperty(name)
+  }
+  
+  /**
+   * Get a Map[String, String] from a property list in the form k1:v2, k2:v2, ...
+   */
+  def getMap(name: String, valid: String => Boolean): Map[String, String] = {
+    try {
+      val m = Utils.parseCsvMap(getString(name, ""))
+      m.foreach {
+        case(key, value) => 
+          if(!valid(value))
+            throw new IllegalArgumentException("Invalid entry '%s' = '%s' for property '%s'".format(key, value, name))
+      }
+      m
+    } catch {
+      case e: Exception => throw new IllegalArgumentException("Error parsing configuration property '%s': %s".format(name, e.getMessage))
+    }
   }
 
   def verify() {

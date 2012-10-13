@@ -17,6 +17,8 @@
 
 package kafka.producer
 
+import kafka.utils.Utils
+
 private[kafka] class DefaultPartitioner[T] extends Partitioner[T] {
   private val random = new java.util.Random
   
@@ -24,6 +26,6 @@ private[kafka] class DefaultPartitioner[T] extends Partitioner[T] {
     if(key == null)
       random.nextInt(numPartitions)
     else
-      math.abs(key.hashCode) % numPartitions
+      Utils.abs(key.hashCode) % numPartitions
   }
 }

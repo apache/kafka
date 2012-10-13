@@ -35,7 +35,7 @@ object Kafka extends Logging {
       val verifiableProps = serverConfig.props
       val metricsConfig = new KafkaMetricsConfig(verifiableProps)
       metricsConfig.reporters.foreach(reporterType => {
-        val reporter = Utils.getObject[KafkaMetricsReporter](reporterType)
+        val reporter = Utils.createObject[KafkaMetricsReporter](reporterType)
         reporter.init(verifiableProps)
         if (reporter.isInstanceOf[KafkaMetricsReporterMBean])
           Utils.registerMBean(reporter, reporter.asInstanceOf[KafkaMetricsReporterMBean].getMBeanName)

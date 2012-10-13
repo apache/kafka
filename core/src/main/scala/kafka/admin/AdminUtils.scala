@@ -18,7 +18,8 @@
 package kafka.admin
 
 import java.util.Random
-import kafka.api.{TopicMetadata, PartitionMetadata}
+import kafka.api.{TopicMetadata, PartitionMetadata, TopicMetadataRequest, TopicMetadataResponse}
+import kafka.common._
 import kafka.cluster.Broker
 import kafka.utils.{Logging, Utils, ZkUtils}
 import org.I0Itec.zkclient.ZkClient

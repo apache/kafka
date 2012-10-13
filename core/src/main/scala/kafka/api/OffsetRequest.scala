@@ -20,6 +20,7 @@ package kafka.api
 import java.nio.ByteBuffer
 import kafka.utils.Utils
 import kafka.common.TopicAndPartition
+import kafka.api.ApiUtils._
 
 
 object OffsetRequest {
@@ -33,11 +34,11 @@ object OffsetRequest {
 
   def readFrom(buffer: ByteBuffer): OffsetRequest = {
     val versionId = buffer.getShort
-    val clientId = Utils.readShortString(buffer)
+    val clientId = readShortString(buffer)
     val replicaId = buffer.getInt
     val topicCount = buffer.getInt
     val pairs = (1 to topicCount).flatMap(_ => {
-      val topic = Utils.readShortString(buffer)
+      val topic = readShortString(buffer)
       val partitionCount = buffer.getInt
       (1 to partitionCount).map(_ => {
         val partitionId = buffer.getInt
@@ -64,13 +65,13 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
-    Utils.writeShortString(buffer, clientId)
+    writeShortString(buffer, clientId)
     buffer.putInt(replicaId)
 
     buffer.putInt(requestInfoGroupedByTopic.size) // topic count
     requestInfoGroupedByTopic.foreach {
       case((topic, partitionInfos)) =>
-        Utils.writeShortString(buffer, topic)
+        writeShortString(buffer, topic)
         buffer.putInt(partitionInfos.size) // partition count
         partitionInfos.foreach {
           case (TopicAndPartition(_, partition), partitionInfo) =>
@@ -83,13 +84,13 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
 
   def sizeInBytes =
     2 + /* versionId */
-    Utils.shortStringLength(clientId, RequestOrResponse.DefaultCharset) +
+    shortStringLength(clientId) +
     4 + /* replicaId */
     4 + /* topic count */
     requestInfoGroupedByTopic.foldLeft(0)((foldedTopics, currTopic) => {
       val (topic, partitionInfos) = currTopic
       foldedTopics +
-      Utils.shortStringLength(topic, RequestOrResponse.DefaultCharset) +
+      shortStringLength(topic) +
       4 + /* partition count */
       partitionInfos.size * (
         4 + /* partition */

@@ -28,6 +28,7 @@ import kafka.utils.ZkUtils._
 import kafka.utils.{ShutdownableThread, SystemTime}
 import kafka.utils.Utils._
 import kafka.common.TopicAndPartition
+import kafka.client.ClientUtils
 
 /**
  *  Usage:
@@ -52,7 +53,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
           cond.await()
 
         val brokers = getAllBrokersInCluster(zkClient)
-        val topicsMetadata = getTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet, brokers).topicsMetadata
+        val topicsMetadata = ClientUtils.fetchTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet, brokers).topicsMetadata
         val leaderForPartitionsMap = new HashMap[(String, Int), Broker]
         topicsMetadata.foreach(
           tmd => {

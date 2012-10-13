@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
 import org.apache.log4j.Logger
 import kafka.message.Message
-import kafka.utils.Utils
+import kafka.utils.ZkUtils
 import java.util.{Random, Properties}
 import kafka.consumer._
 import java.text.SimpleDateFormat
@@ -48,7 +48,7 @@ object ConsumerPerformance {
     }
 
     // clean up zookeeper state for this group id for every perf run
-    Utils.tryCleanupZookeeper(config.consumerConfig.zkConnect, config.consumerConfig.groupId)
+    ZkUtils.maybeDeletePath(config.consumerConfig.zkConnect, "/consumers/" + config.consumerConfig.groupId)
 
     val consumerConnector: ConsumerConnector = Consumer.create(config.consumerConfig)
 
