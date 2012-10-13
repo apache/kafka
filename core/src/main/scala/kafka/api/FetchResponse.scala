@@ -26,7 +26,6 @@ import kafka.utils.Utils
 
 object FetchResponsePartitionData {
   def readFrom(buffer: ByteBuffer): FetchResponsePartitionData = {
-    val partition = buffer.getInt
     val error = buffer.getShort
     val initialOffset = buffer.getLong
     val hw = buffer.getLong
@@ -34,33 +33,35 @@ object FetchResponsePartitionData {
     val messageSetBuffer = buffer.slice()
     messageSetBuffer.limit(messageSetSize)
     buffer.position(buffer.position + messageSetSize)
-    new FetchResponsePartitionData(partition, error, initialOffset, hw, new ByteBufferMessageSet(messageSetBuffer))
+    new FetchResponsePartitionData(error, initialOffset,
+                                   hw, new ByteBufferMessageSet(messageSetBuffer))
   }
 
   val headerSize =
-    4 + /* partition */
     2 + /* error code */
     8 + /* initialOffset */
     8 + /* high watermark */
     4 /* messageSetSize */
 }
 
-case class FetchResponsePartitionData(partition: Int, error: Short = ErrorMapping.NoError, initialOffset:Long = 0L, hw: Long = -1L, messages: MessageSet) {
+case class FetchResponsePartitionData(error: Short = ErrorMapping.NoError,
+                                      initialOffset:Long = 0L, hw: Long = -1L, messages: MessageSet) {
 
   val sizeInBytes = FetchResponsePartitionData.headerSize + messages.sizeInBytes.intValue()
 
-  def this(partition: Int, messages: MessageSet) = this(partition, ErrorMapping.NoError, 0L, -1L, messages)
+  def this(messages: MessageSet) = this(ErrorMapping.NoError, 0L, -1L, messages)
   
 }
 
 // SENDS
 
-class PartitionDataSend(val partitionData: FetchResponsePartitionData) extends Send {
+class PartitionDataSend(val partitionId: Int,
+                        val partitionData: FetchResponsePartitionData) extends Send {
   private val messageSize = partitionData.messages.sizeInBytes
   private var messagesSentSize = 0L
 
-  private val buffer = ByteBuffer.allocate(FetchResponsePartitionData.headerSize)
-  buffer.putInt(partitionData.partition)
+  private val buffer = ByteBuffer.allocate( 4 /** partitionId **/ + FetchResponsePartitionData.headerSize)
+  buffer.putInt(partitionId)
   buffer.putShort(partitionData.error)
   buffer.putLong(partitionData.initialOffset)
   buffer.putLong(partitionData.hw)
@@ -87,8 +88,9 @@ object TopicData {
     val topic = Utils.readShortString(buffer, RequestOrResponse.DefaultCharset)
     val partitionCount = buffer.getInt
     val topicPartitionDataPairs = (1 to partitionCount).map(_ => {
+      val partitionId = buffer.getInt
       val partitionData = FetchResponsePartitionData.readFrom(buffer)
-      (TopicAndPartition(topic, partitionData.partition), partitionData)
+      (partitionId, partitionData)
     })
     TopicData(topic, Map(topicPartitionDataPairs:_*))
   }
@@ -98,9 +100,9 @@ object TopicData {
     4 /* partition count */
 }
 
-case class TopicData(topic: String, partitionData: Map[TopicAndPartition, FetchResponsePartitionData]) {
+case class TopicData(topic: String, partitionData: Map[Int, FetchResponsePartitionData]) {
   val sizeInBytes =
-    TopicData.headerSize(topic) + partitionData.values.foldLeft(0)(_ + _.sizeInBytes)
+    TopicData.headerSize(topic) + partitionData.values.foldLeft(0)(_ + _.sizeInBytes + 4)
 
   val headerSize = TopicData.headerSize(topic)
 }
@@ -113,11 +115,12 @@ class TopicDataSend(val topicData: TopicData) extends Send {
   override def complete = sent >= size
 
   private val buffer = ByteBuffer.allocate(topicData.headerSize)
-  Utils.writeShortString(buffer, topicData.topic, RequestOrResponse.DefaultCharset)
+  Utils.writeShortString(buffer, topicData.topic)
   buffer.putInt(topicData.partitionData.size)
   buffer.rewind()
 
-  val sends = new MultiSend(topicData.partitionData.toList.map(d => new PartitionDataSend(d._2))) {
+  val sends = new MultiSend(topicData.partitionData.toList
+                                    .map(d => new PartitionDataSend(d._1, d._2))) {
     val expectedBytesToWrite = topicData.sizeInBytes - topicData.headerSize
   }
 
@@ -148,9 +151,10 @@ object FetchResponse {
     val topicCount = buffer.getInt
     val pairs = (1 to topicCount).flatMap(_ => {
       val topicData = TopicData.readFrom(buffer)
-      topicData.partitionData.values.map(
-        partitionData => (TopicAndPartition(topicData.topic, partitionData.partition), partitionData)
-      )
+      topicData.partitionData.map {
+        case (partitionId, partitionData) =>
+          (TopicAndPartition(topicData.topic, partitionId), partitionData)
+      }
     })
     FetchResponse(versionId, correlationId, Map(pairs:_*))
   }
@@ -169,9 +173,10 @@ case class FetchResponse(versionId: Short,
   val sizeInBytes =
     FetchResponse.headerSize +
     dataGroupedByTopic.foldLeft(0) ((folded, curr) => {
-      val topicData = TopicData(curr._1, curr._2)
-      folded +
-      topicData.sizeInBytes
+      val topicData = TopicData(curr._1, curr._2.map {
+        case (topicAndPartition, partitionData) => (topicAndPartition.partition, partitionData)
+      })
+      folded + topicData.sizeInBytes
     })
 
   private def partitionDataFor(topic: String, partition: Int): FetchResponsePartitionData = {
@@ -212,7 +217,8 @@ class FetchResponseSend(val fetchResponse: FetchResponse) extends Send {
   buffer.rewind()
 
   val sends = new MultiSend(fetchResponse.dataGroupedByTopic.toList.map {
-    case(topic, data) => new TopicDataSend(TopicData(topic, data))
+    case(topic, data) => new TopicDataSend(TopicData(topic,
+                                                     data.map{case(topicAndPartition, message) => (topicAndPartition.partition, message)}))
   }) {
     val expectedBytesToWrite = fetchResponse.sizeInBytes - FetchResponse.headerSize
   }

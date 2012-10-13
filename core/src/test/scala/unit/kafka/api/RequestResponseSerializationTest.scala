@@ -34,29 +34,32 @@ object SerializationTestUtils{
   private val isr1 = List(0, 1, 2)
   private val leader2 = 0
   private val isr2 = List(0, 2, 3)
-  private val partitionDataFetchResponse0 = new FetchResponsePartitionData(0, new ByteBufferMessageSet(new Message("first message".getBytes)))
-  private val partitionDataFetchResponse1 = new FetchResponsePartitionData(1, new ByteBufferMessageSet(new Message("second message".getBytes)))
-  private val partitionDataFetchResponse2 = new FetchResponsePartitionData(2, new ByteBufferMessageSet(new Message("third message".getBytes)))
-  private val partitionDataFetchResponse3 = new FetchResponsePartitionData(3, new ByteBufferMessageSet(new Message("fourth message".getBytes)))
-  private val partitionDataFetchResponseArray = Array(partitionDataFetchResponse0, partitionDataFetchResponse1, partitionDataFetchResponse2, partitionDataFetchResponse3)
+  private val partitionDataFetchResponse0 = new FetchResponsePartitionData(new ByteBufferMessageSet(new Message("first message".getBytes)))
+  private val partitionDataFetchResponse1 = new FetchResponsePartitionData(new ByteBufferMessageSet(new Message("second message".getBytes)))
+  private val partitionDataFetchResponse2 = new FetchResponsePartitionData(new ByteBufferMessageSet(new Message("third message".getBytes)))
+  private val partitionDataFetchResponse3 = new FetchResponsePartitionData(new ByteBufferMessageSet(new Message("fourth message".getBytes)))
+  private val partitionDataFetchResponseMap = Map((0, partitionDataFetchResponse0), (1, partitionDataFetchResponse1), (2, partitionDataFetchResponse2), (3, partitionDataFetchResponse3))
 
   private val topicDataFetchResponse = {
     val groupedData = Array(topic1, topic2).flatMap(topic =>
-      partitionDataFetchResponseArray.map(partitionData =>
-        (TopicAndPartition(topic, partitionData.partition), partitionData)))
+      partitionDataFetchResponseMap.map(partitionAndData =>
+        (TopicAndPartition(topic, partitionAndData._1), partitionAndData._2)))
     collection.immutable.Map(groupedData:_*)
   }
 
-  private val partitionDataProducerRequest0 = new ProducerRequestPartitionData(0, new ByteBufferMessageSet(new Message("first message".getBytes)))
-  private val partitionDataProducerRequest1 = new ProducerRequestPartitionData(1, new ByteBufferMessageSet(new Message("second message".getBytes)))
-  private val partitionDataProducerRequest2 = new ProducerRequestPartitionData(2, new ByteBufferMessageSet(new Message("third message".getBytes)))
-  private val partitionDataProducerRequest3 = new ProducerRequestPartitionData(3, new ByteBufferMessageSet(new Message("fourth message".getBytes)))
-  private val partitionDataProducerRequestArray = Array(partitionDataProducerRequest0, partitionDataProducerRequest1, partitionDataProducerRequest2, partitionDataProducerRequest3)
+  private val partitionDataMessage0 = new ByteBufferMessageSet(new Message("first message".getBytes))
+  private val partitionDataMessage1 = new ByteBufferMessageSet(new Message("second message".getBytes))
+  private val partitionDataMessage2 = new ByteBufferMessageSet(new Message("third message".getBytes))
+  private val partitionDataMessage3 = new ByteBufferMessageSet(new Message("fourth message".getBytes))
+  private val partitionDataProducerRequestArray = Array(partitionDataMessage0, partitionDataMessage1, partitionDataMessage2, partitionDataMessage3)
 
   private val topicDataProducerRequest = {
     val groupedData = Array(topic1, topic2).flatMap(topic =>
-      partitionDataProducerRequestArray.map(partitionData =>
-        (TopicAndPartition(topic, partitionData.partition), partitionData)))
+      partitionDataProducerRequestArray.zipWithIndex.map
+      {
+        case(partitionDataMessage, partition) =>
+          (TopicAndPartition(topic, partition), partitionDataMessage)
+      })
     collection.immutable.Map(groupedData:_*)
   }
 

@@ -24,13 +24,14 @@ import java.nio.ByteBuffer
 import kafka.api._
 import kafka.common.TopicAndPartition
 import kafka.utils.{Logging, SystemTime}
+import kafka.message.ByteBufferMessageSet
 
 
 object RequestChannel extends Logging {
   val AllDone = new Request(1, 2, getShutdownReceive(), 0)
 
   def getShutdownReceive() = {
-    val emptyProducerRequest = new ProducerRequest(0, 0, "", 0, 0, Map[TopicAndPartition, ProducerRequestPartitionData]())
+    val emptyProducerRequest = new ProducerRequest(0, 0, "", 0, 0, Map[TopicAndPartition, ByteBufferMessageSet]())
     val byteBuffer = ByteBuffer.allocate(emptyProducerRequest.sizeInBytes + 2)
     byteBuffer.putShort(RequestKeys.ProduceKey)
     emptyProducerRequest.writeTo(byteBuffer)

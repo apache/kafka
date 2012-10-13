@@ -21,14 +21,13 @@ import java.net.SocketTimeoutException
 import java.util.Properties
 import junit.framework.Assert
 import kafka.admin.CreateTopicCommand
-import kafka.common.{ErrorMapping}
 import kafka.integration.KafkaServerTestHarness
 import kafka.message._
 import kafka.server.KafkaConfig
 import kafka.utils._
 import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
-import kafka.api.{ProducerResponseStatus, ProducerRequestPartitionData}
+import kafka.api.ProducerResponseStatus
 import kafka.common.{TopicAndPartition, ErrorMapping}
 
 class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
@@ -86,7 +85,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val clientId = SyncProducerConfig.DefaultClientId
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
     val ack = SyncProducerConfig.DefaultRequiredAcks
-    val emptyRequest = new kafka.api.ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, Map[TopicAndPartition, ProducerRequestPartitionData]())
+    val emptyRequest = new kafka.api.ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, Map[TopicAndPartition, MessageSet]())
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val response = producer.send(emptyRequest)

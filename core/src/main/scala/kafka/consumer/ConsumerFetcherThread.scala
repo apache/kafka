@@ -34,26 +34,25 @@ class ConsumerFetcherThread(name: String,
           minBytes = config.minFetchBytes) {
 
   // process fetched data
-  def processPartitionData(topic: String, fetchOffset: Long, partitionData: FetchResponsePartitionData) {
-    val pti = consumerFetcherManager.getPartitionTopicInfo((topic, partitionData.partition))
+  def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: FetchResponsePartitionData) {
+    val pti = consumerFetcherManager.getPartitionTopicInfo(topicAndPartition)
     if (pti.getFetchOffset != fetchOffset)
       throw new RuntimeException("Offset doesn't match for topic %s partition: %d pti offset: %d fetch offset: %d"
-                                .format(topic, partitionData.partition, pti.getFetchOffset, fetchOffset))
+                                .format(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset, fetchOffset))
     pti.enqueue(partitionData.messages.asInstanceOf[ByteBufferMessageSet])
   }
 
   // handle a partition whose offset is out of range and return a new fetch offset
-  def handleOffsetOutOfRange(topic: String, partitionId: Int): Long = {
+  def handleOffsetOutOfRange(topicAndPartition: TopicAndPartition): Long = {
     var startTimestamp : Long = 0
     config.autoOffsetReset match {
       case OffsetRequest.SmallestTimeString => startTimestamp = OffsetRequest.EarliestTime
       case OffsetRequest.LargestTimeString => startTimestamp = OffsetRequest.LatestTime
       case _ => startTimestamp = OffsetRequest.LatestTime
     }
-    val topicAndPartition = TopicAndPartition(topic, partitionId)
     val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(startTimestamp, 1)))
     val newOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
-    val pti = consumerFetcherManager.getPartitionTopicInfo((topic, partitionId))
+    val pti = consumerFetcherManager.getPartitionTopicInfo(topicAndPartition)
     pti.resetFetchOffset(newOffset)
     pti.resetConsumeOffset(newOffset)
     newOffset

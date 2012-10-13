@@ -38,7 +38,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
                              private val config: ConsumerConfig,
                              private val zkClient : ZkClient)
         extends AbstractFetcherManager("ConsumerFetcherManager-%d".format(SystemTime.milliseconds), 1) {
-  private var partitionMap: immutable.Map[(String, Int), PartitionTopicInfo] = null
+  private var partitionMap: immutable.Map[TopicAndPartition, PartitionTopicInfo] = null
   private var cluster: Cluster = null
   private val noLeaderPartitionSet = new mutable.HashSet[TopicAndPartition]
   private val lock = new ReentrantLock
@@ -72,7 +72,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
             // find the leader for this partition
             val leaderBrokerOpt = leaderForPartitionsMap.get((topic, partitionId))
             if(leaderBrokerOpt.isDefined){
-              val pti = partitionMap((topic, partitionId))
+              val pti = partitionMap(TopicAndPartition(topic, partitionId))
               addFetcher(topic, partitionId, pti.getFetchOffset(), leaderBrokerOpt.get)
               noLeaderPartitionSet.remove(TopicAndPartition(topic, partitionId))
             }
@@ -95,7 +95,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
       throw new RuntimeException("%s already shutdown".format(name))
     lock.lock()
     try {
-      partitionMap = topicInfos.map(tpi => ((tpi.topic, tpi.partitionId), tpi)).toMap
+      partitionMap = topicInfos.map(tpi => (TopicAndPartition(tpi.topic, tpi.partitionId), tpi)).toMap
       this.cluster = cluster
       noLeaderPartitionSet ++= topicInfos.map(tpi => TopicAndPartition(tpi.topic, tpi.partitionId))
       cond.signalAll()
@@ -119,11 +119,11 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     lock.unlock()
   }
 
-  def getPartitionTopicInfo(key: (String, Int)) : PartitionTopicInfo = {
+  def getPartitionTopicInfo(topicAndPartition: TopicAndPartition) : PartitionTopicInfo = {
     var pti :PartitionTopicInfo =null
     lock.lock()
     try {
-      pti = partitionMap(key)
+      pti = partitionMap(topicAndPartition)
     } finally {
       lock.unlock()
     }

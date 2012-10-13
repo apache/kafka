@@ -367,7 +367,7 @@ object TestUtils extends Logging {
     val clientId = SyncProducerConfig.DefaultClientId
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
     val data = topics.flatMap(topic =>
-      partitions.map(partition => (TopicAndPartition(topic,  partition), new ProducerRequestPartitionData(partition, message)))
+      partitions.map(partition => (TopicAndPartition(topic,  partition), message))
     )
     new kafka.api.ProducerRequest(correlationId, clientId, acks.toShort, ackTimeoutMs, Map(data:_*))
   }

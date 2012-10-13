@@ -46,10 +46,11 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
   /* callbacks to be defined in subclass */
 
   // process fetched data
-  def processPartitionData(topic: String, fetchOffset: Long, partitionData: FetchResponsePartitionData)
+  def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long,
+                           partitionData: FetchResponsePartitionData)
 
   // handle a partition whose offset is out of range and return a new fetch offset
-  def handleOffsetOutOfRange(topic: String, partitionId: Int): Long
+  def handleOffsetOutOfRange(topicAndPartition: TopicAndPartition): Long
 
   // deal with partitions with errors, potentially due to leadership changes
   def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition])
@@ -112,9 +113,9 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
                   FetcherLagMetrics.getFetcherLagMetrics(topic, partitionId).lag = partitionData.hw - newOffset
                   fetcherMetrics.byteRate.mark(validBytes)
                   // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
-                  processPartitionData(topic, currentOffset.get, partitionData)
+                  processPartitionData(topicAndPartition, currentOffset.get, partitionData)
                 case ErrorMapping.OffsetOutOfRangeCode =>
-                  val newOffset = handleOffsetOutOfRange(topic, partitionId)
+                  val newOffset = handleOffsetOutOfRange(topicAndPartition)
                   fetchMap.put(topicAndPartition, newOffset)
                   warn("current offset %d for topic %s partition %d out of range; reset offset to %d"
                     .format(currentOffset.get, topic, partitionId, newOffset))

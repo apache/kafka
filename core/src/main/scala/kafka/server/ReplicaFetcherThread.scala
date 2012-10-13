@@ -30,8 +30,9 @@ class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: Kafk
     minBytes = brokerConfig.replicaMinBytes) {
 
   // process fetched data
-  def processPartitionData(topic: String, fetchOffset: Long, partitionData: FetchResponsePartitionData) {
-    val partitionId = partitionData.partition
+  def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: FetchResponsePartitionData) {
+    val topic = topicAndPartition.topic
+    val partitionId = topicAndPartition.partition
     val replica = replicaMgr.getReplica(topic, partitionId).get
     val messageSet = partitionData.messages.asInstanceOf[ByteBufferMessageSet]
 
@@ -49,15 +50,14 @@ class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: Kafk
   }
 
   // handle a partition whose offset is out of range and return a new fetch offset
-  def handleOffsetOutOfRange(topic: String, partitionId: Int): Long = {
+  def handleOffsetOutOfRange(topicAndPartition: TopicAndPartition): Long = {
     // This means the local replica is out of date. Truncate the log and catch up from beginning.
-    val topicAndPartition = TopicAndPartition(topic, partitionId)
     val request = OffsetRequest(
       replicaId = brokerConfig.brokerId,
       requestInfo = Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.EarliestTime, 1))
     )
     val offset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
-    val replica = replicaMgr.getReplica(topic, partitionId).get
+    val replica = replicaMgr.getReplica(topicAndPartition.topic, topicAndPartition.partition).get
     replica.log.get.truncateAndStartWithNewOffset(offset)
     offset
   }

@@ -23,25 +23,6 @@ import kafka.utils._
 import scala.collection.Map
 import kafka.common.TopicAndPartition
 
-object ProducerRequestPartitionData {
-  def readFrom(buffer: ByteBuffer): ProducerRequestPartitionData = {
-    val partition = buffer.getInt
-    val messageSetSize = buffer.getInt
-    val messageSetBuffer = buffer.slice()
-    messageSetBuffer.limit(messageSetSize)
-    buffer.position(buffer.position + messageSetSize)
-    new ProducerRequestPartitionData(partition, new ByteBufferMessageSet(messageSetBuffer))
-  }
-
-  val headerSize =
-    4 + /* partition */
-    4 /* messageSetSize */
-}
-
-case class ProducerRequestPartitionData(partition: Int, messages: MessageSet) {
-
-  val sizeInBytes = ProducerRequestPartitionData.headerSize + messages.sizeInBytes.intValue()
-}
 
 object ProducerRequest {
   val CurrentVersion: Short = 0
@@ -63,8 +44,7 @@ object ProducerRequest {
         val messageSetSize = buffer.getInt
         val messageSetBuffer = new Array[Byte](messageSetSize)
         buffer.get(messageSetBuffer,0,messageSetSize)
-        (TopicAndPartition(topic, partition),
-         new ProducerRequestPartitionData(partition,new ByteBufferMessageSet(ByteBuffer.wrap(messageSetBuffer))))
+        (TopicAndPartition(topic, partition), new ByteBufferMessageSet(ByteBuffer.wrap(messageSetBuffer)))
       })
     })
 
@@ -77,7 +57,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
                            clientId: String,
                            requiredAcks: Short,
                            ackTimeoutMs: Int,
-                           data: Map[TopicAndPartition, ProducerRequestPartitionData])
+                           data: Map[TopicAndPartition, MessageSet])
     extends RequestOrResponse(Some(RequestKeys.ProduceKey)) {
 
   /**
@@ -89,7 +69,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
            clientId: String,
            requiredAcks: Short,
            ackTimeoutMs: Int,
-           data: Map[TopicAndPartition, ProducerRequestPartitionData]) =
+           data: Map[TopicAndPartition, MessageSet]) =
     this(ProducerRequest.CurrentVersion, correlationId, clientId, requiredAcks, ackTimeoutMs, data)
 
   def writeTo(buffer: ByteBuffer) {
@@ -106,9 +86,10 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
         Utils.writeShortString(buffer, topic, RequestOrResponse.DefaultCharset) //write the topic
         buffer.putInt(topicAndPartitionData.size) //the number of partitions
         topicAndPartitionData.foreach(partitionAndData => {
-          val partitionData = partitionAndData._2
-          val bytes = partitionData.messages.asInstanceOf[ByteBufferMessageSet].buffer
-          buffer.putInt(partitionData.partition)
+          val partition = partitionAndData._1.partition
+          val partitionMessageData = partitionAndData._2
+          val bytes = partitionMessageData.asInstanceOf[ByteBufferMessageSet].buffer
+          buffer.putInt(partition)
           buffer.putInt(bytes.limit)
           buffer.put(bytes)
           bytes.rewind
@@ -132,7 +113,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
           foldedPartitions +
           4 + /* partition id */
           4 + /* byte-length of serialized messages */
-          currPartition._2.messages.sizeInBytes.toInt
+          currPartition._2.sizeInBytes.toInt
         })
       }
     })

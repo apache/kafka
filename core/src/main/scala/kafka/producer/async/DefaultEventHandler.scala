@@ -24,7 +24,7 @@ import kafka.serializer.Encoder
 import kafka.utils.{Utils, Logging}
 import scala.collection.{Seq, Map}
 import scala.collection.mutable.{ListBuffer, HashMap}
-import kafka.api.{TopicMetadata, ProducerRequest, ProducerRequestPartitionData}
+import kafka.api.{TopicMetadata, ProducerRequest}
 
 
 class DefaultEventHandler[K,V](config: ProducerConfig,
@@ -207,7 +207,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     } else if(messagesPerTopic.size > 0) {
       val topicPartitionDataPairs = messagesPerTopic.toSeq.map {
         case (topicAndPartition, messages) =>
-          (topicAndPartition, new ProducerRequestPartitionData(topicAndPartition.partition, messages))
+          (topicAndPartition, messages)
       }
       val producerRequest = new ProducerRequest(config.correlationId, config.clientId, config.requiredAcks,
         config.requestTimeoutMs, Map(topicPartitionDataPairs:_*))
