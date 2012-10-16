@@ -114,6 +114,12 @@ object SimpleConsumerShell extends Logging {
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
     val formatterArgs = MessageFormatter.tryParseFormatterArgs(options.valuesOf(messageFormatterArgOpt))
 
+    val fetchRequestBuilder = new FetchRequestBuilder()
+                       .clientId(clientId)
+                       .replicaId(Request.DebuggingConsumerId)
+                       .maxWait(maxWaitMs)
+                       .minBytes(ConsumerConfig.MinFetchBytes)
+
     // getting topic metadata
     info("Getting topic metatdata...")
     val metadataTargetBrokers = ClientUtils.parseBrokerList(options.valueOf(brokerListOpt))
@@ -168,17 +174,11 @@ object SimpleConsumerShell extends Logging {
     val simpleConsumer = new SimpleConsumer(fetchTargetBroker.host, fetchTargetBroker.port, 10000, 64*1024)
     val thread = Utils.newThread("kafka-simpleconsumer-shell", new Runnable() {
       def run() {
-        var reqId = 0
         var offset = startingOffset
         try {
           while(true) {
-            val fetchRequest = new FetchRequestBuilder()
-                    .correlationId(reqId)
-                    .clientId(clientId)
-                    .replicaId(Request.DebuggingConsumerId)
+            val fetchRequest = fetchRequestBuilder
                     .addFetch(topic, partitionId, offset, fetchSize)
-                    .maxWait(maxWaitMs)
-                    .minBytes(ConsumerConfig.MinFetchBytes)
                     .build()
             val fetchResponse = simpleConsumer.fetch(fetchRequest)
             val messageSet = fetchResponse.messageSet(topic, partitionId)
@@ -206,11 +206,10 @@ object SimpleConsumerShell extends Logging {
               }
               consumed += 1
             }
-            reqId += 1
           }
         } catch {
           case e: Throwable =>
-            error("Error consuming topic, partition, replica (%s, %d, %d) with request id [%d] and offset [%d]".format(topic, partitionId, replicaId, reqId, offset), e)
+            error("Error consuming topic, partition, replica (%s, %d, %d) with offset [%d]".format(topic, partitionId, replicaId, offset), e)
         }
       }
     }, false)

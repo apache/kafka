@@ -17,17 +17,25 @@
 
 package kafka.server
 
-import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest, FetchResponsePartitionData}
 import kafka.cluster.Broker
 import kafka.message.ByteBufferMessageSet
 import kafka.common.TopicAndPartition
+import kafka.api.{FetchRequest, PartitionOffsetRequestInfo, OffsetRequest, FetchResponsePartitionData}
 
 
-class ReplicaFetcherThread(name:String, sourceBroker: Broker, brokerConfig: KafkaConfig, replicaMgr: ReplicaManager)
-  extends AbstractFetcherThread(name = name, sourceBroker = sourceBroker, socketTimeout = brokerConfig.replicaSocketTimeoutMs,
-    socketBufferSize = brokerConfig.replicaSocketBufferSize, fetchSize = brokerConfig.replicaFetchSize,
-    fetcherBrokerId = brokerConfig.brokerId, maxWait = brokerConfig.replicaMaxWaitTimeMs,
-    minBytes = brokerConfig.replicaMinBytes) {
+class ReplicaFetcherThread(name:String,
+                           sourceBroker: Broker,
+                           brokerConfig: KafkaConfig,
+                           replicaMgr: ReplicaManager)
+  extends AbstractFetcherThread(name = name,
+                                clientId = FetchRequest.ReplicaFetcherClientId + "- %s:%d".format(sourceBroker.host, sourceBroker.port) ,
+                                sourceBroker = sourceBroker,
+                                socketTimeout = brokerConfig.replicaSocketTimeoutMs,
+                                socketBufferSize = brokerConfig.replicaSocketBufferSize,
+                                fetchSize = brokerConfig.replicaFetchSize,
+                                fetcherBrokerId = brokerConfig.brokerId,
+                                maxWait = brokerConfig.replicaMaxWaitTimeMs,
+                                minBytes = brokerConfig.replicaMinBytes) {
 
   // process fetched data
   def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: FetchResponsePartitionData) {

@@ -62,7 +62,6 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
   def testFetchRequestCanProperlySerialize() {
     val request = new FetchRequestBuilder()
-      .correlationId(100)
       .clientId("test-client")
       .maxWait(10001)
       .minBytes(4444)
@@ -99,12 +98,11 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
                replica.logEndOffset > 0 && replica.logEndOffset == replica.highWatermark)
 
     val request = new FetchRequestBuilder()
-      .correlationId(100)
       .clientId("test-client")
       .addFetch(topic, 0, 0, 10000)
       .build()
     val fetched = consumer.fetch(request)
-    assertEquals("Returned correlationId doesn't match that in request.", 100, fetched.correlationId)
+    assertEquals("Returned correlationId doesn't match that in request.", 0, fetched.correlationId)
 
     val messageSet = fetched.messageSet(topic, 0)
     assertTrue(messageSet.iterator.hasNext)

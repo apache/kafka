@@ -23,6 +23,7 @@ import kafka.api.ApiUtils._
 import scala.collection.immutable.Map
 import kafka.common.TopicAndPartition
 import kafka.consumer.ConsumerConfig
+import java.util.concurrent.atomic.AtomicInteger
 
 
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
@@ -30,8 +31,10 @@ case class PartitionFetchInfo(offset: Long, fetchSize: Int)
 
 object FetchRequest {
   val CurrentVersion = 1.shortValue()
-  val DefaultCorrelationId = -1
-  val DefaultClientId = ""
+  val DefaultMaxWait = 0
+  val DefaultMinBytes = 0
+  val ReplicaFetcherClientId = "replica fetcher"
+  val DefaultCorrelationId = 0
 
   def readFrom(buffer: ByteBuffer): FetchRequest = {
     val versionId = buffer.getShort
@@ -57,10 +60,10 @@ object FetchRequest {
 
 case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
                         correlationId: Int = FetchRequest.DefaultCorrelationId,
-                        clientId: String = FetchRequest.DefaultClientId,
+                        clientId: String = ConsumerConfig.DefaultClientId,
                         replicaId: Int = Request.OrdinaryConsumerId,
-                        maxWait: Int = ConsumerConfig.MaxFetchWaitMs,
-                        minBytes: Int = ConsumerConfig.MinFetchBytes,
+                        maxWait: Int = FetchRequest.DefaultMaxWait,
+                        minBytes: Int = FetchRequest.DefaultMinBytes,
                         requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
         extends RequestOrResponse(Some(RequestKeys.FetchKey)) {
 
@@ -123,21 +126,16 @@ case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
 
 @nonthreadsafe
 class FetchRequestBuilder() {
-  private var correlationId = FetchRequest.DefaultCorrelationId
+  private val correlationId = new AtomicInteger(0)
   private val versionId = FetchRequest.CurrentVersion
-  private var clientId = FetchRequest.DefaultClientId
+  private var clientId = ConsumerConfig.DefaultClientId
   private var replicaId = Request.OrdinaryConsumerId
-  private var maxWait = ConsumerConfig.MaxFetchWaitMs
-  private var minBytes = ConsumerConfig.MinFetchBytes
+  private var maxWait = FetchRequest.DefaultMaxWait
+  private var minBytes = FetchRequest.DefaultMinBytes
   private val requestMap = new collection.mutable.HashMap[TopicAndPartition, PartitionFetchInfo]
 
   def addFetch(topic: String, partition: Int, offset: Long, fetchSize: Int) = {
     requestMap.put(TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize))
-    this
-  }
-
-  def correlationId(correlationId: Int): FetchRequestBuilder = {
-    this.correlationId = correlationId
     this
   }
 
@@ -161,5 +159,5 @@ class FetchRequestBuilder() {
     this
   }
 
-  def build() = FetchRequest(versionId, correlationId, clientId, replicaId, maxWait, minBytes, requestMap.toMap)
+  def build() = FetchRequest(versionId, correlationId.getAndIncrement, clientId, replicaId, maxWait, minBytes, requestMap.toMap)
 }

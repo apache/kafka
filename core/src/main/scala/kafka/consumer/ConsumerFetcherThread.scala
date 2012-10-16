@@ -28,10 +28,15 @@ class ConsumerFetcherThread(name: String,
                             val config: ConsumerConfig,
                             sourceBroker: Broker,
                             val consumerFetcherManager: ConsumerFetcherManager)
-        extends AbstractFetcherThread(name = name, sourceBroker = sourceBroker, socketTimeout = config.socketTimeoutMs,
-          socketBufferSize = config.socketBufferSize, fetchSize = config.fetchSize,
-          fetcherBrokerId = Request.OrdinaryConsumerId, maxWait = config.maxFetchWaitMs,
-          minBytes = config.minFetchBytes) {
+        extends AbstractFetcherThread(name = name, 
+                                      clientId = config.clientId,
+                                      sourceBroker = sourceBroker,
+                                      socketTimeout = config.socketTimeoutMs,
+                                      socketBufferSize = config.socketBufferSize, 
+                                      fetchSize = config.fetchSize,
+                                      fetcherBrokerId = Request.OrdinaryConsumerId,
+                                      maxWait = config.maxFetchWaitMs,
+                                      minBytes = config.minFetchBytes) {
 
   // process fetched data
   def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: FetchResponsePartitionData) {

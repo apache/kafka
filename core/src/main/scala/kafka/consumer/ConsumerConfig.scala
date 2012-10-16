@@ -42,6 +42,7 @@ object ConsumerConfig {
   val MirrorTopicsWhitelistProp = "mirror.topics.whitelist"
   val MirrorTopicsBlacklistProp = "mirror.topics.blacklist"
   val MirrorConsumerNumThreadsProp = "mirror.consumer.numthreads"
+  val DefaultClientId = ""
 }
 
 class ConsumerConfig private (props: VerifiableProperties) extends ZKConfig(props) {
@@ -106,5 +107,10 @@ class ConsumerConfig private (props: VerifiableProperties) extends ZKConfig(prop
    *  overhead of decompression.
    *  */
   val enableShallowIterator = props.getBoolean("shallowiterator.enable", false)
+
+  /**
+   * Cliient id is specified by the kafka consumer client, used to distinguish different clients
+   */
+  val clientId = props.getString("clientid", groupId)
 }
 

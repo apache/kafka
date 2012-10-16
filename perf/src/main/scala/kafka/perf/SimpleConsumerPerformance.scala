@@ -59,11 +59,9 @@ object SimpleConsumerPerformance {
     var lastReportTime: Long = startMs
     var lastBytesRead = 0L
     var lastMessagesRead = 0L
-    var reqId = 0
     while(!done) {
       // TODO: add in the maxWait and minBytes for performance
       val request = new FetchRequestBuilder()
-        .correlationId(reqId)
         .clientId(config.clientId)
         .addFetch(config.topic, config.partition, offset, config.fetchSize)
         .build()
@@ -101,7 +99,6 @@ object SimpleConsumerPerformance {
         lastMessagesRead = totalMessagesRead
         consumedInterval = 0
       }
-      reqId += 1
     }
     val reportTime = System.currentTimeMillis
     val elapsed = (reportTime - startMs) / 1000.0

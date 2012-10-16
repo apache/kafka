@@ -34,7 +34,7 @@ import java.util.concurrent.TimeUnit
 /**
  *  Abstract class for fetching data from multiple partitions from the same broker.
  */
-abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socketTimeout: Int, socketBufferSize: Int,
+abstract class  AbstractFetcherThread(name: String, clientId: String, sourceBroker: Broker, socketTimeout: Int, socketBufferSize: Int,
                                      fetchSize: Int, fetcherBrokerId: Int = -1, maxWait: Int = 0, minBytes: Int = 1)
   extends ShutdownableThread(name) {
 
@@ -42,7 +42,13 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
   private val fetchMapLock = new Object
   val simpleConsumer = new SimpleConsumer(sourceBroker.host, sourceBroker.port, socketTimeout, socketBufferSize)
   val fetcherMetrics = FetcherStat.getFetcherStat(name + "-" + sourceBroker.id)
-  
+
+  val fetchRequestuilder = new FetchRequestBuilder().
+          clientId(clientId).
+          replicaId(fetcherBrokerId).
+          maxWait(maxWait).
+          minBytes(minBytes)
+
   /* callbacks to be defined in subclass */
 
   // process fetched data
@@ -61,21 +67,15 @@ abstract class  AbstractFetcherThread(name: String, sourceBroker: Broker, socket
   }
 
   override def doWork() {
-    val builder = new FetchRequestBuilder().
-            clientId(name).
-            replicaId(fetcherBrokerId).
-            maxWait(maxWait).
-            minBytes(minBytes)
-
     fetchMapLock synchronized {
       fetchMap.foreach {
         case((topicAndPartition, offset)) =>
-          builder.addFetch(topicAndPartition.topic, topicAndPartition.partition,
+          fetchRequestuilder.addFetch(topicAndPartition.topic, topicAndPartition.partition,
                            offset, fetchSize)
       }
     }
 
-    val fetchRequest = builder.build()
+    val fetchRequest = fetchRequestuilder.build()
     val partitionsWithError = new mutable.HashSet[TopicAndPartition]
     var response: FetchResponse = null
     try {

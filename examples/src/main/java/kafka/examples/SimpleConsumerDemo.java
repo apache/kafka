@@ -57,7 +57,6 @@ public class SimpleConsumerDemo {
 
     System.out.println("Testing single fetch");
     FetchRequest req = new FetchRequestBuilder()
-            .correlationId(0)
             .clientId(KafkaProperties.clientId)
             .addFetch(KafkaProperties.topic2, 0, 0L, 100)
             .build();
@@ -70,7 +69,6 @@ public class SimpleConsumerDemo {
         put(KafkaProperties.topic3, new ArrayList<Integer>(){{ add(0); }});
     }};
     req = new FetchRequestBuilder()
-            .correlationId(0)
             .clientId(KafkaProperties.clientId)
             .addFetch(KafkaProperties.topic2, 0, 0L, 100)
             .addFetch(KafkaProperties.topic3, 0, 0L, 100)

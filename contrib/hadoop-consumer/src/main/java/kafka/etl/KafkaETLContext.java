@@ -60,7 +60,6 @@ public class KafkaETLContext {
     protected long _offset = Long.MAX_VALUE; /*current offset*/
     protected long _count; /*current count*/
 
-    protected int requestId = 0; /* the id of the next fetch request */
     protected FetchResponse _response = null;  /*fetch response*/
     protected Iterator<MessageAndOffset> _messageIt = null; /*message iterator*/
     protected Iterator<ByteBufferMessageSet> _respIterator = null;
@@ -74,6 +73,7 @@ public class KafkaETLContext {
     
     protected MultipleOutputs _mos;
     protected OutputCollector<KafkaETLKey, BytesWritable> _offsetOut = null;
+    protected FetchRequestBuilder builder = new FetchRequestBuilder();
     
     public long getTotalBytes() {
         return (_offsetRange[1] > _offsetRange[0])? _offsetRange[1] - _offsetRange[0] : 0;
@@ -150,8 +150,7 @@ public class KafkaETLContext {
     public boolean fetchMore () throws IOException {
         if (!hasMore()) return false;
 
-        FetchRequest fetchRequest = new FetchRequestBuilder()
-                .correlationId(requestId)
+        FetchRequest fetchRequest = builder
                 .clientId(_request.clientId())
                 .addFetch(_request.getTopic(), _request.getPartition(), _offset, _bufferSize)
                 .build();
