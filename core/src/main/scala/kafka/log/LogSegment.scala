@@ -2,9 +2,8 @@ package kafka.log
 
 import scala.math._
 import java.io.File
-import kafka.common._
 import kafka.message._
-import kafka.utils.{Utils, Range, Time, SystemTime, nonthreadsafe}
+import kafka.utils._
 
 /**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileMessageSet containing
@@ -19,7 +18,7 @@ class LogSegment(val messageSet: FileMessageSet,
                  val index: OffsetIndex, 
                  val start: Long, 
                  val indexIntervalBytes: Int,
-                 time: Time) extends Range {
+                 time: Time) extends Range with Logging {
   
   var firstAppendTime: Option[Long] = None
   
@@ -51,6 +50,7 @@ class LogSegment(val messageSet: FileMessageSet,
    */
   def append(offset: Long, messages: ByteBufferMessageSet) {
     if (messages.sizeInBytes > 0) {
+      trace("Inserting %d bytes at offset %d at position %d".format(messages.sizeInBytes, offset, messageSet.sizeInBytes()))
       // append an entry to the index (if needed)
       if(bytesSinceLastIndexEntry > indexIntervalBytes) {
         index.append(offset, messageSet.sizeInBytes().toInt)

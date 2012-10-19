@@ -47,9 +47,9 @@ object DumpLogSegments {
     for(i <- 0 until index.entries) {
       val entry = index.entry(i)
       // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
-      if(entry.offset <= startOffset)
+      if(entry.offset == 0 && i > 0)
         return
-      println("offset: %d position: %d".format(entry.offset, entry.position))
+      println("offset: %d position: %d".format(entry.offset + index.baseOffset, entry.position))
     }
   }
   
@@ -61,10 +61,10 @@ object DumpLogSegments {
     var validBytes = 0L
     for(messageAndOffset <- messageSet) {
       val msg = messageAndOffset.message
-      validBytes += MessageSet.entrySize(msg)
-      print("offset: " + messageAndOffset.offset + " isvalid: " + msg.isValid +
-            " payloadsize: " + msg.payloadSize + " magic: " + msg.magic + 
+      print("offset: " + messageAndOffset.offset + " position: " + validBytes + " isvalid: " + msg.isValid +
+            " payloadsize: " + msg.payloadSize + " magic: " + msg.magic +
             " compresscodec: " + msg.compressionCodec + " crc: " + msg.checksum)
+      validBytes += MessageSet.entrySize(msg)
       if(msg.hasKey)
         print(" keysize: " + msg.keySize)
       if(printContents) {

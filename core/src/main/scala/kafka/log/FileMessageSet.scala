@@ -37,14 +37,17 @@ import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 class FileMessageSet private[kafka](val file: File,
                                     private[log] val channel: FileChannel,
                                     private[log] val start: Long = 0L,
-                                    private[log] val limit: Long = Long.MaxValue) extends MessageSet with Logging {
+                                    private[log] val limit: Long = Long.MaxValue,
+                                    initChannelPositionToEnd: Boolean = true) extends MessageSet with Logging {
   
   /* the size of the message set in bytes */
   private val _size = new AtomicLong(scala.math.min(channel.size(), limit) - start)
-    
-  /* set the file position to the last byte in the file */
-  channel.position(channel.size)
-  
+
+  if (initChannelPositionToEnd) {
+    /* set the file position to the last byte in the file */
+    channel.position(channel.size)
+  }
+
   /**
    * Create a file message set with no limit or offset
    */
@@ -59,7 +62,11 @@ class FileMessageSet private[kafka](val file: File,
    * Return a message set which is a view into this set starting from the given position and with the given size limit.
    */
   def read(position: Long, size: Long): FileMessageSet = {
-    new FileMessageSet(file, channel, this.start + position, scala.math.min(this.start + position + size, sizeInBytes()))
+    new FileMessageSet(file,
+                       channel,
+                       this.start + position,
+                       scala.math.min(this.start + position + size, sizeInBytes()),
+                       false)
   }
   
   /**
@@ -74,7 +81,8 @@ class FileMessageSet private[kafka](val file: File,
       buffer.rewind()
       channel.read(buffer, position)
       if(buffer.hasRemaining)
-        throw new IllegalStateException("Failed to read complete buffer.")
+        throw new IllegalStateException("Failed to read complete buffer for targetOffset %d startPosition %d in %s"
+                                        .format(targetOffset, startingPosition, file.getAbsolutePath))
       buffer.rewind()
       val offset = buffer.getLong()
       if(offset >= targetOffset)
@@ -92,7 +100,7 @@ class FileMessageSet private[kafka](val file: File,
     channel.transferTo(start + writePosition, scala.math.min(size, sizeInBytes), destChannel)
   
   /**
-   * Get an iterator over the messages in the set
+   * Get an iterator over the messages in the set. We only do shallow iteration here.
    */
   override def iterator: Iterator[MessageAndOffset] = {
     new IteratorTemplate[MessageAndOffset] {
@@ -133,10 +141,8 @@ class FileMessageSet private[kafka](val file: File,
   /**
    * Append this message to the message set
    */
-  def append(messages: MessageSet): Unit = {
-    var written = 0L
-    while(written < messages.sizeInBytes)
-      written += messages.writeTo(channel, 0, messages.sizeInBytes)
+  def append(messages: ByteBufferMessageSet) {
+    val written = messages.writeTo(channel, 0, messages.sizeInBytes)
     _size.getAndAdd(written)
   }
  

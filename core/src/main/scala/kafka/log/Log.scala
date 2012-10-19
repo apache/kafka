@@ -268,7 +268,8 @@ private[kafka] class Log(val dir: File,
             }
           
           // now append to the log
-          trace("Appending message set to " + this.name + ": " + validMessages)
+          trace("Appending message set to %s offset: %d nextOffset: %d messageSet: %s"
+                .format(this.name, offsets._1, nextOffset.get(), validMessages))
           segment.append(offsets._1, validMessages)
           
           // return the offset at which the messages were appended
@@ -315,7 +316,7 @@ private[kafka] class Log(val dir: File,
         monotonic = false
       // update the last offset seen
       lastOffset = messageAndOffset.offset
-      
+
       // check the validity of the message by checking CRC and message size
       val m = messageAndOffset.message
       m.ensureValid()

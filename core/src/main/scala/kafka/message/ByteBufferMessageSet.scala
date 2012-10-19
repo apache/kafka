@@ -125,8 +125,11 @@ class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends Message
   
   /** Write the messages in this set to the given channel */
   def writeTo(channel: GatheringByteChannel, offset: Long, size: Long): Long = {
+    // Ignore offset and size from input. We just want to write the whole buffer to the channel.
     buffer.mark()
-    val written = channel.write(buffer)
+    var written = 0L
+    while(written < sizeInBytes)
+      written += channel.write(buffer)
     buffer.reset()
     written
   }
