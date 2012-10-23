@@ -22,7 +22,6 @@ import java.util.concurrent.atomic.AtomicLong
 import junit.framework.Assert._
 import org.junit.Test
 import kafka.utils.TestUtils
-import kafka.common.InvalidMessageSizeException
 
 class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 

@@ -23,9 +23,6 @@ import scala.collection._
 import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{Before, Test}
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
-import org.junit.runners.Parameterized.Parameters
 import kafka.utils.TestUtils
 import kafka.utils.Utils
 

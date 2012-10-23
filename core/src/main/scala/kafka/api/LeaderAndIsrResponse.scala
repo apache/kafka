@@ -19,7 +19,6 @@ package kafka.api
 
 import kafka.common.ErrorMapping
 import java.nio.ByteBuffer
-import kafka.utils.Utils
 import kafka.api.ApiUtils._
 import collection.mutable.HashMap
 import collection.Map

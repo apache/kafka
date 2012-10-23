@@ -39,22 +39,22 @@ object RequestChannel extends Logging {
     byteBuffer
   }
 
-  case class Request(processor: Int, requestKey: Any, buffer: ByteBuffer, startTimeNs: Long) {
-    var dequeueTimeNs = -1L
-    var apiLocalCompleteTimeNs = -1L
-    var responseCompleteTimeNs = -1L
+  case class Request(processor: Int, requestKey: Any, buffer: ByteBuffer, startTimeMs: Long) {
+    var dequeueTimeMs = -1L
+    var apiLocalCompleteTimeMs = -1L
+    var responseCompleteTimeMs = -1L
     val requestId = buffer.getShort()
     val requestObj: RequestOrResponse = RequestKeys.deserializerForKey(requestId)(buffer)
     buffer.rewind()
     trace("Received request: %s".format(requestObj))
 
     def updateRequestMetrics() {
-      val endTimeNs = SystemTime.nanoseconds
-      val queueTime = (dequeueTimeNs - startTimeNs).max(0L)
-      val apiLocalTime = (apiLocalCompleteTimeNs - dequeueTimeNs).max(0L)
-      val apiRemoteTime = (responseCompleteTimeNs - apiLocalCompleteTimeNs).max(0L)
-      val responseSendTime = (endTimeNs - responseCompleteTimeNs).max(0L)
-      val totalTime = endTimeNs - startTimeNs
+      val endTimeMs = SystemTime.milliseconds
+      val queueTime = (dequeueTimeMs - startTimeMs).max(0L)
+      val apiLocalTime = (apiLocalCompleteTimeMs - dequeueTimeMs).max(0L)
+      val apiRemoteTime = (responseCompleteTimeMs - apiLocalCompleteTimeMs).max(0L)
+      val responseSendTime = (endTimeMs - responseCompleteTimeMs).max(0L)
+      val totalTime = endTimeMs - startTimeMs
       var metricsList = List(RequestMetrics.metricsMap(RequestKeys.nameForKey(requestId)))
       if (requestId == RequestKeys.FetchKey) {
         val isFromFollower = requestObj.asInstanceOf[FetchRequest].isFromFollower
@@ -76,7 +76,7 @@ object RequestChannel extends Logging {
   }
   
   case class Response(processor: Int, request: Request, responseSend: Send) {
-    request.responseCompleteTimeNs = SystemTime.nanoseconds
+    request.responseCompleteTimeMs = SystemTime.milliseconds
 
     def this(request: Request, send: Send) =
       this(request.processor, request, send)
@@ -133,13 +133,13 @@ object RequestMetrics {
 class RequestMetrics(name: String) extends KafkaMetricsGroup {
   val requestRate = newMeter(name + "-RequestsPerSec",  "requests", TimeUnit.SECONDS)
   // time a request spent in a request queue
-  val queueTimeHist = newHistogram(name + "-QueueTimeNs")
+  val queueTimeHist = newHistogram(name + "-QueueTimeMs")
   // time a request takes to be processed at the local broker
-  val localTimeHist = newHistogram(name + "-LocalTimeNs")
+  val localTimeHist = newHistogram(name + "-LocalTimeMs")
   // time a request takes to wait on remote brokers (only relevant to fetch and produce requests)
-  val remoteTimeHist = newHistogram(name + "-RemoteTimeNs")
+  val remoteTimeHist = newHistogram(name + "-RemoteTimeMs")
   // time to send the response to the requester
-  val responseSendTimeHist = newHistogram(name + "-ResponseSendTimeNs")
-  val totalTimeHist = newHistogram(name + "-TotalTimeNs")
+  val responseSendTimeHist = newHistogram(name + "-ResponseSendTimeMs")
+  val totalTimeHist = newHistogram(name + "-TotalTimeMs")
 }
 

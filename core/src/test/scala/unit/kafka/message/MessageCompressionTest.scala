@@ -18,9 +18,7 @@
 package kafka.message
 
 import java.io.ByteArrayOutputStream
-import java.util.concurrent.atomic.AtomicLong
 import scala.collection._
-import kafka.utils.TestUtils
 import org.scalatest.junit.JUnitSuite
 import org.junit._
 import junit.framework.Assert._

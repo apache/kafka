@@ -22,7 +22,7 @@ import kafka.admin.CreateTopicCommand
 import kafka.utils.TestUtils._
 import kafka.utils.{Utils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
-import kafka.message.{Message, MessageSet, ByteBufferMessageSet}
+import kafka.message.Message
 import kafka.producer.{ProducerConfig, ProducerData, Producer}
 
 class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {

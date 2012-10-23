@@ -69,7 +69,6 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   private def doSend(request: RequestOrResponse): Receive = {
     lock synchronized {
       verifyRequest(request)
-      val startTime = SystemTime.nanoseconds
       getOrMakeConnection()
 
       var response: Receive = null

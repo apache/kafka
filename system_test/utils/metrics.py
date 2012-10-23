@@ -45,6 +45,26 @@ logger     = logging.getLogger("namedLogger")
 thisClassName = '(metrics)'
 d = {'name_of_class': thisClassName}
 
+attributeNameToNameInReportedFileMap = {
+    'Min': 'min',
+    'Max': 'max',
+    'Mean': 'mean',
+    '50thPercentile': 'median',
+    'StdDev': 'stddev',
+    '95thPercentile': '95%',
+    '99thPercentile': '99%',
+    '999thPercentile': '99.9%',
+    'Count': 'count',
+    'OneMinuteRate': '1 min rate',
+    'MeanRate': 'mean rate',
+    'FiveMinuteRate': '5 min rate',
+    'FifteenMinuteRate': '15 min rate',
+    'Value': 'value'
+}
+
+def getCSVFileNameFromMetricsMbeanName(mbeanName):
+    return mbeanName.replace(":type=", ".").replace(",name=", ".") + ".csv"
+
 def read_metrics_definition(metricsFile):
     metricsFileData = open(metricsFile, "r").read()
     metricsJsonData = json.loads(metricsFileData)
@@ -71,7 +91,7 @@ def get_dashboard_definition(metricsFile, role):
     return dashboardsForRole
 
 def ensure_valid_headers(headers, attributes):
-    if headers[0] != "time":
+    if headers[0] != "# time":
         raise Exception("First column should be time")
     for header in headers:
         logger.debug(header, extra=d)
@@ -108,14 +128,17 @@ def plot_graphs(inputCsvFiles, labels, title, xLabel, yLabel, attribute, outputG
         try:
             # read first line as the headers
             headers = csv_reader.pop(0)
-            attributeColumnIndex = ensure_valid_headers(headers, attribute)
+            attributeColumnIndex = ensure_valid_headers(headers, attributeNameToNameInReportedFileMap[attribute])
             logger.debug("Column index for attribute {0} is {1}".format(attribute, attributeColumnIndex), extra=d)
-            start_time = int(csv_reader[0][0])
+            start_time = (int)(os.path.getctime(inputCsvFile) * 1000)
+            int(csv_reader[0][0])
             for line in csv_reader:
+                if(len(line) == 0):
+                    continue
                 yVal = float(line[attributeColumnIndex])                
-                xVal = (int(line[0])-start_time)/1000
+                xVal = int(line[0])
                 y.append(yVal)
-                epoch=int(line[0])/1000
+                epoch= start_time + int(line[0])
                 x.append(xVal)
                 xticks_labels.append(time.strftime("%H:%M:%S", time.localtime(epoch)))
                 coordinates.append(Coordinates(xVal, yVal))
@@ -160,9 +183,12 @@ def draw_graph_for_role(graphs, entities, role, testcaseEnv):
         graphLegendLabels = []
         for entity in entities:
             entityMetricsDir = kafka_system_test_utils.get_testcase_config_log_dir_pathname(testcaseEnv, role, entity['entity_id'], "metrics")
-            entityMetricCsvFile = entityMetricsDir + "/" + graph['bean_name'] + ".csv"
-            inputCsvFiles.append(entityMetricCsvFile)
-            graphLegendLabels.append(role + "-" + entity['entity_id'])
+            entityMetricCsvFile = entityMetricsDir + "/" + getCSVFileNameFromMetricsMbeanName(graph['bean_name'])
+            if(not os.path.exists(entityMetricCsvFile)):
+                logger.warn("The file {0} does not exist for plotting".format(entityMetricCsvFile), extra=d)
+            else:
+                inputCsvFiles.append(entityMetricCsvFile)
+                graphLegendLabels.append(role + "-" + entity['entity_id'])
 #            print "Plotting graph for metric {0} on entity {1}".format(graph['graph_name'], entity['entity_id'])
         try:
             # plot one graph per mbean attribute
@@ -173,7 +199,7 @@ def draw_graph_for_role(graphs, entities, role, testcaseEnv):
             for labelAndAttribute in zip(labels, fullyQualifiedAttributeNames, attributes):            
                 outputGraphFile = testcaseEnv.testCaseDashboardsDir + "/" + role + "/" + labelAndAttribute[1] + ".svg"            
                 plot_graphs(inputCsvFiles, graphLegendLabels, graph['graph_name'] + '-' + labelAndAttribute[2], 
-                            "time", labelAndAttribute[0], labelAndAttribute[1], outputGraphFile)
+                            "time", labelAndAttribute[0], labelAndAttribute[2], outputGraphFile)
 #            print "Finished plotting graph for metric {0} on entity {1}".format(graph['graph_name'], entity['entity_id'])
         except Exception as e:
             logger.error("ERROR while plotting graph {0}: {1}".format(outputGraphFile, e), extra=d)

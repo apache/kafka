@@ -33,9 +33,8 @@ import kafka.utils.ZkUtils._
 import kafka.common._
 import kafka.client.ClientUtils
 import com.yammer.metrics.core.Gauge
-import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.Utils._
 import kafka.api.OffsetRequest
+import kafka.metrics._
 
 
 /**
@@ -117,6 +116,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     scheduler.scheduleWithRate(autoCommit, "Kafka-consumer-autocommit-", config.autoCommitIntervalMs,
       config.autoCommitIntervalMs, false)
   }
+
+  KafkaCSVMetricsReporter.startCSVMetricReporter(config.props)
 
   def this(config: ConsumerConfig) = this(config, true)
 

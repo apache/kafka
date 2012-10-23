@@ -24,10 +24,32 @@ import com.yammer.metrics.Metrics
 import java.io.File
 import com.yammer.metrics.reporting.CsvReporter
 import java.util.concurrent.TimeUnit
-import kafka.utils.{VerifiableProperties, Logging}
+import java.util.concurrent.atomic.AtomicBoolean
+import kafka.utils.{Utils, VerifiableProperties, Logging}
 
 
 private trait KafkaCSVMetricsReporterMBean extends KafkaMetricsReporterMBean
+
+object KafkaCSVMetricsReporter {
+  val CSVReporterStarted: AtomicBoolean = new AtomicBoolean(false)
+
+  def startCSVMetricReporter (verifiableProps: VerifiableProperties) {
+    CSVReporterStarted synchronized {
+      if (CSVReporterStarted.get() == false) {
+        val metricsConfig = new KafkaMetricsConfig(verifiableProps)
+        if(metricsConfig.reporters.size > 0) {
+          metricsConfig.reporters.foreach(reporterType => {
+            val reporter = Utils.createObject[KafkaMetricsReporter](reporterType)
+            reporter.init(verifiableProps)
+            if (reporter.isInstanceOf[KafkaMetricsReporterMBean])
+              Utils.registerMBean(reporter, reporter.asInstanceOf[KafkaMetricsReporterMBean].getMBeanName)
+          })
+          CSVReporterStarted.set(true)
+        }
+      }
+    }
+  }
+}
 
 private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
                               with KafkaCSVMetricsReporterMBean

@@ -26,7 +26,6 @@ import scala.collection.mutable
 import java.util.concurrent.locks.ReentrantLock
 import kafka.utils.ZkUtils._
 import kafka.utils.{ShutdownableThread, SystemTime}
-import kafka.utils.Utils._
 import kafka.common.TopicAndPartition
 import kafka.client.ClientUtils
 

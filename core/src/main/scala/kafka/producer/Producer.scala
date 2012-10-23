@@ -23,7 +23,8 @@ import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
 import kafka.serializer.Encoder
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.common.{QueueFullException, InvalidConfigException}
-import kafka.metrics.KafkaMetricsGroup
+import kafka.metrics._
+
 
 class Producer[K,V](config: ProducerConfig,
                     private val eventHandler: EventHandler[K,V]) // for testing only
@@ -47,6 +48,8 @@ extends Logging {
       producerSendThread.start
     case _ => throw new InvalidConfigException("Valid values for producer.type are sync/async")
   }
+
+  KafkaCSVMetricsReporter.startCSVMetricReporter(config.props)
 
   def this(config: ProducerConfig) =
     this(config,

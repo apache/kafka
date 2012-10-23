@@ -18,14 +18,9 @@
 package kafka.message
 
 import java.io.OutputStream
-import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPOutputStream
 import java.util.zip.GZIPInputStream
-import java.io.IOException
 import java.io.InputStream
-import java.nio.ByteBuffer
-import java.util.concurrent.atomic.AtomicLong
-import kafka.utils._
 
 object CompressionFactory {
   

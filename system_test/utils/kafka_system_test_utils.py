@@ -366,8 +366,13 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
                         logger.error("Unknown cluster name: " + clusterName)
                         sys.exit(1)
 
+                    addedCSVConfig = {}
+                    addedCSVConfig["kafka.csv.metrics.dir"] = get_testcase_config_log_dir_pathname(testcaseEnv, "broker", clusterCfg["entity_id"], "metrics") 
+                    addedCSVConfig["kafka.metrics.polling.interval.secs"] = "5" 
+                    addedCSVConfig["kafka.metrics.reporters"] = "kafka.metrics.KafkaCSVMetricsReporter" 
+                    addedCSVConfig["kafka.csv.metrics.reporter.enabled"] = "true"
                     copy_file_with_dict_values(cfgTemplatePathname + "/server.properties",
-                        cfgDestPathname + "/" + tcCfg["config_filename"], tcCfg, None)
+                        cfgDestPathname + "/" + tcCfg["config_filename"], tcCfg, addedCSVConfig)
 
                 elif ( clusterCfg["role"] == "zookeeper"):
                     if clusterCfg["cluster_name"] == "source":
@@ -391,6 +396,33 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
                     tcCfg["zk.connect"] = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
                     copy_file_with_dict_values(cfgTemplatePathname + "/mirror_consumer.properties",
                         cfgDestPathname + "/" + tcCfg["mirror_consumer_config_filename"], tcCfg, None)
+                
+                elif ( clusterCfg["role"] == "producer_performance" ):
+                    copy_file_with_dict_values(cfgTemplatePathname + "/producer_performance.properties",
+                        cfgDestPathname + "/" + tcCfg["config_filename"], tcCfg, None)
+
+                elif ( clusterCfg["role"] == "console_consumer" ):
+                    copy_file_with_dict_values(cfgTemplatePathname + "/console_consumer.properties",
+                        cfgDestPathname + "/" + tcCfg["config_filename"], tcCfg, None)
+                
+                elif ( clusterCfg["role"] == "producer" ):
+                    addedCSVConfig = {}
+                    addedCSVConfig["kafka.csv.metrics.dir"] = get_testcase_config_log_dir_pathname(testcaseEnv, "producer", clusterCfg["entity_id"], "metrics") 
+                    addedCSVConfig["kafka.metrics.polling.interval.secs"] = "5" 
+                    addedCSVConfig["kafka.metrics.reporters"] = "kafka.metrics.KafkaCSVMetricsReporter" 
+                    addedCSVConfig["kfka.metrics.polling.interval.secsafka.csv.metrics.reporter.enabled"] = "true"
+                    copy_file_with_dict_values(cfgTemplatePathname + "/producer.properties",
+                        cfgDestPathname + "/" + tcCfg["config_filename"], tcCfg, addedCSVConfig)
+
+
+                elif ( clusterCfg["role"] == "consumer" ):
+                    addedCSVConfig = {}
+                    addedCSVConfig["kafka.csv.metrics.dir"] = get_testcase_config_log_dir_pathname(testcaseEnv, "consumer", clusterCfg["entity_id"], "metrics") 
+                    addedCSVConfig["kafka.metrics.polling.interval.secs"] = "5" 
+                    addedCSVConfig["kafka.metrics.reporters"] = "kafka.metrics.KafkaCSVMetricsReporter" 
+                    addedCSVConfig["kfka.metrics.polling.interval.secsafka.csv.metrics.reporter.enabled"] = "true"
+                    copy_file_with_dict_values(cfgTemplatePathname + "/consumer.properties",
+                        cfgDestPathname + "/" + tcCfg["config_filename"], tcCfg, addedCSVConfig)
                 else:
                     logger.debug("UNHANDLED role " + clusterCfg["role"], extra=d)
 
@@ -669,10 +701,6 @@ def start_entity_in_background(systemTestEnv, testcaseEnv, entityId):
             elif role == "mirror_maker":
                 testcaseEnv.entityMirrorMakerParentPidDict[entityId] = tokens[1]
 
-    time.sleep(1)
-    if role != "mirror_maker":
-        metrics.start_metrics_collection(hostname, jmxPort, role, entityId, systemTestEnv, testcaseEnv)
-
 
 def start_console_consumer(systemTestEnv, testcaseEnv):
 
@@ -729,6 +757,8 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
                    "--zookeeper " + zkConnectStr,
                    "--topic " + topic,
                    "--consumer-timeout-ms " + timeoutMs,
+                   "--csv-reporter-enable",
+                   "--metrics-dir " + get_testcase_config_log_dir_pathname(testcaseEnv, "console_consumer", entityId, "metrics"),
                    formatterOption,
                    "--from-beginning ",
                    " >> " + consumerLogPathName,
@@ -738,8 +768,6 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
 
         logger.debug("executing command: [" + cmdStr + "]", extra=d)
         system_test_utils.async_sys_call(cmdStr)
-        time.sleep(2)
-        metrics.start_metrics_collection(host, jmxPort, role, entityId, systemTestEnv, testcaseEnv)
 
         pidCmdStr = "ssh " + host + " 'cat " + consumerLogPath + "/entity_" + entityId + "_pid'"
         logger.debug("executing command: [" + pidCmdStr + "]", extra=d)
@@ -780,8 +808,6 @@ def start_producer_performance(systemTestEnv, testcaseEnv, kafka07Client):
         logger.debug("testcaseEnv.numProducerThreadsRunning : " + str(testcaseEnv.numProducerThreadsRunning), extra=d)
         time.sleep(1)
         testcaseEnv.lock.release()
-        time.sleep(1)
-        metrics.start_metrics_collection(host, jmxPort, role, entityId, systemTestEnv, testcaseEnv)
 
 def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafka07Client):
     host              = producerConfig["hostname"]
@@ -850,6 +876,8 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
                        "--compression-codec " + compCodec,
                        "--message-size " + messageSize,
                        "--request-num-acks " + requestNumAcks,
+                       "--csv-reporter-enabled",
+                       "--metrics-dir " + get_testcase_config_log_dir_pathname(testcaseEnv, "producer_performance", entityId, "metrics"),
                        boolArgumentsStr,
                        " >> " + producerLogPathName,
                        " & echo pid:$! > " + producerLogPath + "/entity_" + entityId + "_pid'"]

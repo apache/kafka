@@ -61,7 +61,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case RequestKeys.StopReplicaKey => handleStopReplicaRequest(request)
       case requestId => throw new KafkaException("No mapping found for handler id " + requestId)
     }
-    request.apiLocalCompleteTimeNs = SystemTime.nanoseconds
+    request.apiLocalCompleteTimeMs = SystemTime.milliseconds
   }
 
   def handleLeaderAndIsrRequest(request: RequestChannel.Request) {

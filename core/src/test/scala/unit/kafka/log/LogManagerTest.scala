@@ -21,9 +21,7 @@ import java.io._
 import junit.framework.Assert._
 import org.junit.Test
 import kafka.common.OffsetOutOfRangeException
-import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
-import kafka.admin.CreateTopicCommand
 import kafka.server.KafkaConfig
 import kafka.utils._
 

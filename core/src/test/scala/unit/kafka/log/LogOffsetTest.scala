@@ -30,7 +30,7 @@ import org.scalatest.junit.JUnit3Suite
 import kafka.admin.CreateTopicCommand
 import kafka.api.{PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
 import kafka.utils.TestUtils._
-import kafka.common.{ErrorMapping, TopicAndPartition, UnknownTopicOrPartitionException}
+import kafka.common.{ErrorMapping, TopicAndPartition}
 
 object LogOffsetTest {
   val random = new Random()  

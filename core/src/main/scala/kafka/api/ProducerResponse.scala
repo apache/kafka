@@ -18,7 +18,6 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.utils.Utils
 import scala.collection.Map
 import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.api.ApiUtils._

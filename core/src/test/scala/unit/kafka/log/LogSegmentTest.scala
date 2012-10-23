@@ -2,7 +2,7 @@ package kafka.log
 
 import junit.framework.Assert._
 import java.util.concurrent.atomic._
-import org.junit.{Test, Before, After}
+import org.junit.{Test, After}
 import org.scalatest.junit.JUnit3Suite
 import kafka.utils.TestUtils
 import kafka.message._

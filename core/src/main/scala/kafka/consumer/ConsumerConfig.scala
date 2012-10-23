@@ -45,7 +45,7 @@ object ConsumerConfig {
   val DefaultClientId = ""
 }
 
-class ConsumerConfig private (props: VerifiableProperties) extends ZKConfig(props) {
+class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(props) {
   import ConsumerConfig._
 
   def this(originalProps: Properties) {

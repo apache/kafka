@@ -24,7 +24,9 @@ import org.apache.log4j.Logger
 import kafka.message.{CompressionCodec, Message}
 import java.text.SimpleDateFormat
 import java.util.{Random, Properties}
-import kafka.utils.Logging
+import kafka.utils.{VerifiableProperties, Logging}
+import kafka.metrics.{KafkaCSVMetricsReporter, KafkaMetricsReporterMBean, KafkaMetricsReporter, KafkaMetricsConfig}
+
 
 /**
  * Load test for the producer
@@ -113,6 +115,12 @@ object ProducerPerformance extends Logging {
       .describedAs("initial message id")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(0)
+    val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
+    val metricsDirectoryOpt = parser.accepts("metrics-dir", "If csv-reporter-enable is set, and this parameter is" +
+            "set, the csv metrics will be outputed here")
+      .withRequiredArg
+      .describedAs("metrics dictory")
+      .ofType(classOf[java.lang.String])
 
     val options = parser.parse(args : _*)
     for(arg <- List(topicOpt, brokerListOpt, numMessagesOpt)) {
@@ -139,6 +147,21 @@ object ProducerPerformance extends Logging {
     val seqIdMode = options.has(initialMessageIdOpt)
     val produceRequestTimeoutMs = options.valueOf(produceRequestTimeoutMsOpt).intValue()
     val produceRequestRequiredAcks = options.valueOf(produceRequestRequiredAcksOpt).intValue()
+
+    val csvMetricsReporterEnabled = options.has(csvMetricsReporterEnabledOpt)
+
+    if (csvMetricsReporterEnabled) {
+      val props = new Properties()
+      props.put("kafka.metrics.polling.interval.secs", "5")
+      props.put("kafka.metrics.reporters", "kafka.metrics.KafkaCSVMetricsReporter")
+      if (options.has(metricsDirectoryOpt))
+        props.put("kafka.csv.metrics.dir", options.valueOf(metricsDirectoryOpt))
+      else
+        props.put("kafka.csv.metrics.dir", "kafka_metrics")
+      props.put("kafka.csv.metrics.reporter.enabled", "true")
+      val verifiableProps = new VerifiableProperties(props)
+      KafkaCSVMetricsReporter.startCSVMetricReporter(verifiableProps)
+    }
 
     // override necessary flags in seqIdMode
     if (seqIdMode) { 

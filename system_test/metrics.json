@@ -11,14 +11,14 @@
                },
                { 
                   "graph_name": "Produce-Request-Time",
-                  "y_label": "ns,ns",
-                  "bean_name": "kafka.network:type=RequestMetrics,name=Produce-TotalTimeNs",
+                  "y_label": "ms,ms",
+                  "bean_name": "kafka.network:type=RequestMetrics,name=Produce-TotalTimeMs",
                   "attributes": "Mean,99thPercentile"
                },
                { 
                   "graph_name": "Produce-Request-Remote-Time",
-                  "y_label": "ns,ns",
-                  "bean_name": "kafka.network:type=RequestMetrics,name=Produce-RemoteTimeNs",
+                  "y_label": "ms,ms",
+                  "bean_name": "kafka.network:type=RequestMetrics,name=Produce-RemoteTimeMs",
                   "attributes": "Mean,99thPercentile"
                },
                { 
@@ -29,14 +29,14 @@
                },
                { 
                   "graph_name": "Fetch-Consumer-Request-Time",
-                  "y_label": "ns,ns",
-                  "bean_name": "kafka.network:type=RequestMetrics,name=Fetch-Consumer-TotalTimeNs",
+                  "y_label": "ms,ms",
+                  "bean_name": "kafka.network:type=RequestMetrics,name=Fetch-Consumer-TotalTimeMs",
                   "attributes": "Mean,99thPercentile"
                },
                { 
                   "graph_name": "Fetch-Consumer-Request-Remote-Time",
-                  "y_label": "ns,ns",
-                  "bean_name": "kafka.network:type=RequestMetrics,name=Fetch-Consumer-RemoteTimeNs",
+                  "y_label": "ms,ms",
+                  "bean_name": "kafka.network:type=RequestMetrics,name=Fetch-Consumer-RemoteTimeMs",
                   "attributes": "Mean,99thPercentile"
                },
                { 
@@ -47,14 +47,14 @@
                },
                { 
                   "graph_name": "Fetch-Follower-Request-Time",
-                  "y_label": "ns,ns",
-                  "bean_name": "kafka.network:type=RequestMetrics,name=Fetch-Follower-TotalTimeNs",
+                  "y_label": "ms,ms",
+                  "bean_name": "kafka.network:type=RequestMetrics,name=Fetch-Follower-TotalTimeMs",
                   "attributes": "Mean,99thPercentile"
                },
                { 
                   "graph_name": "Fetch-Follower-Request-Remote-Time",
-                  "y_label": "ns,ns",
-                  "bean_name": "kafka.network:type=RequestMetrics,name=Fetch-Follower-RemoteTimeNs",
+                  "y_label": "ms,ms",
+                  "bean_name": "kafka.network:type=RequestMetrics,name=Fetch-Follower-RemoteTimeMs",
                   "attributes": "Mean,99thPercentile"
                },
                { 
@@ -90,13 +90,13 @@
                {
                   "graph_name": "ControllerLeaderElectionRateAndTime",
                   "y_label": "elections-per-sec,ms,ms",
-                  "bean_name": "kafka.server:type=ControllerStat,name=LeaderElectionRateAndTimeMs",
+                  "bean_name": "kafka.controller:type=ControllerStat,name=LeaderElectionRateAndTimeMs",
                   "attributes": "OneMinuteRate,Mean,99thPercentile"
                },
                {
                   "graph_name": "LogFlushRateAndTime",
                   "y_label": "flushes-per-sec,ms,ms",
-                  "bean_name": "kafka.message:type=LogFlushStats,name=LogFlushRateAndTimeMs",
+                  "bean_name": "kafka.log:type=LogFlushStats,name=LogFlushRateAndTimeMs",
                   "attributes": "OneMinuteRate,Mean,99thPercentile"
                },
                {

@@ -17,7 +17,8 @@
 
 package kafka
 
-import metrics.{KafkaMetricsReporterMBean, KafkaMetricsReporter, KafkaMetricsConfig}
+
+import metrics.KafkaCSVMetricsReporter
 import server.{KafkaConfig, KafkaServerStartable, KafkaServer}
 import utils.{Utils, Logging}
 
@@ -32,15 +33,7 @@ object Kafka extends Logging {
     try {
       val props = Utils.loadProps(args(0))
       val serverConfig = new KafkaConfig(props)
-      val verifiableProps = serverConfig.props
-      val metricsConfig = new KafkaMetricsConfig(verifiableProps)
-      metricsConfig.reporters.foreach(reporterType => {
-        val reporter = Utils.createObject[KafkaMetricsReporter](reporterType)
-        reporter.init(verifiableProps)
-        if (reporter.isInstanceOf[KafkaMetricsReporterMBean])
-          Utils.registerMBean(reporter, reporter.asInstanceOf[KafkaMetricsReporterMBean].getMBeanName)
-      })
-
+      KafkaCSVMetricsReporter.startCSVMetricReporter(serverConfig.props)
       val kafkaServerStartble = new KafkaServerStartable(serverConfig)
 
       // attach shutdown handler to catch control-c

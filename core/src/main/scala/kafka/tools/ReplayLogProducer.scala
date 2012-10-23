@@ -22,9 +22,8 @@ import java.util.concurrent.{Executors, CountDownLatch}
 import java.util.Properties
 import kafka.producer.{ProducerData, ProducerConfig, Producer}
 import kafka.consumer._
-import kafka.utils.{ZKStringSerializer, Logging, ZkUtils}
+import kafka.utils.{Logging, ZkUtils}
 import kafka.api.OffsetRequest
-import org.I0Itec.zkclient._
 import kafka.message.{CompressionCodec, Message}
 
 object ReplayLogProducer extends Logging {

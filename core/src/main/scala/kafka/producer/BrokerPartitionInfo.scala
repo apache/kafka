@@ -17,11 +17,10 @@
 package kafka.producer
 
 import collection.mutable.HashMap
-import kafka.api.{TopicMetadataRequest, TopicMetadata}
+import kafka.api.TopicMetadata
 import kafka.common.KafkaException
-import kafka.utils.{Logging, Utils}
+import kafka.utils.Logging
 import kafka.common.ErrorMapping
-import kafka.cluster.Broker
 import kafka.client.ClientUtils
 
 

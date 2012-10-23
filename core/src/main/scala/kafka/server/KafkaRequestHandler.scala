@@ -35,7 +35,7 @@ class KafkaRequestHandler(id: Int, brokerId: Int, val requestChannel: RequestCha
         trace("receives shut down command, shut down".format(brokerId, id))
         return
       }
-      req.dequeueTimeNs = SystemTime.nanoseconds
+      req.dequeueTimeMs = SystemTime.milliseconds
       debug("handles request " + req)
       apis.handle(req)
     }

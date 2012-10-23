@@ -24,7 +24,7 @@ import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Before, Test}
 import kafka.message._
-import kafka.common.{MessageSizeTooLargeException, KafkaException, OffsetOutOfRangeException}
+import kafka.common.{MessageSizeTooLargeException, OffsetOutOfRangeException}
 import kafka.utils._
 import scala.Some
 import kafka.server.KafkaConfig

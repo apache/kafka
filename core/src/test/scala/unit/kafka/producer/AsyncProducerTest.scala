@@ -19,7 +19,6 @@ package kafka.producer
 
 import java.util.{LinkedList, Properties}
 import java.util.concurrent.LinkedBlockingQueue
-import java.io.IOException
 import junit.framework.Assert._
 import org.easymock.EasyMock
 import org.junit.Test

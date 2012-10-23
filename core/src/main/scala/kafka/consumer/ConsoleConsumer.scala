@@ -17,7 +17,6 @@
 
 package kafka.consumer
 
-import scala.collection.mutable._
 import scala.collection.JavaConversions._
 import org.I0Itec.zkclient._
 import joptsimple._
@@ -25,9 +24,10 @@ import java.util.Properties
 import java.util.Random
 import java.io.PrintStream
 import kafka.message._
-import kafka.utils.{Utils, Logging, ZkUtils, CommandLineUtils}
-import kafka.utils.ZKStringSerializer
 import kafka.serializer.StringDecoder
+import kafka.utils._
+import kafka.metrics.KafkaCSVMetricsReporter
+
 
 /**
  * Consumer that dumps messages out to standard out.
@@ -107,6 +107,13 @@ object ConsoleConsumer extends Logging {
             .ofType(classOf[java.lang.Integer])
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
             "skip it instead of halt.")
+    val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
+    val metricsDirectoryOpt = parser.accepts("metrics-dir", "If csv-reporter-enable is set, and this parameter is" +
+            "set, the csv metrics will be outputed here")
+      .withRequiredArg
+      .describedAs("metrics dictory")
+      .ofType(classOf[java.lang.String])
+
 
     val options: OptionSet = tryParse(parser, args)
     CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
@@ -121,6 +128,20 @@ object ConsoleConsumer extends Logging {
       new Blacklist(topicArg)
     else
       new Whitelist(topicArg)
+
+    val csvMetricsReporterEnabled = options.has(csvMetricsReporterEnabledOpt)
+    if (csvMetricsReporterEnabled) {
+      val csvReporterProps = new Properties()
+      csvReporterProps.put("kafka.metrics.polling.interval.secs", "5")
+      csvReporterProps.put("kafka.metrics.reporters", "kafka.metrics.KafkaCSVMetricsReporter")
+      if (options.has(metricsDirectoryOpt))
+        csvReporterProps.put("kafka.csv.metrics.dir", options.valueOf(metricsDirectoryOpt))
+      else
+        csvReporterProps.put("kafka.csv.metrics.dir", "kafka_metrics")
+      csvReporterProps.put("kafka.csv.metrics.reporter.enabled", "true")
+      val verifiableProps = new VerifiableProperties(csvReporterProps)
+      KafkaCSVMetricsReporter.startCSVMetricReporter(verifiableProps)
+    }
 
     val props = new Properties()
     props.put("groupid", options.valueOf(groupIdOpt))

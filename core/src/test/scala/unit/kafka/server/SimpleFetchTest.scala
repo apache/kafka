@@ -99,7 +99,7 @@ class SimpleFetchTest extends JUnit3Suite {
     val goodFetchBB = TestUtils.createRequestByteBuffer(goodFetch)
 
     // send the request
-    apis.handleFetchRequest(new RequestChannel.Request(processor=1, requestKey=5, buffer=goodFetchBB, startTimeNs=1))
+    apis.handleFetchRequest(new RequestChannel.Request(processor=1, requestKey=5, buffer=goodFetchBB, startTimeMs=1))
 
     // make sure the log only reads bytes between 0->HW (5)
     EasyMock.verify(log)
@@ -123,7 +123,7 @@ class SimpleFetchTest extends JUnit3Suite {
     apis.handleOffsetRequest(new RequestChannel.Request(processor = 0,
                                                         requestKey = 5,
                                                         buffer = offsetRequestBB,
-                                                        startTimeNs = 1))
+                                                        startTimeMs = 1))
     val offsetResponseBuffer = requestChannel.receiveResponse(0).responseSend.asInstanceOf[BoundedByteBufferSend].buffer
     val offsetResponse = OffsetResponse.readFrom(offsetResponseBuffer)
     EasyMock.verify(replicaManager)
@@ -198,7 +198,7 @@ class SimpleFetchTest extends JUnit3Suite {
     val fetchRequestBB = TestUtils.createRequestByteBuffer(bigFetch)
 
     // send the request
-    apis.handleFetchRequest(new RequestChannel.Request(processor=0, requestKey=5, buffer=fetchRequestBB, startTimeNs=1))
+    apis.handleFetchRequest(new RequestChannel.Request(processor=0, requestKey=5, buffer=fetchRequestBB, startTimeMs=1))
 
     /**
      * Make sure the log satisfies the fetch from a follower by reading data beyond the HW, mainly all bytes after
@@ -226,7 +226,7 @@ class SimpleFetchTest extends JUnit3Suite {
     apis.handleOffsetRequest(new RequestChannel.Request(processor = 1,
                                                         requestKey = 5,
                                                         buffer = offsetRequestBB,
-                                                        startTimeNs = 1))
+                                                        startTimeMs = 1))
     val offsetResponseBuffer = requestChannel.receiveResponse(1).responseSend.asInstanceOf[BoundedByteBufferSend].buffer
     val offsetResponse = OffsetResponse.readFrom(offsetResponseBuffer)
     EasyMock.verify(replicaManager)

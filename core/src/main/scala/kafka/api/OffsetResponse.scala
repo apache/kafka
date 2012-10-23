@@ -19,7 +19,6 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import kafka.common.{ErrorMapping, TopicAndPartition}
-import kafka.utils.Utils
 import kafka.api.ApiUtils._
 
 
