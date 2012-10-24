@@ -93,9 +93,7 @@ object ByteBufferMessageSet {
  * 
  */
 class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends MessageSet with Logging {
-  private var shallowValidByteCount = -1L
-  if(sizeInBytes > Int.MaxValue)
-    throw new InvalidMessageSizeException("Message set cannot be larger than " + Int.MaxValue)
+  private var shallowValidByteCount = -1
 
   def this(compressionCodec: CompressionCodec, messages: Message*) {
     this(ByteBufferMessageSet.create(new AtomicLong(0), compressionCodec, messages:_*))
@@ -109,7 +107,7 @@ class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends Message
     this(NoCompressionCodec, new AtomicLong(0), messages: _*)
   }
 
-  private def shallowValidBytes: Long = {
+  private def shallowValidBytes: Int = {
     if(shallowValidByteCount < 0) {
       var bytes = 0
       val iter = this.internalIterator(true)
@@ -123,10 +121,10 @@ class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends Message
   }
   
   /** Write the messages in this set to the given channel */
-  def writeTo(channel: GatheringByteChannel, offset: Long, size: Long): Long = {
+  def writeTo(channel: GatheringByteChannel, offset: Long, size: Int): Int = {
     // Ignore offset and size from input. We just want to write the whole buffer to the channel.
     buffer.mark()
-    var written = 0L
+    var written = 0
     while(written < sizeInBytes)
       written += channel.write(buffer)
     buffer.reset()
@@ -223,12 +221,12 @@ class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends Message
   /**
    * The total number of bytes in this message set, including any partial trailing messages
    */
-  def sizeInBytes: Long = buffer.limit
+  def sizeInBytes: Int = buffer.limit
   
   /**
    * The total number of bytes in this message set not including any partial, trailing messages
    */
-  def validBytes: Long = shallowValidBytes
+  def validBytes: Int = shallowValidBytes
 
   /**
    * Two message sets are equal if their respective byte buffers are equal

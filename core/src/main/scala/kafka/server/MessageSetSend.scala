@@ -31,10 +31,10 @@ import kafka.common.ErrorMapping
 @nonthreadsafe
 private[server] class MessageSetSend(val messages: MessageSet, val errorCode: Short) extends Send {
   
-  private var sent: Long = 0
-  private var size: Long = messages.sizeInBytes
+  private var sent: Int = 0
+  private val size: Int = messages.sizeInBytes
   private val header = ByteBuffer.allocate(6)
-  header.putInt(size.asInstanceOf[Int] + 2)
+  header.putInt(size + 2)
   header.putShort(errorCode)
   header.rewind()
   
@@ -51,7 +51,7 @@ private[server] class MessageSetSend(val messages: MessageSet, val errorCode: Sh
       written += channel.write(header)
     if(!header.hasRemaining) {
       val fileBytesSent = messages.writeTo(channel, sent, size - sent)
-      written += fileBytesSent.asInstanceOf[Int]
+      written += fileBytesSent
       sent += fileBytesSent
     }
 
@@ -66,6 +66,6 @@ private[server] class MessageSetSend(val messages: MessageSet, val errorCode: Sh
     written
   }
   
-  def sendSize: Int = size.asInstanceOf[Int] + header.capacity
+  def sendSize: Int = size + header.capacity
   
 }

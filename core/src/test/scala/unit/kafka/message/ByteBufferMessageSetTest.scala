@@ -32,7 +32,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
   def testValidBytes() {
     {
       val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes()), new Message("there".getBytes()))
-      val buffer = ByteBuffer.allocate(messages.sizeInBytes.toInt + 2)
+      val buffer = ByteBuffer.allocate(messages.sizeInBytes + 2)
       buffer.put(messages.buffer)
       buffer.putShort(4)
       val messagesPlus = new ByteBufferMessageSet(buffer)
@@ -50,7 +50,7 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
   def testValidBytesWithCompression() {
     {
       val messages = new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes()), new Message("there".getBytes()))
-      val buffer = ByteBuffer.allocate(messages.sizeInBytes.toInt + 2)
+      val buffer = ByteBuffer.allocate(messages.sizeInBytes + 2)
       buffer.put(messages.buffer)
       buffer.putShort(4)
       val messagesPlus = new ByteBufferMessageSet(buffer)

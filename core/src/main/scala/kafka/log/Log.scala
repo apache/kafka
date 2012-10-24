@@ -99,7 +99,7 @@ object Log {
  */
 @threadsafe
 private[kafka] class Log(val dir: File, 
-                         val maxLogFileSize: Long, 
+                         val maxLogFileSize: Int,
                          val maxMessageSize: Int, 
                          val flushInterval: Int = Int.MaxValue,
                          val rollIntervalMs: Long = Long.MaxValue, 
@@ -337,14 +337,14 @@ private[kafka] class Log(val dir: File,
    */
   private def trimInvalidBytes(messages: ByteBufferMessageSet): ByteBufferMessageSet = {
     val messageSetValidBytes = messages.validBytes
-    if(messageSetValidBytes > Int.MaxValue || messageSetValidBytes < 0)
+    if(messageSetValidBytes < 0)
       throw new InvalidMessageSizeException("Illegal length of message set " + messageSetValidBytes + " Message set cannot be appended to log. Possible causes are corrupted produce requests")
     if(messageSetValidBytes == messages.sizeInBytes) {
       messages
     } else {
       // trim invalid bytes
       val validByteBuffer = messages.buffer.duplicate()
-      validByteBuffer.limit(messageSetValidBytes.asInstanceOf[Int])
+      validByteBuffer.limit(messageSetValidBytes)
       new ByteBufferMessageSet(validByteBuffer)
     }
   }

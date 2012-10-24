@@ -36,12 +36,12 @@ import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 @nonthreadsafe
 class FileMessageSet private[kafka](val file: File,
                                     private[log] val channel: FileChannel,
-                                    private[log] val start: Long = 0L,
-                                    private[log] val limit: Long = Long.MaxValue,
+                                    private[log] val start: Int = 0,
+                                    private[log] val limit: Int = Int.MaxValue,
                                     initChannelPositionToEnd: Boolean = true) extends MessageSet with Logging {
   
   /* the size of the message set in bytes */
-  private val _size = new AtomicLong(scala.math.min(channel.size(), limit) - start)
+  private val _size = new AtomicInteger(scala.math.min(channel.size().toInt, limit) - start)
 
   if (initChannelPositionToEnd) {
     /* set the file position to the last byte in the file */
@@ -51,7 +51,7 @@ class FileMessageSet private[kafka](val file: File,
   /**
    * Create a file message set with no limit or offset
    */
-  def this(file: File, channel: FileChannel) = this(file, channel, 0, Long.MaxValue)
+  def this(file: File, channel: FileChannel) = this(file, channel, 0, Int.MaxValue)
   
   /**
    * Create a file message set with no limit or offset
@@ -61,7 +61,7 @@ class FileMessageSet private[kafka](val file: File,
   /**
    * Return a message set which is a view into this set starting from the given position and with the given size limit.
    */
-  def read(position: Long, size: Long): FileMessageSet = {
+  def read(position: Int, size: Int): FileMessageSet = {
     new FileMessageSet(file,
                        channel,
                        this.start + position,
@@ -96,8 +96,8 @@ class FileMessageSet private[kafka](val file: File,
   /**
    * Write some of this set to the given channel, return the amount written
    */
-  def writeTo(destChannel: GatheringByteChannel, writePosition: Long, size: Long): Long = 
-    channel.transferTo(start + writePosition, scala.math.min(size, sizeInBytes), destChannel)
+  def writeTo(destChannel: GatheringByteChannel, writePosition: Long, size: Int): Int =
+    channel.transferTo(start + writePosition, scala.math.min(size, sizeInBytes), destChannel).toInt
   
   /**
    * Get an iterator over the messages in the set. We only do shallow iteration here.
@@ -136,7 +136,7 @@ class FileMessageSet private[kafka](val file: File,
   /**
    * The number of bytes taken up by this file set
    */
-  def sizeInBytes(): Long = _size.get()
+  def sizeInBytes(): Int = _size.get()
   
   /**
    * Append this message to the message set
@@ -175,7 +175,7 @@ class FileMessageSet private[kafka](val file: File,
    * Truncate this file message set to the given size. Note that this API does no checking that the 
    * given size falls on a valid byte offset.
    */
-  def truncateTo(targetSize: Long) = {
+  def truncateTo(targetSize: Int) = {
     if(targetSize > sizeInBytes())
       throw new KafkaException("Attempt to truncate log segment to %d bytes failed since the current ".format(targetSize) +
         " size of this log segment is only %d bytes".format(sizeInBytes()))

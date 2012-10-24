@@ -113,7 +113,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
           foldedPartitions +
           4 + /* partition id */
           4 + /* byte-length of serialized messages */
-          currPartition._2.sizeInBytes.toInt
+          currPartition._2.sizeInBytes
         })
       }
     })

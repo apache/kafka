@@ -92,7 +92,7 @@ class LogManagerTest extends JUnit3Suite {
     time.currentMs += maxLogAge + 3000
     logManager.cleanupLogs()
     assertEquals("Now there should only be only one segment.", 1, log.numberOfSegments)
-    assertEquals("Should get empty fetch off new log.", 0L, log.read(offset+1, 1024).sizeInBytes)
+    assertEquals("Should get empty fetch off new log.", 0, log.read(offset+1, 1024).sizeInBytes)
     try {
       log.read(0, 1024)
       fail("Should get exception from fetching earlier.")
@@ -111,7 +111,7 @@ class LogManagerTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, -1)
     logManager.shutdown()
     config = new KafkaConfig(props) {
-      override val logFileSize = (10 * (setSize - 1)).asInstanceOf[Int] // each segment will be 10 messages
+      override val logFileSize = (10 * (setSize - 1)) // each segment will be 10 messages
       override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Long]
       override val logRetentionHours = retentionHours
       override val flushInterval = 100
@@ -138,7 +138,7 @@ class LogManagerTest extends JUnit3Suite {
     // this cleanup shouldn't find any expired segments but should delete some to reduce size
     logManager.cleanupLogs()
     assertEquals("Now there should be exactly 6 segments", 6, log.numberOfSegments)
-    assertEquals("Should get empty fetch off new log.", 0L, log.read(offset + 1, 1024).sizeInBytes)
+    assertEquals("Should get empty fetch off new log.", 0, log.read(offset + 1, 1024).sizeInBytes)
     try {
       log.read(0, 1024)
       fail("Should get exception from fetching earlier.")

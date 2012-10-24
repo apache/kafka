@@ -47,7 +47,7 @@ object FetchResponsePartitionData {
 case class FetchResponsePartitionData(error: Short = ErrorMapping.NoError,
                                       initialOffset:Long = 0L, hw: Long = -1L, messages: MessageSet) {
 
-  val sizeInBytes = FetchResponsePartitionData.headerSize + messages.sizeInBytes.intValue()
+  val sizeInBytes = FetchResponsePartitionData.headerSize + messages.sizeInBytes
 
   def this(messages: MessageSet) = this(ErrorMapping.NoError, 0L, -1L, messages)
   
@@ -58,14 +58,14 @@ case class FetchResponsePartitionData(error: Short = ErrorMapping.NoError,
 class PartitionDataSend(val partitionId: Int,
                         val partitionData: FetchResponsePartitionData) extends Send {
   private val messageSize = partitionData.messages.sizeInBytes
-  private var messagesSentSize = 0L
+  private var messagesSentSize = 0
 
   private val buffer = ByteBuffer.allocate( 4 /** partitionId **/ + FetchResponsePartitionData.headerSize)
   buffer.putInt(partitionId)
   buffer.putShort(partitionData.error)
   buffer.putLong(partitionData.initialOffset)
   buffer.putLong(partitionData.hw)
-  buffer.putInt(partitionData.messages.sizeInBytes.intValue())
+  buffer.putInt(partitionData.messages.sizeInBytes)
   buffer.rewind()
 
   override def complete = !buffer.hasRemaining && messagesSentSize >= messageSize
@@ -75,7 +75,7 @@ class PartitionDataSend(val partitionId: Int,
     if(buffer.hasRemaining)
       written += channel.write(buffer)
     if(!buffer.hasRemaining && messagesSentSize < messageSize) {
-      val bytesSent = partitionData.messages.writeTo(channel, messagesSentSize, messageSize - messagesSentSize).toInt
+      val bytesSent = partitionData.messages.writeTo(channel, messagesSentSize, messageSize - messagesSentSize)
       messagesSentSize += bytesSent
       written += bytesSent
     }

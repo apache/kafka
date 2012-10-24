@@ -46,10 +46,10 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   @Test
   def testSizeInBytes() {
     assertEquals("Empty message set should have 0 bytes.",
-                 0L,
+                 0,
                  createMessageSet(Array[Message]()).sizeInBytes)
     assertEquals("Predicted size should equal actual size.", 
-                 MessageSet.messageSetSize(messages).toLong, 
+                 MessageSet.messageSetSize(messages),
                  createMessageSet(messages).sizeInBytes)
   }
 

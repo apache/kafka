@@ -32,7 +32,7 @@ class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends Message
     this(NoCompressionCodec, messages)
   }
 
-  def validBytes: Long = underlying.validBytes
+  def validBytes: Int = underlying.validBytes
 
   override def iterator: java.util.Iterator[MessageAndOffset] = new java.util.Iterator[MessageAndOffset] {
     val underlyingIterator = underlying.iterator
@@ -49,7 +49,7 @@ class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends Message
 
   override def toString: String = underlying.toString
 
-  def sizeInBytes: Long = underlying.sizeInBytes
+  def sizeInBytes: Int = underlying.sizeInBytes
 
   override def equals(other: Any): Boolean = {
     other match {

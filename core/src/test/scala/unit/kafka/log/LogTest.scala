@@ -93,7 +93,7 @@ class LogTest extends JUnitSuite {
     val set = TestUtils.singleMessageSet("test".getBytes())
     val setSize = set.sizeInBytes
     val msgPerSeg = 10
-    val logFileSize = msgPerSeg * (setSize - 1).asInstanceOf[Int] // each segment will be 10 messages
+    val logFileSize = msgPerSeg * (setSize - 1) // each segment will be 10 messages
 
     // create a log
     val log = new Log(logDir, logFileSize, config.maxMessageSize, 1000, 10000, needsRecovery = false, time = time)
@@ -132,7 +132,7 @@ class LogTest extends JUnitSuite {
   def testReadOutOfRange() {
     createEmptyLogs(logDir, 1024)
     val log = new Log(logDir, 1024, config.maxMessageSize, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, time = time)
-    assertEquals("Reading just beyond end of log should produce 0 byte read.", 0L, log.read(1024, 1000).sizeInBytes)
+    assertEquals("Reading just beyond end of log should produce 0 byte read.", 0, log.read(1024, 1000).sizeInBytes)
     try {
       log.read(0, 1024)
       fail("Expected exception on invalid read.")
@@ -250,7 +250,7 @@ class LogTest extends JUnitSuite {
 
     // append messages to log
     val maxMessageSize = second.sizeInBytes - 1
-    val log = new Log(logDir, 100, maxMessageSize.toInt, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, time = time)
+    val log = new Log(logDir, 100, maxMessageSize, 1000, config.logRollHours*60*60*1000L, needsRecovery = false, time = time)
 
     // should be able to append the small message
     log.append(first)
@@ -297,7 +297,7 @@ class LogTest extends JUnitSuite {
     val set = TestUtils.singleMessageSet("test".getBytes())
     val setSize = set.sizeInBytes
     val msgPerSeg = 10
-    val logFileSize = msgPerSeg * (setSize - 1).asInstanceOf[Int] // each segment will be 10 messages
+    val logFileSize = msgPerSeg * (setSize - 1) // each segment will be 10 messages
 
     // create a log
     val log = new Log(logDir, logFileSize, config.maxMessageSize, 1000, 10000, needsRecovery = false, time = time)
