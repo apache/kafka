@@ -1,0 +1,1 @@
+java -Xmx1024M -XX:MaxPermSize=512m -jar lib\sbt-launch.jar "%1"

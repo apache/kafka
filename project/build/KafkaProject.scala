@@ -18,8 +18,13 @@
 import sbt._
 import scala.xml.{Node, Elem, NodeSeq}
 import scala.xml.transform.{RewriteRule, RuleTransformer}
+import java.io.File
 
 class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProject {
+  
+  override def managedStyle = ManagedStyle.Maven
+  lazy val publishTo = Resolver.file("file", new File( "D:\\Outils\\Maven\\repo" ))
+  
   lazy val core = project("core", "core-kafka", new CoreKafkaProject(_))
   lazy val examples = project("examples", "java-examples", new KafkaExamplesProject(_), core)
   lazy val contrib = project("contrib", "contrib", new ContribProject(_))
