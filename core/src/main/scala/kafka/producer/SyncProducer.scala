@@ -37,7 +37,6 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   
   private val MaxConnectBackoffMs = 60000
   private var sentOnConnection = 0
-  private var lastConnectionTime = -1L
 
   private val lock = new Object()
   @volatile private var shutdown: Boolean = false
@@ -81,13 +80,6 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
           disconnect()
           throw e
         case e => throw e
-      }
-      // TODO: do we still need this?
-      sentOnConnection += 1
-
-      if(sentOnConnection >= config.reconnectInterval || (config.reconnectTimeInterval >= 0 && System.currentTimeMillis - lastConnectionTime >= config.reconnectTimeInterval)) {
-        reconnect()
-        sentOnConnection = 0
       }
       response
     }
@@ -138,24 +130,15 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   }
     
   private def connect(): BlockingChannel = {
-    var connectBackoffMs = 1
-    val beginTimeMs = SystemTime.milliseconds
-    while(!blockingChannel.isConnected && !shutdown) {
+    if (!blockingChannel.isConnected && !shutdown) {
       try {
         blockingChannel.connect()
-        lastConnectionTime = System.currentTimeMillis
         info("Connected to " + config.host + ":" + config.port + " for producing")
       } catch {
         case e: Exception => {
           disconnect()
-          val endTimeMs = SystemTime.milliseconds
-          if ( (endTimeMs - beginTimeMs + connectBackoffMs) > config.connectTimeoutMs ) {
-            error("Producer connection to " +  config.host + ":" + config.port + " timing out after " + config.connectTimeoutMs + " ms", e)
-            throw e
-          }
-          error("Connection attempt to " +  config.host + ":" + config.port + " failed, next attempt in " + connectBackoffMs + " ms", e)
-          SystemTime.sleep(connectBackoffMs)
-          connectBackoffMs = math.min(10 * connectBackoffMs, MaxConnectBackoffMs)
+          error("Producer connection to " +  config.host + ":" + config.port + " unsuccessful", e)
+          throw e
         }
       }
     }

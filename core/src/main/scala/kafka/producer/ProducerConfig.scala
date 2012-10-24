@@ -38,12 +38,6 @@ class ProducerConfig private (val props: VerifiableProperties)
    */
   val brokerList = props.getString("broker.list")
 
-  /**
-   * If DefaultEventHandler is used, this specifies the number of times to
-   * retry if an error is encountered during send.
-   */
-  val numRetries = props.getInt("num.retries", 0)
-
   /** the partitioner class for partitioning events amongst sub-topics */
   val partitionerClass = props.getString("partitioner.class", "kafka.producer.DefaultPartitioner")
 

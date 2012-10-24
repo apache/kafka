@@ -135,10 +135,6 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* default replication factors for automatically created topics */
   val defaultReplicationFactor = props.getInt("default.replication.factor", 1)
 
-  /* wait time in ms to allow the preferred replica for a partition to become the leader. This property is used during
-  * leader election on all replicas minus the preferred replica */
-  val preferredReplicaWaitTime = props.getLong("preferred.replica.wait.time", 300)
-
   val replicaMaxLagTimeMs = props.getLong("replica.max.lag.time.ms", 10000)
 
   val replicaMaxLagBytes = props.getLong("replica.max.lag.bytes", 4000)
