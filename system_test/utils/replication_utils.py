@@ -58,3 +58,10 @@ class ReplicationUtils(object):
             self.leaderAttributesDict["LEADER_ELECTION_COMPLETED_MSG"] + \
             " for topic (.*?) partition (.*?) \(.*"
 
+        # Controller attributes
+        self.isControllerLogPattern    = "Controller startup complete"
+        self.controllerAttributesDict  = {}
+        self.controllerAttributesDict["CONTROLLER_STARTUP_COMPLETE_MSG"] = self.isControllerLogPattern
+        self.controllerAttributesDict["REGX_CONTROLLER_STARTUP_PATTERN"] = "\[(.*?)\] .* \[Controller (.*?)\]: " + \
+            self.controllerAttributesDict["CONTROLLER_STARTUP_COMPLETE_MSG"]
+

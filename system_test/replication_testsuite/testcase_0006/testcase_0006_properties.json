@@ -8,7 +8,8 @@
                   "07":"Log segment size    : 10240"
   },
   "testcase_args": {
-    "bounce_leader": "false",
+    "broker_type": "leader",
+    "bounce_broker": "false",
     "replica_factor": "3",
     "num_partition": "3",
     "num_iteration": "1",

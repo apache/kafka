@@ -219,7 +219,6 @@ def get_child_processes(pid):
             break
     return pidStack
 
-
 def sigterm_remote_process(hostname, pidStack):
 
     while ( len(pidStack) > 0 ):
@@ -232,7 +231,6 @@ def sigterm_remote_process(hostname, pidStack):
         except:
             print "WARN - pid:",pid,"not found"
             raise
-
 
 def sigkill_remote_process(hostname, pidStack):
 
@@ -247,6 +245,35 @@ def sigkill_remote_process(hostname, pidStack):
             print "WARN - pid:",pid,"not found"
             raise
 
+def simulate_garbage_collection_pause_in_remote_process(hostname, pidStack, pauseTimeInSeconds):
+    pausedPidStack = []
+
+    # pause the processes
+    while len(pidStack) > 0:
+        pid = pidStack.pop()
+        pausedPidStack.append(pid)
+        cmdStr = "ssh " + hostname + " 'kill -SIGSTOP " + pid + "'"
+
+        try:
+            logger.debug("executing command [" + cmdStr + "]", extra=d)
+            sys_call_return_subproc(cmdStr)
+        except:
+            print "WARN - pid:",pid,"not found"
+            raise
+
+    time.sleep(int(pauseTimeInSeconds))
+
+    # resume execution of the processes
+    while len(pausedPidStack) > 0:
+        pid = pausedPidStack.pop()
+        cmdStr = "ssh " + hostname + " 'kill -SIGCONT " + pid + "'"
+
+        try:
+            logger.debug("executing command [" + cmdStr + "]", extra=d)
+            sys_call_return_subproc(cmdStr)
+        except:
+            print "WARN - pid:",pid,"not found"
+            raise
 
 def terminate_process(pidStack):
     while ( len(pidStack) > 0 ):
@@ -359,6 +386,8 @@ def setup_remote_hosts(systemTestEnv):
 
         if hostname == "localhost" and kafkaHome == "default":
             clusterEntityConfigDictList[listIndex]["kafka_home"] = localKafkaHome
+        if hostname == "localhost" and kafkaHome == "system_test/migration_tool_testsuite/0.7":
+            clusterEntityConfigDictList[listIndex]["kafka_home"] = localKafkaHome + "/system_test/migration_tool_testsuite/0.7"
 
         kafkaHome = clusterEntityConfigDict["kafka_home"]
         javaHome  = clusterEntityConfigDict["java_home"]

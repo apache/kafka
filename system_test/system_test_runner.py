@@ -166,6 +166,7 @@ def main():
                 print
 
     if not systemTestEnv.printTestDescriptionsOnly:
+        totalFailureCount = 0
         print
         print "========================================================"
         print "                 TEST REPORTS"
@@ -174,13 +175,25 @@ def main():
             for key in sorted(systemTestResult.iterkeys()):
                 if key == "validation_status":
                     print key, " : "
+                    testItemStatus = None
                     for validatedItem in sorted(systemTestResult[key].iterkeys()):
-                         print "    ", validatedItem, " : ", systemTestResult[key][validatedItem]
+                        testItemStatus = systemTestResult[key][validatedItem]
+                        print "    ", validatedItem, " : ", testItemStatus
+                        if "FAILED" == testItemStatus:
+                            totalFailureCount += 1
                 else:
                     print key, " : ", systemTestResult[key]
             print
             print "========================================================"
             print
+
+        print "========================================================"
+        print "Total failures count : " + str(totalFailureCount)
+        print "========================================================"
+        print
+        return totalFailureCount
+
+    return -1
 
 # =========================
 # main entry point

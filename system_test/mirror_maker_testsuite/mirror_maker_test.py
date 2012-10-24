@@ -170,9 +170,6 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
                 self.anonLogger.info("sleeping for 5s")
                 time.sleep(5)
 
-                #print "#### sleeping for 30 min"
-                #time.sleep(1800)
-
                 self.log_message("creating topics")
                 kafka_system_test_utils.create_topic(self.systemTestEnv, self.testcaseEnv)
                 self.anonLogger.info("sleeping for 5s")
@@ -189,7 +186,7 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
                 time.sleep(int(msgProducingFreeTimeSec))
 
                 # =============================================
-                # A while-loop to bounce leader as specified
+                # A while-loop to bounce mirror maker as specified
                 # by "num_iterations" in testcase_n_properties.json
                 # =============================================
                 i = 1
@@ -198,46 +195,25 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
 
                     self.log_message("Iteration " + str(i) + " of " + str(numIterations))
 
-                    self.log_message("looking up leader")
-                    leaderDict = kafka_system_test_utils.get_leader_elected_log_line(
-                        self.systemTestEnv, self.testcaseEnv, self.leaderAttributesDict)
-        
-                    # ==========================
-                    # leaderDict looks like this:
-                    # ==========================
-                    #{'entity_id': u'3',
-                    # 'partition': '0',
-                    # 'timestamp': 1345050255.8280001,
-                    # 'hostname': u'localhost',
-                    # 'topic': 'test_1',
-                    # 'brokerid': '3'}
+                    # =============================================
+                    # Bounce Mirror Maker if specified in testcase config
+                    # =============================================
+                    bounceMirrorMaker = self.testcaseEnv.testcaseArgumentsDict["bounce_mirror_maker"]
+                    self.log_message("bounce_mirror_maker flag : " + bounceMirrorMaker)
+                    if (bounceMirrorMaker.lower() == "true"):
 
-                    # =============================================
-                    # validate to see if leader election is successful
-                    # =============================================
-                    self.log_message("validating leader election")
-                    result = kafka_system_test_utils.validate_leader_election_successful( 
-                         self.testcaseEnv, leaderDict, self.testcaseEnv.validationStatusDict)
-        
-                    # =============================================
-                    # trigger leader re-election by stopping leader
-                    # to get re-election latency
-                    # =============================================
-                    bounceLeaderFlag = self.testcaseEnv.testcaseArgumentsDict["bounce_leader"]
-                    self.log_message("bounce_leader flag : " + bounceLeaderFlag)
-                    if (bounceLeaderFlag.lower() == "true"):
-                        reelectionLatency = kafka_system_test_utils.get_reelection_latency(
-                            self.systemTestEnv, self.testcaseEnv, leaderDict, self.leaderAttributesDict)
-                        latencyKeyName = "Leader Election Latency - iter " + str(i) + " brokerid " + leaderDict["brokerid"]
-                        self.testcaseEnv.validationStatusDict[latencyKeyName] = str("{0:.2f}".format(reelectionLatency * 1000)) + " ms"
-       
-                    # =============================================
-                    # starting previously terminated broker 
-                    # =============================================
-                    if bounceLeaderFlag.lower() == "true":
-                        self.log_message("starting the previously terminated broker")
-                        stoppedLeaderEntityId  = leaderDict["entity_id"]
-                        kafka_system_test_utils.start_entity_in_background(self.systemTestEnv, self.testcaseEnv, stoppedLeaderEntityId)
+                        clusterConfigList       = self.systemTestEnv.clusterEntityConfigDictList
+                        mirrorMakerEntityIdList = system_test_utils.get_data_from_list_of_dicts(
+                            clusterConfigList, "role", "mirror_maker", "entity_id")
+
+                        mirrorMakerPPid = self.testcaseEnv.entityMirrorMakerParentPidDict[mirrorMakerEntityIdList[0]]
+                        self.log_message("stopping mirror maker : " + mirrorMakerPPid)
+                        kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, mirrorMakerEntityIdList[0], mirrorMakerPPid)
+                        time.sleep(1)
+
+                        # starting previously terminated broker 
+                        self.log_message("starting the previously terminated mirror maker")
+                        kafka_system_test_utils.start_mirror_makers(self.systemTestEnv, self.testcaseEnv)
 
                     self.anonLogger.info("sleeping for 15s")
                     time.sleep(15)
@@ -294,13 +270,15 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
                 # collect logs from remote hosts
                 # =============================================
                 kafka_system_test_utils.collect_logs_from_remote_hosts(self.systemTestEnv, self.testcaseEnv)
-    
+
                 # =============================================
                 # validate the data matched and checksum
                 # =============================================
                 self.log_message("validating data matched")
-                kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
+                #kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
+                kafka_system_test_utils.validate_simple_consumer_data_matched(self.systemTestEnv, self.testcaseEnv)
                 kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv)
+                kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv, "target")
 
                 # =============================================
                 # draw graphs
@@ -313,7 +291,7 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
                 metrics.build_all_dashboards(self.systemTestEnv.METRICS_PATHNAME,
                                              self.testcaseEnv.testCaseDashboardsDir,
                                              self.systemTestEnv.clusterEntityConfigDictList)
-                
+
             except Exception as e:
                 self.log_message("Exception while running test {0}".format(e))
                 traceback.print_exc()

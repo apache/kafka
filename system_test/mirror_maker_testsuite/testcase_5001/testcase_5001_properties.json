@@ -11,6 +11,7 @@
   },
   "testcase_args": {
     "bounce_leader": "false",
+    "bounce_mirror_maker": "false",
     "replica_factor": "3",
     "num_partition": "1",
     "num_iteration": "1",
