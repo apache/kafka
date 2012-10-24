@@ -25,7 +25,6 @@ import kafka.api.{OffsetRequest, FetchRequestBuilder, Request}
 import kafka.cluster.Broker
 import scala.collection.JavaConversions._
 
-
 /**
  * Command line program to dump out messages to standard out using the simple consumer
  */
@@ -90,6 +89,8 @@ object SimpleConsumerShell extends Logging {
                            .defaultsTo(1000)
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
         "skip it instead of halt.")
+    val noWaitAtEndOfLogOpt = parser.accepts("no-wait-at-logend",
+        "If set, when the simple consumer reaches the end of the Log, it will stop, not waiting for new produced messages")
 
     val options = parser.parse(args : _*)
     for(arg <- List(brokerListOpt, topicOpt, partitionIdOpt)) {
@@ -110,6 +111,7 @@ object SimpleConsumerShell extends Logging {
 
     val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
     val printOffsets = if(options.has(printOffsetOpt)) true else false
+    val noWaitAtEndOfLog = options.has(noWaitAtEndOfLogOpt)
 
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
     val formatterArgs = MessageFormatter.tryParseFormatterArgs(options.valuesOf(messageFormatterArgOpt))
@@ -182,11 +184,14 @@ object SimpleConsumerShell extends Logging {
                     .build()
             val fetchResponse = simpleConsumer.fetch(fetchRequest)
             val messageSet = fetchResponse.messageSet(topic, partitionId)
+            if (messageSet.validBytes <= 0 && noWaitAtEndOfLog) {
+              println("Terminating. Reached the end of partition (%s, %d) at offset %d".format(topic, partitionId, offset))
+              return
+            }
             debug("multi fetched " + messageSet.sizeInBytes + " bytes from offset " + offset)
-            var consumed = 0
             for(messageAndOffset <- messageSet) {
               try {
-                offset = messageAndOffset.offset
+                offset = messageAndOffset.nextOffset
                 if(printOffsets)
                   System.out.println("next offset = " + offset)
                 formatter.writeTo(messageAndOffset.message, System.out)
@@ -204,7 +209,6 @@ object SimpleConsumerShell extends Logging {
                 simpleConsumer.close()
                 System.exit(1)
               }
-              consumed += 1
             }
           }
         } catch {
