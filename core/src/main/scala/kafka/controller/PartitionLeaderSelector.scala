@@ -25,10 +25,9 @@ trait PartitionLeaderSelector {
   /**
    * @param topic                      The topic of the partition whose leader needs to be elected
    * @param partition                  The partition whose leader needs to be elected
-   * @param assignedReplicas           The list of replicas assigned to the input partition
    * @param currentLeaderAndIsr        The current leader and isr of input partition read from zookeeper
    * @throws PartitionOfflineException If no replica in the assigned replicas list is alive
-   * @returns The leader and isr request, with the newly selected leader info, to send to the brokers
+   * @return The leader and isr request, with the newly selected leader info, to send to the brokers
    * Also, returns the list of replicas the returned leader and isr request should be sent to
    * This API selects a new leader for the input partition
    */
@@ -147,3 +146,40 @@ with Logging {
     }
   }
 }
+
+/**
+ * Picks one of the alive replicas (other than the current leader) in ISR as
+ * new leader, fails if there are no other replicas in ISR.
+ */
+class ControlledShutdownLeaderSelector(controllerContext: ControllerContext)
+        extends PartitionLeaderSelector
+        with Logging {
+
+  this.logIdent = "[ControlledShutdownLeaderSelector]: "
+
+  def selectLeader(topic: String, partition: Int, currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
+    val currentLeaderEpoch = currentLeaderAndIsr.leaderEpoch
+    val currentLeaderIsrZkPathVersion = currentLeaderAndIsr.zkVersion
+
+    val currentLeader = currentLeaderAndIsr.leader
+
+    val assignedReplicas = controllerContext.partitionReplicaAssignment(TopicAndPartition(topic, partition))
+    val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
+    val liveAssignedReplicas = assignedReplicas.filter(r => liveOrShuttingDownBrokerIds.contains(r))
+
+    val newIsr = currentLeaderAndIsr.isr.filter(brokerId => brokerId != currentLeader &&
+                                                            !controllerContext.shuttingDownBrokerIds.contains(brokerId))
+    val newLeaderOpt = newIsr.headOption
+    newLeaderOpt match {
+      case Some(newLeader) =>
+        debug("Partition [%s,%d] : current leader = %d, new leader = %d"
+              .format(topic, partition, currentLeader, newLeader))
+        (LeaderAndIsr(newLeader, currentLeaderEpoch + 1, newIsr, currentLeaderIsrZkPathVersion + 1),
+         liveAssignedReplicas)
+      case None =>
+        throw new StateChangeFailedException("No other replicas in ISR for %s-%s.".format(topic, partition))
+    }
+  }
+
+}
+

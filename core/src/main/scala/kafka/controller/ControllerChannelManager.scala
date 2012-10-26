@@ -49,7 +49,13 @@ class ControllerChannelManager private (config: KafkaConfig) extends Logging {
 
   def sendRequest(brokerId : Int, request : RequestOrResponse, callback: (RequestOrResponse) => Unit = null) {
     brokerLock synchronized {
-      brokerStateInfo(brokerId).messageQueue.put((request, callback))
+      val stateInfoOpt = brokerStateInfo.get(brokerId)
+      stateInfoOpt match {
+        case Some(stateInfo) =>
+          stateInfo.messageQueue.put((request, callback))
+        case None =>
+          warn("Not sending request %s to broker %d, since it is offline.".format(request, brokerId))
+      }
     }
   }
 
@@ -123,7 +129,7 @@ class RequestSendThread(val controllerId: Int,
           case RequestKeys.StopReplicaKey =>
             response = StopReplicaResponse.readFrom(receive.buffer)
         }
-        trace("got a response %s".format(controllerId, response, toBrokerId))
+        trace("Controller %d request to broker %d got a response %s".format(controllerId, toBrokerId, response))
 
         if(callback != null){
           callback(response)
@@ -141,6 +147,7 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
   extends  Logging {
   val leaderAndIsrRequestMap = new mutable.HashMap[Int, mutable.HashMap[(String, Int), PartitionStateInfo]]
   val stopReplicaRequestMap = new mutable.HashMap[Int, Seq[(String, Int)]]
+  val stopAndDeleteReplicaRequestMap = new mutable.HashMap[Int, Seq[(String, Int)]]
 
   def newBatch() {
     // raise error if the previous batch is not empty
@@ -149,6 +156,7 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
         "a new one. Some state changes %s might be lost ".format(leaderAndIsrRequestMap.toString()))
     leaderAndIsrRequestMap.clear()
     stopReplicaRequestMap.clear()
+    stopAndDeleteReplicaRequestMap.clear()
   }
 
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int, leaderAndIsr: LeaderAndIsr, replicationFactor: Int) {
@@ -160,10 +168,18 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
     }
   }
 
-  def addStopReplicaRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int) {
+  def addStopReplicaRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int, deletePartition: Boolean) {
     brokerIds.foreach { brokerId =>
       stopReplicaRequestMap.getOrElseUpdate(brokerId, Seq.empty[(String, Int)])
-      stopReplicaRequestMap(brokerId) :+ (topic, partition)
+      stopAndDeleteReplicaRequestMap.getOrElseUpdate(brokerId, Seq.empty[(String, Int)])
+      if (deletePartition) {
+        val v = stopAndDeleteReplicaRequestMap(brokerId)
+        stopAndDeleteReplicaRequestMap(brokerId) = v :+ (topic, partition)
+      }
+      else {
+        val v = stopReplicaRequestMap(brokerId)
+        stopReplicaRequestMap(brokerId) = v :+ (topic, partition)
+      }
     }
   }
 
@@ -176,12 +192,19 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
       sendRequest(broker, leaderAndIsrRequest, null)
     }
     leaderAndIsrRequestMap.clear()
-    stopReplicaRequestMap.foreach { r =>
-      val broker = r._1
-      debug("The stop replica request sent to broker %d is %s".format(broker, r._2.mkString(",")))
-      sendRequest(broker, new StopReplicaRequest(Set.empty[(String, Int)] ++ r._2), null)
+    Seq((stopReplicaRequestMap, false), (stopAndDeleteReplicaRequestMap, true)) foreach {
+      case(m, deletePartitions) => {
+        m foreach {
+          case(broker, replicas) =>
+            if (replicas.size > 0) {
+              debug("The stop replica request (delete = %s) sent to broker %d is %s"
+                .format(deletePartitions, broker, replicas.mkString(",")))
+              sendRequest(broker, new StopReplicaRequest(deletePartitions, Set.empty[(String, Int)] ++ replicas), null)
+            }
+        }
+        m.clear()
+      }
     }
-    stopReplicaRequestMap.clear()
   }
 }
 

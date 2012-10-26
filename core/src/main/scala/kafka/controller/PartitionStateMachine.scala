@@ -121,8 +121,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   private def handleStateChange(topic: String, partition: Int, targetState: PartitionState,
                                 leaderSelector: PartitionLeaderSelector) {
     val topicAndPartition = TopicAndPartition(topic, partition)
+    val currState = partitionState.getOrElseUpdate(topicAndPartition, NonExistentPartition)
     try {
-      partitionState.getOrElseUpdate(topicAndPartition, NonExistentPartition)
       targetState match {
         case NewPartition =>
           // pre: partition did not exist before this
@@ -163,8 +163,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           // post: partition state is deleted from all brokers and zookeeper
       }
     }catch {
-      case e => error("State change for partition [%s, %d] ".format(topic, partition) +
-        "from %s to %s failed".format(partitionState(topicAndPartition), targetState), e)
+      case t: Throwable => error("State change for partition [%s, %d] ".format(topic, partition) +
+        "from %s to %s failed".format(currState, targetState), t)
     }
   }
 
@@ -203,8 +203,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   /**
    * Invoked on the NonExistentPartition->NewPartition state transition to update the controller's cache with the
    * partition's replica assignment.
-   * @topic     The topic of the partition whose replica assignment is to be cached
-   * @partition The partition whose replica assignment is to be cached
+   * @param topic     The topic of the partition whose replica assignment is to be cached
+   * @param partition The partition whose replica assignment is to be cached
    */
   private def assignReplicasToPartitions(topic: String, partition: Int) {
     val assignedReplicas = ZkUtils.getReplicasForPartition(controllerContext.zkClient, topic, partition)
@@ -216,10 +216,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * a leader and isr path in zookeeper. Once the partition moves to the OnlinePartition state, it's leader and isr
    * path gets initialized and it never goes back to the NewPartition state. From here, it can only go to the
    * OfflinePartition state.
-   * @topic               The topic of the partition whose leader and isr path is to be initialized
-   * @partition           The partition whose leader and isr path is to be initialized
-   * @brokerRequestBatch  The object that holds the leader and isr requests to be sent to each broker as a result of
-   *                      this state change
+   * @param topicAndPartition   The topic/partition whose leader and isr path is to be initialized
    */
   private def initializeLeaderAndIsrForPartition(topicAndPartition: TopicAndPartition) {
     debug("Initializing leader and isr for partition %s".format(topicAndPartition))
@@ -258,10 +255,9 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   /**
    * Invoked on the OfflinePartition->OnlinePartition state change. It invokes the leader election API to elect a leader
    * for the input offline partition
-   * @topic               The topic of the offline partition
-   * @partition           The offline partition
-   * @brokerRequestBatch  The object that holds the leader and isr requests to be sent to each broker as a result of
-   *                      this state change
+   * @param topic               The topic of the offline partition
+   * @param partition           The offline partition
+   * @param leaderSelector      Specific leader selector (e.g., offline/reassigned/etc.)
    */
   def electLeaderForPartition(topic: String, partition: Int, leaderSelector: PartitionLeaderSelector) {
     /** handle leader election for the partitions whose leader is no longer alive **/
@@ -291,8 +287,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     }catch {
       case poe: PartitionOfflineException => throw new PartitionOfflineException("All replicas for partition [%s, %d] are dead."
         .format(topic, partition) + " Marking this partition offline", poe)
-      case sce => throw new StateChangeFailedException(("Error while electing leader for partition" +
-        " [%s, %d]").format(topic, partition), sce)
+      case sce => throw new StateChangeFailedException(("Error while electing leader for partition " +
+        " [%s, %d] due to: %s.").format(topic, partition, sce.getMessage), sce)
     }
     debug("After leader election, leader cache is updated to %s".format(controllerContext.allLeaders.map(l => (l._1, l._2))))
   }

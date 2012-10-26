@@ -91,14 +91,15 @@ class ReplicaManager(val config: KafkaConfig,
     kafkaScheduler.scheduleWithRate(maybeShrinkIsr, "isr-expiration-thread-", 0, config.replicaMaxLagTimeMs)
   }
 
-  def stopReplica(topic: String, partitionId: Int): Short  = {
+  def stopReplica(topic: String, partitionId: Int, deletePartition: Boolean): Short  = {
     trace("Handling stop replica for partition [%s, %d]".format(topic, partitionId))
     val errorCode = ErrorMapping.NoError
     getReplica(topic, partitionId) match {
       case Some(replica) =>
         replicaFetcherManager.removeFetcher(topic, partitionId)
         /* TODO: handle deleteLog in a better way */
-        //logManager.deleteLog(topic, partition)
+        //if (deletePartition)
+        //  logManager.deleteLog(topic, partition)
         leaderPartitionsLock synchronized {
           leaderPartitions -= replica.partition
         }

@@ -88,11 +88,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     trace("Handling stop replica request " + stopReplicaRequest)
 
     val responseMap = new HashMap[(String, Int), Short]
-
     for((topic, partitionId) <- stopReplicaRequest.partitions) {
-      val errorCode = replicaManager.stopReplica(topic, partitionId)
+      val errorCode = replicaManager.stopReplica(topic, partitionId, stopReplicaRequest.deletePartitions)
       responseMap.put((topic, partitionId), errorCode)
     }
+
     val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.versionId, responseMap)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(stopReplicaResponse)))
   }
@@ -455,11 +455,20 @@ class KafkaApis(val requestChannel: RequestChannel,
      * When a request expires just answer it with whatever data is present
      */
     def expire(delayed: DelayedFetch) {
-      val topicData = readMessageSets(delayed.fetch)
-      val response = FetchResponse(FetchRequest.CurrentVersion, delayed.fetch.correlationId, topicData)
-      val fromFollower = delayed.fetch.isFromFollower
-      delayedRequestMetrics.recordDelayedFetchExpired(fromFollower)
-      requestChannel.sendResponse(new RequestChannel.Response(delayed.request, new FetchResponseSend(response)))
+      debug("Expiring fetch request %s.".format(delayed.fetch))
+      try {
+        val topicData = readMessageSets(delayed.fetch)
+        val response = FetchResponse(FetchRequest.CurrentVersion, delayed.fetch.correlationId, topicData)
+        val fromFollower = delayed.fetch.isFromFollower
+        delayedRequestMetrics.recordDelayedFetchExpired(fromFollower)
+        requestChannel.sendResponse(new RequestChannel.Response(delayed.request, new FetchResponseSend(response)))
+      }
+      catch {
+        case e1: LeaderNotAvailableException =>
+          debug("Leader changed before fetch request %s expired.".format(delayed.fetch))
+        case e2: UnknownTopicOrPartitionException =>
+          debug("Replica went offline before fetch request %s expired.".format(delayed.fetch))
+      }
     }
   }
 

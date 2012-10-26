@@ -650,7 +650,7 @@ object ZkUtils extends Logging {
    * or throws an exception if the broker dies before the query to zookeeper finishes
    * @param brokerId The broker id
    * @param zkClient The zookeeper client connection
-   * @returns An optional Broker object encapsulating the broker metadata
+   * @return An optional Broker object encapsulating the broker metadata
    */
   def getBrokerInfo(zkClient: ZkClient, brokerId: Int): Option[Broker] = {
     ZkUtils.readDataMaybeNull(zkClient, ZkUtils.BrokerIdsPath + "/" + brokerId)._1 match {

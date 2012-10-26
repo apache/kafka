@@ -25,7 +25,7 @@ abstract class AbstractFetcherManager(protected val name: String, numFetchers: I
     // map of (source brokerid, fetcher Id per source broker) => fetcher
   private val fetcherThreadMap = new mutable.HashMap[(Broker, Int), AbstractFetcherThread]
   private val mapLock = new Object
-  this.logIdent = "[" + name + "], "
+  this.logIdent = "[" + name + "] "
 
   private def getFetcherId(topic: String, partitionId: Int) : Int = {
     (topic.hashCode() + 31 * partitionId) % numFetchers

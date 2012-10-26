@@ -19,7 +19,6 @@ package kafka.controller
 import collection._
 import kafka.utils.{ZkUtils, Logging}
 import collection.JavaConversions._
-import kafka.api.LeaderAndIsr
 import java.util.concurrent.atomic.AtomicBoolean
 import org.I0Itec.zkclient.IZkChildListener
 import kafka.common.{TopicAndPartition, StateChangeFailedException}
@@ -75,7 +74,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
 
   /**
    * This API is invoked by the broker change controller callbacks and the startup API of the state machine
-   * @param brokerIds    The list of brokers that need to be transitioned to the target state
+   * @param replicas     The list of replicas (brokers) that need to be transitioned to the target state
    * @param targetState  The state that the replicas should be moved to
    * The controller's allLeaders cache should have been updated before this
    */
@@ -122,7 +121,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
         case NonExistentReplica =>
           assertValidPreviousStates(topic, partition, replicaId, List(OfflineReplica), targetState)
           // send stop replica command
-          brokerRequestBatch.addStopReplicaRequestForBrokers(List(replicaId), topic, partition)
+          brokerRequestBatch.addStopReplicaRequestForBrokers(List(replicaId), topic, partition, deletePartition = true)
           // remove this replica from the assigned replicas list for its partition
           val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
           controllerContext.partitionReplicaAssignment.put(topicAndPartition,
@@ -159,38 +158,38 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
         case OfflineReplica =>
           assertValidPreviousStates(topic, partition, replicaId, List(NewReplica, OnlineReplica), targetState)
           // As an optimization, the controller removes dead replicas from the ISR
-          var zookeeperPathUpdateSucceeded: Boolean = false
-          var newLeaderAndIsr: LeaderAndIsr = null
-          while(!zookeeperPathUpdateSucceeded) {
-            // refresh leader and isr from zookeeper again
-            val leaderAndIsrOpt = ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition)
-            leaderAndIsrOpt match {
-              case Some(leaderAndIsr) => // increment the leader epoch even if the ISR changes
-                newLeaderAndIsr = new LeaderAndIsr(leaderAndIsr.leader, leaderAndIsr.leaderEpoch + 1,
-                  leaderAndIsr.isr.filter(b => b != replicaId), leaderAndIsr.zkVersion + 1)
-                info("New leader and ISR for partition [%s, %d] is %s".format(topic, partition, newLeaderAndIsr.toString()))
-                // update the new leadership decision in zookeeper or retry
-                val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(zkClient,
-                  ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), newLeaderAndIsr.toString(),
-                  leaderAndIsr.zkVersion)
-                newLeaderAndIsr.zkVersion = newVersion
-                zookeeperPathUpdateSucceeded = updateSucceeded
-              case None => throw new StateChangeFailedException("Failed to change state of replica %d".format(replicaId) +
-                " for partition [%s, %d] since the leader and isr path in zookeeper is empty".format(topic, partition))
-            }
+          val currLeaderAndIsrOpt = ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition)
+          val leaderAndIsrIsEmpty: Boolean = currLeaderAndIsrOpt match {
+            case Some(currLeaderAndIsr) =>
+              if (currLeaderAndIsr.isr.contains(replicaId))
+                controller.removeReplicaFromIsr(topic, partition, replicaId) match {
+                  case Some(updatedLeaderAndIsr) =>
+                    // send the shrunk ISR state change request only to the leader
+                    brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(updatedLeaderAndIsr.leader),
+                                                                        topic, partition, updatedLeaderAndIsr,
+                                                                        replicaAssignment.size)
+                    replicaState.put((topic, partition, replicaId), OfflineReplica)
+                    info("Replica %d for partition [%s, %d] state changed to OfflineReplica"
+                                 .format(replicaId, topic, partition))
+                    info("Removed offline replica %d from ISR for partition [%s, %d]"
+                                 .format(replicaId, topic, partition))
+                    false
+                  case None =>
+                    true
+                }
+              else false
+            case None =>
+              true
           }
-          // send the shrunk ISR state change request only to the leader
-          brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(newLeaderAndIsr.leader),
-                                                              topic, partition, newLeaderAndIsr, replicaAssignment.size)
-          // update the local leader and isr cache
-          controllerContext.allLeaders.put(topicAndPartition, newLeaderAndIsr.leader)
-          replicaState.put((topic, partition, replicaId), OfflineReplica)
-          info("Replica %d for partition [%s, %d] state changed to OfflineReplica".format(replicaId, topic, partition))
-          info("Removed offline replica %d from ISR for partition [%s, %d]".format(replicaId, topic, partition))
+          if (leaderAndIsrIsEmpty)
+            throw new StateChangeFailedException(
+              "Failed to change state of replica %d for partition [%s, %d] since the leader and isr path in zookeeper is empty"
+              .format(replicaId, topic, partition))
       }
-    }catch {
-      case e => error("Error while changing state of replica %d for partition ".format(replicaId) +
-        "[%s, %d] to %s".format(topic, partition, targetState), e)
+    }
+    catch {
+      case t: Throwable => error("Error while changing state of replica %d for partition ".format(replicaId) +
+        "[%s, %d] to %s".format(topic, partition, targetState), t)
     }
   }
 
@@ -239,12 +238,11 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
           controllerContext.controllerLock synchronized {
             try {
               val curBrokerIds = currentBrokerList.map(_.toInt).toSet
-              val newBrokerIds = curBrokerIds -- controllerContext.liveBrokerIds
+              val newBrokerIds = curBrokerIds -- controllerContext.liveOrShuttingDownBrokerIds
               val newBrokers = newBrokerIds.map(ZkUtils.getBrokerInfo(zkClient, _)).filter(_.isDefined).map(_.get)
-              val deadBrokerIds = controllerContext.liveBrokerIds -- curBrokerIds
+              val deadBrokerIds = controllerContext.liveOrShuttingDownBrokerIds -- curBrokerIds
               controllerContext.liveBrokers = curBrokerIds.map(ZkUtils.getBrokerInfo(zkClient, _)).filter(_.isDefined).map(_.get)
-              controllerContext.liveBrokerIds = controllerContext.liveBrokers.map(_.id)
-              info("Newly added brokers: %s, deleted brokers: %s, all brokers: %s"
+              info("Newly added brokers: %s, deleted brokers: %s, all live brokers: %s"
                 .format(newBrokerIds.mkString(","), deadBrokerIds.mkString(","), controllerContext.liveBrokerIds.mkString(",")))
               newBrokers.foreach(controllerContext.controllerChannelManager.addBroker(_))
               deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker(_))

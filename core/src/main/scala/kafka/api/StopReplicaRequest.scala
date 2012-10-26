@@ -20,8 +20,11 @@ package kafka.api
 
 import java.nio._
 import kafka.api.ApiUtils._
+import kafka.utils.Logging
+import kafka.network.InvalidRequestException
 
-object StopReplicaRequest {
+
+object StopReplicaRequest extends Logging {
   val CurrentVersion = 1.shortValue()
   val DefaultClientId = ""
   val DefaultAckTimeout = 100
@@ -30,28 +33,38 @@ object StopReplicaRequest {
     val versionId = buffer.getShort
     val clientId = readShortString(buffer)
     val ackTimeoutMs = buffer.getInt
+    val deletePartitions = buffer.get match {
+      case 1 => true
+      case 0 => false
+      case x =>
+        throw new InvalidRequestException("Invalid byte %d in delete partitions field. (Assuming false.)".format(x))
+    }
     val topicPartitionPairCount = buffer.getInt
     val topicPartitionPairSet = new collection.mutable.HashSet[(String, Int)]()
-    for (i <- 0 until topicPartitionPairCount)
+    (1 to topicPartitionPairCount) foreach { _ =>
       topicPartitionPairSet.add(readShortString(buffer), buffer.getInt)
-    new StopReplicaRequest(versionId, clientId, ackTimeoutMs, topicPartitionPairSet.toSet)
+    }
+    StopReplicaRequest(versionId, clientId, ackTimeoutMs, deletePartitions, topicPartitionPairSet.toSet)
   }
 }
 
 case class StopReplicaRequest(versionId: Short,
                               clientId: String,
                               ackTimeoutMs: Int,
+                              deletePartitions: Boolean,
                               partitions: Set[(String, Int)])
         extends RequestOrResponse(Some(RequestKeys.StopReplicaKey)) {
-  def this(partitions: Set[(String, Int)]) = {
+
+  def this(deletePartitions: Boolean, partitions: Set[(String, Int)]) = {
     this(StopReplicaRequest.CurrentVersion, StopReplicaRequest.DefaultClientId, StopReplicaRequest.DefaultAckTimeout,
-        partitions)
+         deletePartitions, partitions)
   }
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     writeShortString(buffer, clientId)
     buffer.putInt(ackTimeoutMs)
+    buffer.put(if (deletePartitions) 1.toByte else 0.toByte)
     buffer.putInt(partitions.size)
     for ((topic, partitionId) <- partitions){
       writeShortString(buffer, topic)
@@ -60,9 +73,15 @@ case class StopReplicaRequest(versionId: Short,
   }
 
   def sizeInBytes(): Int = {
-    var size = 2 + (2 + clientId.length()) + 4 + 4
+    var size =
+      2 + /* versionId */
+      ApiUtils.shortStringLength(clientId) +
+      4 + /* ackTimeoutMs */
+      1 + /* deletePartitions */
+      4 /* partition count */
     for ((topic, partitionId) <- partitions){
-      size += (2 + topic.length()) + 4
+      size += (ApiUtils.shortStringLength(topic)) +
+              4 /* partition id */
     }
     size
   }
