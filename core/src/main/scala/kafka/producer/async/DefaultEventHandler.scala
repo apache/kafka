@@ -248,7 +248,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       val topicAndPartition = e._1
       val produceData = e._2
       val messages = new ListBuffer[Message]
-      produceData.map(p => messages.appendAll(p.getData))
+      produceData.foreach(p => messages.appendAll(p.getData))
       ( topicAndPartition,
         config.compressionCodec match {
           case NoCompressionCodec =>
