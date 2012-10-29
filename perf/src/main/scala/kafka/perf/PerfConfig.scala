@@ -22,10 +22,6 @@ import joptsimple.OptionParser
 
 class PerfConfig(args: Array[String]) {
   val parser = new OptionParser
-  val topicOpt = parser.accepts("topic", "REQUIRED: The topic to consume from.")
-    .withRequiredArg
-    .describedAs("topic")
-    .ofType(classOf[String])
   val numMessagesOpt = parser.accepts("messages", "The number of messages to send or consume")
     .withRequiredArg
     .describedAs("count")

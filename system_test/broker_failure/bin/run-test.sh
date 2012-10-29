@@ -450,7 +450,7 @@ start_background_producer() {
         $base_dir/bin/kafka-run-class.sh \
             kafka.perf.ProducerPerformance \
             --brokerinfo zk.connect=localhost:2181 \
-            --topic $topic \
+            --topics $topic \
             --messages $num_msg_per_batch \
             --message-size $message_size \
             --threads $num_producer_threads \
