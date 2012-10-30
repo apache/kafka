@@ -24,7 +24,7 @@ import kafka.utils._
 import java.util.concurrent._
 import atomic.AtomicBoolean
 import org.I0Itec.zkclient.ZkClient
-import kafka.controller.KafkaController
+import kafka.controller.{ControllerStat, KafkaController}
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
@@ -99,9 +99,19 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     replicaManager.startup()
     // start the controller
     kafkaController.startup()
+    // register metrics beans
+    registerStats()
     info("started")
   }
 
+  /**
+   *  Forces some dynamic jmx beans to be registered on server startup.
+   */
+  private def registerStats() {
+    BrokerTopicStat.getBrokerAllTopicStat()
+    ControllerStat.offlinePartitionRate
+    ControllerStat.uncleanLeaderElectionRate
+  }
 
   /**
    * Shutdown API for shutting down a single instance of the Kafka server.
