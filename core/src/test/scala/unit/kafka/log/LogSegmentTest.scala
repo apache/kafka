@@ -18,7 +18,7 @@ class LogSegmentTest extends JUnit3Suite {
     val ms = new FileMessageSet(msFile)
     val idxFile = TestUtils.tempFile()
     idxFile.delete()
-    val idx = new OffsetIndex(idxFile, offset, 100)
+    val idx = new OffsetIndex(idxFile, offset, 1000)
     val seg = new LogSegment(ms, idx, offset, 10, SystemTime)
     segments += seg
     seg
@@ -86,12 +86,31 @@ class LogSegmentTest extends JUnit3Suite {
   @Test
   def testTruncate() {
     val seg = createSegment(40)
-    val ms = messages(50, "hello", "there", "you")
-    seg.append(50, ms)
-    seg.truncateTo(51)
-    val read = seg.read(50, maxSize = 1000, None)
-    assertEquals(1, read.size)
-    assertEquals(ms.head, read.head)
+    var offset = 40
+    for(i <- 0 until 30) {
+      val ms1 = messages(offset, "hello")
+      seg.append(offset, ms1)
+      val ms2 = messages(offset+1, "hello")
+      seg.append(offset+1, ms2)
+      // check that we can read back both messages
+      val read = seg.read(offset, 10000, None)
+      assertEquals(List(ms1.head, ms2.head), read.toList)
+      // now truncate off the last message
+      seg.truncateTo(offset + 1)
+      val read2 = seg.read(offset, 10000, None)
+      assertEquals(1, read2.size)
+      assertEquals(ms1.head, read2.head)
+      offset += 1
+    }
+  }
+  
+  @Test
+  def testTruncateFull() {
+    // test the case where we fully truncate the log
+    val seg = createSegment(40)
+    seg.append(40, messages(40, "hello", "there"))
+    seg.truncateTo(0)
+    seg.append(40, messages(40, "hello", "there"))    
   }
   
   @Test

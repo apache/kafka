@@ -25,7 +25,7 @@ import java.util.concurrent.atomic._
 import kafka.utils._
 
 /**
- * An index that maps logical offsets to physical file locations for a particular log segment. This index may be sparse:
+ * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
  * that is it may not hold an entry for all messages in the log.
  * 
  * The index is stored in a file that is pre-allocated to hold a fixed maximum number of 8-byte entries.
@@ -94,20 +94,20 @@ class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) 
   var lastOffset = readLastOffset()
   
   /**
-   * The last logical offset written to the index
+   * The last offset written to the index
    */
   private def readLastOffset(): Long = {
     val offset = 
       size.get match {
         case 0 => 0
-        case s => logical(this.mmap, s-1)
+        case s => relativeOffset(this.mmap, s-1)
       }
     baseOffset + offset
   }
 
   /**
    * Find the largest offset less than or equal to the given targetOffset 
-   * and return a pair holding this logical offset and it's corresponding physical file position.
+   * and return a pair holding this offset and it's corresponding physical file position.
    * If the target offset is smaller than the least entry in the index (or the index is empty),
    * the pair (baseOffset, 0) is returned.
    */
@@ -117,7 +117,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) 
     if(slot == -1)
       OffsetPosition(baseOffset, 0)
     else
-      OffsetPosition(baseOffset + logical(idx, slot), physical(idx, slot))
+      OffsetPosition(baseOffset + relativeOffset(idx, slot), physical(idx, slot))
   }
   
   /**
@@ -127,14 +127,14 @@ class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) 
    */
   private def indexSlotFor(idx: ByteBuffer, targetOffset: Long): Int = {
     // we only store the difference from the baseoffset so calculate that
-    val relativeOffset = targetOffset - baseOffset
+    val relOffset = targetOffset - baseOffset
     
     // check if the index is empty
     if(entries == 0)
       return -1
     
     // check if the target offset is smaller than the least offset
-    if(logical(idx, 0) > relativeOffset)
+    if(relativeOffset(idx, 0) > relOffset)
       return -1
       
     // binary search for the entry
@@ -142,10 +142,10 @@ class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) 
     var hi = entries-1
     while(lo < hi) {
       val mid = ceil(hi/2.0 + lo/2.0).toInt
-      val found = logical(idx, mid)
-      if(found == relativeOffset)
+      val found = relativeOffset(idx, mid)
+      if(found == relOffset)
         return mid
-      else if(found < relativeOffset)
+      else if(found < relOffset)
         lo = mid
       else
         hi = mid - 1
@@ -153,8 +153,8 @@ class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) 
     lo
   }
   
-  /* return the nth logical offset relative to the base offset */
-  private def logical(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * 8)
+  /* return the nth offset relative to the base offset */
+  private def relativeOffset(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * 8)
   
   /* return the nth physical offset */
   private def physical(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * 8 + 4)
@@ -166,23 +166,23 @@ class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) 
     if(n >= entries)
       throw new IllegalArgumentException("Attempt to fetch the %dth entry from an index of size %d.".format(n, entries))
     val idx = mmap.duplicate
-    OffsetPosition(logical(idx, n), physical(idx, n))
+    OffsetPosition(relativeOffset(idx, n), physical(idx, n))
   }
   
   /**
    * Append entry for the given offset/location pair to the index. This entry must have a larger offset than all subsequent entries.
    */
-  def append(logicalOffset: Long, position: Int) {
+  def append(offset: Long, position: Int) {
     this synchronized {
       if(isFull)
         throw new IllegalStateException("Attempt to append to a full index (size = " + size + ").")
-      if(size.get > 0 && logicalOffset <= lastOffset)
-        throw new IllegalArgumentException("Attempt to append an offset (" + logicalOffset + ") no larger than the last offset appended (" + lastOffset + ").")
-      debug("Adding index entry %d => %d to %s.".format(logicalOffset, position, file.getName))
-      this.mmap.putInt((logicalOffset - baseOffset).toInt)
+      if(size.get > 0 && offset <= lastOffset)
+        throw new IllegalArgumentException("Attempt to append an offset (%d) to position %d no larger than the last offset appended (%d).".format(offset, entries, lastOffset))
+      debug("Adding index entry %d => %d to %s.".format(offset, position, file.getName))
+      this.mmap.putInt((offset - baseOffset).toInt)
       this.mmap.putInt(position)
       this.size.incrementAndGet()
-      this.lastOffset = logicalOffset
+      this.lastOffset = offset
     }
   }
   
@@ -213,7 +213,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) 
       val newEntries = 
         if(slot < 0)
           0
-        else if(logical(idx, slot) == offset)
+        else if(relativeOffset(idx, slot) == offset - baseOffset)
           slot
         else
           slot + 1

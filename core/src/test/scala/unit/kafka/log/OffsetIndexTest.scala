@@ -115,18 +115,30 @@ class OffsetIndexTest extends JUnitSuite {
     for(i <- 1 until 10)
       idx.append(i, i)
       
+    // now check the last offset after various truncate points and validate that we can still append to the index.      
     idx.truncateTo(12)
     assertEquals("Index should be unchanged by truncate past the end", OffsetPosition(9, 9), idx.lookup(10))
+    assertEquals("9 should be the last entry in the index", 9, idx.lastOffset)
+    
+    idx.append(10, 10)
     idx.truncateTo(10)
     assertEquals("Index should be unchanged by truncate at the end", OffsetPosition(9, 9), idx.lookup(10))
+    assertEquals("9 should be the last entry in the index", 9, idx.lastOffset)
+    idx.append(10, 10)
+    
     idx.truncateTo(9)
     assertEquals("Index should truncate off last entry", OffsetPosition(8, 8), idx.lookup(10))
+    assertEquals("8 should be the last entry in the index", 8, idx.lastOffset)
+    idx.append(9, 9)
+    
     idx.truncateTo(5)
     assertEquals("4 should be the last entry in the index", OffsetPosition(4, 4), idx.lookup(10))
     assertEquals("4 should be the last entry in the index", 4, idx.lastOffset)
+    idx.append(5, 5)
     
     idx.truncate()
     assertEquals("Full truncation should leave no entries", 0, idx.entries())
+    idx.append(0, 0)
   }
   
   def assertWriteFails[T](message: String, idx: OffsetIndex, offset: Int, klass: Class[T]) {
