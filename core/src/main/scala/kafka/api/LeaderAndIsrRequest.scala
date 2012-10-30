@@ -23,6 +23,7 @@ import kafka.utils._
 import kafka.api.ApiUtils._
 import collection.mutable.Map
 import collection.mutable.HashMap
+import kafka.cluster.Broker
 
 
 object LeaderAndIsr {
@@ -92,7 +93,13 @@ object LeaderAndIsrRequest {
 
       partitionStateInfos.put((topic, partition), partitionStateInfo)
     }
-    new LeaderAndIsrRequest(versionId, clientId, ackTimeoutMs, partitionStateInfos)
+
+    val leadersCount = buffer.getInt
+    var leaders = Set[Broker]()
+    for (i <- 0 until leadersCount)
+      leaders += Broker.readFrom(buffer)
+
+    new LeaderAndIsrRequest(versionId, clientId, ackTimeoutMs, partitionStateInfos, leaders)
   }
 }
 
@@ -100,11 +107,12 @@ object LeaderAndIsrRequest {
 case class LeaderAndIsrRequest (versionId: Short,
                                 clientId: String,
                                 ackTimeoutMs: Int,
-                                partitionStateInfos: Map[(String, Int), PartitionStateInfo])
+                                partitionStateInfos: Map[(String, Int), PartitionStateInfo],
+                                leaders: Set[Broker])
         extends RequestOrResponse(Some(RequestKeys.LeaderAndIsrKey)) {
 
-  def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo]) = {
-    this(LeaderAndIsrRequest.CurrentVersion, LeaderAndIsrRequest.DefaultClientId, LeaderAndIsrRequest.DefaultAckTimeout, partitionStateInfos)
+  def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo], liveBrokers: Set[Broker]) = {
+    this(LeaderAndIsrRequest.CurrentVersion, LeaderAndIsrRequest.DefaultClientId, LeaderAndIsrRequest.DefaultAckTimeout, partitionStateInfos, liveBrokers)
   }
 
   def writeTo(buffer: ByteBuffer) {
@@ -117,12 +125,17 @@ case class LeaderAndIsrRequest (versionId: Short,
       buffer.putInt(key._2)
       value.writeTo(buffer)
     }
+    buffer.putInt(leaders.size)
+    leaders.foreach(_.writeTo(buffer))
   }
 
   def sizeInBytes(): Int = {
     var size = 1 + 2 + (2 + clientId.length) + 4 + 4
     for((key, value) <- partitionStateInfos)
       size += (2 + key._1.length) + 4 + value.sizeInBytes
+    size += 4
+    for(broker <- leaders)
+      size += broker.sizeInBytes
     size
   }
 }

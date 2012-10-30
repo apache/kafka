@@ -24,7 +24,6 @@ import java.nio.channels._
 import java.io.{InputStream, ByteArrayOutputStream, DataOutputStream}
 import java.util.concurrent.atomic.AtomicLong
 import kafka.utils.IteratorTemplate
-import kafka.common.InvalidMessageSizeException
 
 object ByteBufferMessageSet {
   

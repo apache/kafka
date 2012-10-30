@@ -86,7 +86,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         partitionAndState => handleStateChange(partitionAndState._1.topic, partitionAndState._1.partition, OnlinePartition,
                                                offlinePartitionSelector)
       }
-      brokerRequestBatch.sendRequestsToBrokers()
+      brokerRequestBatch.sendRequestsToBrokers(controllerContext.liveBrokers)
     }catch {
       case e => error("Error while moving some partitions to the online state", e)
     }
@@ -105,7 +105,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       partitions.foreach { topicAndPartition =>
         handleStateChange(topicAndPartition.topic, topicAndPartition.partition, targetState, leaderSelector)
       }
-      brokerRequestBatch.sendRequestsToBrokers()
+      brokerRequestBatch.sendRequestsToBrokers(controllerContext.liveBrokers)
     }catch {
       case e => error("Error while moving some partitions to %s state".format(targetState), e)
     }

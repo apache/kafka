@@ -183,11 +183,13 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
     }
   }
 
-  def sendRequestsToBrokers() {
+  def sendRequestsToBrokers(liveBrokers: Set[Broker]) {
     leaderAndIsrRequestMap.foreach { m =>
       val broker = m._1
       val partitionStateInfos = m._2
-      val leaderAndIsrRequest = new LeaderAndIsrRequest(partitionStateInfos)
+      val leaderIds = partitionStateInfos.map(_._2.leaderAndIsr.leader).toSet
+      val leaders = liveBrokers.filter(b => leaderIds.contains(b.id))
+      val leaderAndIsrRequest = new LeaderAndIsrRequest(partitionStateInfos, leaders)
       debug("The leaderAndIsr request sent to broker %d is %s".format(broker, leaderAndIsrRequest))
       sendRequest(broker, leaderAndIsrRequest, null)
     }

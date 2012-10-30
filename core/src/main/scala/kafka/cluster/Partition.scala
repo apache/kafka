@@ -112,73 +112,72 @@ class Partition(val topic: String,
 
 
   /**
-   *  If the leaderEpoch of the incoming request is higher than locally cached epoch, make it the new leader of follower to the new leader.
-   */
-  def makeLeaderOrFollower(topic: String, partitionId: Int, leaderAndIsr: LeaderAndIsr, isMakingLeader: Boolean): Boolean = {
-    leaderIsrUpdateLock synchronized {
-      if (leaderEpoch >= leaderAndIsr.leaderEpoch){
-        info("Current leader epoch [%d] is larger or equal to the requested leader epoch [%d], discard the become %s request"
-          .format(leaderEpoch, leaderAndIsr.leaderEpoch, if(isMakingLeader) "leader" else "follower"))
-        return false
-      }
-      if(isMakingLeader)
-        makeLeader(topic, partitionId, leaderAndIsr)
-      else
-        makeFollower(topic, partitionId, leaderAndIsr)
-      true
-    }
-  }
-
-  /**
    *  If the leaderEpoch of the incoming request is higher than locally cached epoch, make the local replica the leader in the following steps.
    *  1. stop the existing replica fetcher
    *  2. create replicas in ISR if needed (the ISR expand/shrink logic needs replicas in ISR to be available)
    *  3. reset LogEndOffset for remote replicas (there could be old LogEndOffset from the time when this broker was the leader last time)
    *  4. set the new leader and ISR
    */
-  private def makeLeader(topic: String, partitionId: Int, leaderAndIsr: LeaderAndIsr) {
-    trace("Started to become leader at the request %s".format(leaderAndIsr.toString()))
-    // stop replica fetcher thread, if any
-    replicaFetcherManager.removeFetcher(topic, partitionId)
+  def makeLeader(topic: String, partitionId: Int, leaderAndIsr: LeaderAndIsr): Boolean = {
+    leaderIsrUpdateLock synchronized {
+      if (leaderEpoch >= leaderAndIsr.leaderEpoch){
+        info("Current leader epoch [%d] is larger or equal to the requested leader epoch [%d], discard the become leader request"
+          .format(leaderEpoch, leaderAndIsr.leaderEpoch))
+        return false
+      }
+      trace("Started to become leader at the request %s".format(leaderAndIsr.toString()))
+      // stop replica fetcher thread, if any
+      replicaFetcherManager.removeFetcher(topic, partitionId)
 
-    val newInSyncReplicas = leaderAndIsr.isr.map(r => getOrCreateReplica(r)).toSet
-    // reset LogEndOffset for remote replicas
-    assignedReplicas.foreach(r => if (r.brokerId != localBrokerId) r.logEndOffset = ReplicaManager.UnknownLogEndOffset)
-    inSyncReplicas = newInSyncReplicas
-    leaderEpoch = leaderAndIsr.leaderEpoch
-    zkVersion = leaderAndIsr.zkVersion
-    leaderReplicaIdOpt = Some(localBrokerId)
-    // we may need to increment high watermark since ISR could be down to 1
-    maybeIncrementLeaderHW(getReplica().get)
+      val newInSyncReplicas = leaderAndIsr.isr.map(r => getOrCreateReplica(r)).toSet
+      // reset LogEndOffset for remote replicas
+      assignedReplicas.foreach(r => if (r.brokerId != localBrokerId) r.logEndOffset = ReplicaManager.UnknownLogEndOffset)
+      inSyncReplicas = newInSyncReplicas
+      leaderEpoch = leaderAndIsr.leaderEpoch
+      zkVersion = leaderAndIsr.zkVersion
+      leaderReplicaIdOpt = Some(localBrokerId)
+      // we may need to increment high watermark since ISR could be down to 1
+      maybeIncrementLeaderHW(getReplica().get)
+      true
+    }
   }
 
   /**
+   *  If the leaderEpoch of the incoming request is higher than locally cached epoch, make the local replica the follower in the following steps.
    *  1. stop any existing fetcher on this partition from the local replica
    *  2. make sure local replica exists and truncate the log to high watermark
    *  3. set the leader and set ISR to empty
    *  4. start a fetcher to the new leader
    */
-  private def makeFollower(topic: String, partitionId: Int, leaderAndIsr: LeaderAndIsr) = {
-    trace("Started to become follower at the request %s".format(leaderAndIsr.toString()))
-    val newLeaderBrokerId: Int = leaderAndIsr.leader
-    info("Starting the follower state transition to follow leader %d for topic %s partition %d"
-      .format(newLeaderBrokerId, topic, partitionId))
-    ZkUtils.getBrokerInfo(zkClient, newLeaderBrokerId) match {
-      case Some(leaderBroker) =>
-        // stop fetcher thread to previous leader
-        replicaFetcherManager.removeFetcher(topic, partitionId)
-        // make sure local replica exists
-        val localReplica = getOrCreateReplica()
-        localReplica.log.get.truncateTo(localReplica.highWatermark)
-        inSyncReplicas = Set.empty[Replica]
-        leaderEpoch = leaderAndIsr.leaderEpoch
-        zkVersion = leaderAndIsr.zkVersion
-        leaderReplicaIdOpt = Some(newLeaderBrokerId)
-        // start fetcher thread to current leader
-        replicaFetcherManager.addFetcher(topic, partitionId, localReplica.logEndOffset, leaderBroker)
-      case None => // leader went down
-        warn("Aborting become follower state change on %d since leader %d for ".format(localBrokerId, newLeaderBrokerId) +
-        " topic %s partition %d became unavailble during the state change operation".format(topic, partitionId))
+  def makeFollower(topic: String, partitionId: Int, leaderAndIsr: LeaderAndIsr, liveBrokers: Set[Broker]): Boolean = {
+    leaderIsrUpdateLock synchronized {
+      if (leaderEpoch >= leaderAndIsr.leaderEpoch){
+        info("Current leader epoch [%d] is larger or equal to the requested leader epoch [%d], discard the become follwer request"
+          .format(leaderEpoch, leaderAndIsr.leaderEpoch))
+        return false
+      }
+      trace("Started to become follower at the request %s".format(leaderAndIsr.toString()))
+      val newLeaderBrokerId: Int = leaderAndIsr.leader
+      info("Starting the follower state transition to follow leader %d for topic %s partition %d"
+        .format(newLeaderBrokerId, topic, partitionId))
+      liveBrokers.find(_.id == newLeaderBrokerId) match {
+        case Some(leaderBroker) =>
+          // stop fetcher thread to previous leader
+          replicaFetcherManager.removeFetcher(topic, partitionId)
+          // make sure local replica exists
+          val localReplica = getOrCreateReplica()
+          localReplica.log.get.truncateTo(localReplica.highWatermark)
+          inSyncReplicas = Set.empty[Replica]
+          leaderEpoch = leaderAndIsr.leaderEpoch
+          zkVersion = leaderAndIsr.zkVersion
+          leaderReplicaIdOpt = Some(newLeaderBrokerId)
+          // start fetcher thread to current leader
+          replicaFetcherManager.addFetcher(topic, partitionId, localReplica.logEndOffset, leaderBroker)
+        case None => // leader went down
+          warn("Aborting become follower state change on %d since leader %d for ".format(localBrokerId, newLeaderBrokerId) +
+          " topic %s partition %d became unavailble during the state change operation".format(topic, partitionId))
+      }
+      true
     }
   }
 

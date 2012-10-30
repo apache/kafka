@@ -16,7 +16,7 @@
  */
 package kafka.server
 
-import kafka.cluster.{Partition, Replica}
+import kafka.cluster.{Broker, Partition, Replica}
 import collection._
 import org.I0Itec.zkclient.ZkClient
 import java.util.concurrent.atomic.AtomicBoolean
@@ -173,7 +173,7 @@ class ReplicaManager(val config: KafkaConfig,
         if(requestedLeaderId == config.brokerId)
           makeLeader(topic, partitionId, partitionStateInfo)
         else
-          makeFollower(topic, partitionId, partitionStateInfo)
+          makeFollower(topic, partitionId, partitionStateInfo, leaderAndISRRequest.leaders)
       } catch {
         case e =>
           error("Error processing leaderAndISR request %s".format(leaderAndISRRequest), e)
@@ -201,7 +201,7 @@ class ReplicaManager(val config: KafkaConfig,
     val leaderAndIsr = partitionStateInfo.leaderAndIsr
     info("Becoming Leader for topic [%s] partition [%d]".format(topic, partitionId))
     val partition = getOrCreatePartition(topic, partitionId, partitionStateInfo.replicationFactor)
-    if (partition.makeLeaderOrFollower(topic, partitionId, leaderAndIsr, true)) {
+    if (partition.makeLeader(topic, partitionId, leaderAndIsr)) {
       // also add this partition to the list of partitions for which the leader is the current broker
       leaderPartitionsLock synchronized {
         leaderPartitions += partition
@@ -210,14 +210,14 @@ class ReplicaManager(val config: KafkaConfig,
     info("Completed the leader state transition for topic %s partition %d".format(topic, partitionId))
   }
 
-  private def makeFollower(topic: String, partitionId: Int, partitionStateInfo: PartitionStateInfo) {
+  private def makeFollower(topic: String, partitionId: Int, partitionStateInfo: PartitionStateInfo, liveBrokers: Set[Broker]) {
     val leaderAndIsr = partitionStateInfo.leaderAndIsr
     val leaderBrokerId: Int = leaderAndIsr.leader
     info("Starting the follower state transition to follow leader %d for topic %s partition %d"
                  .format(leaderBrokerId, topic, partitionId))
 
     val partition = getOrCreatePartition(topic, partitionId, partitionStateInfo.replicationFactor)
-    if (partition.makeLeaderOrFollower(topic, partitionId, leaderAndIsr, false)) {
+    if (partition.makeFollower(topic, partitionId, leaderAndIsr, liveBrokers)) {
       // remove this replica's partition from the ISR expiration queue
       leaderPartitionsLock synchronized {
         leaderPartitions -= partition
