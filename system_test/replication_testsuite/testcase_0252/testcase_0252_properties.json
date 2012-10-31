@@ -64,7 +64,7 @@
       "message-size": "500",
       "message": "100",
       "request-num-acks": "-1",
-      "async":"true",
+      "sync":"false",
       "log_filename": "producer_performance.log",
       "config_filename": "producer_performance.properties"
     },

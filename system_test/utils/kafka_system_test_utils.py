@@ -821,7 +821,16 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
     messageSize    = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "message-size")
     noMsgPerBatch  = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "message")
     requestNumAcks = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "request-num-acks")
-    asyncMode      = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "async")
+    syncMode       = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "sync")
+    retryBackoffMs = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "producer-retry-backoff-ms")
+    numOfRetries   = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "producer-num-retries")
+
+    # for optional properties in testcase_xxxx_properties.json,
+    # check the length of returned value for those properties:
+    if len(retryBackoffMs) == 0:      # no setting for "producer-retry-backoff-ms"
+        retryBackoffMs     =  "100"   # default
+    if len(numOfRetries)   == 0:      # no setting for "producer-num-retries"
+        numOfRetries       =  "3"     # default
 
     brokerListStr  = ""
     if clusterName == "source":
@@ -843,8 +852,8 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
     producerSleepSec = int(testcaseEnv.testcaseArgumentsDict["sleep_seconds_between_producer_calls"])
 
     boolArgumentsStr = ""
-    if asyncMode.lower() == "true":
-        boolArgumentsStr = boolArgumentsStr + " --async"
+    if syncMode.lower() == "true":
+        boolArgumentsStr = boolArgumentsStr + " --sync"
 
     # keep calling producer until signaled to stop by:
     # testcaseEnv.userDefinedEnvVarDict["stopBackgroundProducer"]
@@ -869,6 +878,8 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
                        "--compression-codec " + compCodec,
                        "--message-size " + messageSize,
                        "--request-num-acks " + requestNumAcks,
+                       "--producer-retry-backoff-ms " + retryBackoffMs,
+                       "--producer-num-retries " + numOfRetries,
                        "--csv-reporter-enabled",
                        "--metrics-dir " + get_testcase_config_log_dir_pathname(testcaseEnv, "producer_performance", entityId, "metrics"),
                        boolArgumentsStr,
