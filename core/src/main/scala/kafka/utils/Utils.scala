@@ -226,22 +226,28 @@ object Utils extends Logging {
   def rm(file: String): Unit = rm(new File(file))
   
   /**
+   * Recursively delete the list of files/directories and any subfiles (if any exist)
+   * @param a sequence of files to be deleted
+   */
+  def rm(files: Seq[String]): Unit = files.map(f => rm(new File(f)))
+  
+  /**
    * Recursively delete the given file/directory and any subfiles (if any exist)
    * @param file The root file at which to begin deleting
    */
-  def rm(file: File): Unit = {
-    if(file == null) {
-      return
-    } else if(file.isDirectory) {
-      val files = file.listFiles()
-      if(files != null) {
-        for(f <- files)
-          rm(f)
-      }
-      file.delete()
-    } else {
-      file.delete()
-    }
+  def rm(file: File) {
+	if(file == null) {
+	  return
+	} else if(file.isDirectory) {
+	  val files = file.listFiles()
+	  if(files != null) {
+	    for(f <- files)
+	      rm(f)
+	  }
+	  file.delete()
+	} else {
+	  file.delete()
+	}
   }
   
   /**

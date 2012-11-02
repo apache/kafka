@@ -45,8 +45,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   val message = new Message("hello".getBytes())
 
   var producer: Producer[Int, Message] = null
-  var hwFile1: HighwaterMarkCheckpoint = new HighwaterMarkCheckpoint(configProps1.logDir)
-  var hwFile2: HighwaterMarkCheckpoint = new HighwaterMarkCheckpoint(configProps2.logDir)
+  var hwFile1: HighwaterMarkCheckpoint = new HighwaterMarkCheckpoint(configProps1.logDirs(0))
+  var hwFile2: HighwaterMarkCheckpoint = new HighwaterMarkCheckpoint(configProps2.logDirs(0))
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 
   def testHWCheckpointNoFailuresSingleLogSegment {
@@ -83,7 +83,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(numMessages, leaderHW)
     val followerHW = hwFile2.read(topic, 0)
     assertEquals(numMessages, followerHW)
-    servers.foreach(server => { server.shutdown(); Utils.rm(server.config.logDir)})
+    servers.foreach(server => { server.shutdown(); Utils.rm(server.config.logDirs(0))})
   }
 
   def testHWCheckpointWithFailuresSingleLogSegment {
@@ -148,7 +148,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer.close()
     assertEquals(hw, hwFile1.read(topic, 0))
     assertEquals(hw, hwFile2.read(topic, 0))
-    servers.foreach(server => Utils.rm(server.config.logDir))
+    servers.foreach(server => Utils.rm(server.config.logDirs))
   }
 
   def testHWCheckpointNoFailuresMultipleLogSegments {
@@ -165,8 +165,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     server2 = TestUtils.createServer(configs.last)
     servers ++= List(server1, server2)
 
-    hwFile1 = new HighwaterMarkCheckpoint(server1.config.logDir)
-    hwFile2 = new HighwaterMarkCheckpoint(server2.config.logDir)
+    hwFile1 = new HighwaterMarkCheckpoint(server1.config.logDirs(0))
+    hwFile2 = new HighwaterMarkCheckpoint(server2.config.logDirs(0))
 
     val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
     producerProps.put("producer.request.timeout.ms", "1000")
@@ -193,7 +193,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(hw, leaderHW)
     val followerHW = hwFile2.read(topic, 0)
     assertEquals(hw, followerHW)
-    servers.foreach(server => Utils.rm(server.config.logDir))
+    servers.foreach(server => Utils.rm(server.config.logDirs))
   }
 
   def testHWCheckpointWithFailuresMultipleLogSegments {
@@ -210,8 +210,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     server2 = TestUtils.createServer(configs.last)
     servers ++= List(server1, server2)
 
-    hwFile1 = new HighwaterMarkCheckpoint(server1.config.logDir)
-    hwFile2 = new HighwaterMarkCheckpoint(server2.config.logDir)
+    hwFile1 = new HighwaterMarkCheckpoint(server1.config.logDirs(0))
+    hwFile2 = new HighwaterMarkCheckpoint(server2.config.logDirs(0))
 
     val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
     producerProps.put("producer.request.timeout.ms", "1000")
@@ -263,7 +263,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer.close()
     assertEquals(hw, hwFile1.read(topic, 0))
     assertEquals(hw, hwFile2.read(topic, 0))
-    servers.foreach(server => Utils.rm(server.config.logDir))
+    servers.foreach(server => Utils.rm(server.config.logDirs))
   }
 
   private def sendMessages(n: Int = 1) {

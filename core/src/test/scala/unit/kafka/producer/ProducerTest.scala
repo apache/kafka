@@ -79,8 +79,8 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     server1.awaitShutdown()
     server2.shutdown
     server2.awaitShutdown()
-    Utils.rm(server1.config.logDir)
-    Utils.rm(server2.config.logDir)
+    Utils.rm(server1.config.logDirs)
+    Utils.rm(server2.config.logDirs)
     super.tearDown()
   }
 

@@ -37,7 +37,6 @@ class Partition(val topic: String,
   private val localBrokerId = replicaManager.config.brokerId
   private val logManager = replicaManager.logManager
   private val replicaFetcherManager = replicaManager.replicaFetcherManager
-  private val highwaterMarkCheckpoint = replicaManager.highWatermarkCheckpoint
   private val zkClient = replicaManager.zkClient
   var leaderReplicaIdOpt: Option[Int] = None
   var inSyncReplicas: Set[Replica] = Set.empty[Replica]
@@ -69,8 +68,8 @@ class Partition(val topic: String,
       case None =>
         if (isReplicaLocal(replicaId)) {
           val log = logManager.getOrCreateLog(topic, partitionId)
-          val localReplica = new Replica(replicaId, this, time,
-            highwaterMarkCheckpoint.read(topic, partitionId).min(log.logEndOffset), Some(log))
+          val offset = replicaManager.highWatermarkCheckpoints(log.dir.getParent).read(topic, partitionId).min(log.logEndOffset)
+          val localReplica = new Replica(replicaId, this, time, offset, Some(log))
           addReplicaIfNotExists(localReplica)
         }
         else {

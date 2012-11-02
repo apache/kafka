@@ -22,6 +22,8 @@ import scala.collection._
 
 class VerifiableProperties(val props: Properties) extends Logging {
   private val referenceSet = mutable.HashSet[String]()
+  
+  def this() = this(new Properties)
 
   def containsKey(name: String): Boolean = {
     props.containsKey(name)
@@ -185,4 +187,6 @@ class VerifiableProperties(val props: Properties) extends Logging {
         info("Property %s is overridden to %s".format(key, props.getProperty(key)))
     }
   }
+  
+  override def toString(): String = props.toString
 }

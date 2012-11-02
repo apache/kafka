@@ -17,6 +17,7 @@
 package kafka.server
 
 import kafka.utils.Logging
+import kafka.common._
 import java.util.concurrent.locks.ReentrantLock
 import java.io._
 
@@ -40,7 +41,7 @@ class HighwaterMarkCheckpoint(val path: String) extends Logging {
   private val hwFileLock = new ReentrantLock()
   // recover from previous tmp file, if required
 
-  def write(highwaterMarksPerPartition: Map[(String, Int), Long]) {
+  def write(highwaterMarksPerPartition: Map[TopicAndPartition, Long]) {
     hwFileLock.lock()
     try {
       // write to temp file and then swap with the highwatermark file
@@ -56,9 +57,7 @@ class HighwaterMarkCheckpoint(val path: String) extends Logging {
       hwFileWriter.newLine()
 
       highwaterMarksPerPartition.foreach { partitionAndHw =>
-        val topic = partitionAndHw._1._1
-        val partitionId = partitionAndHw._1._2
-        hwFileWriter.write("%s %s %s".format(topic, partitionId, partitionAndHw._2))
+        hwFileWriter.write("%s %s %s".format(partitionAndHw._1.topic, partitionAndHw._1.partition, partitionAndHw._2))
         hwFileWriter.newLine()
       }
       hwFileWriter.flush()
@@ -77,9 +76,10 @@ class HighwaterMarkCheckpoint(val path: String) extends Logging {
     hwFileLock.lock()
     try {
       hwFile.length() match {
-        case 0 => warn("No previously checkpointed highwatermark value found for topic %s ".format(topic) +
-          "partition %d. Returning 0 as the highwatermark".format(partition))
-        0L
+        case 0 => 
+          warn("No previously checkpointed highwatermark value found for topic %s ".format(topic) +
+               "partition %d. Returning 0 as the highwatermark".format(partition))
+          0L
         case _ =>
           val hwFileReader = new BufferedReader(new FileReader(hwFile))
           val version = hwFileReader.readLine().toShort
@@ -95,17 +95,18 @@ class HighwaterMarkCheckpoint(val path: String) extends Logging {
                   // find the index of partition
                   val partitionIndex = nextHwEntry.indexOf(partitionId)
                   val topic = nextHwEntry.substring(0, partitionIndex-1)
-                  ((topic, partitionId.toInt) -> highwaterMark)
+                  (TopicAndPartition(topic, partitionId.toInt) -> highwaterMark)
                 }
               hwFileReader.close()
-              val hwOpt = partitionHighWatermarks.toMap.get((topic, partition))
+              val hwOpt = partitionHighWatermarks.toMap.get(TopicAndPartition(topic, partition))
               hwOpt match {
-                case Some(hw) => debug("Read hw %d for topic %s partition %d from highwatermark checkpoint file"
-                                        .format(hw, topic, partition))
+                case Some(hw) => 
+                  debug("Read hw %d for topic %s partition %d from highwatermark checkpoint file".format(hw, topic, partition))
                   hw
-                case None => warn("No previously checkpointed highwatermark value found for topic %s ".format(topic) +
-                  "partition %d. Returning 0 as the highwatermark".format(partition))
-                0L
+                case None => 
+                  warn("No previously checkpointed highwatermark value found for topic %s ".format(topic) +
+                       "partition %d. Returning 0 as the highwatermark".format(partition))
+                  0L
               }
             case _ => fatal("Unrecognized version of the highwatermark checkpoint file " + version)
             System.exit(1)

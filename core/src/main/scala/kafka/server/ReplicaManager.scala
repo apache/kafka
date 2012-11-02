@@ -25,7 +25,7 @@ import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 import java.util.concurrent.TimeUnit
-import kafka.common.{ReplicaNotAvailableException, UnknownTopicOrPartitionException, LeaderNotAvailableException, ErrorMapping}
+import kafka.common._
 import kafka.api.{PartitionStateInfo, LeaderAndIsrRequest}
 
 
@@ -44,8 +44,7 @@ class ReplicaManager(val config: KafkaConfig,
   val replicaFetcherManager = new ReplicaFetcherManager(config, this)
   this.logIdent = "Replica Manager on Broker " + config.brokerId + ": "
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
-  val highWatermarkCheckpoint = new HighwaterMarkCheckpoint(config.logDir)
-  info("Created highwatermark file %s".format(highWatermarkCheckpoint.name))
+  val highWatermarkCheckpoints = config.logDirs.map(dir => (dir, new HighwaterMarkCheckpoint(dir))).toMap
 
   newGauge(
     "LeaderCount",
@@ -245,22 +244,12 @@ class ReplicaManager(val config: KafkaConfig,
    * Flushes the highwatermark value for all partitions to the highwatermark file
    */
   def checkpointHighWatermarks() {
-    val highWaterarksForAllPartitions = allPartitions.map {
-      partition =>
-        val topic = partition._1._1
-        val partitionId = partition._1._2
-        val localReplicaOpt = partition._2.getReplica(config.brokerId)
-        val hw = localReplicaOpt match {
-          case Some(localReplica) => localReplica.highWatermark
-          case None =>
-            error("Highwatermark for topic %s partition %d doesn't exist during checkpointing"
-                  .format(topic, partitionId))
-             0L
-        }
-        (topic, partitionId) -> hw
-    }.toMap
-    highWatermarkCheckpoint.write(highWaterarksForAllPartitions)
-    trace("Checkpointed high watermark data: %s".format(highWaterarksForAllPartitions))
+    val replicas = allPartitions.values.map(_.getReplica(config.brokerId)).collect{case Some(replica) => replica}
+    val replicasByDir = replicas.filter(_.log.isDefined).groupBy(_.log.get.dir.getParent)
+    for((dir, reps) <- replicasByDir) {
+      val hwms = reps.map(r => (TopicAndPartition(r.topic, r.partitionId) -> r.highWatermark)).toMap
+      highWatermarkCheckpoints(dir).write(hwms)
+    }
   }
 
   def shutdown() {

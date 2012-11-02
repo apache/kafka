@@ -21,7 +21,7 @@ import java.util.Properties
 import kafka.message.Message
 import kafka.consumer.ConsumerConfig
 import java.net.InetAddress
-import kafka.utils.{VerifiableProperties, ZKConfig}
+import kafka.utils.{VerifiableProperties, ZKConfig, Utils}
 
 /**
  * Configuration settings for the kafka server
@@ -74,7 +74,8 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val numPartitions = props.getIntInRange("num.partitions", 1, (1, Int.MaxValue))
   
   /* the directories in which the log data is kept */
-  val logDir = props.getString("log.dir")
+  val logDirs = Utils.parseCsvList(props.getString("log.directories", props.getString("log.dir", "")))
+  require(logDirs.size > 0)
   
   /* the maximum size of a single log file */
   val logFileSize = props.getIntInRange("log.file.size", 1*1024*1024*1024, (Message.MinHeaderSize, Int.MaxValue))

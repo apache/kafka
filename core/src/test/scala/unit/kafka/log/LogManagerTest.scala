@@ -18,21 +18,23 @@
 package kafka.log
 
 import java.io._
+import java.nio.channels.OverlappingFileLockException
 import junit.framework.Assert._
 import org.junit.Test
 import kafka.common.OffsetOutOfRangeException
 import org.scalatest.junit.JUnit3Suite
 import kafka.server.KafkaConfig
+import kafka.common._
 import kafka.utils._
 
 class LogManagerTest extends JUnit3Suite {
 
   val time: MockTime = new MockTime()
   val maxRollInterval = 100
-  val maxLogAge = 1000
+  val maxLogAgeHours = 10
   var logDir: File = null
   var logManager: LogManager = null
-  var config:KafkaConfig = null
+  var config: KafkaConfig = null
   val name = "kafka"
   val veryLargeLogFlushInterval = 10000000L
   val scheduler = new KafkaScheduler(2)
@@ -41,12 +43,13 @@ class LogManagerTest extends JUnit3Suite {
     super.setUp()
     config = new KafkaConfig(TestUtils.createBrokerConfig(0, -1)) {
                    override val logFileSize = 1024
-                   override val flushInterval = 100
+                   override val flushInterval = 10000
+                   override val logRetentionHours = maxLogAgeHours
                  }
     scheduler.startup
-    logManager = new LogManager(config, scheduler, time, maxRollInterval, veryLargeLogFlushInterval, maxLogAge, false)
+    logManager = new LogManager(config, scheduler, time)
     logManager.startup
-    logDir = logManager.logDir
+    logDir = logManager.logDirs(0)
   }
 
   override def tearDown() {
@@ -54,13 +57,14 @@ class LogManagerTest extends JUnit3Suite {
     if(logManager != null)
       logManager.shutdown()
     Utils.rm(logDir)
+    logManager.logDirs.map(Utils.rm(_))
     super.tearDown()
   }
   
   @Test
   def testCreateLog() {
     val log = logManager.getOrCreateLog(name, 0)
-    val logFile = new File(config.logDir, name + "-0")
+    val logFile = new File(config.logDirs(0), name + "-0")
     assertTrue(logFile.exists)
     log.append(TestUtils.singleMessageSet("test".getBytes()))
   }
@@ -68,7 +72,7 @@ class LogManagerTest extends JUnit3Suite {
   @Test
   def testGetLog() {
     val log = logManager.getLog(name, 0)
-    val logFile = new File(config.logDir, name + "-0")
+    val logFile = new File(config.logDirs(0), name + "-0")
     assertTrue(!logFile.exists)
   }
 
@@ -87,12 +91,13 @@ class LogManagerTest extends JUnit3Suite {
 
     // update the last modified time of all log segments
     val logSegments = log.segments.view
-    logSegments.foreach(s => s.messageSet.file.setLastModified(time.currentMs))
+    logSegments.foreach(_.messageSet.file.setLastModified(time.currentMs))
 
-    time.currentMs += maxLogAge + 3000
+    time.currentMs += maxLogAgeHours*60*60*1000 + 1
     logManager.cleanupLogs()
     assertEquals("Now there should only be only one segment.", 1, log.numberOfSegments)
     assertEquals("Should get empty fetch off new log.", 0, log.read(offset+1, 1024).sizeInBytes)
+
     try {
       log.read(0, 1024)
       fail("Should get exception from fetching earlier.")
@@ -115,8 +120,9 @@ class LogManagerTest extends JUnit3Suite {
       override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Long]
       override val logRetentionHours = retentionHours
       override val flushInterval = 100
+      override val logRollHours = maxRollInterval
     }
-    logManager = new LogManager(config, scheduler, time, maxRollInterval, veryLargeLogFlushInterval, retentionMs, false)
+    logManager = new LogManager(config, scheduler, time)
     logManager.startup
 
     // create a log
@@ -157,17 +163,47 @@ class LogManagerTest extends JUnit3Suite {
                    override val logFileSize = 1024 *1024 *1024
                    override val flushSchedulerThreadRate = 50
                    override val flushInterval = Int.MaxValue
+                   override val logRollHours = maxRollInterval
                    override val flushIntervalMap = Map("timebasedflush" -> 100)
                  }
-    logManager = new LogManager(config, scheduler, time, maxRollInterval, veryLargeLogFlushInterval, maxLogAge, false)
+    logManager = new LogManager(config, scheduler, time)
     logManager.startup
     val log = logManager.getOrCreateLog(name, 0)
     for(i <- 0 until 200) {
       var set = TestUtils.singleMessageSet("test".getBytes())
       log.append(set)
     }
-    println("now = " + System.currentTimeMillis + " last flush = " + log.getLastFlushedTime)
-    assertTrue("The last flush time has to be within defaultflushInterval of current time ",
-                     (System.currentTimeMillis - log.getLastFlushedTime) < 150)
+    val ellapsed = System.currentTimeMillis - log.getLastFlushedTime
+    assertTrue("The last flush time has to be within defaultflushInterval of current time (was %d)".format(ellapsed),
+                     ellapsed < 2*config.flushSchedulerThreadRate)
+  }
+  
+  @Test
+  def testLeastLoadedAssignment() {
+    // create a log manager with multiple data directories
+    val props = TestUtils.createBrokerConfig(0, -1)
+    val dirs = Seq(TestUtils.tempDir().getAbsolutePath, 
+                   TestUtils.tempDir().getAbsolutePath, 
+                   TestUtils.tempDir().getAbsolutePath)
+    props.put("log.directories", dirs.mkString(","))
+    logManager.shutdown()
+    logManager = new LogManager(new KafkaConfig(props), scheduler, time)
+    
+    // verify that logs are always assigned to the least loaded partition
+    for(partition <- 0 until 20) {
+      logManager.getOrCreateLog("test", partition)
+      assertEquals("We should have created the right number of logs", partition + 1, logManager.allLogs.size)
+      val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
+      assertTrue("Load should balance evenly", counts.max <= counts.min + 1)
+    }
+  }
+  
+  def testTwoLogManagersUsingSameDirFails() {
+    try {
+      new LogManager(logManager.config, scheduler, time)
+      fail("Should not be able to create a second log manager instance with the same data directory")
+    } catch {
+      case e: KafkaException => // this is good 
+    }
   }
 }

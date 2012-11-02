@@ -32,7 +32,6 @@ import kafka.controller.{ControllerStat, KafkaController}
  */
 class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logging {
   this.logIdent = "[Kafka Server " + config.brokerId + "], "
-  val CleanShutdownFile = ".kafka_cleanshutdown"
   private var isShuttingDown = new AtomicBoolean(false)
   private var shutdownLatch = new CountDownLatch(1)
   var socketServer: SocketServer = null
@@ -53,12 +52,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     info("starting")
     isShuttingDown = new AtomicBoolean(false)
     shutdownLatch = new CountDownLatch(1)
-    var needRecovery = true
-    val cleanShutDownFile = new File(new File(config.logDir), CleanShutdownFile)
-    if (cleanShutDownFile.exists) {
-      needRecovery = false
-      cleanShutDownFile.delete
-    }
 
     /* start scheduler */
     kafkaScheduler.startup
@@ -66,11 +59,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     /* start log manager */
     logManager = new LogManager(config,
                                 kafkaScheduler,
-                                time,
-                                1000L * 60 * 60 * config.logRollHours,
-                                1000L * 60 * config.logCleanupIntervalMinutes,
-                                1000L * 60 * 60 * config.logRetentionHours,
-                                needRecovery)
+                                time)
     logManager.startup()
 
     socketServer = new SocketServer(config.brokerId,
@@ -122,25 +111,22 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     val canShutdown = isShuttingDown.compareAndSet(false, true);
     if (canShutdown) {
       if(requestHandlerPool != null)
-        requestHandlerPool.shutdown()
-      kafkaScheduler.shutdown()
+        Utils.swallow(requestHandlerPool.shutdown())
+      Utils.swallow(kafkaScheduler.shutdown())
       if(apis != null)
-        apis.close()
+        Utils.swallow(apis.close())
       if(kafkaZookeeper != null)
-        kafkaZookeeper.shutdown()
+        Utils.swallow(kafkaZookeeper.shutdown())
       if(replicaManager != null)
-        replicaManager.shutdown()
+        Utils.swallow(replicaManager.shutdown())
       if(socketServer != null)
-        socketServer.shutdown()
+        Utils.swallow(socketServer.shutdown())
       if(logManager != null)
-        logManager.shutdown()
+        Utils.swallow(logManager.shutdown())
 
       if(kafkaController != null)
-        kafkaController.shutdown()
+        Utils.swallow(kafkaController.shutdown())
 
-      val cleanShutDownFile = new File(new File(config.logDir), CleanShutdownFile)
-      debug("creating clean shutdown file " + cleanShutDownFile.getAbsolutePath())
-      cleanShutDownFile.createNewFile
       shutdownLatch.countDown()
       info("shut down completed")
     }

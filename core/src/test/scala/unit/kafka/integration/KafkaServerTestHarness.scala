@@ -40,7 +40,7 @@ trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
 
   override def tearDown() {
     servers.map(server => server.shutdown())
-    servers.map(server => Utils.rm(server.config.logDir))
+    servers.map(server => server.config.logDirs.map(Utils.rm(_)))
     super.tearDown
   }
 }

@@ -45,7 +45,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   override def tearDown() {
     servers.map(server => server.shutdown())
-    servers.map(server => Utils.rm(server.config.logDir))
+    servers.map(server => Utils.rm(server.config.logDirs))
     super.tearDown()
   }
 
