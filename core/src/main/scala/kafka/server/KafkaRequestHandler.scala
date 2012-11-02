@@ -29,15 +29,19 @@ class KafkaRequestHandler(id: Int, brokerId: Int, val requestChannel: RequestCha
   this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
 
   def run() { 
-    while(true) { 
-      val req = requestChannel.receiveRequest()
-      if(req eq RequestChannel.AllDone){
-        trace("receives shut down command, shut down".format(brokerId, id))
-        return
+    while(true) {
+      try {
+        val req = requestChannel.receiveRequest()
+        if(req eq RequestChannel.AllDone){
+          trace("receives shut down command, shut down".format(brokerId, id))
+          return
+        }
+        req.dequeueTimeMs = SystemTime.milliseconds
+        debug("handles request " + req)
+        apis.handle(req)
+      } catch {
+        case e: Throwable => error("exception when handling request", e)
       }
-      req.dequeueTimeMs = SystemTime.milliseconds
-      debug("handles request " + req)
-      apis.handle(req)
     }
   }
 

@@ -19,15 +19,13 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import collection.mutable.HashMap
-import collection.mutable.Map
-import kafka.common.ErrorMapping
+import collection.Map
 import kafka.api.ApiUtils._
 
 
 object StopReplicaResponse {
   def readFrom(buffer: ByteBuffer): StopReplicaResponse = {
     val versionId = buffer.getShort
-    val errorCode = buffer.getShort
     val numEntries = buffer.getInt
 
     val responseMap = new HashMap[(String, Int), Short]()
@@ -37,16 +35,15 @@ object StopReplicaResponse {
       val partitionErrorCode = buffer.getShort()
       responseMap.put((topic, partition), partitionErrorCode)
     }
-    new StopReplicaResponse(versionId, responseMap, errorCode)
+    new StopReplicaResponse(versionId, responseMap)
   }
 }
 
 
 case class StopReplicaResponse(val versionId: Short,
-                               val responseMap: Map[(String, Int), Short],
-                               val errorCode: Short = ErrorMapping.NoError) extends RequestOrResponse{
+                               val responseMap: Map[(String, Int), Short]) extends RequestOrResponse{
   def sizeInBytes(): Int ={
-    var size = 2 + 2 + 4
+    var size = 2 + 4
     for ((key, value) <- responseMap){
       size += (2 + key._1.length) + 4 + 2
     }
@@ -55,7 +52,6 @@ case class StopReplicaResponse(val versionId: Short,
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
-    buffer.putShort(errorCode)
     buffer.putInt(responseMap.size)
     for ((key:(String, Int), value) <- responseMap){
       writeShortString(buffer, key._1)
