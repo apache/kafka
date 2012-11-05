@@ -20,7 +20,11 @@ class LogSegment(val messageSet: FileMessageSet,
                  val indexIntervalBytes: Int,
                  time: Time) extends Range with Logging {
   
-  var firstAppendTime: Option[Long] = None
+  var firstAppendTime: Option[Long] =
+    if (messageSet.sizeInBytes > 0)
+      Some(time.milliseconds)
+    else
+      None
   
   /* the number of bytes since we last added an entry in the offset index */
   var bytesSinceLastIndexEntry = 0
@@ -118,6 +122,8 @@ class LogSegment(val messageSet: FileMessageSet,
       return
     index.truncateTo(offset)  
     messageSet.truncateTo(mapping.position)
+    if (messageSet.sizeInBytes == 0)
+      firstAppendTime = None
   }
   
   /**
