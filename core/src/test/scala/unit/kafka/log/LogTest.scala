@@ -342,7 +342,31 @@ class LogTest extends JUnitSuite {
     assertEquals("Should change offset", 0, log.logEndOffset)
     assertEquals("Should change log size", log.size, 0)
   }
-  
+
+  @Test
+  def testIndexResizingAtTruncation() {
+    val set = TestUtils.singleMessageSet("test".getBytes())
+    val setSize = set.sizeInBytes
+    val msgPerSeg = 10
+    val logFileSize = msgPerSeg * (setSize - 1) // each segment will be 10 messages
+    val log = new Log(logDir, logFileSize, config.maxMessageSize, 1000, 10000, needsRecovery = false, time = time)
+    assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
+    for (i<- 1 to msgPerSeg)
+      log.append(set)
+    assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
+    for (i<- 1 to msgPerSeg)
+      log.append(set)
+    assertEquals("There should be exactly 2 segment.", 2, log.numberOfSegments)
+    assertEquals("The index of the first segment should be trim to empty", 0, log.segments.view(0).index.maxEntries)
+    log.truncateTo(0)
+    assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
+    assertEquals("The index of segment 1 should be resized to maxIndexSize", log.maxIndexSize/8, log.segments.view(0).index.maxEntries)
+    for (i<- 1 to msgPerSeg)
+      log.append(set)
+    assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
+  }
+
+
   @Test
   def testAppendWithoutOffsetAssignment() {
     for(codec <- List(NoCompressionCodec, DefaultCompressionCodec)) {

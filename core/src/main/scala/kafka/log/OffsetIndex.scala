@@ -49,7 +49,7 @@ import kafka.utils._
  * All external APIs translate from relative offsets to full offsets, so users of this class do not interact with the internal 
  * storage format.
  */
-class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) extends Logging {
+class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = -1) extends Logging {
   
   /* the memory mapping */
   private var mmap: MappedByteBuffer = 
@@ -85,7 +85,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) 
     }
   
   /* the maximum number of entries this index can hold */
-  val maxEntries = mmap.limit / 8
+  def maxEntries = mmap.limit / 8
   
   /* the number of entries in the index */
   private var size = new AtomicInteger(mmap.position / 8)
@@ -227,14 +227,22 @@ class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) 
    * Trim this segment to fit just the valid entries, deleting all trailing unwritten bytes from
    * the file.
    */
-  def trimToSize() {
+  def trimToValidSize() = resize(entries * 8)
+
+  /**
+   * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in
+   * trimToValidSize() which is called at closing the segment or new segment being rolled; (2) at
+   * loading segments from disk or truncating back to an old segment where a new log segment became active;
+   * we want to reset the index size to maximum index size to avoid rolling new segment.
+   */
+  def resize(newSize: Int) {
     this synchronized {
       flush()
       val raf = new RandomAccessFile(file, "rws")
+      val roundedNewSize = roundToExactMultiple(newSize, 8)
       try {
-        val newLength = entries * 8
-        raf.setLength(newLength)
-        this.mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, newLength)
+        raf.setLength(roundedNewSize)
+        this.mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
       } finally {
         Utils.swallow(raf.close())
       }
@@ -262,7 +270,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, maxIndexSize: Int = -1) 
   
   /** Close the index */
   def close() {
-    trimToSize()
+    trimToValidSize()
   }
   
   /**

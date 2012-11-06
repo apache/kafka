@@ -174,6 +174,9 @@ private[kafka] class Log(val dir: File,
         }
       })
 
+      // reset the index size of the last (current active) log segment to its maximum value
+      logSegments.get(logSegments.size() - 1).index.resize(maxIndexSize)
+
       // run recovery on the last segment if necessary
       if(needsRecovery)
         recoverSegment(logSegments.get(logSegments.size - 1))
@@ -444,9 +447,14 @@ private[kafka] class Log(val dir: File,
     }
     debug("Rolling log '" + name + "' to " + logFile.getName + " and " + indexFile.getName)
     segments.view.lastOption match {
-      case Some(segment) => segment.index.trimToSize()
+      case Some(segment) => segment.index.trimToValidSize()
       case None => 
     }
+
+    val segmentsView = segments.view
+    if(segmentsView.size > 0 && segmentsView.last.start == newOffset)
+      throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exsits".format(dir.getName, newOffset))
+
     val segment = new LogSegment(dir, 
                                  startOffset = newOffset,
                                  indexIntervalBytes = indexIntervalBytes, 

@@ -120,7 +120,9 @@ class LogSegment(val messageSet: FileMessageSet,
     val mapping = translateOffset(offset)
     if(mapping == null)
       return
-    index.truncateTo(offset)  
+    index.truncateTo(offset)
+    // after truncation, reset and allocate more space for the (new currently  active) index
+    index.resize(index.maxIndexSize)
     messageSet.truncateTo(mapping.position)
     if (messageSet.sizeInBytes == 0)
       firstAppendTime = None
