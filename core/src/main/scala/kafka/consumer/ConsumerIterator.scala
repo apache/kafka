@@ -73,13 +73,19 @@ class ConsumerIterator[T](private val channel: BlockingQueue[FetchedDataChunk],
         return allDone
       } else {
         currentTopicInfo = currentDataChunk.topicInfo
-        if (currentTopicInfo.getConsumeOffset != currentDataChunk.fetchOffset) {
+        val cdcFetchOffset = currentDataChunk.fetchOffset
+        val ctiConsumeOffset = currentTopicInfo.getConsumeOffset
+        if (ctiConsumeOffset < cdcFetchOffset) {
           error("consumed offset: %d doesn't match fetch offset: %d for %s;\n Consumer may lose data"
-                        .format(currentTopicInfo.getConsumeOffset, currentDataChunk.fetchOffset, currentTopicInfo))
-          currentTopicInfo.resetConsumeOffset(currentDataChunk.fetchOffset)
+            .format(ctiConsumeOffset, cdcFetchOffset, currentTopicInfo))
+          currentTopicInfo.resetConsumeOffset(cdcFetchOffset)
         }
-        localCurrent = if (enableShallowIterator) currentDataChunk.messages.shallowIterator
-                       else currentDataChunk.messages.iterator
+        localCurrent =
+          if (enableShallowIterator)
+            currentDataChunk.messages.shallowIterator
+          else
+            currentDataChunk.messages.iterator
+
         current.set(localCurrent)
       }
       // if we just updated the current chunk and it is empty that means the fetch size is too small!
@@ -88,9 +94,13 @@ class ConsumerIterator[T](private val channel: BlockingQueue[FetchedDataChunk],
                                                "%s partition %d at fetch offset %d. Increase the fetch size, or decrease the maximum message size the broker will allow."
                                                .format(currentDataChunk.topicInfo.topic, currentDataChunk.topicInfo.partitionId, currentDataChunk.fetchOffset))
     }
-    val item = localCurrent.next()
+    var item = localCurrent.next()
+    // reject the messages that have already been consumed
+    while (item.offset < currentTopicInfo.getConsumeOffset && localCurrent.hasNext) {
+      item = localCurrent.next()
+    }
     consumedOffset = item.nextOffset
-    
+
     item.message.ensureValid() // validate checksum of message to ensure it is valid
 
     new MessageAndMetadata(decoder.toEvent(item.message), currentTopicInfo.topic)

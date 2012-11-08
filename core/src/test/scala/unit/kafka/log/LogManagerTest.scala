@@ -18,10 +18,8 @@
 package kafka.log
 
 import java.io._
-import java.nio.channels.OverlappingFileLockException
 import junit.framework.Assert._
 import org.junit.Test
-import kafka.common.OffsetOutOfRangeException
 import org.scalatest.junit.JUnit3Suite
 import kafka.server.KafkaConfig
 import kafka.common._

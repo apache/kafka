@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.io.File
 import kafka.network.SocketServer
 import kafka.log.LogManager
 import kafka.utils._

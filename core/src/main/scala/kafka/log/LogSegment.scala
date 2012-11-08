@@ -57,7 +57,7 @@ class LogSegment(val messageSet: FileMessageSet,
       trace("Inserting %d bytes at offset %d at position %d".format(messages.sizeInBytes, offset, messageSet.sizeInBytes()))
       // append an entry to the index (if needed)
       if(bytesSinceLastIndexEntry > indexIntervalBytes) {
-        index.append(offset, messageSet.sizeInBytes().toInt)
+        index.append(offset, messageSet.sizeInBytes())
         this.bytesSinceLastIndexEntry = 0
       }
       // append the messages
@@ -102,7 +102,7 @@ class LogSegment(val messageSet: FileMessageSet,
           val mapping = translateOffset(offset)
           val endPosition = 
             if(mapping == null)
-              messageSet.sizeInBytes().toInt // the max offset is off the end of the log, use the end of the file
+              messageSet.sizeInBytes() // the max offset is off the end of the log, use the end of the file
             else
               mapping.position
           min(endPosition - startPosition.position, maxSize) 
@@ -133,7 +133,7 @@ class LogSegment(val messageSet: FileMessageSet,
    * Not that this is expensive.
    */
   def nextOffset(): Long = {
-    val ms = read(index.lastOffset, messageSet.sizeInBytes.toInt, None)
+    val ms = read(index.lastOffset, messageSet.sizeInBytes, None)
     ms.lastOption match {
       case None => start
       case Some(last) => last.nextOffset

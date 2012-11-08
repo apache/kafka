@@ -22,7 +22,7 @@ import kafka.utils._
 import scala.collection._
 import kafka.log.Log._
 import kafka.common.{TopicAndPartition, KafkaException}
-import kafka.server.{HighwaterMarkCheckpoint, KafkaConfig}
+import kafka.server.KafkaConfig
 
 
 /**

@@ -16,7 +16,7 @@
 */
 package kafka.server
 
-import kafka.log.{Log, LogManager}
+import kafka.log.LogManager
 import org.I0Itec.zkclient.ZkClient
 import org.scalatest.junit.JUnit3Suite
 import org.easymock.EasyMock
