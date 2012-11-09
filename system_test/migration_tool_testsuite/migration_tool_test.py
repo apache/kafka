@@ -188,50 +188,38 @@ class MigrationToolTest(ReplicationUtils, SetupUtils):
                 # =============================================
                 i = 1
                 numIterations = int(self.testcaseEnv.testcaseArgumentsDict["num_iteration"])
+                bouncedEntityDownTimeSec = 1
+                try:
+                    bouncedEntityDownTimeSec = int(self.testcaseEnv.testcaseArgumentsDict["bounced_entity_downtime_sec"])
+                except:
+                    pass
+
                 while i <= numIterations:
 
                     self.log_message("Iteration " + str(i) + " of " + str(numIterations))
 
-                    self.log_message("looking up leader")
-                    leaderDict = kafka_system_test_utils.get_leader_elected_log_line(
-                        self.systemTestEnv, self.testcaseEnv, self.leaderAttributesDict)
-        
-                    # ==========================
-                    # leaderDict looks like this:
-                    # ==========================
-                    #{'entity_id': u'3',
-                    # 'partition': '0',
-                    # 'timestamp': 1345050255.8280001,
-                    # 'hostname': u'localhost',
-                    # 'topic': 'test_1',
-                    # 'brokerid': '3'}
+                    # =============================================
+                    # Bounce Migration Tool
+                    # =============================================
+                    bounceMigrationTool = self.testcaseEnv.testcaseArgumentsDict["bounce_migration_tool"]
+                    self.log_message("bounce_migration_tool flag : " + bounceMigrationTool)
+                    if (bounceMigrationTool.lower() == "true"):
 
-                    # =============================================
-                    # validate to see if leader election is successful
-                    # =============================================
-                    self.log_message("validating leader election")
-                    result = kafka_system_test_utils.validate_leader_election_successful( 
-                         self.testcaseEnv, leaderDict, self.testcaseEnv.validationStatusDict)
-        
-                    # =============================================
-                    # trigger leader re-election by stopping leader
-                    # to get re-election latency
-                    # =============================================
-                    bounceLeaderFlag = self.testcaseEnv.testcaseArgumentsDict["bounce_leader"]
-                    self.log_message("bounce_leader flag : " + bounceLeaderFlag)
-                    if (bounceLeaderFlag.lower() == "true"):
-                        reelectionLatency = kafka_system_test_utils.get_reelection_latency(
-                            self.systemTestEnv, self.testcaseEnv, leaderDict, self.leaderAttributesDict)
-                        latencyKeyName = "Leader Election Latency - iter " + str(i) + " brokerid " + leaderDict["brokerid"]
-                        self.testcaseEnv.validationStatusDict[latencyKeyName] = str("{0:.2f}".format(reelectionLatency * 1000)) + " ms"
-       
-                    # =============================================
-                    # starting previously terminated broker 
-                    # =============================================
-                    if bounceLeaderFlag.lower() == "true":
-                        self.log_message("starting the previously terminated broker")
-                        stoppedLeaderEntityId  = leaderDict["entity_id"]
-                        kafka_system_test_utils.start_entity_in_background(self.systemTestEnv, self.testcaseEnv, stoppedLeaderEntityId)
+                        clusterConfigList         = self.systemTestEnv.clusterEntityConfigDictList
+                        migrationToolEntityIdList = system_test_utils.get_data_from_list_of_dicts(
+                                                    clusterConfigList, "role", "migration_tool", "entity_id")
+
+                        stoppedMigrationToolEntityId = migrationToolEntityIdList[0]
+                        migrationToolPPid = self.testcaseEnv.entityMigrationToolParentPidDict[stoppedMigrationToolEntityId]
+
+                        self.log_message("stopping migration tool : " + migrationToolPPid)
+                        kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, stoppedMigrationToolEntityId, migrationToolPPid)
+                        self.anonLogger.info("sleeping for " + str(bouncedEntityDownTimeSec) + " sec")
+                        time.sleep(bouncedEntityDownTimeSec)
+
+                        # starting previously terminated broker 
+                        self.log_message("starting the previously terminated migration tool")
+                        kafka_system_test_utils.start_migration_tool(self.systemTestEnv, self.testcaseEnv, stoppedMigrationToolEntityId)
 
                     self.anonLogger.info("sleeping for 15s")
                     time.sleep(15)

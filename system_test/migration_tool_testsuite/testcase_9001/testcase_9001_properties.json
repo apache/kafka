@@ -9,7 +9,7 @@
                   "08":"Log segment size    : 51200"
   },
   "testcase_args": {
-    "bounce_leader": "false",
+    "bounce_migration_tool": "false",
     "replica_factor": "3",
     "num_partition": "1",
     "num_iteration": "1",

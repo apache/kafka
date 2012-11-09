@@ -191,6 +191,12 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
                 # =============================================
                 i = 1
                 numIterations = int(self.testcaseEnv.testcaseArgumentsDict["num_iteration"])
+                bouncedEntityDownTimeSec = 1
+                try:
+                    bouncedEntityDownTimeSec = int(self.testcaseEnv.testcaseArgumentsDict["bounced_entity_downtime_sec"])
+                except:
+                    pass
+
                 while i <= numIterations:
 
                     self.log_message("Iteration " + str(i) + " of " + str(numIterations))
@@ -202,18 +208,20 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
                     self.log_message("bounce_mirror_maker flag : " + bounceMirrorMaker)
                     if (bounceMirrorMaker.lower() == "true"):
 
-                        clusterConfigList       = self.systemTestEnv.clusterEntityConfigDictList
-                        mirrorMakerEntityIdList = system_test_utils.get_data_from_list_of_dicts(
-                            clusterConfigList, "role", "mirror_maker", "entity_id")
+                        clusterConfigList          = self.systemTestEnv.clusterEntityConfigDictList
+                        mirrorMakerEntityIdList    = system_test_utils.get_data_from_list_of_dicts(
+                                                     clusterConfigList, "role", "mirror_maker", "entity_id")
+                        stoppedMirrorMakerEntityId = mirrorMakerEntityIdList[0]
 
-                        mirrorMakerPPid = self.testcaseEnv.entityMirrorMakerParentPidDict[mirrorMakerEntityIdList[0]]
+                        mirrorMakerPPid = self.testcaseEnv.entityMirrorMakerParentPidDict[stoppedMirrorMakerEntityId]
                         self.log_message("stopping mirror maker : " + mirrorMakerPPid)
-                        kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, mirrorMakerEntityIdList[0], mirrorMakerPPid)
-                        time.sleep(1)
+                        kafka_system_test_utils.stop_remote_entity(self.systemTestEnv, stoppedMirrorMakerEntityId, mirrorMakerPPid)
+                        self.anonLogger.info("sleeping for " + str(bouncedEntityDownTimeSec) + " sec")
+                        time.sleep(bouncedEntityDownTimeSec)
 
                         # starting previously terminated broker 
                         self.log_message("starting the previously terminated mirror maker")
-                        kafka_system_test_utils.start_mirror_makers(self.systemTestEnv, self.testcaseEnv)
+                        kafka_system_test_utils.start_mirror_makers(self.systemTestEnv, self.testcaseEnv, stoppedMirrorMakerEntityId)
 
                     self.anonLogger.info("sleeping for 15s")
                     time.sleep(15)

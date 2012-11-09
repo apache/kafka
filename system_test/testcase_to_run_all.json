@@ -38,6 +38,14 @@
         "testcase_0121",
         "testcase_0122",
         "testcase_0123",
+        "testcase_0124",
+        "testcase_0125",
+        "testcase_0126",
+        "testcase_0127",
+
+        "testcase_0131",
+        "testcase_0132",
+        "testcase_0133",
 
         "testcase_0151",
         "testcase_0152",
@@ -73,15 +81,41 @@
         "testcase_0305",
         "testcase_0306",
         "testcase_0307",
-        "testcase_0308"
+        "testcase_0308",
+
+        "testcase_4001",
+        "testcase_4002",
+        "testcase_4003",
+        "testcase_4004",
+        "testcase_4005",
+        "testcase_4006",
+        "testcase_4007",
+        "testcase_4008",
+
+        "testcase_4011",
+        "testcase_4012",
+        "testcase_4013",
+        "testcase_4014",
+        "testcase_4015",
+        "testcase_4016",
+        "testcase_4017",
+        "testcase_4018"
     ],
 
     "MigrationToolTest"  : [
-        "testcase_9001"
+        "testcase_9001",
+        "testcase_9003",
+        "testcase_9004",
+        "testcase_9005",
+        "testcase_9006"
     ],
 
     "MirrorMakerTest"  : [
         "testcase_5001",
-        "testcase_5002"
+        "testcase_5002",
+        "testcase_5003",
+        "testcase_5004",
+        "testcase_5005",
+        "testcase_5006"
     ]
 }
