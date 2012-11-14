@@ -30,26 +30,6 @@ import kafka.utils.{Utils, VerifiableProperties, Logging}
 
 private trait KafkaCSVMetricsReporterMBean extends KafkaMetricsReporterMBean
 
-object KafkaCSVMetricsReporter {
-  val CSVReporterStarted: AtomicBoolean = new AtomicBoolean(false)
-
-  def startCSVMetricReporter (verifiableProps: VerifiableProperties) {
-    CSVReporterStarted synchronized {
-      if (CSVReporterStarted.get() == false) {
-        val metricsConfig = new KafkaMetricsConfig(verifiableProps)
-        if(metricsConfig.reporters.size > 0) {
-          metricsConfig.reporters.foreach(reporterType => {
-            val reporter = Utils.createObject[KafkaMetricsReporter](reporterType)
-            reporter.init(verifiableProps)
-            if (reporter.isInstanceOf[KafkaMetricsReporterMBean])
-              Utils.registerMBean(reporter, reporter.asInstanceOf[KafkaMetricsReporterMBean].getMBeanName)
-          })
-          CSVReporterStarted.set(true)
-        }
-      }
-    }
-  }
-}
 
 private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
                               with KafkaCSVMetricsReporterMBean
@@ -69,8 +49,8 @@ private class KafkaCSVMetricsReporter extends KafkaMetricsReporter
       if (!initialized) {
         val metricsConfig = new KafkaMetricsConfig(props)
         csvDir = new File(props.getString("kafka.csv.metrics.dir", "kafka_metrics"))
-        if (!csvDir.exists())
-          csvDir.mkdirs()
+        Utils.rm(csvDir)
+        csvDir.mkdirs()
         underlying = new CsvReporter(Metrics.defaultRegistry(), csvDir)
         if (props.getBoolean("kafka.csv.metrics.reporter.enabled", default = false)) {
           initialized = true

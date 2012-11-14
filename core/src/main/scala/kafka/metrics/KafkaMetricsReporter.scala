@@ -20,7 +20,9 @@
 
 package kafka.metrics
 
-import kafka.utils.VerifiableProperties
+import kafka.utils.{Utils, VerifiableProperties}
+import java.util.concurrent.atomic.AtomicBoolean
+
 
 /**
  * Base trait for reporter MBeans. If a client wants to expose these JMX
@@ -43,5 +45,26 @@ trait KafkaMetricsReporterMBean {
 
 trait KafkaMetricsReporter {
   def init(props: VerifiableProperties)
+}
+
+object KafkaMetricsReporter {
+  val ReporterStarted: AtomicBoolean = new AtomicBoolean(false)
+
+  def startReporters (verifiableProps: VerifiableProperties) {
+    ReporterStarted synchronized {
+      if (ReporterStarted.get() == false) {
+        val metricsConfig = new KafkaMetricsConfig(verifiableProps)
+        if(metricsConfig.reporters.size > 0) {
+          metricsConfig.reporters.foreach(reporterType => {
+            val reporter = Utils.createObject[KafkaMetricsReporter](reporterType)
+            reporter.init(verifiableProps)
+            if (reporter.isInstanceOf[KafkaMetricsReporterMBean])
+              Utils.registerMBean(reporter, reporter.asInstanceOf[KafkaMetricsReporterMBean].getMBeanName)
+          })
+          ReporterStarted.set(true)
+        }
+      }
+    }
+  }
 }
 

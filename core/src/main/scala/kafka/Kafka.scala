@@ -18,7 +18,7 @@
 package kafka
 
 
-import metrics.KafkaCSVMetricsReporter
+import metrics.KafkaMetricsReporter
 import server.{KafkaConfig, KafkaServerStartable, KafkaServer}
 import utils.{Utils, Logging}
 
@@ -33,7 +33,7 @@ object Kafka extends Logging {
     try {
       val props = Utils.loadProps(args(0))
       val serverConfig = new KafkaConfig(props)
-      KafkaCSVMetricsReporter.startCSVMetricReporter(serverConfig.props)
+      KafkaMetricsReporter.startReporters(serverConfig.props)
       val kafkaServerStartble = new KafkaServerStartable(serverConfig)
 
       // attach shutdown handler to catch control-c
@@ -41,7 +41,7 @@ object Kafka extends Logging {
         override def run() = {
           kafkaServerStartble.shutdown
         }
-      });
+      })
 
       kafkaServerStartble.startup
       kafkaServerStartble.awaitShutdown

@@ -49,7 +49,7 @@ extends Logging {
     case _ => throw new InvalidConfigException("Valid values for producer.type are sync/async")
   }
 
-  KafkaCSVMetricsReporter.startCSVMetricReporter(config.props)
+  KafkaMetricsReporter.startReporters(config.props)
 
   def this(config: ProducerConfig) =
     this(config,

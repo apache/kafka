@@ -26,7 +26,7 @@ import java.text.SimpleDateFormat
 import java.util._
 import collection.immutable.List
 import kafka.utils.{VerifiableProperties, Logging}
-import kafka.metrics.KafkaCSVMetricsReporter
+import kafka.metrics.KafkaMetricsReporter
 
 
 /**
@@ -175,7 +175,7 @@ object ProducerPerformance extends Logging {
         props.put("kafka.csv.metrics.dir", "kafka_metrics")
       props.put("kafka.csv.metrics.reporter.enabled", "true")
       val verifiableProps = new VerifiableProperties(props)
-      KafkaCSVMetricsReporter.startCSVMetricReporter(verifiableProps)
+      KafkaMetricsReporter.startReporters(verifiableProps)
     }
 
     val messageSendGapMs = options.valueOf(messageSendGapMsOpt).intValue()

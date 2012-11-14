@@ -26,7 +26,7 @@ import java.io.PrintStream
 import kafka.message._
 import kafka.serializer.StringDecoder
 import kafka.utils._
-import kafka.metrics.KafkaCSVMetricsReporter
+import kafka.metrics.KafkaMetricsReporter
 
 
 /**
@@ -140,7 +140,7 @@ object ConsoleConsumer extends Logging {
         csvReporterProps.put("kafka.csv.metrics.dir", "kafka_metrics")
       csvReporterProps.put("kafka.csv.metrics.reporter.enabled", "true")
       val verifiableProps = new VerifiableProperties(csvReporterProps)
-      KafkaCSVMetricsReporter.startCSVMetricReporter(verifiableProps)
+      KafkaMetricsReporter.startReporters(verifiableProps)
     }
 
     val props = new Properties()

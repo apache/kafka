@@ -117,7 +117,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       config.autoCommitIntervalMs, false)
   }
 
-  KafkaCSVMetricsReporter.startCSVMetricReporter(config.props)
+  KafkaMetricsReporter.startReporters(config.props)
 
   def this(config: ConsumerConfig) = this(config, true)
 
