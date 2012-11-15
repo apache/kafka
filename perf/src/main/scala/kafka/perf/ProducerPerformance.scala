@@ -94,18 +94,8 @@ object ProducerPerformance extends Logging {
             .withRequiredArg()
             .ofType(classOf[java.lang.Integer])
             .defaultsTo(-1)
-    val messageSizeOpt = parser.accepts("message-size", "The size of each message.")
-            .withRequiredArg
-            .describedAs("size")
-            .ofType(classOf[java.lang.Integer])
-            .defaultsTo(100)
     val varyMessageSizeOpt = parser.accepts("vary-message-size", "If set, message size will vary up to the given maximum.")
     val syncOpt = parser.accepts("sync", "If set, messages are sent synchronously.")
-    val batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch.")
-            .withRequiredArg
-            .describedAs("batch size")
-            .ofType(classOf[java.lang.Integer])
-            .defaultsTo(200)
     val numThreadsOpt = parser.accepts("threads", "Number of sending threads.")
             .withRequiredArg
             .describedAs("number of threads")
@@ -127,6 +117,20 @@ object ProducerPerformance extends Logging {
             .describedAs("message send time gap")
             .ofType(classOf[java.lang.Integer])
             .defaultsTo(0)
+    val produceRequestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The produce request timeout in ms")
+      .withRequiredArg()
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(3000)
+    val produceRequestRequiredAcksOpt = parser.accepts("request-num-acks", "Number of acks required for producer request " +
+      "to complete")
+      .withRequiredArg()
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(-1)
+    val asyncOpt = parser.accepts("async", "If set, messages are sent asynchronously.")
+      .withRequiredArg
+      .describedAs("count")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(1)
     val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
     val metricsDirectoryOpt = parser.accepts("metrics-dir", "If csv-reporter-enable is set, and this parameter is" +
             "set, the csv metrics will be outputed here")
@@ -154,10 +158,10 @@ object ProducerPerformance extends Logging {
     var isSync = options.has(syncOpt)
     var batchSize = options.valueOf(batchSizeOpt).intValue
     var numThreads = options.valueOf(numThreadsOpt).intValue
-    val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOption).intValue)
+    val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOpt).intValue)
     val seqIdMode = options.has(initialMessageIdOpt)
     var initialMessageId: Int = 0
-    if (seqIdMode)
+    if(seqIdMode)
       initialMessageId = options.valueOf(initialMessageIdOpt).intValue()
     val producerRequestTimeoutMs = options.valueOf(producerRequestTimeoutMsOpt).intValue()
     val producerRequestRequiredAcks = options.valueOf(producerRequestRequiredAcksOpt).intValue()

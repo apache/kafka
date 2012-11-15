@@ -28,9 +28,7 @@ import kafka.utils.{SystemTime, KafkaScheduler, TestUtils, MockTime, Utils}
 
 class HighwatermarkPersistenceTest extends JUnit3Suite {
 
-  val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
-    override val defaultFlushIntervalMs = 100
-  })
+  val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_))
   val topic = "foo"
   val logManagers = configs.map(config => new LogManager(config, new KafkaScheduler(1), new MockTime))
     

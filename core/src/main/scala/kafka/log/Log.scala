@@ -608,5 +608,8 @@ private[kafka] class Log(val dir: File,
   def getLastFlushedTime():Long = {
     return lastflushedTime.get
   }
+  
+  override def toString() = "Log(" + this.dir + ")"
+  
 }
   

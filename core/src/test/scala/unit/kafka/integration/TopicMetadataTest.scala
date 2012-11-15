@@ -33,7 +33,7 @@ import kafka.api.{RequestKeys, TopicMetadata, TopicMetadataResponse, TopicMetada
 
 class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
-  val configs = props.map(p => new KafkaConfig(p) { override val flushInterval = 1})
+  val configs = props.map(p => new KafkaConfig(p))
   var brokers: Seq[Broker] = null
 
   override def setUp() {

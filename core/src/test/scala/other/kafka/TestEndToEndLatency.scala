@@ -63,7 +63,7 @@ object TestEndToEndLatency {
         println(i + "\t" + elapsed / 1000.0 / 1000.0)
       totalTime += elapsed
     }
-    println("Avg latency: " + (totalTime / numMessages / 1000.0 / 1000.0)) + "ms"
+    println("Avg latency: " + (totalTime / numMessages / 1000.0 / 1000.0) + "ms")
     producer.close()
     connector.shutdown()
     System.exit(0)

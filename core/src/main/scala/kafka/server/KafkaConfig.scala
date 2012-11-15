@@ -159,4 +159,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
    * Increasing this value can increase the degree of I/O parallelism in the follower broker. */
   val numReplicaFetchers = props.getInt("replica.fetchers", 1)
   
+  /* the frequency with which the highwater mark is saved out to disk */
+  val highWaterMarkCheckpointIntervalMs = props.getLong("replica.highwatermark.checkpoint.ms", 5000L)
+  
  }

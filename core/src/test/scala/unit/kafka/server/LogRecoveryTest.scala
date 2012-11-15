@@ -32,7 +32,6 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
     override val replicaMaxLagTimeMs = 5000L
     override val replicaMaxLagBytes = 10L
-    override val flushInterval = 10
     override val replicaMinBytes = 20
   })
   val topic = "new-topic"

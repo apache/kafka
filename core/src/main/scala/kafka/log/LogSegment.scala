@@ -82,7 +82,9 @@ class LogSegment(val messageSet: FileMessageSet,
    * no more than maxSize bytes and will end before maxOffset if a maxOffset is specified.
    */
   def read(startOffset: Long, maxSize: Int, maxOffset: Option[Long]): MessageSet = {
-    if(maxSize <= 0)
+    if(maxSize < 0)
+      throw new IllegalArgumentException("Invalid max size for log read (%d)".format(maxSize))
+    if(maxSize == 0)
       return MessageSet.Empty
       
     val startPosition = translateOffset(startOffset)
@@ -99,6 +101,8 @@ class LogSegment(val messageSet: FileMessageSet,
           maxSize
         case Some(offset) => {
           // there is a max offset, translate it to a file position and use that to calculate the max read size
+          if(offset < startOffset)
+            throw new IllegalArgumentException("Attempt to read with a maximum offset (%d) less than the start offset (%d).".format(offset, startOffset))
           val mapping = translateOffset(offset)
           val endPosition = 
             if(mapping == null)
