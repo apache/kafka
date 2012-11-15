@@ -128,7 +128,7 @@ with Logging {
     val assignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
     val preferredReplica = assignedReplicas.head
     // check if preferred replica is the current leader
-    val currentLeader = controllerContext.allLeaders(topicAndPartition)
+    val currentLeader = controllerContext.allLeaders(topicAndPartition).leader
     if(currentLeader == preferredReplica) {
       throw new StateChangeFailedException("Preferred replica %d is already the current leader for partition [%s,%d]"
         .format(preferredReplica, topic, partition))
