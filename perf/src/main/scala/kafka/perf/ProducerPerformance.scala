@@ -23,6 +23,7 @@ import kafka.producer._
 import org.apache.log4j.Logger
 import kafka.message.{CompressionCodec, Message}
 import java.text.SimpleDateFormat
+import kafka.serializer._
 import java.util._
 import collection.immutable.List
 import kafka.utils.{VerifiableProperties, Logging}
@@ -201,9 +202,12 @@ object ProducerPerformance extends Logging {
     props.put("producer.request.timeout.ms", config.producerRequestTimeoutMs.toString)
     props.put("producer.num.retries", config.producerNumRetries.toString)
     props.put("producer.retry.backoff.ms", config.producerRetryBackoffMs.toString)
+    props.put("serializer.class", classOf[DefaultEncoder].getName.toString)
+    props.put("key.serializer.class", classOf[NullEncoder[Long]].getName.toString)
 
+    
     val producerConfig = new ProducerConfig(props)
-    val producer = new Producer[Message, Message](producerConfig)
+    val producer = new Producer[Long, Array[Byte]](producerConfig)
     val seqIdNumDigit = 10   // no. of digits for max int value
 
     val messagesPerThread = config.numMessages / config.numThreads
@@ -215,7 +219,7 @@ object ProducerPerformance extends Logging {
     private val threadIdLabel  = "ThreadID"
     private val topicLabel     = "Topic"
     private var leftPaddedSeqId : String = ""
-    private def generateMessageWithSeqId(topic: String, msgId: Long, msgSize: Int): Message = {
+    private def generateMessageWithSeqId(topic: String, msgId: Long, msgSize: Int): Array[Byte] = {
       // Each thread gets a unique range of sequential no. for its ids.
       // Eg. 1000 msg in 10 threads => 100 msg per thread
       // thread 0 IDs :   0 ~  99
@@ -233,19 +237,18 @@ object ProducerPerformance extends Logging {
 
       val seqMsgString = String.format("%1$-"+msgSize+"s", msgHeader).replace(' ', 'x')
       debug(seqMsgString)
-      return new Message(seqMsgString.getBytes())
+      return seqMsgString.getBytes()
     }
 
-    private def generateProducerData(topic: String, messageId: Long): (ProducerData[Message, Message], Int) = {
+    private def generateProducerData(topic: String, messageId: Long): (KeyedMessage[Long, Array[Byte]], Int) = {
       val msgSize = if(config.isFixSize) config.messageSize else 1 + rand.nextInt(config.messageSize)
       val message = if(config.seqIdMode) {
         val seqId = config.initialMessageId + (messagesPerThread * threadId) + messageId
         generateMessageWithSeqId(topic, seqId, msgSize)
+      } else {
+        new Array[Byte](msgSize)
       }
-      else {
-        new Message(new Array[Byte](msgSize))
-      }
-      (new ProducerData[Message, Message](topic, null, message), message.payloadSize)
+      (new KeyedMessage[Long, Array[Byte]](topic, messageId, message), message.length)
     }
 
     override def run {

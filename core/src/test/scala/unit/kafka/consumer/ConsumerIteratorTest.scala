@@ -26,10 +26,10 @@ import junit.framework.Assert._
 import kafka.message._
 import kafka.server._
 import kafka.utils.TestUtils._
-import kafka.utils.{TestZKUtils, TestUtils}
+import kafka.utils._
 import kafka.admin.CreateTopicCommand
 import org.junit.Test
-import kafka.serializer.DefaultDecoder
+import kafka.serializer._
 import kafka.cluster.{Broker, Cluster}
 import org.scalatest.junit.JUnit3Suite
 import kafka.integration.KafkaServerTestHarness
@@ -46,13 +46,14 @@ class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
   val topic = "topic"
   val group = "group1"
   val consumer0 = "consumer0"
+  val consumedOffset = 5
   val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, c.brokerId.toString, "localhost", c.port)))
   val queue = new LinkedBlockingQueue[FetchedDataChunk]
   val topicInfos = configs.map(c => new PartitionTopicInfo(topic,
                                                            c.brokerId,
                                                            0,
                                                            queue,
-                                                           new AtomicLong(5),
+                                                           new AtomicLong(consumedOffset),
                                                            new AtomicLong(0),
                                                            new AtomicInteger(0)))
   val consumerConfig = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer0))
@@ -65,24 +66,25 @@ class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
 
   @Test
   def testConsumerIteratorDeduplicationDeepIterator() {
-    val messages = 0.until(10).map(x => new Message((configs(0).brokerId * 5 + x).toString.getBytes)).toList
+    val messageStrings = (0 until 10).map(_.toString).toList
+    val messages = messageStrings.map(s => new Message(s.getBytes))
     val messageSet = new ByteBufferMessageSet(DefaultCompressionCodec, new AtomicLong(0), messages:_*)
 
     topicInfos(0).enqueue(messageSet)
     assertEquals(1, queue.size)
     queue.put(ZookeeperConsumerConnector.shutdownCommand)
 
-    val iter: ConsumerIterator[Message] = new ConsumerIterator[Message](queue, consumerConfig.consumerTimeoutMs,
-                                                                        new DefaultDecoder, false)
-    var receivedMessages: List[Message] = Nil
-    for (i <- 0 until 5) {
-      assertTrue(iter.hasNext)
-      receivedMessages ::= iter.next.message
-    }
+    val iter = new ConsumerIterator[String, String](queue, 
+                                                    consumerConfig.consumerTimeoutMs,
+                                                    new StringDecoder(), 
+                                                    new StringDecoder(),
+                                                    enableShallowIterator = false)
+    var receivedMessages = (0 until 5).map(i => iter.next.message).toList
 
-    assertTrue(!iter.hasNext)
+    assertFalse(iter.hasNext)
     assertEquals(1, queue.size) // This is only the shutdown command.
     assertEquals(5, receivedMessages.size)
-    assertEquals(receivedMessages.sortWith((s,t) => s.checksum < t.checksum), messages.takeRight(5).sortWith((s,t) => s.checksum < t.checksum))
+    val unconsumed = messageSet.filter(_.offset >= consumedOffset).map(m => Utils.readString(m.message.payload))
+    assertEquals(unconsumed, receivedMessages)
   }
 }

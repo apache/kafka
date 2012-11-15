@@ -20,10 +20,12 @@ import org.scalatest.junit.JUnit3Suite
 import org.junit.Assert._
 import kafka.admin.CreateTopicCommand
 import kafka.utils.TestUtils._
+import kafka.utils.IntEncoder
 import kafka.utils.{Utils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
+import kafka.serializer._
 import kafka.message.Message
-import kafka.producer.{ProducerConfig, ProducerData, Producer}
+import kafka.producer.{ProducerConfig, KeyedMessage, Producer}
 
 class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
@@ -42,12 +44,17 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   val configProps1 = configs.head
   val configProps2 = configs.last
 
-  val message = new Message("hello".getBytes())
+  val message = "hello"
 
-  var producer: Producer[Int, Message] = null
+  var producer: Producer[Int, String] = null
   var hwFile1: HighwaterMarkCheckpoint = new HighwaterMarkCheckpoint(configProps1.logDirs(0))
   var hwFile2: HighwaterMarkCheckpoint = new HighwaterMarkCheckpoint(configProps2.logDirs(0))
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
+  
+  val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
+  producerProps.put("key.serializer.class", classOf[IntEncoder].getName.toString)
+  producerProps.put("producer.request.required.acks", "-1")
+
 
   def testHWCheckpointNoFailuresSingleLogSegment {
     // start both servers
@@ -55,10 +62,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     server2 = TestUtils.createServer(configProps2)
     servers ++= List(server1, server2)
 
-    val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
-    producerProps.put("producer.request.timeout.ms", "1000")
-    producerProps.put("producer.request.required.acks", "-1")
-    producer = new Producer[Int, Message](new ProducerConfig(producerProps))
+    producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
     // create topic with 1 partition, 2 replicas, one on each broker
     CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(_.brokerId).mkString(":"))
@@ -92,10 +96,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     server2 = TestUtils.createServer(configProps2)
     servers ++= List(server1, server2)
 
-    val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
-    producerProps.put("producer.request.timeout.ms", "1000")
-    producerProps.put("producer.request.required.acks", "-1")
-    producer = new Producer[Int, Message](new ProducerConfig(producerProps))
+    producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
     // create topic with 1 partition, 2 replicas, one on each broker
     CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(_.brokerId).mkString(":"))
@@ -152,14 +153,6 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   def testHWCheckpointNoFailuresMultipleLogSegments {
-    val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
-      override val replicaMaxLagTimeMs = 5000L
-      override val replicaMaxLagBytes = 10L
-      override val flushInterval = 10
-      override val replicaMinBytes = 20
-      override val logFileSize = 30
-    })
-
     // start both servers
     server1 = TestUtils.createServer(configs.head)
     server2 = TestUtils.createServer(configs.last)
@@ -168,10 +161,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     hwFile1 = new HighwaterMarkCheckpoint(server1.config.logDirs(0))
     hwFile2 = new HighwaterMarkCheckpoint(server2.config.logDirs(0))
 
-    val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
-    producerProps.put("producer.request.timeout.ms", "1000")
-    producerProps.put("producer.request.required.acks", "-1")
-    producer = new Producer[Int, Message](new ProducerConfig(producerProps))
+    producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
     // create topic with 1 partition, 2 replicas, one on each broker
     CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(_.brokerId).mkString(":"))
@@ -197,14 +187,6 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   def testHWCheckpointWithFailuresMultipleLogSegments {
-    val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
-      override val replicaMaxLagTimeMs = 5000L
-      override val replicaMaxLagBytes = 10L
-      override val flushInterval = 1000
-      override val replicaMinBytes = 20
-      override val logFileSize = 30
-    })
-
     // start both servers
     server1 = TestUtils.createServer(configs.head)
     server2 = TestUtils.createServer(configs.last)
@@ -213,10 +195,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     hwFile1 = new HighwaterMarkCheckpoint(server1.config.logDirs(0))
     hwFile2 = new HighwaterMarkCheckpoint(server2.config.logDirs(0))
 
-    val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
-    producerProps.put("producer.request.timeout.ms", "1000")
-    producerProps.put("producer.request.required.acks", "-1")
-    producer = new Producer[Int, Message](new ProducerConfig(producerProps))
+    producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
     // create topic with 1 partition, 2 replicas, one on each broker
     CreateTopicCommand.createTopic(zkClient, topic, 1, 2, configs.map(_.brokerId).mkString(":"))
@@ -268,6 +247,6 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   private def sendMessages(n: Int = 1) {
     for(i <- 0 until n)
-      producer.send(new ProducerData[Int, Message](topic, 0, message))
+      producer.send(new KeyedMessage[Int, String](topic, 0, message))
   }
 }

@@ -17,5 +17,5 @@
 
 package kafka.message
 
-case class MessageAndMetadata[T](message: T, topic: String = "")
+case class MessageAndMetadata[K, V](key: K, message: V, topic: String, partition: Int, offset: Long)
 

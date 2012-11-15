@@ -22,19 +22,20 @@ import java.util.concurrent.BlockingQueue
 import kafka.serializer.Decoder
 import kafka.message.MessageAndMetadata
 
-class KafkaStream[T](private val queue: BlockingQueue[FetchedDataChunk],
-                     consumerTimeoutMs: Int,
-                     private val decoder: Decoder[T],
-                     val enableShallowIterator: Boolean)
-   extends Iterable[MessageAndMetadata[T]] with java.lang.Iterable[MessageAndMetadata[T]] {
+class KafkaStream[K,V](private val queue: BlockingQueue[FetchedDataChunk],
+                        consumerTimeoutMs: Int,
+                        private val keyDecoder: Decoder[K],
+                        private val valueDecoder: Decoder[V],
+                        val enableShallowIterator: Boolean)
+   extends Iterable[MessageAndMetadata[K,V]] with java.lang.Iterable[MessageAndMetadata[K,V]] {
 
-  private val iter: ConsumerIterator[T] =
-    new ConsumerIterator[T](queue, consumerTimeoutMs, decoder, enableShallowIterator)
+  private val iter: ConsumerIterator[K,V] =
+    new ConsumerIterator[K,V](queue, consumerTimeoutMs, keyDecoder, valueDecoder, enableShallowIterator)
 
   /**
    *  Create an iterator over messages in the stream.
    */
-  def iterator(): ConsumerIterator[T] = iter
+  def iterator(): ConsumerIterator[K,V] = iter
 
   /**
    * This method clears the queue being iterated during the consumer rebalancing. This is mainly

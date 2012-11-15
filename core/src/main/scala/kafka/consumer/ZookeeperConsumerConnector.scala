@@ -28,13 +28,14 @@ import java.net.InetAddress
 import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import java.util.UUID
-import kafka.serializer.Decoder
+import kafka.serializer._
 import kafka.utils.ZkUtils._
 import kafka.common._
 import kafka.client.ClientUtils
 import com.yammer.metrics.core.Gauge
 import kafka.api.OffsetRequest
 import kafka.metrics._
+import kafka.producer.ProducerConfig
 
 
 /**
@@ -120,17 +121,23 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   KafkaMetricsReporter.startReporters(config.props)
 
   def this(config: ConsumerConfig) = this(config, true)
+  
+  def createMessageStreams(topicCountMap: Map[String,Int]): Map[String, List[KafkaStream[Array[Byte],Array[Byte]]]] = 
+    createMessageStreams(topicCountMap, new DefaultDecoder(), new DefaultDecoder())
 
-  def createMessageStreams[T](topicCountMap: Map[String,Int], decoder: Decoder[T])
-      : Map[String,List[KafkaStream[T]]] = {
+  def createMessageStreams[K,V](topicCountMap: Map[String,Int], keyDecoder: Decoder[K], valueDecoder: Decoder[V])
+      : Map[String, List[KafkaStream[K,V]]] = {
     if (messageStreamCreated.getAndSet(true))
       throw new RuntimeException(this.getClass.getSimpleName +
                                    " can create message streams at most once")
-    consume(topicCountMap, decoder)
+    consume(topicCountMap, keyDecoder, valueDecoder)
   }
 
-  def createMessageStreamsByFilter[T](topicFilter: TopicFilter, numStreams: Int, decoder: Decoder[T]) = {
-    val wildcardStreamsHandler = new WildcardStreamsHandler[T](topicFilter, numStreams, decoder)
+  def createMessageStreamsByFilter[K,V](topicFilter: TopicFilter, 
+                                        numStreams: Int, 
+                                        keyDecoder: Decoder[K] = new DefaultDecoder(), 
+                                        valueDecoder: Decoder[V] = new DefaultDecoder()) = {
+    val wildcardStreamsHandler = new WildcardStreamsHandler[K,V](topicFilter, numStreams, keyDecoder, valueDecoder)
     wildcardStreamsHandler.streams
   }
 
@@ -173,8 +180,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     }
   }
 
-  def consume[T](topicCountMap: scala.collection.Map[String,Int], decoder: Decoder[T])
-      : Map[String,List[KafkaStream[T]]] = {
+  def consume[K, V](topicCountMap: scala.collection.Map[String,Int], keyDecoder: Decoder[K], valueDecoder: Decoder[V])
+      : Map[String,List[KafkaStream[K,V]]] = {
     debug("entering consume ")
     if (topicCountMap == null)
       throw new RuntimeException("topicCountMap is null")
@@ -187,8 +194,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     val queuesAndStreams = topicThreadIds.values.map(threadIdSet =>
       threadIdSet.map(_ => {
         val queue =  new LinkedBlockingQueue[FetchedDataChunk](config.maxQueuedChunks)
-        val stream = new KafkaStream[T](
-          queue, config.consumerTimeoutMs, decoder, config.enableShallowIterator)
+        val stream = new KafkaStream[K,V](
+          queue, config.consumerTimeoutMs, keyDecoder, valueDecoder, config.enableShallowIterator)
         (queue, stream)
       })
     ).flatten.toList
@@ -197,7 +204,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     registerConsumerInZK(dirs, consumerIdString, topicCount)
     reinitializeConsumer(topicCount, queuesAndStreams)
 
-    loadBalancerListener.kafkaMessageAndMetadataStreams.asInstanceOf[Map[String, List[KafkaStream[T]]]]
+    loadBalancerListener.kafkaMessageAndMetadataStreams.asInstanceOf[Map[String, List[KafkaStream[K,V]]]]
   }
 
   // this API is used by unit tests only
@@ -293,7 +300,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   }
 
   class ZKRebalancerListener(val group: String, val consumerIdString: String,
-                             val kafkaMessageAndMetadataStreams: mutable.Map[String,List[KafkaStream[_]]])
+                             val kafkaMessageAndMetadataStreams: mutable.Map[String,List[KafkaStream[_,_]]])
     extends IZkChildListener {
     private var isWatcherTriggered = false
     private val lock = new ReentrantLock
@@ -473,7 +480,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     }
 
     private def closeFetchersForQueues(cluster: Cluster,
-                                       messageStreams: Map[String,List[KafkaStream[_]]],
+                                       messageStreams: Map[String,List[KafkaStream[_,_]]],
                                        queuesToBeCleared: Iterable[BlockingQueue[FetchedDataChunk]]) {
       val allPartitionInfos = topicRegistry.values.map(p => p.values).flatten
       fetcher match {
@@ -496,7 +503,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     private def clearFetcherQueues(topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster,
                                    queuesTobeCleared: Iterable[BlockingQueue[FetchedDataChunk]],
-                                   messageStreams: Map[String,List[KafkaStream[_]]]) {
+                                   messageStreams: Map[String,List[KafkaStream[_,_]]]) {
 
       // Clear all but the currently iterated upon chunk in the consumer thread's queue
       queuesTobeCleared.foreach(_.clear)
@@ -510,7 +517,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     }
 
-    private def closeFetchers(cluster: Cluster, messageStreams: Map[String,List[KafkaStream[_]]],
+    private def closeFetchers(cluster: Cluster, messageStreams: Map[String,List[KafkaStream[_,_]]],
                               relevantTopicThreadIdsMap: Map[String, Set[String]]) {
       // only clear the fetcher queues for certain topic partitions that *might* no longer be served by this consumer
       // after this rebalancing attempt
@@ -610,17 +617,17 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     }
   }
 
-  private def reinitializeConsumer[T](
+  private def reinitializeConsumer[K,V](
       topicCount: TopicCount,
-      queuesAndStreams: List[(LinkedBlockingQueue[FetchedDataChunk],KafkaStream[T])]) {
+      queuesAndStreams: List[(LinkedBlockingQueue[FetchedDataChunk],KafkaStream[K,V])]) {
 
     val dirs = new ZKGroupDirs(config.groupId)
 
     // listener to consumer and partition changes
     if (loadBalancerListener == null) {
-      val topicStreamsMap = new mutable.HashMap[String,List[KafkaStream[T]]]
+      val topicStreamsMap = new mutable.HashMap[String,List[KafkaStream[K,V]]]
       loadBalancerListener = new ZKRebalancerListener(
-        config.groupId, consumerIdString, topicStreamsMap.asInstanceOf[scala.collection.mutable.Map[String, List[KafkaStream[_]]]])
+        config.groupId, consumerIdString, topicStreamsMap.asInstanceOf[scala.collection.mutable.Map[String, List[KafkaStream[_,_]]]])
     }
 
     // register listener for session expired event
@@ -690,9 +697,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     loadBalancerListener.syncedRebalance()
   }
 
-  class WildcardStreamsHandler[T](topicFilter: TopicFilter,
+  class WildcardStreamsHandler[K,V](topicFilter: TopicFilter,
                                   numStreams: Int,
-                                  decoder: Decoder[T])
+                                  keyDecoder: Decoder[K],
+                                  valueDecoder: Decoder[V])
                                 extends TopicEventHandler[String] {
 
     if (messageStreamCreated.getAndSet(true))
@@ -702,8 +710,11 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     private val wildcardQueuesAndStreams = (1 to numStreams)
       .map(e => {
         val queue = new LinkedBlockingQueue[FetchedDataChunk](config.maxQueuedChunks)
-        val stream = new KafkaStream[T](
-          queue, config.consumerTimeoutMs, decoder, config.enableShallowIterator)
+        val stream = new KafkaStream[K,V](queue, 
+                                          config.consumerTimeoutMs, 
+                                          keyDecoder, 
+                                          valueDecoder, 
+                                          config.enableShallowIterator)
         (queue, stream)
     }).toList
 
@@ -760,7 +771,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         reinitializeConsumer(wildcardTopicCount, wildcardQueuesAndStreams)
     }
 
-    def streams: Seq[KafkaStream[T]] =
+    def streams: Seq[KafkaStream[K,V]] =
       wildcardQueuesAndStreams.map(_._2)
   }
 }

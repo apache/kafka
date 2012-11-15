@@ -22,8 +22,9 @@ import junit.framework.Assert._
 import kafka.api.{PartitionFetchInfo, FetchRequest, FetchRequestBuilder}
 import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import java.util.Properties
-import kafka.producer.{ProducerData, Producer, ProducerConfig}
-import kafka.serializer.StringDecoder
+import kafka.utils.Utils
+import kafka.producer.{KeyedMessage, Producer, ProducerConfig}
+import kafka.serializer._
 import kafka.message.Message
 import kafka.utils.TestUtils
 import org.apache.log4j.{Level, Logger}
@@ -91,7 +92,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val config = new ProducerConfig(props)
 
     val stringProducer1 = new Producer[String, String](config)
-    stringProducer1.send(new ProducerData[String, String](topic, Array("test-message")))
+    stringProducer1.send(new KeyedMessage[String, String](topic, "test-message"))
 
     val replica = servers.head.replicaManager.getReplica(topic, 0).get
     assertTrue("HighWatermark should equal logEndOffset with just 1 replica",
@@ -108,30 +109,26 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     assertTrue(messageSet.iterator.hasNext)
 
     val fetchedMessageAndOffset = messageSet.head
-    val stringDecoder = new StringDecoder
-    val fetchedStringMessage = stringDecoder.toEvent(fetchedMessageAndOffset.message)
-    assertEquals("test-message", fetchedStringMessage)
+    assertEquals("test-message", Utils.readString(fetchedMessageAndOffset.message.payload, "UTF-8"))
   }
 
   def testDefaultEncoderProducerAndFetchWithCompression() {
     val topic = "test-topic"
     val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
+    props.put("serializer.class", classOf[StringEncoder].getName.toString)
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("compression", "true")
     val config = new ProducerConfig(props)
 
     val stringProducer1 = new Producer[String, String](config)
-    stringProducer1.send(new ProducerData[String, String](topic, Array("test-message")))
+    stringProducer1.send(new KeyedMessage[String, String](topic, "test-message"))
 
     var fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
     val messageSet = fetched.messageSet(topic, 0)
     assertTrue(messageSet.iterator.hasNext)
 
     val fetchedMessageAndOffset = messageSet.head
-    val stringDecoder = new StringDecoder
-    val fetchedStringMessage = stringDecoder.toEvent(fetchedMessageAndOffset.message)
-    assertEquals("test-message", fetchedStringMessage)
+    assertEquals("test-message", Utils.readString(fetchedMessageAndOffset.message.payload, "UTF-8"))
   }
 
   def testProduceAndMultiFetch() {
@@ -140,22 +137,21 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
     {
-      val messages = new mutable.HashMap[String, Seq[Message]]
+      val messages = new mutable.HashMap[String, Seq[String]]
       val builder = new FetchRequestBuilder()
       for( (topic, partition) <- topics) {
-        val messageList = List(new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-        val producerData = new ProducerData[String, Message](topic, topic, messageList)
+        val messageList = List("a_" + topic, "b_" + topic)
+        val producerData = messageList.map(new KeyedMessage[String, String](topic, topic, _))
         messages += topic -> messageList
-        producer.send(producerData)
+        producer.send(producerData:_*)
         builder.addFetch(topic, partition, 0, 10000)
-    }
+      }
 
-      // wait a bit for produced message to be available
       val request = builder.build()
       val response = consumer.fetch(request)
-      for( (topic, partition) <- topics) {
+      for((topic, partition) <- topics) {
         val fetched = response.messageSet(topic, partition)
-        TestUtils.checkEquals(messages(topic).iterator, fetched.map(messageAndOffset => messageAndOffset.message).iterator)
+        assertEquals(messages(topic), fetched.map(messageAndOffset => Utils.readString(messageAndOffset.message.payload)))
       }
     }
 
@@ -204,13 +200,13 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
     {
-      val messages = new mutable.HashMap[String, Seq[Message]]
+      val messages = new mutable.HashMap[String, Seq[String]]
       val builder = new FetchRequestBuilder()
       for( (topic, partition) <- topics) {
-        val messageList = List(new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-        val producerData = new ProducerData[String, Message](topic, topic, messageList)
+        val messageList = List("a_" + topic, "b_" + topic)
+        val producerData = messageList.map(new KeyedMessage[String, String](topic, topic, _))
         messages += topic -> messageList
-        producer.send(producerData)
+        producer.send(producerData:_*)
         builder.addFetch(topic, partition, 0, 10000)
       }
 
@@ -219,7 +215,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
       val response = consumer.fetch(request)
       for( (topic, partition) <- topics) {
         val fetched = response.messageSet(topic, partition)
-        TestUtils.checkEquals(messages(topic).iterator, fetched.map(messageAndOffset => messageAndOffset.message).iterator)
+        assertEquals(messages(topic), fetched.map(messageAndOffset => Utils.readString(messageAndOffset.message.payload)))
       }
     }
 
@@ -267,14 +263,14 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
-    val messages = new mutable.HashMap[String, Seq[Message]]
+    val messages = new mutable.HashMap[String, Seq[String]]
     val builder = new FetchRequestBuilder()
-    var produceList: List[ProducerData[String, Message]] = Nil
+    var produceList: List[KeyedMessage[String, String]] = Nil
     for( (topic, partition) <- topics) {
-      val messageList = List(new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-      val producerData = new ProducerData[String, Message](topic, topic, messageList)
+      val messageList = List("a_" + topic, "b_" + topic)
+      val producerData = messageList.map(new KeyedMessage[String, String](topic, topic, _))
       messages += topic -> messageList
-      producer.send(producerData)
+      producer.send(producerData:_*)
       builder.addFetch(topic, partition, 0, 10000)
     }
     producer.send(produceList: _*)
@@ -284,21 +280,21 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val response = consumer.fetch(request)
     for( (topic, partition) <- topics) {
       val fetched = response.messageSet(topic, partition)
-      TestUtils.checkEquals(messages(topic).iterator, fetched.map(messageAndOffset => messageAndOffset.message).iterator)
+      assertEquals(messages(topic), fetched.map(messageAndOffset => Utils.readString(messageAndOffset.message.payload)))
     }
   }
 
   def testMultiProduceWithCompression() {
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
-    val messages = new mutable.HashMap[String, Seq[Message]]
+    val messages = new mutable.HashMap[String, Seq[String]]
     val builder = new FetchRequestBuilder()
-    var produceList: List[ProducerData[String, Message]] = Nil
+    var produceList: List[KeyedMessage[String, String]] = Nil
     for( (topic, partition) <- topics) {
-      val messageList = List(new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-      val producerData = new ProducerData[String, Message](topic, topic, messageList)
+      val messageList = List("a_" + topic, "b_" + topic)
+      val producerData = messageList.map(new KeyedMessage[String, String](topic, topic, _))
       messages += topic -> messageList
-      producer.send(producerData)
+      producer.send(producerData:_*)
       builder.addFetch(topic, partition, 0, 10000)
     }
     producer.send(produceList: _*)
@@ -308,7 +304,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val response = consumer.fetch(request)
     for( (topic, partition) <- topics) {
       val fetched = response.messageSet(topic, 0)
-      TestUtils.checkEquals(messages(topic).iterator, fetched.map(messageAndOffset => messageAndOffset.message).iterator)
+      assertEquals(messages(topic), fetched.map(messageAndOffset => Utils.readString(messageAndOffset.message.payload)))
     }
   }
 

@@ -18,6 +18,7 @@
 package kafka.javaapi.producer
 
 import kafka.producer.ProducerConfig
+import kafka.producer.KeyedMessage
 
 class Producer[K,V](private val underlying: kafka.producer.Producer[K,V]) // for testing only
 {
@@ -27,20 +28,17 @@ class Producer[K,V](private val underlying: kafka.producer.Producer[K,V]) // for
    * synchronous or the asynchronous producer
    * @param producerData the producer data object that encapsulates the topic, key and message data
    */
-  def send(producerData: kafka.javaapi.producer.ProducerData[K,V]) {
-    import collection.JavaConversions._
-    underlying.send(new kafka.producer.ProducerData[K,V](producerData.getTopic, producerData.getKey,
-                                                         asBuffer(producerData.getData)))
+  def send(message: KeyedMessage[K,V]) {
+    underlying.send(message)
   }
 
   /**
    * Use this API to send data to multiple topics
    * @param producerData list of producer data objects that encapsulate the topic, key and message data
    */
-  def send(producerData: java.util.List[kafka.javaapi.producer.ProducerData[K,V]]) {
+  def send(messages: java.util.List[KeyedMessage[K,V]]) {
     import collection.JavaConversions._
-    underlying.send(asBuffer(producerData).map(pd => new kafka.producer.ProducerData[K,V](pd.getTopic, pd.getKey,
-                                                         asBuffer(pd.getData))): _*)
+    underlying.send(asBuffer(messages):_*)
   }
 
   /**

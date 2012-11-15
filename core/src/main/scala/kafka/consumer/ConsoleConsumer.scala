@@ -24,7 +24,7 @@ import java.util.Properties
 import java.util.Random
 import java.io.PrintStream
 import kafka.message._
-import kafka.serializer.StringDecoder
+import kafka.serializer._
 import kafka.utils._
 import kafka.metrics.KafkaMetricsReporter
 
@@ -179,7 +179,7 @@ object ConsoleConsumer extends Logging {
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
     formatter.init(formatterArgs)
     try {
-      val stream = connector.createMessageStreamsByFilter(filterSpec).get(0)
+      val stream = connector.createMessageStreamsByFilter(filterSpec, 1, new DefaultDecoder(), new DefaultDecoder()).get(0)
       val iter = if(maxMessages >= 0)
         stream.slice(0, maxMessages)
       else
@@ -187,7 +187,7 @@ object ConsoleConsumer extends Logging {
 
       for(messageAndTopic <- iter) {
         try {
-          formatter.writeTo(messageAndTopic.message, System.out)
+          formatter.writeTo(messageAndTopic.key, messageAndTopic.message, System.out)
         } catch {
           case e =>
             if (skipMessageOnError)
@@ -251,36 +251,14 @@ object MessageFormatter {
 }
 
 trait MessageFormatter {
-  def writeTo(message: Message, output: PrintStream)
+  def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream)
   def init(props: Properties) {}
   def close() {}
 }
 
-class DecodedMessageFormatter extends MessageFormatter {
-  var topicStr: String = _
-  val decoder = new StringDecoder()
-
-  override def init(props: Properties) {
-    topicStr = props.getProperty("topic")
-    if (topicStr != null)
-      topicStr = topicStr + ":"
-    else
-      topicStr = ""
-  }
-
-  def writeTo(message: Message, output: PrintStream) {
-    try {
-      output.println(topicStr + decoder.toEvent(message) + ":payloadsize:" + message.payloadSize)
-    } catch {
-      case e => e.printStackTrace()
-    }
-  }
-}
-
 class NewlineMessageFormatter extends MessageFormatter {
-  def writeTo(message: Message, output: PrintStream) {
-    val payload = message.payload
-    output.write(payload.array, payload.arrayOffset, payload.limit)
+  def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
+    output.write(value)
     output.write('\n')
   }
 }
@@ -296,8 +274,8 @@ class ChecksumMessageFormatter extends MessageFormatter {
       topicStr = ""
   }
 
-  def writeTo(message: Message, output: PrintStream) {
-    val chksum = message.checksum
+  def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
+    val chksum = new Message(value, key).checksum
     output.println(topicStr + "checksum:" + chksum)
   }
 }

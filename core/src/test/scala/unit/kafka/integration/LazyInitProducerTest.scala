@@ -21,10 +21,11 @@ import kafka.api.FetchRequestBuilder
 import kafka.message.{Message, ByteBufferMessageSet}
 import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import org.apache.log4j.{Level, Logger}
+import org.junit.Assert._
 import org.scalatest.junit.JUnit3Suite
 import scala.collection._
-import kafka.producer.ProducerData
-import kafka.utils.TestUtils
+import kafka.producer.KeyedMessage
+import kafka.utils._
 import kafka.common.{ErrorMapping, KafkaException, OffsetOutOfRangeException}
 
 /**
@@ -57,17 +58,17 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
   def testProduceAndFetch() {
     // send some messages
     val topic = "test"
-    val sentMessages = List(new Message("hello".getBytes()), new Message("there".getBytes()))
-    val producerData = new ProducerData[String, Message](topic, topic, sentMessages)
+    val sentMessages = List("hello", "there")
+    val producerData = sentMessages.map(m => new KeyedMessage[String, String](topic, topic, m))
 
-    producer.send(producerData)
+    producer.send(producerData:_*)
 
     var fetchedMessage: ByteBufferMessageSet = null
     while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
       val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       fetchedMessage = fetched.messageSet(topic, 0)
     }
-    TestUtils.checkEquals(sentMessages.iterator, fetchedMessage.map(m => m.message).iterator)
+    assertEquals(sentMessages, fetchedMessage.map(m => Utils.readString(m.message.payload)).toList)
 
     // send an invalid offset
     try {
@@ -83,12 +84,12 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
     // send some messages, with non-ordered topics
     val topicOffsets = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
     {
-      val messages = new mutable.HashMap[String, Seq[Message]]
+      val messages = new mutable.HashMap[String, Seq[String]]
       val builder = new FetchRequestBuilder()
       for( (topic, offset) <- topicOffsets) {
-        val producedData = List(new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
+        val producedData = List("a_" + topic, "b_" + topic)
         messages += topic -> producedData
-        producer.send(new ProducerData[String, Message](topic, topic, producedData))
+        producer.send(producedData.map(m => new KeyedMessage[String, String](topic, topic, m)):_*)
         builder.addFetch(topic, offset, 0, 10000)
       }
 
@@ -97,7 +98,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       val response = consumer.fetch(request)
       for( (topic, offset) <- topicOffsets) {
         val fetched = response.messageSet(topic, offset)
-        TestUtils.checkEquals(messages(topic).iterator, fetched.map(m => m.message).iterator)
+        assertEquals(messages(topic), fetched.map(m => Utils.readString(m.message.payload)))
       }
     }
 
@@ -121,13 +122,13 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
   def testMultiProduce() {
     // send some messages
     val topics = List("test1", "test2", "test3");
-    val messages = new mutable.HashMap[String, Seq[Message]]
+    val messages = new mutable.HashMap[String, Seq[String]]
     val builder = new FetchRequestBuilder()
-    var produceList: List[ProducerData[String, Message]] = Nil
+    var produceList: List[KeyedMessage[String, String]] = Nil
     for(topic <- topics) {
-      val set = List(new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
+      val set = List("a_" + topic, "b_" + topic)
       messages += topic -> set
-      produceList ::= new ProducerData[String, Message](topic, topic, set)
+      produceList ++= set.map(new KeyedMessage[String, String](topic, topic, _))
       builder.addFetch(topic, 0, 0, 10000)
     }
     producer.send(produceList: _*)
@@ -137,20 +138,20 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
     val response = consumer.fetch(request)
     for(topic <- topics) {
       val fetched = response.messageSet(topic, 0)
-      TestUtils.checkEquals(messages(topic).iterator, fetched.map(m => m.message).iterator)
+      assertEquals(messages(topic), fetched.map(m => Utils.readString(m.message.payload)))
     }
   }
 
   def testMultiProduceResend() {
     // send some messages
     val topics = List("test1", "test2", "test3");
-    val messages = new mutable.HashMap[String, Seq[Message]]
+    val messages = new mutable.HashMap[String, Seq[String]]
     val builder = new FetchRequestBuilder()
-    var produceList: List[ProducerData[String, Message]] = Nil
+    var produceList: List[KeyedMessage[String, String]] = Nil
     for(topic <- topics) {
-      val set = List(new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
+      val set = List("a_" + topic, "b_" + topic)
       messages += topic -> set
-      produceList ::= new ProducerData[String, Message](topic, topic, set)
+      produceList ++= set.map(new KeyedMessage[String, String](topic, topic, _))
       builder.addFetch(topic, 0, 0, 10000)
     }
     producer.send(produceList: _*)
@@ -161,9 +162,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
     val response = consumer.fetch(request)
     for(topic <- topics) {
       val topicMessages = response.messageSet(topic, 0)
-      TestUtils.checkEquals(TestUtils.stackedIterator(messages(topic).iterator,
-                                                      messages(topic).iterator),
-                            topicMessages.iterator.map(_.message))
+      assertEquals(messages(topic) ++ messages(topic), topicMessages.map(m => Utils.readString(m.message.payload)))
     }
   }
 }

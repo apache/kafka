@@ -133,19 +133,25 @@ object Utils extends Logging {
     })
     thread
   }
+  
+  /**
+   * Read the given byte buffer into a byte array
+   */
+  def readBytes(buffer: ByteBuffer): Array[Byte] = readBytes(buffer, 0, buffer.limit)
 
   /**
    * Read a byte array from the given offset and size in the buffer
-   * TODO: Should use System.arraycopy
    */
   def readBytes(buffer: ByteBuffer, offset: Int, size: Int): Array[Byte] = {
-    val bytes = new Array[Byte](size)
-    var i = 0
-    while(i < size) {
-      bytes(i) = buffer.get(offset + i)
-      i += 1
+    val dest = new Array[Byte](size)
+    if(buffer.hasArray) {
+      System.arraycopy(buffer.array, buffer.arrayOffset() + offset, dest, 0, size)
+    } else {
+      buffer.mark()
+      buffer.get(dest)
+      buffer.reset()
     }
-    bytes
+    dest
   }
 
   /**
@@ -204,7 +210,7 @@ object Utils extends Logging {
    * @param buffer The buffer to translate
    * @param encoding The encoding to use in translating bytes to characters
    */
-  def readString(buffer: ByteBuffer, encoding: String): String = {
+  def readString(buffer: ByteBuffer, encoding: String = Charset.defaultCharset.toString): String = {
     val bytes = new Array[Byte](buffer.remaining)
     buffer.get(bytes)
     new String(bytes, encoding)
@@ -446,16 +452,10 @@ object Utils extends Logging {
   /**
    * Create an instance of the class with the given class name
    */
-  def createObject[T<:AnyRef](className: String): T = {
-    className match {
-      case null => null.asInstanceOf[T]
-      case _ =>
-        val clazz = Class.forName(className)
-        val clazzT = clazz.asInstanceOf[Class[T]]
-        val constructors = clazzT.getConstructors
-        require(constructors.length == 1)
-        constructors.head.newInstance().asInstanceOf[T]
-    }
+  def createObject[T<:AnyRef](className: String, args: AnyRef*): T = {
+    val klass = Class.forName(className).asInstanceOf[Class[T]]
+    val constructor = klass.getConstructor(args.map(_.getClass): _*)
+    constructor.newInstance(args: _*).asInstanceOf[T]
   }
 
   /**

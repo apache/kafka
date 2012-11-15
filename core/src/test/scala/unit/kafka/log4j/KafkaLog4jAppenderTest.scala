@@ -169,10 +169,9 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
   }
 }
 
-class AppenderStringEncoder extends Encoder[LoggingEvent] {
-  def toMessage(event: LoggingEvent):Message = {
-    val logMessage = event.getMessage
-    new Message(logMessage.asInstanceOf[String].getBytes)
+class AppenderStringEncoder(encoding: String = "UTF-8") extends Encoder[LoggingEvent] {
+  def toBytes(event: LoggingEvent): Array[Byte] = {
+    event.getMessage.toString.getBytes(encoding)
   }
 }
 

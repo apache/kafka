@@ -24,6 +24,7 @@ import kafka.message.{Message, ByteBufferMessageSet}
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.producer._
+import kafka.utils.IntEncoder
 import kafka.utils.TestUtils._
 import kafka.admin.CreateTopicCommand
 import kafka.api.FetchRequestBuilder
@@ -36,19 +37,21 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   val host = "localhost"
   val topic = "test"
-  val sent1 = List(new Message("hello".getBytes()), new Message("there".getBytes()))
-  val sent2 = List( new Message("more".getBytes()), new Message("messages".getBytes()))
+  val sent1 = List("hello", "there")
+  val sent2 = List("more", "messages")
 
   @Test
   def testCleanShutdown() {
     var server = new KafkaServer(config)
     server.startup()
-    var producer = new Producer[Int, Message](new ProducerConfig(getProducerConfig(TestUtils.getBrokerListStrFromConfigs(Seq(config)), 64*1024, 100000, 10000)))
+    val producerConfig = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(Seq(config)), 64*1024, 100000, 10000)
+    producerConfig.put("key.serializer.class", classOf[IntEncoder].getName.toString)
+    var producer = new Producer[Int, String](new ProducerConfig(producerConfig))
 
     // create topic
     CreateTopicCommand.createTopic(zkClient, topic, 1, 1, "0")
     // send some messages
-    producer.send(new ProducerData[Int, Message](topic, 0, sent1))
+    producer.send(sent1.map(m => new KeyedMessage[Int, String](topic, 0, m)):_*)
 
     // do a clean shutdown and check that the clean shudown file is written out
     server.shutdown()
@@ -62,7 +65,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     server = new KafkaServer(config)
     server.startup()
 
-    producer = new Producer[Int, Message](new ProducerConfig(getProducerConfig(TestUtils.getBrokerListStrFromConfigs(Seq(config)), 64*1024, 100000, 10000)))
+    producer = new Producer[Int, String](new ProducerConfig(producerConfig))
     val consumer = new SimpleConsumer(host,
                                       port,
                                       1000000,
@@ -75,18 +78,18 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).maxWait(0).build())
       fetchedMessage = fetched.messageSet(topic, 0)
     }
-    TestUtils.checkEquals(sent1.iterator, fetchedMessage.map(m => m.message).iterator)
+    assertEquals(sent1, fetchedMessage.map(m => Utils.readString(m.message.payload)))
     val newOffset = fetchedMessage.last.nextOffset
 
     // send some more messages
-    producer.send(new ProducerData[Int, Message](topic, 0, sent2))
+    producer.send(sent2.map(m => new KeyedMessage[Int, String](topic, 0, m)):_*)
 
     fetchedMessage = null
     while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
       val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, newOffset, 10000).build())
       fetchedMessage = fetched.messageSet(topic, 0)
     }
-    TestUtils.checkEquals(sent2.iterator, fetchedMessage.map(m => m.message).iterator)
+    assertEquals(sent2, fetchedMessage.map(m => Utils.readString(m.message.payload)))
 
     consumer.close()
     producer.close()

@@ -19,8 +19,8 @@ package kafka.tools;
 
 import joptsimple.*;
 import kafka.javaapi.producer.Producer;
-import kafka.javaapi.producer.ProducerData;
 import kafka.message.Message;
+import kafka.producer.KeyedMessage;
 import kafka.producer.ProducerConfig;
 import kafka.utils.Utils;
 import scala.collection.Iterator;
@@ -282,7 +282,7 @@ public class KafkaMigrationTool
           ((ByteBuffer)payload_07).get(bytes);
           Message message_08 = new Message(bytes);
           logger.debug(String.format("Send kafka 08 message of size %d to topic %s", message_08.size(), topic));
-          ProducerData<String, Message> producerData = new ProducerData((String)topic, message_08);
+          KeyedMessage<String, Message> producerData = new KeyedMessage((String)topic, null, message_08);
           Producer nextProducer = producerCircularIterator.next();
           nextProducer.send(producerData);
         }

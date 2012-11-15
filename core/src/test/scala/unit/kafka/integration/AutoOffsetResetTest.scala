@@ -25,7 +25,8 @@ import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
 import kafka.utils.TestUtils
 import kafka.message.Message
-import kafka.producer.{Producer, ProducerData}
+import kafka.serializer._
+import kafka.producer.{Producer, KeyedMessage}
 
 class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
@@ -69,10 +70,11 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
    * Returns the count of messages received.
    */
   def resetAndConsume(numMessages: Int, resetTo: String, offset: Long): Int = {
-    val producer: Producer[String, Message] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs))
+    val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs), 
+        new DefaultEncoder(), new StringEncoder())
 
     for(i <- 0 until numMessages)
-      producer.send(new ProducerData[String, Message](topic, topic, new Message("test".getBytes())))
+      producer.send(new KeyedMessage[String, Array[Byte]](topic, topic, "test".getBytes))
 
     // update offset in zookeeper for consumer to jump "forward" in time
     val dirs = new ZKGroupTopicDirs(group, topic)

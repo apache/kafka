@@ -23,11 +23,12 @@ import java.util.Properties
 import kafka.producer.{ProducerConfig, Producer}
 import kafka.message.Message
 import kafka.utils.TestUtils
+import kafka.serializer._
 
 trait ProducerConsumerTestHarness extends JUnit3Suite with KafkaServerTestHarness {
     val port: Int
     val host = "localhost"
-    var producer: Producer[String, Message] = null
+    var producer: Producer[String, String] = null
     var consumer: SimpleConsumer = null
 
   override def setUp() {
@@ -41,6 +42,7 @@ trait ProducerConsumerTestHarness extends JUnit3Suite with KafkaServerTestHarnes
       props.put("producer.retry.backoff.ms", "1000")
       props.put("producer.num.retries", "3")
       props.put("producer.request.required.acks", "-1")
+      props.put("serializer.class", classOf[StringEncoder].getName.toString)
       producer = new Producer(new ProducerConfig(props))
       consumer = new SimpleConsumer(host,
                                    port,

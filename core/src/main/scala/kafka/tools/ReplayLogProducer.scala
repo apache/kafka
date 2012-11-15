@@ -20,7 +20,7 @@ package kafka.tools
 import joptsimple.OptionParser
 import java.util.concurrent.{Executors, CountDownLatch}
 import java.util.Properties
-import kafka.producer.{ProducerData, ProducerConfig, Producer}
+import kafka.producer.{KeyedMessage, ProducerConfig, Producer}
 import kafka.consumer._
 import kafka.utils.{Logging, ZkUtils}
 import kafka.api.OffsetRequest
@@ -136,7 +136,7 @@ object ReplayLogProducer extends Logging {
     val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOption).intValue)
   }
 
-  class ZKConsumerThread(config: Config, stream: KafkaStream[Message]) extends Thread with Logging {
+  class ZKConsumerThread(config: Config, stream: KafkaStream[Array[Byte], Array[Byte]]) extends Thread with Logging {
     val shutdownLatch = new CountDownLatch(1)
     val props = new Properties()
     props.put("broker.list", config.brokerList)
@@ -150,7 +150,7 @@ object ReplayLogProducer extends Logging {
       props.put("producer.type", "async")
 
     val producerConfig = new ProducerConfig(props)
-    val producer = new Producer[Message, Message](producerConfig)
+    val producer = new Producer[Array[Byte], Array[Byte]](producerConfig)
 
     override def run() {
       info("Starting consumer thread..")
@@ -163,7 +163,7 @@ object ReplayLogProducer extends Logging {
             stream
         for (messageAndMetadata <- iter) {
           try {
-            producer.send(new ProducerData[Message, Message](config.outputTopic, messageAndMetadata.message))
+            producer.send(new KeyedMessage[Array[Byte], Array[Byte]](config.outputTopic, messageAndMetadata.message))
             if (config.delayedMSBtwSend > 0 && (messageCount + 1) % config.batchSize == 0)
               Thread.sleep(config.delayedMSBtwSend)
             messageCount += 1

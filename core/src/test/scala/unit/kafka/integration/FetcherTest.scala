@@ -27,7 +27,8 @@ import kafka.message._
 import kafka.server._
 import org.scalatest.junit.JUnit3Suite
 import kafka.consumer._
-import kafka.producer.{ProducerData, Producer}
+import kafka.serializer._
+import kafka.producer.{KeyedMessage, Producer}
 import kafka.utils.TestUtils._
 import kafka.utils.TestUtils
 import kafka.admin.CreateTopicCommand
@@ -38,7 +39,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
   val configs =
     for(props <- TestUtils.createBrokerConfigs(numNodes))
     yield new KafkaConfig(props)
-  val messages = new mutable.HashMap[Int, Seq[Message]]
+  val messages = new mutable.HashMap[Int, Seq[Array[Byte]]]
   val topic = "topic"
   val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, c.brokerId.toString, "localhost", c.port)))
   val shutdown = ZookeeperConsumerConnector.shutdownCommand
@@ -83,10 +84,10 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
   def sendMessages(messagesPerNode: Int): Int = {
     var count = 0
     for(conf <- configs) {
-      val producer: Producer[String, Message] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs))
-      val ms = 0.until(messagesPerNode).map(x => new Message((conf.brokerId * 5 + x).toString.getBytes)).toArray
+      val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs), new DefaultEncoder(), new StringEncoder())
+      val ms = 0.until(messagesPerNode).map(x => (conf.brokerId * 5 + x).toString.getBytes).toArray
       messages += conf.brokerId -> ms
-      producer.send(new ProducerData[String, Message](topic, topic, ms))
+      producer.send(ms.map(m => KeyedMessage[String, Array[Byte]](topic, topic, m)):_*)
       producer.close()
       count += ms.size
     }

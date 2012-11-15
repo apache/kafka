@@ -52,7 +52,7 @@ object ConsumerPerformance {
 
     val consumerConnector: ConsumerConnector = Consumer.create(config.consumerConfig)
 
-    val topicMessageStreams = consumerConnector.createMessageStreams(Predef.Map(config.topic -> config.numThreads))
+    val topicMessageStreams = consumerConnector.createMessageStreams(Map(config.topic -> config.numThreads))
     var threadList = List[ConsumerPerfThread]()
     for ((topic, streamList) <- topicMessageStreams)
       for (i <- 0 until streamList.length)
@@ -140,7 +140,7 @@ object ConsumerPerformance {
     val hideHeader = options.has(hideHeaderOpt)
   }
 
-  class ConsumerPerfThread(threadId: Int, name: String, stream: KafkaStream[Message],
+  class ConsumerPerfThread(threadId: Int, name: String, stream: KafkaStream[Array[Byte], Array[Byte]],
                            config:ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong)
     extends Thread(name) {
     private val shutdownLatch = new CountDownLatch(1)
@@ -160,7 +160,7 @@ object ConsumerPerformance {
       try {
         for (messageAndMetadata <- stream if messagesRead < config.numMessages) {
           messagesRead += 1
-          bytesRead += messageAndMetadata.message.payloadSize
+          bytesRead += messageAndMetadata.message.length
 
           if (messagesRead % config.reportingInterval == 0) {
             if(config.showDetailedStats)

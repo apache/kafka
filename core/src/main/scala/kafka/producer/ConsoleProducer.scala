@@ -111,7 +111,7 @@ object ConsoleProducer {
     do { 
       message = reader.readMessage()
       if(message != null)
-        producer.send(new ProducerData(topic, message))
+        producer.send(new KeyedMessage(topic, message))
     } while(message != null)
   }
 

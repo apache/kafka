@@ -17,7 +17,7 @@
 
 package kafka.consumer
 
-import kafka.utils.{IteratorTemplate, Logging}
+import kafka.utils.{IteratorTemplate, Logging, Utils}
 import java.util.concurrent.{TimeUnit, BlockingQueue}
 import kafka.serializer.Decoder
 import java.util.concurrent.atomic.AtomicReference
@@ -30,17 +30,18 @@ import kafka.common.{KafkaException, MessageSizeTooLargeException}
  * The iterator takes a shutdownCommand object which can be added to the queue to trigger a shutdown
  *
  */
-class ConsumerIterator[T](private val channel: BlockingQueue[FetchedDataChunk],
-                          consumerTimeoutMs: Int,
-                          private val decoder: Decoder[T],
-                          val enableShallowIterator: Boolean)
-  extends IteratorTemplate[MessageAndMetadata[T]] with Logging {
+class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk],
+                             consumerTimeoutMs: Int,
+                             private val keyDecoder: Decoder[K],
+                             private val valueDecoder: Decoder[V],
+                             val enableShallowIterator: Boolean)
+  extends IteratorTemplate[MessageAndMetadata[K, V]] with Logging {
 
   private var current: AtomicReference[Iterator[MessageAndOffset]] = new AtomicReference(null)
-  private var currentTopicInfo:PartitionTopicInfo = null
+  private var currentTopicInfo: PartitionTopicInfo = null
   private var consumedOffset: Long = -1L
 
-  override def next(): MessageAndMetadata[T] = {
+  override def next(): MessageAndMetadata[K, V] = {
     val item = super.next()
     if(consumedOffset < 0)
       throw new KafkaException("Offset returned by the message set is invalid %d".format(consumedOffset))
@@ -52,7 +53,7 @@ class ConsumerIterator[T](private val channel: BlockingQueue[FetchedDataChunk],
     item
   }
 
-  protected def makeNext(): MessageAndMetadata[T] = {
+  protected def makeNext(): MessageAndMetadata[K, V] = {
     var currentDataChunk: FetchedDataChunk = null
     // if we don't have an iterator, get one
     var localCurrent = current.get()
@@ -103,7 +104,10 @@ class ConsumerIterator[T](private val channel: BlockingQueue[FetchedDataChunk],
 
     item.message.ensureValid() // validate checksum of message to ensure it is valid
 
-    new MessageAndMetadata(decoder.toEvent(item.message), currentTopicInfo.topic)
+    val keyBuffer = item.message.key
+    val key = if(keyBuffer == null) null.asInstanceOf[K] else keyDecoder.fromBytes(Utils.readBytes(keyBuffer))
+    val value = valueDecoder.fromBytes(Utils.readBytes(item.message.payload))
+    new MessageAndMetadata(key, value, currentTopicInfo.topic, currentTopicInfo.partitionId, item.offset)
   }
 
   def clearCurrentChunk() {

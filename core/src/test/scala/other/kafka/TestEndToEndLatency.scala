@@ -55,7 +55,7 @@ object TestEndToEndLatency {
     var totalTime = 0.0
     for(i <- 0 until numMessages) {
       var begin = System.nanoTime
-      producer.send(new ProducerData(topic, message))
+      producer.send(new KeyedMessage(topic, message))
       val received = iter.next
       val elapsed = System.nanoTime - begin
       // poor man's progress bar

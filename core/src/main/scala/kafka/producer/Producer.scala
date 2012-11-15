@@ -33,7 +33,7 @@ extends Logging {
   if (config.batchSize > config.queueSize)
     throw new InvalidConfigException("Batch size can't be larger than queue size.")
 
-  private val queue = new LinkedBlockingQueue[ProducerData[K,V]](config.queueSize)
+  private val queue = new LinkedBlockingQueue[KeyedMessage[K,V]](config.queueSize)
 
   private val random = new Random
   private var sync: Boolean = true
@@ -43,9 +43,12 @@ extends Logging {
     case "async" =>
       sync = false
       val asyncProducerID = random.nextInt(Int.MaxValue)
-      producerSendThread = new ProducerSendThread[K,V]("ProducerSendThread-" + asyncProducerID, queue,
-        eventHandler, config.queueTime, config.batchSize)
-      producerSendThread.start
+      producerSendThread = new ProducerSendThread[K,V]("ProducerSendThread-" + asyncProducerID, 
+                                                       queue,
+                                                       eventHandler, 
+                                                       config.queueTime, 
+                                                       config.batchSize)
+      producerSendThread.start()
     case _ => throw new InvalidConfigException("Valid values for producer.type are sync/async")
   }
 
@@ -54,8 +57,9 @@ extends Logging {
   def this(config: ProducerConfig) =
     this(config,
          new DefaultEventHandler[K,V](config,
-                                      Utils.createObject[Partitioner[K]](config.partitionerClass),
-                                      Utils.createObject[Encoder[V]](config.serializerClass),
+                                      Utils.createObject[Partitioner[K]](config.partitionerClass, config.props),
+                                      Utils.createObject[Encoder[V]](config.serializerClass, config.props),
+                                      Utils.createObject[Encoder[K]](config.keySerializerClass, config.props),
                                       new ProducerPool(config)))
 
   /**
@@ -63,36 +67,36 @@ extends Logging {
    * synchronous or the asynchronous producer
    * @param producerData the producer data object that encapsulates the topic, key and message data
    */
-  def send(producerData: ProducerData[K,V]*) {
+  def send(messages: KeyedMessage[K,V]*) {
     if (hasShutdown.get)
       throw new ProducerClosedException
-    recordStats(producerData: _*)
+    recordStats(messages)
     sync match {
-      case true => eventHandler.handle(producerData)
-      case false => asyncSend(producerData: _*)
+      case true => eventHandler.handle(messages)
+      case false => asyncSend(messages)
     }
   }
 
-  private def recordStats(producerData: ProducerData[K,V]*) {
-    for (data <- producerData) {
-      ProducerTopicStat.getProducerTopicStat(data.getTopic).messageRate.mark(data.getData.size)
-      ProducerTopicStat.getProducerAllTopicStat.messageRate.mark(data.getData.size)
+  private def recordStats(messages: Seq[KeyedMessage[K,V]]) {
+    for (message <- messages) {
+      ProducerTopicStat.getProducerTopicStat(message.topic).messageRate.mark()
+      ProducerTopicStat.getProducerAllTopicStat.messageRate.mark()
     }
   }
 
-  private def asyncSend(producerData: ProducerData[K,V]*) {
-    for (data <- producerData) {
+  private def asyncSend(messages: Seq[KeyedMessage[K,V]]) {
+    for (message <- messages) {
       val added = config.enqueueTimeoutMs match {
         case 0  =>
-          queue.offer(data)
+          queue.offer(message)
         case _  =>
           try {
             config.enqueueTimeoutMs < 0 match {
             case true =>
-              queue.put(data)
+              queue.put(message)
               true
             case _ =>
-              queue.offer(data, config.enqueueTimeoutMs, TimeUnit.MILLISECONDS)
+              queue.offer(message, config.enqueueTimeoutMs, TimeUnit.MILLISECONDS)
             }
           }
           catch {
@@ -102,10 +106,10 @@ extends Logging {
       }
       if(!added) {
         AsyncProducerStats.droppedMessageRate.mark()
-        error("Event queue is full of unsent messages, could not send event: " + data.toString)
-        throw new QueueFullException("Event queue is full of unsent messages, could not send event: " + data.toString)
+        error("Event queue is full of unsent messages, could not send event: " + message.toString)
+        throw new QueueFullException("Event queue is full of unsent messages, could not send event: " + message.toString)
       }else {
-        trace("Added to send queue an event: " + data.toString)
+        trace("Added to send queue an event: " + message.toString)
         trace("Remaining queue size: " + queue.remainingCapacity)
       }
     }

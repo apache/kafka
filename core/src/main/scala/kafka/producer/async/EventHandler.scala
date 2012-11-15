@@ -16,7 +16,7 @@
 */
 package kafka.producer.async
 
-import kafka.producer.ProducerData
+import kafka.producer.KeyedMessage
 
 /**
  * Handler that dispatches the batched data from the queue.
@@ -27,7 +27,7 @@ trait EventHandler[K,V] {
    * Callback to dispatch the batched data and send it to a Kafka server
    * @param events the data sent to the producer
   */
-  def handle(events: Seq[ProducerData[K,V]])
+  def handle(events: Seq[KeyedMessage[K,V]])
 
   /**
    * Cleans up and shuts down the event handler

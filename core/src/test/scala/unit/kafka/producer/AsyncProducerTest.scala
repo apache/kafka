@@ -25,14 +25,14 @@ import org.junit.Test
 import kafka.api._
 import kafka.cluster.Broker
 import kafka.common._
-import kafka.message.Message
+import kafka.message._
 import kafka.producer.async._
-import kafka.serializer.{StringEncoder, StringDecoder, Encoder}
+import kafka.serializer._
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils._
 import org.scalatest.junit.JUnit3Suite
 import scala.collection.Map
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.ArrayBuffer
 import kafka.utils._
 
 class AsyncProducerTest extends JUnit3Suite {
@@ -52,7 +52,7 @@ class AsyncProducerTest extends JUnit3Suite {
     // a mock event handler that blocks
     val mockEventHandler = new EventHandler[String,String] {
 
-      def handle(events: Seq[ProducerData[String,String]]) {
+      def handle(events: Seq[KeyedMessage[String,String]]) {
         Thread.sleep(500)
       }
 
@@ -116,7 +116,7 @@ class AsyncProducerTest extends JUnit3Suite {
     EasyMock.expectLastCall
     EasyMock.replay(mockHandler)
 
-    val queue = new LinkedBlockingQueue[ProducerData[String,String]](10)
+    val queue = new LinkedBlockingQueue[KeyedMessage[String,String]](10)
     val producerSendThread =
       new ProducerSendThread[String,String]("thread1", queue, mockHandler, Integer.MAX_VALUE, 5)
     producerSendThread.start()
@@ -141,7 +141,7 @@ class AsyncProducerTest extends JUnit3Suite {
     EasyMock.replay(mockHandler)
 
     val queueExpirationTime = 200
-    val queue = new LinkedBlockingQueue[ProducerData[String,String]](10)
+    val queue = new LinkedBlockingQueue[KeyedMessage[String,String]](10)
     val producerSendThread =
       new ProducerSendThread[String,String]("thread1", queue, mockHandler, queueExpirationTime, 5)
     producerSendThread.start()
@@ -156,12 +156,12 @@ class AsyncProducerTest extends JUnit3Suite {
 
   @Test
   def testPartitionAndCollateEvents() {
-    val producerDataList = new ListBuffer[ProducerData[Int,Message]]
-    producerDataList.append(new ProducerData[Int,Message]("topic1", 0, new Message("msg1".getBytes)))
-    producerDataList.append(new ProducerData[Int,Message]("topic2", 1, new Message("msg2".getBytes)))
-    producerDataList.append(new ProducerData[Int,Message]("topic1", 2, new Message("msg3".getBytes)))
-    producerDataList.append(new ProducerData[Int,Message]("topic1", 3, new Message("msg4".getBytes)))
-    producerDataList.append(new ProducerData[Int,Message]("topic2", 4, new Message("msg5".getBytes)))
+    val producerDataList = new ArrayBuffer[KeyedMessage[Int,Message]]
+    producerDataList.append(new KeyedMessage[Int,Message]("topic1", 0, new Message("msg1".getBytes)))
+    producerDataList.append(new KeyedMessage[Int,Message]("topic2", 1, new Message("msg2".getBytes)))
+    producerDataList.append(new KeyedMessage[Int,Message]("topic1", 2, new Message("msg3".getBytes)))
+    producerDataList.append(new KeyedMessage[Int,Message]("topic1", 3, new Message("msg4".getBytes)))
+    producerDataList.append(new KeyedMessage[Int,Message]("topic2", 4, new Message("msg5".getBytes)))
 
     val props = new Properties()
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
@@ -185,20 +185,18 @@ class AsyncProducerTest extends JUnit3Suite {
 
     val producerPool = new ProducerPool(config)
     val handler = new DefaultEventHandler[Int,String](config,
-                                                      partitioner = intPartitioner,
-                                                      encoder = null.asInstanceOf[Encoder[String]],
-                                                      producerPool = producerPool,
-                                                      topicPartitionInfos)
+                                                         partitioner = intPartitioner,
+                                                         encoder = null.asInstanceOf[Encoder[String]],
+                                                         keyEncoder = new IntEncoder(),
+                                                         producerPool = producerPool,
+                                                         topicPartitionInfos)
 
-    val topic1Broker1Data = new ListBuffer[ProducerData[Int,Message]]
-    topic1Broker1Data.appendAll(List(new ProducerData[Int,Message]("topic1", 0, new Message("msg1".getBytes)),
-                                     new ProducerData[Int,Message]("topic1", 2, new Message("msg3".getBytes))))
-    val topic1Broker2Data = new ListBuffer[ProducerData[Int,Message]]
-    topic1Broker2Data.appendAll(List(new ProducerData[Int,Message]("topic1", 3, new Message("msg4".getBytes))))
-    val topic2Broker1Data = new ListBuffer[ProducerData[Int,Message]]
-    topic2Broker1Data.appendAll(List(new ProducerData[Int,Message]("topic2", 4, new Message("msg5".getBytes))))
-    val topic2Broker2Data = new ListBuffer[ProducerData[Int,Message]]
-    topic2Broker2Data.appendAll(List(new ProducerData[Int,Message]("topic2", 1, new Message("msg2".getBytes))))
+    val topic1Broker1Data = 
+      ArrayBuffer[KeyedMessage[Int,Message]](new KeyedMessage[Int,Message]("topic1", 0, new Message("msg1".getBytes)),
+                                             new KeyedMessage[Int,Message]("topic1", 2, new Message("msg3".getBytes)))
+    val topic1Broker2Data = ArrayBuffer[KeyedMessage[Int,Message]](new KeyedMessage[Int,Message]("topic1", 3, new Message("msg4".getBytes)))
+    val topic2Broker1Data = ArrayBuffer[KeyedMessage[Int,Message]](new KeyedMessage[Int,Message]("topic2", 4, new Message("msg5".getBytes)))
+    val topic2Broker2Data = ArrayBuffer[KeyedMessage[Int,Message]](new KeyedMessage[Int,Message]("topic2", 1, new Message("msg2".getBytes)))
     val expectedResult = Some(Map(
         0 -> Map(
               TopicAndPartition("topic1", 0) -> topic1Broker1Data,
@@ -214,7 +212,7 @@ class AsyncProducerTest extends JUnit3Suite {
 
   @Test
   def testSerializeEvents() {
-    val produceData = TestUtils.getMsgStrings(5).map(m => new ProducerData[String,String]("topic1",m))
+    val produceData = TestUtils.getMsgStrings(5).map(m => new KeyedMessage[String,String]("topic1",m))
     val props = new Properties()
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     val config = new ProducerConfig(props)
@@ -228,20 +226,20 @@ class AsyncProducerTest extends JUnit3Suite {
     val handler = new DefaultEventHandler[String,String](config,
                                                          partitioner = null.asInstanceOf[Partitioner[String]],
                                                          encoder = new StringEncoder,
+                                                         keyEncoder = new StringEncoder,
                                                          producerPool = producerPool,
                                                          topicPartitionInfos
     )
 
     val serializedData = handler.serialize(produceData)
-    val decoder = new StringDecoder
-    val deserializedData = serializedData.map(d => new ProducerData[String,String](d.getTopic, d.getData.map(m => decoder.toEvent(m))))
+    val deserializedData = serializedData.map(d => new KeyedMessage[String,String](d.topic, Utils.readString(d.message.payload)))
     TestUtils.checkEquals(produceData.iterator, deserializedData.iterator)
   }
 
   @Test
   def testInvalidPartition() {
-    val producerDataList = new ListBuffer[ProducerData[String,Message]]
-    producerDataList.append(new ProducerData[String,Message]("topic1", "key1", new Message("msg1".getBytes)))
+    val producerDataList = new ArrayBuffer[KeyedMessage[String,Message]]
+    producerDataList.append(new KeyedMessage[String,Message]("topic1", "key1", new Message("msg1".getBytes)))
     val props = new Properties()
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     val config = new ProducerConfig(props)
@@ -257,6 +255,7 @@ class AsyncProducerTest extends JUnit3Suite {
     val handler = new DefaultEventHandler[String,String](config,
                                                          partitioner = new NegativePartitioner,
                                                          encoder = null.asInstanceOf[Encoder[String]],
+                                                         keyEncoder = null.asInstanceOf[Encoder[String]],
                                                          producerPool = producerPool,
                                                          topicPartitionInfos)
     try {
@@ -282,11 +281,12 @@ class AsyncProducerTest extends JUnit3Suite {
 
     val producerPool = new ProducerPool(config)
 
-    val producerDataList = new ListBuffer[ProducerData[String,String]]
-    producerDataList.append(new ProducerData[String,String]("topic1", "msg1"))
+    val producerDataList = new ArrayBuffer[KeyedMessage[String,String]]
+    producerDataList.append(new KeyedMessage[String,String]("topic1", "msg1"))
     val handler = new DefaultEventHandler[String,String](config,
                                                          partitioner = null.asInstanceOf[Partitioner[String]],
                                                          encoder = new StringEncoder,
+                                                         keyEncoder = new StringEncoder,
                                                          producerPool = producerPool,
                                                          topicPartitionInfos)
     try {
@@ -333,12 +333,13 @@ class AsyncProducerTest extends JUnit3Suite {
     val handler = new DefaultEventHandler[String,String](config,
                                                          partitioner = null.asInstanceOf[Partitioner[String]],
                                                          encoder = null.asInstanceOf[Encoder[String]],
+                                                         keyEncoder = null.asInstanceOf[Encoder[String]],
                                                          producerPool = producerPool,
                                                          topicPartitionInfos)
-    val producerDataList = new ListBuffer[ProducerData[String,Message]]
-    producerDataList.append(new ProducerData[String,Message]("topic1", new Message("msg1".getBytes)))
-    producerDataList.append(new ProducerData[String,Message]("topic2", new Message("msg2".getBytes)))
-    producerDataList.append(new ProducerData[String,Message]("topic1", new Message("msg3".getBytes)))
+    val producerDataList = new ArrayBuffer[KeyedMessage[String,Message]]
+    producerDataList.append(new KeyedMessage[String,Message]("topic1", new Message("msg1".getBytes)))
+    producerDataList.append(new KeyedMessage[String,Message]("topic2", new Message("msg2".getBytes)))
+    producerDataList.append(new KeyedMessage[String,Message]("topic1", new Message("msg3".getBytes)))
 
     val partitionedDataOpt = handler.partitionAndCollate(producerDataList)
     partitionedDataOpt match {
@@ -375,13 +376,14 @@ class AsyncProducerTest extends JUnit3Suite {
     val handler = new DefaultEventHandler[String,String]( config,
                                                           partitioner = null.asInstanceOf[Partitioner[String]],
                                                           encoder = new StringEncoder,
+                                                          keyEncoder = new StringEncoder,
                                                           producerPool = producerPool,
                                                           topicPartitionInfos)
 
     val producer = new Producer[String, String](config, handler)
     try {
       // send all 10 messages, should create 2 batches and 2 syncproducer calls
-      producer.send(msgs.map(m => new ProducerData[String,String](topic, List(m))): _*)
+      producer.send(msgs.map(m => new KeyedMessage[String,String](topic, m)): _*)
       producer.close
 
     } catch {
@@ -392,7 +394,8 @@ class AsyncProducerTest extends JUnit3Suite {
   @Test
   def testFailedSendRetryLogic() {
     val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
+    props.put("serializer.class", classOf[StringEncoder].getName.toString)
+    props.put("key.serializer.class", classOf[NullEncoder[Int]].getName.toString)
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
 
     val config = new ProducerConfig(props)
@@ -407,11 +410,11 @@ class AsyncProducerTest extends JUnit3Suite {
     // produce request for topic1 and partitions 0 and 1.  Let the first request fail
     // entirely.  The second request will succeed for partition 1 but fail for partition 0.
     // On the third try for partition 0, let it succeed.
-    val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), TestUtils.messagesToSet(msgs), 0)
+    val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), 0)
     val response1 = ProducerResponse(ProducerRequest.CurrentVersion, 0,
       Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(ErrorMapping.NotLeaderForPartitionCode.toShort, 0L)),
           (TopicAndPartition("topic1", 1), ProducerResponseStatus(ErrorMapping.NoError, 0L))))
-    val request2 = TestUtils.produceRequest(topic1, 0, TestUtils.messagesToSet(msgs))
+    val request2 = TestUtils.produceRequest(topic1, 0, messagesToSet(msgs))
     val response2 = ProducerResponse(ProducerRequest.CurrentVersion, 0,
       Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(ErrorMapping.NoError, 0L))))
     val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
@@ -429,11 +432,11 @@ class AsyncProducerTest extends JUnit3Suite {
 
     val handler = new DefaultEventHandler[Int,String](config,
                                                       partitioner = new FixedValuePartitioner(),
-                                                      encoder = new StringEncoder,
+                                                      encoder = new StringEncoder(),
+                                                      keyEncoder = new NullEncoder[Int](),
                                                       producerPool = producerPool,
                                                       topicPartitionInfos)
-    val data = List(new ProducerData[Int,String](topic1, 0, msgs),
-                    new ProducerData[Int,String](topic1, 1, msgs))
+    val data = msgs.map(m => new KeyedMessage[Int,String](topic1, 0, m)) ++ msgs.map(m => new KeyedMessage[Int,String](topic1, 1, m))
     handler.handle(data)
     handler.close()
 
@@ -445,12 +448,8 @@ class AsyncProducerTest extends JUnit3Suite {
   def testJavaProducer() {
     val topic = "topic1"
     val msgs = TestUtils.getMsgStrings(5)
-    val scalaProducerData = msgs.map(m => new ProducerData[String, String](topic, List(m)))
-    val javaProducerData = scala.collection.JavaConversions.asList(msgs.map(m => {
-        val javaList = new LinkedList[String]()
-        javaList.add(m)
-        new kafka.javaapi.producer.ProducerData[String, String](topic, javaList)
-      }))
+    val scalaProducerData = msgs.map(m => new KeyedMessage[String, String](topic, m))
+    val javaProducerData = scala.collection.JavaConversions.asList(scalaProducerData)
 
     val mockScalaProducer = EasyMock.createMock(classOf[kafka.producer.Producer[String, String]])
     mockScalaProducer.send(scalaProducerData.head)
@@ -480,10 +479,10 @@ class AsyncProducerTest extends JUnit3Suite {
     }
   }
 
-  def getProduceData(nEvents: Int): Seq[ProducerData[String,String]] = {
-    val producerDataList = new ListBuffer[ProducerData[String,String]]
+  def getProduceData(nEvents: Int): Seq[KeyedMessage[String,String]] = {
+    val producerDataList = new ArrayBuffer[KeyedMessage[String,String]]
     for (i <- 0 until nEvents)
-      producerDataList.append(new ProducerData[String,String]("topic1", null, List("msg" + i)))
+      producerDataList.append(new KeyedMessage[String,String]("topic1", null, "msg" + i))
     producerDataList
   }
 
@@ -495,4 +494,16 @@ class AsyncProducerTest extends JUnit3Suite {
     val broker1 = new Broker(brokerId, brokerHost, brokerHost, brokerPort)
     new TopicMetadata(topic, partition.map(new PartitionMetadata(_, Some(broker1), List(broker1))))
   }
+  
+  def messagesToSet(messages: Seq[String]): ByteBufferMessageSet = {
+    new ByteBufferMessageSet(NoCompressionCodec, messages.map(m => new Message(m.getBytes)): _*)
+  }
+  
+  def messagesToSet(key: Array[Byte], messages: Seq[Array[Byte]]): ByteBufferMessageSet = {
+    new ByteBufferMessageSet(NoCompressionCodec, messages.map(m => new Message(key = key, bytes = m)): _*)
+  }
+}
+
+class NegativePartitioner(props: VerifiableProperties = null) extends Partitioner[String] {
+  def partition(data: String, numPartitions: Int): Int = -1
 }

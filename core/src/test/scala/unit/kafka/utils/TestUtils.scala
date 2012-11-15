@@ -288,13 +288,16 @@ object TestUtils extends Logging {
   /**
    * Create a producer for the given host and port
    */
-  def createProducer[K, V](brokerList: String, encoder: Encoder[V] = new DefaultEncoder): Producer[K, V] = {
+  def createProducer[K, V](brokerList: String, 
+                           encoder: Encoder[V] = new DefaultEncoder(), 
+                           keyEncoder: Encoder[K] = new DefaultEncoder()): Producer[K, V] = {
     val props = new Properties()
     props.put("broker.list", brokerList)
     props.put("buffer.size", "65536")
     props.put("connect.timeout.ms", "100000")
     props.put("reconnect.interval", "10000")
     props.put("serializer.class", encoder.getClass.getCanonicalName)
+    props.put("key.serializer.class", keyEncoder.getClass.getCanonicalName)
     new Producer[K, V](new ProducerConfig(props))
   }
 
@@ -307,6 +310,8 @@ object TestUtils extends Logging {
     props.put("buffer.size", bufferSize.toString)
     props.put("connect.timeout.ms", connectTimeout.toString)
     props.put("reconnect.interval", reconnectInterval.toString)
+    props.put("producer.request.timeout.ms", 30000.toString)
+    props.put("serializer.class", classOf[StringEncoder].getName.toString)
     props
   }
 
@@ -351,11 +356,6 @@ object TestUtils extends Logging {
    */
   def produceRequest(topic: String, partition: Int, message: ByteBufferMessageSet): kafka.api.ProducerRequest = {
     produceRequest(SyncProducerConfig.DefaultCorrelationId,topic,partition,message)
-  }
-
-  def messagesToSet(messages: Seq[String]): ByteBufferMessageSet = {
-    val encoder = new StringEncoder
-    new ByteBufferMessageSet(NoCompressionCodec, messages.map(m => encoder.toMessage(m)): _*)
   }
 
   def produceRequest(correlationId: Int, topic: String, partition: Int, message: ByteBufferMessageSet): kafka.api.ProducerRequest = {
@@ -490,30 +490,22 @@ object TestZKUtils {
   val zookeeperConnect = "127.0.0.1:2182"
 }
 
-class StringSerializer extends Encoder[String] {
-  def toEvent(message: Message):String = message.toString
-  def toMessage(event: String):Message = new Message(event.getBytes)
-  def getTopic(event: String): String = event.concat("-topic")
+class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {
+  override def toBytes(n: Int) = n.toString.getBytes
 }
 
-class NegativePartitioner extends Partitioner[String] {
-  def partition(data: String, numPartitions: Int): Int = {
-    -1
-  }
-}
-
-class StaticPartitioner extends Partitioner[String] {
+class StaticPartitioner(props: VerifiableProperties = null) extends Partitioner[String] {
   def partition(data: String, numPartitions: Int): Int = {
     (data.length % numPartitions)
   }
 }
 
-class HashPartitioner extends Partitioner[String] {
+class HashPartitioner(props: VerifiableProperties = null) extends Partitioner[String] {
   def partition(data: String, numPartitions: Int): Int = {
     (data.hashCode % numPartitions)
   }
 }
 
-class FixedValuePartitioner extends Partitioner[Int] {
+class FixedValuePartitioner(props: VerifiableProperties = null) extends Partitioner[Int] {
   def partition(data: Int, numPartitions: Int): Int = data
 }

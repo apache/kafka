@@ -17,21 +17,44 @@
 
 package kafka.serializer
 
-import kafka.message.Message
+import kafka.message._
+import kafka.utils.VerifiableProperties
 
+/**
+ * A decoder is a method of turning byte arrays into objects.
+ * An implementation is required to provide a constructor that
+ * takes a VerifiableProperties instance.
+ */
 trait Decoder[T] {
-  def toEvent(message: Message):T
+  def fromBytes(bytes: Array[Byte]): T
 }
 
-class DefaultDecoder extends Decoder[Message] {
-  def toEvent(message: Message):Message = message
+/**
+ * The default implementation does nothing, just returns the same byte array it takes in.
+ */
+class DefaultDecoder(props: VerifiableProperties = null) extends Decoder[Array[Byte]] {
+  def fromBytes(bytes: Array[Byte]): Array[Byte] = bytes
 }
 
-class StringDecoder extends Decoder[String] {
-  def toEvent(message: Message):String = {
-    val buf = message.payload
-    val arr = new Array[Byte](buf.remaining)
-    buf.get(arr)
-    new String(arr)
+/**
+ * Decode messages without any key
+ */
+class KeylessMessageDecoder(props: VerifiableProperties = null) extends Decoder[Message] {
+  def fromBytes(bytes: Array[Byte]) = new Message(bytes)
+}
+
+/**
+ * The string encoder translates strings into bytes. It uses UTF8 by default but takes
+ * an optional property serializer.encoding to control this.
+ */
+class StringDecoder(props: VerifiableProperties = null) extends Decoder[String] {
+  val encoding = 
+    if(props == null)
+      "UTF8" 
+    else
+      props.getString("serializer.encoding", "UTF8")
+      
+  def fromBytes(bytes: Array[Byte]): String = {
+    new String(bytes, encoding)
   }
 }

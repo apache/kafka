@@ -20,10 +20,11 @@ package kafka.tools
 import kafka.message.Message
 import joptsimple.OptionParser
 import kafka.utils.{Utils, CommandLineUtils, Logging}
-import kafka.producer.{ProducerData, ProducerConfig, Producer}
+import kafka.producer.{KeyedMessage, ProducerConfig, Producer}
 import scala.collection.JavaConversions._
 import java.util.concurrent.CountDownLatch
 import kafka.consumer._
+import kafka.serializer._
 
 
 object MirrorMaker extends Logging {
@@ -92,7 +93,7 @@ object MirrorMaker extends Logging {
     val producers = (1 to options.valueOf(numProducersOpt).intValue()).map(_ => {
       val config = new ProducerConfig(
         Utils.loadProps(options.valueOf(producerConfigOpt)))
-      new Producer[Null, Message](config)
+      new Producer[Array[Byte], Array[Byte]](config)
     })
 
     val threads = {
@@ -113,11 +114,9 @@ object MirrorMaker extends Logging {
         new Blacklist(options.valueOf(blacklistOpt))
 
       val streams =
-        connectors.map(_.createMessageStreamsByFilter(filterSpec, numStreams.intValue()))
+        connectors.map(_.createMessageStreamsByFilter(filterSpec, numStreams.intValue(), new DefaultDecoder(), new DefaultDecoder()))
 
-      streams.flatten.zipWithIndex.map(streamAndIndex => {
-        new MirrorMakerThread(streamAndIndex._1, producers, streamAndIndex._2)
-      })
+      streams.flatten.zipWithIndex.map(streamAndIndex => new MirrorMakerThread(streamAndIndex._1, producers, streamAndIndex._2))
     }
 
     threads.foreach(_.start())
@@ -125,8 +124,8 @@ object MirrorMaker extends Logging {
     threads.foreach(_.awaitShutdown())
   }
 
-  class MirrorMakerThread(stream: KafkaStream[Message],
-                          producers: Seq[Producer[Null, Message]],
+  class MirrorMakerThread(stream: KafkaStream[Array[Byte], Array[Byte]],
+                          producers: Seq[Producer[Array[Byte], Array[Byte]]],
                           threadId: Int)
           extends Thread with Logging {
 
@@ -140,16 +139,14 @@ object MirrorMaker extends Logging {
       try {
         for (msgAndMetadata <- stream) {
           val producer = producerSelector.next()
-          val pd = new ProducerData[Null, Message](
+          val pd = new KeyedMessage[Array[Byte], Array[Byte]](
             msgAndMetadata.topic, msgAndMetadata.message)
           producer.send(pd)
         }
-      }
-      catch {
+      } catch {
         case e =>
           fatal("%s stream unexpectedly exited.", e)
-      }
-      finally {
+      } finally {
         shutdownLatch.countDown()
         info("Stopped thread %s.".format(threadName))
       }
@@ -158,8 +155,7 @@ object MirrorMaker extends Logging {
     def awaitShutdown() {
       try {
         shutdownLatch.await()
-      }
-      catch {
+      } catch {
         case e: InterruptedException => fatal(
           "Shutdown of thread %s interrupted. This might leak data!"
                   .format(threadName))

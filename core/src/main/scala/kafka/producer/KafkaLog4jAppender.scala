@@ -87,8 +87,7 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
     }
     else this.layout.format(event)
     LogLog.debug("[" + new Date(event.getTimeStamp).toString + "]" + message)
-    val messageData : ProducerData[String, String] =
-      new ProducerData[String, String](topic, message)
+    val messageData = new KeyedMessage[String, String](topic, message)
     producer.send(messageData);
   }
 

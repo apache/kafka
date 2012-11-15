@@ -19,6 +19,9 @@ package kafka.examples;
 import kafka.api.FetchRequest;
 import kafka.api.FetchRequestBuilder;
 import kafka.javaapi.FetchResponse;
+
+import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import kafka.javaapi.consumer.SimpleConsumer;
@@ -29,9 +32,12 @@ import java.util.Map;
 
 public class SimpleConsumerDemo {
     
-  private static void printMessages(ByteBufferMessageSet messageSet) {
-    for (MessageAndOffset messageAndOffset : messageSet) {
-      System.out.println(ExampleUtils.getMessage(messageAndOffset.message()));
+  private static void printMessages(ByteBufferMessageSet messageSet) throws UnsupportedEncodingException {
+    for(MessageAndOffset messageAndOffset: messageSet) {
+      ByteBuffer payload = messageAndOffset.message().payload();
+      byte[] bytes = new byte[payload.limit()];
+      payload.get(bytes);
+      System.out.println(new String(bytes, "UTF-8"));
     }
   }
 
@@ -47,7 +53,7 @@ public class SimpleConsumerDemo {
     }
   }
   
-  public static void main(String[] args) {
+  public static void main(String[] args) throws Exception {
     generateData();
       
     SimpleConsumer simpleConsumer = new SimpleConsumer(KafkaProperties.kafkaServerURL,

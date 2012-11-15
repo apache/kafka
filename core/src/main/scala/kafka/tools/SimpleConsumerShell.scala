@@ -19,10 +19,12 @@ package kafka.tools
 
 import joptsimple._
 import kafka.utils._
+import kafka.producer.ProducerConfig
 import kafka.consumer._
 import kafka.client.ClientUtils
 import kafka.api.{OffsetRequest, FetchRequestBuilder, Request}
 import kafka.cluster.Broker
+import java.util.Properties
 import scala.collection.JavaConversions._
 
 /**
@@ -194,7 +196,9 @@ object SimpleConsumerShell extends Logging {
                 offset = messageAndOffset.nextOffset
                 if(printOffsets)
                   System.out.println("next offset = " + offset)
-                formatter.writeTo(messageAndOffset.message, System.out)
+                val message = messageAndOffset.message
+                val key = if(message.hasKey) Utils.readBytes(message.key) else null
+                formatter.writeTo(key, Utils.readBytes(message.payload), System.out)
               } catch {
                 case e =>
                   if (skipMessageOnError)

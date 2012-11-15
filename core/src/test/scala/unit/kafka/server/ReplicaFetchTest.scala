@@ -20,7 +20,7 @@ package kafka.server
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils._
-import kafka.producer.ProducerData
+import kafka.producer.KeyedMessage
 import kafka.serializer.StringEncoder
 import kafka.admin.CreateTopicCommand
 import kafka.utils.TestUtils
@@ -55,9 +55,11 @@ class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
     }
 
     // send test messages to leader
-    val producer = TestUtils.createProducer[String, String](TestUtils.getBrokerListStrFromConfigs(configs), new StringEncoder)
-    producer.send(new ProducerData[String, String](topic1, testMessageList1),
-                  new ProducerData[String, String](topic2, testMessageList2))
+    val producer = TestUtils.createProducer[String, String](TestUtils.getBrokerListStrFromConfigs(configs), 
+                                                            new StringEncoder(), 
+                                                            new StringEncoder())
+    val messages = testMessageList1.map(m => new KeyedMessage(topic1, m, m)) ++ testMessageList2.map(m => new KeyedMessage(topic2, m, m))
+    producer.send(messages:_*)
     producer.close()
 
     def logsMatch(): Boolean = {
