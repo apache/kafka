@@ -280,9 +280,8 @@ public class KafkaMigrationTool
           int size = ((ByteBuffer)payload_07).remaining();
           byte[] bytes = new byte[size];
           ((ByteBuffer)payload_07).get(bytes);
-          Message message_08 = new Message(bytes);
-          logger.debug(String.format("Send kafka 08 message of size %d to topic %s", message_08.size(), topic));
-          KeyedMessage<String, Message> producerData = new KeyedMessage((String)topic, null, message_08);
+          logger.debug(String.format("Send kafka 08 message of size %d to topic %s", bytes.length, topic));
+          KeyedMessage<String, byte[]> producerData = new KeyedMessage((String)topic, null, bytes);
           Producer nextProducer = producerCircularIterator.next();
           nextProducer.send(producerData);
         }
