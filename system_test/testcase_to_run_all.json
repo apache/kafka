@@ -99,7 +99,9 @@
         "testcase_4015",
         "testcase_4016",
         "testcase_4017",
-        "testcase_4018"
+        "testcase_4018",
+
+        "testcase_9051"
     ],
 
     "MigrationToolTest"  : [

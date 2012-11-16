@@ -123,6 +123,12 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                     logRetentionTest = self.testcaseEnv.testcaseArgumentsDict["log_retention_test"]
                 except:
                     pass
+                consumerMultiTopicsMode = "false"
+                try:
+                    consumerMultiTopicsMode = self.testcaseEnv.testcaseArgumentsDict["consumer_multi_topics_mode"]
+                except:
+                    pass
+
 
                 # initialize self.testcaseEnv with user-defined environment variables (product specific)
                 self.testcaseEnv.userDefinedEnvVarDict["zkConnectStr"] = ""
@@ -363,8 +369,8 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                 # =============================================
                 minStartingOffsetDict = None
                 if logRetentionTest.lower() == "true":
-                    self.anonLogger.info("sleeping for 10s before collecting logs")
-                    time.sleep(10)
+                    self.anonLogger.info("sleeping for 60s to make sure log truncation is completed")
+                    time.sleep(60)
                     kafka_system_test_utils.collect_logs_from_remote_hosts(self.systemTestEnv, self.testcaseEnv)
 
                     minStartingOffsetDict = kafka_system_test_utils.getMinCommonStartingOffset(self.systemTestEnv, self.testcaseEnv)
@@ -374,10 +380,19 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                 # =============================================
                 # starting debug consumer
                 # =============================================
-                self.log_message("starting debug consumers in the background")
-                kafka_system_test_utils.start_simple_consumer(self.systemTestEnv, self.testcaseEnv, minStartingOffsetDict)
-                self.anonLogger.info("sleeping for 10s")
-                time.sleep(10)
+                if consumerMultiTopicsMode.lower() == "false":
+                    self.log_message("starting debug consumers in the background")
+                    kafka_system_test_utils.start_simple_consumer(self.systemTestEnv, self.testcaseEnv, minStartingOffsetDict)
+                    self.anonLogger.info("sleeping for 10s")
+                    time.sleep(10)
+
+                # =============================================
+                # starting console consumer
+                # =============================================
+                if logRetentionTest.lower() == "false":
+                    self.log_message("starting consumer in the background")
+                    kafka_system_test_utils.start_console_consumer(self.systemTestEnv, self.testcaseEnv)
+                    time.sleep(1)
                     
                 # =============================================
                 # this testcase is completed - stop all entities
@@ -396,7 +411,7 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                 # collect logs from remote hosts
                 # =============================================
                 kafka_system_test_utils.collect_logs_from_remote_hosts(self.systemTestEnv, self.testcaseEnv)
-    
+
                 # =============================================
                 # validate the data matched and checksum
                 # =============================================
@@ -405,10 +420,13 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                 if logRetentionTest.lower() == "true":
                     kafka_system_test_utils.validate_simple_consumer_data_matched_across_replicas(self.systemTestEnv, self.testcaseEnv)
                     kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
+                elif consumerMultiTopicsMode.lower() == "true":
+                    kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv)
+                    kafka_system_test_utils.validate_data_matched_in_multi_topics_from_single_consumer_producer(self.systemTestEnv, self.testcaseEnv)
                 else:
-                    #kafka_system_test_utils.validate_simple_consumer_data_matched(self.systemTestEnv, self.testcaseEnv)
                     kafka_system_test_utils.validate_simple_consumer_data_matched_across_replicas(self.systemTestEnv, self.testcaseEnv)
                     kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv)
+                    kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
 
                 # =============================================
                 # draw graphs

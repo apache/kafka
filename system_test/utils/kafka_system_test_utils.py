@@ -996,47 +996,43 @@ def create_topic(systemTestEnv, testcaseEnv):
     prodPerfCfgList = system_test_utils.get_dict_from_list_of_dicts(clusterEntityConfigDictList, "role", "producer_performance")
 
     for prodPerfCfg in prodPerfCfgList:
-        topic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", prodPerfCfg["entity_id"], "topic")
+        topicsStr       = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", prodPerfCfg["entity_id"], "topic")
         zkEntityId      = system_test_utils.get_data_by_lookup_keyval(clusterEntityConfigDictList, "role", "zookeeper", "entity_id")
         zkHost          = system_test_utils.get_data_by_lookup_keyval(clusterEntityConfigDictList, "role", "zookeeper", "hostname")
         kafkaHome       = system_test_utils.get_data_by_lookup_keyval(clusterEntityConfigDictList, "entity_id", zkEntityId, "kafka_home")
         javaHome        = system_test_utils.get_data_by_lookup_keyval(clusterEntityConfigDictList, "entity_id", zkEntityId, "java_home")
         createTopicBin  = kafkaHome + "/bin/kafka-create-topic.sh"
 
-        logger.debug("zkEntityId : " + zkEntityId, extra=d)
+        logger.debug("zkEntityId     : " + zkEntityId, extra=d)
         logger.debug("createTopicBin : " + createTopicBin, extra=d)
 
+        zkConnectStr = ""
+        topicsList   = topicsStr.split(',')
+
         if len(testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]) > 0:
-            logger.info("creating topic: [" + topic + "] at: [" + testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"] + "]", extra=d) 
+            zkConnectStr = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
+        elif len(testcaseEnv.userDefinedEnvVarDict["targetZkConnectStr"]) > 0:
+            zkConnectStr = testcaseEnv.userDefinedEnvVarDict["targetZkConnectStr"]
+        else:
+            raise Exception("Empty zkConnectStr found")
+
+        for topic in topicsList:
+            logger.info("creating topic: [" + topic + "] at: [" + zkConnectStr + "]", extra=d) 
             cmdList = ["ssh " + zkHost,
                        "'JAVA_HOME=" + javaHome,
                        createTopicBin,
                        " --topic "     + topic,
-                       " --zookeeper " + testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"],
+                       " --zookeeper " + zkConnectStr,
                        " --replica "   + testcaseEnv.testcaseArgumentsDict["replica_factor"],
                        " --partition " + testcaseEnv.testcaseArgumentsDict["num_partition"] + " >> ",
                        testcaseEnv.testCaseBaseDir + "/logs/create_source_cluster_topic.log'"]
-
+    
             cmdStr = " ".join(cmdList)
             logger.debug("executing command: [" + cmdStr + "]", extra=d)
             subproc = system_test_utils.sys_call_return_subproc(cmdStr)
 
-        if len(testcaseEnv.userDefinedEnvVarDict["targetZkConnectStr"]) > 0:
-            logger.info("creating topic: [" + topic + "] at: [" + testcaseEnv.userDefinedEnvVarDict["targetZkConnectStr"] + "]", extra=d) 
-            cmdList = ["ssh " + zkHost,
-                       "'JAVA_HOME=" + javaHome,
-                       createTopicBin,
-                       " --topic "     + topic,
-                       " --zookeeper " + testcaseEnv.userDefinedEnvVarDict["targetZkConnectStr"],
-                       " --replica "   + testcaseEnv.testcaseArgumentsDict["replica_factor"],
-                       " --partition " + testcaseEnv.testcaseArgumentsDict["num_partition"] + " >> ",
-                       testcaseEnv.testCaseBaseDir + "/logs/create_target_cluster_topic.log'"]
 
-            cmdStr = " ".join(cmdList)
-            logger.debug("executing command: [" + cmdStr + "]", extra=d)
-            subproc = system_test_utils.sys_call_return_subproc(cmdStr)
-
-def get_message_id(logPathName):
+def get_message_id(logPathName, topic=""):
     logLines      = open(logPathName, "r").readlines()
     messageIdList = []
 
@@ -1044,8 +1040,12 @@ def get_message_id(logPathName):
         if not "MessageID" in line:
             continue
         else:
-            matchObj = re.match('.*MessageID:(.*?):', line)
-            messageIdList.append( matchObj.group(1) )
+            matchObj = re.match('.*Topic:(.*?):.*:MessageID:(.*?):', line)
+            if len(topic) == 0:
+                messageIdList.append( matchObj.group(2) )
+            else:
+                if topic == matchObj.group(1):
+                    messageIdList.append( matchObj.group(2) )
 
     return messageIdList
 
@@ -1949,14 +1949,75 @@ def validate_simple_consumer_data_matched_across_replicas(systemTestEnv, testcas
             logger.info("topic " + topic + " : no. of brokers with non-zero msg count : " + str(nonZeroMsgCounter), extra=d)
             logger.info("topic " + topic + " : non-zero brokers msg count             : " + str(nonZeroMsgValue), extra=d)
 
-        if mismatchCounter == 0:
+        if mismatchCounter == 0 and nonZeroMsgCounter > 0:
             validationStatusDict["Validate for data matched on topic [" + topic + "] across replicas"] = "PASSED"
         else:
             validationStatusDict["Validate for data matched on topic [" + topic + "] across replicas"] = "FAILED"
 
 
+def validate_data_matched_in_multi_topics_from_single_consumer_producer(systemTestEnv, testcaseEnv):
+    validationStatusDict        = testcaseEnv.validationStatusDict
+    clusterEntityConfigDictList = systemTestEnv.clusterEntityConfigDictList
 
+    prodPerfCfgList = system_test_utils.get_dict_from_list_of_dicts(clusterEntityConfigDictList, "role", "producer_performance")
+    consumerCfgList = system_test_utils.get_dict_from_list_of_dicts(clusterEntityConfigDictList, "role", "console_consumer")
 
+    for prodPerfCfg in prodPerfCfgList:
+        producerEntityId = prodPerfCfg["entity_id"]
+        topicStr = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "topic")
+        acks     = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "request-num-acks")
+
+        consumerEntityIdList = system_test_utils.get_data_from_list_of_dicts(clusterEntityConfigDictList, "role", "console_consumer", "entity_id")
+
+        matchingConsumerEntityId = None
+        for consumerEntityId in consumerEntityIdList:
+            consumerTopic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", consumerEntityId, "topic")
+            if consumerTopic in topicStr:
+                matchingConsumerEntityId = consumerEntityId
+                break
+
+        if matchingConsumerEntityId is None:
+            break
+
+        producerLogPath     = get_testcase_config_log_dir_pathname(testcaseEnv, "producer_performance", producerEntityId, "default")
+        producerLogPathName = producerLogPath + "/producer_performance.log"
+
+        consumerLogPath     = get_testcase_config_log_dir_pathname(testcaseEnv, "console_consumer", matchingConsumerEntityId, "default")
+        consumerLogPathName = consumerLogPath + "/console_consumer.log"
+
+        topicList = topicStr.split(',')
+        for topic in topicList:
+            msgIdMissingInConsumerLogPathName = get_testcase_config_log_dir_pathname( 
+                                                testcaseEnv, "console_consumer", matchingConsumerEntityId, "default") \
+                                                + "/msg_id_missing_in_consumer_" + topic + ".log"
+            producerMsgIdList  = get_message_id(producerLogPathName, topic)
+            consumerMsgIdList  = get_message_id(consumerLogPathName, topic)
+            producerMsgIdSet   = set(producerMsgIdList)
+            consumerMsgIdSet   = set(consumerMsgIdList)
+
+            missingMsgIdInConsumer = producerMsgIdSet - consumerMsgIdSet
+
+            outfile = open(msgIdMissingInConsumerLogPathName, "w")
+            for id in missingMsgIdInConsumer:
+                outfile.write(id + "\n")
+            outfile.close()
+
+            logger.info("no. of unique messages on topic [" + topic + "] sent from publisher  : " + str(len(producerMsgIdSet)), extra=d)
+            logger.info("no. of unique messages on topic [" + topic + "] received by consumer : " + str(len(consumerMsgIdSet)), extra=d)
+            validationStatusDict["Unique messages from producer on [" + topic + "]"] = str(len(producerMsgIdSet))
+            validationStatusDict["Unique messages from consumer on [" + topic + "]"] = str(len(consumerMsgIdSet))
+
+            if ( len(missingMsgIdInConsumer) == 0 and len(producerMsgIdSet) > 0 ):
+                validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "PASSED"
+            elif (acks == "1"):
+                missingPercentage = len(missingMsgIdInConsumer) * 100 / len(producerMsgIdSet)
+                print "#### missing Percent : ", missingPercentage
+                if missingPercentage <= 1:
+                    validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "PASSED"
+                    logger.warn("Test case passes with less than 1% data loss : [" + str(len(missingMsgIdInConsumer)) + "] missing messages", extra=d)
+            else:
+                validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "FAILED"
+                logger.info("See " + msgIdMissingInConsumerLogPathName + " for missing MessageID", extra=d)
 
 
 
