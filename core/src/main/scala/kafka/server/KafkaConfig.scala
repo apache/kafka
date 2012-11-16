@@ -153,7 +153,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val replicaMaxWaitTimeMs = props.getInt("replica.fetch.wait.time.ms", 500)
 
   /* minimum bytes expected for each fetch response. If not enough bytes, wait up to replicaMaxWaitTimeMs */
-  val replicaMinBytes = props.getInt("replica.fetch.min.bytes", 4096)
+  val replicaMinBytes = props.getInt("replica.fetch.min.bytes", 1)
 
   /* number of fetcher threads used to replicate messages from a source broker.
    * Increasing this value can increase the degree of I/O parallelism in the follower broker. */
