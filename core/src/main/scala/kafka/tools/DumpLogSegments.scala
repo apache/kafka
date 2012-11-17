@@ -124,7 +124,8 @@ object DumpLogSegments {
 
       if(lastOffset == -1)
         lastOffset = messageAndOffset.offset
-      else if (messageAndOffset.offset != lastOffset +1) {
+      // If it's uncompressed message, its offset must be lastOffset + 1 no matter last message is compressed or uncompressed
+      else if (msg.compressionCodec == NoCompressionCodec && messageAndOffset.offset != lastOffset +1) {
         var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getName, List[(Int, Int)]())
         nonConsecutivePairsSeq ::=((lastOffset, messageAndOffset.offset).asInstanceOf[(Int, Int)])
         nonConsecutivePairsForLogFilesMap.put(file.getName, nonConsecutivePairsSeq)
