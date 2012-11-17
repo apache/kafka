@@ -27,6 +27,7 @@ import kafka.common.TopicAndPartition
 class ConsumerFetcherThread(name: String,
                             val config: ConsumerConfig,
                             sourceBroker: Broker,
+                            partitionMap: Map[TopicAndPartition, PartitionTopicInfo],
                             val consumerFetcherManager: ConsumerFetcherManager)
         extends AbstractFetcherThread(name = name, 
                                       clientId = config.clientId,
@@ -40,7 +41,7 @@ class ConsumerFetcherThread(name: String,
 
   // process fetched data
   def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: FetchResponsePartitionData) {
-    val pti = consumerFetcherManager.getPartitionTopicInfo(topicAndPartition)
+    val pti = partitionMap(topicAndPartition)
     if (pti.getFetchOffset != fetchOffset)
       throw new RuntimeException("Offset doesn't match for topic %s partition: %d pti offset: %d fetch offset: %d"
                                 .format(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset, fetchOffset))
@@ -57,7 +58,7 @@ class ConsumerFetcherThread(name: String,
     }
     val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(startTimestamp, 1)))
     val newOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
-    val pti = consumerFetcherManager.getPartitionTopicInfo(topicAndPartition)
+    val pti = partitionMap(topicAndPartition)
     pti.resetFetchOffset(newOffset)
     pti.resetConsumeOffset(newOffset)
     newOffset

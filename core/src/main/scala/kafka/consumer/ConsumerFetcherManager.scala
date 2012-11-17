@@ -88,7 +88,9 @@ class ConsumerFetcherManager(private val consumerIdString: String,
 
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: Broker): AbstractFetcherThread = {
-    new ConsumerFetcherThread("ConsumerFetcherThread-%s-%d-%d".format(consumerIdString, fetcherId, sourceBroker.id), config, sourceBroker, this)
+    new ConsumerFetcherThread(
+      "ConsumerFetcherThread-%s-%d-%d".format(consumerIdString, fetcherId, sourceBroker.id),
+      config, sourceBroker, partitionMap, this)
   }
 
   def startConnections(topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster) {
@@ -106,29 +108,15 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   }
 
   def stopAllConnections() {
+    lock.lock()
     // first, clear noLeaderPartitionSet so that no more fetchers can be added to leader_finder_thread
-    lock.lock()
     noLeaderPartitionSet.clear()
-    lock.unlock()
-
-    // second, stop all existing fetchers
-    closeAllFetchers()
-
-    // finally clear partitionMap
-    lock.lock()
+    // second, clear partitionMap
     partitionMap = null
     lock.unlock()
-  }
 
-  def getPartitionTopicInfo(topicAndPartition: TopicAndPartition) : PartitionTopicInfo = {
-    var pti :PartitionTopicInfo =null
-    lock.lock()
-    try {
-      pti = partitionMap(topicAndPartition)
-    } finally {
-      lock.unlock()
-    }
-    pti      
+    // third, stop all existing fetchers
+    closeAllFetchers()
   }
 
   def addPartitionsWithError(partitionList: Iterable[TopicAndPartition]) {
