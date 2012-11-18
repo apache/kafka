@@ -69,7 +69,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     val leaderForPartitionMap = Map(
       0 -> configs.head.brokerId
     )
-    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap)
+    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
     val topicMetadata = mockLogManagerAndTestTopic(topic)
     assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
     assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)

@@ -372,7 +372,9 @@ object TestUtils extends Logging {
     new kafka.api.ProducerRequest(correlationId, clientId, acks.toShort, ackTimeoutMs, Map(data:_*))
   }
 
-  def makeLeaderForPartition(zkClient: ZkClient, topic: String, leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int]) {
+  def makeLeaderForPartition(zkClient: ZkClient, topic: String,
+                             leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int],
+                             controllerEpoch: Int) {
     leaderPerPartitionMap.foreach
     {
       leaderForPartition => {
@@ -390,7 +392,7 @@ object TestUtils extends Logging {
             newLeaderAndIsr.zkVersion += 1
           }
           ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
-            newLeaderAndIsr.toString)
+            ZkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch))
         } catch {
           case oe => error("Error while electing leader for topic %s partition %d".format(topic, partition), oe)
         }

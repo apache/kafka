@@ -25,6 +25,7 @@ import kafka.message.{Message, ByteBufferMessageSet}
 import kafka.cluster.Broker
 import collection.mutable._
 import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.controller.LeaderIsrAndControllerEpoch
 
 
 object SerializationTestUtils{
@@ -83,11 +84,11 @@ object SerializationTestUtils{
   private val topicmetaData2 = new TopicMetadata(topic2, partitionMetaDataSeq)
 
   def createTestLeaderAndIsrRequest() : LeaderAndIsrRequest = {
-    val leaderAndIsr1 = new LeaderAndIsr(leader1, 1, isr1, 1)
-    val leaderAndIsr2 = new LeaderAndIsr(leader2, 1, isr2, 2)
+    val leaderAndIsr1 = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader1, 1, isr1, 1), 1)
+    val leaderAndIsr2 = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader2, 1, isr2, 2), 1)
     val map = Map(((topic1, 0), PartitionStateInfo(leaderAndIsr1, 3)),
                   ((topic2, 0), PartitionStateInfo(leaderAndIsr2, 3)))
-    new LeaderAndIsrRequest(map, collection.immutable.Set[Broker]())
+    new LeaderAndIsrRequest(map.toMap, collection.immutable.Set[Broker](), 1)
   }
 
   def createTestLeaderAndIsrResponse() : LeaderAndIsrResponse = {
@@ -97,13 +98,13 @@ object SerializationTestUtils{
   }
 
   def createTestStopReplicaRequest() : StopReplicaRequest = {
-    new StopReplicaRequest(deletePartitions = true, partitions = collection.immutable.Set((topic1, 0), (topic2, 0)))
+    new StopReplicaRequest(controllerEpoch = 1, deletePartitions = true, partitions = collection.immutable.Set((topic1, 0), (topic2, 0)))
   }
 
   def createTestStopReplicaResponse() : StopReplicaResponse = {
     val responseMap = Map(((topic1, 0), ErrorMapping.NoError),
                           ((topic2, 0), ErrorMapping.NoError))
-    new StopReplicaResponse(1, responseMap)
+    new StopReplicaResponse(1, responseMap.toMap)
   }
 
   def createTestProducerRequest: ProducerRequest = {

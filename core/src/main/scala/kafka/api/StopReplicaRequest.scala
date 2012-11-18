@@ -33,6 +33,7 @@ object StopReplicaRequest extends Logging {
     val versionId = buffer.getShort
     val clientId = readShortString(buffer)
     val ackTimeoutMs = buffer.getInt
+    val controllerEpoch = buffer.getInt
     val deletePartitions = buffer.get match {
       case 1 => true
       case 0 => false
@@ -44,7 +45,7 @@ object StopReplicaRequest extends Logging {
     (1 to topicPartitionPairCount) foreach { _ =>
       topicPartitionPairSet.add(readShortString(buffer), buffer.getInt)
     }
-    StopReplicaRequest(versionId, clientId, ackTimeoutMs, deletePartitions, topicPartitionPairSet.toSet)
+    StopReplicaRequest(versionId, clientId, ackTimeoutMs, deletePartitions, topicPartitionPairSet.toSet, controllerEpoch)
   }
 }
 
@@ -52,18 +53,20 @@ case class StopReplicaRequest(versionId: Short,
                               clientId: String,
                               ackTimeoutMs: Int,
                               deletePartitions: Boolean,
-                              partitions: Set[(String, Int)])
+                              partitions: Set[(String, Int)],
+                              controllerEpoch: Int)
         extends RequestOrResponse(Some(RequestKeys.StopReplicaKey)) {
 
-  def this(deletePartitions: Boolean, partitions: Set[(String, Int)]) = {
+  def this(deletePartitions: Boolean, partitions: Set[(String, Int)], controllerEpoch: Int) = {
     this(StopReplicaRequest.CurrentVersion, StopReplicaRequest.DefaultClientId, StopReplicaRequest.DefaultAckTimeout,
-         deletePartitions, partitions)
+         deletePartitions, partitions, controllerEpoch)
   }
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
     writeShortString(buffer, clientId)
     buffer.putInt(ackTimeoutMs)
+    buffer.putInt(controllerEpoch)
     buffer.put(if (deletePartitions) 1.toByte else 0.toByte)
     buffer.putInt(partitions.size)
     for ((topic, partitionId) <- partitions){
@@ -77,6 +80,7 @@ case class StopReplicaRequest(versionId: Short,
       2 + /* versionId */
       ApiUtils.shortStringLength(clientId) +
       4 + /* ackTimeoutMs */
+      4 + /* controller epoch */
       1 + /* deletePartitions */
       4 /* partition count */
     for ((topic, partitionId) <- partitions){

@@ -44,8 +44,6 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext, electionPath:
     }
   }
 
-  def amILeader : Boolean = leaderId == brokerId
-
   def elect: Boolean = {
     controllerContext.zkClient.subscribeDataChanges(electionPath, leaderChangeListener)
     try {
@@ -56,16 +54,26 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext, electionPath:
     } catch {
       case e: ZkNodeExistsException =>
         // If someone else has written the path, then
-        debug("Someone else was elected as leader other than " + brokerId)
         val data: String = controllerContext.zkClient.readData(electionPath, true)
-        if (data != null) leaderId = data.toInt
-      case e2 => throw e2
+        debug("Broker %d was elected as leader instead of broker %d".format(data.toInt, brokerId))
+        if (data != null) {
+          leaderId = data.toInt
+        }
+      case e2 =>
+        error("Error while electing or becoming leader on broker %d".format(brokerId), e2)
+        resign()
     }
     amILeader
   }
 
   def close = {
     leaderId = -1
+  }
+
+  def amILeader : Boolean = leaderId == brokerId
+
+  def resign() = {
+    deletePath(controllerContext.zkClient, electionPath)
   }
 
   /**
@@ -79,6 +87,10 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext, electionPath:
      */
     @throws(classOf[Exception])
     def handleDataChange(dataPath: String, data: Object) {
+      controllerContext.controllerLock synchronized {
+        leaderId = data.toString.toInt
+        info("New leader is %d".format(leaderId))
+      }
     }
 
     /**

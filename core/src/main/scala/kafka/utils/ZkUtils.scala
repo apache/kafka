@@ -24,17 +24,19 @@ import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException, 
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import scala.collection._
 import kafka.api.LeaderAndIsr
+import mutable.HashMap
 import org.apache.zookeeper.data.Stat
 import java.util.concurrent.locks.{ReentrantLock, Condition}
-import kafka.controller.{PartitionAndReplica, ReassignedPartitionsContext}
 import kafka.admin._
 import kafka.common.{TopicAndPartition, KafkaException, NoEpochForPartitionException}
+import kafka.controller.{LeaderIsrAndControllerEpoch, PartitionAndReplica, ReassignedPartitionsContext}
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
   val BrokerIdsPath = "/brokers/ids"
   val BrokerTopicsPath = "/brokers/topics"
   val ControllerPath = "/controller"
+  val ControllerEpochPath = "/controllerEpoch"
   val ReassignPartitionsPath = "/admin/reassign_partitions"
   val PreferredReplicaLeaderElectionPath = "/admin/preferred_replica_election"
 
@@ -74,7 +76,7 @@ object ZkUtils extends Logging {
     brokerIds.map(_.toInt).map(getBrokerInfo(zkClient, _)).filter(_.isDefined).map(_.get)
   }
 
-  def getLeaderAndIsrForPartition(zkClient: ZkClient, topic: String, partition: Int):Option[LeaderAndIsr] = {
+  def getLeaderIsrAndEpochForPartition(zkClient: ZkClient, topic: String, partition: Int):Option[LeaderIsrAndControllerEpoch] = {
     val leaderAndIsrPath = getTopicPartitionLeaderAndIsrPath(topic, partition)
     val leaderAndIsrInfo = readDataMaybeNull(zkClient, leaderAndIsrPath)
     val leaderAndIsrOpt = leaderAndIsrInfo._1
@@ -85,17 +87,23 @@ object ZkUtils extends Logging {
     }
   }
 
-  def parseLeaderAndIsr(leaderAndIsrStr: String, topic: String, partition: Int, stat: Stat): Option[LeaderAndIsr] = {
+  def getLeaderAndIsrForPartition(zkClient: ZkClient, topic: String, partition: Int):Option[LeaderAndIsr] = {
+    getLeaderIsrAndEpochForPartition(zkClient, topic, partition).map(_.leaderAndIsr)
+  }
+
+  def parseLeaderAndIsr(leaderAndIsrStr: String, topic: String, partition: Int, stat: Stat)
+  : Option[LeaderIsrAndControllerEpoch] = {
     Json.parseFull(leaderAndIsrStr) match {
       case Some(m) =>
         val leader = m.asInstanceOf[Map[String, String]].get("leader").get.toInt
         val epoch = m.asInstanceOf[Map[String, String]].get("leaderEpoch").get.toInt
         val isrString = m.asInstanceOf[Map[String, String]].get("ISR").get
+        val controllerEpoch = m.asInstanceOf[Map[String, String]].get("controllerEpoch").get.toInt
         val isr = Utils.parseCsvList(isrString).map(r => r.toInt)
         val zkPathVersion = stat.getVersion
         debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for topic %s and partition %d".format(leader, epoch,
           isr.toString(), zkPathVersion, topic, partition))
-        Some(LeaderAndIsr(leader, epoch, isr.toList, zkPathVersion))
+        Some(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr.toList, zkPathVersion), controllerEpoch))
       case None => None
     }
   }
@@ -187,6 +195,15 @@ object ZkUtils extends Logging {
   def getConsumerPartitionOwnerPath(group: String, topic: String, partition: Int): String = {
     val topicDirs = new ZKGroupTopicDirs(group, topic)
     topicDirs.consumerOwnerDir + "/" + partition
+  }
+
+  def leaderAndIsrZkData(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
+    val jsonDataMap = new HashMap[String, String]
+    jsonDataMap.put("leader", leaderAndIsr.leader.toString)
+    jsonDataMap.put("leaderEpoch", leaderAndIsr.leaderEpoch.toString)
+    jsonDataMap.put("ISR", leaderAndIsr.isr.mkString(","))
+    jsonDataMap.put("controllerEpoch", controllerEpoch.toString)
+    Utils.stringMapToJson(jsonDataMap)
   }
 
   /**
@@ -306,6 +323,25 @@ object ZkUtils extends Logging {
         .format(path, data, expectVersion, stat.getVersion))
       (true, stat.getVersion)
     } catch {
+      case e: Exception =>
+        error("Conditional update of zkPath %s with data %s and expected version %d failed".format(path, data,
+          expectVersion), e)
+        (false, -1)
+    }
+  }
+
+  /**
+   * Conditional update the persistent path data, return (true, newVersion) if it succeeds, otherwise (the current
+   * version is not the expected version, etc.) return (false, -1). If path doesn't exist, throws ZkNoNodeException
+   */
+  def conditionalUpdatePersistentPathIfExists(client: ZkClient, path: String, data: String, expectVersion: Int): (Boolean, Int) = {
+    try {
+      val stat = client.writeData(path, data, expectVersion)
+      info("Conditional update of zkPath %s with value %s and expected version %d succeeded, returning the new version: %d"
+        .format(path, data, expectVersion, stat.getVersion))
+      (true, stat.getVersion)
+    } catch {
+      case nne: ZkNoNodeException => throw nne
       case e: Exception =>
         error("Conditional update of zkPath %s with data %s and expected version %d failed".format(path, data,
           expectVersion), e)
@@ -439,13 +475,13 @@ object ZkUtils extends Logging {
   }
 
   def getPartitionLeaderAndIsrForTopics(zkClient: ZkClient, topics: Seq[String]):
-  mutable.Map[TopicAndPartition, LeaderAndIsr] = {
-    val ret = new mutable.HashMap[TopicAndPartition, LeaderAndIsr]
+  mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
+    val ret = new mutable.HashMap[TopicAndPartition, LeaderIsrAndControllerEpoch]
     val partitionsForTopics = getPartitionsForTopics(zkClient, topics)
     for((topic, partitions) <- partitionsForTopics) {
       for(partition <- partitions) {
-        ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition.toInt) match {
-          case Some(leaderAndIsr) => ret.put(TopicAndPartition(topic, partition.toInt), leaderAndIsr)
+        ZkUtils.getLeaderIsrAndEpochForPartition(zkClient, topic, partition.toInt) match {
+          case Some(leaderIsrAndControllerEpoch) => ret.put(TopicAndPartition(topic, partition.toInt), leaderIsrAndControllerEpoch)
           case None =>
         }
       }
