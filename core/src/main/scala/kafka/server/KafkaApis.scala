@@ -146,6 +146,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val (response, error) = replicaManager.stopReplicas(stopReplicaRequest)
     val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.versionId, response.toMap, error)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(stopReplicaResponse)))
+
+    replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads()
   }
 
   /**

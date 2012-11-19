@@ -23,7 +23,7 @@ import kafka.cluster.Broker
 
 abstract class AbstractFetcherManager(protected val name: String, numFetchers: Int = 1) extends Logging {
     // map of (source brokerid, fetcher Id per source broker) => fetcher
-  private val fetcherThreadMap = new mutable.HashMap[(Broker, Int), AbstractFetcherThread]
+  private val fetcherThreadMap = new mutable.HashMap[BrokerAndFetcherId, AbstractFetcherThread]
   private val mapLock = new Object
   this.logIdent = "[" + name + "] "
 
@@ -37,17 +37,17 @@ abstract class AbstractFetcherManager(protected val name: String, numFetchers: I
   def addFetcher(topic: String, partitionId: Int, initialOffset: Long, sourceBroker: Broker) {
     mapLock synchronized {
       var fetcherThread: AbstractFetcherThread = null
-      val key = (sourceBroker, getFetcherId(topic, partitionId))
+      val key = new BrokerAndFetcherId(sourceBroker, getFetcherId(topic, partitionId))
       fetcherThreadMap.get(key) match {
         case Some(f) => fetcherThread = f
         case None =>
-          fetcherThread = createFetcherThread(key._2, sourceBroker)
+          fetcherThread = createFetcherThread(key.fetcherId, sourceBroker)
           fetcherThreadMap.put(key, fetcherThread)
           fetcherThread.start
       }
       fetcherThread.addPartition(topic, partitionId, initialOffset)
       info("adding fetcher on topic %s, partion %d, initOffset %d to broker %d with fetcherId %d"
-          .format(topic, partitionId, initialOffset, sourceBroker.id, key._2))
+          .format(topic, partitionId, initialOffset, sourceBroker.id, key.fetcherId))
     }
   }
 
@@ -56,11 +56,20 @@ abstract class AbstractFetcherManager(protected val name: String, numFetchers: I
     mapLock synchronized {
       for ((key, fetcher) <- fetcherThreadMap) {
         fetcher.removePartition(topic, partitionId)
+      }
+    }
+  }
+
+  def shutdownIdleFetcherThreads() {
+    mapLock synchronized {
+      val keysToBeRemoved = new mutable.HashSet[BrokerAndFetcherId]
+      for ((key, fetcher) <- fetcherThreadMap) {
         if (fetcher.partitionCount <= 0) {
           fetcher.shutdown()
-          fetcherThreadMap.remove(key)
+          keysToBeRemoved += key
         }
       }
+      fetcherThreadMap --= keysToBeRemoved
     }
   }
 
@@ -73,3 +82,5 @@ abstract class AbstractFetcherManager(protected val name: String, numFetchers: I
     }
   }
 }
+
+case class BrokerAndFetcherId(broker: Broker, fetcherId: Int)

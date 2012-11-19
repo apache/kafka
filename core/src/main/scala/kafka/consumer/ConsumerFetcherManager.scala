@@ -75,6 +75,8 @@ class ConsumerFetcherManager(private val consumerIdString: String,
               addFetcher(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset(), leaderBroker)
           }
           noLeaderPartitionSet --= leaderForPartitionsMap.keySet
+
+          shutdownIdleFetcherThreads()
         } catch {
           case t => warn("Failed to find leader for %s".format(noLeaderPartitionSet), t)
         }
@@ -124,6 +126,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     lock.lock()
     try {
       if (partitionMap != null) {
+        partitionList.foreach(tp => removeFetcher(tp.topic, tp.partition))
         noLeaderPartitionSet ++= partitionList
         cond.signalAll()
       }

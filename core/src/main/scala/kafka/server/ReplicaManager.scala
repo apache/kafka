@@ -206,6 +206,8 @@ class ReplicaManager(val config: KafkaConfig,
         }
         responseMap.put(topicAndPartition, errorCode)
       }
+      info("Completed leader and isr request %s".format(leaderAndISRRequest))
+      replicaFetcherManager.shutdownIdleFetcherThreads()
       (responseMap, ErrorMapping.NoError)
     }
   }
