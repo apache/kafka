@@ -20,11 +20,15 @@ package kafka.utils
 import java.util.concurrent._
 import scala.math._
 
-class DelayedItem[T](val item: T, delay: Long, unit: TimeUnit) extends Delayed {
-  
-  val delayMs = unit.toMillis(delay)
-  val createdMs = System.currentTimeMillis
-  
+class DelayedItem[T](val item: T, delay: Long, unit: TimeUnit) extends Delayed with Logging {
+
+  val createdMs = SystemTime.milliseconds
+  val delayMs = {
+    val given = unit.toMillis(delay)
+    if (given < 0 || (createdMs + given) < 0) (Long.MaxValue - createdMs)
+    else given
+  }
+
   def this(item: T, delayMs: Long) = 
     this(item, delayMs, TimeUnit.MILLISECONDS)
 
@@ -32,18 +36,18 @@ class DelayedItem[T](val item: T, delay: Long, unit: TimeUnit) extends Delayed {
    * The remaining delay time
    */
   def getDelay(unit: TimeUnit): Long = {
-    val ellapsedMs = (System.currentTimeMillis - createdMs)
-    unit.convert(max(delayMs - ellapsedMs, 0), unit)
+    val elapsedMs = (SystemTime.milliseconds - createdMs)
+    unit.convert(max(delayMs - elapsedMs, 0), unit)
   }
     
   def compareTo(d: Delayed): Int = {
     val delayed = d.asInstanceOf[DelayedItem[T]]
     val myEnd = createdMs + delayMs
-    val yourEnd = delayed.createdMs - delayed.delayMs
-    
+    val yourEnd = delayed.createdMs + delayed.delayMs
+
     if(myEnd < yourEnd) -1
     else if(myEnd > yourEnd) 1
-    else 0 
+    else 0
   }
   
 }

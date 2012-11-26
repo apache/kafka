@@ -18,40 +18,22 @@
 package kafka.message
 
 import java.nio._
+import java.util.concurrent.atomic.AtomicLong
 import junit.framework.Assert._
 import org.junit.Test
 import kafka.utils.TestUtils
-import kafka.common.InvalidMessageSizeException
 
 class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
 
   override def createMessageSet(messages: Seq[Message]): ByteBufferMessageSet = 
     new ByteBufferMessageSet(NoCompressionCodec, messages: _*)
-  
-  @Test
-  def testSmallFetchSize() {
-    // create a ByteBufferMessageSet that doesn't contain a full message
-    // iterating it should get an InvalidMessageSizeException
-    val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("01234567890123456789".getBytes()))
-    val buffer = messages.serialized.slice
-    buffer.limit(10)
-    val messageSetWithNoFullMessage = new ByteBufferMessageSet(buffer = buffer, initialOffset = 1000)
-    try {
-      for (message <- messageSetWithNoFullMessage)
-        fail("shouldn't see any message")
-    }
-    catch {
-      case e: InvalidMessageSizeException => //this is expected
-      case e2 => fail("shouldn't see any other exceptions")
-    }
-  }
 
   @Test
   def testValidBytes() {
     {
       val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message("hello".getBytes()), new Message("there".getBytes()))
-      val buffer = ByteBuffer.allocate(messages.sizeInBytes.toInt + 2)
-      buffer.put(messages.serialized)
+      val buffer = ByteBuffer.allocate(messages.sizeInBytes + 2)
+      buffer.put(messages.buffer)
       buffer.putShort(4)
       val messagesPlus = new ByteBufferMessageSet(buffer)
       assertEquals("Adding invalid bytes shouldn't change byte count", messages.validBytes, messagesPlus.validBytes)
@@ -61,6 +43,18 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
     {
       assertEquals("Valid bytes on an empty ByteBufferMessageSet should return 0", 0,
         MessageSet.Empty.asInstanceOf[ByteBufferMessageSet].validBytes)
+    }
+  }
+
+  @Test
+  def testValidBytesWithCompression() {
+    {
+      val messages = new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes()), new Message("there".getBytes()))
+      val buffer = ByteBuffer.allocate(messages.sizeInBytes + 2)
+      buffer.put(messages.buffer)
+      buffer.putShort(4)
+      val messagesPlus = new ByteBufferMessageSet(buffer)
+      assertEquals("Adding invalid bytes shouldn't change byte count", messages.validBytes, messagesPlus.validBytes)
     }
   }
 
@@ -92,8 +86,6 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(messageSet.iterator))
       //make sure ByteBufferMessageSet is re-iterable.
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(messageSet.iterator))
-      //make sure the last offset after iteration is correct
-      assertEquals("offset of last message not expected", messageSet.last.offset, messageSet.serialized.limit)
 
       //make sure shallow iterator is the same as deep iterator
       TestUtils.checkEquals[Message](TestUtils.getMessageIterator(messageSet.shallowIterator),
@@ -106,9 +98,6 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(messageSet.iterator))
       //make sure ByteBufferMessageSet is re-iterable.
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(messageSet.iterator))
-      //make sure the last offset after iteration is correct
-      assertEquals("offset of last message not expected", messageSet.last.offset, messageSet.serialized.limit)
-
       verifyShallowIterator(messageSet)
     }
 
@@ -117,17 +106,14 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       val emptyMessageList : List[Message] = Nil
       val emptyMessageSet = new ByteBufferMessageSet(NoCompressionCodec, emptyMessageList: _*)
       val regularMessgeSet = new ByteBufferMessageSet(NoCompressionCodec, messageList: _*)
-      val buffer = ByteBuffer.allocate(emptyMessageSet.serialized.limit + regularMessgeSet.serialized.limit)
-      buffer.put(emptyMessageSet.serialized)
-      buffer.put(regularMessgeSet.serialized)
+      val buffer = ByteBuffer.allocate(emptyMessageSet.buffer.limit + regularMessgeSet.buffer.limit)
+      buffer.put(emptyMessageSet.buffer)
+      buffer.put(regularMessgeSet.buffer)
       buffer.rewind
-      val mixedMessageSet = new ByteBufferMessageSet(buffer, 0, 0)
+      val mixedMessageSet = new ByteBufferMessageSet(buffer)
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
       //make sure ByteBufferMessageSet is re-iterable.
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
-      //make sure the last offset after iteration is correct
-      assertEquals("offset of last message not expected", mixedMessageSet.last.offset, mixedMessageSet.serialized.limit)
-
       //make sure shallow iterator is the same as deep iterator
       TestUtils.checkEquals[Message](TestUtils.getMessageIterator(mixedMessageSet.shallowIterator),
                                      TestUtils.getMessageIterator(mixedMessageSet.iterator))
@@ -138,25 +124,49 @@ class ByteBufferMessageSetTest extends BaseMessageSetTestCases {
       val emptyMessageList : List[Message] = Nil
       val emptyMessageSet = new ByteBufferMessageSet(DefaultCompressionCodec, emptyMessageList: _*)
       val regularMessgeSet = new ByteBufferMessageSet(DefaultCompressionCodec, messageList: _*)
-      val buffer = ByteBuffer.allocate(emptyMessageSet.serialized.limit + regularMessgeSet.serialized.limit)
-      buffer.put(emptyMessageSet.serialized)
-      buffer.put(regularMessgeSet.serialized)
+      val buffer = ByteBuffer.allocate(emptyMessageSet.buffer.limit + regularMessgeSet.buffer.limit)
+      buffer.put(emptyMessageSet.buffer)
+      buffer.put(regularMessgeSet.buffer)
       buffer.rewind
-      val mixedMessageSet = new ByteBufferMessageSet(buffer, 0, 0)
+      val mixedMessageSet = new ByteBufferMessageSet(buffer)
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
       //make sure ByteBufferMessageSet is re-iterable.
       TestUtils.checkEquals[Message](messageList.iterator, TestUtils.getMessageIterator(mixedMessageSet.iterator))
-      //make sure the last offset after iteration is correct
-      assertEquals("offset of last message not expected", mixedMessageSet.last.offset, mixedMessageSet.serialized.limit)
-
       verifyShallowIterator(mixedMessageSet)
+    }
+  }
+  
+  @Test
+  def testOffsetAssignment() {
+    val messages = new ByteBufferMessageSet(NoCompressionCodec,
+                                            new Message("hello".getBytes), 
+                                            new Message("there".getBytes), 
+                                            new Message("beautiful".getBytes))
+    val compressedMessages = new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec,
+                                                      messages = messages.map(_.message).toBuffer:_*)
+    // check uncompressed offsets 
+    checkOffsets(messages, 0)
+    var offset = 1234567
+    checkOffsets(messages.assignOffsets(new AtomicLong(offset), NoCompressionCodec), offset)
+    
+    // check compressed messages
+    checkOffsets(compressedMessages, 0)
+    checkOffsets(compressedMessages.assignOffsets(new AtomicLong(offset), DefaultCompressionCodec), offset)
+  }
+  
+  /* check that offsets are assigned based on byte offset from the given base offset */
+  def checkOffsets(messages: ByteBufferMessageSet, baseOffset: Long) {
+    var offset = baseOffset
+    for(entry <- messages) {
+      assertEquals("Unexpected offset in message set iterator", offset, entry.offset)
+      offset += 1
     }
   }
 
   def verifyShallowIterator(messageSet: ByteBufferMessageSet) {
-      //make sure the offsets returned by a shallow iterator is a subset of that of a deep iterator
-      val shallowOffsets = messageSet.shallowIterator.map(msgAndOff => msgAndOff.offset).toSet
-      val deepOffsets = messageSet.iterator.map(msgAndOff => msgAndOff.offset).toSet
-      assertTrue(shallowOffsets.subsetOf(deepOffsets))
+    //make sure the offsets returned by a shallow iterator is a subset of that of a deep iterator
+    val shallowOffsets = messageSet.shallowIterator.map(msgAndOff => msgAndOff.offset).toSet
+    val deepOffsets = messageSet.iterator.map(msgAndOff => msgAndOff.offset).toSet
+    assertTrue(shallowOffsets.subsetOf(deepOffsets))
   }
 }

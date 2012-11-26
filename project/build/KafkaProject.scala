@@ -16,7 +16,7 @@
  */
 
 import sbt._
-import scala.xml.{Node, Elem, NodeSeq}
+import scala.xml.{Node, Elem}
 import scala.xml.transform.{RewriteRule, RuleTransformer}
 
 class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProject {
@@ -56,9 +56,53 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
         <exclude module="log4j"/>
         <exclude module="jline"/>
       </dependency>
-      <dependency org="com.github.sgroschupf" name="zkclient" rev="0.1">
-      </dependency>
     </dependencies>
+
+    def zkClientDep =
+      <dependency>
+        <groupId>zkclient</groupId>
+        <artifactId>zkclient</artifactId>
+        <version>20120522</version>
+        <scope>compile</scope>
+      </dependency>
+
+    def metricsDeps =
+      <dependencies>
+        <dependency>
+          <groupId>com.yammer.metrics</groupId>
+          <artifactId>metrics-core</artifactId>
+          <version>3.0.0-c0c8be71</version>
+          <scope>compile</scope>
+        </dependency>
+        <dependency>
+          <groupId>com.yammer.metrics</groupId>
+          <artifactId>metrics-annotations</artifactId>
+          <version>3.0.0-c0c8be71</version>
+          <scope>compile</scope>
+        </dependency>
+      </dependencies>
+
+    object ZkClientDepAdder extends RuleTransformer(new RewriteRule() {
+      override def transform(node: Node): Seq[Node] = node match {
+        case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
+          Elem(prefix, "dependencies", attribs, scope, deps ++ zkClientDep:_*)
+        }
+        case other => other
+      }
+    })
+
+    object MetricsDepAdder extends RuleTransformer(new RewriteRule() {
+      override def transform(node: Node): Seq[Node] = node match {
+        case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
+          Elem(prefix, "dependencies", attribs, scope, deps ++ metricsDeps:_*)
+        }
+        case other => other
+      }
+    })
+
+    override def pomPostProcess(pom: Node): Node = {
+      MetricsDepAdder(ZkClientDepAdder(pom))
+    }
 
     override def artifactID = "kafka"
     override def filterScalaJars = false
@@ -232,6 +276,7 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
   trait CoreDependencies {
     val log4j = "log4j" % "log4j" % "1.2.15"
     val jopt = "net.sf.jopt-simple" % "jopt-simple" % "3.2"
+    val slf4jSimple = "org.slf4j" % "slf4j-simple" % "latest.release"
   }
   
   trait HadoopDependencies {
@@ -245,5 +290,4 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
   trait CompressionDependencies {
     val snappy = "org.xerial.snappy" % "snappy-java" % "1.0.4.1"	
   }
-
 }

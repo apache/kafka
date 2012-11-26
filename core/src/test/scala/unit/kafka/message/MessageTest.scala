@@ -19,52 +19,75 @@ package kafka.message
 
 import java.util._
 import java.nio._
+import scala.collection._
 import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{Before, Test}
 import kafka.utils.TestUtils
+import kafka.utils.Utils
+
+case class MessageTestVal(val key: Array[Byte], 
+                          val payload: Array[Byte], 
+                          val codec: CompressionCodec, 
+                          val message: Message)
 
 class MessageTest extends JUnitSuite {
   
-  var message: Message = null
-  val payload = "some bytes".getBytes()
-
+  var messages = new mutable.ArrayBuffer[MessageTestVal]()
+  
   @Before
   def setUp(): Unit = {
-    message = new Message(payload)
+    val keys = Array(null, "key".getBytes, "".getBytes)
+    val vals = Array("value".getBytes, "".getBytes)
+    val codecs = Array(NoCompressionCodec, GZIPCompressionCodec)
+    for(k <- keys; v <- vals; codec <- codecs)
+      messages += new MessageTestVal(k, v, codec, new Message(v, k, codec))
   }
   
   @Test
   def testFieldValues = {
-    TestUtils.checkEquals(ByteBuffer.wrap(payload), message.payload)
-    assertEquals(Message.CurrentMagicValue, message.magic)
-    assertEquals(69L, new Message(69, "hello".getBytes()).checksum)
+    for(v <- messages) {
+      TestUtils.checkEquals(ByteBuffer.wrap(v.payload), v.message.payload)
+      assertEquals(Message.CurrentMagicValue, v.message.magic)
+      if(v.message.hasKey)
+        TestUtils.checkEquals(ByteBuffer.wrap(v.key), v.message.key)
+      else
+        assertEquals(null, v.message.key)
+      assertEquals(v.codec, v.message.compressionCodec)
+    }
   }
 
   @Test
   def testChecksum() {
-    assertTrue("Auto-computed checksum should be valid", message.isValid)
-    val badChecksum = message.checksum + 1 % Int.MaxValue
-    val invalid = new Message(badChecksum, payload)
-    assertEquals("Message should return written checksum", badChecksum, invalid.checksum)
-    assertFalse("Message with invalid checksum should be invalid", invalid.isValid)
+    for(v <- messages) {
+      assertTrue("Auto-computed checksum should be valid", v.message.isValid)
+      // garble checksum
+      val badChecksum: Int = (v.message.checksum + 1 % Int.MaxValue).toInt
+      Utils.writeUnsignedInt(v.message.buffer, Message.CrcOffset, badChecksum)
+      assertFalse("Message with invalid checksum should be invalid", v.message.isValid)
+    }
   }
   
   @Test
   def testEquality() = {
-    assertFalse("Should not equal null", message.equals(null))
-    assertFalse("Should not equal a random string", message.equals("asdf"))
-    assertTrue("Should equal itself", message.equals(message))
-    val copy = new Message(message.checksum, payload)
-    assertTrue("Should equal another message with the same content.", message.equals(copy))
+    for(v <- messages) {
+      assertFalse("Should not equal null", v.message.equals(null))
+      assertFalse("Should not equal a random string", v.message.equals("asdf"))
+      assertTrue("Should equal itself", v.message.equals(v.message))
+      val copy = new Message(bytes = v.payload, key = v.key, codec = v.codec)
+      assertTrue("Should equal another message with the same content.", v.message.equals(copy))
+    }
   }
   
   @Test
   def testIsHashable() = {
     // this is silly, but why not
-    val m = new HashMap[Message,Boolean]()
-    m.put(message, true)
-    assertNotNull(m.get(message))
+    val m = new HashMap[Message, Message]()
+    for(v <- messages)
+      m.put(v.message, v.message)
+    for(v <- messages)
+      assertEquals(v.message, m.get(v.message))
   }
   
 }
+ 	

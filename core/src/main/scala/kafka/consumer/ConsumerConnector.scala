@@ -18,39 +18,54 @@
 package kafka.consumer
 
 import scala.collection._
-import kafka.utils.{Utils, Logging}
-import kafka.serializer.{DefaultDecoder, Decoder}
+import kafka.utils.Logging
+import kafka.serializer._
 
 /**
  *  Main interface for consumer
  */
 trait ConsumerConnector {
+  
   /**
    *  Create a list of MessageStreams for each topic.
    *
    *  @param topicCountMap  a map of (topic, #streams) pair
-   *  @param decoder Decoder to decode each Message to type T
    *  @return a map of (topic, list of  KafkaStream) pairs.
    *          The number of items in the list is #streams. Each stream supports
    *          an iterator over message/metadata pairs.
    */
-  def createMessageStreams[T](topicCountMap: Map[String,Int],
-                              decoder: Decoder[T] = new DefaultDecoder)
-    : Map[String,List[KafkaStream[T]]]
-
+  def createMessageStreams(topicCountMap: Map[String,Int]): Map[String, List[KafkaStream[Array[Byte],Array[Byte]]]]
+  
+  /**
+   *  Create a list of MessageStreams for each topic.
+   *
+   *  @param topicCountMap  a map of (topic, #streams) pair
+   *  @param keyDecoder Decoder to decode the key portion of the message
+   *  @param valueDecoder Decoder to decode the value portion of the message
+   *  @return a map of (topic, list of  KafkaStream) pairs.
+   *          The number of items in the list is #streams. Each stream supports
+   *          an iterator over message/metadata pairs.
+   */
+  def createMessageStreams[K,V](topicCountMap: Map[String,Int],
+                                keyDecoder: Decoder[K],
+                                valueDecoder: Decoder[V])
+    : Map[String,List[KafkaStream[K,V]]]
+  
   /**
    *  Create a list of message streams for all topics that match a given filter.
    *
    *  @param topicFilter Either a Whitelist or Blacklist TopicFilter object.
    *  @param numStreams Number of streams to return
-   *  @param decoder Decoder to decode each Message to type T
+   *  @param keyDecoder Decoder to decode the key portion of the message
+   *  @param valueDecoder Decoder to decode the value portion of the message
    *  @return a list of KafkaStream each of which provides an
    *          iterator over message/metadata pairs over allowed topics.
    */
-  def createMessageStreamsByFilter[T](topicFilter: TopicFilter,
-                                      numStreams: Int = 1,
-                                      decoder: Decoder[T] = new DefaultDecoder)
-    : Seq[KafkaStream[T]]
+  def createMessageStreamsByFilter[K,V](topicFilter: TopicFilter,
+                                        numStreams: Int = 1,
+                                        keyDecoder: Decoder[K] = new DefaultDecoder(),
+                                        valueDecoder: Decoder[V] = new DefaultDecoder())
+    : Seq[KafkaStream[K,V]]
 
   /**
    *  Commit the offsets of all broker partitions connected by this connector.
@@ -64,8 +79,6 @@ trait ConsumerConnector {
 }
 
 object Consumer extends Logging {
-  private val consumerStatsMBeanName = "kafka:type=kafka.ConsumerStats"
-
   /**
    *  Create a ConsumerConnector
    *
@@ -74,7 +87,6 @@ object Consumer extends Logging {
    */
   def create(config: ConsumerConfig): ConsumerConnector = {
     val consumerConnect = new ZookeeperConsumerConnector(config)
-    Utils.registerMBean(consumerConnect, consumerStatsMBeanName + ",groupid=" + config.groupId)
     consumerConnect
   }
 
@@ -86,7 +98,6 @@ object Consumer extends Logging {
    */
   def createJavaConsumerConnector(config: ConsumerConfig): kafka.javaapi.consumer.ConsumerConnector = {
     val consumerConnect = new kafka.javaapi.consumer.ZookeeperConsumerConnector(config)
-    Utils.registerMBean(consumerConnect.underlying, consumerStatsMBeanName + ",groupid=" + config.groupId)
     consumerConnect
   }
 }

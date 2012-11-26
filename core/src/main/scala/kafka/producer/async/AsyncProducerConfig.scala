@@ -16,22 +16,16 @@
 */
 package kafka.producer.async
 
-import java.util.Properties
-import kafka.utils.Utils
-import kafka.producer.SyncProducerConfig
+import kafka.utils.VerifiableProperties
 
-class AsyncProducerConfig(override val props: Properties) extends SyncProducerConfig(props)
-        with AsyncProducerConfigShared {
-}
-
-trait AsyncProducerConfigShared {
-  val props: Properties
+trait AsyncProducerConfig {
+  val props: VerifiableProperties
 
   /* maximum time, in milliseconds, for buffering data on the producer queue */
-  val queueTime = Utils.getInt(props, "queue.time", 5000)
+  val queueTime = props.getInt("queue.time", 5000)
 
   /** the maximum size of the blocking queue for buffering on the producer */
-  val queueSize = Utils.getInt(props, "queue.size", 10000)
+  val queueSize = props.getInt("queue.size", 10000)
 
   /**
    * Timeout for event enqueue:
@@ -39,23 +33,15 @@ trait AsyncProducerConfigShared {
    * -ve: enqueue will block indefinitely if the queue is full
    * +ve: enqueue will block up to this many milliseconds if the queue is full
    */
-  val enqueueTimeoutMs = Utils.getInt(props, "queue.enqueueTimeout.ms", 0)
+  val enqueueTimeoutMs = props.getInt("queue.enqueueTimeout.ms", 0)
 
   /** the number of messages batched at the producer */
-  val batchSize = Utils.getInt(props, "batch.size", 200)
+  val batchSize = props.getInt("batch.size", 200)
 
-  /** the serializer class for events */
-  val serializerClass = Utils.getString(props, "serializer.class", "kafka.serializer.DefaultEncoder")
-
-  /** the callback handler for one or multiple events */
-  val cbkHandler = Utils.getString(props, "callback.handler", null)
-
-  /** properties required to initialize the callback handler */
-  val cbkHandlerProps = Utils.getProps(props, "callback.handler.props", null)
-
-  /** the handler for events */
-  val eventHandler = Utils.getString(props, "event.handler", null)
-
-  /** properties required to initialize the callback handler */
-  val eventHandlerProps = Utils.getProps(props, "event.handler.props", null)
+  /** the serializer class for values */
+  val serializerClass = props.getString("serializer.class", "kafka.serializer.DefaultEncoder")
+  
+  /** the serializer class for keys (defaults to the same as for values) */
+  val keySerializerClass = props.getString("key.serializer.class", serializerClass)
+  
 }

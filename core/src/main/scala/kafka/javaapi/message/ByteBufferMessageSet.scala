@@ -16,36 +16,23 @@
 */
 package kafka.javaapi.message
 
+import java.util.concurrent.atomic.AtomicLong
+import scala.reflect.BeanProperty
 import java.nio.ByteBuffer
-import kafka.common.ErrorMapping
 import kafka.message._
 
-class ByteBufferMessageSet(private val buffer: ByteBuffer,
-                           private val initialOffset: Long = 0L,
-                           private val errorCode: Int = ErrorMapping.NoError) extends MessageSet {
-  val underlying: kafka.message.ByteBufferMessageSet = new kafka.message.ByteBufferMessageSet(buffer,
-                                                                                              initialOffset,
-                                                                                              errorCode)
-  def this(buffer: ByteBuffer) = this(buffer, 0L, ErrorMapping.NoError)
-
+class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends MessageSet {
+  private val underlying: kafka.message.ByteBufferMessageSet = new kafka.message.ByteBufferMessageSet(buffer)
+  
   def this(compressionCodec: CompressionCodec, messages: java.util.List[Message]) {
-    this(MessageSet.createByteBuffer(compressionCodec, scala.collection.JavaConversions.asBuffer(messages): _*),
-         0L, ErrorMapping.NoError)
+    this(new kafka.message.ByteBufferMessageSet(compressionCodec, new AtomicLong(0), scala.collection.JavaConversions.asBuffer(messages): _*).buffer)
   }
 
   def this(messages: java.util.List[Message]) {
     this(NoCompressionCodec, messages)
   }
 
-  def validBytes: Long = underlying.validBytes
-
-  def serialized():ByteBuffer = underlying.serialized
-
-  def getInitialOffset = initialOffset
-
-  def getBuffer = buffer
-
-  def getErrorCode = errorCode
+  def validBytes: Int = underlying.validBytes
 
   override def iterator: java.util.Iterator[MessageAndOffset] = new java.util.Iterator[MessageAndOffset] {
     val underlyingIterator = underlying.iterator
@@ -62,18 +49,15 @@ class ByteBufferMessageSet(private val buffer: ByteBuffer,
 
   override def toString: String = underlying.toString
 
-  def sizeInBytes: Long = underlying.sizeInBytes
+  def sizeInBytes: Int = underlying.sizeInBytes
 
   override def equals(other: Any): Boolean = {
     other match {
-      case that: ByteBufferMessageSet =>
-        (that canEqual this) && errorCode == that.errorCode && buffer.equals(that.buffer) && initialOffset == that.initialOffset
+      case that: ByteBufferMessageSet => buffer.equals(that.buffer)
       case _ => false
     }
   }
 
-  def canEqual(other: Any): Boolean = other.isInstanceOf[ByteBufferMessageSet]
 
-  override def hashCode: Int = 31 * (17 + errorCode) + buffer.hashCode + initialOffset.hashCode
-
+  override def hashCode: Int = buffer.hashCode
 }

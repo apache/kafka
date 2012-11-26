@@ -21,7 +21,7 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 import kafka.javaapi.producer.Producer;
-import kafka.javaapi.producer.ProducerData;
+import kafka.producer.KeyedMessage;
 import kafka.message.Message;
 import org.apache.hadoop.io.BytesWritable;
 import org.apache.hadoop.io.NullWritable;
@@ -33,7 +33,7 @@ public class KafkaRecordWriter<W extends BytesWritable> extends RecordWriter<Nul
   protected Producer<Integer, Message> producer;
   protected String topic;
 
-  protected List<ProducerData<Integer, Message>> msgList = new LinkedList<ProducerData<Integer, Message>>();
+  protected List<KeyedMessage<Integer, Message>> msgList = new LinkedList<KeyedMessage<Integer, Message>>();
   protected int totalSize = 0;
   protected int queueSize;
 
@@ -57,7 +57,7 @@ public class KafkaRecordWriter<W extends BytesWritable> extends RecordWriter<Nul
   public void write(NullWritable key, BytesWritable value) throws IOException, InterruptedException
   {
     Message msg = new Message(value.getBytes());
-    msgList.add(new ProducerData<Integer, Message>(this.topic, msg));
+    msgList.add(new KeyedMessage<Integer, Message>(this.topic, msg));
     totalSize += msg.size();
 
     // MultiProducerRequest only supports sending up to Short.MAX_VALUE messages in one batch

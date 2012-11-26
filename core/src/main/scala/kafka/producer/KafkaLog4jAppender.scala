@@ -23,52 +23,61 @@ import org.apache.log4j.AppenderSkeleton
 import org.apache.log4j.helpers.LogLog
 import kafka.utils.Logging
 import java.util.{Properties, Date}
-import scala.collection._
 
 class KafkaLog4jAppender extends AppenderSkeleton with Logging {
-  var port:Int = 0
-  var host:String = null
   var topic:String = null
   var serializerClass:String = null
-  var zkConnect:String = null
   var brokerList:String = null
-  
+  var producerType:String = null
+  var compressionCodec:String = null
+  var enqueueTimeout:String = null
+  var queueSize:String = null
+
   private var producer: Producer[String, String] = null
 
   def getTopic:String = topic
   def setTopic(topic: String) { this.topic = topic }
 
-  def getZkConnect:String = zkConnect
-  def setZkConnect(zkConnect: String) { this.zkConnect = zkConnect }
-  
   def getBrokerList:String = brokerList
   def setBrokerList(brokerList: String) { this.brokerList = brokerList }
   
   def getSerializerClass:String = serializerClass
   def setSerializerClass(serializerClass:String) { this.serializerClass = serializerClass }
 
+  def getProducerType:String = producerType
+  def setProducerType(producerType:String) { this.producerType = producerType }
+  
+  def getCompressionCodec:String = compressionCodec
+  def setCompressionCodec(compressionCodec:String) { this.compressionCodec = compressionCodec }
+  
+  def getEnqueueTimeout:String = enqueueTimeout
+  def setEnqueueTimeout(enqueueTimeout:String) { this.enqueueTimeout = enqueueTimeout }
+
+  def getQueueSize:String = queueSize
+  def setQueueSize(queueSize:String) { this.queueSize = queueSize }
+
   override def activateOptions() {
-    val connectDiagnostic : mutable.ListBuffer[String] = mutable.ListBuffer();
     // check for config parameter validity
     val props = new Properties()
-    if( zkConnect == null) connectDiagnostic += "zkConnect"
-    else props.put("zk.connect", zkConnect);
-    if( brokerList == null) connectDiagnostic += "brokerList"
-    else if( props.isEmpty) props.put("broker.list", brokerList)
-    if(props.isEmpty )
-      throw new MissingConfigException(
-        connectDiagnostic mkString ("One of these connection properties must be specified: ", ", ", ".")
-      )
+    if(brokerList != null)
+      props.put("broker.list", brokerList)
+    if(props.isEmpty)
+      throw new MissingConfigException("The broker.list property should be specified")
     if(topic == null)
       throw new MissingConfigException("topic must be specified by the Kafka log4j appender")
     if(serializerClass == null) {
       serializerClass = "kafka.serializer.StringEncoder"
-      LogLog.warn("Using default encoder - kafka.serializer.StringEncoder")
+      LogLog.debug("Using default encoder - kafka.serializer.StringEncoder")
     }
     props.put("serializer.class", serializerClass)
+    //These have default values in ProducerConfig and AsyncProducerConfig. We don't care if they're not specified
+    if(producerType != null) props.put("producer.type", producerType)
+    if(compressionCodec != null) props.put("compression.codec", compressionCodec)
+    if(enqueueTimeout != null) props.put("queue.enqueueTimeout.ms", enqueueTimeout)
+    if(queueSize != null) props.put("queue.size", queueSize)
     val config : ProducerConfig = new ProducerConfig(props)
     producer = new Producer[String, String](config)
-    LogLog.debug("Kafka producer connected to " + (if(config.zkConnect == null) config.brokerList else config.zkConnect))
+    LogLog.debug("Kafka producer connected to " +  config.brokerList)
     LogLog.debug("Logging for topic: " + topic)
   }
   
@@ -78,8 +87,7 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
     }
     else this.layout.format(event)
     LogLog.debug("[" + new Date(event.getTimeStamp).toString + "]" + message)
-    val messageData : ProducerData[String, String] =
-      new ProducerData[String, String](topic, message)
+    val messageData = new KeyedMessage[String, String](topic, message)
     producer.send(messageData);
   }
 

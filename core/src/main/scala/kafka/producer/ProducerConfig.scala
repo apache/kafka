@@ -17,52 +17,49 @@
 
 package kafka.producer
 
-import async.AsyncProducerConfigShared
+import async.AsyncProducerConfig
 import java.util.Properties
-import kafka.utils.{ZKConfig, Utils}
-import kafka.common.InvalidConfigException
+import kafka.utils.{Utils, VerifiableProperties}
+import kafka.message.{CompressionCodec, NoCompressionCodec}
 
-class ProducerConfig(val props: Properties) extends ZKConfig(props)
-        with AsyncProducerConfigShared with SyncProducerConfigShared{
+class ProducerConfig private (val props: VerifiableProperties)
+        extends AsyncProducerConfig with SyncProducerConfigShared {
 
-  /** For bypassing zookeeper based auto partition discovery, use this config   *
-   *  to pass in static broker and per-broker partition information. Format-    *
-   *  brokerid1:host1:port1, brokerid2:host2:port2*/
-  val brokerList = Utils.getString(props, "broker.list", null)
-  if(Utils.propertyExists(brokerList) && Utils.getString(props, "partitioner.class", null) != null)
-    throw new InvalidConfigException("partitioner.class cannot be used when broker.list is set")
+  def this(originalProps: Properties) {
+    this(new VerifiableProperties(originalProps))
+    props.verify()
+  }
 
-  /**
-   * If DefaultEventHandler is used, this specifies the number of times to
-   * retry if an error is encountered during send. Currently, it is only
-   * appropriate when broker.list points to a VIP. If the zk.connect option
-   * is used instead, this will not have any effect because with the zk-based
-   * producer, brokers are not re-selected upon retry. So retries would go to
-   * the same (potentially still down) broker. (KAFKA-253 will help address
-   * this.)
+  /** This is for bootstrapping and the producer will only use it for getting metadata
+   * (topics, partitions and replicas). The socket connections for sending the actual data
+   * will be established based on the broker information returned in the metadata. The
+   * format is host1:por1,host2:port2, and the list can be a subset of brokers or
+   * a VIP pointing to a subset of brokers.
    */
-  val numRetries = Utils.getInt(props, "num.retries", 0)
-
-  /** If both broker.list and zk.connect options are specified, throw an exception */
-  if(Utils.propertyExists(brokerList) && Utils.propertyExists(zkConnect))
-    throw new InvalidConfigException("only one of broker.list and zk.connect can be specified")
-
-  if(!Utils.propertyExists(zkConnect) && !Utils.propertyExists(brokerList))
-    throw new InvalidConfigException("At least one of zk.connect or broker.list must be specified")
+  val brokerList = props.getString("broker.list")
 
   /** the partitioner class for partitioning events amongst sub-topics */
-  val partitionerClass = Utils.getString(props, "partitioner.class", "kafka.producer.DefaultPartitioner")
+  val partitionerClass = props.getString("partitioner.class", "kafka.producer.DefaultPartitioner")
 
   /** this parameter specifies whether the messages are sent asynchronously *
    * or not. Valid values are - async for asynchronous send                 *
    *                            sync for synchronous send                   */
-  val producerType = Utils.getString(props, "producer.type", "sync")
+  val producerType = props.getString("producer.type", "sync")
 
   /**
    * This parameter allows you to specify the compression codec for all data generated *
    * by this producer. The default is NoCompressionCodec
    */
-  val compressionCodec = Utils.getCompressionCodec(props, "compression.codec")
+  val compressionCodec = {
+    val prop = props.getString("compression.codec", NoCompressionCodec.name)
+    try {
+      CompressionCodec.getCompressionCodec(prop.toInt)
+    }
+    catch {
+      case nfe: NumberFormatException =>
+        CompressionCodec.getCompressionCodec(prop)
+    }
+  }
 
   /** This parameter allows you to set whether compression should be turned *
    *  on for particular topics
@@ -75,7 +72,7 @@ class ProducerConfig(val props: Properties) extends ZKConfig(props)
    *
    *  If the compression codec is NoCompressionCodec, compression is disabled for all topics
    */
-  val compressedTopics = Utils.getCSVList(Utils.getString(props, "compressed.topics", null))
+  val compressedTopics = Utils.parseCsvList(props.getString("compressed.topics", null))
 
   /**
    * The producer using the zookeeper software load balancer maintains a ZK cache that gets
@@ -85,5 +82,7 @@ class ProducerConfig(val props: Properties) extends ZKConfig(props)
    * ZK cache needs to be updated.
    * This parameter specifies the number of times the producer attempts to refresh this ZK cache.
    */
-  val zkReadRetries = Utils.getInt(props, "zk.read.num.retries", 3)
+  val producerRetries = props.getInt("producer.num.retries", 3)
+
+  val producerRetryBackoffMs = props.getInt("producer.retry.backoff.ms", 100)
 }

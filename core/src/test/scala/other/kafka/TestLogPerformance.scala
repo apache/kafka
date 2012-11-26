@@ -18,22 +18,22 @@
 package kafka.log
 
 import kafka.message._
-import kafka.utils.{TestUtils, Utils, SystemTime}
+import kafka.utils.{SystemTime, TestUtils, Utils}
 import kafka.server.KafkaConfig
 
 object TestLogPerformance {
 
   def main(args: Array[String]): Unit = {
-    val props = TestUtils.createBrokerConfig(0, -1)
-    val config = new KafkaConfig(props)
     if(args.length < 4)
       Utils.croak("USAGE: java " + getClass().getName() + " num_messages message_size batch_size compression_codec")
     val numMessages = args(0).toInt
     val messageSize = args(1).toInt
     val batchSize = args(2).toInt
     val compressionCodec = CompressionCodec.getCompressionCodec(args(3).toInt)
+    val props = TestUtils.createBrokerConfig(0, -1)
+    val config = new KafkaConfig(props)
     val dir = TestUtils.tempDir()
-    val log = new Log(dir, SystemTime, 50*1024*1024, config.maxMessageSize, 5000000, 24*7*60*60*1000L, false)
+    val log = new Log(dir, 50*1024*1024, config.maxMessageSize, 5000000, config.logRollHours*60*60*1000L, needsRecovery = false, time = SystemTime)
     val bytes = new Array[Byte](messageSize)
     new java.util.Random().nextBytes(bytes)
     val message = new Message(bytes)
@@ -46,10 +46,10 @@ object TestLogPerformance {
     for(i <- 0 until numBatches)
       log.append(messageSet)
     log.close()
-    val ellapsed = (System.currentTimeMillis() - start) / 1000.0
+    val elapsed = (System.currentTimeMillis() - start) / 1000.0
     val writtenBytes = MessageSet.entrySize(message) * numMessages
     println("message size = " + MessageSet.entrySize(message))
-    println("MB/sec: " + writtenBytes / ellapsed / (1024.0 * 1024.0))
+    println("MB/sec: " + writtenBytes / elapsed / (1024.0 * 1024.0))
     Utils.rm(dir)
   }
   

@@ -13,690 +13,293 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 
 package kafka.producer
 
-import async.AsyncProducer
-import java.util.Properties
-import org.apache.log4j.{Logger, Level}
-import kafka.server.{KafkaRequestHandlers, KafkaServer, KafkaConfig}
-import kafka.zk.EmbeddedZookeeper
-import org.junit.{After, Before, Test}
-import junit.framework.Assert
-import org.easymock.EasyMock
-import java.util.concurrent.ConcurrentHashMap
-import kafka.cluster.Partition
-import org.scalatest.junit.JUnitSuite
-import kafka.common.{InvalidConfigException, UnavailableProducerException, InvalidPartitionException}
-import kafka.utils.{TestUtils, TestZKUtils, Utils}
-import kafka.serializer.{StringEncoder, Encoder}
+import org.scalatest.junit.JUnit3Suite
 import kafka.consumer.SimpleConsumer
-import kafka.api.FetchRequest
-import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
+import kafka.message.Message
+import kafka.server.{KafkaConfig, KafkaRequestHandler, KafkaServer}
+import kafka.zk.ZooKeeperTestHarness
+import org.apache.log4j.{Level, Logger}
+import org.junit.Assert._
+import org.junit.Test
+import kafka.utils._
+import java.util
+import kafka.admin.{AdminUtils, CreateTopicCommand}
+import util.Properties
+import kafka.api.FetchRequestBuilder
+import kafka.common.{KafkaException, ErrorMapping, FailedToSendMessageException}
 
-class ProducerTest extends JUnitSuite {
-  private val topic = "test-topic"
+
+class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   private val brokerId1 = 0
-  private val brokerId2 = 1  
+  private val brokerId2 = 1
   private val ports = TestUtils.choosePorts(2)
   private val (port1, port2) = (ports(0), ports(1))
   private var server1: KafkaServer = null
   private var server2: KafkaServer = null
-  private var producer1: SyncProducer = null
-  private var producer2: SyncProducer = null
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null
-  private var zkServer:EmbeddedZookeeper = null
-  private val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandlers])
+  private val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
 
-  @Before
-  def setUp() {
+  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1)
+  private val config1 = new KafkaConfig(props1) {
+    override val hostName = "localhost"
+    override val numPartitions = 4
+  }
+  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2)
+  private val config2 = new KafkaConfig(props2) {
+    override val hostName = "localhost"
+    override val numPartitions = 4
+  }
+
+  override def setUp() {
+    super.setUp()
     // set up 2 brokers with 4 partitions each
-    zkServer = new EmbeddedZookeeper(TestZKUtils.zookeeperConnect)
-
-    val props1 = TestUtils.createBrokerConfig(brokerId1, port1)
-    val config1 = new KafkaConfig(props1) {
-      override val numPartitions = 4
-    }
     server1 = TestUtils.createServer(config1)
-
-    val props2 = TestUtils.createBrokerConfig(brokerId2, port2)
-    val config2 = new KafkaConfig(props2) {
-      override val numPartitions = 4
-    }
     server2 = TestUtils.createServer(config2)
 
     val props = new Properties()
     props.put("host", "localhost")
     props.put("port", port1.toString)
 
-    producer1 = new SyncProducer(new SyncProducerConfig(props))
-    producer1.send("test-topic", new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                                          messages = new Message("test".getBytes())))
-
-    producer2 = new SyncProducer(new SyncProducerConfig(props) {
-      override val port = port2
-    })
-    producer2.send("test-topic", new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                                          messages = new Message("test".getBytes())))
-
     consumer1 = new SimpleConsumer("localhost", port1, 1000000, 64*1024)
     consumer2 = new SimpleConsumer("localhost", port2, 100, 64*1024)
 
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)
-
-    Thread.sleep(500)
   }
 
-  @After
-  def tearDown() {
+  override def tearDown() {
     // restore set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.ERROR)
     server1.shutdown
+    server1.awaitShutdown()
     server2.shutdown
-    Utils.rm(server1.config.logDir)
-    Utils.rm(server2.config.logDir)    
-    Thread.sleep(500)
-    zkServer.shutdown
-    Thread.sleep(500)
+    server2.awaitShutdown()
+    Utils.rm(server1.config.logDirs)
+    Utils.rm(server2.config.logDirs)
+    super.tearDown()
   }
 
-  @Test
-  def testSend() {
-    val props = new Properties()
-    props.put("partitioner.class", "kafka.producer.StaticPartitioner")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
-    val config = new ProducerConfig(props)
-    val partitioner = new StaticPartitioner
-    val serializer = new StringSerializer
 
-    // 2 sync producers
-    val syncProducers = new ConcurrentHashMap[Int, SyncProducer]()
-    val syncProducer1 = EasyMock.createMock(classOf[SyncProducer])
-    val syncProducer2 = EasyMock.createMock(classOf[SyncProducer])
-    // it should send to partition 0 (first partition) on second broker i.e broker2
-    syncProducer2.send(topic, 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message("test1".getBytes)))
-    EasyMock.expectLastCall
-    syncProducer1.close
-    EasyMock.expectLastCall
-    syncProducer2.close
-    EasyMock.expectLastCall
-    EasyMock.replay(syncProducer1)
-    EasyMock.replay(syncProducer2)
+  def testUpdateBrokerPartitionInfo() {
+    CreateTopicCommand.createTopic(zkClient, "new-topic", 1, 2)
+    assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
+      AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
 
-    syncProducers.put(brokerId1, syncProducer1)
-    syncProducers.put(brokerId2, syncProducer2)
-
-    val producerPool = new ProducerPool(config, serializer, syncProducers, new ConcurrentHashMap[Int, AsyncProducer[String]]())
-    val producer = new Producer[String, String](config, partitioner, producerPool, false, null)
-
-    producer.send(new ProducerData[String, String](topic, "test", Array("test1")))
-    producer.close
-
-    EasyMock.verify(syncProducer1)
-    EasyMock.verify(syncProducer2)
-  }
-
-  @Test
-  def testSendSingleMessage() {
-    val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("broker.list", "0:localhost:9092")
-
-
-    val config = new ProducerConfig(props)
-    val partitioner = new StaticPartitioner
-    val serializer = new StringSerializer
-
-    // 2 sync producers
-    val syncProducers = new ConcurrentHashMap[Int, kafka.producer.SyncProducer]()
-    val syncProducer1 = EasyMock.createMock(classOf[kafka.producer.SyncProducer])
-    // it should send to a random partition due to use of broker.list
-    syncProducer1.send(topic, -1, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message("t".getBytes())))
-    EasyMock.expectLastCall
-    syncProducer1.close
-    EasyMock.expectLastCall
-    EasyMock.replay(syncProducer1)
-
-    syncProducers.put(brokerId1, syncProducer1)
-
-    val producerPool = new ProducerPool[String](config, serializer, syncProducers,
-      new ConcurrentHashMap[Int, AsyncProducer[String]]())
-    val producer = new Producer[String, String](config, partitioner, producerPool, false, null)
-
-    producer.send(new ProducerData[String, String](topic, "t"))
-    producer.close
-
-    EasyMock.verify(syncProducer1)
-  }
-
-  @Test
-  def testInvalidPartition() {
-    val props = new Properties()
-    props.put("partitioner.class", "kafka.producer.NegativePartitioner")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
-    val config = new ProducerConfig(props)
-
-    val richProducer = new Producer[String, String](config)
-    try {
-      richProducer.send(new ProducerData[String, String](topic, "test", Array("test")))
-      Assert.fail("Should fail with InvalidPartitionException")
-    }catch {
-      case e: InvalidPartitionException => // expected, do nothing
-    }finally {
-      richProducer.close()
-    }
-  }
-
-  @Test
-  def testDefaultEncoder() {
-    val props = new Properties()
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
-    val config = new ProducerConfig(props)
-
-    val stringProducer1 = new Producer[String, String](config)
-    try {
-      stringProducer1.send(new ProducerData[String, String](topic, "test", Array("test")))
-      fail("Should fail with ClassCastException due to incompatible Encoder")
+    val props1 = new util.Properties()
+    props1.put("broker.list", "localhost:80,localhost:81")
+    props1.put("serializer.class", "kafka.serializer.StringEncoder")
+    val producerConfig1 = new ProducerConfig(props1)
+    val producer1 = new Producer[String, String](producerConfig1)
+    try{
+      producer1.send(new KeyedMessage[String, String]("new-topic", "test", "test1"))
+      fail("Test should fail because the broker list provided are not valid")
     } catch {
-      case e: ClassCastException =>
-    }finally {
-      stringProducer1.close()
+      case e: KafkaException =>
+      case oe => fail("fails with exception", oe)
+    } finally {
+      producer1.close()
     }
 
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    val stringProducer2 = new Producer[String, String](new ProducerConfig(props))
-    stringProducer2.send(new ProducerData[String, String](topic, "test", Array("test")))
-    stringProducer2.close()
-
-    val messageProducer1 = new Producer[String, Message](config)
-    try {
-      messageProducer1.send(new ProducerData[String, Message](topic, "test", Array(new Message("test".getBytes))))
+    val props2 = new util.Properties()
+    props2.put("broker.list", "localhost:80," + TestUtils.getBrokerListStrFromConfigs(Seq( config1)))
+    props2.put("serializer.class", "kafka.serializer.StringEncoder")
+    val producerConfig2= new ProducerConfig(props2)
+    val producer2 = new Producer[String, String](producerConfig2)
+    try{
+      producer2.send(new KeyedMessage[String, String]("new-topic", "test", "test1"))
     } catch {
-      case e: ClassCastException => fail("Should not fail with ClassCastException due to default Encoder")
-    }finally {
-      messageProducer1.close()
+      case e => fail("Should succeed sending the message", e)
+    } finally {
+      producer2.close()
+    }
+
+    val props3 = new util.Properties()
+    props3.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    props3.put("serializer.class", "kafka.serializer.StringEncoder")
+    val producerConfig3 = new ProducerConfig(props3)
+    val producer3 = new Producer[String, String](producerConfig3)
+    try{
+      producer3.send(new KeyedMessage[String, String]("new-topic", "test", "test1"))
+    } catch {
+      case e => fail("Should succeed sending the message", e)
+    } finally {
+      producer3.close()
     }
   }
 
   @Test
-  def testSyncProducerPool() {
-    // 2 sync producers
-    val syncProducers = new ConcurrentHashMap[Int, SyncProducer]()
-    val syncProducer1 = EasyMock.createMock(classOf[SyncProducer])
-    val syncProducer2 = EasyMock.createMock(classOf[SyncProducer])
-    syncProducer1.send("test-topic", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message("test1".getBytes)))
-    EasyMock.expectLastCall
-    syncProducer1.close
-    EasyMock.expectLastCall
-    syncProducer2.close
-    EasyMock.expectLastCall
-    EasyMock.replay(syncProducer1)
-    EasyMock.replay(syncProducer2)
+  def testSendToNewTopic() {
+    val props1 = new util.Properties()
+    props1.put("serializer.class", "kafka.serializer.StringEncoder")
+    props1.put("partitioner.class", "kafka.utils.StaticPartitioner")
+    props1.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    props1.put("producer.request.required.acks", "2")
+    props1.put("producer.request.timeout.ms", "1000")
 
-    syncProducers.put(brokerId1, syncProducer1)
-    syncProducers.put(brokerId2, syncProducer2)
+    val props2 = new util.Properties()
+    props2.putAll(props1)
+    props2.put("producer.request.required.acks", "3")
+    props2.put("producer.request.timeout.ms", "1000")
 
-    // default for producer.type is "sync"
-    val props = new Properties()
-    props.put("partitioner.class", "kafka.producer.NegativePartitioner")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
-    val producerPool = new ProducerPool[String](new ProducerConfig(props), new StringSerializer,
-      syncProducers, new ConcurrentHashMap[Int, AsyncProducer[String]]())
-    producerPool.send(producerPool.getProducerPoolData("test-topic", new Partition(brokerId1, 0), Array("test1")))
+    val producerConfig1 = new ProducerConfig(props1)
+    val producerConfig2 = new ProducerConfig(props2)
 
-    producerPool.close
-    EasyMock.verify(syncProducer1)
-    EasyMock.verify(syncProducer2)
-  }
+    // create topic with 1 partition and await leadership
+    CreateTopicCommand.createTopic(zkClient, "new-topic", 1, 2)
+    assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
+      AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
 
-  @Test
-  def testAsyncProducerPool() {
-    // 2 async producers
-    val asyncProducers = new ConcurrentHashMap[Int, AsyncProducer[String]]()
-    val asyncProducer1 = EasyMock.createMock(classOf[AsyncProducer[String]])
-    val asyncProducer2 = EasyMock.createMock(classOf[AsyncProducer[String]])
-    asyncProducer1.send(topic, "test1", 0)
-    EasyMock.expectLastCall
-    asyncProducer1.close
-    EasyMock.expectLastCall
-    asyncProducer2.close
-    EasyMock.expectLastCall
-    EasyMock.replay(asyncProducer1)
-    EasyMock.replay(asyncProducer2)
+    val producer1 = new Producer[String, String](producerConfig1)
+    val producer2 = new Producer[String, String](producerConfig2)
+    // Available partition ids should be 0.
+    producer1.send(new KeyedMessage[String, String]("new-topic", "test", "test1"))
+    producer1.send(new KeyedMessage[String, String]("new-topic", "test", "test2"))
+    // get the leader
+    val leaderOpt = ZkUtils.getLeaderForPartition(zkClient, "new-topic", 0)
+    assertTrue("Leader for topic new-topic partition 0 should exist", leaderOpt.isDefined)
+    val leader = leaderOpt.get
 
-    asyncProducers.put(brokerId1, asyncProducer1)
-    asyncProducers.put(brokerId2, asyncProducer2)
+    val messageSet = if(leader == server1.config.brokerId) {
+      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      response1.messageSet("new-topic", 0).iterator.toBuffer
+    }else {
+      val response2 = consumer2.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      response2.messageSet("new-topic", 0).iterator.toBuffer
+    }
+    assertEquals("Should have fetched 2 messages", 2, messageSet.size)
+    assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes), messageSet(0).message)
+    assertEquals(new Message(bytes = "test2".getBytes, key = "test".getBytes), messageSet(1).message)
+    producer1.close()
 
-    // change producer.type to "async"
-    val props = new Properties()
-    props.put("partitioner.class", "kafka.producer.NegativePartitioner")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("producer.type", "async")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
-    val producerPool = new ProducerPool[String](new ProducerConfig(props), new StringSerializer,
-      new ConcurrentHashMap[Int, SyncProducer](), asyncProducers)
-    producerPool.send(producerPool.getProducerPoolData(topic, new Partition(brokerId1, 0), Array("test1")))
-
-    producerPool.close
-    EasyMock.verify(asyncProducer1)
-    EasyMock.verify(asyncProducer2)
-  }
-
-  @Test
-  def testSyncUnavailableProducerException() {
-    val syncProducers = new ConcurrentHashMap[Int, SyncProducer]()
-    val syncProducer1 = EasyMock.createMock(classOf[SyncProducer])
-    val syncProducer2 = EasyMock.createMock(classOf[SyncProducer])
-    syncProducer2.close
-    EasyMock.expectLastCall
-    EasyMock.replay(syncProducer1)
-    EasyMock.replay(syncProducer2)
-
-    syncProducers.put(brokerId2, syncProducer2)
-
-    // default for producer.type is "sync"
-    val props = new Properties()
-    props.put("partitioner.class", "kafka.producer.NegativePartitioner")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
-    val producerPool = new ProducerPool[String](new ProducerConfig(props), new StringSerializer,
-      syncProducers, new ConcurrentHashMap[Int, AsyncProducer[String]]())
     try {
-      producerPool.send(producerPool.getProducerPoolData("test-topic", new Partition(brokerId1, 0), Array("test1")))
-      Assert.fail("Should fail with UnavailableProducerException")
-    }catch {
-      case e: UnavailableProducerException => // expected
+      producer2.send(new KeyedMessage[String, String]("new-topic", "test", "test2"))
+      fail("Should have timed out for 3 acks.")
     }
-
-    producerPool.close
-    EasyMock.verify(syncProducer1)
-    EasyMock.verify(syncProducer2)
-  }
-
-  @Test
-  def testAsyncUnavailableProducerException() {
-    val asyncProducers = new ConcurrentHashMap[Int, AsyncProducer[String]]()
-    val asyncProducer1 = EasyMock.createMock(classOf[AsyncProducer[String]])
-    val asyncProducer2 = EasyMock.createMock(classOf[AsyncProducer[String]])
-    asyncProducer2.close
-    EasyMock.expectLastCall
-    EasyMock.replay(asyncProducer1)
-    EasyMock.replay(asyncProducer2)
-
-    asyncProducers.put(brokerId2, asyncProducer2)
-
-    // change producer.type to "async"
-    val props = new Properties()
-    props.put("partitioner.class", "kafka.producer.NegativePartitioner")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("producer.type", "async")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
-    val producerPool = new ProducerPool[String](new ProducerConfig(props), new StringSerializer,
-      new ConcurrentHashMap[Int, SyncProducer](), asyncProducers)
-    try {
-      producerPool.send(producerPool.getProducerPoolData(topic, new Partition(brokerId1, 0), Array("test1")))
-      Assert.fail("Should fail with UnavailableProducerException")
-    }catch {
-      case e: UnavailableProducerException => // expected
+    catch {
+      case se: FailedToSendMessageException => true
+      case e => fail("Not expected", e)
     }
-
-    producerPool.close
-    EasyMock.verify(asyncProducer1)
-    EasyMock.verify(asyncProducer2)
-  }
-
-  @Test
-  def testConfigBrokerPartitionInfoWithPartitioner {
-    val props = new Properties()
-    props.put("partitioner.class", "kafka.producer.StaticPartitioner")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("producer.type", "async")
-    props.put("broker.list", brokerId1 + ":" + "localhost" + ":" + port1 + ":" + 4 + "," +
-                                       brokerId2 + ":" + "localhost" + ":" + port2 + ":" + 4)
-
-    var config: ProducerConfig = null
-    try {
-      config = new ProducerConfig(props)
-      fail("should fail with InvalidConfigException due to presence of partitioner.class and broker.list")
-    }catch {
-      case e: InvalidConfigException => // expected
+    finally {
+      producer2.close()
     }
   }
 
-  @Test
-  def testConfigBrokerPartitionInfo() {
-    val props = new Properties()
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("producer.type", "async")
-    props.put("broker.list", brokerId1 + ":" + "localhost" + ":" + port1)
-
-    val config = new ProducerConfig(props)
-    val partitioner = new StaticPartitioner
-    val serializer = new StringSerializer
-
-    // 2 async producers
-    val asyncProducers = new ConcurrentHashMap[Int, AsyncProducer[String]]()
-    val asyncProducer1 = EasyMock.createMock(classOf[AsyncProducer[String]])
-    // it should send to a random partition due to use of broker.list
-    asyncProducer1.send(topic, "test1", -1)
-    EasyMock.expectLastCall
-    asyncProducer1.close
-    EasyMock.expectLastCall
-    EasyMock.replay(asyncProducer1)
-
-    asyncProducers.put(brokerId1, asyncProducer1)
-
-    val producerPool = new ProducerPool(config, serializer, new ConcurrentHashMap[Int, SyncProducer](), asyncProducers)
-    val producer = new Producer[String, String](config, partitioner, producerPool, false, null)
-
-    producer.send(new ProducerData[String, String](topic, "test1", Array("test1")))
-    producer.close
-
-    EasyMock.verify(asyncProducer1)
-  }
 
   @Test
-  def testZKSendToNewTopic() {
+  def testSendWithDeadBroker() {
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("partitioner.class", "kafka.producer.StaticPartitioner")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
+    props.put("producer.request.timeout.ms", "2000")
+//    props.put("producer.request.required.acks", "-1")
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+
+    // create topic
+    CreateTopicCommand.createTopic(zkClient, "new-topic", 4, 2, "0,0,0,0")
+    assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
+      AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 1, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 2, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 3, 500)
 
     val config = new ProducerConfig(props)
-    val serializer = new StringEncoder
-
     val producer = new Producer[String, String](config)
     try {
-      // Available broker id, partition id at this stage should be (0,0), (1,0)
-      // this should send the message to broker 0 on partition 0
-      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-      Thread.sleep(100)
-      // Available broker id, partition id at this stage should be (0,0), (0,1), (0,2), (0,3), (1,0)
-      // Since 4 % 5 = 4, this should send the message to broker 1 on partition 0
-      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-      Thread.sleep(100)
-      // cross check if brokers got the messages
-      val messageSet1 = consumer1.fetch(new FetchRequest("new-topic", 0, 0, 10000)).iterator
-      Assert.assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      Assert.assertEquals(new Message("test1".getBytes), messageSet1.next.message)
-      val messageSet2 = consumer2.fetch(new FetchRequest("new-topic", 0, 0, 10000)).iterator
-      Assert.assertTrue("Message set should have 1 message", messageSet2.hasNext)
-      Assert.assertEquals(new Message("test1".getBytes), messageSet2.next.message)
+      // Available partition ids should be 0, 1, 2 and 3, all lead and hosted only
+      // on broker 0
+      producer.send(new KeyedMessage[String, String]("new-topic", "test", "test1"))
+    } catch {
+      case e => fail("Unexpected exception: " + e)
+    }
+
+    // kill the broker
+    server1.shutdown
+    server1.awaitShutdown()
+
+    try {
+      // These sends should fail since there are no available brokers
+      producer.send(new KeyedMessage[String, String]("new-topic", "test", "test1"))
+      fail("Should fail since no leader exists for the partition.")
+    } catch {
+      case e => // success
+    }
+
+    // restart server 1
+    server1.startup()
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
+
+    try {
+      // cross check if broker 1 got the messages
+      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      val messageSet1 = response1.messageSet("new-topic", 0).iterator
+      assertTrue("Message set should have 1 message", messageSet1.hasNext)
+      assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes), messageSet1.next.message)
+      assertFalse("Message set should have another message", messageSet1.hasNext)
     } catch {
       case e: Exception => fail("Not expected", e)
-    }finally {
-      producer.close
     }
+    producer.close
   }
 
   @Test
-  def testZKSendWithDeadBroker() {
+  def testAsyncSendCanCorrectlyFailWithTimeout() {
+    val timeoutMs = 500
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("partitioner.class", "kafka.producer.StaticPartitioner")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
+    props.put("producer.request.timeout.ms", String.valueOf(timeoutMs))
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
 
     val config = new ProducerConfig(props)
-    val serializer = new StringEncoder
-
     val producer = new Producer[String, String](config)
+
+    // create topics in ZK
+    CreateTopicCommand.createTopic(zkClient, "new-topic", 4, 2, "0:1,0:1,0:1,0:1")
+    assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
+      AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
+
+    // do a simple test to make sure plumbing is okay
     try {
-      // Available broker id, partition id at this stage should be (0,0), (1,0)
-      // Hence, this should send the message to broker 0 on partition 0
-      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-      Thread.sleep(100)
-      // kill 2nd broker
-      server2.shutdown
-      Thread.sleep(100)
-      // Available broker id, partition id at this stage should be (0,0), (0,1), (0,2), (0,3), (1,0)
-      // Since 4 % 5 = 4, in a normal case, it would send to broker 1 on partition 0. But since broker 1 is down,
-      // 4 % 4 = 0, So it should send the message to broker 0 on partition 0
-      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test1")))
-      Thread.sleep(100)
+      // this message should be assigned to partition 0 whose leader is on broker 0
+      producer.send(new KeyedMessage[String, String]("new-topic", "test", "test"))
       // cross check if brokers got the messages
-      val messageSet1 = consumer1.fetch(new FetchRequest("new-topic", 0, 0, 10000)).iterator
-      Assert.assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      Assert.assertEquals(new Message("test1".getBytes), messageSet1.next.message)
-      Assert.assertTrue("Message set should have another message", messageSet1.hasNext)
-      Assert.assertEquals(new Message("test1".getBytes), messageSet1.next.message)
+      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch("new-topic", 0, 0, 10000).build())
+      val messageSet1 = response1.messageSet("new-topic", 0).iterator
+      assertTrue("Message set should have 1 message", messageSet1.hasNext)
+      assertEquals(new Message("test".getBytes), messageSet1.next.message)
     } catch {
-      case e: Exception => fail("Not expected")
-    }finally {
-      producer.close
+      case e => case e: Exception => producer.close; fail("Not expected", e)
     }
-  }
 
-  @Test
-  def testZKSendToExistingTopicWithNoBrokers() {
-    val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("partitioner.class", "kafka.producer.StaticPartitioner")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    // stop IO threads and request handling, but leave networking operational
+    // any requests should be accepted and queue up, but not handled
+    server1.requestHandlerPool.shutdown()
 
-    val config = new ProducerConfig(props)
-    val serializer = new StringEncoder
-
-    val producer = new Producer[String, String](config)
-    var server: KafkaServer = null
-
+    val t1 = SystemTime.milliseconds
     try {
-      // shutdown server1
-      server1.shutdown
-      Thread.sleep(100)
-      // Available broker id, partition id at this stage should be (1,0)
-      // this should send the message to broker 1 on partition 0
-      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test")))
-      Thread.sleep(100)
-      // cross check if brokers got the messages
-      val messageSet1 = consumer2.fetch(new FetchRequest("new-topic", 0, 0, 10000)).iterator
-      Assert.assertTrue("Message set should have 1 message", messageSet1.hasNext)
-      Assert.assertEquals(new Message("test".getBytes), messageSet1.next.message)
-
-      // shutdown server2
-      server2.shutdown
-      Thread.sleep(100)
-      // delete the new-topic logs
-      Utils.rm(server2.config.logDir)
-      Thread.sleep(100)
-      // start it up again. So broker 2 exists under /broker/ids, but nothing exists under /broker/topics/new-topic
-      val props2 = TestUtils.createBrokerConfig(brokerId1, port1)
-      val config2 = new KafkaConfig(props2) {
-        override val numPartitions = 4
-      }
-      server = TestUtils.createServer(config2)
-      Thread.sleep(100)
-
-      // now there are no brokers registered under test-topic.
-      producer.send(new ProducerData[String, String]("new-topic", "test", Array("test")))
-      Thread.sleep(100)
-
-      // cross check if brokers got the messages
-      val messageSet2 = consumer1.fetch(new FetchRequest("new-topic", 0, 0, 10000)).iterator
-      Assert.assertTrue("Message set should have 1 message", messageSet2.hasNext)
-      Assert.assertEquals(new Message("test".getBytes), messageSet2.next.message)
-
+      // this message should be assigned to partition 0 whose leader is on broker 0, but
+      // broker 0 will not response within timeoutMs millis.
+      producer.send(new KeyedMessage[String, String]("new-topic", "test", "test"))
     } catch {
+      case e: FailedToSendMessageException => /* success */
       case e: Exception => fail("Not expected", e)
-    }finally {
-      server.shutdown
+    } finally {
       producer.close
     }
-  }
+    val t2 = SystemTime.milliseconds
 
-  @Test
-  def testPartitionedSendToNewTopic() {
-    val props = new Properties()
-    props.put("partitioner.class", "kafka.producer.StaticPartitioner")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
-
-    val config = new ProducerConfig(props)
-    val partitioner = new StaticPartitioner
-    val serializer = new StringSerializer
-
-    // 2 sync producers
-    val syncProducers = new ConcurrentHashMap[Int, SyncProducer]()
-    val syncProducer1 = EasyMock.createMock(classOf[SyncProducer])
-    val syncProducer2 = EasyMock.createMock(classOf[SyncProducer])
-    syncProducer1.send("test-topic1", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                                                  messages = new Message("test1".getBytes)))
-    EasyMock.expectLastCall
-    syncProducer1.send("test-topic1", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                                                  messages = new Message("test1".getBytes)))
-    EasyMock.expectLastCall
-    syncProducer1.close
-    EasyMock.expectLastCall
-    syncProducer2.close
-    EasyMock.expectLastCall
-    EasyMock.replay(syncProducer1)
-    EasyMock.replay(syncProducer2)
-
-    syncProducers.put(brokerId1, syncProducer1)
-    syncProducers.put(brokerId2, syncProducer2)
-
-    val producerPool = new ProducerPool(config, serializer, syncProducers, new ConcurrentHashMap[Int, AsyncProducer[String]]())
-    val producer = new Producer[String, String](config, partitioner, producerPool, false, null)
-
-    producer.send(new ProducerData[String, String]("test-topic1", "test", Array("test1")))
-    Thread.sleep(100)
-
-    // now send again to this topic using a real producer, this time all brokers would have registered
-    // their partitions in zookeeper
-    producer1.send("test-topic1", new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                                           messages = new Message("test".getBytes())))
-    Thread.sleep(100)
-
-    // wait for zookeeper to register the new topic
-    producer.send(new ProducerData[String, String]("test-topic1", "test1", Array("test1")))
-    Thread.sleep(100)
-    producer.close
-
-    EasyMock.verify(syncProducer1)
-    EasyMock.verify(syncProducer2)
-  }
-
-  @Test
-  def testPartitionedSendToNewBrokerInExistingTopic() {
-    val props = new Properties()
-    props.put("partitioner.class", "kafka.producer.StaticPartitioner")
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
-
-    val config = new ProducerConfig(props)
-    val partitioner = new StaticPartitioner
-    val serializer = new StringSerializer
-
-    // 2 sync producers
-    val syncProducers = new ConcurrentHashMap[Int, SyncProducer]()
-    val syncProducer1 = EasyMock.createMock(classOf[SyncProducer])
-    val syncProducer2 = EasyMock.createMock(classOf[SyncProducer])
-    val syncProducer3 = EasyMock.createMock(classOf[SyncProducer])
-    syncProducer3.send("test-topic", 2, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                                                 messages = new Message("test1".getBytes)))
-    EasyMock.expectLastCall
-    syncProducer1.close
-    EasyMock.expectLastCall
-    syncProducer2.close
-    EasyMock.expectLastCall
-    syncProducer3.close
-    EasyMock.expectLastCall
-    EasyMock.replay(syncProducer1)
-    EasyMock.replay(syncProducer2)
-    EasyMock.replay(syncProducer3)
-
-    syncProducers.put(brokerId1, syncProducer1)
-    syncProducers.put(brokerId2, syncProducer2)
-    syncProducers.put(2, syncProducer3)
-
-    val producerPool = new ProducerPool(config, serializer, syncProducers, new ConcurrentHashMap[Int, AsyncProducer[String]]())
-    val producer = new Producer[String, String](config, partitioner, producerPool, false, null)
-
-    val port = TestUtils.choosePort
-    val serverProps = TestUtils.createBrokerConfig(2, port)
-    val serverConfig = new KafkaConfig(serverProps) {
-      override val numPartitions = 4
-    }
-
-    val server3 = TestUtils.createServer(serverConfig)
-    Thread.sleep(500)
-    // send a message to the new broker to register it under topic "test-topic"
-    val tempProps = new Properties()
-    tempProps.put("host", "localhost")
-    tempProps.put("port", port.toString)
-    val tempProducer = new SyncProducer(new SyncProducerConfig(tempProps))
-    tempProducer.send("test-topic", new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                                             messages = new Message("test".getBytes())))
-
-    Thread.sleep(500)
-    producer.send(new ProducerData[String, String]("test-topic", "test-topic", Array("test1")))
-    producer.close
-
-    EasyMock.verify(syncProducer1)
-    EasyMock.verify(syncProducer2)
-    EasyMock.verify(syncProducer3)
-
-    server3.shutdown
-    Utils.rm(server3.config.logDir)
-  }
-
-  @Test
-  def testDefaultPartitioner() {
-    val props = new Properties()
-    props.put("serializer.class", "kafka.producer.StringSerializer")
-    props.put("producer.type", "async")
-    props.put("broker.list", brokerId1 + ":" + "localhost" + ":" + port1)
-    val config = new ProducerConfig(props)
-    val partitioner = new DefaultPartitioner[String]
-    val serializer = new StringSerializer
-
-    // 2 async producers
-    val asyncProducers = new ConcurrentHashMap[Int, AsyncProducer[String]]()
-    val asyncProducer1 = EasyMock.createMock(classOf[AsyncProducer[String]])
-    // it should send to a random partition due to use of broker.list
-    asyncProducer1.send(topic, "test1", -1)
-    EasyMock.expectLastCall
-    asyncProducer1.close
-    EasyMock.expectLastCall
-    EasyMock.replay(asyncProducer1)
-
-    asyncProducers.put(brokerId1, asyncProducer1)
-
-    val producerPool = new ProducerPool(config, serializer, new ConcurrentHashMap[Int, SyncProducer](), asyncProducers)
-    val producer = new Producer[String, String](config, partitioner, producerPool, false, null)
-
-    producer.send(new ProducerData[String, String](topic, "test", Array("test1")))
-    producer.close
-
-    EasyMock.verify(asyncProducer1)
+    // make sure we don't wait fewer than numRetries*timeoutMs milliseconds
+    // we do this because the DefaultEventHandler retries a number of times
+    assertTrue((t2-t1) >= timeoutMs*config.producerRetries)
   }
 }
 
-class StringSerializer extends Encoder[String] {
-  def toEvent(message: Message):String = message.toString
-  def toMessage(event: String):Message = new Message(event.getBytes)
-  def getTopic(event: String): String = event.concat("-topic")
-}
-
-class NegativePartitioner extends Partitioner[String] {
-  def partition(data: String, numPartitions: Int): Int = {
-    -1
-  }
-}
-
-class StaticPartitioner extends Partitioner[String] {
-  def partition(data: String, numPartitions: Int): Int = {
-    (data.length % numPartitions)
-  }
-}
-
-class HashPartitioner extends Partitioner[String] {
-  def partition(data: String, numPartitions: Int): Int = {
-    (data.hashCode % numPartitions)
-  }
-}

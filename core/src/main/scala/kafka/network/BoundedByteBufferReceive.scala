@@ -26,9 +26,9 @@ import kafka.utils._
  * 
  */
 @nonthreadsafe
-private[kafka] class BoundedByteBufferReceive(val maxSize: Int) extends Receive {
+private[kafka] class BoundedByteBufferReceive(val maxSize: Int) extends Receive with Logging {
   
-  private val sizeBuffer: ByteBuffer = ByteBuffer.allocate(4)
+  private val sizeBuffer = ByteBuffer.allocate(4)
   private var contentBuffer: ByteBuffer = null
   
   def this() = this(Int.MaxValue)
@@ -78,12 +78,10 @@ private[kafka] class BoundedByteBufferReceive(val maxSize: Int) extends Receive 
     var buffer: ByteBuffer = null
     try {
       buffer = ByteBuffer.allocate(size)
-    }
-    catch {
-      case e: OutOfMemoryError => {
-        logger.error("OOME with size " + size, e)
+    } catch {
+      case e: OutOfMemoryError =>
+        error("OOME with size " + size, e)
         throw e
-      }
       case e2 =>
         throw e2
     }

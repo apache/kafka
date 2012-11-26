@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -18,63 +18,33 @@
 package kafka.server
 
 import kafka.utils._
-import kafka.cluster.Broker
-import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
-import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.apache.zookeeper.Watcher.Event.KeeperState
-import kafka.log.LogManager
-import java.net.InetAddress
+import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
+import kafka.common._
+
 
 /**
- * Handles the server's interaction with zookeeper. The server needs to register the following paths:
- *   /topics/[topic]/[node_id-partition_num]
+ * Handles registering broker with zookeeper in the following path:
  *   /brokers/[0...N] --> host:port
- * 
  */
-class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Logging {
-  
+class KafkaZooKeeper(config: KafkaConfig) extends Logging {
+
   val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + config.brokerId
-  var zkClient: ZkClient = null
-  var topics: List[String] = Nil
-  val lock = new Object()
-  
-  def startup() {
-    /* start client */
-    info("connecting to ZK: " + config.zkConnect)
-    zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
-    zkClient.subscribeStateChanges(new SessionExpireListener)
-  }
+  private var zkClient: ZkClient = null
 
-  def registerBrokerInZk() {
+   def startup() {
+     /* start client */
+     info("connecting to ZK: " + config.zkConnect)
+     zkClient = KafkaZookeeperClient.getZookeeperClient(config)
+     zkClient.subscribeStateChanges(new SessionExpireListener)
+     registerBrokerInZk()
+   }
+
+  private def registerBrokerInZk() {
     info("Registering broker " + brokerIdPath)
-    val hostName = if (config.hostName == null) InetAddress.getLocalHost.getHostAddress else config.hostName
+    val hostName = config.hostName
     val creatorId = hostName + "-" + System.currentTimeMillis
-    val broker = new Broker(config.brokerId, creatorId, hostName, config.port)
-    try {
-      ZkUtils.createEphemeralPathExpectConflict(zkClient, brokerIdPath, broker.getZKString)
-    } catch {
-      case e: ZkNodeExistsException =>
-        throw new RuntimeException("A broker is already registered on the path " + brokerIdPath + ". This probably " + 
-                                   "indicates that you either have configured a brokerid that is already in use, or " + 
-                                   "else you have shutdown this broker and restarted it faster than the zookeeper " + 
-                                   "timeout so it appears to be re-registering.")
-    }
-    info("Registering broker " + brokerIdPath + " succeeded with " + broker)
-  }
-
-  def registerTopicInZk(topic: String) {
-    registerTopicInZkInternal(topic)
-    lock synchronized {
-      topics ::= topic
-    }
-  }
-
-  def registerTopicInZkInternal(topic: String) {
-    val brokerTopicPath = ZkUtils.BrokerTopicsPath + "/" + topic + "/" + config.brokerId
-    val numParts = logManager.getTopicPartitionsMap.getOrElse(topic, config.numPartitions)
-    info("Begin registering broker topic " + brokerTopicPath + " with " + numParts.toString + " partitions")
-    ZkUtils.createEphemeralPathExpectConflict(zkClient, brokerTopicPath, numParts.toString)
-    info("End registering broker topic " + brokerTopicPath)
+    ZkUtils.registerBrokerInZk(zkClient, config.brokerId, hostName, creatorId, config.port)
   }
 
   /**
@@ -98,20 +68,19 @@ class KafkaZooKeeper(config: KafkaConfig, logManager: LogManager) extends Loggin
     def handleNewSession() {
       info("re-registering broker info in ZK for broker " + config.brokerId)
       registerBrokerInZk()
-      lock synchronized {
-        info("re-registering broker topics in ZK for broker " + config.brokerId)
-        for (topic <- topics)
-          registerTopicInZkInternal(topic)
-      }
       info("done re-registering broker")
+      info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
     }
   }
 
-  def close() {
+  def shutdown() {
     if (zkClient != null) {
       info("Closing zookeeper client...")
       zkClient.close()
     }
-  } 
-  
+  }
+
+  def getZookeeperClient = {
+    zkClient
+  }
 }

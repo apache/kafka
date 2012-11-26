@@ -23,8 +23,12 @@ import kafka.producer._
 import org.apache.log4j.Logger
 import kafka.message.{CompressionCodec, Message}
 import java.text.SimpleDateFormat
-import java.util.{Random, Properties}
-import kafka.utils.Logging
+import kafka.serializer._
+import java.util._
+import collection.immutable.List
+import kafka.utils.{VerifiableProperties, Logging}
+import kafka.metrics.KafkaMetricsReporter
+
 
 /**
  * Load test for the producer
@@ -45,14 +49,9 @@ object ProducerPerformance extends Logging {
     val startMs = System.currentTimeMillis
     val rand = new java.util.Random
 
-    if(!config.hideHeader) {
-      if(!config.showDetailedStats)
+    if(!config.hideHeader)
         println("start.time, end.time, compression, message.size, batch.size, total.data.sent.in.MB, MB.sec, " +
-          "total.data.sent.in.nMsg, nMsg.sec")
-      else
-        println("time, compression, thread.id, message.size, batch.size, total.data.sent.in.MB, MB.sec, " +
-          "total.data.sent.in.nMsg, nMsg.sec")
-    }
+                        "total.data.sent.in.nMsg, nMsg.sec")
 
     for(i <- 0 until config.numThreads) {
       executor.execute(new ProducerThread(i, config, totalBytesSent, totalMessagesSent, allDone, rand))
@@ -61,76 +60,130 @@ object ProducerPerformance extends Logging {
     allDone.await()
     val endMs = System.currentTimeMillis
     val elapsedSecs = (endMs - startMs) / 1000.0
-    if(!config.showDetailedStats) {
-      val totalMBSent = (totalBytesSent.get * 1.0)/ (1024 * 1024)
-      println(("%s, %s, %d, %d, %d, %.2f, %.4f, %d, %.4f").format(config.dateFormat.format(startMs),
-        config.dateFormat.format(endMs), config.compressionCodec.codec, config.messageSize, config.batchSize,
-        totalMBSent, totalMBSent/elapsedSecs, totalMessagesSent.get, totalMessagesSent.get/elapsedSecs))
-    }
+    val totalMBSent = (totalBytesSent.get * 1.0)/ (1024 * 1024)
+    println(("%s, %s, %d, %d, %d, %.2f, %.4f, %d, %.4f").format(
+      config.dateFormat.format(startMs), config.dateFormat.format(endMs),
+      config.compressionCodec.codec, config.messageSize, config.batchSize, totalMBSent,
+      totalMBSent/elapsedSecs, totalMessagesSent.get, totalMessagesSent.get/elapsedSecs))
     System.exit(0)
   }
 
   class ProducerPerfConfig(args: Array[String]) extends PerfConfig(args) {
-    val brokerInfoOpt = parser.accepts("brokerinfo", "REQUIRED: broker info (either from zookeeper or a list.")
+    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: broker info (the list of broker host and port for bootstrap.")
+            .withRequiredArg
+            .describedAs("hostname:port,..,hostname:port")
+            .ofType(classOf[String])
+    val topicsOpt = parser.accepts("topics", "REQUIRED: The comma separated list of topics to produce to")
       .withRequiredArg
-      .describedAs("broker.list=brokerid:hostname:port or zk.connect=host:port")
+      .describedAs("topic1,topic2..")
       .ofType(classOf[String])
-    val messageSizeOpt = parser.accepts("message-size", "The size of each message.")
-      .withRequiredArg
-      .describedAs("size")
-      .ofType(classOf[java.lang.Integer])
-      .defaultsTo(100)
+    val producerRequestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The produce request timeout in ms")
+            .withRequiredArg()
+            .ofType(classOf[java.lang.Integer])
+            .defaultsTo(3000)
+    val producerNumRetriesOpt = parser.accepts("producer-num-retries", "The producer retries number")
+            .withRequiredArg()
+            .ofType(classOf[java.lang.Integer])
+            .defaultsTo(3)
+    val producerRetryBackOffMsOpt = parser.accepts("producer-retry-backoff-ms", "The producer retry backoff time in milliseconds")
+            .withRequiredArg()
+            .ofType(classOf[java.lang.Integer])
+            .defaultsTo(100)
+    val producerRequestRequiredAcksOpt = parser.accepts("request-num-acks", "Number of acks required for producer request " +
+            "to complete")
+            .withRequiredArg()
+            .ofType(classOf[java.lang.Integer])
+            .defaultsTo(-1)
     val varyMessageSizeOpt = parser.accepts("vary-message-size", "If set, message size will vary up to the given maximum.")
-    val asyncOpt = parser.accepts("async", "If set, messages are sent asynchronously.")
-    val batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch.")
-      .withRequiredArg
-      .describedAs("size")
-      .ofType(classOf[java.lang.Integer])
-      .defaultsTo(200)
+    val syncOpt = parser.accepts("sync", "If set, messages are sent synchronously.")
     val numThreadsOpt = parser.accepts("threads", "Number of sending threads.")
+            .withRequiredArg
+            .describedAs("number of threads")
+            .ofType(classOf[java.lang.Integer])
+            .defaultsTo(1)
+    val compressionCodecOption = parser.accepts("compression-codec", "If set, messages are sent compressed")
+            .withRequiredArg
+            .describedAs("supported codec: NoCompressionCodec as 0, GZIPCompressionCodec as 1, SnappyCompressionCodec as 2")
+            .ofType(classOf[java.lang.Integer])
+            .defaultsTo(0)
+    val initialMessageIdOpt = parser.accepts("initial-message-id", "The is used for generating test data, If set, messages will be tagged with an " +
+            "ID and sent by producer starting from this ID sequentially. Message content will be String type and " +
+            "in the form of 'Message:000...1:xxx...'")
+            .withRequiredArg()
+            .describedAs("initial message id")
+            .ofType(classOf[java.lang.Integer])
+    val messageSendGapMsOpt = parser.accepts("message-send-gap-ms", "If set, the send thread will wait for specified time between two sends")
+            .withRequiredArg()
+            .describedAs("message send time gap")
+            .ofType(classOf[java.lang.Integer])
+            .defaultsTo(0)
+    val produceRequestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The produce request timeout in ms")
+      .withRequiredArg()
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(3000)
+    val produceRequestRequiredAcksOpt = parser.accepts("request-num-acks", "Number of acks required for producer request " +
+      "to complete")
+      .withRequiredArg()
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(-1)
+    val asyncOpt = parser.accepts("async", "If set, messages are sent asynchronously.")
       .withRequiredArg
       .describedAs("count")
       .ofType(classOf[java.lang.Integer])
-      .defaultsTo(10)
-    val compressionCodecOption = parser.accepts("compression-codec", "If set, messages are sent compressed")
+      .defaultsTo(1)
+    val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
+    val metricsDirectoryOpt = parser.accepts("metrics-dir", "If csv-reporter-enable is set, and this parameter is" +
+            "set, the csv metrics will be outputed here")
       .withRequiredArg
-      .describedAs("compression codec ")
-      .ofType(classOf[java.lang.Integer])
-      .defaultsTo(0)
+      .describedAs("metrics dictory")
+      .ofType(classOf[java.lang.String])
 
     val options = parser.parse(args : _*)
-    for(arg <- List(topicOpt, brokerInfoOpt, numMessagesOpt)) {
+    for(arg <- List(topicsOpt, brokerListOpt, numMessagesOpt)) {
       if(!options.has(arg)) {
         System.err.println("Missing required argument \"" + arg + "\"")
         parser.printHelpOn(System.err)
         System.exit(1)
       }
     }
-    val topic = options.valueOf(topicOpt)
+    val topicsStr = options.valueOf(topicsOpt)
+    val topics = topicsStr.split(",")
     val numMessages = options.valueOf(numMessagesOpt).longValue
     val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
-    val showDetailedStats = options.has(showDetailedStatsOpt)
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
-    val brokerInfo = options.valueOf(brokerInfoOpt)
+    val brokerList = options.valueOf(brokerListOpt)
     val messageSize = options.valueOf(messageSizeOpt).intValue
-    val isFixSize = !options.has(varyMessageSizeOpt)
-    val isAsync = options.has(asyncOpt)
+    var isFixSize = !options.has(varyMessageSizeOpt)
+    var isSync = options.has(syncOpt)
     var batchSize = options.valueOf(batchSizeOpt).intValue
-    val numThreads = options.valueOf(numThreadsOpt).intValue
-    val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOption).intValue)
-  }
+    var numThreads = options.valueOf(numThreadsOpt).intValue
+    val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOpt).intValue)
+    val seqIdMode = options.has(initialMessageIdOpt)
+    var initialMessageId: Int = 0
+    if(seqIdMode)
+      initialMessageId = options.valueOf(initialMessageIdOpt).intValue()
+    val producerRequestTimeoutMs = options.valueOf(producerRequestTimeoutMsOpt).intValue()
+    val producerRequestRequiredAcks = options.valueOf(producerRequestRequiredAcksOpt).intValue()
+    val producerNumRetries = options.valueOf(producerNumRetriesOpt).intValue()
+    val producerRetryBackoffMs = options.valueOf(producerRetryBackOffMsOpt).intValue()
 
-  private def getStringOfLength(len: Int) : String = {
-    val strArray = new Array[Char](len)
-    for (i <- 0 until len)
-      strArray(i) = 'x'
-    return new String(strArray)
-  }
+    val csvMetricsReporterEnabled = options.has(csvMetricsReporterEnabledOpt)
 
-  private def getByteArrayOfLength(len: Int): Array[Byte] = {
-    //new Array[Byte](len)
-    new Array[Byte]( if (len == 0) 5 else len )
+    if (csvMetricsReporterEnabled) {
+      val props = new Properties()
+      props.put("kafka.metrics.polling.interval.secs", "1")
+      props.put("kafka.metrics.reporters", "kafka.metrics.KafkaCSVMetricsReporter")
+      if (options.has(metricsDirectoryOpt))
+        props.put("kafka.csv.metrics.dir", options.valueOf(metricsDirectoryOpt))
+      else
+        props.put("kafka.csv.metrics.dir", "kafka_metrics")
+      props.put("kafka.csv.metrics.reporter.enabled", "true")
+      val verifiableProps = new VerifiableProperties(props)
+      KafkaMetricsReporter.startReporters(verifiableProps)
+    }
+
+    val messageSendGapMs = options.valueOf(messageSendGapMsOpt).intValue()
   }
 
   class ProducerThread(val threadId: Int,
@@ -140,91 +193,86 @@ object ProducerPerformance extends Logging {
                        val allDone: CountDownLatch,
                        val rand: Random) extends Runnable {
     val props = new Properties()
-    val brokerInfoList = config.brokerInfo.split("=")
-    if (brokerInfoList(0) == "zk.connect") {
-      props.put("zk.connect", brokerInfoList(1))
-      props.put("zk.sessiontimeout.ms", "300000")
-    }
-    else
-      props.put("broker.list", brokerInfoList(1))
+    props.put("broker.list", config.brokerList)
     props.put("compression.codec", config.compressionCodec.codec.toString)
     props.put("reconnect.interval", Integer.MAX_VALUE.toString)
     props.put("buffer.size", (64*1024).toString)
-    if(config.isAsync) {
+    if(!config.isSync) {
       props.put("producer.type","async")
       props.put("batch.size", config.batchSize.toString)
       props.put("queue.enqueueTimeout.ms", "-1")
     }
+    props.put("producer.request.required.acks", config.producerRequestRequiredAcks.toString)
+    props.put("producer.request.timeout.ms", config.producerRequestTimeoutMs.toString)
+    props.put("producer.num.retries", config.producerNumRetries.toString)
+    props.put("producer.retry.backoff.ms", config.producerRetryBackoffMs.toString)
+    props.put("serializer.class", classOf[DefaultEncoder].getName.toString)
+    props.put("key.serializer.class", classOf[NullEncoder[Long]].getName.toString)
+
+    
     val producerConfig = new ProducerConfig(props)
-    val producer = new Producer[Message, Message](producerConfig)
+    val producer = new Producer[Long, Array[Byte]](producerConfig)
+    val seqIdNumDigit = 10   // no. of digits for max int value
+
+    val messagesPerThread = config.numMessages / config.numThreads
+    debug("Messages per thread = " + messagesPerThread)
+
+    // generate the sequential message ID
+    private val SEP            = ":"              // message field separator
+    private val messageIdLabel = "MessageID"
+    private val threadIdLabel  = "ThreadID"
+    private val topicLabel     = "Topic"
+    private var leftPaddedSeqId : String = ""
+    private def generateMessageWithSeqId(topic: String, msgId: Long, msgSize: Int): Array[Byte] = {
+      // Each thread gets a unique range of sequential no. for its ids.
+      // Eg. 1000 msg in 10 threads => 100 msg per thread
+      // thread 0 IDs :   0 ~  99
+      // thread 1 IDs : 100 ~ 199
+      // thread 2 IDs : 200 ~ 299
+      // . . .
+      leftPaddedSeqId = String.format("%0"+seqIdNumDigit+"d", long2Long(msgId))
+
+      val msgHeader = topicLabel      + SEP +
+              topic           + SEP +
+              threadIdLabel   + SEP +
+              threadId        + SEP +
+              messageIdLabel  + SEP +
+              leftPaddedSeqId + SEP
+
+      val seqMsgString = String.format("%1$-"+msgSize+"s", msgHeader).replace(' ', 'x')
+      debug(seqMsgString)
+      return seqMsgString.getBytes()
+    }
+
+    private def generateProducerData(topic: String, messageId: Long): (KeyedMessage[Long, Array[Byte]], Int) = {
+      val msgSize = if(config.isFixSize) config.messageSize else 1 + rand.nextInt(config.messageSize)
+      val message = if(config.seqIdMode) {
+        val seqId = config.initialMessageId + (messagesPerThread * threadId) + messageId
+        generateMessageWithSeqId(topic, seqId, msgSize)
+      } else {
+        new Array[Byte](msgSize)
+      }
+      (new KeyedMessage[Long, Array[Byte]](topic, messageId, message), message.length)
+    }
 
     override def run {
       var bytesSent = 0L
-      var lastBytesSent = 0L
       var nSends = 0
-      var lastNSends = 0
-      val message = new Message(new Array[Byte](config.messageSize))
-      var reportTime = System.currentTimeMillis()
-      var lastReportTime = reportTime
-      val messagesPerThread = if(!config.isAsync) config.numMessages / config.numThreads / config.batchSize
-                              else config.numMessages / config.numThreads
-      debug("Messages per thread = " + messagesPerThread)
-      var messageSet: List[Message] = Nil
-      if(config.isFixSize) {
-        for(k <- 0 until config.batchSize) {
-          messageSet ::= message
-        }
-      }
       var j: Long = 0L
       while(j < messagesPerThread) {
-        var strLength = config.messageSize
-        if (!config.isFixSize) {
-          for(k <- 0 until config.batchSize) {
-            strLength = rand.nextInt(config.messageSize)
-            val message = new Message(getByteArrayOfLength(strLength))
-            messageSet ::= message
-            bytesSent += message.payloadSize
-          }
-        }else if(!config.isAsync) {
-          bytesSent += config.batchSize*message.payloadSize
-        }
-        try  {
-          if(!config.isAsync) {
-            producer.send(new ProducerData[Message,Message](config.topic, null, messageSet))
-            if(!config.isFixSize) messageSet = Nil
-            nSends += config.batchSize
-          }else {
-            if(!config.isFixSize) {
-              strLength = rand.nextInt(config.messageSize)
-              val messageBytes = getByteArrayOfLength(strLength)
-              rand.nextBytes(messageBytes)
-              val message = new Message(messageBytes)
-              producer.send(new ProducerData[Message,Message](config.topic, message))
-              debug(config.topic + "-checksum:" + message.checksum)
-              bytesSent += message.payloadSize
-            }else {
-              producer.send(new ProducerData[Message,Message](config.topic, message))
-              debug(config.topic + "-checksum:" + message.checksum)
-              bytesSent += message.payloadSize
+        try {
+          config.topics.foreach(
+            topic =>{
+              val (producerData, bytesSent_) = generateProducerData(topic, j)
+              bytesSent += bytesSent_
+              producer.send(producerData)
+              nSends += 1
+              if(config.messageSendGapMs > 0)
+                Thread.sleep(config.messageSendGapMs)
             }
-            nSends += 1
-          }
-        }catch {
-          case e: Exception => e.printStackTrace
-        }
-        if(nSends % config.reportingInterval == 0) {
-          reportTime = System.currentTimeMillis()
-          val elapsed = (reportTime - lastReportTime)/ 1000.0
-          val mbBytesSent = ((bytesSent - lastBytesSent) * 1.0)/(1024 * 1024)
-          val numMessagesPerSec = (nSends - lastNSends) / elapsed
-          val mbPerSec = mbBytesSent / elapsed
-          val formattedReportTime = config.dateFormat.format(reportTime)
-          if(config.showDetailedStats)
-            println(("%s, %d, %d, %d, %d, %.2f, %.4f, %d, %.4f").format(formattedReportTime, config.compressionCodec.codec,
-              threadId, config.messageSize, config.batchSize, (bytesSent*1.0)/(1024 * 1024), mbPerSec, nSends, numMessagesPerSec))
-          lastReportTime = reportTime
-          lastBytesSent = bytesSent
-          lastNSends = nSends
+          )
+        } catch {
+          case e: Exception => error("Error sending messages", e)
         }
         j += 1
       }

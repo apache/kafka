@@ -53,17 +53,17 @@ class Throttler(val desiredRatePerSec: Double,
     lock synchronized {
       observedSoFar += observed
       val now = time.nanoseconds
-      val ellapsedNs = now - periodStartNs
+      val elapsedNs = now - periodStartNs
       // if we have completed an interval AND we have observed something, maybe
       // we should take a little nap
-      if(ellapsedNs > checkIntervalMs * Time.NsPerMs && observedSoFar > 0) {
-        val rateInSecs = (observedSoFar * Time.NsPerSec) / ellapsedNs
+      if(elapsedNs > checkIntervalMs * Time.NsPerMs && observedSoFar > 0) {
+        val rateInSecs = (observedSoFar * Time.NsPerSec) / elapsedNs
         val needAdjustment = !(throttleDown ^ (rateInSecs > desiredRatePerSec))
         if(needAdjustment) {
           // solve for the amount of time to sleep to make us hit the desired rate
           val desiredRateMs = desiredRatePerSec / Time.MsPerSec.asInstanceOf[Double]
-          val ellapsedMs = ellapsedNs / Time.NsPerMs
-          val sleepTime = round(observedSoFar / desiredRateMs - ellapsedMs)
+          val elapsedMs = elapsedNs / Time.NsPerMs
+          val sleepTime = round(observedSoFar / desiredRateMs - elapsedMs)
           if(sleepTime > 0) {
             Throttler.debug("Natural rate is " + rateInSecs + " per second but desired rate is " + desiredRatePerSec + 
                                      ", sleeping for " + sleepTime + " ms to compensate.")

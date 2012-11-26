@@ -21,12 +21,15 @@ import java.io.IOException;
 import java.net.URI;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
+import java.util.Map;
 import kafka.api.FetchRequest;
-import kafka.api.OffsetRequest;
-import kafka.common.ErrorMapping;
-import kafka.javaapi.MultiFetchResponse;
+import kafka.api.FetchRequestBuilder;
+import kafka.api.PartitionOffsetRequestInfo;
+import kafka.common.TopicAndPartition;
+import kafka.javaapi.FetchResponse;
+import kafka.javaapi.OffsetRequest;
 import kafka.javaapi.consumer.SimpleConsumer;
 import kafka.javaapi.message.ByteBufferMessageSet;
 import kafka.message.MessageAndOffset;
@@ -57,7 +60,7 @@ public class KafkaETLContext {
     protected long _offset = Long.MAX_VALUE; /*current offset*/
     protected long _count; /*current count*/
 
-    protected MultiFetchResponse _response = null;  /*fetch response*/
+    protected FetchResponse _response = null;  /*fetch response*/
     protected Iterator<MessageAndOffset> _messageIt = null; /*message iterator*/
     protected Iterator<ByteBufferMessageSet> _respIterator = null;
     protected int _retry = 0;
@@ -70,6 +73,7 @@ public class KafkaETLContext {
     
     protected MultipleOutputs _mos;
     protected OutputCollector<KafkaETLKey, BytesWritable> _offsetOut = null;
+    protected FetchRequestBuilder builder = new FetchRequestBuilder();
     
     public long getTotalBytes() {
         return (_offsetRange[1] > _offsetRange[0])? _offsetRange[1] - _offsetRange[0] : 0;
@@ -136,7 +140,6 @@ public class KafkaETLContext {
 
             while ( !gotNext && _respIterator.hasNext()) {
                 ByteBufferMessageSet msgSet = _respIterator.next();
-                if ( hasError(msgSet)) return false;
                 _messageIt = msgSet.iterator();
                 gotNext = get(key, value);
             }
@@ -146,16 +149,19 @@ public class KafkaETLContext {
     
     public boolean fetchMore () throws IOException {
         if (!hasMore()) return false;
-        
-        FetchRequest fetchRequest = 
-            new FetchRequest(_request.getTopic(), _request.getPartition(), _offset, _bufferSize);
-        List<FetchRequest> array = new ArrayList<FetchRequest>();
-        array.add(fetchRequest);
+
+        FetchRequest fetchRequest = builder
+                .clientId(_request.clientId())
+                .addFetch(_request.getTopic(), _request.getPartition(), _offset, _bufferSize)
+                .build();
 
         long tempTime = System.currentTimeMillis();
-        _response = _consumer.multifetch(array);
-        if(_response != null)
-            _respIterator = _response.iterator();
+        _response = _consumer.fetch(fetchRequest);
+        if(_response != null) {
+            _respIterator = new ArrayList<ByteBufferMessageSet>(){{
+                add((ByteBufferMessageSet) _response.messageSet(_request.getTopic(), _request.getPartition()));
+            }}.iterator();
+        }
         _requestTime += (System.currentTimeMillis() - tempTime);
         
         return true;
@@ -198,7 +204,7 @@ public class KafkaETLContext {
             
             key.set(_index, _offset, messageAndOffset.message().checksum());
             
-            _offset = messageAndOffset.offset();  //increase offset
+            _offset = messageAndOffset.nextOffset();  //increase offset
             _count ++;  //increase count
             
             return true;
@@ -214,15 +220,23 @@ public class KafkaETLContext {
         /* get smallest and largest offsets*/
         long[] range = new long[2];
 
-        long[] startOffsets = _consumer.getOffsetsBefore(_request.getTopic(), _request.getPartition(),
-                OffsetRequest.EarliestTime(), 1);
+        TopicAndPartition topicAndPartition = new TopicAndPartition(_request.getTopic(), _request.getPartition());
+        Map<TopicAndPartition, PartitionOffsetRequestInfo> requestInfo =
+                new HashMap<TopicAndPartition, PartitionOffsetRequestInfo>();
+        requestInfo.put(topicAndPartition, new PartitionOffsetRequestInfo(kafka.api.OffsetRequest.EarliestTime(), 1));
+        OffsetRequest request = new OffsetRequest(
+            requestInfo, kafka.api.OffsetRequest.CurrentVersion(), kafka.api.OffsetRequest.DefaultClientId());
+        long[] startOffsets = _consumer.getOffsetsBefore(request).offsets(_request.getTopic(), _request.getPartition());
         if (startOffsets.length != 1)
             throw new IOException("input:" + _input + " Expect one smallest offset but get "
                                             + startOffsets.length);
         range[0] = startOffsets[0];
         
-        long[] endOffsets = _consumer.getOffsetsBefore(_request.getTopic(), _request.getPartition(),
-                                        OffsetRequest.LatestTime(), 1);
+        requestInfo.clear();
+        requestInfo.put(topicAndPartition, new PartitionOffsetRequestInfo(kafka.api.OffsetRequest.LatestTime(), 1));
+        request = new OffsetRequest(
+            requestInfo, kafka.api.OffsetRequest.CurrentVersion(), kafka.api.OffsetRequest.DefaultClientId());
+        long[] endOffsets = _consumer.getOffsetsBefore(request).offsets(_request.getTopic(), _request.getPartition());
         if (endOffsets.length != 1)
             throw new IOException("input:" + _input + " Expect one latest offset but get " 
                                             + endOffsets.length);
@@ -243,36 +257,6 @@ public class KafkaETLContext {
         }
         System.out.println("Using offset range [" + range[0] + ", " + range[1] + "]");
         return range;
-    }
-    
-    /**
-     * Called by the default implementation of {@link #map} to check error code
-     * to determine whether to continue.
-     */
-    protected boolean hasError(ByteBufferMessageSet messages)
-            throws IOException {
-        int errorCode = messages.getErrorCode();
-        if (errorCode == ErrorMapping.OffsetOutOfRangeCode()) {
-            /* offset cannot cross the maximum offset (guaranteed by Kafka protocol).
-               Kafka server may delete old files from time to time */
-            System.err.println("WARNING: current offset=" + _offset + ". It is out of range.");
-
-            if (_retry >= MAX_RETRY_TIME)  return true;
-            _retry++;
-            // get the current offset range
-            _offsetRange = getOffsetRange();
-            _offset =  _offsetRange[0];
-            return false;
-        } else if (errorCode == ErrorMapping.InvalidMessageCode()) {
-            throw new IOException(_input + " current offset=" + _offset
-                    + " : invalid offset.");
-        } else if (errorCode == ErrorMapping.WrongPartitionCode()) {
-            throw new IOException(_input + " : wrong partition");
-        } else if (errorCode != ErrorMapping.NoError()) {
-            throw new IOException(_input + " current offset=" + _offset
-                    + " error:" + errorCode);
-        } else
-            return false;
     }
     
     public static int getClientBufferSize(Props props) throws Exception {

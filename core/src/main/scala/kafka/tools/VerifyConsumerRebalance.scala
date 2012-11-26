@@ -79,7 +79,7 @@ object VerifyConsumerRebalance extends Logging {
      * under /consumers/[consumer_group]/owners/[topic]/[broker_id-partition_id]
      */
     val consumersPerTopicMap = ZkUtils.getConsumersPerTopic(zkClient, group)
-    val partitionsPerTopicMap = ZkUtils.getPartitionsForTopics(zkClient, consumersPerTopicMap.keys.iterator)
+    val partitionsPerTopicMap = ZkUtils.getPartitionsForTopics(zkClient, consumersPerTopicMap.keySet.toSeq)
 
     partitionsPerTopicMap.foreach { partitionsForTopic =>
       val topic = partitionsForTopic._1
@@ -104,7 +104,7 @@ object VerifyConsumerRebalance extends Logging {
         }
         // try reading the partition owner path for see if a valid consumer id exists there
         val partitionOwnerPath = topicDirs.consumerOwnerDir + "/" + partition
-        val partitionOwner = ZkUtils.readDataMaybeNull(zkClient, partitionOwnerPath)
+        val partitionOwner = ZkUtils.readDataMaybeNull(zkClient, partitionOwnerPath)._1
         if(partitionOwner == null) {
           error("No owner for topic %s partition %s".format(topic, partition))
           rebalanceSucceeded = false

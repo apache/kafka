@@ -18,83 +18,86 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.utils.{nonthreadsafe, Utils}
-import kafka.network.{Send, Request}
-import java.nio.channels.GatheringByteChannel
-import kafka.common.ErrorMapping
+import kafka.common.TopicAndPartition
+import kafka.api.ApiUtils._
+
 
 object OffsetRequest {
+  val CurrentVersion = 1.shortValue()
+  val DefaultClientId = ""
+
   val SmallestTimeString = "smallest"
   val LargestTimeString = "largest"
   val LatestTime = -1L
   val EarliestTime = -2L
 
   def readFrom(buffer: ByteBuffer): OffsetRequest = {
-    val topic = Utils.readShortString(buffer, "UTF-8")
-    val partition = buffer.getInt()
-    val offset = buffer.getLong
-    val maxNumOffsets = buffer.getInt
-    new OffsetRequest(topic, partition, offset, maxNumOffsets)
-  }
-
-  def serializeOffsetArray(offsets: Array[Long]): ByteBuffer = {
-    val size = 4 + 8 * offsets.length
-    val buffer = ByteBuffer.allocate(size)
-    buffer.putInt(offsets.length)
-    for (i <- 0 until offsets.length)
-      buffer.putLong(offsets(i))
-    buffer.rewind
-    buffer
-  }
-
-  def deserializeOffsetArray(buffer: ByteBuffer): Array[Long] = {
-    val size = buffer.getInt
-    val offsets = new Array[Long](size)
-    for (i <- 0 until offsets.length)
-      offsets(i) = buffer.getLong
-    offsets
+    val versionId = buffer.getShort
+    val clientId = readShortString(buffer)
+    val replicaId = buffer.getInt
+    val topicCount = buffer.getInt
+    val pairs = (1 to topicCount).flatMap(_ => {
+      val topic = readShortString(buffer)
+      val partitionCount = buffer.getInt
+      (1 to partitionCount).map(_ => {
+        val partitionId = buffer.getInt
+        val time = buffer.getLong
+        val maxNumOffsets = buffer.getInt
+        (TopicAndPartition(topic, partitionId), PartitionOffsetRequestInfo(time, maxNumOffsets))
+      })
+    })
+    OffsetRequest(Map(pairs:_*), versionId = versionId, clientId = clientId, replicaId = replicaId)
   }
 }
 
-class OffsetRequest(val topic: String,
-                    val partition: Int,
-                    val time: Long,
-                    val maxNumOffsets: Int) extends Request(RequestKeys.Offsets) {
+case class PartitionOffsetRequestInfo(time: Long, maxNumOffsets: Int)
+
+case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo],
+                         versionId: Short = OffsetRequest.CurrentVersion,
+                         clientId: String = OffsetRequest.DefaultClientId,
+                         replicaId: Int = Request.OrdinaryConsumerId)
+        extends RequestOrResponse(Some(RequestKeys.OffsetsKey)) {
+
+  def this(requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo], replicaId: Int) = this(requestInfo, OffsetRequest.CurrentVersion, OffsetRequest.DefaultClientId, replicaId)
+
+  lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
 
   def writeTo(buffer: ByteBuffer) {
-    Utils.writeShortString(buffer, topic, "UTF-8")
-    buffer.putInt(partition)
-    buffer.putLong(time)
-    buffer.putInt(maxNumOffsets)
+    buffer.putShort(versionId)
+    writeShortString(buffer, clientId)
+    buffer.putInt(replicaId)
+
+    buffer.putInt(requestInfoGroupedByTopic.size) // topic count
+    requestInfoGroupedByTopic.foreach {
+      case((topic, partitionInfos)) =>
+        writeShortString(buffer, topic)
+        buffer.putInt(partitionInfos.size) // partition count
+        partitionInfos.foreach {
+          case (TopicAndPartition(_, partition), partitionInfo) =>
+            buffer.putInt(partition)
+            buffer.putLong(partitionInfo.time)
+            buffer.putInt(partitionInfo.maxNumOffsets)
+        }
+    }
   }
 
-  def sizeInBytes(): Int = 2 + topic.length + 4 + 8 + 4
+  def sizeInBytes =
+    2 + /* versionId */
+    shortStringLength(clientId) +
+    4 + /* replicaId */
+    4 + /* topic count */
+    requestInfoGroupedByTopic.foldLeft(0)((foldedTopics, currTopic) => {
+      val (topic, partitionInfos) = currTopic
+      foldedTopics +
+      shortStringLength(topic) +
+      4 + /* partition count */
+      partitionInfos.size * (
+        4 + /* partition */
+        8 + /* time */
+        4 /* maxNumOffsets */
+      )
+    })
 
-  override def toString(): String= "OffsetRequest(topic:" + topic + ", part:" + partition + ", time:" + time +
-          ", maxNumOffsets:" + maxNumOffsets + ")"
-}
-
-@nonthreadsafe
-private[kafka] class OffsetArraySend(offsets: Array[Long]) extends Send {
-  private var size: Long = offsets.foldLeft(4)((sum, _) => sum + 8)
-  private val header = ByteBuffer.allocate(6)
-  header.putInt(size.asInstanceOf[Int] + 2)
-  header.putShort(ErrorMapping.NoError.asInstanceOf[Short])
-  header.rewind()
-  private val contentBuffer = OffsetRequest.serializeOffsetArray(offsets)
-
-  var complete: Boolean = false
-
-  def writeTo(channel: GatheringByteChannel): Int = {
-    expectIncomplete()
-    var written = 0
-    if(header.hasRemaining)
-      written += channel.write(header)
-    if(!header.hasRemaining && contentBuffer.hasRemaining)
-      written += channel.write(contentBuffer)
-
-    if(!contentBuffer.hasRemaining)
-      complete = true
-    written
-  }
+  def isFromOrdinaryClient = replicaId == Request.OrdinaryConsumerId
+  def isFromDebuggingClient = replicaId == Request.DebuggingConsumerId
 }

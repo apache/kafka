@@ -17,70 +17,30 @@
 
 package kafka.javaapi.message
 
-import java.nio._
 import junit.framework.Assert._
 import org.junit.Test
 import kafka.message.{DefaultCompressionCodec, CompressionCodec, NoCompressionCodec, Message}
 
 class ByteBufferMessageSetTest extends kafka.javaapi.message.BaseMessageSetTestCases {
-
-  override def createMessageSet(messages: Seq[Message],
-                                compressed: CompressionCodec = NoCompressionCodec): ByteBufferMessageSet =
-    new ByteBufferMessageSet(compressed, getMessageList(messages: _*))
   
-  @Test
-  def testValidBytes() {
-    val messageList = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                               messages = getMessageList(new Message("hello".getBytes()),
-                                                                      new Message("there".getBytes())))
-    val buffer = ByteBuffer.allocate(messageList.sizeInBytes.toInt + 2)
-    buffer.put(messageList.getBuffer)
-    buffer.putShort(4)
-    val messageListPlus = new ByteBufferMessageSet(buffer)
-    assertEquals("Adding invalid bytes shouldn't change byte count", messageList.validBytes, messageListPlus.validBytes)
-  }
+  override def createMessageSet(messages: Seq[Message], compressed: CompressionCodec = NoCompressionCodec): ByteBufferMessageSet =
+    new ByteBufferMessageSet(new kafka.message.ByteBufferMessageSet(compressed, messages: _*).buffer)
 
-  @Test
-  def testValidBytesWithCompression () {
-    val messageList = new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec,
-                                               messages = getMessageList(new Message("hello".getBytes()),
-                                                                         new Message("there".getBytes())))
-    val buffer = ByteBuffer.allocate(messageList.sizeInBytes.toInt + 2)
-    buffer.put(messageList.getBuffer)
-    buffer.putShort(4)
-    val messageListPlus = new ByteBufferMessageSet(buffer, 0, 0)
-    assertEquals("Adding invalid bytes shouldn't change byte count", messageList.validBytes, messageListPlus.validBytes)
-  }
+  val msgSeq: Seq[Message] = Seq(new Message("hello".getBytes()), new Message("there".getBytes()))
 
   @Test
   def testEquals() {
-    val messageList = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                            messages = getMessageList(new Message("hello".getBytes()),
-                                                                      new Message("there".getBytes())))
-    val moreMessages = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec,
-                                                messages = getMessageList(new Message("hello".getBytes()),
-                                                                          new Message("there".getBytes())))
-
+    val messageList = createMessageSet(msgSeq, NoCompressionCodec)
+    val moreMessages = createMessageSet(msgSeq, NoCompressionCodec)
     assertEquals(messageList, moreMessages)
     assertTrue(messageList.equals(moreMessages))
   }
 
   @Test
   def testEqualsWithCompression () {
-    val messageList = new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec,
-                                            messages = getMessageList(new Message("hello".getBytes()),
-                                                                      new Message("there".getBytes())))
-    val moreMessages = new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec,
-                                                messages = getMessageList(new Message("hello".getBytes()),
-                                                                          new Message("there".getBytes())))
-
+    val messageList = createMessageSet(msgSeq, DefaultCompressionCodec)
+    val moreMessages = createMessageSet(msgSeq, DefaultCompressionCodec)
     assertEquals(messageList, moreMessages)
     assertTrue(messageList.equals(moreMessages))
-  }
-
-  private def getMessageList(messages: Message*): java.util.List[Message] = {
-    val messageList = new java.util.ArrayList[Message]()
-    messages.foreach(m => messageList.add(m))
-    messageList
   }
 }

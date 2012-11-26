@@ -17,44 +17,24 @@
 
 package kafka.consumer
 
-import java.util.concurrent.atomic.AtomicLong
-import kafka.utils.{Pool, Utils, threadsafe, Logging}
-
-trait ConsumerTopicStatMBean {
-  def getMessagesPerTopic: Long
-  def getBytesPerTopic: Long
-}
+import kafka.utils.{Pool, threadsafe, Logging}
+import java.util.concurrent.TimeUnit
+import kafka.metrics.KafkaMetricsGroup
 
 @threadsafe
-class ConsumerTopicStat extends ConsumerTopicStatMBean {
-  private val numCumulatedMessagesPerTopic = new AtomicLong(0)
-  private val numCumulatedBytesPerTopic = new AtomicLong(0)
-
-  def getMessagesPerTopic: Long = numCumulatedMessagesPerTopic.get
-
-  def recordMessagesPerTopic(nMessages: Int) = numCumulatedMessagesPerTopic.getAndAdd(nMessages)
-
-  def getBytesPerTopic: Long = numCumulatedBytesPerTopic.get
-
-  def recordBytesPerTopic(nBytes: Long) = numCumulatedBytesPerTopic.getAndAdd(nBytes)
+class ConsumerTopicStat(name: String) extends KafkaMetricsGroup {
+  val messageRate = newMeter(name + "MessagesPerSec",  "messages", TimeUnit.SECONDS)
+  val byteRate = newMeter(name + "BytesPerSec",  "bytes", TimeUnit.SECONDS)
 }
 
 object ConsumerTopicStat extends Logging {
-  private val stats = new Pool[String, ConsumerTopicStat]
-  private val allTopicStat = new ConsumerTopicStat
-  Utils.registerMBean(allTopicStat, "kafka:type=kafka.ConsumerAllTopicStat")
+  private val valueFactory = (k: String) => new ConsumerTopicStat(k)
+  private val stats = new Pool[String, ConsumerTopicStat](Some(valueFactory))
+  private val allTopicStat = new ConsumerTopicStat("AllTopics")
 
   def getConsumerAllTopicStat(): ConsumerTopicStat = allTopicStat
 
   def getConsumerTopicStat(topic: String): ConsumerTopicStat = {
-    var stat = stats.get(topic)
-    if (stat == null) {
-      stat = new ConsumerTopicStat
-      if (stats.putIfNotExists(topic, stat) == null)
-        Utils.registerMBean(stat, "kafka:type=kafka.ConsumerTopicStat." + topic)
-      else
-        stat = stats.get(topic)
-    }
-    return stat
+    stats.getAndMaybePut(topic + "-")
   }
 }

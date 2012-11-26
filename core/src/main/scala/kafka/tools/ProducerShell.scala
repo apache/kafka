@@ -62,7 +62,7 @@ object ProducerShell {
         done = true
       } else {
         val message = line.trim
-        producer.send(new ProducerData[String, String](topic, message))
+        producer.send(new KeyedMessage[String, String](topic, message))
         println("Sent: %s (%d bytes)".format(line, message.getBytes.length))
       }
     }

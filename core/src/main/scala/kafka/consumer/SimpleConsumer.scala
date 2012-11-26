@@ -17,12 +17,56 @@
 
 package kafka.consumer
 
-import java.net._
-import java.nio.channels._
 import kafka.api._
-import kafka.message._
 import kafka.network._
 import kafka.utils._
+import java.util.concurrent.TimeUnit
+import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
+import kafka.utils.ZkUtils._
+import collection.immutable
+import kafka.common.{TopicAndPartition, KafkaException}
+import org.I0Itec.zkclient.ZkClient
+import kafka.cluster.Broker
+
+
+object SimpleConsumer extends Logging {
+  def earliestOrLatestOffset(broker: Broker, topic: String, partitionId: Int, earliestOrLatest: Long,
+                             isFromOrdinaryConsumer: Boolean): Long = {
+    var simpleConsumer: SimpleConsumer = null
+    var producedOffset: Long = -1L
+    try {
+      simpleConsumer = new SimpleConsumer(broker.host, broker.port, ConsumerConfig.SocketTimeout,
+                                          ConsumerConfig.SocketBufferSize)
+      val topicAndPartition = TopicAndPartition(topic, partitionId)
+      val request = if(isFromOrdinaryConsumer)
+        new OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)))
+      else
+        new OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)),
+                          Request.DebuggingConsumerId)
+      producedOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
+    } catch {
+      case e =>
+        error("error in earliestOrLatestOffset() ", e)
+    }
+    finally {
+      if (simpleConsumer != null)
+        simpleConsumer.close()
+    }
+    producedOffset
+  }
+
+  def earliestOrLatestOffset(zkClient: ZkClient, topic: String, brokerId: Int, partitionId: Int,
+                             earliestOrLatest: Long, isFromOrdinaryConsumer: Boolean = true): Long = {
+    val cluster = getCluster(zkClient)
+    val broker = cluster.getBroker(brokerId) match {
+      case Some(b) => b
+      case None => throw new KafkaException("Broker " + brokerId + " is unavailable. Cannot issue " +
+                                                    "getOffsetsBefore request")
+    }
+    earliestOrLatestOffset(broker, topic, partitionId, earliestOrLatest, isFromOrdinaryConsumer)
+  }
+}
+
 
 /**
  * A consumer of kafka messages
@@ -32,39 +76,63 @@ class SimpleConsumer(val host: String,
                      val port: Int,
                      val soTimeout: Int,
                      val bufferSize: Int) extends Logging {
-  private var channel : SocketChannel = null
+
   private val lock = new Object()
+  private val blockingChannel = new BlockingChannel(host, port, bufferSize, BlockingChannel.UseDefaultBufferSize, soTimeout)
 
-  private def connect(): SocketChannel = {
+  private def connect(): BlockingChannel = {
     close
-    val address = new InetSocketAddress(host, port)
-
-    val channel = SocketChannel.open
-    debug("Connected to " + address + " for fetching.")
-    channel.configureBlocking(true)
-    channel.socket.setReceiveBufferSize(bufferSize)
-    channel.socket.setSoTimeout(soTimeout)
-    channel.socket.setKeepAlive(true)
-    channel.socket.setTcpNoDelay(true)
-    channel.connect(address)
-    trace("requested receive buffer size=" + bufferSize + " actual receive buffer size= " + channel.socket.getReceiveBufferSize)
-    trace("soTimeout=" + soTimeout + " actual soTimeout= " + channel.socket.getSoTimeout)
-    
-    channel
+    blockingChannel.connect()
+    blockingChannel
   }
 
-  private def close(channel: SocketChannel) = {
-    debug("Disconnecting from " + channel.socket.getRemoteSocketAddress())
-    Utils.swallow(logger.warn, channel.close())
-    Utils.swallow(logger.warn, channel.socket.close())
+  private def disconnect() = {
+    if(blockingChannel.isConnected) {
+      debug("Disconnecting from " + host + ":" + port)
+      blockingChannel.disconnect()
+    }
+  }
+
+  private def reconnect() {
+    disconnect()
+    connect()
   }
 
   def close() {
     lock synchronized {
-      if (channel != null)
-        close(channel)
-      channel = null
+        disconnect()
     }
+  }
+  
+  private def sendRequest(request: RequestOrResponse): Receive = {
+    lock synchronized {
+      getOrMakeConnection()
+      var response: Receive = null
+      try {
+        blockingChannel.send(request)
+        response = blockingChannel.receive()
+      } catch {
+        case e : java.io.IOException =>
+          info("Reconnect due to socket error: ", e)
+          // retry once
+          try {
+            reconnect()
+            blockingChannel.send(request)
+            response = blockingChannel.receive()
+          } catch {
+            case ioe: java.io.IOException =>
+              disconnect()
+              throw ioe
+          }
+        case e => throw e
+      }
+      response
+    }
+  }
+
+  def send(request: TopicMetadataRequest): TopicMetadataResponse = {
+    val response = sendRequest(request)
+    TopicMetadataResponse.readFrom(response.buffer)
   }
 
   /**
@@ -73,154 +141,32 @@ class SimpleConsumer(val host: String,
    *  @param request  specifies the topic name, topic partition, starting byte offset, maximum bytes to be fetched.
    *  @return a set of fetched messages
    */
-  def fetch(request: FetchRequest): ByteBufferMessageSet = {
-    lock synchronized {
-      val startTime = SystemTime.nanoseconds
-      getOrMakeConnection()
-      var response: Tuple2[Receive,Int] = null
-      try {
-        sendRequest(request)
-        response = getResponse
-      } catch {
-        case e : java.io.IOException =>
-          info("Reconnect in fetch request due to socket error: ", e)
-          // retry once
-          try {
-            channel = connect
-            sendRequest(request)
-            response = getResponse
-          }catch {
-            case ioe: java.io.IOException => channel = null; throw ioe;
-          }
-        case e => throw e
-      }
-      val endTime = SystemTime.nanoseconds
-      SimpleConsumerStats.recordFetchRequest(endTime - startTime)
-      SimpleConsumerStats.recordConsumptionThroughput(response._1.buffer.limit)
-      new ByteBufferMessageSet(response._1.buffer, request.offset, response._2)
+  def fetch(request: FetchRequest): FetchResponse = {
+    var response: Receive = null
+    FetchRequestAndResponseStat.requestTimer.time {
+      response = sendRequest(request)
     }
-  }
-
-  /**
-   *  Combine multiple fetch requests in one call.
-   *
-   *  @param fetches  a sequence of fetch requests.
-   *  @return a sequence of fetch responses
-   */
-  def multifetch(fetches: FetchRequest*): MultiFetchResponse = {
-    lock synchronized {
-      val startTime = SystemTime.nanoseconds
-      getOrMakeConnection()
-      var response: Tuple2[Receive,Int] = null
-      try {
-        sendRequest(new MultiFetchRequest(fetches.toArray))
-        response = getResponse
-      } catch {
-        case e : java.io.IOException =>
-          info("Reconnect in multifetch due to socket error: ", e)
-          // retry once
-          try {
-            channel = connect
-            sendRequest(new MultiFetchRequest(fetches.toArray))
-            response = getResponse
-          }catch {
-            case ioe: java.io.IOException => channel = null; throw ioe;
-          }
-        case e => throw e        
-      }
-      val endTime = SystemTime.nanoseconds
-      SimpleConsumerStats.recordFetchRequest(endTime - startTime)
-      SimpleConsumerStats.recordConsumptionThroughput(response._1.buffer.limit)
-
-      // error code will be set on individual messageset inside MultiFetchResponse
-      new MultiFetchResponse(response._1.buffer, fetches.length, fetches.toArray.map(f => f.offset))
-    }
+    val fetchResponse = FetchResponse.readFrom(response.buffer)
+    val fetchedSize = fetchResponse.sizeInBytes
+    FetchRequestAndResponseStat.respondSizeHist.update(fetchedSize)
+    fetchResponse
   }
 
   /**
    *  Get a list of valid offsets (up to maxSize) before the given time.
-   *  The result is a list of offsets, in descending order.
-   *
-   *  @param time: time in millisecs (-1, from the latest offset available, -2 from the smallest offset available)
-   *  @return an array of offsets
+   *  @param request a [[kafka.api.OffsetRequest]] object.
+   *  @return a [[kafka.api.OffsetResponse]] object.
    */
-  def getOffsetsBefore(topic: String, partition: Int, time: Long, maxNumOffsets: Int): Array[Long] = {
-    lock synchronized {
-      getOrMakeConnection()
-      var response: Tuple2[Receive,Int] = null
-      try {
-        sendRequest(new OffsetRequest(topic, partition, time, maxNumOffsets))
-        response = getResponse
-      } catch {
-        case e : java.io.IOException =>
-          info("Reconnect in get offetset request due to socket error: ", e)
-          // retry once
-          try {
-            channel = connect
-            sendRequest(new OffsetRequest(topic, partition, time, maxNumOffsets))
-            response = getResponse
-          }catch {
-            case ioe: java.io.IOException => channel = null; throw ioe;
-          }
-      }
-      OffsetRequest.deserializeOffsetArray(response._1.buffer)
-    }
-  }
-
-  private def sendRequest(request: Request) = {
-    val send = new BoundedByteBufferSend(request)
-    send.writeCompletely(channel)
-  }
-
-  private def getResponse(): Tuple2[Receive,Int] = {
-    val response = new BoundedByteBufferReceive()
-    response.readCompletely(channel)
-
-    // this has the side effect of setting the initial position of buffer correctly
-    val errorCode: Int = response.buffer.getShort
-    (response, errorCode)
-  }
+  def getOffsetsBefore(request: OffsetRequest) = OffsetResponse.readFrom(sendRequest(request).buffer)
 
   private def getOrMakeConnection() {
-    if(channel == null) {
-      channel = connect()
+    if(!blockingChannel.isConnected) {
+      connect()
     }
   }
 }
 
-trait SimpleConsumerStatsMBean {
-  def getFetchRequestsPerSecond: Double
-  def getAvgFetchRequestMs: Double
-  def getMaxFetchRequestMs: Double
-  def getNumFetchRequests: Long  
-  def getConsumerThroughput: Double
+object FetchRequestAndResponseStat extends KafkaMetricsGroup {
+  val requestTimer = new KafkaTimer(newTimer("FetchRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+  val respondSizeHist = newHistogram("FetchResponseSize")
 }
-
-@threadsafe
-class SimpleConsumerStats extends SimpleConsumerStatsMBean {
-  private val fetchRequestStats = new SnapshotStats
-
-  def recordFetchRequest(requestNs: Long) = fetchRequestStats.recordRequestMetric(requestNs)
-
-  def recordConsumptionThroughput(data: Long) = fetchRequestStats.recordThroughputMetric(data)
-
-  def getFetchRequestsPerSecond: Double = fetchRequestStats.getRequestsPerSecond
-
-  def getAvgFetchRequestMs: Double = fetchRequestStats.getAvgMetric / (1000.0 * 1000.0)
-
-  def getMaxFetchRequestMs: Double = fetchRequestStats.getMaxMetric / (1000.0 * 1000.0)
-
-  def getNumFetchRequests: Long = fetchRequestStats.getNumRequests
-
-  def getConsumerThroughput: Double = fetchRequestStats.getThroughput
-}
-
-object SimpleConsumerStats extends Logging {
-  private val simpleConsumerstatsMBeanName = "kafka:type=kafka.SimpleConsumerStats"
-  private val stats = new SimpleConsumerStats
-  Utils.registerMBean(stats, simpleConsumerstatsMBeanName)
-
-  def recordFetchRequest(requestMs: Long) = stats.recordFetchRequest(requestMs)
-  def recordConsumptionThroughput(data: Long) = stats.recordConsumptionThroughput(data)
-}
-

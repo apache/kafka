@@ -18,9 +18,9 @@
 package kafka.javaapi.consumer
 
 import kafka.utils.threadsafe
-import kafka.javaapi.message.ByteBufferMessageSet
-import kafka.javaapi.MultiFetchResponse
-import kafka.api.FetchRequest
+import kafka.javaapi.FetchResponse
+import kafka.javaapi.OffsetRequest
+
 
 /**
  * A consumer of kafka messages
@@ -30,40 +30,53 @@ class SimpleConsumer(val host: String,
                      val port: Int,
                      val soTimeout: Int,
                      val bufferSize: Int) {
-  val underlying = new kafka.consumer.SimpleConsumer(host, port, soTimeout, bufferSize)
+  private val underlying = new kafka.consumer.SimpleConsumer(host, port, soTimeout, bufferSize)
 
   /**
-   *  Fetch a set of messages from a topic.
+   *  Fetch a set of messages from a topic. This version of the fetch method
+   *  takes the Scala version of a fetch request (i.e.,
+   *  [[kafka.api.FetchRequest]] and is intended for use with the
+   *  [[kafka.api.FetchRequestBuilder]].
    *
    *  @param request  specifies the topic name, topic partition, starting byte offset, maximum bytes to be fetched.
    *  @return a set of fetched messages
    */
-  def fetch(request: FetchRequest): ByteBufferMessageSet = {
+  def fetch(request: kafka.api.FetchRequest): FetchResponse = {
     import kafka.javaapi.Implicits._
     underlying.fetch(request)
   }
+  
+  /**
+   *  Fetch a set of messages from a topic.
+   *
+   *  @param request specifies the topic name, topic partition, starting byte offset, maximum bytes to be fetched.
+   *  @return a set of fetched messages
+   */
+  def fetch(request: kafka.javaapi.FetchRequest): FetchResponse = {
+    fetch(request.underlying)
+  }
 
   /**
-   *  Combine multiple fetch requests in one call.
-   *
-   *  @param fetches  a sequence of fetch requests.
-   *  @return a sequence of fetch responses
+   *  Fetch metadata for a sequence of topics.
+   *  
+   *  @param request specifies the versionId, clientId, sequence of topics.
+   *  @return metadata for each topic in the request.
    */
-  def multifetch(fetches: java.util.List[FetchRequest]): MultiFetchResponse = {
-    import scala.collection.JavaConversions._
+  def send(request: kafka.javaapi.TopicMetadataRequest): kafka.javaapi.TopicMetadataResponse = {
     import kafka.javaapi.Implicits._
-    underlying.multifetch(asBuffer(fetches): _*)
+    underlying.send(request.underlying)
   }
 
   /**
    *  Get a list of valid offsets (up to maxSize) before the given time.
-   *  The result is a list of offsets, in descending order.
    *
-   *  @param time: time in millisecs (-1, from the latest offset available, -2 from the smallest offset available)
-   *  @return an array of offsets
+   *  @param request a [[kafka.javaapi.OffsetRequest]] object.
+   *  @return a [[kafka.javaapi.OffsetResponse]] object.
    */
-  def getOffsetsBefore(topic: String, partition: Int, time: Long, maxNumOffsets: Int): Array[Long] =
-    underlying.getOffsetsBefore(topic, partition, time, maxNumOffsets)
+  def getOffsetsBefore(request: OffsetRequest): kafka.javaapi.OffsetResponse = {
+    import kafka.javaapi.Implicits._
+    underlying.getOffsetsBefore(request.underlying)
+  }
 
   def close() {
     underlying.close

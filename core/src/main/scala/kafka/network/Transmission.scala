@@ -20,6 +20,7 @@ package kafka.network
 import java.nio._
 import java.nio.channels._
 import kafka.utils.Logging
+import kafka.common.KafkaException
 
 /**
  * Represents a stateful transfer of data to or from the network
@@ -30,12 +31,12 @@ private[network] trait Transmission extends Logging {
   
   protected def expectIncomplete(): Unit = {
     if(complete)
-      throw new IllegalStateException("This operation cannot be completed on a complete request.")
+      throw new KafkaException("This operation cannot be completed on a complete request.")
   }
   
   protected def expectComplete(): Unit = {
     if(!complete)
-      throw new IllegalStateException("This operation cannot be completed on an incomplete request.")
+      throw new KafkaException("This operation cannot be completed on an incomplete request.")
   }
   
 }
@@ -43,19 +44,20 @@ private[network] trait Transmission extends Logging {
 /**
  * A transmission that is being received from a channel
  */
-private[kafka] trait Receive extends Transmission {
+trait Receive extends Transmission {
   
   def buffer: ByteBuffer
   
   def readFrom(channel: ReadableByteChannel): Int
   
   def readCompletely(channel: ReadableByteChannel): Int = {
-    var read = 0
+    var totalRead = 0
     while(!complete) {
-      read = readFrom(channel)
+      val read = readFrom(channel)
       trace(read + " bytes read.")
+      totalRead += read
     }
-    read
+    totalRead
   }
   
 }
@@ -63,17 +65,18 @@ private[kafka] trait Receive extends Transmission {
 /**
  * A transmission that is being sent out to the channel
  */
-private[kafka] trait Send extends Transmission {
+trait Send extends Transmission {
     
   def writeTo(channel: GatheringByteChannel): Int
-  
+
   def writeCompletely(channel: GatheringByteChannel): Int = {
-    var written = 0
+    var totalWritten = 0
     while(!complete) {
-      written = writeTo(channel)
+      val written = writeTo(channel)
       trace(written + " bytes written.")
+      totalWritten += written
     }
-    written
+    totalWritten
   }
     
 }
@@ -99,9 +102,9 @@ abstract class MultiSend[S <: Send](val sends: List[S]) extends Send {
     if (current == Nil) {
       if (totalWritten != expectedBytesToWrite)
         error("mismatch in sending bytes over socket; expected: " + expectedBytesToWrite + " actual: " + totalWritten)
-      return true
+      true
+    } else {
+      false
     }
-    else
-      return false
   }
 }

@@ -32,6 +32,7 @@ class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
   def startup() {
     try {
       server.startup()
+      serverConfig.verify()
     }
     catch {
       case e =>
@@ -47,13 +48,13 @@ class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
     catch {
       case e =>
         fatal("Fatal error during KafkaServerStable shutdown. Prepare to halt", e)
-        Runtime.getRuntime.halt(1)
+        System.exit(1)
     }
   }
 
-  def awaitShutdown() {
+  def awaitShutdown() = 
     server.awaitShutdown
-  }
+
 }
 
 

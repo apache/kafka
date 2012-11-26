@@ -20,18 +20,15 @@ package kafka.tools
 import joptsimple.OptionParser
 import java.util.concurrent.{Executors, CountDownLatch}
 import java.util.Properties
-import kafka.producer.async.DefaultEventHandler
-import kafka.serializer.DefaultEncoder
-import kafka.producer.{ProducerData, DefaultPartitioner, ProducerConfig, Producer}
+import kafka.producer.{KeyedMessage, ProducerConfig, Producer}
 import kafka.consumer._
-import kafka.utils.{ZKStringSerializer, Logging}
+import kafka.utils.{Logging, ZkUtils}
 import kafka.api.OffsetRequest
-import org.I0Itec.zkclient._
 import kafka.message.{CompressionCodec, Message}
 
 object ReplayLogProducer extends Logging {
 
-  private val GROUPID: String = "replay-log-producer"
+  private val GroupId: String = "replay-log-producer"
 
   def main(args: Array[String]) {
     val config = new Config(args)
@@ -40,12 +37,12 @@ object ReplayLogProducer extends Logging {
     val allDone = new CountDownLatch(config.numThreads)
 
     // if there is no group specified then avoid polluting zookeeper with persistent group data, this is a hack
-    tryCleanupZookeeper(config.zkConnect, GROUPID)
+    ZkUtils.maybeDeletePath(config.zkConnect, "/consumers/" + GroupId)
     Thread.sleep(500)
 
     // consumer properties
     val consumerProps = new Properties
-    consumerProps.put("groupid", GROUPID)
+    consumerProps.put("groupid", GroupId)
     consumerProps.put("zk.connect", config.zkConnect)
     consumerProps.put("consumer.timeout.ms", "10000")
     consumerProps.put("autooffset.reset", OffsetRequest.SmallestTimeString)
@@ -74,9 +71,9 @@ object ReplayLogProducer extends Logging {
       .describedAs("zookeeper url")
       .ofType(classOf[String])
       .defaultsTo("127.0.0.1:2181")
-    val brokerInfoOpt = parser.accepts("brokerinfo", "REQUIRED: broker info (either from zookeeper or a list.")
+    val brokerListOpt = parser.accepts("broker-list", "REQUIRED: the broker list must be specified.")
       .withRequiredArg
-      .describedAs("broker.list=brokerid:hostname:port or zk.connect=host:port")
+      .describedAs("hostname:port")
       .ofType(classOf[String])
     val inputTopicOpt = parser.accepts("inputtopic", "REQUIRED: The topic to consume from.")
       .withRequiredArg
@@ -119,7 +116,7 @@ object ReplayLogProducer extends Logging {
       .defaultsTo(0)
 
     val options = parser.parse(args : _*)
-    for(arg <- List(brokerInfoOpt, inputTopicOpt)) {
+    for(arg <- List(brokerListOpt, inputTopicOpt)) {
       if(!options.has(arg)) {
         System.err.println("Missing required argument \"" + arg + "\"")
         parser.printHelpOn(System.err)
@@ -127,7 +124,7 @@ object ReplayLogProducer extends Logging {
       }
     }
     val zkConnect = options.valueOf(zkConnectOpt)
-    val brokerInfo = options.valueOf(brokerInfoOpt)
+    val brokerList = options.valueOf(brokerListOpt)
     val numMessages = options.valueOf(numMessagesOpt).intValue
     val isAsync = options.has(asyncOpt)
     val delayedMSBtwSend = options.valueOf(delayMSBtwBatchOpt).longValue
@@ -139,26 +136,10 @@ object ReplayLogProducer extends Logging {
     val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOption).intValue)
   }
 
-  def tryCleanupZookeeper(zkUrl: String, groupId: String) {
-    try {
-      val dir = "/consumers/" + groupId
-      info("Cleaning up temporary zookeeper data under " + dir + ".")
-      val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)
-      zk.deleteRecursive(dir)
-      zk.close()
-    } catch {
-      case _ => // swallow
-    }
-  }
-
-  class ZKConsumerThread(config: Config, stream: KafkaStream[Message]) extends Thread with Logging {
+  class ZKConsumerThread(config: Config, stream: KafkaStream[Array[Byte], Array[Byte]]) extends Thread with Logging {
     val shutdownLatch = new CountDownLatch(1)
     val props = new Properties()
-    val brokerInfoList = config.brokerInfo.split("=")
-    if (brokerInfoList(0) == "zk.connect")
-      props.put("zk.connect", brokerInfoList(1))
-    else
-      props.put("broker.list", brokerInfoList(1))
+    props.put("broker.list", config.brokerList)
     props.put("reconnect.interval", Integer.MAX_VALUE.toString)
     props.put("buffer.size", (64*1024).toString)
     props.put("compression.codec", config.compressionCodec.codec.toString)
@@ -169,9 +150,7 @@ object ReplayLogProducer extends Logging {
       props.put("producer.type", "async")
 
     val producerConfig = new ProducerConfig(props)
-    val producer = new Producer[Message, Message](producerConfig, new DefaultEncoder,
-                                                  new DefaultEventHandler[Message](producerConfig, null),
-                                                  null, new DefaultPartitioner[Message])
+    val producer = new Producer[Array[Byte], Array[Byte]](producerConfig)
 
     override def run() {
       info("Starting consumer thread..")
@@ -184,7 +163,7 @@ object ReplayLogProducer extends Logging {
             stream
         for (messageAndMetadata <- iter) {
           try {
-            producer.send(new ProducerData[Message, Message](config.outputTopic, messageAndMetadata.message))
+            producer.send(new KeyedMessage[Array[Byte], Array[Byte]](config.outputTopic, messageAndMetadata.message))
             if (config.delayedMSBtwSend > 0 && (messageCount + 1) % config.batchSize == 0)
               Thread.sleep(config.delayedMSBtwSend)
             messageCount += 1

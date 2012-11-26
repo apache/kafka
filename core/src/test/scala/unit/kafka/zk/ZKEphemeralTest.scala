@@ -13,19 +13,18 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
+*/
 
 package kafka.zk
 
 import kafka.consumer.ConsumerConfig
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils.{ZkUtils, ZKStringSerializer}
-import kafka.utils.{TestZKUtils, TestUtils}
+import kafka.utils.TestUtils
 import org.junit.Assert
 import org.scalatest.junit.JUnit3Suite
 
 class ZKEphemeralTest extends JUnit3Suite with ZooKeeperTestHarness {
-  val zkConnect = TestZKUtils.zookeeperConnect
   var zkSessionTimeoutMs = 1000
 
   def testEphemeralNodeCleanup = {
@@ -36,21 +35,15 @@ class ZKEphemeralTest extends JUnit3Suite with ZooKeeperTestHarness {
     try {
       ZkUtils.createEphemeralPathExpectConflict(zkClient, "/tmp/zktest", "node created")
     } catch {                       
-      case e: Exception => println("Exception in creating ephemeral node")
+      case e: Exception =>
     }
 
     var testData: String = null
-
-    testData = ZkUtils.readData(zkClient, "/tmp/zktest")
+    testData = ZkUtils.readData(zkClient, "/tmp/zktest")._1
     Assert.assertNotNull(testData)
-
     zkClient.close
-
-    Thread.sleep(zkSessionTimeoutMs)
-
     zkClient = new ZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
                                 ZKStringSerializer)
-
     val nodeExists = ZkUtils.pathExists(zkClient, "/tmp/zktest")
     Assert.assertFalse(nodeExists)
   }

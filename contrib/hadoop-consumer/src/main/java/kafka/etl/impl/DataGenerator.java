@@ -26,10 +26,10 @@ import java.util.Random;
 import kafka.etl.KafkaETLKey;
 import kafka.etl.KafkaETLRequest;
 import kafka.etl.Props;
-import kafka.javaapi.message.ByteBufferMessageSet;
-import kafka.javaapi.producer.SyncProducer;
+import kafka.javaapi.producer.Producer;
 import kafka.message.Message;
-import kafka.producer.SyncProducerConfig;
+import kafka.producer.ProducerConfig;
+import kafka.producer.KeyedMessage;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.BytesWritable;
@@ -47,7 +47,7 @@ public class DataGenerator {
 			System.currentTimeMillis());
 
 	protected Props _props;
-	protected SyncProducer _producer = null;
+	protected Producer _producer = null;
 	protected URI _uri = null;
 	protected String _topic;
 	protected int _count;
@@ -70,28 +70,28 @@ public class DataGenerator {
 		
 		System.out.println("server uri:" + _uri.toString());
         Properties producerProps = new Properties();
-        producerProps.put("host", _uri.getHost());
-        producerProps.put("port", String.valueOf(_uri.getPort()));
+        producerProps.put("broker.list", String.format("%s:%d", _uri.getHost(), _uri.getPort()));
         producerProps.put("buffer.size", String.valueOf(TCP_BUFFER_SIZE));
         producerProps.put("connect.timeout.ms", String.valueOf(CONNECT_TIMEOUT));
         producerProps.put("reconnect.interval", String.valueOf(RECONNECT_INTERVAL));
-		_producer = new SyncProducer(new SyncProducerConfig(producerProps));
+        
+		_producer = new Producer(new ProducerConfig(producerProps));
 			
 	}
 
 	public void run() throws Exception {
 
-		List<Message> list = new ArrayList<Message>();
+		List<KeyedMessage> list = new ArrayList<KeyedMessage>();
 		for (int i = 0; i < _count; i++) {
 			Long timestamp = RANDOM.nextLong();
 			if (timestamp < 0) timestamp = -timestamp;
 			byte[] bytes = timestamp.toString().getBytes("UTF8");
 			Message message = new Message(bytes);
-			list.add(message);
+			list.add(new KeyedMessage<Integer, Message>(_topic, null, message));
 		}
 		// send events
 		System.out.println(" send " + list.size() + " " + _topic + " count events to " + _uri);
-		_producer.send(_topic, new ByteBufferMessageSet(kafka.message.NoCompressionCodec$.MODULE$, list));
+		_producer.send(list);
 
 		// close the producer
 		_producer.close();

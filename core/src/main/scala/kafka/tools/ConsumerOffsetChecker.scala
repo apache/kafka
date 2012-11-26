@@ -22,10 +22,14 @@ import joptsimple._
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils.{ZkUtils, ZKStringSerializer, Logging}
 import kafka.consumer.SimpleConsumer
-import collection.mutable.Map
+import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest}
+import kafka.common.TopicAndPartition
+import scala.collection._
+
+
 object ConsumerOffsetChecker extends Logging {
 
-  private val consumerMap: Map[String, Option[SimpleConsumer]] = Map()
+  private val consumerMap: mutable.Map[String, Option[SimpleConsumer]] = mutable.Map()
 
   private val BidPidPattern = """(\d+)-(\d+)""".r
 
@@ -34,7 +38,7 @@ object ConsumerOffsetChecker extends Logging {
   // e.g., host.domain.com-1315436360737:host.domain.com:9092
 
   private def getConsumer(zkClient: ZkClient, bid: String): Option[SimpleConsumer] = {
-    val brokerInfo = ZkUtils.readDataMaybeNull(zkClient, "/brokers/ids/%s".format(bid))
+    val brokerInfo = ZkUtils.readDataMaybeNull(zkClient, "/brokers/ids/%s".format(bid))._1
     val consumer = brokerInfo match {
       case BrokerIpPattern(ip, port) =>
         Some(new SimpleConsumer(ip, port.toInt, 10000, 100000))
@@ -48,9 +52,9 @@ object ConsumerOffsetChecker extends Logging {
   private def processPartition(zkClient: ZkClient,
                                group: String, topic: String, bidPid: String) {
     val offset = ZkUtils.readData(zkClient, "/consumers/%s/offsets/%s/%s".
-            format(group, topic, bidPid)).toLong
+            format(group, topic, bidPid))._1.toLong
     val owner = ZkUtils.readDataMaybeNull(zkClient, "/consumers/%s/owners/%s/%s".
-            format(group, topic, bidPid))
+            format(group, topic, bidPid))._1
     println("%s,%s,%s (Group,Topic,BrokerId-PartitionId)".format(group, topic, bidPid))
     println("%20s%s".format("Owner = ", owner))
     println("%20s%d".format("Consumer offset = ", offset))
@@ -62,8 +66,10 @@ object ConsumerOffsetChecker extends Logging {
           bid, getConsumer(zkClient, bid))
         consumerOpt match {
           case Some(consumer) =>
-            val logSize =
-              consumer.getOffsetsBefore(topic, pid.toInt, -1, 1).last.toLong
+            val topicAndPartition = TopicAndPartition(topic, pid.toInt)
+            val request =
+              OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 1)))
+            val logSize = consumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
             println("%20s%d".format("Log size = ", logSize))
             println("%20s%,d (%,.2fG)".format("= ", logSize, logSize / math.pow(1024, 3)))
 

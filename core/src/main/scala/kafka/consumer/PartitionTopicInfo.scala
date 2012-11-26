@@ -20,17 +20,15 @@ package kafka.consumer
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import kafka.message._
-import kafka.cluster._
 import kafka.utils.Logging
-import kafka.common.ErrorMapping
 
-private[consumer] class PartitionTopicInfo(val topic: String,
-                                           val brokerId: Int,
-                                           val partition: Partition,
-                                           private val chunkQueue: BlockingQueue[FetchedDataChunk],
-                                           private val consumedOffset: AtomicLong,
-                                           private val fetchedOffset: AtomicLong,
-                                           private val fetchSize: AtomicInteger) extends Logging {
+class PartitionTopicInfo(val topic: String,
+                         val brokerId: Int,
+                         val partitionId: Int,
+                         private val chunkQueue: BlockingQueue[FetchedDataChunk],
+                         private val consumedOffset: AtomicLong,
+                         private val fetchedOffset: AtomicLong,
+                         private val fetchSize: AtomicInteger) extends Logging {
 
   debug("initial consumer offset of " + this + " is " + consumedOffset.get)
   debug("initial fetch offset of " + this + " is " + fetchedOffset.get)
@@ -51,31 +49,31 @@ private[consumer] class PartitionTopicInfo(val topic: String,
 
   /**
    * Enqueue a message set for processing
-   * @return the number of valid bytes
    */
-  def enqueue(messages: ByteBufferMessageSet, fetchOffset: Long): Long = {
-    val size = messages.validBytes
+  def enqueue(messages: ByteBufferMessageSet) {
+    val size = messages.sizeInBytes
     if(size > 0) {
-      // update fetched offset to the compressed data chunk size, not the decompressed message set size
-      trace("Updating fetch offset = " + fetchedOffset.get + " with size = " + size)
-      chunkQueue.put(new FetchedDataChunk(messages, this, fetchOffset))
-      val newOffset = fetchedOffset.addAndGet(size)
-      debug("updated fetch offset of ( %s ) to %d".format(this, newOffset))
-      ConsumerTopicStat.getConsumerTopicStat(topic).recordBytesPerTopic(size)
-      ConsumerTopicStat.getConsumerAllTopicStat().recordBytesPerTopic(size)
+      val next = nextOffset(messages)
+      trace("Updating fetch offset = " + fetchedOffset.get + " to " + next)
+      chunkQueue.put(new FetchedDataChunk(messages, this, fetchedOffset.get))
+      fetchedOffset.set(next)
+      debug("updated fetch offset of (%s) to %d".format(this, next))
+      ConsumerTopicStat.getConsumerTopicStat(topic).byteRate.mark(size)
+      ConsumerTopicStat.getConsumerAllTopicStat().byteRate.mark(size)
     }
-    size
   }
-
+  
   /**
-   *  add an empty message with the exception to the queue so that client can see the error
+   * Get the next fetch offset after this message set
    */
-  def enqueueError(e: Throwable, fetchOffset: Long) = {
-    val messages = new ByteBufferMessageSet(buffer = ErrorMapping.EmptyByteBuffer, initialOffset = 0,
-      errorCode = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
-    chunkQueue.put(new FetchedDataChunk(messages, this, fetchOffset))
+  private def nextOffset(messages: ByteBufferMessageSet): Long = {
+    var nextOffset = -1L
+    val iter = messages.shallowIterator
+    while(iter.hasNext)
+      nextOffset = iter.next.nextOffset
+    nextOffset
   }
 
-  override def toString(): String = topic + ":" + partition.toString + ": fetched offset = " + fetchedOffset.get +
+  override def toString(): String = topic + ":" + partitionId.toString + ": fetched offset = " + fetchedOffset.get +
     ": consumed offset = " + consumedOffset.get
 }

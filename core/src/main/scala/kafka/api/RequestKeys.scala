@@ -17,10 +17,36 @@
 
 package kafka.api
 
+import kafka.common.KafkaException
+import java.nio.ByteBuffer
+
 object RequestKeys {
-  val Produce: Short = 0
-  val Fetch: Short = 1
-  val MultiFetch: Short = 2
-  val MultiProduce: Short = 3
-  val Offsets: Short = 4
+  val ProduceKey: Short = 0
+  val FetchKey: Short = 1
+  val OffsetsKey: Short = 2
+  val MetadataKey: Short = 3
+  val LeaderAndIsrKey: Short = 4
+  val StopReplicaKey: Short = 5
+
+  val keyToNameAndDeserializerMap: Map[Short, (String, (ByteBuffer) => RequestOrResponse)]=
+    Map(ProduceKey -> ("Produce", ProducerRequest.readFrom),
+        FetchKey -> ("Fetch", FetchRequest.readFrom),
+        OffsetsKey -> ("Offsets", OffsetRequest.readFrom),
+        MetadataKey -> ("Metadata", TopicMetadataRequest.readFrom),
+        LeaderAndIsrKey -> ("LeaderAndIsr", LeaderAndIsrRequest.readFrom),
+        StopReplicaKey -> ("StopReplica", StopReplicaRequest.readFrom))
+
+  def nameForKey(key: Short): String = {
+    keyToNameAndDeserializerMap.get(key) match {
+      case Some(nameAndSerializer) => nameAndSerializer._1
+      case None => throw new KafkaException("Wrong request type %d".format(key))
+    }
+  }
+
+  def deserializerForKey(key: Short): (ByteBuffer) => RequestOrResponse = {
+    keyToNameAndDeserializerMap.get(key) match {
+      case Some(nameAndSerializer) => nameAndSerializer._2
+      case None => throw new KafkaException("Wrong request type %d".format(key))
+    }
+  }
 }

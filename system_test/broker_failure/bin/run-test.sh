@@ -50,7 +50,7 @@ readonly test_topic=test01                           # topic used in this test
 readonly consumer_grp=group1                         # consumer group
 readonly source_console_consumer_grp=source
 readonly target_console_consumer_grp=target
-readonly message_size=5000
+readonly message_size=100
 readonly console_consumer_timeout_ms=15000
 readonly num_kafka_source_server=4                   # requires same no. of property files such as: 
                                                      # $base_dir/config/server_source{1..4}.properties
@@ -64,6 +64,7 @@ readonly wait_time_after_restarting_broker=10
 # Change the followings as needed
 # ====================================
 num_msg_per_batch=500                                # no. of msg produced in each calling of ProducerPerformance
+num_producer_threads=5                               # no. of producer threads to send msg
 producer_sleep_min=5                                 # min & max sleep time (in sec) between each 
 producer_sleep_max=5                                 # batch of messages sent from producer 
 
@@ -103,27 +104,27 @@ mirror_producer_prop_files=
 # ====================================
 console_consumer_source_pid=
 console_consumer_source_log=$base_dir/console_consumer_source.log
-console_consumer_source_crc_log=$base_dir/console_consumer_source_crc.log
-console_consumer_source_crc_sorted_log=$base_dir/console_consumer_source_crc_sorted.log
-console_consumer_source_crc_sorted_uniq_log=$base_dir/console_consumer_source_crc_sorted_uniq.log
+console_consumer_source_mid_log=$base_dir/console_consumer_source_mid.log
+console_consumer_source_mid_sorted_log=$base_dir/console_consumer_source_mid_sorted.log
+console_consumer_source_mid_sorted_uniq_log=$base_dir/console_consumer_source_mid_sorted_uniq.log
 
 # ====================================
 # console consumer target
 # ====================================
 console_consumer_target_pid=
 console_consumer_target_log=$base_dir/console_consumer_target.log
-console_consumer_target_crc_log=$base_dir/console_consumer_target_crc.log
-console_consumer_target_crc_sorted_log=$base_dir/console_consumer_target_crc_sorted.log
-console_consumer_target_crc_sorted_uniq_log=$base_dir/console_consumer_target_crc_sorted_uniq.log
+console_consumer_target_mid_log=$base_dir/console_consumer_target_mid.log
+console_consumer_target_mid_sorted_log=$base_dir/console_consumer_target_mid_sorted.log
+console_consumer_target_mid_sorted_uniq_log=$base_dir/console_consumer_target_mid_sorted_uniq.log
 
 # ====================================
 # producer
 # ====================================
 background_producer_pid=
 producer_performance_log=$base_dir/producer_performance.log
-producer_performance_crc_log=$base_dir/producer_performance_crc.log
-producer_performance_crc_sorted_log=$base_dir/producer_performance_crc_sorted.log
-producer_performance_crc_sorted_uniq_log=$base_dir/producer_performance_crc_sorted_uniq.log
+producer_performance_mid_log=$base_dir/producer_performance_mid.log
+producer_performance_mid_sorted_log=$base_dir/producer_performance_mid_sorted.log
+producer_performance_mid_sorted_uniq_log=$base_dir/producer_performance_mid_sorted_uniq.log
 tmp_file_to_stop_background_producer=/tmp/tmp_file_to_stop_background_producer
 
 # ====================================
@@ -187,21 +188,21 @@ cleanup() {
     rm -f $base_dir/kafka_source{1..4}.log
 
     rm -f $producer_performance_log
-    rm -f $producer_performance_crc_log
-    rm -f $producer_performance_crc_sorted_log
-    rm -f $producer_performance_crc_sorted_uniq_log
+    rm -f $producer_performance_mid_log
+    rm -f $producer_performance_mid_sorted_log
+    rm -f $producer_performance_mid_sorted_uniq_log
 
     rm -f $console_consumer_target_log
     rm -f $console_consumer_source_log
-    rm -f $console_consumer_target_crc_log
-    rm -f $console_consumer_source_crc_log
+    rm -f $console_consumer_target_mid_log
+    rm -f $console_consumer_source_mid_log
 
     rm -f $checksum_diff_log
 
-    rm -f $console_consumer_target_crc_sorted_log
-    rm -f $console_consumer_source_crc_sorted_log
-    rm -f $console_consumer_target_crc_sorted_uniq_log
-    rm -f $console_consumer_source_crc_sorted_uniq_log
+    rm -f $console_consumer_target_mid_sorted_log
+    rm -f $console_consumer_source_mid_sorted_log
+    rm -f $console_consumer_target_mid_sorted_uniq_log
+    rm -f $console_consumer_source_mid_sorted_uniq_log
 }
 
 # =========================================
@@ -362,6 +363,7 @@ start_console_consumer() {
     this_consumer_grp=$1
     this_consumer_zk_port=$2
     this_consumer_log=$3
+    this_msg_formatter=$4
 
     info "starting console consumers for $this_consumer_grp"
 
@@ -371,7 +373,7 @@ start_console_consumer() {
         --group $this_consumer_grp \
         --from-beginning \
         --consumer-timeout-ms $console_consumer_timeout_ms \
-        --formatter "kafka.consumer.ConsoleConsumer\$ChecksumMessageFormatter" \
+        --formatter "kafka.consumer.ConsoleConsumer\$${this_msg_formatter}" \
         2>&1 > ${this_consumer_log} &
     console_consumer_pid=$!
 
@@ -442,27 +444,20 @@ start_background_producer() {
 
     while [ ! -e $tmp_file_to_stop_background_producer ]
     do
-        sleeptime=
-
-        get_random_range $producer_sleep_min $producer_sleep_max
-        sleeptime=$?
-
-        batch_no=$(($batch_no + 1))
+        sleeptime=$(get_random_range $producer_sleep_min $producer_sleep_max)
 
         info "producing $num_msg_per_batch messages on topic '$topic'"
         $base_dir/bin/kafka-run-class.sh \
             kafka.perf.ProducerPerformance \
             --brokerinfo zk.connect=localhost:2181 \
-            --topic $topic \
+            --topics $topic \
             --messages $num_msg_per_batch \
             --message-size $message_size \
-            --batch-size 50 \
-            --vary-message-size \
-            --threads 1 \
-            --reporting-interval $num_msg_per_batch \
-            --async \
+            --threads $num_producer_threads \
+            --initial-message-id $batch_no \
             2>&1 >> $base_dir/producer_performance.log    # appending all producers' msgs
 
+        batch_no=$(($batch_no + $num_msg_per_batch))
         sleep $sleeptime
     done
 }
@@ -474,37 +469,37 @@ cmp_checksum() {
 
     cmp_result=0
 
-    grep ^checksum $console_consumer_source_log | tr -d ' ' | cut -f2 -d ':' > $console_consumer_source_crc_log
-    grep ^checksum $console_consumer_target_log | tr -d ' ' | cut -f2 -d ':' > $console_consumer_target_crc_log
-    grep checksum $producer_performance_log | tr ' ' '\n' | grep checksum | awk -F ':' '{print $2}' > $producer_performance_crc_log
+    grep MessageID $console_consumer_source_log | sed s'/^.*MessageID://g' | awk -F ':' '{print $1}' > $console_consumer_source_mid_log
+    grep MessageID $console_consumer_target_log | sed s'/^.*MessageID://g' | awk -F ':' '{print $1}' > $console_consumer_target_mid_log
+    grep MessageID $producer_performance_log    | sed s'/^.*MessageID://g' | awk -F ':' '{print $1}' > $producer_performance_mid_log
 
-    sort $console_consumer_target_crc_log > $console_consumer_target_crc_sorted_log
-    sort $console_consumer_source_crc_log > $console_consumer_source_crc_sorted_log
-    sort $producer_performance_crc_log > $producer_performance_crc_sorted_log
+    sort $console_consumer_target_mid_log > $console_consumer_target_mid_sorted_log
+    sort $console_consumer_source_mid_log > $console_consumer_source_mid_sorted_log
+    sort $producer_performance_mid_log > $producer_performance_mid_sorted_log
 
-    sort -u $console_consumer_target_crc_log > $console_consumer_target_crc_sorted_uniq_log
-    sort -u $console_consumer_source_crc_log > $console_consumer_source_crc_sorted_uniq_log
-    sort -u $producer_performance_crc_log > $producer_performance_crc_sorted_uniq_log
+    sort -u $console_consumer_target_mid_log > $console_consumer_target_mid_sorted_uniq_log
+    sort -u $console_consumer_source_mid_log > $console_consumer_source_mid_sorted_uniq_log
+    sort -u $producer_performance_mid_log > $producer_performance_mid_sorted_uniq_log
 
-    msg_count_from_source_consumer=`cat $console_consumer_source_crc_log | wc -l | tr -d ' '`
-    uniq_msg_count_from_source_consumer=`cat $console_consumer_source_crc_sorted_uniq_log | wc -l | tr -d ' '`
+    msg_count_from_source_consumer=`cat $console_consumer_source_mid_log | wc -l | tr -d ' '`
+    uniq_msg_count_from_source_consumer=`cat $console_consumer_source_mid_sorted_uniq_log | wc -l | tr -d ' '`
 
-    msg_count_from_mirror_consumer=`cat $console_consumer_target_crc_log | wc -l | tr -d ' '`
-    uniq_msg_count_from_mirror_consumer=`cat $console_consumer_target_crc_sorted_uniq_log | wc -l | tr -d ' '`
+    msg_count_from_mirror_consumer=`cat $console_consumer_target_mid_log | wc -l | tr -d ' '`
+    uniq_msg_count_from_mirror_consumer=`cat $console_consumer_target_mid_sorted_uniq_log | wc -l | tr -d ' '`
 
-    uniq_msg_count_from_producer=`cat $producer_performance_crc_sorted_uniq_log | wc -l | tr -d ' '`
+    uniq_msg_count_from_producer=`cat $producer_performance_mid_sorted_uniq_log | wc -l | tr -d ' '`
 
-    total_msg_published=`cat $producer_performance_crc_log | wc -l | tr -d ' '`
+    total_msg_published=`cat $producer_performance_mid_log | wc -l | tr -d ' '`
 
     duplicate_msg_in_producer=$(( $total_msg_published - $uniq_msg_count_from_producer ))
 
-    crc_only_in_mirror_consumer=`comm -23 $console_consumer_target_crc_sorted_uniq_log $console_consumer_source_crc_sorted_uniq_log`
-    crc_only_in_source_consumer=`comm -13 $console_consumer_target_crc_sorted_uniq_log $console_consumer_source_crc_sorted_uniq_log`
-    crc_common_in_both_consumer=`comm -12 $console_consumer_target_crc_sorted_uniq_log $console_consumer_source_crc_sorted_uniq_log`
+    crc_only_in_mirror_consumer=`comm -23 $console_consumer_target_mid_sorted_uniq_log $console_consumer_source_mid_sorted_uniq_log`
+    crc_only_in_source_consumer=`comm -13 $console_consumer_target_mid_sorted_uniq_log $console_consumer_source_mid_sorted_uniq_log`
+    crc_common_in_both_consumer=`comm -12 $console_consumer_target_mid_sorted_uniq_log $console_consumer_source_mid_sorted_uniq_log`
 
-    crc_only_in_producer=`comm -23 $producer_performance_crc_sorted_uniq_log $console_consumer_source_crc_sorted_uniq_log`
+    crc_only_in_producer=`comm -23 $producer_performance_mid_sorted_uniq_log $console_consumer_source_mid_sorted_uniq_log`
 
-    duplicate_mirror_crc=`comm -23 $console_consumer_target_crc_sorted_log $console_consumer_target_crc_sorted_uniq_log` 
+    duplicate_mirror_mid=`comm -23 $console_consumer_target_mid_sorted_log $console_consumer_target_mid_sorted_uniq_log` 
     no_of_duplicate_msg=$(( $msg_count_from_mirror_consumer - $uniq_msg_count_from_mirror_consumer \
                           + $msg_count_from_source_consumer - $uniq_msg_count_from_source_consumer - \
                           2*$duplicate_msg_in_producer ))
@@ -543,7 +538,7 @@ cmp_checksum() {
     echo "========================================================" >> $checksum_diff_log
     echo "duplicate crc in mirror consumer"                         >> $checksum_diff_log
     echo "========================================================" >> $checksum_diff_log
-    echo "${duplicate_mirror_crc}"                                  >> $checksum_diff_log
+    echo "${duplicate_mirror_mid}"                                  >> $checksum_diff_log
 
     echo "================="
     if [[ $source_mirror_uniq_msg_diff -eq 0 && $uniq_msg_count_from_source_consumer -gt 0 ]]; then
@@ -564,7 +559,7 @@ start_test() {
 
     echo
     info "==========================================================="
-    info "#### Starting Kafka Broker / Mirror Maker Failure Test #### (v1.0)"
+    info "#### Starting Kafka Broker / Mirror Maker Failure Test ####"
     info "==========================================================="
     echo
 
@@ -574,8 +569,8 @@ start_test() {
     start_source_servers_cluster
     sleep 2
 
-#    create_topic $test_topic localhost:$zk_source_port 1
-#    sleep 2
+    create_topic $test_topic localhost:$zk_source_port 1
+    sleep 2
 
     start_target_servers_cluster
     sleep 2
@@ -607,8 +602,7 @@ start_test() {
                 info "=========================================="
 
                 # bounce target kafka broker
-                get_random_range 1 $num_kafka_target_server 
-                idx=$?
+                idx=$(get_random_range 1 $num_kafka_target_server)
 
                 if [ "x${kafka_target_pids[$idx]}" != "x" ]; then
                     echo
@@ -637,8 +631,7 @@ start_test() {
                 info "=========================================="
 
                 # bounce mirror maker
-                get_random_range 1 $num_kafka_mirror_maker
-                idx=$?
+                idx=$(get_random_range 1 $num_kafka_mirror_maker)
 
                 if [ "x${kafka_mirror_maker_pids[$idx]}" != "x" ]; then
                     echo
@@ -667,8 +660,7 @@ start_test() {
                 info "=========================================="
 
                 # bounce source kafka broker
-                get_random_range 1 $num_kafka_source_server 
-                idx=$?
+                idx=$(get_random_range 1 $num_kafka_source_server)
 
                 if [ "x${kafka_source_pids[$idx]}" != "x" ]; then
                     echo
@@ -789,10 +781,10 @@ trap "shutdown_servers; force_shutdown_consumer; force_shutdown_background_produ
 start_test
 
 # starting consumer to consume data in source
-start_console_consumer $source_console_consumer_grp $zk_source_port $console_consumer_source_log
+start_console_consumer $source_console_consumer_grp $zk_source_port $console_consumer_source_log DecodedMessageFormatter
 
 # starting consumer to consume data in target
-start_console_consumer $target_console_consumer_grp $zk_target_port $console_consumer_target_log
+start_console_consumer $target_console_consumer_grp $zk_target_port $console_consumer_target_log DecodedMessageFormatter
 
 # wait for zero source consumer lags
 wait_for_zero_consumer_lags $source_console_consumer_grp $zk_source_port

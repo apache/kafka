@@ -42,6 +42,9 @@ trait Logging {
     if (logger.isTraceEnabled())
       logger.trace(msgWithLogIdent(msg),e)
   }
+  def swallowTrace(action: => Unit) {
+    Utils.swallow(logger.trace, action)
+  }
 
   def debug(msg: => String): Unit = {
     if (logger.isDebugEnabled())
@@ -54,6 +57,9 @@ trait Logging {
   def debug(msg: => String, e: => Throwable) = {
     if (logger.isDebugEnabled())
       logger.debug(msgWithLogIdent(msg),e)
+  }
+  def swallowDebug(action: => Unit) {
+    Utils.swallow(logger.debug, action)
   }
 
   def info(msg: => String): Unit = {
@@ -68,6 +74,9 @@ trait Logging {
     if (logger.isInfoEnabled())
       logger.info(msgWithLogIdent(msg),e)
   }
+  def swallowInfo(action: => Unit) {
+    Utils.swallow(logger.info, action)
+  }
 
   def warn(msg: => String): Unit = {
     logger.warn(msgWithLogIdent(msg))
@@ -77,7 +86,11 @@ trait Logging {
   }
   def warn(msg: => String, e: => Throwable) = {
     logger.warn(msgWithLogIdent(msg),e)
-  }	
+  }
+  def swallowWarn(action: => Unit) {
+    Utils.swallow(logger.warn, action)
+  }
+  def swallow(action: => Unit) = swallowWarn(action)
 
   def error(msg: => String): Unit = {
     logger.error(msgWithLogIdent(msg))
@@ -87,6 +100,9 @@ trait Logging {
   }
   def error(msg: => String, e: => Throwable) = {
     logger.error(msgWithLogIdent(msg),e)
+  }
+  def swallowError(action: => Unit) {
+    Utils.swallow(logger.error, action)
   }
 
   def fatal(msg: => String): Unit = {

@@ -20,6 +20,7 @@ package kafka.log
 import junit.framework.Assert._
 import org.junit.Test
 import org.scalatest.junit.JUnitSuite
+import kafka.common.KafkaException
 
 class SegmentListTest extends JUnitSuite {
 
@@ -30,29 +31,83 @@ class SegmentListTest extends JUnitSuite {
     val view = sl.view
     assertEquals(list, view.iterator.toList)
     sl.append(5)
-    assertEquals("Appending to both should result in list that are still equals", 
+    assertEquals("Appending to both should result in lists that are still equals",
                  list ::: List(5), sl.view.iterator.toList)
     assertEquals("But the prior view should still equal the original list", list, view.iterator.toList)
   }
   
   @Test
   def testTrunc() {
-    val hd = List(1,2,3)
-    val tail = List(4,5,6)
-    val sl = new SegmentList(hd ::: tail)
-    val view = sl.view
-    assertEquals(hd ::: tail, view.iterator.toList)
-    val deleted = sl.trunc(3)
-    assertEquals(tail, sl.view.iterator.toList)
-    assertEquals(hd, deleted.iterator.toList)
-    assertEquals("View should remain consistent", hd ::: tail, view.iterator.toList)
+    {
+      val hd = List(1,2,3)
+      val tail = List(4,5,6)
+      val sl = new SegmentList(hd ::: tail)
+      val view = sl.view
+      assertEquals(hd ::: tail, view.iterator.toList)
+      val deleted = sl.trunc(3)
+      assertEquals(tail, sl.view.iterator.toList)
+      assertEquals(hd, deleted.iterator.toList)
+      assertEquals("View should remain consistent", hd ::: tail, view.iterator.toList)
+    }
+    {
+      val hd = List(1,2,3,4,5)
+      val tail = List(6)
+      val sl = new SegmentList(hd ::: tail)
+      val view = sl.view
+      assertEquals(hd ::: tail, view.iterator.toList)
+      try {
+        sl.trunc(-1)
+        fail("Attempt to truncate with illegal index should fail")
+      } catch {
+        case e: KafkaException => // this is ok
+      }
+      val deleted = sl.truncLast(4)
+      assertEquals(hd, sl.view.iterator.toList)
+      assertEquals(tail, deleted.iterator.toList)
+      assertEquals("View should remain consistent", hd ::: tail, view.iterator.toList)
+    }
+    {
+      val sl = new SegmentList(List(1, 2))
+      sl.trunc(3)
+      assertEquals(0, sl.view.length)
+    }
   }
   
   @Test
-  def testTruncBeyondList() {
-    val sl = new SegmentList(List(1, 2))
-    sl.trunc(3)
-    assertEquals(0, sl.view.length)
+  def testTruncLast() {
+    {
+      val hd = List(1,2,3)
+      val tail = List(4,5,6)
+      val sl = new SegmentList(hd ::: tail)
+      val view = sl.view
+      assertEquals(hd ::: tail, view.iterator.toList)
+      val deleted = sl.truncLast(2)
+      assertEquals(hd, sl.view.iterator.toList)
+      assertEquals(tail, deleted.iterator.toList)
+      assertEquals("View should remain consistent", hd ::: tail, view.iterator.toList)
+    }
+    {
+      val hd = List(1,2,3,4,5)
+      val tail = List(6)
+      val sl = new SegmentList(hd ::: tail)
+      val view = sl.view
+      assertEquals(hd ::: tail, view.iterator.toList)
+      try {
+        sl.truncLast(6)
+        fail("Attempt to truncate with illegal index should fail")
+      } catch {
+        case e: KafkaException => // this is ok
+      }
+      try {
+        sl.truncLast(-1)
+        fail("Attempt to truncate with illegal index should fail")
+      } catch {
+        case e: KafkaException => // this is ok
+      }
+      val deleted = sl.truncLast(4)
+      assertEquals(hd, sl.view.iterator.toList)
+      assertEquals(tail, deleted.iterator.toList)
+      assertEquals("View should remain consistent", hd ::: tail, view.iterator.toList)
+    }
   }
-  
 }

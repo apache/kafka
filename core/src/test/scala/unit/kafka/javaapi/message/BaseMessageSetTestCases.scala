@@ -58,17 +58,17 @@ trait BaseMessageSetTestCases extends JUnitSuite {
   @Test
   def testSizeInBytes() {
     assertEquals("Empty message set should have 0 bytes.",
-                 0L,
+                 0,
                  createMessageSet(Array[Message]()).sizeInBytes)
     assertEquals("Predicted size should equal actual size.", 
-                 kafka.message.MessageSet.messageSetSize(messages).toLong,
+                 kafka.message.MessageSet.messageSetSize(messages),
                  createMessageSet(messages).sizeInBytes)
   }
 
   @Test
   def testSizeInBytesWithCompression () {
     assertEquals("Empty message set should have 0 bytes.",
-                 0L,           // overhead of the GZIP output stream
+                 0,           // overhead of the GZIP output stream
                  createMessageSet(Array[Message](), DefaultCompressionCodec).sizeInBytes)
   }
 }

@@ -17,15 +17,12 @@
 
 package kafka.producer
 
-import java.net._
-import java.nio.channels._
-import kafka.message._
-import kafka.network._
-import kafka.utils._
 import kafka.api._
-import scala.math._
-import java.nio.ByteBuffer
+import kafka.network.{BlockingChannel, BoundedByteBufferSend, Receive}
+import kafka.utils._
 import java.util.Random
+import java.util.concurrent.TimeUnit
+import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 
 object SyncProducer {
   val RequestKey: Short = 0
@@ -39,45 +36,28 @@ object SyncProducer {
 class SyncProducer(val config: SyncProducerConfig) extends Logging {
   
   private val MaxConnectBackoffMs = 60000
-  private var channel : SocketChannel = null
   private var sentOnConnection = 0
-  /** make time-based reconnect starting at a random time **/
-  private var lastConnectionTime = System.currentTimeMillis - SyncProducer.randomGenerator.nextDouble() * config.reconnectInterval
 
   private val lock = new Object()
-  @volatile
-  private var shutdown: Boolean = false
+  @volatile private var shutdown: Boolean = false
+  private val blockingChannel = new BlockingChannel(config.host, config.port, BlockingChannel.UseDefaultBufferSize,
+    config.bufferSize, config.requestTimeoutMs)
 
   trace("Instantiating Scala Sync Producer")
 
-  private def verifySendBuffer(buffer : ByteBuffer) = {
+  private def verifyRequest(request: RequestOrResponse) = {
     /**
      * This seems a little convoluted, but the idea is to turn on verification simply changing log4j settings
      * Also, when verification is turned on, care should be taken to see that the logs don't fill up with unnecessary
      * data. So, leaving the rest of the logging at TRACE, while errors should be logged at ERROR level
      */
     if (logger.isDebugEnabled) {
+      val buffer = new BoundedByteBufferSend(request).buffer
       trace("verifying sendbuffer of size " + buffer.limit)
       val requestTypeId = buffer.getShort()
-      if (requestTypeId == RequestKeys.MultiProduce) {
-        try {
-          val request = MultiProducerRequest.readFrom(buffer)
-          for (produce <- request.produces) {
-            try {
-              for (messageAndOffset <- produce.messages)
-                if (!messageAndOffset.message.isValid)
-                  throw new InvalidMessageException("Message for topic " + produce.topic + " is invalid")
-            }
-            catch {
-              case e: Throwable =>
-                error("error iterating messages ", e)
-            }
-          }
-        }
-        catch {
-          case e: Throwable =>
-            error("error verifying sendbuffer ", e)
-        }
+      if(requestTypeId == RequestKeys.ProduceKey) {
+        val request = ProducerRequest.readFrom(buffer)
+        trace(request.toString)
       }
     }
   }
@@ -85,54 +65,41 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   /**
    * Common functionality for the public send methods
    */
-  private def send(send: BoundedByteBufferSend) {
+  private def doSend(request: RequestOrResponse): Receive = {
     lock synchronized {
-      verifySendBuffer(send.buffer.slice)
-      val startTime = SystemTime.nanoseconds
+      verifyRequest(request)
       getOrMakeConnection()
 
+      var response: Receive = null
       try {
-        send.writeCompletely(channel)
+        blockingChannel.send(request)
+        response = blockingChannel.receive()
       } catch {
-        case e : java.io.IOException =>
+        case e: java.io.IOException =>
           // no way to tell if write succeeded. Disconnect and re-throw exception to let client handle retry
           disconnect()
           throw e
-        case e2 =>
-          throw e2
+        case e => throw e
       }
-      // TODO: do we still need this?
-      sentOnConnection += 1
-
-      if(sentOnConnection >= config.reconnectInterval || (config.reconnectTimeInterval >= 0 && System.currentTimeMillis - lastConnectionTime >= config.reconnectTimeInterval)) {
-        disconnect()
-        channel = connect()
-        sentOnConnection = 0
-        lastConnectionTime = System.currentTimeMillis
-      }
-      val endTime = SystemTime.nanoseconds
-      SyncProducerStats.recordProduceRequest(endTime - startTime)
+      response
     }
   }
 
   /**
    * Send a message
    */
-  def send(topic: String, partition: Int, messages: ByteBufferMessageSet) {
-    messages.verifyMessageSize(config.maxMessageSize)
-    val setSize = messages.sizeInBytes.asInstanceOf[Int]
-    trace("Got message set with " + setSize + " bytes to send")
-    send(new BoundedByteBufferSend(new ProducerRequest(topic, partition, messages)))
+  def send(producerRequest: ProducerRequest): ProducerResponse = {
+    ProducerRequestStat.requestSizeHist.update(producerRequest.sizeInBytes)
+    var response: Receive = null
+    ProducerRequestStat.requestTimer.time {
+      response = doSend(producerRequest)
+    }
+    ProducerResponse.readFrom(response.buffer)
   }
- 
-  def send(topic: String, messages: ByteBufferMessageSet): Unit = send(topic, ProducerRequest.RandomPartition, messages)
 
-  def multiSend(produces: Array[ProducerRequest]) {
-    for (request <- produces)
-      request.messages.verifyMessageSize(config.maxMessageSize)
-    val setSize = produces.foldLeft(0L)(_ + _.messages.sizeInBytes)
-    trace("Got multi message sets with " + setSize + " bytes to send")
-    send(new BoundedByteBufferSend(new MultiProducerRequest(produces)))
+  def send(request: TopicMetadataRequest): TopicMetadataResponse = {
+    val response = doSend(request)
+    TopicMetadataResponse.readFrom(response.buffer)
   }
 
   def close() = {
@@ -142,6 +109,10 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     }
   }
 
+  private def reconnect() {
+    disconnect()
+    connect()
+  }
 
   /**
    * Disconnect from current channel, closing connection.
@@ -149,81 +120,39 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
    */
   private def disconnect() {
     try {
-      if(channel != null) {
+      if(blockingChannel.isConnected) {
         info("Disconnecting from " + config.host + ":" + config.port)
-        Utils.swallow(logger.warn, channel.close())
-        Utils.swallow(logger.warn, channel.socket.close())
-        channel = null
+        blockingChannel.disconnect()
       }
     } catch {
       case e: Exception => error("Error on disconnect: ", e)
     }
   }
     
-  private def connect(): SocketChannel = {
-    var connectBackoffMs = 1
-    val beginTimeMs = SystemTime.milliseconds
-    while(channel == null && !shutdown) {
+  private def connect(): BlockingChannel = {
+    if (!blockingChannel.isConnected && !shutdown) {
       try {
-        channel = SocketChannel.open()
-        channel.socket.setSendBufferSize(config.bufferSize)
-        channel.configureBlocking(true)
-        channel.socket.setSoTimeout(config.socketTimeoutMs)
-        channel.socket.setKeepAlive(true)
-        channel.connect(new InetSocketAddress(config.host, config.port))
+        blockingChannel.connect()
         info("Connected to " + config.host + ":" + config.port + " for producing")
-      }
-      catch {
+      } catch {
         case e: Exception => {
           disconnect()
-          val endTimeMs = SystemTime.milliseconds
-          if ( (endTimeMs - beginTimeMs + connectBackoffMs) > config.connectTimeoutMs)
-          {
-            error("Producer connection to " +  config.host + ":" + config.port + " timing out after " + config.connectTimeoutMs + " ms", e)
-            throw e
-          }
-          error("Connection attempt to " +  config.host + ":" + config.port + " failed, next attempt in " + connectBackoffMs + " ms", e)
-          SystemTime.sleep(connectBackoffMs)
-          connectBackoffMs = min(10 * connectBackoffMs, MaxConnectBackoffMs)
+          error("Producer connection to " +  config.host + ":" + config.port + " unsuccessful", e)
+          throw e
         }
       }
     }
-    channel
+    blockingChannel
   }
 
   private def getOrMakeConnection() {
-    if(channel == null) {
-      channel = connect()
+    if(!blockingChannel.isConnected) {
+      connect()
     }
   }
 }
 
-trait SyncProducerStatsMBean {
-  def getProduceRequestsPerSecond: Double
-  def getAvgProduceRequestMs: Double
-  def getMaxProduceRequestMs: Double
-  def getNumProduceRequests: Long
-}
-
-@threadsafe
-class SyncProducerStats extends SyncProducerStatsMBean {
-  private val produceRequestStats = new SnapshotStats
-
-  def recordProduceRequest(requestNs: Long) = produceRequestStats.recordRequestMetric(requestNs)
-
-  def getProduceRequestsPerSecond: Double = produceRequestStats.getRequestsPerSecond
-
-  def getAvgProduceRequestMs: Double = produceRequestStats.getAvgMetric / (1000.0 * 1000.0)
-
-  def getMaxProduceRequestMs: Double = produceRequestStats.getMaxMetric / (1000.0 * 1000.0)
-
-  def getNumProduceRequests: Long = produceRequestStats.getNumRequests
-}
-
-object SyncProducerStats extends Logging {
-  private val kafkaProducerstatsMBeanName = "kafka:type=kafka.KafkaProducerStats"
-  private val stats = new SyncProducerStats
-  Utils.swallow(logger.warn, Utils.registerMBean(stats, kafkaProducerstatsMBeanName))
-
-  def recordProduceRequest(requestMs: Long) = stats.recordProduceRequest(requestMs)
+object ProducerRequestStat extends KafkaMetricsGroup {
+  val requestTimer = new KafkaTimer(newTimer("ProduceRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+  val requestSizeHist = newHistogram("ProducerRequestSize")
 }

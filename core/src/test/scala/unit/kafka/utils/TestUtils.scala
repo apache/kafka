@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -28,39 +28,48 @@ import kafka.server._
 import kafka.producer._
 import kafka.message._
 import org.I0Itec.zkclient.ZkClient
+import kafka.cluster.Broker
+import collection.mutable.ListBuffer
 import kafka.consumer.ConsumerConfig
+import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.TimeUnit
+import kafka.api._
+import collection.mutable.Map
+import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
+import kafka.common.TopicAndPartition
+
 
 /**
  * Utility functions to help with testing
  */
-object TestUtils {
-  
+object TestUtils extends Logging {
+
   val Letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
   val Digits = "0123456789"
   val LettersAndDigits = Letters + Digits
-  
+
   /* A consistent random number generator to make tests repeatable */
   val seededRandom = new Random(192348092834L)
   val random = new Random()
-  
+
   /**
    * Choose a number of random available ports
    */
   def choosePorts(count: Int): List[Int] = {
-    val sockets = 
+    val sockets =
       for(i <- 0 until count)
-        yield new ServerSocket(0)
+      yield new ServerSocket(0)
     val socketList = sockets.toList
     val ports = socketList.map(_.getLocalPort)
     socketList.map(_.close)
     ports
   }
-  
+
   /**
    * Choose an available port
    */
   def choosePort(): Int = choosePorts(1).head
-  
+
   /**
    * Create a temporary directory
    */
@@ -71,7 +80,7 @@ object TestUtils {
     f.deleteOnExit()
     f
   }
-  
+
   /**
    * Create a temporary file
    */
@@ -80,44 +89,50 @@ object TestUtils {
     f.deleteOnExit()
     f
   }
-  
+
   /**
    * Create a temporary file and return an open file channel for this file
    */
   def tempChannel(): FileChannel = new RandomAccessFile(tempFile(), "rw").getChannel()
-  
+
   /**
    * Create a kafka server instance with appropriate test settings
    * USING THIS IS A SIGN YOU ARE NOT WRITING A REAL UNIT TEST
    * @param config The configuration of the server
    */
-  def createServer(config: KafkaConfig): KafkaServer = {
-    val server = new KafkaServer(config)
+  def createServer(config: KafkaConfig, time: Time = SystemTime): KafkaServer = {
+    val server = new KafkaServer(config, time)
     server.startup()
     server
   }
-  
+
   /**
    * Create a test config for the given node id
    */
   def createBrokerConfigs(numConfigs: Int): List[Properties] = {
     for((port, node) <- choosePorts(numConfigs).zipWithIndex)
-      yield createBrokerConfig(node, port)
+    yield createBrokerConfig(node, port)
   }
-  
+
+  def getBrokerListStrFromConfigs(configs: Seq[KafkaConfig]): String = {
+    configs.map(c => c.hostName + ":" + c.port).mkString(",")
+  }
+
   /**
    * Create a test config for the given node id
    */
   def createBrokerConfig(nodeId: Int, port: Int): Properties = {
     val props = new Properties
     props.put("brokerid", nodeId.toString)
+    props.put("hostname", "localhost")
     props.put("port", port.toString)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
     props.put("log.flush.interval", "1")
     props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("replica.socket.timeout.ms", "1500")
     props
   }
-  
+
   /**
    * Create a test config for a consumer
    */
@@ -131,6 +146,7 @@ object TestUtils {
     props.put("zk.sessiontimeout.ms", "400")
     props.put("zk.synctime.ms", "200")
     props.put("autocommit.interval.ms", "1000")
+    props.put("rebalance.retries.max", "4")
 
     props
   }
@@ -139,9 +155,9 @@ object TestUtils {
    * Wrap the message in a message set
    * @param payload The bytes of the message
    */
-  def singleMessageSet(payload: Array[Byte]) = 
-    new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(payload))
-  
+  def singleMessageSet(payload: Array[Byte], codec: CompressionCodec = NoCompressionCodec) =
+    new ByteBufferMessageSet(compressionCodec = codec, messages = new Message(payload))
+
   /**
    * Generate an array of random bytes
    * @param numBytes The size of the array
@@ -151,7 +167,7 @@ object TestUtils {
     seededRandom.nextBytes(bytes)
     bytes
   }
-  
+
   /**
    * Generate a random string of letters and digits of the given length
    * @param len The length of the string
@@ -172,7 +188,7 @@ object TestUtils {
     for(i <- 0 until b1.limit - b1.position)
       assertEquals("byte " + i + " byte not equal.", b1.get(b1.position + i), b2.get(b1.position + i))
   }
-  
+
   /**
    * Throw an exception if the two iterators are of differing lengths or contain
    * different messages on their Nth element
@@ -183,33 +199,31 @@ object TestUtils {
       length += 1
       assertEquals(expected.next, actual.next)
     }
-    
-    if (expected.hasNext)
-    {
-     var length1 = length;
-     while (expected.hasNext)
-     {
-       expected.next
-       length1 += 1
-     }
-     assertFalse("Iterators have uneven length-- first has more: "+length1 + " > " + length, true);
+
+    // check if the expected iterator is longer
+    if (expected.hasNext) {
+      var length1 = length;
+      while (expected.hasNext) {
+        expected.next
+        length1 += 1
+      }
+      assertFalse("Iterators have uneven length-- first has more: "+length1 + " > " + length, true);
     }
-    
-    if (actual.hasNext)
-    {
-     var length2 = length;
-     while (actual.hasNext)
-     {
-       actual.next
-       length2 += 1
-     }
-     assertFalse("Iterators have uneven length-- second has more: "+length2 + " > " + length, true);
+
+    // check if the actual iterator was longer
+    if (actual.hasNext) {
+      var length2 = length;
+      while (actual.hasNext) {
+        actual.next
+        length2 += 1
+      }
+      assertFalse("Iterators have uneven length-- second has more: "+length2 + " > " + length, true);
     }
   }
 
   /**
    *  Throw an exception if an iterable has different length than expected
-   *  
+   *
    */
   def checkLength[T](s1: Iterator[T], expectedLength:Int) {
     var n = 0
@@ -260,7 +274,7 @@ object TestUtils {
    * Create a hexidecimal string for the given bytes
    */
   def hexString(bytes: Array[Byte]): String = hexString(ByteBuffer.wrap(bytes))
-  
+
   /**
    * Create a hexidecimal string for the given bytes
    */
@@ -270,18 +284,35 @@ object TestUtils {
       builder.append(String.format("%x", Integer.valueOf(buffer.get(buffer.position + i))))
     builder.toString
   }
-  
+
   /**
    * Create a producer for the given host and port
    */
-  def createProducer(host: String, port: Int): SyncProducer = {
+  def createProducer[K, V](brokerList: String, 
+                           encoder: Encoder[V] = new DefaultEncoder(), 
+                           keyEncoder: Encoder[K] = new DefaultEncoder()): Producer[K, V] = {
     val props = new Properties()
-    props.put("host", host)
-    props.put("port", port.toString)
+    props.put("broker.list", brokerList)
     props.put("buffer.size", "65536")
     props.put("connect.timeout.ms", "100000")
     props.put("reconnect.interval", "10000")
-    return new SyncProducer(new SyncProducerConfig(props))
+    props.put("serializer.class", encoder.getClass.getCanonicalName)
+    props.put("key.serializer.class", keyEncoder.getClass.getCanonicalName)
+    new Producer[K, V](new ProducerConfig(props))
+  }
+
+  def getProducerConfig(brokerList: String, bufferSize: Int, connectTimeout: Int,
+                        reconnectInterval: Int): Properties = {
+    val props = new Properties()
+    props.put("producer.type", "sync")
+    props.put("broker.list", brokerList)
+    props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
+    props.put("buffer.size", bufferSize.toString)
+    props.put("connect.timeout.ms", connectTimeout.toString)
+    props.put("reconnect.interval", reconnectInterval.toString)
+    props.put("producer.request.timeout.ms", 30000.toString)
+    props.put("serializer.class", classOf[StringEncoder].getName.toString)
+    props
   }
 
   def updateConsumerOffset(config : ConsumerConfig, path : String, offset : Long) = {
@@ -301,8 +332,182 @@ object TestUtils {
     }
   }
 
+  def createBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
+    val brokers = ids.map(id => new Broker(id, "localhost" + System.currentTimeMillis(), "localhost", 6667))
+    brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, b.id, b.host, b.creatorId, b.port))
+    brokers
+  }
+
+  def deleteBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
+    val brokers = ids.map(id => new Broker(id, "localhost" + System.currentTimeMillis(), "localhost", 6667))
+    brokers.foreach(b => ZkUtils.deletePath(zkClient, ZkUtils.BrokerIdsPath + "/" + b))
+    brokers
+  }
+
+  def getMsgStrings(n: Int): Seq[String] = {
+    val buffer = new ListBuffer[String]
+    for (i <- 0 until  n)
+      buffer += ("msg" + i)
+    buffer
+  }
+
+  /**
+   * Create a wired format request based on simple basic information
+   */
+  def produceRequest(topic: String, partition: Int, message: ByteBufferMessageSet): kafka.api.ProducerRequest = {
+    produceRequest(SyncProducerConfig.DefaultCorrelationId,topic,partition,message)
+  }
+
+  def produceRequest(correlationId: Int, topic: String, partition: Int, message: ByteBufferMessageSet): kafka.api.ProducerRequest = {
+    produceRequestWithAcks(List(topic), List(partition), message, SyncProducerConfig.DefaultRequiredAcks)
+  }
+
+  def produceRequestWithAcks(topics: Seq[String], partitions: Seq[Int], message: ByteBufferMessageSet, acks: Int): kafka.api.ProducerRequest = {
+    val correlationId = SyncProducerConfig.DefaultCorrelationId
+    val clientId = SyncProducerConfig.DefaultClientId
+    val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
+    val data = topics.flatMap(topic =>
+      partitions.map(partition => (TopicAndPartition(topic,  partition), message))
+    )
+    new kafka.api.ProducerRequest(correlationId, clientId, acks.toShort, ackTimeoutMs, Map(data:_*))
+  }
+
+  def makeLeaderForPartition(zkClient: ZkClient, topic: String,
+                             leaderPerPartitionMap: scala.collection.immutable.Map[Int, Int],
+                             controllerEpoch: Int) {
+    leaderPerPartitionMap.foreach
+    {
+      leaderForPartition => {
+        val partition = leaderForPartition._1
+        val leader = leaderForPartition._2
+        try{
+          val currentLeaderAndIsrOpt = ZkUtils.getLeaderAndIsrForPartition(zkClient, topic, partition)
+          var newLeaderAndIsr: LeaderAndIsr = null
+          if(currentLeaderAndIsrOpt == None)
+            newLeaderAndIsr = new LeaderAndIsr(leader, List(leader))
+          else{
+            newLeaderAndIsr = currentLeaderAndIsrOpt.get
+            newLeaderAndIsr.leader = leader
+            newLeaderAndIsr.leaderEpoch += 1
+            newLeaderAndIsr.zkVersion += 1
+          }
+          ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
+            ZkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch))
+        } catch {
+          case oe => error("Error while electing leader for topic %s partition %d".format(topic, partition), oe)
+        }
+      }
+    }
+  }
+
+  def waitUntilLeaderIsElectedOrChanged(zkClient: ZkClient, topic: String, partition: Int, timeoutMs: Long, oldLeaderOpt: Option[Int] = None): Option[Int] = {
+    val leaderLock = new ReentrantLock()
+    val leaderExistsOrChanged = leaderLock.newCondition()
+
+    if(oldLeaderOpt == None)
+      info("Waiting for leader to be elected for topic %s partition %d".format(topic, partition))
+    else
+      info("Waiting for leader for topic %s partition %d to be changed from old leader %d".format(topic, partition, oldLeaderOpt.get))
+
+    leaderLock.lock()
+    try {
+      zkClient.subscribeDataChanges(ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), new LeaderExistsOrChangedListener(topic, partition, leaderLock, leaderExistsOrChanged, oldLeaderOpt, zkClient))
+      leaderExistsOrChanged.await(timeoutMs, TimeUnit.MILLISECONDS)
+      // check if leader is elected
+      val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
+      leader match {
+        case Some(l) =>
+          if(oldLeaderOpt == None)
+            info("Leader %d is elected for topic %s partition %d".format(l, topic, partition))
+          else
+            info("Leader for topic %s partition %d is changed from %d to %d".format(topic, partition, oldLeaderOpt.get, l))
+        case None => error("Timing out after %d ms since leader is not elected for topic %s partition %d"
+                                   .format(timeoutMs, topic, partition))
+      }
+      leader
+    } finally {
+      leaderLock.unlock()
+    }
+  }
+  
+  /**
+   * Execute the given block. If it throws an assert error, retry. Repeat
+   * until no error is thrown or the time limit ellapses
+   */
+  def retry(waitTime: Long, block: () => Unit) {
+    val startTime = System.currentTimeMillis()
+    while(true) {
+      try {
+        block()
+      } catch {
+        case e: AssertionError =>
+          if(System.currentTimeMillis - startTime > waitTime)
+            throw e
+          else
+            Thread.sleep(100)
+      }
+    }
+  }
+
+  /**
+   * Wait until the given condition is true or the given wait time ellapses
+   */
+  def waitUntilTrue(condition: () => Boolean, waitTime: Long): Boolean = {
+    val startTime = System.currentTimeMillis()
+    while (true) {
+      if (condition())
+        return true
+      if (System.currentTimeMillis() > startTime + waitTime)
+        return false
+      Thread.sleep(waitTime.min(100L))
+    }
+    // should never hit here
+    throw new RuntimeException("unexpected error")
+  }
+
+  def isLeaderLocalOnBroker(topic: String, partitionId: Int, server: KafkaServer): Boolean = {
+    val partitionOpt = server.replicaManager.getPartition(topic, partitionId)
+    partitionOpt match {
+      case None => false
+      case Some(partition) =>
+        val replicaOpt = partition.leaderReplicaIfLocal
+        replicaOpt match {
+          case None => false
+          case Some(_) => true
+        }
+    }
+  }
+
+  def createRequestByteBuffer(request: RequestOrResponse): ByteBuffer = {
+    val byteBuffer = ByteBuffer.allocate(request.sizeInBytes + 2)
+    byteBuffer.putShort(request.requestId.get)
+    request.writeTo(byteBuffer)
+    byteBuffer.rewind()
+    byteBuffer
+  }
+  
 }
 
 object TestZKUtils {
-  val zookeeperConnect = "127.0.0.1:2182"  
+  val zookeeperConnect = "127.0.0.1:2182"
+}
+
+class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {
+  override def toBytes(n: Int) = n.toString.getBytes
+}
+
+class StaticPartitioner(props: VerifiableProperties = null) extends Partitioner[String] {
+  def partition(data: String, numPartitions: Int): Int = {
+    (data.length % numPartitions)
+  }
+}
+
+class HashPartitioner(props: VerifiableProperties = null) extends Partitioner[String] {
+  def partition(data: String, numPartitions: Int): Int = {
+    (data.hashCode % numPartitions)
+  }
+}
+
+class FixedValuePartitioner(props: VerifiableProperties = null) extends Partitioner[Int] {
+  def partition(data: Int, numPartitions: Int): Int = data
 }

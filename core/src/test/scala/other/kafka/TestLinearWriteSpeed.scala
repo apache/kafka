@@ -20,16 +20,22 @@ package kafka
 import java.io._
 import java.nio._
 import java.nio.channels._
+import scala.math._
 import joptsimple._
 
 object TestLinearWriteSpeed {
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser
+    val dirOpt = parser.accepts("dir", "The directory to write to.")
+                           .withRequiredArg
+                           .describedAs("path")
+                           .ofType(classOf[java.lang.String])
+                           .defaultsTo(System.getProperty("java.io.tmpdir"))
     val bytesOpt = parser.accepts("bytes", "REQUIRED: The number of bytes to write.")
                            .withRequiredArg
                            .describedAs("num_bytes")
-                           .ofType(classOf[java.lang.Integer])
+                           .ofType(classOf[java.lang.Long])
     val sizeOpt = parser.accepts("size", "REQUIRED: The size of each write.")
                            .withRequiredArg
                            .describedAs("num_bytes")
@@ -39,7 +45,18 @@ object TestLinearWriteSpeed {
                            .describedAs("num_files")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1)
-    
+   val reportingIntervalOpt = parser.accepts("reporting-interval", "The number of ms between updates.")
+                           .withRequiredArg
+                           .describedAs("ms")
+                           .ofType(classOf[java.lang.Long])
+                           .defaultsTo(1000)
+   val maxThroughputOpt = parser.accepts("max-throughput-mb", "The maximum throughput.")
+                           .withRequiredArg
+                           .describedAs("mb")
+                           .ofType(classOf[java.lang.Integer])
+                           .defaultsTo(Integer.MAX_VALUE)
+   val mmapOpt = parser.accepts("mmap", "Mmap file.")
+                          
     val options = parser.parse(args : _*)
     
     for(arg <- List(bytesOpt, sizeOpt, filesOpt)) {
@@ -50,27 +67,84 @@ object TestLinearWriteSpeed {
       }
     }
 
-    val bytesToWrite = options.valueOf(bytesOpt).intValue
+    var bytesToWrite = options.valueOf(bytesOpt).longValue
+    val mmap = options.has(mmapOpt)
     val bufferSize = options.valueOf(sizeOpt).intValue
     val numFiles = options.valueOf(filesOpt).intValue
+    val reportingInterval = options.valueOf(reportingIntervalOpt).longValue
+    val dir = options.valueOf(dirOpt)
+    val maxThroughputBytes = options.valueOf(maxThroughputOpt).intValue * 1024L * 1024L
     val buffer = ByteBuffer.allocate(bufferSize)
     while(buffer.hasRemaining)
       buffer.put(123.asInstanceOf[Byte])
     
-    val channels = new Array[FileChannel](numFiles)
+    val writables = new Array[Writable](numFiles)
     for(i <- 0 until numFiles) {
-      val file = File.createTempFile("kafka-test", ".dat")
+      val file = new File(dir, "kafka-test-" + i + ".dat")
       file.deleteOnExit()
-      channels(i) = new RandomAccessFile(file, "rw").getChannel()
+      val raf = new RandomAccessFile(file, "rw")
+      raf.setLength(bytesToWrite / numFiles)
+      if(mmap)
+        writables(i) = new MmapWritable(raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, raf.length()))
+      else
+        writables(i) = new ChannelWritable(raf.getChannel())
     }
+    bytesToWrite = (bytesToWrite / numFiles) * numFiles
     
-    val begin = System.currentTimeMillis
-    for(i <- 0 until bytesToWrite / bufferSize) {
+    println("%10s\t%10s\t%10s".format("mb_sec", "avg_latency", "max_latency"))
+    
+    val beginTest = System.nanoTime
+    var maxLatency = 0L
+    var totalLatency = 0L
+    var count = 0L
+    var written = 0L
+    var totalWritten = 0L
+    var lastReport = beginTest
+    while(totalWritten + bufferSize < bytesToWrite) {
       buffer.rewind()
-      channels(i % numFiles).write(buffer)
+      val start = System.nanoTime
+      writables((count % numFiles).toInt.abs).write(buffer)
+      val ellapsed = System.nanoTime - start
+      maxLatency = max(ellapsed, maxLatency)
+      totalLatency += ellapsed
+      written += bufferSize
+      count += 1
+      totalWritten += bufferSize
+      if((start - lastReport)/(1000.0*1000.0) > reportingInterval.doubleValue) {
+        val ellapsedSecs = (start - lastReport) / (1000.0*1000.0*1000.0)
+        val mb = written / (1024.0*1024.0)
+        println("%10.3f\t%10.3f\t%10.3f".format(mb / ellapsedSecs, totalLatency / count.toDouble / (1000.0*1000.0), maxLatency / (1000.0 * 1000.0)))
+        lastReport = start
+        written = 0
+        maxLatency = 0L
+        totalLatency = 0L
+      } else if(written > maxThroughputBytes) {
+        // if we have written enough, just sit out this reporting interval
+        val lastReportMs = lastReport / (1000*1000)
+        val now = System.nanoTime / (1000*1000)
+        val sleepMs = lastReportMs + reportingInterval - now
+        if(sleepMs > 0)
+          Thread.sleep(sleepMs)
+      }
     }
-    val ellapsedSecs = (System.currentTimeMillis - begin) / 1000.0
-    System.out.println(bytesToWrite / (1024 * 1024 * ellapsedSecs) + " MB per sec")
+    val elapsedSecs = (System.nanoTime - beginTest) / (1000.0*1000.0*1000.0)
+    println(bytesToWrite / (1024.0 * 1024.0 * elapsedSecs) + " MB per sec")
+  }
+  
+  trait Writable {
+    def write(buffer: ByteBuffer)
+  }
+  
+  class MmapWritable(val buffer: ByteBuffer) extends Writable {
+    def write(b: ByteBuffer) {
+      buffer.put(b)
+    }
+  }
+  
+  class ChannelWritable(val channel: FileChannel) extends Writable {
+    def write(b: ByteBuffer) {
+      channel.write(b)
+    }
   }
   
 }

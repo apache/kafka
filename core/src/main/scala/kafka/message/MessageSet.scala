@@ -24,9 +24,11 @@ import java.nio.channels._
  * Message set helper functions
  */
 object MessageSet {
-  
-  val LogOverhead = 4
-  val Empty: MessageSet = new ByteBufferMessageSet(ByteBuffer.allocate(0))
+
+  val MessageSizeLength = 4
+  val OffsetLength = 8
+  val LogOverhead = MessageSizeLength + OffsetLength
+  val Empty = new ByteBufferMessageSet(ByteBuffer.allocate(0))
   
   /**
    * The size of a message set containing the given messages
@@ -52,54 +54,32 @@ object MessageSet {
    */
   def entrySize(message: Message): Int = LogOverhead + message.size
 
-  def createByteBuffer(compressionCodec: CompressionCodec, messages: Message*): ByteBuffer =
-    compressionCodec match {
-      case NoCompressionCodec =>
-        val buffer = ByteBuffer.allocate(MessageSet.messageSetSize(messages))
-        for (message <- messages) {
-          message.serializeTo(buffer)
-        }
-        buffer.rewind
-        buffer
-      case _ =>
-        messages.size match {
-          case 0 =>
-            val buffer = ByteBuffer.allocate(MessageSet.messageSetSize(messages))
-            buffer.rewind
-            buffer
-          case _ =>
-            val message = CompressionUtils.compress(messages, compressionCodec)
-            val buffer = ByteBuffer.allocate(message.serializedSize)
-            message.serializeTo(buffer)
-            buffer.rewind
-            buffer
-        }
-    }
 }
 
 /**
- * A set of messages. A message set has a fixed serialized form, though the container
- * for the bytes could be either in-memory or on disk. A The format of each message is
+ * A set of messages with offsets. A message set has a fixed serialized form, though the container
+ * for the bytes could be either in-memory or on disk. The format of each message is
  * as follows:
+ * 8 byte message offset number
  * 4 byte size containing an integer N
- * N message bytes as described in the message class
+ * N message bytes as described in the Message class
  */
 abstract class MessageSet extends Iterable[MessageAndOffset] {
 
   /** Write the messages in this set to the given channel starting at the given offset byte. 
     * Less than the complete amount may be written, but no more than maxSize can be. The number
     * of bytes written is returned */
-  def writeTo(channel: GatheringByteChannel, offset: Long, maxSize: Long): Long
+  def writeTo(channel: GatheringByteChannel, offset: Long, maxSize: Int): Int
   
   /**
-   * Provides an iterator over the messages in this set
+   * Provides an iterator over the message/offset pairs in this set
    */
   def iterator: Iterator[MessageAndOffset]
   
   /**
    * Gives the total size of this message set in bytes
    */
-  def sizeInBytes: Long
+  def sizeInBytes: Int
   
   /**
    * Validate the checksum of all the messages in the set. Throws an InvalidMessageException if the checksum doesn't
@@ -111,4 +91,18 @@ abstract class MessageSet extends Iterable[MessageAndOffset] {
         throw new InvalidMessageException
   }
   
+  /**
+   * Print this message set's contents
+   */
+  override def toString: String = {
+    val builder = new StringBuilder()
+    builder.append(getClass.getSimpleName + "(")
+    for(message <- this) {
+      builder.append(message)
+      builder.append(", ")
+    }
+    builder.append(")")
+    builder.toString
+  }
+
 }

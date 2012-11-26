@@ -17,10 +17,13 @@
 
 package kafka.utils
 
+import java.util.Arrays
+import java.nio.ByteBuffer
 import org.apache.log4j.Logger
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
 import org.junit.Assert._
+import kafka.common.KafkaException
 
 
 class UtilsTest extends JUnitSuite {
@@ -29,7 +32,7 @@ class UtilsTest extends JUnitSuite {
 
   @Test
   def testSwallow() {
-    Utils.swallow(logger.info, throw new IllegalStateException("test"))
+    Utils.swallow(logger.info, throw new KafkaException("test"))
   }
 
   @Test
@@ -49,6 +52,14 @@ class UtilsTest extends JUnitSuite {
     assertEquals(1, its.next())
     assertEquals(2, its.next())
     assertEquals(1, its.next())
+  }
+  
+  @Test
+  def testReadBytes() {
+    for(testCase <- List("", "a", "abcd")) {
+      val bytes = testCase.getBytes
+      assertTrue(Arrays.equals(bytes, Utils.readBytes(ByteBuffer.wrap(bytes))))
+    }
   }
 
 }

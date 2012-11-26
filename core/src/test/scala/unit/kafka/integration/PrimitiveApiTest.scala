@@ -17,94 +17,140 @@
 
 package kafka.integration
 
-import scala.collection._
+import java.nio.ByteBuffer
 import junit.framework.Assert._
-import kafka.api.{ProducerRequest, FetchRequest}
-import kafka.common.{OffsetOutOfRangeException, InvalidPartitionException}
-import kafka.server.{KafkaRequestHandlers, KafkaConfig}
-import org.apache.log4j.{Level, Logger}
-import org.scalatest.junit.JUnit3Suite
+import kafka.api.{PartitionFetchInfo, FetchRequest, FetchRequestBuilder}
+import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import java.util.Properties
-import kafka.producer.{ProducerData, Producer, ProducerConfig}
-import kafka.serializer.StringDecoder
+import kafka.utils.Utils
+import kafka.producer.{KeyedMessage, Producer, ProducerConfig}
+import kafka.serializer._
+import kafka.message.Message
 import kafka.utils.TestUtils
-import kafka.message.{DefaultCompressionCodec, NoCompressionCodec, Message, ByteBufferMessageSet}
-import java.io.File
+import org.apache.log4j.{Level, Logger}
+import org.I0Itec.zkclient.ZkClient
+import kafka.zk.ZooKeeperTestHarness
+import org.scalatest.junit.JUnit3Suite
+import scala.collection._
+import kafka.admin.{AdminUtils, CreateTopicCommand}
+import kafka.common.{TopicAndPartition, ErrorMapping, UnknownTopicOrPartitionException, OffsetOutOfRangeException}
 
 /**
  * End to end tests of the primitive apis against a local server
  */
-class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with KafkaServerTestHarness {
+class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with ZooKeeperTestHarness {
   
   val port = TestUtils.choosePort
   val props = TestUtils.createBrokerConfig(0, port)
-  val config = new KafkaConfig(props) {
-                 override val enableZookeeper = false
-               }
+  val config = new KafkaConfig(props)
   val configs = List(config)
-  val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandlers])
+  val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
+
+  override def setUp() {
+    super.setUp
+    // temporarily set request handler logger to a higher level
+    requestHandlerLogger.setLevel(Level.FATAL)
+  }
+
+  override def tearDown() {
+    // restore set request handler logger to a higher level
+    requestHandlerLogger.setLevel(Level.ERROR)
+
+    super.tearDown
+  }
+
+  def testFetchRequestCanProperlySerialize() {
+    val request = new FetchRequestBuilder()
+      .clientId("test-client")
+      .maxWait(10001)
+      .minBytes(4444)
+      .addFetch("topic1", 0, 0, 10000)
+      .addFetch("topic2", 1, 1024, 9999)
+      .addFetch("topic1", 1, 256, 444)
+      .build()
+    val serializedBuffer = ByteBuffer.allocate(request.sizeInBytes)
+    request.writeTo(serializedBuffer)
+    serializedBuffer.rewind()
+    val deserializedRequest = FetchRequest.readFrom(serializedBuffer)
+    assertEquals(request, deserializedRequest)
+  }
+
+  def testEmptyFetchRequest() {
+    val partitionRequests = immutable.Map[TopicAndPartition, PartitionFetchInfo]()
+    val request = new FetchRequest(requestInfo = partitionRequests)
+    val fetched = consumer.fetch(request)
+    assertTrue(!fetched.hasError && fetched.data.size == 0)
+  }
 
   def testDefaultEncoderProducerAndFetch() {
     val topic = "test-topic"
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("broker.list", "0:localhost:" + port)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     val config = new ProducerConfig(props)
 
     val stringProducer1 = new Producer[String, String](config)
-    stringProducer1.send(new ProducerData[String, String](topic, "test", Array("test-message")))
-    Thread.sleep(200)
+    stringProducer1.send(new KeyedMessage[String, String](topic, "test-message"))
 
-    var fetched = consumer.fetch(new FetchRequest(topic, 0, 0, 10000))
-    assertTrue(fetched.iterator.hasNext)
+    val replica = servers.head.replicaManager.getReplica(topic, 0).get
+    assertTrue("HighWatermark should equal logEndOffset with just 1 replica",
+               replica.logEndOffset > 0 && replica.logEndOffset == replica.highWatermark)
 
-    val fetchedMessageAndOffset = fetched.iterator.next
-    val stringDecoder = new StringDecoder
-    val fetchedStringMessage = stringDecoder.toEvent(fetchedMessageAndOffset.message)
-    assertEquals("test-message", fetchedStringMessage)
+    val request = new FetchRequestBuilder()
+      .clientId("test-client")
+      .addFetch(topic, 0, 0, 10000)
+      .build()
+    val fetched = consumer.fetch(request)
+    assertEquals("Returned correlationId doesn't match that in request.", 0, fetched.correlationId)
+
+    val messageSet = fetched.messageSet(topic, 0)
+    assertTrue(messageSet.iterator.hasNext)
+
+    val fetchedMessageAndOffset = messageSet.head
+    assertEquals("test-message", Utils.readString(fetchedMessageAndOffset.message.payload, "UTF-8"))
   }
 
   def testDefaultEncoderProducerAndFetchWithCompression() {
     val topic = "test-topic"
     val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("broker.list", "0:localhost:" + port)
+    props.put("serializer.class", classOf[StringEncoder].getName.toString)
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("compression", "true")
     val config = new ProducerConfig(props)
 
     val stringProducer1 = new Producer[String, String](config)
-    stringProducer1.send(new ProducerData[String, String](topic, "test", Array("test-message")))
-    Thread.sleep(200)
+    stringProducer1.send(new KeyedMessage[String, String](topic, "test-message"))
 
-    var fetched = consumer.fetch(new FetchRequest(topic, 0, 0, 10000))
-    assertTrue(fetched.iterator.hasNext)
+    var fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+    val messageSet = fetched.messageSet(topic, 0)
+    assertTrue(messageSet.iterator.hasNext)
 
-    val fetchedMessageAndOffset = fetched.iterator.next
-    val stringDecoder = new StringDecoder
-    val fetchedStringMessage = stringDecoder.toEvent(fetchedMessageAndOffset.message)
-    assertEquals("test-message", fetchedStringMessage)
+    val fetchedMessageAndOffset = messageSet.head
+    assertEquals("test-message", Utils.readString(fetchedMessageAndOffset.message.payload, "UTF-8"))
   }
 
   def testProduceAndMultiFetch() {
+    createSimpleTopicsAndAwaitLeader(zkClient, List("test1", "test2", "test3", "test4"), config.brokerId)
+
     // send some messages
-    val topics = List("test1", "test2", "test3");
+    val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
     {
-      val messages = new mutable.HashMap[String, ByteBufferMessageSet]
-      val fetches = new mutable.ArrayBuffer[FetchRequest]
-      for(topic <- topics) {
-        val set = new ByteBufferMessageSet(NoCompressionCodec,
-                                           new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-        messages += topic -> set
-        producer.send(topic, set)
-        set.getBuffer.rewind
-        fetches += new FetchRequest(topic, 0, 0, 10000)
+      val messages = new mutable.HashMap[String, Seq[String]]
+      val builder = new FetchRequestBuilder()
+      for( (topic, partition) <- topics) {
+        val messageList = List("a_" + topic, "b_" + topic)
+        val producerData = messageList.map(new KeyedMessage[String, String](topic, topic, _))
+        messages += topic -> messageList
+        producer.send(producerData:_*)
+        builder.addFetch(topic, partition, 0, 10000)
       }
 
-      // wait a bit for produced message to be available
-      Thread.sleep(700)
-      val response = consumer.multifetch(fetches: _*)
-      for((topic, resp) <- topics.zip(response.toList))
-        TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+      val request = builder.build()
+      val response = consumer.fetch(request)
+      for((topic, partition) <- topics) {
+        val fetched = response.messageSet(topic, partition)
+        assertEquals(messages(topic), fetched.map(messageAndOffset => Utils.readString(messageAndOffset.message.payload)))
+      }
     }
 
     // temporarily set request handler logger to a higher level
@@ -112,35 +158,33 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
     {
       // send some invalid offsets
-      val fetches = new mutable.ArrayBuffer[FetchRequest]
-      for(topic <- topics)
-        fetches += new FetchRequest(topic, 0, -1, 10000)
+      val builder = new FetchRequestBuilder()
+      for((topic, partition) <- topics)
+        builder.addFetch(topic, partition, -1, 10000)
 
       try {
-        val responses = consumer.multifetch(fetches: _*)
-        for(resp <- responses)
-          resp.iterator
-        fail("expect exception")
-      }
-      catch {
+        val request = builder.build()
+        val response = consumer.fetch(request)
+        response.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
+        fail("Expected exception when fetching message with invalid offset")
+      } catch {
         case e: OffsetOutOfRangeException => "this is good"
       }
-    }    
+    }
 
     {
       // send some invalid partitions
-      val fetches = new mutable.ArrayBuffer[FetchRequest]
-      for(topic <- topics)
-        fetches += new FetchRequest(topic, -1, 0, 10000)
+      val builder = new FetchRequestBuilder()
+      for((topic, partition) <- topics)
+        builder.addFetch(topic, -1, 0, 10000)
 
       try {
-        val responses = consumer.multifetch(fetches: _*)
-        for(resp <- responses)
-          resp.iterator
-        fail("expect exception")
-      }
-      catch {
-        case e: InvalidPartitionException => "this is good"
+        val request = builder.build()
+        val response = consumer.fetch(request)
+        response.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
+        fail("Expected exception when fetching message with invalid partition")
+      } catch {
+        case e: UnknownTopicOrPartitionException => "this is good"
       }
     }
 
@@ -149,25 +193,28 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   }
 
   def testProduceAndMultiFetchWithCompression() {
+    createSimpleTopicsAndAwaitLeader(zkClient, List("test1", "test2", "test3", "test4"), config.brokerId)
+
     // send some messages
-    val topics = List("test1", "test2", "test3");
+    val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
     {
-      val messages = new mutable.HashMap[String, ByteBufferMessageSet]
-      val fetches = new mutable.ArrayBuffer[FetchRequest]
-      for(topic <- topics) {
-        val set = new ByteBufferMessageSet(DefaultCompressionCodec,
-                                           new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-        messages += topic -> set
-        producer.send(topic, set)
-        set.getBuffer.rewind
-        fetches += new FetchRequest(topic, 0, 0, 10000)
+      val messages = new mutable.HashMap[String, Seq[String]]
+      val builder = new FetchRequestBuilder()
+      for( (topic, partition) <- topics) {
+        val messageList = List("a_" + topic, "b_" + topic)
+        val producerData = messageList.map(new KeyedMessage[String, String](topic, topic, _))
+        messages += topic -> messageList
+        producer.send(producerData:_*)
+        builder.addFetch(topic, partition, 0, 10000)
       }
 
       // wait a bit for produced message to be available
-      Thread.sleep(200)
-      val response = consumer.multifetch(fetches: _*)
-      for((topic, resp) <- topics.zip(response.toList))
-        TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+      val request = builder.build()
+      val response = consumer.fetch(request)
+      for( (topic, partition) <- topics) {
+        val fetched = response.messageSet(topic, partition)
+        assertEquals(messages(topic), fetched.map(messageAndOffset => Utils.readString(messageAndOffset.message.payload)))
+      }
     }
 
     // temporarily set request handler logger to a higher level
@@ -175,35 +222,33 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
     {
       // send some invalid offsets
-      val fetches = new mutable.ArrayBuffer[FetchRequest]
-      for(topic <- topics)
-        fetches += new FetchRequest(topic, 0, -1, 10000)
+      val builder = new FetchRequestBuilder()
+      for( (topic, partition) <- topics)
+        builder.addFetch(topic, partition, -1, 10000)
 
       try {
-        val responses = consumer.multifetch(fetches: _*)
-        for(resp <- responses)
-          resp.iterator
-        fail("expect exception")
-      }
-      catch {
+        val request = builder.build()
+        val response = consumer.fetch(request)
+        response.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
+        fail("Expected exception when fetching message with invalid offset")
+      } catch {
         case e: OffsetOutOfRangeException => "this is good"
       }
     }
 
     {
       // send some invalid partitions
-      val fetches = new mutable.ArrayBuffer[FetchRequest]
-      for(topic <- topics)
-        fetches += new FetchRequest(topic, -1, 0, 10000)
+      val builder = new FetchRequestBuilder()
+      for( (topic, _) <- topics)
+        builder.addFetch(topic, -1, 0, 10000)
 
       try {
-        val responses = consumer.multifetch(fetches: _*)
-        for(resp <- responses)
-          resp.iterator
-        fail("expect exception")
-      }
-      catch {
-        case e: InvalidPartitionException => "this is good"
+        val request = builder.build()
+        val response = consumer.fetch(request)
+        response.data.values.foreach(pdata => ErrorMapping.maybeThrowException(pdata.error))
+        fail("Expected exception when fetching message with invalid partition")
+      } catch {
+        case e: UnknownTopicOrPartitionException => "this is good"
       }
     }
 
@@ -212,60 +257,73 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   }
 
   def testMultiProduce() {
-    // send some messages
-    val topics = List("test1", "test2", "test3");
-    val messages = new mutable.HashMap[String, ByteBufferMessageSet]
-    val fetches = new mutable.ArrayBuffer[FetchRequest]
-    var produceList: List[ProducerRequest] = Nil
-    for(topic <- topics) {
-      val set = new ByteBufferMessageSet(NoCompressionCodec,
-                                         new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-      messages += topic -> set
-      produceList ::= new ProducerRequest(topic, 0, set)
-      fetches += new FetchRequest(topic, 0, 0, 10000)
-    }
-    producer.multiSend(produceList.toArray)
+    createSimpleTopicsAndAwaitLeader(zkClient, List("test1", "test2", "test3", "test4"), config.brokerId)
 
-    for (messageSet <- messages.values)
-      messageSet.getBuffer.rewind
-      
+    // send some messages
+    val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
+    val messages = new mutable.HashMap[String, Seq[String]]
+    val builder = new FetchRequestBuilder()
+    var produceList: List[KeyedMessage[String, String]] = Nil
+    for( (topic, partition) <- topics) {
+      val messageList = List("a_" + topic, "b_" + topic)
+      val producerData = messageList.map(new KeyedMessage[String, String](topic, topic, _))
+      messages += topic -> messageList
+      producer.send(producerData:_*)
+      builder.addFetch(topic, partition, 0, 10000)
+    }
+    producer.send(produceList: _*)
+
     // wait a bit for produced message to be available
-    Thread.sleep(200)
-    val response = consumer.multifetch(fetches: _*)
-    for((topic, resp) <- topics.zip(response.toList))
-      TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+    val request = builder.build()
+    val response = consumer.fetch(request)
+    for( (topic, partition) <- topics) {
+      val fetched = response.messageSet(topic, partition)
+      assertEquals(messages(topic), fetched.map(messageAndOffset => Utils.readString(messageAndOffset.message.payload)))
+    }
   }
 
   def testMultiProduceWithCompression() {
     // send some messages
-    val topics = List("test1", "test2", "test3");
-    val messages = new mutable.HashMap[String, ByteBufferMessageSet]
-    val fetches = new mutable.ArrayBuffer[FetchRequest]
-    var produceList: List[ProducerRequest] = Nil
-    for(topic <- topics) {
-      val set = new ByteBufferMessageSet(DefaultCompressionCodec,
-                                         new Message(("a_" + topic).getBytes), new Message(("b_" + topic).getBytes))
-      messages += topic -> set
-      produceList ::= new ProducerRequest(topic, 0, set)
-      fetches += new FetchRequest(topic, 0, 0, 10000)
+    val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
+    val messages = new mutable.HashMap[String, Seq[String]]
+    val builder = new FetchRequestBuilder()
+    var produceList: List[KeyedMessage[String, String]] = Nil
+    for( (topic, partition) <- topics) {
+      val messageList = List("a_" + topic, "b_" + topic)
+      val producerData = messageList.map(new KeyedMessage[String, String](topic, topic, _))
+      messages += topic -> messageList
+      producer.send(producerData:_*)
+      builder.addFetch(topic, partition, 0, 10000)
     }
-    producer.multiSend(produceList.toArray)
-
-    for (messageSet <- messages.values)
-      messageSet.getBuffer.rewind
+    producer.send(produceList: _*)
 
     // wait a bit for produced message to be available
-    Thread.sleep(200)
-    val response = consumer.multifetch(fetches: _*)
-    for((topic, resp) <- topics.zip(response.toList))
-      TestUtils.checkEquals(messages(topic).iterator, resp.iterator)
+    val request = builder.build()
+    val response = consumer.fetch(request)
+    for( (topic, partition) <- topics) {
+      val fetched = response.messageSet(topic, 0)
+      assertEquals(messages(topic), fetched.map(messageAndOffset => Utils.readString(messageAndOffset.message.payload)))
+    }
   }
 
-  def testConsumerNotExistTopic() {
+  def testConsumerEmptyTopic() {
     val newTopic = "new-topic"
-    val messageSetIter = consumer.fetch(new FetchRequest(newTopic, 0, 0, 10000)).iterator
-    assertTrue(messageSetIter.hasNext == false)
-    val logFile = new File(config.logDir, newTopic + "-0")
-    assertTrue(!logFile.exists)
+    CreateTopicCommand.createTopic(zkClient, newTopic, 1, 1, config.brokerId.toString)
+    assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
+      AdminUtils.fetchTopicMetadataFromZk(newTopic, zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, newTopic, 0, 500)
+    val fetchResponse = consumer.fetch(new FetchRequestBuilder().addFetch(newTopic, 0, 0, 10000).build())
+    assertFalse(fetchResponse.messageSet(newTopic, 0).iterator.hasNext)
+  }
+
+  /**
+   * For testing purposes, just create these topics each with one partition and one replica for
+   * which the provided broker should the leader for.  Create and wait for broker to lead.  Simple.
+   */
+  def createSimpleTopicsAndAwaitLeader(zkClient: ZkClient, topics: Seq[String], brokerId: Int) {
+    for( topic <- topics ) {
+      CreateTopicCommand.createTopic(zkClient, topic, 1, 1, brokerId.toString)
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
+    }
   }
 }

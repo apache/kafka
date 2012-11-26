@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
 import org.apache.log4j.Logger
 import kafka.message.Message
-import kafka.utils.Utils
+import kafka.utils.ZkUtils
 import java.util.{Random, Properties}
 import kafka.consumer._
 import java.text.SimpleDateFormat
@@ -48,18 +48,18 @@ object ConsumerPerformance {
     }
 
     // clean up zookeeper state for this group id for every perf run
-    Utils.tryCleanupZookeeper(config.consumerConfig.zkConnect, config.consumerConfig.groupId)
+    ZkUtils.maybeDeletePath(config.consumerConfig.zkConnect, "/consumers/" + config.consumerConfig.groupId)
 
     val consumerConnector: ConsumerConnector = Consumer.create(config.consumerConfig)
 
-    val topicMessageStreams = consumerConnector.createMessageStreams(Predef.Map(config.topic -> config.numThreads))
+    val topicMessageStreams = consumerConnector.createMessageStreams(Map(config.topic -> config.numThreads))
     var threadList = List[ConsumerPerfThread]()
     for ((topic, streamList) <- topicMessageStreams)
       for (i <- 0 until streamList.length)
         threadList ::= new ConsumerPerfThread(i, "kafka-zk-consumer-" + i, streamList(i), config,
                                               totalMessagesRead, totalBytesRead)
 
-    logger.info("Sleeping for 1000 seconds.")
+    logger.info("Sleeping for 1 second.")
     Thread.sleep(1000)
     logger.info("starting threads")
     val startMs = System.currentTimeMillis
@@ -86,6 +86,10 @@ object ConsumerPerformance {
                            .withRequiredArg
                            .describedAs("urls")
                            .ofType(classOf[String])
+    val topicOpt = parser.accepts("topic", "REQUIRED: The topic to consume from.")
+      .withRequiredArg
+      .describedAs("topic")
+      .ofType(classOf[String])
     val groupIdOpt = parser.accepts("group", "The group id to consume on.")
                            .withRequiredArg
                            .describedAs("gid")
@@ -136,7 +140,7 @@ object ConsumerPerformance {
     val hideHeader = options.has(hideHeaderOpt)
   }
 
-  class ConsumerPerfThread(threadId: Int, name: String, stream: KafkaStream[Message],
+  class ConsumerPerfThread(threadId: Int, name: String, stream: KafkaStream[Array[Byte], Array[Byte]],
                            config:ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong)
     extends Thread(name) {
     private val shutdownLatch = new CountDownLatch(1)
@@ -156,7 +160,7 @@ object ConsumerPerformance {
       try {
         for (messageAndMetadata <- stream if messagesRead < config.numMessages) {
           messagesRead += 1
-          bytesRead += messageAndMetadata.message.payloadSize
+          bytesRead += messageAndMetadata.message.length
 
           if (messagesRead % config.reportingInterval == 0) {
             if(config.showDetailedStats)

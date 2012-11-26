@@ -17,14 +17,14 @@
 
 package kafka
 
+
+import metrics.KafkaMetricsReporter
 import server.{KafkaConfig, KafkaServerStartable, KafkaServer}
 import utils.{Utils, Logging}
-
 
 object Kafka extends Logging {
 
   def main(args: Array[String]): Unit = {
-
     if (args.length != 1) {
       println("USAGE: java [options] %s server.properties".format(classOf[KafkaServer].getSimpleName()))
       System.exit(1)
@@ -33,16 +33,15 @@ object Kafka extends Logging {
     try {
       val props = Utils.loadProps(args(0))
       val serverConfig = new KafkaConfig(props)
-
+      KafkaMetricsReporter.startReporters(serverConfig.props)
       val kafkaServerStartble = new KafkaServerStartable(serverConfig)
 
       // attach shutdown handler to catch control-c
       Runtime.getRuntime().addShutdownHook(new Thread() {
         override def run() = {
           kafkaServerStartble.shutdown
-          kafkaServerStartble.awaitShutdown
         }
-      });
+      })
 
       kafkaServerStartble.startup
       kafkaServerStartble.awaitShutdown
