@@ -89,7 +89,7 @@ object ConsoleConsumer extends Logging {
             .withRequiredArg
             .describedAs("class")
             .ofType(classOf[String])
-            .defaultsTo(classOf[NewlineMessageFormatter].getName)
+            .defaultsTo(classOf[DefaultMessageFormatter].getName)
     val messageFormatterArgOpt = parser.accepts("property")
             .withRequiredArg
             .describedAs("prop")
@@ -256,10 +256,27 @@ trait MessageFormatter {
   def close() {}
 }
 
-class NewlineMessageFormatter extends MessageFormatter {
+class DefaultMessageFormatter extends MessageFormatter {
+  var printKey = false
+  var keySeparator = "\t".getBytes
+  var lineSeparator = "\n".getBytes
+  
+  override def init(props: Properties) {
+    if(props.containsKey("print.key"))
+      printKey = props.getProperty("print.key").trim.toLowerCase.equals("true")
+    if(props.containsKey("key.separator"))
+      keySeparator = props.getProperty("key.separator").getBytes
+    if(props.containsKey("line.separator"))
+      lineSeparator = props.getProperty("line.separator").getBytes
+  }
+  
   def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
+    if(printKey) {
+      output.write(key)
+      output.write(keySeparator)
+    }
     output.write(value)
-    output.write('\n')
+    output.write(lineSeparator)
   }
 }
 

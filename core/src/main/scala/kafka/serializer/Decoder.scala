@@ -37,13 +37,6 @@ class DefaultDecoder(props: VerifiableProperties = null) extends Decoder[Array[B
 }
 
 /**
- * Decode messages without any key
- */
-class KeylessMessageDecoder(props: VerifiableProperties = null) extends Decoder[Message] {
-  def fromBytes(bytes: Array[Byte]) = new Message(bytes)
-}
-
-/**
  * The string encoder translates strings into bytes. It uses UTF8 by default but takes
  * an optional property serializer.encoding to control this.
  */

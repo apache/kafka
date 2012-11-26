@@ -74,7 +74,7 @@ object SimpleConsumerShell extends Logging {
                            .withRequiredArg
                            .describedAs("class")
                            .ofType(classOf[String])
-                           .defaultsTo(classOf[NewlineMessageFormatter].getName)
+                           .defaultsTo(classOf[DefaultMessageFormatter].getName)
     val messageFormatterArgOpt = parser.accepts("property")
                            .withRequiredArg
                            .describedAs("prop")
