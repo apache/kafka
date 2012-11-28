@@ -1,0 +1,72 @@
+** Please note that the following commands should be executed
+   after downloading the kafka source code to build all the
+   required binaries:
+   1. <kafka install dir>/ $ ./sbt update
+   2. <kafka install dir>/ $ ./sbt package
+
+   Now you are ready to follow the steps below.
+
+This script performs broker failure tests in an environment with
+Mirrored Source & Target clusters in a single machine:
+
+1. Start a cluster of Kafka source brokers
+2. Start a cluster of Kafka target brokers
+3. Start one or more Mirror Maker to create mirroring between
+   source and target clusters
+4. A producer produces batches of messages to the SOURCE brokers
+   in the background
+5. The Kafka SOURCE, TARGET brokers and Mirror Maker will be
+   terminated in a round-robin fashion and wait for the consumer
+   to catch up.
+6. Repeat step 5 as many times as specified in the script
+7. An independent ConsoleConsumer in publish/subcribe mode to
+   consume messages from the SOURCE brokers cluster
+8. An independent ConsoleConsumer in publish/subcribe mode to
+   consume messages from the TARGET brokers cluster
+
+Expected results:
+==================
+There should not be any discrepancies by comparing the unique 
+message checksums from the source ConsoleConsumer and the 
+target ConsoleConsumer.
+
+Notes:
+==================
+The number of Kafka SOURCE brokers can be increased as follows:
+1. Update the value of $num_kafka_source_server in this script
+2. Make sure that there are corresponding number of prop files:
+   $base_dir/config/server_source{1..4}.properties
+
+The number of Kafka TARGET brokers can be increased as follows:
+1. Update the value of $num_kafka_target_server in this script
+2. Make sure that there are corresponding number of prop files:
+   $base_dir/config/server_target{1..3}.properties
+
+Quick Start:
+==================
+In the directory <kafka home>/system_test/broker_failure,
+execute this script as following:
+  $ bin/run-test.sh -n <num of iterations> -s <servers to bounce>
+
+num of iterations - the number of iterations that the test runs
+
+servers to bounce - the servers to be bounced in a round-robin fashion.
+
+    Values to be entered:
+        1 - source broker
+        2 - mirror maker
+        3 - target broker
+
+    Example:
+        * To bounce only mirror maker and target broker
+          in turns, enter the value 23.
+        * To bounce only mirror maker, enter the value 2.
+        * To run the test without bouncing, enter 0.
+
+At the end of the test, the received messages checksums in both
+SOURCE & TARGET will be compared. If all checksums are matched,
+the test is PASSED. Otherwise, the test is FAILED.
+
+In the event of failure, by default the brokers and zookeepers
+remain running to make it easier to debug the issue - hit Ctrl-C
+to shut them down. 
