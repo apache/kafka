@@ -210,12 +210,8 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       warn("Failed to send to broker %d with data %s".format(brokerId, messagesPerTopic))
       messagesPerTopic.keys.toSeq
     } else if(messagesPerTopic.size > 0) {
-      val topicPartitionDataPairs = messagesPerTopic.toSeq.map {
-        case (topicAndPartition, messages) =>
-          (topicAndPartition, messages)
-      }
       val producerRequest = new ProducerRequest(config.correlationId, config.clientId, config.requiredAcks,
-        config.requestTimeoutMs, Map(topicPartitionDataPairs:_*))
+        config.requestTimeoutMs, messagesPerTopic)
       try {
         val syncProducer = producerPool.getProducer(brokerId)
         val response = syncProducer.send(producerRequest)
