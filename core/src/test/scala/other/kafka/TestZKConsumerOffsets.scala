@@ -18,7 +18,6 @@
 package kafka
 
 import consumer._
-import message.Message
 import utils.Utils
 import java.util.concurrent.CountDownLatch
 

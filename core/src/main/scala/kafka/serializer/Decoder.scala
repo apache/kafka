@@ -17,7 +17,6 @@
 
 package kafka.serializer
 
-import kafka.message._
 import kafka.utils.VerifiableProperties
 
 /**

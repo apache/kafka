@@ -13,37 +13,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 
-package kafka
+package kafka.common
 
-import org.apache.log4j.PropertyConfigurator
-import kafka.utils.Logging
-import serializer.Encoder
-
-object TestKafkaAppender extends Logging {
-  
-  def main(args:Array[String]) {
-    
-    if(args.length < 1) {
-      println("USAGE: " + TestKafkaAppender.getClass.getName + " log4j_config")
-      System.exit(1)
-    }
-
-    try {
-      PropertyConfigurator.configure(args(0))
-    } catch {
-      case e: Exception => System.err.println("KafkaAppender could not be initialized ! Exiting..")
-      e.printStackTrace()
-      System.exit(1)
-    }
-
-    for(i <- 1 to 10)
-      info("test")    
-  }
+class InvalidClientIdException(message: String) extends RuntimeException(message) {
+  def this() = this(null)
 }
-
-class AppenderStringSerializer(encoding: String = "UTF-8") extends Encoder[AnyRef] {
-  def toBytes(event: AnyRef): Array[Byte] = event.toString.getBytes(encoding)
-}
-

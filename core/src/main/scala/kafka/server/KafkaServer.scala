@@ -23,7 +23,7 @@ import kafka.utils._
 import java.util.concurrent._
 import atomic.AtomicBoolean
 import org.I0Itec.zkclient.ZkClient
-import kafka.controller.{ControllerStat, KafkaController}
+import kafka.controller.{ControllerStats, KafkaController}
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
@@ -96,9 +96,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
    *  Forces some dynamic jmx beans to be registered on server startup.
    */
   private def registerStats() {
-    BrokerTopicStat.getBrokerAllTopicStat()
-    ControllerStat.offlinePartitionRate
-    ControllerStat.uncleanLeaderElectionRate
+    BrokerTopicStats.getBrokerAllTopicStats()
+    ControllerStats.offlinePartitionRate
+    ControllerStats.uncleanLeaderElectionRate
   }
 
   /**

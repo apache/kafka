@@ -68,11 +68,11 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
 
   /**
    * It updates the cache by issuing a get topic metadata request to a random broker.
-   * @param topic the topic for which the metadata is to be fetched
+   * @param topics the topics for which the metadata is to be fetched
    */
-  def updateInfo(topics: Set[String]) = {
+  def updateInfo(topics: Set[String]) {
     var topicsMetadata: Seq[TopicMetadata] = Nil
-    val topicMetadataResponse = ClientUtils.fetchTopicMetadata(topics, brokers)
+    val topicMetadataResponse = ClientUtils.fetchTopicMetadata(topics, producerConfig.clientId, brokers)
     topicsMetadata = topicMetadataResponse.topicsMetadata
     // throw partition specific exception
     topicsMetadata.foreach(tmd =>{

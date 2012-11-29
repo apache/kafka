@@ -18,8 +18,6 @@
 package kafka.serializer
 
 import kafka.utils.VerifiableProperties
-import kafka.message._
-import kafka.utils.Utils
 
 /**
  * An encoder is a method of turning objects into byte arrays.

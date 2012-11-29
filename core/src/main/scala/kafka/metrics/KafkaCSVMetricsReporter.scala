@@ -24,7 +24,6 @@ import com.yammer.metrics.Metrics
 import java.io.File
 import com.yammer.metrics.reporting.CsvReporter
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicBoolean
 import kafka.utils.{Utils, VerifiableProperties, Logging}
 
 

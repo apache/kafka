@@ -44,7 +44,7 @@ trait SyncProducerConfigShared {
   val correlationId = props.getInt("producer.request.correlation_id", SyncProducerConfig.DefaultCorrelationId)
 
   /* the client application sending the producer requests */
-  val clientId = props.getString("producer.request.client_id",SyncProducerConfig.DefaultClientId)
+  val clientId = props.getString("clientid", SyncProducerConfig.DefaultClientId)
 
   /*
    * The required acks of the producer requests - negative value means ack

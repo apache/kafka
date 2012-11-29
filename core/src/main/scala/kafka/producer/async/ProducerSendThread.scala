@@ -28,12 +28,13 @@ class ProducerSendThread[K,V](val threadName: String,
                               val queue: BlockingQueue[KeyedMessage[K,V]],
                               val handler: EventHandler[K,V],
                               val queueTime: Long,
-                              val batchSize: Int) extends Thread(threadName) with Logging with KafkaMetricsGroup {
+                              val batchSize: Int,
+                              val clientId: String) extends Thread(threadName) with Logging with KafkaMetricsGroup {
 
   private val shutdownLatch = new CountDownLatch(1)
   private val shutdownCommand = new KeyedMessage[K,V]("shutdown", null.asInstanceOf[K], null.asInstanceOf[V])
 
-  newGauge("ProducerQueueSize-" + getId,
+  newGauge(clientId + "-ProducerQueueSize-" + getId,
           new Gauge[Int] {
             def getValue = queue.size
           })

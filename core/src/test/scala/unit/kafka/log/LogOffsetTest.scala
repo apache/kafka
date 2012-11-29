@@ -53,7 +53,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     logDir = new File(logDirPath)
     time = new MockTime()
     server = TestUtils.createServer(new KafkaConfig(config), time)
-    simpleConsumer = new SimpleConsumer("localhost", brokerPort, 1000000, 64*1024)
+    simpleConsumer = new SimpleConsumer("localhost", brokerPort, 1000000, 64*1024, "")
   }
 
   @After

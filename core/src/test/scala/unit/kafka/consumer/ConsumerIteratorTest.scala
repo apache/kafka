@@ -55,7 +55,8 @@ class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
                                                            queue,
                                                            new AtomicLong(consumedOffset),
                                                            new AtomicLong(0),
-                                                           new AtomicInteger(0)))
+                                                           new AtomicInteger(0),
+                                                           new ConsumerTopicStats("")))
   val consumerConfig = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer0))
 
   override def setUp() {
@@ -78,7 +79,8 @@ class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
                                                     consumerConfig.consumerTimeoutMs,
                                                     new StringDecoder(), 
                                                     new StringDecoder(),
-                                                    enableShallowIterator = false)
+                                                    enableShallowIterator = false,
+                                                    consumerTopicStats = new ConsumerTopicStats(""))
     var receivedMessages = (0 until 5).map(i => iter.next.message).toList
 
     assertFalse(iter.hasNext)

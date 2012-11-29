@@ -20,7 +20,6 @@ package kafka.producer
 import scala.collection.JavaConversions._
 import joptsimple._
 import java.util.Properties
-import java.util.regex._
 import java.io._
 import kafka.common._
 import kafka.message._

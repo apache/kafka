@@ -17,7 +17,7 @@
 
 package kafka.producer
 
-import java.util.{LinkedList, Properties}
+import java.util.Properties
 import java.util.concurrent.LinkedBlockingQueue
 import junit.framework.Assert._
 import org.easymock.EasyMock
@@ -68,7 +68,10 @@ class AsyncProducerTest extends JUnit3Suite {
 
     val config = new ProducerConfig(props)
     val produceData = getProduceData(12)
-    val producer = new Producer[String, String](config, mockEventHandler)
+    val producer = new Producer[String, String](config,
+                                                mockEventHandler,
+                                                new ProducerStats(""),
+                                                new ProducerTopicStats(""))
     try {
       // send all 10 messages, should hit the batch size and then reach broker
       producer.send(produceData: _*)
@@ -118,7 +121,7 @@ class AsyncProducerTest extends JUnit3Suite {
 
     val queue = new LinkedBlockingQueue[KeyedMessage[String,String]](10)
     val producerSendThread =
-      new ProducerSendThread[String,String]("thread1", queue, mockHandler, Integer.MAX_VALUE, 5)
+      new ProducerSendThread[String,String]("thread1", queue, mockHandler, Integer.MAX_VALUE, 5, "")
     producerSendThread.start()
 
     for (producerData <- producerDataList)
@@ -143,7 +146,7 @@ class AsyncProducerTest extends JUnit3Suite {
     val queueExpirationTime = 200
     val queue = new LinkedBlockingQueue[KeyedMessage[String,String]](10)
     val producerSendThread =
-      new ProducerSendThread[String,String]("thread1", queue, mockHandler, queueExpirationTime, 5)
+      new ProducerSendThread[String,String]("thread1", queue, mockHandler, queueExpirationTime, 5, "")
     producerSendThread.start()
 
     for (producerData <- producerDataList)
@@ -185,11 +188,13 @@ class AsyncProducerTest extends JUnit3Suite {
 
     val producerPool = new ProducerPool(config)
     val handler = new DefaultEventHandler[Int,String](config,
-                                                         partitioner = intPartitioner,
-                                                         encoder = null.asInstanceOf[Encoder[String]],
-                                                         keyEncoder = new IntEncoder(),
-                                                         producerPool = producerPool,
-                                                         topicPartitionInfos)
+                                                      partitioner = intPartitioner,
+                                                      encoder = null.asInstanceOf[Encoder[String]],
+                                                      keyEncoder = new IntEncoder(),
+                                                      producerPool = producerPool,
+                                                      topicPartitionInfos = topicPartitionInfos,
+                                                      producerStats = new ProducerStats(""),
+                                                      producerTopicStats = new ProducerTopicStats(""))
 
     val topic1Broker1Data = 
       ArrayBuffer[KeyedMessage[Int,Message]](new KeyedMessage[Int,Message]("topic1", 0, new Message("msg1".getBytes)),
@@ -228,8 +233,9 @@ class AsyncProducerTest extends JUnit3Suite {
                                                          encoder = new StringEncoder,
                                                          keyEncoder = new StringEncoder,
                                                          producerPool = producerPool,
-                                                         topicPartitionInfos
-    )
+                                                         topicPartitionInfos = topicPartitionInfos,
+                                                         producerStats = new ProducerStats(""),
+                                                         producerTopicStats = new ProducerTopicStats(""))
 
     val serializedData = handler.serialize(produceData)
     val deserializedData = serializedData.map(d => new KeyedMessage[String,String](d.topic, Utils.readString(d.message.payload)))
@@ -257,7 +263,9 @@ class AsyncProducerTest extends JUnit3Suite {
                                                          encoder = null.asInstanceOf[Encoder[String]],
                                                          keyEncoder = null.asInstanceOf[Encoder[String]],
                                                          producerPool = producerPool,
-                                                         topicPartitionInfos)
+                                                         topicPartitionInfos = topicPartitionInfos,
+                                                         producerStats = new ProducerStats(""),
+                                                         producerTopicStats = new ProducerTopicStats(""))
     try {
       handler.partitionAndCollate(producerDataList)
       fail("Should fail with UnknownTopicOrPartitionException")
@@ -288,7 +296,9 @@ class AsyncProducerTest extends JUnit3Suite {
                                                          encoder = new StringEncoder,
                                                          keyEncoder = new StringEncoder,
                                                          producerPool = producerPool,
-                                                         topicPartitionInfos)
+                                                         topicPartitionInfos = topicPartitionInfos,
+                                                         producerStats = new ProducerStats(""),
+                                                         producerTopicStats = new ProducerTopicStats(""))
     try {
       handler.handle(producerDataList)
       fail("Should fail with NoBrokersForPartitionException")
@@ -335,7 +345,9 @@ class AsyncProducerTest extends JUnit3Suite {
                                                          encoder = null.asInstanceOf[Encoder[String]],
                                                          keyEncoder = null.asInstanceOf[Encoder[String]],
                                                          producerPool = producerPool,
-                                                         topicPartitionInfos)
+                                                         topicPartitionInfos = topicPartitionInfos,
+                                                         producerStats = new ProducerStats(""),
+                                                         producerTopicStats = new ProducerTopicStats(""))
     val producerDataList = new ArrayBuffer[KeyedMessage[String,Message]]
     producerDataList.append(new KeyedMessage[String,Message]("topic1", new Message("msg1".getBytes)))
     producerDataList.append(new KeyedMessage[String,Message]("topic2", new Message("msg2".getBytes)))
@@ -373,14 +385,19 @@ class AsyncProducerTest extends JUnit3Suite {
 
     val msgs = TestUtils.getMsgStrings(10)
 
-    val handler = new DefaultEventHandler[String,String]( config,
-                                                          partitioner = null.asInstanceOf[Partitioner[String]],
-                                                          encoder = new StringEncoder,
-                                                          keyEncoder = new StringEncoder,
-                                                          producerPool = producerPool,
-                                                          topicPartitionInfos)
+    val handler = new DefaultEventHandler[String,String](config,
+                                                         partitioner = null.asInstanceOf[Partitioner[String]],
+                                                         encoder = new StringEncoder,
+                                                         keyEncoder = new StringEncoder,
+                                                         producerPool = producerPool,
+                                                         topicPartitionInfos = topicPartitionInfos,
+                                                         producerStats = new ProducerStats(""),
+                                                         producerTopicStats = new ProducerTopicStats(""))
 
-    val producer = new Producer[String, String](config, handler)
+    val producer = new Producer[String, String](config,
+                                                handler,
+                                                new ProducerStats(""),
+                                                new ProducerTopicStats(""))
     try {
       // send all 10 messages, should create 2 batches and 2 syncproducer calls
       producer.send(msgs.map(m => new KeyedMessage[String,String](topic, m)): _*)
@@ -435,7 +452,9 @@ class AsyncProducerTest extends JUnit3Suite {
                                                       encoder = new StringEncoder(),
                                                       keyEncoder = new NullEncoder[Int](),
                                                       producerPool = producerPool,
-                                                      topicPartitionInfos)
+                                                      topicPartitionInfos = topicPartitionInfos,
+                                                      producerStats = new ProducerStats(""),
+                                                      producerTopicStats = new ProducerTopicStats(""))
     val data = msgs.map(m => new KeyedMessage[Int,String](topic1, 0, m)) ++ msgs.map(m => new KeyedMessage[Int,String](topic1, 1, m))
     handler.handle(data)
     handler.close()

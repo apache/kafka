@@ -237,8 +237,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def appendToLocalLog(partitionAndData: Map[TopicAndPartition, MessageSet]): Iterable[ProduceResult] = {
     trace("Append [%s] to local log ".format(partitionAndData.toString))
     partitionAndData.map {case (topicAndPartition, messages) =>
-      BrokerTopicStat.getBrokerTopicStat(topicAndPartition.topic).bytesInRate.mark(messages.sizeInBytes)
-      BrokerTopicStat.getBrokerAllTopicStat.bytesInRate.mark(messages.sizeInBytes)
+      BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesInRate.mark(messages.sizeInBytes)
+      BrokerTopicStats.getBrokerAllTopicStats.bytesInRate.mark(messages.sizeInBytes)
 
       try {
         val localReplica = replicaManager.getLeaderReplicaIfLocal(topicAndPartition.topic, topicAndPartition.partition)
@@ -255,8 +255,8 @@ class KafkaApis(val requestChannel: RequestChannel,
           Runtime.getRuntime.halt(1)
           null
         case e =>
-          BrokerTopicStat.getBrokerTopicStat(topicAndPartition.topic).failedProduceRequestRate.mark()
-          BrokerTopicStat.getBrokerAllTopicStat.failedProduceRequestRate.mark()
+          BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).failedProduceRequestRate.mark()
+          BrokerTopicStats.getBrokerAllTopicStats.failedProduceRequestRate.mark()
           error("Error processing ProducerRequest on %s:%d".format(topicAndPartition.topic, topicAndPartition.partition), e)
           new ProduceResult(topicAndPartition, e)
        }
@@ -323,8 +323,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         val partitionData =
           try {
             val (messages, highWatermark) = readMessageSet(topic, partition, offset, fetchSize, fetchRequest.replicaId)
-            BrokerTopicStat.getBrokerTopicStat(topic).bytesOutRate.mark(messages.sizeInBytes)
-            BrokerTopicStat.getBrokerAllTopicStat.bytesOutRate.mark(messages.sizeInBytes)
+            BrokerTopicStats.getBrokerTopicStats(topic).bytesOutRate.mark(messages.sizeInBytes)
+            BrokerTopicStats.getBrokerAllTopicStats.bytesOutRate.mark(messages.sizeInBytes)
             if (!isFetchFromFollower) {
               new FetchResponsePartitionData(ErrorMapping.NoError, offset, highWatermark, messages)
             } else {
@@ -334,8 +334,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
           } catch {
             case t: Throwable =>
-              BrokerTopicStat.getBrokerTopicStat(topic).failedFetchRequestRate.mark()
-              BrokerTopicStat.getBrokerAllTopicStat.failedFetchRequestRate.mark()
+              BrokerTopicStats.getBrokerTopicStats(topic).failedFetchRequestRate.mark()
+              BrokerTopicStats.getBrokerAllTopicStats.failedFetchRequestRate.mark()
               error("error when processing request " + (topic, partition, offset, fetchSize), t)
               new FetchResponsePartitionData(ErrorMapping.codeFor(t.getClass.asInstanceOf[Class[Throwable]]),
                                              offset, -1L, MessageSet.Empty)

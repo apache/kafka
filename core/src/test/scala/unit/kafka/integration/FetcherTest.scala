@@ -23,7 +23,6 @@ import scala.collection._
 import junit.framework.Assert._
 
 import kafka.cluster._
-import kafka.message._
 import kafka.server._
 import org.scalatest.junit.JUnit3Suite
 import kafka.consumer._
@@ -50,7 +49,8 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
                                                            queue,
                                                            new AtomicLong(0),
                                                            new AtomicLong(0),
-                                                           new AtomicInteger(0)))
+                                                           new AtomicInteger(0),
+                                                           new ConsumerTopicStats("")))
 
   var fetcher: ConsumerFetcherManager = null
 

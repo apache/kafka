@@ -16,7 +16,6 @@
  */
 package kafka.javaapi.consumer
 
-import kafka.message.Message
 import kafka.serializer._
 import kafka.consumer._
 import scala.collection.JavaConversions.asList

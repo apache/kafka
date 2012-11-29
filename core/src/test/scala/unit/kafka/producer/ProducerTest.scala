@@ -65,8 +65,9 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     props.put("host", "localhost")
     props.put("port", port1.toString)
 
-    consumer1 = new SimpleConsumer("localhost", port1, 1000000, 64*1024)
-    consumer2 = new SimpleConsumer("localhost", port2, 100, 64*1024)
+    consumer1 = new SimpleConsumer("localhost", port1, 1000000, 64*1024, "")
+    consumer2 = new SimpleConsumer("localhost", port2, 100, 64*1024, "")
+
 
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)

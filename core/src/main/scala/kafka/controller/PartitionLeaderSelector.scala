@@ -58,12 +58,12 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext) exten
               .format(liveAssignedReplicasToThisPartition.mkString(",")))
             liveAssignedReplicasToThisPartition.isEmpty match {
               case true =>
-                ControllerStat.offlinePartitionRate.mark()
+                ControllerStats.offlinePartitionRate.mark()
                 throw new PartitionOfflineException(("No replica for partition " +
                   "([%s, %d]) is alive. Live brokers are: [%s],".format(topic, partition, controllerContext.liveBrokerIds)) +
                   " Assigned replicas are: [%s]".format(assignedReplicas))
               case false =>
-                ControllerStat.uncleanLeaderElectionRate.mark()
+                ControllerStats.uncleanLeaderElectionRate.mark()
                 val newLeader = liveAssignedReplicasToThisPartition.head
                 warn("No broker in ISR is alive, elected leader from the alive replicas is [%s], ".format(newLeader) +
                   "There's potential data loss")
@@ -78,7 +78,7 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext) exten
           partition))
         (newLeaderAndIsr, liveAssignedReplicasToThisPartition)
       case None =>
-        ControllerStat.offlinePartitionRate.mark()
+        ControllerStats.offlinePartitionRate.mark()
         throw new PartitionOfflineException("Partition [%s, %d] doesn't have".format(topic, partition) +
           "replicas assigned to it")
     }

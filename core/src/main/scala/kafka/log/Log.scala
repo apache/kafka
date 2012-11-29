@@ -24,7 +24,7 @@ import java.util.concurrent.atomic._
 import kafka.utils._
 import scala.math._
 import java.text.NumberFormat
-import kafka.server.BrokerTopicStat
+import kafka.server.BrokerTopicStats
 import kafka.message._
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
@@ -244,8 +244,8 @@ private[kafka] class Log(val dir: File,
     if(messageSetInfo.count == 0) {
       (-1L, -1L)
     } else {
-      BrokerTopicStat.getBrokerTopicStat(topicName).messagesInRate.mark(messageSetInfo.count)
-      BrokerTopicStat.getBrokerAllTopicStat.messagesInRate.mark(messageSetInfo.count)
+      BrokerTopicStats.getBrokerTopicStats(topicName).messagesInRate.mark(messageSetInfo.count)
+      BrokerTopicStats.getBrokerAllTopicStats.messagesInRate.mark(messageSetInfo.count)
 
       // trim any invalid bytes or partial messages before appending it to the on-disk log
       var validMessages = trimInvalidBytes(messages)

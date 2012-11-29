@@ -79,14 +79,14 @@ class BrokerTopicMetrics(name: String) extends KafkaMetricsGroup {
   val failedFetchRequestRate = newMeter(name + "FailedFetchRequestsPerSec",  "requests", TimeUnit.SECONDS)
 }
 
-object BrokerTopicStat extends Logging {
+object BrokerTopicStats extends Logging {
   private val valueFactory = (k: String) => new BrokerTopicMetrics(k)
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
-  private val allTopicStat = new BrokerTopicMetrics("AllTopics")
+  private val allTopicStats = new BrokerTopicMetrics("AllTopics")
 
-  def getBrokerAllTopicStat(): BrokerTopicMetrics = allTopicStat
+  def getBrokerAllTopicStats(): BrokerTopicMetrics = allTopicStats
 
-  def getBrokerTopicStat(topic: String): BrokerTopicMetrics = {
+  def getBrokerTopicStats(topic: String): BrokerTopicMetrics = {
     stats.getAndMaybePut(topic + "-")
   }
 }

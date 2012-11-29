@@ -17,7 +17,6 @@
 
 package kafka.producer
 
-import kafka.utils.Utils
 
 import kafka.utils._
 

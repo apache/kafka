@@ -33,7 +33,7 @@ object FetchRequest {
   val CurrentVersion = 1.shortValue()
   val DefaultMaxWait = 0
   val DefaultMinBytes = 0
-  val ReplicaFetcherClientId = "replica fetcher"
+  val ReplicaFetcherClientId = "replica-fetcher"
   val DefaultCorrelationId = 0
 
   def readFrom(buffer: ByteBuffer): FetchRequest = {

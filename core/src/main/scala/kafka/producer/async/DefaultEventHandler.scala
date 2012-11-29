@@ -33,7 +33,9 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
                                private val encoder: Encoder[V],
                                private val keyEncoder: Encoder[K],
                                private val producerPool: ProducerPool,
-                               private val topicPartitionInfos: HashMap[String, TopicMetadata] = new HashMap[String, TopicMetadata])
+                               private val topicPartitionInfos: HashMap[String, TopicMetadata] = new HashMap[String, TopicMetadata],
+                               private val producerStats: ProducerStats,
+                               private val producerTopicStats: ProducerTopicStats)
   extends EventHandler[K,V] with Logging {
   val isSync = ("sync" == config.producerType)
 
@@ -48,8 +50,8 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       serializedData.foreach{
         keyed => 
           val dataSize = keyed.message.payloadSize
-          ProducerTopicStat.getProducerTopicStat(keyed.topic).byteRate.mark(dataSize)
-          ProducerTopicStat.getProducerAllTopicStat.byteRate.mark(dataSize)
+          producerTopicStats.getProducerTopicStats(keyed.topic).byteRate.mark(dataSize)
+          producerTopicStats.getProducerAllTopicStats.byteRate.mark(dataSize)
       }
       var outstandingProduceRequests = serializedData
       var remainingRetries = config.producerRetries + 1
@@ -61,11 +63,11 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           // get topics of the outstanding produce requests and refresh metadata for those
           Utils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.topic).toSet))
           remainingRetries -= 1
-          ProducerStats.resendRate.mark()
+          producerStats.resendRate.mark()
         }
       }
       if(outstandingProduceRequests.size > 0) {
-        ProducerStats.failedSendRate.mark()
+        producerStats.failedSendRate.mark()
         error("Failed to send the following requests: " + outstandingProduceRequests)
         throw new FailedToSendMessageException("Failed to send messages after " + config.producerRetries + " tries.", null)
       }
@@ -111,7 +113,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           serializedMessages += KeyedMessage[K,Message](topic = e.topic, key = null.asInstanceOf[K], message = new Message(bytes = encoder.toBytes(e.message)))
       } catch {
         case t =>
-          ProducerStats.serializationErrorRate.mark()
+          producerStats.serializationErrorRate.mark()
           if (isSync) {
             throw t
           } else {

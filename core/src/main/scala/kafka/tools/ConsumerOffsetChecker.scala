@@ -41,7 +41,7 @@ object ConsumerOffsetChecker extends Logging {
     val brokerInfo = ZkUtils.readDataMaybeNull(zkClient, "/brokers/ids/%s".format(bid))._1
     val consumer = brokerInfo match {
       case BrokerIpPattern(ip, port) =>
-        Some(new SimpleConsumer(ip, port.toInt, 10000, 100000))
+        Some(new SimpleConsumer(ip, port.toInt, 10000, 100000, "ConsumerOffsetChecker"))
       case _ =>
         error("Could not parse broker info %s".format(brokerInfo))
         None

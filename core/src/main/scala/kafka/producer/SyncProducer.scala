@@ -34,14 +34,12 @@ object SyncProducer {
  */
 @threadsafe
 class SyncProducer(val config: SyncProducerConfig) extends Logging {
-  
-  private val MaxConnectBackoffMs = 60000
-  private var sentOnConnection = 0
 
   private val lock = new Object()
   @volatile private var shutdown: Boolean = false
   private val blockingChannel = new BlockingChannel(config.host, config.port, BlockingChannel.UseDefaultBufferSize,
     config.bufferSize, config.requestTimeoutMs)
+  val producerRequestStats = new ProducerRequestStats(config.clientId, "host_" + config.host + "-port_" + config.port)
 
   trace("Instantiating Scala Sync Producer")
 
@@ -89,9 +87,9 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
    * Send a message
    */
   def send(producerRequest: ProducerRequest): ProducerResponse = {
-    ProducerRequestStat.requestSizeHist.update(producerRequest.sizeInBytes)
+    producerRequestStats.requestSizeHist.update(producerRequest.sizeInBytes)
     var response: Receive = null
-    ProducerRequestStat.requestTimer.time {
+    producerRequestStats.requestTimer.time {
       response = doSend(producerRequest)
     }
     ProducerResponse.readFrom(response.buffer)
@@ -152,7 +150,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   }
 }
 
-object ProducerRequestStat extends KafkaMetricsGroup {
-  val requestTimer = new KafkaTimer(newTimer("ProduceRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
-  val requestSizeHist = newHistogram("ProducerRequestSize")
+class ProducerRequestStats(clientId: String, brokerInfo: String) extends KafkaMetricsGroup {
+  val requestTimer = new KafkaTimer(newTimer(clientId + "-" + brokerInfo + "-ProduceRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+  val requestSizeHist = newHistogram(clientId + "-" + brokerInfo + "-ProducerRequestSize")
 }
