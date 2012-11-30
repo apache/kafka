@@ -27,7 +27,6 @@ class ClientIdTest {
   @Test
   def testInvalidClientIds() {
     val invalidclientIds = new ArrayBuffer[String]()
-    invalidclientIds += (".", "..")
     var longName = "ATCG"
     for (i <- 1 to 6)
       longName += longName

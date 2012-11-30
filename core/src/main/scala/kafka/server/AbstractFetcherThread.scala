@@ -42,9 +42,10 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   private val partitionMapLock = new ReentrantLock
   private val partitionMapCond = partitionMapLock.newCondition()
   val simpleConsumer = new SimpleConsumer(sourceBroker.host, sourceBroker.port, socketTimeout, socketBufferSize, clientId)
-  val fetcherStats = new FetcherStats(clientId)
+  private val brokerInfo = "host_%s-port_%s".format(sourceBroker.host, sourceBroker.port)
+  val fetcherStats = new FetcherStats(clientId + "-" + brokerInfo)
   val fetcherMetrics = fetcherStats.getFetcherStats(name + "-" + sourceBroker.id)
-  val fetcherLagStats = new FetcherLagStats(clientId)
+  val fetcherLagStats = new FetcherLagStats(clientId + "-" + brokerInfo)
 
   /* callbacks to be defined in subclass */
 
@@ -65,7 +66,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
 
   override def doWork() {
     val fetchRequestuilder = new FetchRequestBuilder().
-            clientId(clientId).
+            clientId(clientId + "-" + brokerInfo).
             replicaId(fetcherBrokerId).
             maxWait(maxWait).
             minBytes(minBytes)
