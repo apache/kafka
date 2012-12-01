@@ -434,9 +434,13 @@ class KafkaApis(val requestChannel: RequestChannel,
             try {
               /* check if auto creation of topics is turned on */
               if (config.autoCreateTopics) {
-                CreateTopicCommand.createTopic(zkClient, topicAndMetadata.topic, config.numPartitions, config.defaultReplicationFactor)
-                info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
-                             .format(topicAndMetadata.topic, config.numPartitions, config.defaultReplicationFactor))
+                try {
+                  CreateTopicCommand.createTopic(zkClient, topicAndMetadata.topic, config.numPartitions, config.defaultReplicationFactor)
+                  info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
+                               .format(topicAndMetadata.topic, config.numPartitions, config.defaultReplicationFactor))
+                } catch {
+                  case e: TopicExistsException => // let it go, possibly another broker created this topic
+                }
                 val newTopicMetadata = AdminUtils.fetchTopicMetadataFromZk(topicAndMetadata.topic, zkClient)
                 topicsMetadata += newTopicMetadata
                 newTopicMetadata.errorCode match {

@@ -48,7 +48,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     lock synchronized {
       val serializedData = serialize(events)
       serializedData.foreach{
-        keyed => 
+        keyed =>
           val dataSize = keyed.message.payloadSize
           producerTopicStats.getProducerTopicStats(keyed.topic).byteRate.mark(dataSize)
           producerTopicStats.getProducerAllTopicStats.byteRate.mark(dataSize)
@@ -82,7 +82,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         try {
           for ((brokerid, messagesPerBrokerMap) <- partitionedData) {
             if (logger.isTraceEnabled)
-              messagesPerBrokerMap.foreach(partitionAndEvent => 
+              messagesPerBrokerMap.foreach(partitionAndEvent =>
                 trace("Handling event for Topic: %s, Broker: %d, Partitions: %s".format(partitionAndEvent._1, brokerid, partitionAndEvent._2)))
             val messageSetPerBroker = groupMessagesToSet(messagesPerBrokerMap)
 
@@ -173,7 +173,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     debug("Broker partitions registered for topic: %s are %s"
       .format(m.topic, topicPartitionsList.map(p => p.partitionId).mkString(",")))
     val totalNumPartitions = topicPartitionsList.length
-    if(totalNumPartitions == 0) 
+    if(totalNumPartitions == 0)
       throw new NoBrokersForPartitionException("Partition key = " + m.key)
     topicPartitionsList
   }
@@ -189,10 +189,10 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     if(numPartitions <= 0)
       throw new UnknownTopicOrPartitionException("Invalid number of partitions: " + numPartitions +
         "\n Valid values are > 0")
-    val partition = 
-      if(key == null) 
+    val partition =
+      if(key == null)
         Utils.abs(counter.getAndIncrement()) % numPartitions
-      else 
+      else
         partitioner.partition(key, numPartitions)
     if(partition < 0 || partition >= numPartitions)
       throw new UnknownTopicOrPartitionException("Invalid partition id : " + partition +
@@ -217,11 +217,16 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       try {
         val syncProducer = producerPool.getProducer(brokerId)
         val response = syncProducer.send(producerRequest)
-        trace("Producer sent messages for topics %s to broker %d on %s:%d"
+        debug("Producer sent messages for topics %s to broker %d on %s:%d"
           .format(messagesPerTopic, brokerId, syncProducer.config.host, syncProducer.config.port))
         if (response.status.size != producerRequest.data.size)
           throw new KafkaException("Incomplete response (%s) for producer request (%s)"
-                                           .format(response, producerRequest))
+            .format(response, producerRequest))
+        if (logger.isTraceEnabled) {
+          val successfullySentData = response.status.filter(_._2.error == ErrorMapping.NoError)
+          successfullySentData.foreach(m => messagesPerTopic(m._1).foreach(message =>
+            trace("Successfully sent message: %s".format(Utils.readString(message.message.payload)))))
+        }
         response.status.filter(_._2.error != ErrorMapping.NoError).toSeq
           .map(partitionStatus => partitionStatus._1)
       } catch {
@@ -236,33 +241,33 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
 
   private def groupMessagesToSet(messagesPerTopicAndPartition: Map[TopicAndPartition, Seq[KeyedMessage[K,Message]]]) = {
     /** enforce the compressed.topics config here.
-     *  If the compression codec is anything other than NoCompressionCodec,
-     *    Enable compression only for specified topics if any
-     *    If the list of compressed topics is empty, then enable the specified compression codec for all topics
-     *  If the compression codec is NoCompressionCodec, compression is disabled for all topics
-     */
+      *  If the compression codec is anything other than NoCompressionCodec,
+      *    Enable compression only for specified topics if any
+      *    If the list of compressed topics is empty, then enable the specified compression codec for all topics
+      *  If the compression codec is NoCompressionCodec, compression is disabled for all topics
+      */
 
     val messagesPerTopicPartition = messagesPerTopicAndPartition.map { case (topicAndPartition, messages) =>
       val rawMessages = messages.map(_.message)
       ( topicAndPartition,
         config.compressionCodec match {
           case NoCompressionCodec =>
-            trace("Sending %d messages with no compression to %s".format(messages.size, topicAndPartition))
+            debug("Sending %d messages with no compression to %s".format(messages.size, topicAndPartition))
             new ByteBufferMessageSet(NoCompressionCodec, rawMessages: _*)
           case _ =>
             config.compressedTopics.size match {
               case 0 =>
-                trace("Sending %d messages with compression codec %d to %s"
+                debug("Sending %d messages with compression codec %d to %s"
                   .format(messages.size, config.compressionCodec.codec, topicAndPartition))
                 new ByteBufferMessageSet(config.compressionCodec, rawMessages: _*)
               case _ =>
                 if(config.compressedTopics.contains(topicAndPartition.topic)) {
-                  trace("Sending %d messages with compression codec %d to %s"
+                  debug("Sending %d messages with compression codec %d to %s"
                     .format(messages.size, config.compressionCodec.codec, topicAndPartition))
                   new ByteBufferMessageSet(config.compressionCodec, rawMessages: _*)
                 }
                 else {
-                  trace("Sending %d messages to %s with no compression as it is not in compressed.topics - %s"
+                  debug("Sending %d messages to %s with no compression as it is not in compressed.topics - %s"
                     .format(messages.size, topicAndPartition, config.compressedTopics.toString))
                   new ByteBufferMessageSet(NoCompressionCodec, rawMessages: _*)
                 }

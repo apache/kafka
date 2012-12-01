@@ -64,5 +64,5 @@ object SyncProducerConfig {
   val DefaultCorrelationId = -1
   val DefaultClientId = ""
   val DefaultRequiredAcks : Short = 0
-  val DefaultAckTimeoutMs = 500
+  val DefaultAckTimeoutMs = 1500
 }

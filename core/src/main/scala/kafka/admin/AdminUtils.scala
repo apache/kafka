@@ -25,7 +25,8 @@ import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import scala.collection._
 import scala.collection.mutable
-import kafka.common.{BrokerNotAvailableException, LeaderNotAvailableException, ReplicaNotAvailableException, ErrorMapping}
+import kafka.common._
+import scala.Some
 
 object AdminUtils extends Logging {
   val rand = new Random
@@ -82,7 +83,7 @@ object AdminUtils extends Logging {
       ZkUtils.createPersistentPath(zkClient, zkPath, jsonPartitionMap)
       debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionMap))
     } catch {
-      case e: ZkNodeExistsException => throw new AdministrationException("topic %s already exists".format(topic))
+      case e: ZkNodeExistsException => throw new TopicExistsException("topic %s already exists".format(topic))
       case e2 => throw new AdministrationException(e2.toString)
     }
   }

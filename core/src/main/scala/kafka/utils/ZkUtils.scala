@@ -184,7 +184,7 @@ object ZkUtils extends Logging {
     val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
     val broker = new Broker(id, creator, host, port)
     try {
-      createEphemeralPathExpectConflict(zkClient, brokerIdPath, broker.getZKString)
+      createEphemeralPathExpectConflict(zkClient, brokerIdPath, broker.getZkString)
     } catch {
       case e: ZkNodeExistsException =>
         throw new RuntimeException("A broker is already registered on the path " + brokerIdPath + ". This probably " + "indicates that you either have configured a brokerid that is already in use, or " + "else you have shutdown this broker and restarted it faster than the zookeeper " + "timeout so it appears to be re-registering.")

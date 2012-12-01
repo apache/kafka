@@ -13,7 +13,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
+*/
 package kafka.producer
 
 import collection.mutable.HashMap
@@ -72,7 +72,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
    */
   def updateInfo(topics: Set[String]) {
     var topicsMetadata: Seq[TopicMetadata] = Nil
-    val topicMetadataResponse = ClientUtils.fetchTopicMetadata(topics, producerConfig.clientId, brokers)
+    val topicMetadataResponse = ClientUtils.fetchTopicMetadata(topics, brokers, producerConfig)
     topicsMetadata = topicMetadataResponse.topicsMetadata
     // throw partition specific exception
     topicsMetadata.foreach(tmd =>{

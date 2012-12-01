@@ -176,6 +176,7 @@ object ConsoleConsumer extends Logging {
       }
     })
 
+    var numMessages = 0L
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
     formatter.init(formatterArgs)
     try {
@@ -188,6 +189,7 @@ object ConsoleConsumer extends Logging {
       for(messageAndTopic <- iter) {
         try {
           formatter.writeTo(messageAndTopic.key, messageAndTopic.message, System.out)
+          numMessages += 1
         } catch {
           case e =>
             if (skipMessageOnError)
@@ -198,6 +200,7 @@ object ConsoleConsumer extends Logging {
         if(System.out.checkError()) {
           // This means no one is listening to our output stream any more, time to shutdown
           System.err.println("Unable to write to standard out, closing consumer.")
+          System.err.println("Consumed %d messages".format(numMessages))
           formatter.close()
           connector.shutdown()
           System.exit(1)
@@ -206,6 +209,7 @@ object ConsoleConsumer extends Logging {
     } catch {
       case e => error("Error processing message, stopping consumer: ", e)
     }
+    System.out.println("Consumed %d messages".format(numMessages))
     System.out.flush()
     formatter.close()
     connector.shutdown()

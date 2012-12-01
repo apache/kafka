@@ -392,7 +392,7 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                 if logRetentionTest.lower() == "false":
                     self.log_message("starting consumer in the background")
                     kafka_system_test_utils.start_console_consumer(self.systemTestEnv, self.testcaseEnv)
-                    time.sleep(1)
+                    time.sleep(10)
                     
                 # =============================================
                 # this testcase is completed - stop all entities
@@ -421,11 +421,11 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                     kafka_system_test_utils.validate_simple_consumer_data_matched_across_replicas(self.systemTestEnv, self.testcaseEnv)
                     kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
                 elif consumerMultiTopicsMode.lower() == "true":
-                    kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv)
+                    #kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv)
                     kafka_system_test_utils.validate_data_matched_in_multi_topics_from_single_consumer_producer(self.systemTestEnv, self.testcaseEnv)
                 else:
                     kafka_system_test_utils.validate_simple_consumer_data_matched_across_replicas(self.systemTestEnv, self.testcaseEnv)
-                    kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv)
+                    #kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv)
                     kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
 
                 # =============================================

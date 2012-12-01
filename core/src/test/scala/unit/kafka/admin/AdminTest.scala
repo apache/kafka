@@ -22,7 +22,7 @@ import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{ZkUtils, TestUtils}
-import kafka.common.{ErrorMapping, TopicAndPartition}
+import kafka.common.{TopicExistsException, ErrorMapping, TopicAndPartition}
 
 
 class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
@@ -170,7 +170,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
       AdminUtils.createTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
       fail("shouldn't be able to create a topic already exists")
     } catch {
-      case e: AdministrationException => // this is good
+      case e: TopicExistsException => // this is good
       case e2 => throw e2
     }
   }

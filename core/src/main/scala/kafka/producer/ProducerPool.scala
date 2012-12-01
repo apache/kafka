@@ -37,17 +37,6 @@ object ProducerPool {
     props.putAll(config.props.props)
     new SyncProducer(new SyncProducerConfig(props))
   }
-
-  /**
-   * Used in ClientUtils to send TopicMetadataRequest to a broker.
-   */
-  def createSyncProducer(clientId: String, broker: Broker): SyncProducer = {
-    val props = new Properties()
-    props.put("host", broker.host)
-    props.put("port", broker.port.toString)
-    props.put("client.id", clientId)
-    new SyncProducer(new SyncProducerConfig(props))
-  }
 }
 
 class ProducerPool(val config: ProducerConfig) extends Logging {

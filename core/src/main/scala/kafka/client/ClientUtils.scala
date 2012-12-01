@@ -6,20 +6,28 @@ import kafka.api._
 import kafka.producer._
 import kafka.common.KafkaException
 import kafka.utils.{Utils, Logging}
+import java.util.Properties
 
 /**
  * Helper functions common to clients (producer, consumer, or admin)
  */
 object ClientUtils extends Logging{
 
-  def fetchTopicMetadata(topics: Set[String], clientId: String, brokers: Seq[Broker]): TopicMetadataResponse = {
+  /**
+   * Used by the producer to send a metadata request since it has access to the ProducerConfig
+   * @param topics The topics for which the metadata needs to be fetched
+   * @param brokers The brokers in the cluster as configured on the producer through broker.list
+   * @param producerConfig The producer's config
+   * @return topic metadata response
+   */
+  def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], producerConfig: ProducerConfig): TopicMetadataResponse = {
     var fetchMetaDataSucceeded: Boolean = false
     var i: Int = 0
     val topicMetadataRequest = new TopicMetadataRequest(topics.toSeq)
     var topicMetadataResponse: TopicMetadataResponse = null
     var t: Throwable = null
     while(i < brokers.size && !fetchMetaDataSucceeded) {
-      val producer: SyncProducer = ProducerPool.createSyncProducer(clientId + "-FetchTopicMetadata", brokers(i))
+      val producer: SyncProducer = ProducerPool.createSyncProducer(producerConfig, brokers(i))
       info("Fetching metadata for topic %s".format(topics))
       try {
         topicMetadataResponse = producer.send(topicMetadataRequest)
@@ -39,7 +47,22 @@ object ClientUtils extends Logging{
     }
     return topicMetadataResponse
   }
-  
+
+  /**
+   * Used by a non-producer client to send a metadata request
+   * @param topics The topics for which the metadata needs to be fetched
+   * @param brokers The brokers in the cluster as configured on the client
+   * @param clientId The client's identifier
+   * @return topic metadata response
+   */
+  def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], clientId: String): TopicMetadataResponse = {
+    val props = new Properties()
+    props.put("broker.list", brokers.map(_.getConnectionString()).mkString(","))
+    props.put("clientid", clientId)
+    val producerConfig = new ProducerConfig(props)
+    fetchTopicMetadata(topics, brokers, producerConfig)
+  }
+
   /**
    * Parse a list of broker urls in the form host1:port1, host2:port2, ... 
    */
