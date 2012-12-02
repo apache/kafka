@@ -15,11 +15,10 @@
  * limitations under the License.
  */
 
-package kafka.log
+package kafka.server
 
 import java.io.File
 import kafka.utils._
-import kafka.server.{KafkaConfig, KafkaServer}
 import junit.framework.Assert._
 import java.util.{Random, Properties}
 import kafka.consumer.SimpleConsumer
@@ -31,12 +30,14 @@ import kafka.admin.CreateTopicCommand
 import kafka.api.{PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
 import kafka.utils.TestUtils._
 import kafka.common.{ErrorMapping, TopicAndPartition}
-
-object LogOffsetTest {
-  val random = new Random()  
-}
+import kafka.utils.nonthreadsafe
+import kafka.utils.threadsafe
+import org.junit.After
+import org.junit.Before
+import org.junit.Test
 
 class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
+  val random = new Random() 
   var logDir: File = null
   var topicLogDir: File = null
   var server: KafkaServer = null
@@ -91,7 +92,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
-    val offsets = log.getOffsetsBefore(OffsetRequest.LatestTime, 10)
+    val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), OffsetRequest.LatestTime, 10)
     assertEquals(Seq(20L, 15L, 10L, 5L, 0L), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
@@ -111,7 +112,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testEmptyLogsGetOffsets() {
-    val topicPartition = "kafka-" + LogOffsetTest.random.nextInt(10)
+    val topicPartition = "kafka-" + random.nextInt(10)
     val topicPartitionPath = getLogDir.getAbsolutePath + "/" + topicPartition
     topicLogDir = new File(topicPartitionPath)
     topicLogDir.mkdir
@@ -139,7 +140,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testGetOffsetsBeforeNow() {
-    val topicPartition = "kafka-" + LogOffsetTest.random.nextInt(3)
+    val topicPartition = "kafka-" + random.nextInt(3)
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
@@ -153,10 +154,9 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
-    time.sleep(20)
-    val now = time.milliseconds
+    val now = time.milliseconds + 30000 // pretend it is the future to avoid race conditions with the fs
 
-    val offsets = log.getOffsetsBefore(now, 10)
+    val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), now, 10)
     assertEquals(Seq(20L, 15L, 10L, 5L, 0L), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
@@ -169,7 +169,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testGetOffsetsBeforeEarliestTime() {
-    val topicPartition = "kafka-" + LogOffsetTest.random.nextInt(3)
+    val topicPartition = "kafka-" + random.nextInt(3)
     val topic = topicPartition.split("-").head
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
@@ -183,7 +183,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
     log.flush()
 
-    val offsets = log.getOffsetsBefore(OffsetRequest.EarliestTime, 10)
+    val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), OffsetRequest.EarliestTime, 10)
 
     assertEquals(Seq(0L), offsets)
 
