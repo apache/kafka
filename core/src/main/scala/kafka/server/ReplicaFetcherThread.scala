@@ -66,7 +66,7 @@ class ReplicaFetcherThread(name:String,
     )
     val offset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
     val replica = replicaMgr.getReplica(topicAndPartition.topic, topicAndPartition.partition).get
-    replica.log.get.truncateAndStartWithNewOffset(offset)
+    replica.log.get.truncateFullyAndStartAt(offset)
     offset
   }
 

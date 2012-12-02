@@ -59,6 +59,9 @@ class LogManagerTest extends JUnit3Suite {
     super.tearDown()
   }
   
+  /**
+   * Test that getOrCreateLog on a non-existent log creates a new log and that we can append to the new log.
+   */
   @Test
   def testCreateLog() {
     val log = logManager.getOrCreateLog(name, 0)
@@ -67,29 +70,34 @@ class LogManagerTest extends JUnit3Suite {
     log.append(TestUtils.singleMessageSet("test".getBytes()))
   }
 
+  /**
+   * Test that get on a non-existent returns None and no log is created.
+   */
   @Test
-  def testGetLog() {
+  def testGetNonExistentLog() {
     val log = logManager.getLog(name, 0)
+    assertEquals("No log should be found.", None, log)
     val logFile = new File(config.logDirs(0), name + "-0")
     assertTrue(!logFile.exists)
   }
 
+  /**
+   * Test time-based log cleanup. First append messages, then set the time into the future and run cleanup.
+   */
   @Test
   def testCleanupExpiredSegments() {
     val log = logManager.getOrCreateLog(name, 0)
     var offset = 0L
     for(i <- 0 until 1000) {
       var set = TestUtils.singleMessageSet("test".getBytes())
-      val (start, end) = log.append(set)
-      offset = end
+      val info = log.append(set)
+      offset = info.lastOffset
     }
-    log.flush
 
     assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
 
     // update the last modified time of all log segments
-    val logSegments = log.segments.view
-    logSegments.foreach(_.messageSet.file.setLastModified(time.currentMs))
+    log.logSegments.foreach(_.log.file.setLastModified(time.currentMs))
 
     time.currentMs += maxLogAgeHours*60*60*1000 + 1
     logManager.cleanupLogs()
@@ -106,6 +114,9 @@ class LogManagerTest extends JUnit3Suite {
     log.append(TestUtils.singleMessageSet("test".getBytes()))
   }
 
+  /**
+   * Test size-based cleanup. Append messages, then run cleanup and check that segments are deleted.
+   */
   @Test
   def testCleanupSegmentsToMaintainSize() {
     val setSize = TestUtils.singleMessageSet("test".getBytes()).sizeInBytes
@@ -130,11 +141,9 @@ class LogManagerTest extends JUnit3Suite {
     // add a bunch of messages that should be larger than the retentionSize
     for(i <- 0 until 1000) {
       val set = TestUtils.singleMessageSet("test".getBytes())
-      val (start, end) = log.append(set)
-      offset = start
+      val info = log.append(set)
+      offset = info.firstOffset
     }
-    // flush to make sure it's written to disk
-    log.flush
 
     // should be exactly 100 full segments + 1 new empty one
     assertEquals("There should be example 100 segments.", 100, log.numberOfSegments)
@@ -153,29 +162,33 @@ class LogManagerTest extends JUnit3Suite {
     log.append(TestUtils.singleMessageSet("test".getBytes()))
   }
 
+  /**
+   * Test that flush is invoked by the background scheduler thread.
+   */
   @Test
   def testTimeBasedFlush() {
     val props = TestUtils.createBrokerConfig(0, -1)
     logManager.shutdown()
     config = new KafkaConfig(props) {
-                   override val logFileSize = 1024 *1024 *1024
-                   override val flushSchedulerThreadRate = 50
+                   override val flushSchedulerThreadRate = 5
+                   override val defaultFlushIntervalMs = 5
                    override val flushInterval = Int.MaxValue
-                   override val logRollHours = maxRollInterval
-                   override val flushIntervalMap = Map("timebasedflush" -> 100)
                  }
-    logManager = new LogManager(config, scheduler, time)
+    logManager = new LogManager(config, scheduler, SystemTime)
     logManager.startup
     val log = logManager.getOrCreateLog(name, 0)
+    val lastFlush = log.lastFlushTime
     for(i <- 0 until 200) {
       var set = TestUtils.singleMessageSet("test".getBytes())
       log.append(set)
     }
-    val ellapsed = System.currentTimeMillis - log.getLastFlushedTime
-    assertTrue("The last flush time has to be within defaultflushInterval of current time (was %d)".format(ellapsed),
-                     ellapsed < 2*config.flushSchedulerThreadRate)
+    Thread.sleep(config.flushSchedulerThreadRate)
+    assertTrue("Time based flush should have been triggered triggered", lastFlush != log.lastFlushTime)
   }
   
+  /**
+   * Test that new logs that are created are assigned to the least loaded log directory
+   */
   @Test
   def testLeastLoadedAssignment() {
     // create a log manager with multiple data directories
@@ -196,6 +209,9 @@ class LogManagerTest extends JUnit3Suite {
     }
   }
   
+  /**
+   * Test that it is not possible to open two log managers using the same data directory
+   */
   def testTwoLogManagersUsingSameDirFails() {
     try {
       new LogManager(logManager.config, scheduler, time)

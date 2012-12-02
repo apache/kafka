@@ -19,7 +19,7 @@ package kafka.zk
 
 import org.scalatest.junit.JUnit3Suite
 import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{ZKStringSerializer, TestZKUtils}
+import kafka.utils.{ZKStringSerializer, TestZKUtils, Utils}
 
 trait ZooKeeperTestHarness extends JUnit3Suite {
   val zkConnect: String = TestZKUtils.zookeeperConnect
@@ -36,8 +36,8 @@ trait ZooKeeperTestHarness extends JUnit3Suite {
 
   override def tearDown() {
     super.tearDown
-    zkClient.close()
-    zookeeper.shutdown()
+    Utils.swallow(zkClient.close())
+    Utils.swallow(zookeeper.shutdown())
   }
 
 }

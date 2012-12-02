@@ -27,8 +27,6 @@ trait LeaderElector extends Logging {
 
   def amILeader : Boolean
 
-//  def electAndBecomeLeader: Unit
-//
   def elect: Boolean
 
   def close

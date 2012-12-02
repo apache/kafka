@@ -401,8 +401,6 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(1, topicMetadata.partitionsMetadata.head.isr.size)
 
     servers.foreach(_.shutdown())
-
-
   }
 
   private def checkIfReassignPartitionPathExists(): Boolean = {

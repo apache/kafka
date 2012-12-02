@@ -21,6 +21,7 @@ import kafka.admin.{CreateTopicCommand, AdminUtils}
 import kafka.api._
 import kafka.message._
 import kafka.network._
+import kafka.log._
 import kafka.utils.{Pool, SystemTime, Logging}
 import org.apache.log4j.Logger
 import scala.collection._
@@ -59,7 +60,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.MetadataKey => handleTopicMetadataRequest(request)
         case RequestKeys.LeaderAndIsrKey => handleLeaderAndIsrRequest(request)
         case RequestKeys.StopReplicaKey => handleStopReplicaRequest(request)
-        case requestId => throw new KafkaException("No mapping found for handler id " + requestId)
+        case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
       case e: Throwable =>
@@ -243,12 +244,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       try {
         val localReplica = replicaManager.getLeaderReplicaIfLocal(topicAndPartition.topic, topicAndPartition.partition)
         val log = localReplica.log.get
-        val (start, end) = log.append(messages.asInstanceOf[ByteBufferMessageSet], assignOffsets = true)
+        val info = log.append(messages.asInstanceOf[ByteBufferMessageSet], assignOffsets = true)
+        
+        // update stats
+        BrokerTopicStat.getBrokerTopicStat(topicAndPartition.topic).messagesInRate.mark(info.count)
+        BrokerTopicStat.getBrokerAllTopicStat.messagesInRate.mark(info.count)
+        
         // we may need to increment high watermark since ISR could be down to 1
         localReplica.partition.maybeIncrementLeaderHW(localReplica)
         trace("%d bytes written to log %s-%d beginning at offset %d and ending at offset %d"
-              .format(messages.size, topicAndPartition.topic, topicAndPartition.partition, start, end))
-        ProduceResult(topicAndPartition, start, end)
+              .format(messages.size, topicAndPartition.topic, topicAndPartition.partition, info.firstOffset, info.lastOffset))
+        ProduceResult(topicAndPartition, info.firstOffset, info.lastOffset)
       } catch {
         case e: KafkaStorageException =>
           fatal("Halting due to unrecoverable I/O error while handling produce request: ", e)
@@ -358,11 +364,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     else
       replicaManager.getLeaderReplicaIfLocal(topic, partition)
     trace("Fetching log segment for topic, partition, offset, size = " + (topic, partition, offset, maxSize))
-    val maxOffsetOpt = if (fromReplicaId == Request.OrdinaryConsumerId) {
-      Some(localReplica.highWatermark)
-    } else {
-      None
-    }
+    val maxOffsetOpt = 
+      if (fromReplicaId == Request.OrdinaryConsumerId)
+        Some(localReplica.highWatermark)
+      else
+        None
     val messages = localReplica.log match {
       case Some(log) =>
         log.read(offset, maxSize, maxOffsetOpt)
@@ -391,15 +397,18 @@ class KafkaApis(val requestChannel: RequestChannel,
         else
           replicaManager.getReplicaOrException(topicAndPartition.topic, topicAndPartition.partition)
         val offsets = {
-          val allOffsets = replicaManager.logManager.getOffsets(topicAndPartition,
-                                                                partitionOffsetRequestInfo.time,
-                                                                partitionOffsetRequestInfo.maxNumOffsets)
-          if (!offsetRequest.isFromOrdinaryClient) allOffsets
-          else {
+          val allOffsets = fetchOffsets(replicaManager.logManager,
+                                        topicAndPartition,
+                                        partitionOffsetRequestInfo.time,
+                                        partitionOffsetRequestInfo.maxNumOffsets)
+          if (!offsetRequest.isFromOrdinaryClient) {
+            allOffsets
+          } else {
             val hw = localReplica.highWatermark
             if (allOffsets.exists(_ > hw))
               hw +: allOffsets.dropWhile(_ > hw)
-            else allOffsets
+            else 
+              allOffsets
           }
         }
         (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.NoError, offsets))
@@ -411,6 +420,59 @@ class KafkaApis(val requestChannel: RequestChannel,
     })
     val response = OffsetResponse(OffsetRequest.CurrentVersion, responseMap)
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+  }
+  
+  def fetchOffsets(logManager: LogManager, topicAndPartition: TopicAndPartition, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
+    logManager.getLog(topicAndPartition.topic, topicAndPartition.partition) match {
+      case Some(log) => 
+        fetchOffsetsBefore(log, timestamp, maxNumOffsets)
+      case None => 
+        if (timestamp == OffsetRequest.LatestTime || timestamp == OffsetRequest.EarliestTime)
+          Seq(0L)
+        else
+          Nil
+    }
+  }
+  
+  def fetchOffsetsBefore(log: Log, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
+    val segsArray = log.logSegments.toArray
+    var offsetTimeArray: Array[(Long, Long)] = null
+    if(segsArray.last.size > 0)
+      offsetTimeArray = new Array[(Long, Long)](segsArray.length + 1)
+    else
+      offsetTimeArray = new Array[(Long, Long)](segsArray.length)
+
+    for(i <- 0 until segsArray.length)
+      offsetTimeArray(i) = (segsArray(i).baseOffset, segsArray(i).lastModified)
+    if(segsArray.last.size > 0)
+      offsetTimeArray(segsArray.length) = (log.logEndOffset, SystemTime.milliseconds)
+
+    var startIndex = -1
+    timestamp match {
+      case OffsetRequest.LatestTime =>
+        startIndex = offsetTimeArray.length - 1
+      case OffsetRequest.EarliestTime =>
+        startIndex = 0
+      case _ =>
+        var isFound = false
+        debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
+        startIndex = offsetTimeArray.length - 1
+        while (startIndex >= 0 && !isFound) {
+          if (offsetTimeArray(startIndex)._2 <= timestamp)
+            isFound = true
+          else
+            startIndex -=1
+        }
+    }
+
+    val retSize = maxNumOffsets.min(startIndex + 1)
+    val ret = new Array[Long](retSize)
+    for(j <- 0 until retSize) {
+      ret(j) = offsetTimeArray(startIndex)._1
+      startIndex -= 1
+    }
+    // ensure that the returned seq is in descending order of offsets
+    ret.toSeq.sortBy(- _)
   }
 
   /**

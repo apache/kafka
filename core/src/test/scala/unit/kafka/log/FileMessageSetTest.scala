@@ -35,13 +35,21 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     set
   }
 
+  /**
+   * Test that the cached size variable matches the actual file size as we append messages
+   */
   @Test
   def testFileSize() {
     assertEquals(messageSet.channel.size, messageSet.sizeInBytes)
-    messageSet.append(singleMessageSet("abcd".getBytes()))
-    assertEquals(messageSet.channel.size, messageSet.sizeInBytes)
+    for(i <- 0 until 20) {
+      messageSet.append(singleMessageSet("abcd".getBytes))
+      assertEquals(messageSet.channel.size, messageSet.sizeInBytes)
+    } 
   }
   
+  /**
+   * Test that adding invalid bytes to the end of the log doesn't break iteration
+   */
   @Test
   def testIterationOverPartialAndTruncation() {
     testPartialWrite(0, messageSet)
@@ -62,6 +70,9 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     checkEquals(messages.iterator, messageSet.map(m => m.message).iterator)
   }
   
+  /**
+   * Iterating over the file does file reads but shouldn't change the position of the underlying FileChannel.
+   */
   @Test
   def testIterationDoesntChangePosition() {
     val position = messageSet.channel.position
@@ -69,39 +80,71 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     assertEquals(position, messageSet.channel.position)
   }
   
+  /**
+   * Test a simple append and read.
+   */
   @Test
   def testRead() {
-    val read = messageSet.read(0, messageSet.sizeInBytes)
+    var read = messageSet.read(0, messageSet.sizeInBytes)
     checkEquals(messageSet.iterator, read.iterator)
     val items = read.iterator.toList
     val sec = items.tail.head
-    val read2 = messageSet.read(MessageSet.entrySize(sec.message), messageSet.sizeInBytes)
-    checkEquals(items.tail.iterator, read2.iterator)
+    read = messageSet.read(position = MessageSet.entrySize(sec.message), size = messageSet.sizeInBytes)
+    assertEquals("Try a read starting from the second message", items.tail, read.toList)
+    read = messageSet.read(MessageSet.entrySize(sec.message), MessageSet.entrySize(sec.message))
+    assertEquals("Try a read of a single message starting from the second message", List(items.tail.head), read.toList)
   }
   
+  /**
+   * Test the MessageSet.searchFor API.
+   */
   @Test
   def testSearch() {
     // append a new message with a high offset
     val lastMessage = new Message("test".getBytes)
     messageSet.append(new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(50), lastMessage))
-    var physicalOffset = 0
+    var position = 0
     assertEquals("Should be able to find the first message by its offset", 
-                 OffsetPosition(0L, physicalOffset), 
+                 OffsetPosition(0L, position), 
                  messageSet.searchFor(0, 0))
-    physicalOffset += MessageSet.entrySize(messageSet.head.message)
+    position += MessageSet.entrySize(messageSet.head.message)
     assertEquals("Should be able to find second message when starting from 0", 
-                 OffsetPosition(1L, physicalOffset), 
+                 OffsetPosition(1L, position), 
                  messageSet.searchFor(1, 0))
     assertEquals("Should be able to find second message starting from its offset", 
-                 OffsetPosition(1L, physicalOffset), 
-                 messageSet.searchFor(1, physicalOffset))
-    physicalOffset += MessageSet.entrySize(messageSet.tail.head.message)
-    assertEquals("Should be able to find third message from a non-existant offset", 
-                 OffsetPosition(50L, physicalOffset), 
-                 messageSet.searchFor(3, physicalOffset))
-    assertEquals("Should be able to find third message by correct offset", 
-                 OffsetPosition(50L, physicalOffset), 
-                 messageSet.searchFor(50, physicalOffset))
+                 OffsetPosition(1L, position), 
+                 messageSet.searchFor(1, position))
+    position += MessageSet.entrySize(messageSet.tail.head.message) + MessageSet.entrySize(messageSet.tail.tail.head.message)
+    assertEquals("Should be able to find fourth message from a non-existant offset", 
+                 OffsetPosition(50L, position), 
+                 messageSet.searchFor(3, position))
+    assertEquals("Should be able to find fourth message by correct offset", 
+                 OffsetPosition(50L, position), 
+                 messageSet.searchFor(50,  position))
+  }
+  
+  /**
+   * Test that the message set iterator obeys start and end slicing
+   */
+  @Test
+  def testIteratorWithLimits() {
+    val message = messageSet.toList(1)
+    val start = messageSet.searchFor(1, 0).position
+    val size = message.message.size
+    val slice = messageSet.read(start, size)
+    assertEquals(List(message), slice.toList)
+  }
+  
+  /**
+   * Test the truncateTo method lops off messages and appropriately updates the size
+   */
+  @Test
+  def testTruncate() {
+    val message = messageSet.toList(0)
+    val end = messageSet.searchFor(1, 0).position
+    messageSet.truncateTo(end)
+    assertEquals(List(message), messageSet.toList)
+    assertEquals(MessageSet.entrySize(message.message), messageSet.sizeInBytes)
   }
   
 }

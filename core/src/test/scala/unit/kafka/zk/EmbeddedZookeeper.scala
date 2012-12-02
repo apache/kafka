@@ -33,7 +33,8 @@ class EmbeddedZookeeper(val connectString: String) {
   factory.startup(zookeeper)
 
   def shutdown() {
-    factory.shutdown()
+    Utils.swallow(zookeeper.shutdown())
+    Utils.swallow(factory.shutdown())
     Utils.rm(logDir)
     Utils.rm(snapshotDir)
   }

@@ -54,7 +54,7 @@ import java.util.Properties;
  * The user need to provide the configuration file for 07 consumer and 08 producer. For 08 producer,
  * the "serializer.class" filed is set to "kafka.serializer.DefaultEncode" by the code.
  */
-
+@SuppressWarnings({"unchecked", "rawtypes"})
 public class KafkaMigrationTool
 {
   private static final org.apache.log4j.Logger logger = org.apache.log4j.Logger.getLogger(KafkaMigrationTool.class.getName());

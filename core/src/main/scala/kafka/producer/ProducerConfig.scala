@@ -75,14 +75,14 @@ class ProducerConfig private (val props: VerifiableProperties)
   val compressedTopics = Utils.parseCsvList(props.getString("compressed.topics", null))
 
   /**
-   * The producer using the zookeeper software load balancer maintains a ZK cache that gets
-   * updated by the zookeeper watcher listeners. During some events like a broker bounce, the
-   * producer ZK cache can get into an inconsistent state, for a small time period. In this time
-   * period, it could end up picking a broker partition that is unavailable. When this happens, the
-   * ZK cache needs to be updated.
-   * This parameter specifies the number of times the producer attempts to refresh this ZK cache.
+   * If a request fails it is possible to have the producer automatically retry. This is controlled by this setting.
+   * Note that not all errors mean that the message was lost--for example if the network connection is lost we will
+   * get a socket exception--in this case enabling retries can result in duplicate messages.
    */
   val producerRetries = props.getInt("producer.num.retries", 3)
 
+  /**
+   * The amount of time to wait in between retries
+   */
   val producerRetryBackoffMs = props.getInt("producer.retry.backoff.ms", 100)
 }

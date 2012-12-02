@@ -51,7 +51,7 @@ import kafka.utils._
  */
 class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = -1) extends Logging {
   
-  /* the memory mapping */
+  /* initialize the memory mapping for this index */
   private var mmap: MappedByteBuffer = 
     {
       val newlyCreated = file.createNewFile()
@@ -84,10 +84,12 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
       }
     }
   
-  /* the maximum number of entries this index can hold */
+  /**
+   * The maximum number of eight-byte entries this index can hold
+   */
   def maxEntries = mmap.limit / 8
   
-  /* the number of entries in the index */
+  /* the number of eight-byte entries currently in the index */
   private var size = new AtomicInteger(mmap.position / 8)
   
   /* the last offset in the index */
@@ -108,6 +110,10 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
   /**
    * Find the largest offset less than or equal to the given targetOffset 
    * and return a pair holding this offset and it's corresponding physical file position.
+   * 
+   * @param targetOffset The offset to look up.
+   * 
+   * @return The offset found and the corresponding file position for this offset. 
    * If the target offset is smaller than the least entry in the index (or the index is empty),
    * the pair (baseOffset, 0) is returned.
    */
@@ -123,7 +129,11 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
   /**
    * Find the slot in which the largest offset less than or equal to the given
    * target offset is stored.
-   * Return -1 if the least entry in the index is larger than the target offset or the index is empty
+   * 
+   * @param idx The index buffer
+   * @param targetOffset The offset to look for
+   * 
+   * @return The slot found or -1 if the least entry in the index is larger than the target offset or the index is empty
    */
   private def indexSlotFor(idx: ByteBuffer, targetOffset: Long): Int = {
     // we only store the difference from the baseoffset so calculate that
@@ -161,6 +171,8 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
   
   /**
    * Get the nth offset mapping from the index
+   * @param n The entry number in the index
+   * @return The offset/position pair at that entry
    */
   def entry(n: Int): OffsetPosition = {
     if(n >= entries)
@@ -170,7 +182,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
   }
   
   /**
-   * Append entry for the given offset/location pair to the index. This entry must have a larger offset than all subsequent entries.
+   * Append an entry for the given offset/location pair to the index. This entry must have a larger offset than all subsequent entries.
    */
   def append(offset: Long, position: Int) {
     this synchronized {
@@ -192,7 +204,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
   def isFull: Boolean = entries >= this.maxEntries
   
   /**
-   * Truncate the entire index
+   * Truncate the entire index, deleting all entries
    */
   def truncate() = truncateTo(this.baseOffset)
   

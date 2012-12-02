@@ -397,6 +397,7 @@ class AsyncProducerTest extends JUnit3Suite {
     props.put("serializer.class", classOf[StringEncoder].getName.toString)
     props.put("key.serializer.class", classOf[NullEncoder[Int]].getName.toString)
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
+    props.put("producer.num.retries", 3.toString)
 
     val config = new ProducerConfig(props)
 

@@ -2,6 +2,9 @@ package kafka.log
 
 import junit.framework.Assert._
 import java.util.concurrent.atomic._
+import java.io.File
+import java.io.RandomAccessFile
+import java.util.Random
 import org.junit.{Test, After}
 import org.scalatest.junit.JUnit3Suite
 import kafka.utils.TestUtils
@@ -13,6 +16,7 @@ class LogSegmentTest extends JUnit3Suite {
   
   val segments = mutable.ArrayBuffer[LogSegment]()
   
+  /* create a segment with the given base offset */
   def createSegment(offset: Long): LogSegment = {
     val msFile = TestUtils.tempFile()
     val ms = new FileMessageSet(msFile)
@@ -24,6 +28,7 @@ class LogSegmentTest extends JUnit3Suite {
     seg
   }
   
+  /* create a ByteBufferMessageSet for the given messages starting from the given offset */
   def messages(offset: Long, messages: String*): ByteBufferMessageSet = {
     new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, 
                              offsetCounter = new AtomicLong(offset), 
@@ -34,17 +39,24 @@ class LogSegmentTest extends JUnit3Suite {
   def teardown() {
     for(seg <- segments) {
       seg.index.delete()
-      seg.messageSet.delete()
+      seg.log.delete()
     }
   }
   
+  /**
+   * A read on an empty log segment should return null
+   */
   @Test
   def testReadOnEmptySegment() {
     val seg = createSegment(40)
     val read = seg.read(startOffset = 40, maxSize = 300, maxOffset = None)
-    assertEquals(0, read.size)
+    assertNull("Read beyond the last offset in the segment should be null", read)
   }
   
+  /**
+   * Reading from before the first offset in the segment should return messages
+   * beginning with the first message in the segment
+   */
   @Test
   def testReadBeforeFirstOffset() {
     val seg = createSegment(40)
@@ -54,24 +66,40 @@ class LogSegmentTest extends JUnit3Suite {
     assertEquals(ms.toList, read.toList)
   }
   
+  /**
+   * If we set the startOffset and maxOffset for the read to be the same value
+   * we should get only the first message in the log
+   */
   @Test
-  def testReadSingleMessage() {
-    val seg = createSegment(40)
-    val ms = messages(50, "hello", "there")
-    seg.append(50, ms)
-    val read = seg.read(startOffset = 41, maxSize = 200, maxOffset = Some(50))
-    assertEquals(new Message("hello".getBytes), read.head.message)
+  def testMaxOffset() {
+    val baseOffset = 50
+    val seg = createSegment(baseOffset)
+    val ms = messages(baseOffset, "hello", "there", "beautiful")
+    seg.append(baseOffset, ms)
+    def validate(offset: Long) = 
+      assertEquals(ms.filter(_.offset == offset).toList, 
+                   seg.read(startOffset = offset, maxSize = 1024, maxOffset = Some(offset+1)).toList)
+    validate(50)
+    validate(51)
+    validate(52)
   }
   
+  /**
+   * If we read from an offset beyond the last offset in the segment we should get null
+   */
   @Test
   def testReadAfterLast() {
     val seg = createSegment(40)
     val ms = messages(50, "hello", "there")
     seg.append(50, ms)
     val read = seg.read(startOffset = 52, maxSize = 200, maxOffset = None)
-    assertEquals(0, read.size)
+    assertNull("Read beyond the last offset in the segment should give null", null)
   }
   
+  /**
+   * If we read from an offset which doesn't exist we should get a message set beginning
+   * with the least offset greater than the given startOffset.
+   */
   @Test
   def testReadFromGap() {
     val seg = createSegment(40)
@@ -83,6 +111,10 @@ class LogSegmentTest extends JUnit3Suite {
     assertEquals(ms2.toList, read.toList)
   }
   
+  /**
+   * In a loop append two messages then truncate off the second of those messages and check that we can read
+   * the first but not the second message.
+   */
   @Test
   def testTruncate() {
     val seg = createSegment(40)
@@ -93,32 +125,85 @@ class LogSegmentTest extends JUnit3Suite {
       val ms2 = messages(offset+1, "hello")
       seg.append(offset+1, ms2)
       // check that we can read back both messages
-      val read = seg.read(offset, 10000, None)
+      val read = seg.read(offset, None, 10000)
       assertEquals(List(ms1.head, ms2.head), read.toList)
       // now truncate off the last message
       seg.truncateTo(offset + 1)
-      val read2 = seg.read(offset, 10000, None)
+      val read2 = seg.read(offset, None, 10000)
       assertEquals(1, read2.size)
       assertEquals(ms1.head, read2.head)
       offset += 1
     }
   }
   
+  /**
+   * Test truncating the whole segment, and check that we can reappend with the original offset.
+   */
   @Test
   def testTruncateFull() {
     // test the case where we fully truncate the log
     val seg = createSegment(40)
     seg.append(40, messages(40, "hello", "there"))
     seg.truncateTo(0)
+    assertNull("Segment should be empty.", seg.read(0, None, 1024))
     seg.append(40, messages(40, "hello", "there"))    
   }
   
+  /**
+   * Test that offsets are assigned sequentially and that the nextOffset variable is incremented
+   */
   @Test
   def testNextOffsetCalculation() {
     val seg = createSegment(40)
     assertEquals(40, seg.nextOffset)
     seg.append(50, messages(50, "hello", "there", "you"))
     assertEquals(53, seg.nextOffset())
+  }
+  
+  /**
+   * Create a segment with some data and an index. Then corrupt the index,
+   * and recover the segment, the entries should all be readable.
+   */
+  @Test
+  def testRecoveryFixesCorruptIndex() {
+    val seg = createSegment(0)
+    for(i <- 0 until 100)
+      seg.append(i, messages(i, i.toString))
+    val indexFile = seg.index.file
+    writeNonsense(indexFile, 5, indexFile.length.toInt)
+    seg.recover(64*1024)
+    for(i <- 0 until 100)
+      assertEquals(i, seg.read(i, Some(i+1), 1024).head.offset)
+  }
+  
+  /**
+   * Randomly corrupt a log a number of times and attempt recovery.
+   */
+  @Test
+  def testRecoveryWithCorruptMessage() {
+    val rand = new Random(1)
+    val messagesAppended = 20
+    for(iteration <- 0 until 10) {
+      val seg = createSegment(0)
+      for(i <- 0 until messagesAppended)
+        seg.append(i, messages(i, i.toString))
+      val offsetToBeginCorruption = rand.nextInt(messagesAppended)
+      // start corrupting somewhere in the middle of the chosen record all the way to the end
+      val position = seg.log.searchFor(offsetToBeginCorruption, 0).position + rand.nextInt(15)
+      writeNonsense(seg.log.file, position, seg.log.file.length.toInt - position)
+      seg.recover(64*1024)
+      assertEquals("Should have truncated off bad messages.", (0 until offsetToBeginCorruption).toList, seg.log.map(_.offset).toList)
+      seg.delete()
+    }
+  }
+  
+  def writeNonsense(fileName: File, position: Long, size: Int) {
+    val file = new RandomAccessFile(fileName, "rw")
+    file.seek(position)
+    val rand = new Random
+    for(i <- 0 until size)
+      file.writeByte(rand.nextInt(255))
+    file.close()
   }
   
 }

@@ -20,7 +20,6 @@ package kafka.log
 import java.io._
 import kafka.utils._
 import scala.collection._
-import kafka.log.Log._
 import kafka.common.{TopicAndPartition, KafkaException}
 import kafka.server.KafkaConfig
 
@@ -36,9 +35,9 @@ import kafka.server.KafkaConfig
  * A background thread handles log retention by periodically truncating excess log segments.
  */
 @threadsafe
-private[kafka] class LogManager(val config: KafkaConfig,
-                                scheduler: KafkaScheduler,
-                                private val time: Time) extends Logging {
+class LogManager(val config: KafkaConfig,
+                 scheduler: KafkaScheduler,
+                 private val time: Time) extends Logging {
 
   val CleanShutdownFile = ".kafka_cleanshutdown"
   val LockFile = ".lock"
@@ -62,9 +61,12 @@ private[kafka] class LogManager(val config: KafkaConfig,
   loadLogs(logDirs)
   
   /**
-   * 1. Ensure that there are no duplicates in the directory list
-   * 2. Create each directory if it doesn't exist
-   * 3. Check that each path is a readable directory 
+   * Create and check validity of the given directories, specifically:
+   * <ol>
+   * <li> Ensure that there are no duplicates in the directory list
+   * <li> Create each directory if it doesn't exist
+   * <li> Check that each path is a readable directory 
+   * </ol>
    */
   private def createAndValidateLogDirs(dirs: Seq[File]) {
     if(dirs.map(_.getCanonicalPath).toSet.size < dirs.size)
@@ -95,7 +97,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   }
   
   /**
-   * Recovery and load all logs in the given data directories
+   * Recover and load all logs in the given data directories
    */
   private def loadLogs(dirs: Seq[File]) {
     for(dir <- dirs) {
@@ -120,8 +122,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
                               needsRecovery, 
                               config.logIndexMaxSizeBytes,
                               config.logIndexIntervalBytes,
-                              time, 
-                              config.brokerId)
+                              time)
             val previous = this.logs.put(topicPartition, log)
             if(previous != null)
               throw new IllegalArgumentException("Duplicate log directories found: %s, %s!".format(log.dir.getAbsolutePath, previous.dir.getAbsolutePath))
@@ -132,7 +133,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   }
 
   /**
-   *  Start the log flush thread
+   *  Start the background threads to flush logs and do log cleanup
    */
   def startup() {
     /* Schedule the cleanup task to delete old logs */
@@ -140,14 +141,17 @@ private[kafka] class LogManager(val config: KafkaConfig,
       info("Starting log cleaner every " + logCleanupIntervalMs + " ms")
       scheduler.scheduleWithRate(cleanupLogs, "kafka-logcleaner-", 60 * 1000, logCleanupIntervalMs, false)
       info("Starting log flusher every " + config.flushSchedulerThreadRate +
-                   " ms with the following overrides " + logFlushIntervals)
-      scheduler.scheduleWithRate(flushDirtyLogs, "kafka-logflusher-",
-                                 config.flushSchedulerThreadRate, config.flushSchedulerThreadRate, false)
+           " ms with the following overrides " + logFlushIntervals)
+      scheduler.scheduleWithRate(flushDirtyLogs, 
+                                 "kafka-logflusher-",
+                                 config.flushSchedulerThreadRate, 
+                                 config.flushSchedulerThreadRate, 
+                                 isDaemon = false)
     }
   }
   
   /**
-   * Get the log if it exists
+   * Get the log if it exists, otherwise return None
    */
   def getLog(topic: String, partition: Int): Option[Log] = {
     val topicAndPartiton = TopicAndPartition(topic, partition)
@@ -159,7 +163,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
   }
 
   /**
-   * Create the log if it does not exist, if it exists just return it
+   * Create the log if it does not exist, otherwise just return it
    */
   def getOrCreateLog(topic: String, partition: Int): Log = {
     val topicAndPartition = TopicAndPartition(topic, partition)
@@ -195,8 +199,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
                     needsRecovery = false, 
                     config.logIndexMaxSizeBytes, 
                     config.logIndexIntervalBytes, 
-                    time, 
-                    config.brokerId)
+                    time)
       info("Created log for topic %s partition %d in %s.".format(topicAndPartition.topic, topicAndPartition.partition, dataDir.getAbsolutePath))
       logs.put(topicAndPartition, log)
       log
@@ -223,14 +226,6 @@ private[kafka] class LogManager(val config: KafkaConfig,
     }
   }
 
-  def getOffsets(topicAndPartition: TopicAndPartition, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    val log = getLog(topicAndPartition.topic, topicAndPartition.partition)
-    log match {
-      case Some(l) => l.getOffsetsBefore(timestamp, maxNumOffsets)
-      case None => getEmptyOffsets(timestamp)
-    }
-  }
-
   /**
    * Runs through the log removing segments older than a certain age
    */
@@ -238,9 +233,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
     val startMs = time.milliseconds
     val topic = parseTopicPartitionName(log.name).topic
     val logCleanupThresholdMs = logRetentionMsMap.get(topic).getOrElse(this.logCleanupDefaultAgeMs)
-    val toBeDeleted = log.markDeletedWhile(startMs - _.messageSet.file.lastModified > logCleanupThresholdMs)
-    val total = log.deleteSegments(toBeDeleted)
-    total
+    log.deleteOldSegments(startMs - _.lastModified > logCleanupThresholdMs)
   }
 
   /**
@@ -250,7 +243,8 @@ private[kafka] class LogManager(val config: KafkaConfig,
   private def cleanupSegmentsToMaintainSize(log: Log): Int = {
     val topic = parseTopicPartitionName(log.dir.getName).topic
     val maxLogRetentionSize = logRetentionSizeMap.get(topic).getOrElse(config.logRetentionSize)
-    if(maxLogRetentionSize < 0 || log.size < maxLogRetentionSize) return 0
+    if(maxLogRetentionSize < 0 || log.size < maxLogRetentionSize)
+      return 0
     var diff = log.size - maxLogRetentionSize
     def shouldDelete(segment: LogSegment) = {
       if(diff - segment.size >= 0) {
@@ -260,9 +254,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
         false
       }
     }
-    val toBeDeleted = log.markDeletedWhile( shouldDelete )
-    val total = log.deleteSegments(toBeDeleted)
-    total
+    log.deleteOldSegments(shouldDelete)
   }
 
   /**
@@ -307,19 +299,20 @@ private[kafka] class LogManager(val config: KafkaConfig,
    */
   private def flushDirtyLogs() = {
     debug("Checking for dirty logs to flush...")
-    for (log <- allLogs) {
+    for ((topicAndPartition, log) <- logs) {
       try {
-        val timeSinceLastFlush = System.currentTimeMillis - log.getLastFlushedTime
+        val timeSinceLastFlush = time.milliseconds - log.lastFlushTime
+        
         var logFlushInterval = config.defaultFlushIntervalMs
-        if(logFlushIntervals.contains(log.topicName))
-          logFlushInterval = logFlushIntervals(log.topicName)
-        debug(log.topicName + " flush interval  " + logFlushInterval +
-                      " last flushed " + log.getLastFlushedTime + " time since last flush: " + timeSinceLastFlush)
+        if(logFlushIntervals.contains(topicAndPartition.topic))
+          logFlushInterval = logFlushIntervals(topicAndPartition.topic)
+        debug("Checking if flush is needed on " + topicAndPartition.topic + " flush interval  " + logFlushInterval +
+              " last flushed " + log.lastFlushTime + " time since last flush: " + timeSinceLastFlush)
         if(timeSinceLastFlush >= logFlushInterval)
           log.flush
       } catch {
         case e =>
-          error("Error flushing topic " + log.topicName, e)
+          error("Error flushing topic " + topicAndPartition.topic, e)
           e match {
             case _: IOException =>
               fatal("Halting due to unrecoverable I/O error while flushing logs: " + e.getMessage, e)
@@ -330,11 +323,12 @@ private[kafka] class LogManager(val config: KafkaConfig,
     }
   }
 
+  /**
+   * Parse the topic and partition out of the directory name of a log
+   */
   private def parseTopicPartitionName(name: String): TopicAndPartition = {
     val index = name.lastIndexOf('-')
     TopicAndPartition(name.substring(0,index), name.substring(index+1).toInt)
   }
-
-  def topics(): Iterable[String] = logs.keys.map(_.topic)
 
 }

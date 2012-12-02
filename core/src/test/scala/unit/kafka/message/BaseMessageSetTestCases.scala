@@ -26,7 +26,7 @@ import org.junit.Test
 
 trait BaseMessageSetTestCases extends JUnitSuite {
   
-  val messages = Array(new Message("abcd".getBytes()), new Message("efgh".getBytes()))
+  val messages = Array(new Message("abcd".getBytes), new Message("efgh".getBytes), new Message("ijkl".getBytes))
   
   def createMessageSet(messages: Seq[Message]): MessageSet
 
