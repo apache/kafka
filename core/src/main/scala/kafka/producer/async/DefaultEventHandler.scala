@@ -39,7 +39,8 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   extends EventHandler[K,V] with Logging {
   val isSync = ("sync" == config.producerType)
 
-  val counter = new AtomicInteger(0)
+  val partitionCounter = new AtomicInteger(0)
+  val correlationCounter = new AtomicInteger(0)
   val brokerPartitionInfo = new BrokerPartitionInfo(config, producerPool, topicPartitionInfos)
 
   private val lock = new Object()
@@ -191,7 +192,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         "\n Valid values are > 0")
     val partition =
       if(key == null)
-        Utils.abs(counter.getAndIncrement()) % numPartitions
+        Utils.abs(partitionCounter.getAndIncrement()) % numPartitions
       else
         partitioner.partition(key, numPartitions)
     if(partition < 0 || partition >= numPartitions)
@@ -212,7 +213,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       warn("Failed to send to broker %d with data %s".format(brokerId, messagesPerTopic))
       messagesPerTopic.keys.toSeq
     } else if(messagesPerTopic.size > 0) {
-      val producerRequest = new ProducerRequest(config.correlationId, config.clientId, config.requiredAcks,
+      val producerRequest = new ProducerRequest(correlationCounter.getAndIncrement(), config.clientId, config.requiredAcks,
         config.requestTimeoutMs, messagesPerTopic)
       try {
         val syncProducer = producerPool.getProducer(brokerId)

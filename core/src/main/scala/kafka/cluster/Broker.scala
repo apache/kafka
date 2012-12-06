@@ -31,38 +31,32 @@ private[kafka] object Broker {
     if(brokerInfoString == null)
       throw new BrokerNotAvailableException("Broker id %s does not exist".format(id))
     val brokerInfo = brokerInfoString.split(":")
-    new Broker(id, brokerInfo(0), brokerInfo(1), brokerInfo(2).toInt)
+    new Broker(id, brokerInfo(0), brokerInfo(1).toInt)
   }
 
   def readFrom(buffer: ByteBuffer): Broker = {
     val id = buffer.getInt
-    val creatorId = readShortString(buffer)
     val host = readShortString(buffer)
     val port = buffer.getInt
-    new Broker(id, creatorId, host, port)
+    new Broker(id, host, port)
   }
 }
 
-private[kafka] case class Broker(val id: Int, val creatorId: String, val host: String, val port: Int) {
+private[kafka] case class Broker(val id: Int, val host: String, val port: Int) {
   
-  override def toString(): String = new String("id:" + id + ",creatorId:" + creatorId + ",host:" + host + ",port:" + port)
+  override def toString(): String = new String("id:" + id + ",host:" + host + ",port:" + port)
 
-  def getZkString(): String = new String(creatorId + ":" + host + ":" + port)
+  def getZkString(): String = host + ":" + port
 
-  def getConnectionString(): String = new String(host + ":" + port)
+  def getConnectionString(): String = host + ":" + port
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(id)
-    writeShortString(buffer, creatorId)
     writeShortString(buffer, host)
     buffer.putInt(port)
   }
 
-  def sizeInBytes: Int = {
-    val size = shortStringLength(creatorId) + shortStringLength(host) /* host name */ + 4 /* port */ + 4 /* broker id*/
-    debug("Size of broker info = " + size)
-    size
-  }
+  def sizeInBytes: Int = shortStringLength(host) /* host name */ + 4 /* port */ + 4 /* broker id*/
 
   override def equals(obj: Any): Boolean = {
     obj match {

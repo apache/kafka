@@ -168,8 +168,8 @@ class AsyncProducerTest extends JUnit3Suite {
 
     val props = new Properties()
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
-    val broker1 = new Broker(0, "localhost", "localhost", 9092)
-    val broker2 = new Broker(1, "localhost", "localhost", 9093)
+    val broker1 = new Broker(0, "localhost", 9092)
+    val broker2 = new Broker(1, "localhost", 9093)
     broker1
     // form expected partitions metadata
     val partition1Metadata = new PartitionMetadata(0, Some(broker1), List(broker1, broker2))
@@ -427,17 +427,18 @@ class AsyncProducerTest extends JUnit3Suite {
     // produce request for topic1 and partitions 0 and 1.  Let the first request fail
     // entirely.  The second request will succeed for partition 1 but fail for partition 0.
     // On the third try for partition 0, let it succeed.
-    val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), 0)
+    val request1 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), acks = 0, correlationId = 0)
+    val request2 = TestUtils.produceRequestWithAcks(List(topic1), List(0, 1), messagesToSet(msgs), acks = 0, correlationId = 1)
     val response1 = ProducerResponse(ProducerRequest.CurrentVersion, 0,
       Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(ErrorMapping.NotLeaderForPartitionCode.toShort, 0L)),
           (TopicAndPartition("topic1", 1), ProducerResponseStatus(ErrorMapping.NoError, 0L))))
-    val request2 = TestUtils.produceRequest(topic1, 0, messagesToSet(msgs))
+    val request3 = TestUtils.produceRequest(topic1, 0, messagesToSet(msgs), correlationId = 2)
     val response2 = ProducerResponse(ProducerRequest.CurrentVersion, 0,
       Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(ErrorMapping.NoError, 0L))))
     val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
     EasyMock.expect(mockSyncProducer.send(request1)).andThrow(new RuntimeException) // simulate SocketTimeoutException
-    EasyMock.expect(mockSyncProducer.send(request1)).andReturn(response1)
-    EasyMock.expect(mockSyncProducer.send(request2)).andReturn(response2)
+    EasyMock.expect(mockSyncProducer.send(request2)).andReturn(response1)
+    EasyMock.expect(mockSyncProducer.send(request3)).andReturn(response2)
     EasyMock.replay(mockSyncProducer)
 
     val producerPool = EasyMock.createMock(classOf[ProducerPool])
@@ -510,7 +511,7 @@ class AsyncProducerTest extends JUnit3Suite {
   }
 
   private def getTopicMetadata(topic: String, partition: Seq[Int], brokerId: Int, brokerHost: String, brokerPort: Int): TopicMetadata = {
-    val broker1 = new Broker(brokerId, brokerHost, brokerHost, brokerPort)
+    val broker1 = new Broker(brokerId, brokerHost, brokerPort)
     new TopicMetadata(topic, partition.map(new PartitionMetadata(_, Some(broker1), List(broker1))))
   }
   

@@ -26,6 +26,7 @@ object OffsetResponse {
 
   def readFrom(buffer: ByteBuffer): OffsetResponse = {
     val versionId = buffer.getShort
+    val correlationId = buffer.getInt
     val numTopics = buffer.getInt
     val pairs = (1 to numTopics).flatMap(_ => {
       val topic = readShortString(buffer)
@@ -38,7 +39,7 @@ object OffsetResponse {
         (TopicAndPartition(topic, partition), PartitionOffsetsResponse(error, offsets))
       })
     })
-    OffsetResponse(versionId, Map(pairs:_*))
+    OffsetResponse(versionId, correlationId, Map(pairs:_*))
   }
 
 }
@@ -48,6 +49,7 @@ case class PartitionOffsetsResponse(error: Short, offsets: Seq[Long])
 
 
 case class OffsetResponse(versionId: Short,
+                          correlationId: Int,
                           partitionErrorAndOffsets: Map[TopicAndPartition, PartitionOffsetsResponse])
         extends RequestOrResponse {
 
@@ -57,6 +59,7 @@ case class OffsetResponse(versionId: Short,
 
   val sizeInBytes = {
     2 + /* versionId */
+    4 + /* correlation id */
     4 + /* topic count */
     offsetsGroupedByTopic.foldLeft(0)((foldedTopics, currTopic) => {
       val (topic, errorAndOffsetsMap) = currTopic
@@ -75,6 +78,7 @@ case class OffsetResponse(versionId: Short,
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
+    buffer.putInt(correlationId)
     buffer.putInt(offsetsGroupedByTopic.size) // topic count
     offsetsGroupedByTopic.foreach {
       case((topic, errorAndOffsetsMap)) =>

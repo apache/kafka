@@ -33,6 +33,7 @@ object OffsetRequest {
 
   def readFrom(buffer: ByteBuffer): OffsetRequest = {
     val versionId = buffer.getShort
+    val correlationId = buffer.getInt
     val clientId = readShortString(buffer)
     val replicaId = buffer.getInt
     val topicCount = buffer.getInt
@@ -54,16 +55,18 @@ case class PartitionOffsetRequestInfo(time: Long, maxNumOffsets: Int)
 
 case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo],
                          versionId: Short = OffsetRequest.CurrentVersion,
+                         correlationId: Int = 0,
                          clientId: String = OffsetRequest.DefaultClientId,
                          replicaId: Int = Request.OrdinaryConsumerId)
         extends RequestOrResponse(Some(RequestKeys.OffsetsKey)) {
 
-  def this(requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo], replicaId: Int) = this(requestInfo, OffsetRequest.CurrentVersion, OffsetRequest.DefaultClientId, replicaId)
+  def this(requestInfo: Map[TopicAndPartition, PartitionOffsetRequestInfo], correlationId: Int, replicaId: Int) = this(requestInfo, OffsetRequest.CurrentVersion, correlationId, OffsetRequest.DefaultClientId, replicaId)
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
+    buffer.putInt(correlationId)
     writeShortString(buffer, clientId)
     buffer.putInt(replicaId)
 
@@ -83,6 +86,7 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
 
   def sizeInBytes =
     2 + /* versionId */
+    4 + /* correlationId */
     shortStringLength(clientId) +
     4 + /* replicaId */
     4 + /* topic count */

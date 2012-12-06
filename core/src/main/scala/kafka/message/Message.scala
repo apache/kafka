@@ -38,12 +38,15 @@ object Message {
   val KeySizeOffset = AttributesOffset + AttributesLength
   val KeySizeLength = 4
   val KeyOffset = KeySizeOffset + KeySizeLength
-  val MessageOverhead = KeyOffset
+  val ValueSizeLength = 4
+  
+  /** The amount of overhead bytes in a message */
+  val MessageOverhead = KeyOffset + ValueSizeLength
   
   /**
    * The minimum valid size for the message header
    */
-  val MinHeaderSize = CrcLength + MagicLength + AttributesLength + KeySizeLength
+  val MinHeaderSize = CrcLength + MagicLength + AttributesLength + KeySizeLength + ValueSizeLength
   
   /**
    * The current "magic" value
@@ -97,22 +100,24 @@ class Message(val buffer: ByteBuffer) {
                              Message.AttributesLength + 
                              Message.KeySizeLength + 
                              (if(key == null) 0 else key.length) + 
+                             Message.ValueSizeLength + 
                              (if(payloadSize >= 0) payloadSize else bytes.length - payloadOffset)))
     // skip crc, we will fill that in at the end
-    buffer.put(MagicOffset, CurrentMagicValue)
-    var attributes:Byte = 0
+    buffer.position(MagicOffset)
+    buffer.put(CurrentMagicValue)
+    var attributes: Byte = 0
     if (codec.codec > 0)
       attributes =  (attributes | (CompressionCodeMask & codec.codec)).toByte
-    buffer.put(AttributesOffset, attributes)
+    buffer.put(attributes)
     if(key == null) {
-      buffer.putInt(KeySizeOffset, -1)
-      buffer.position(KeyOffset)
+      buffer.putInt(-1)
     } else {
-      buffer.putInt(KeySizeOffset, key.length)
-      buffer.position(KeyOffset)
+      buffer.putInt(key.length)
       buffer.put(key, 0, key.length)
     }
-    buffer.put(bytes, payloadOffset, if(payloadSize >= 0) payloadSize else bytes.length - payloadOffset)
+    val size = if(payloadSize >= 0) payloadSize else bytes.length - payloadOffset
+    buffer.putInt(size)
+    buffer.put(bytes, payloadOffset, size)
     buffer.rewind()
     
     // now compute the checksum and fill it in
@@ -171,9 +176,14 @@ class Message(val buffer: ByteBuffer) {
   def hasKey: Boolean = keySize >= 0
   
   /**
+   * The position where the payload size is stored
+   */
+  private def payloadSizeOffset = Message.KeyOffset + max(0, keySize)
+  
+  /**
    * The length of the message value in bytes
    */
-  def payloadSize: Int = size - KeyOffset - max(0, keySize)
+  def payloadSize: Int = buffer.getInt(payloadSizeOffset)
   
   /**
    * The magic version of this message
@@ -194,29 +204,27 @@ class Message(val buffer: ByteBuffer) {
   /**
    * A ByteBuffer containing the content of the message
    */
-  def payload: ByteBuffer = {
-    var payload = buffer.duplicate
-    payload.position(KeyOffset + max(keySize, 0))
-    payload = payload.slice()
-    payload.limit(payloadSize)
-    payload.rewind()
-    payload
-  }
+  def payload: ByteBuffer = sliceDelimited(payloadSizeOffset)
   
   /**
    * A ByteBuffer containing the message key
    */
-  def key: ByteBuffer = {
-    val s = keySize
-    if(s < 0) {
+  def key: ByteBuffer = sliceDelimited(KeySizeOffset)
+  
+  /**
+   * Read a size-delimited byte buffer starting at the given offset
+   */
+  private def sliceDelimited(start: Int): ByteBuffer = {
+    val size = buffer.getInt(start)
+    if(size < 0) {
       null
     } else {
-      var key = buffer.duplicate
-      key.position(KeyOffset)
-      key = key.slice()
-      key.limit(s)
-      key.rewind()
-      key
+      var b = buffer.duplicate
+      b.position(start + 4)
+      b = b.slice()
+      b.limit(size)
+      b.rewind
+      b
     }
   }
 

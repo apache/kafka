@@ -24,6 +24,7 @@ import java.nio.channels._
 import java.util.Random
 import java.util.Properties
 import junit.framework.Assert._
+import kafka.api._
 import kafka.server._
 import kafka.producer._
 import kafka.message._
@@ -333,13 +334,13 @@ object TestUtils extends Logging {
   }
 
   def createBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
-    val brokers = ids.map(id => new Broker(id, "localhost" + System.currentTimeMillis(), "localhost", 6667))
-    brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, b.id, b.host, b.creatorId, b.port))
+    val brokers = ids.map(id => new Broker(id, "localhost", 6667))
+    brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, b.id, b.host, b.port))
     brokers
   }
 
   def deleteBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
-    val brokers = ids.map(id => new Broker(id, "localhost" + System.currentTimeMillis(), "localhost", 6667))
+    val brokers = ids.map(id => new Broker(id, "localhost", 6667))
     brokers.foreach(b => ZkUtils.deletePath(zkClient, ZkUtils.BrokerIdsPath + "/" + b))
     brokers
   }
@@ -354,22 +355,27 @@ object TestUtils extends Logging {
   /**
    * Create a wired format request based on simple basic information
    */
-  def produceRequest(topic: String, partition: Int, message: ByteBufferMessageSet): kafka.api.ProducerRequest = {
-    produceRequest(SyncProducerConfig.DefaultCorrelationId,topic,partition,message)
+  def produceRequest(topic: String, 
+                     partition: Int, 
+                     message: ByteBufferMessageSet, 
+                     acks: Int = SyncProducerConfig.DefaultRequiredAcks,
+                     timeout: Int = SyncProducerConfig.DefaultAckTimeoutMs,
+                     correlationId: Int = 0,
+                     clientId: String = SyncProducerConfig.DefaultClientId): ProducerRequest = {
+    produceRequestWithAcks(Seq(topic), Seq(partition), message, acks, timeout, correlationId, clientId)
   }
 
-  def produceRequest(correlationId: Int, topic: String, partition: Int, message: ByteBufferMessageSet): kafka.api.ProducerRequest = {
-    produceRequestWithAcks(List(topic), List(partition), message, SyncProducerConfig.DefaultRequiredAcks)
-  }
-
-  def produceRequestWithAcks(topics: Seq[String], partitions: Seq[Int], message: ByteBufferMessageSet, acks: Int): kafka.api.ProducerRequest = {
-    val correlationId = SyncProducerConfig.DefaultCorrelationId
-    val clientId = SyncProducerConfig.DefaultClientId
-    val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
+  def produceRequestWithAcks(topics: Seq[String], 
+                             partitions: Seq[Int], 
+                             message: ByteBufferMessageSet, 
+                             acks: Int = SyncProducerConfig.DefaultRequiredAcks, 
+                             timeout: Int = SyncProducerConfig.DefaultAckTimeoutMs,
+                             correlationId: Int = 0,
+                             clientId: String = SyncProducerConfig.DefaultClientId): ProducerRequest = {
     val data = topics.flatMap(topic =>
       partitions.map(partition => (TopicAndPartition(topic,  partition), message))
     )
-    new kafka.api.ProducerRequest(correlationId, clientId, acks.toShort, ackTimeoutMs, Map(data:_*))
+    new ProducerRequest(correlationId, clientId, acks.toShort, timeout, Map(data:_*))
   }
 
   def makeLeaderForPartition(zkClient: ZkClient, topic: String,

@@ -92,7 +92,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     log.flush()
 
     val offsets = log.getOffsetsBefore(OffsetRequest.LatestTime, 10)
-    assertEquals(Seq(20L, 15L, 10L, 5L, 0L), offsets)
+    assertEquals(Seq(20L, 16L, 12L, 8L, 4L, 0L), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
     val topicAndPartition = TopicAndPartition(topic, part)
@@ -101,7 +101,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
       replicaId = 0)
     val consumerOffsets =
       simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
-    assertEquals(Seq(20L, 15L, 10L, 5L, 0L), consumerOffsets)
+    assertEquals(Seq(20L, 16L, 12L, 8L, 4L, 0L), consumerOffsets)
 
     // try to fetch using latest offset
     val fetchResponse = simpleConsumer.fetch(
@@ -157,14 +157,14 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val now = time.milliseconds
 
     val offsets = log.getOffsetsBefore(now, 10)
-    assertEquals(Seq(20L, 15L, 10L, 5L, 0L), offsets)
+    assertEquals(Seq(20L, 16L, 12L, 8L, 4L, 0L), offsets)
 
     waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
     val topicAndPartition = TopicAndPartition(topic, part)
     val offsetRequest = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(now, 10)), replicaId = 0)
     val consumerOffsets =
       simpleConsumer.getOffsetsBefore(offsetRequest).partitionErrorAndOffsets(topicAndPartition).offsets
-    assertEquals(Seq(20L, 15L, 10L, 5L, 0L), consumerOffsets)
+    assertEquals(Seq(20L, 16L, 12L, 8L, 4L, 0L), consumerOffsets)
   }
 
   @Test

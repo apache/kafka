@@ -180,9 +180,9 @@ object ZkUtils extends Logging {
     replicas.contains(brokerId.toString)
   }
 
-  def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, creator: String, port: Int) {
+  def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, port: Int) {
     val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
-    val broker = new Broker(id, creator, host, port)
+    val broker = new Broker(id, host, port)
     try {
       createEphemeralPathExpectConflict(zkClient, brokerIdPath, broker.getZkString)
     } catch {

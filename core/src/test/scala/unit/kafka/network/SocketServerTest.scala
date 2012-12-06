@@ -74,7 +74,7 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def simpleRequest() {
     val socket = connect()
-    val correlationId = SyncProducerConfig.DefaultCorrelationId
+    val correlationId = -1
     val clientId = SyncProducerConfig.DefaultClientId
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
     val ack = SyncProducerConfig.DefaultRequiredAcks

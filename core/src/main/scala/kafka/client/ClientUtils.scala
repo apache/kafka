@@ -75,8 +75,7 @@ object ClientUtils extends Logging{
       val brokerInfos = brokerStr.split(":")
       val hostName = brokerInfos(0)
       val port = brokerInfos(1).toInt
-      val creatorId = hostName + "-" + System.currentTimeMillis()
-      new Broker(brokerId, creatorId, hostName, port)
+      new Broker(brokerId, hostName, port)
     })
   }
   

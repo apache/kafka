@@ -17,30 +17,46 @@
 
 package kafka.api
 
+import kafka.cluster.Broker
 import java.nio.ByteBuffer
 
 object TopicMetadataResponse {
 
   def readFrom(buffer: ByteBuffer): TopicMetadataResponse = {
     val versionId = buffer.getShort
+    val correlationId = buffer.getInt
+    val brokerCount = buffer.getInt
+    val brokers = (0 until brokerCount).map(_ => Broker.readFrom(buffer))
+    val brokerMap = brokers.map(b => (b.id, b)).toMap
     val topicCount = buffer.getInt
-    val topicsMetadata = new Array[TopicMetadata](topicCount)
-    for( i <- 0 until topicCount) {
-      topicsMetadata(i) = TopicMetadata.readFrom(buffer)
-    }
-    new TopicMetadataResponse(versionId, topicsMetadata.toSeq)
+    val topicsMetadata = (0 until topicCount).map(_ => TopicMetadata.readFrom(buffer, brokerMap))
+    new TopicMetadataResponse(versionId, topicsMetadata, correlationId)
   }
 }
 
 case class TopicMetadataResponse(versionId: Short,
-                                 topicsMetadata: Seq[TopicMetadata]) extends RequestOrResponse
-{
-  val sizeInBytes = 2 + topicsMetadata.foldLeft(4)(_ + _.sizeInBytes)
+                                 topicsMetadata: Seq[TopicMetadata],
+                                 correlationId: Int) extends RequestOrResponse {
+  val sizeInBytes: Int = {
+    val brokers = extractBrokers(topicsMetadata).values
+    2 + 4 + 4 + brokers.map(_.sizeInBytes).sum + 4 + topicsMetadata.map(_.sizeInBytes).sum
+  }
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
+    buffer.putInt(correlationId)
+    /* brokers */
+    val brokers = extractBrokers(topicsMetadata).values
+    buffer.putInt(brokers.size)
+    brokers.foreach(_.writeTo(buffer))
     /* topic metadata */
     buffer.putInt(topicsMetadata.length)
     topicsMetadata.foreach(_.writeTo(buffer))
+  }
+    
+  def extractBrokers(topicMetadatas: Seq[TopicMetadata]): Map[Int, Broker] = {
+    val parts = topicsMetadata.flatMap(_.partitionsMetadata)
+    val brokers = parts.flatMap(_.replicas) ++ parts.map(_.leader).collect{case Some(l) => l}
+    brokers.map(b => (b.id, b)).toMap
   }
 }

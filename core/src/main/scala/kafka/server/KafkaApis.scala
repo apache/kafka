@@ -88,7 +88,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               case (topicAndPartition, partitionOffsetRequest) =>
                 (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), null))
             }
-            val errorResponse = OffsetResponse(apiRequest.versionId, partitionOffsetResponseMap)
+            val errorResponse = OffsetResponse(apiRequest.versionId, apiRequest.correlationId, partitionOffsetResponseMap)
             requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
             error("error when handling request %s".format(apiRequest), e)
           case RequestKeys.MetadataKey =>
@@ -96,7 +96,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             val topicMeatadata = apiRequest.topics.map {
               topic => TopicMetadata(topic, Nil, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
             }
-            val errorResponse = TopicMetadataResponse(apiRequest.versionId, topicMeatadata)
+            val errorResponse = TopicMetadataResponse(apiRequest.versionId, topicMeatadata, apiRequest.correlationId)
             requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
             error("error when handling request %s".format(apiRequest), e)
           case RequestKeys.LeaderAndIsrKey =>
@@ -104,7 +104,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             val responseMap = apiRequest.partitionStateInfos.map {
               case (topicAndPartition, partitionAndState) => (topicAndPartition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
             }
-            val errorResponse = LeaderAndIsrResponse(apiRequest.versionId, responseMap)
+            val errorResponse = LeaderAndIsrResponse(apiRequest.versionId, apiRequest.correlationId, responseMap)
             requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
             error("error when handling request %s".format(apiRequest), e)
           case RequestKeys.StopReplicaKey =>
@@ -113,7 +113,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               case topicAndPartition => (topicAndPartition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
             }.toMap
             error("error when handling request %s".format(apiRequest), e)
-            val errorResponse = StopReplicaResponse(apiRequest.versionId, responseMap)
+            val errorResponse = StopReplicaResponse(apiRequest.versionId, apiRequest.correlationId, responseMap)
             requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
         }
     } finally
@@ -127,7 +127,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     trace("Handling leader and ISR request " + leaderAndIsrRequest)
     try {
       val (response, error) = replicaManager.becomeLeaderOrFollower(leaderAndIsrRequest)
-      val leaderAndIsrResponse = new LeaderAndIsrResponse(leaderAndIsrRequest.versionId, response, error)
+      val leaderAndIsrResponse = new LeaderAndIsrResponse(leaderAndIsrRequest.versionId, leaderAndIsrRequest.correlationId, response, error)
       requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(leaderAndIsrResponse)))
     } catch {
       case e: KafkaStorageException =>
@@ -144,7 +144,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     trace("Handling stop replica request " + stopReplicaRequest)
 
     val (response, error) = replicaManager.stopReplicas(stopReplicaRequest)
-    val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.versionId, response.toMap, error)
+    val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.versionId, stopReplicaRequest.correlationId, response.toMap, error)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(stopReplicaResponse)))
 
     replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads()
@@ -409,7 +409,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), Nil) )
       }
     })
-    val response = OffsetResponse(OffsetRequest.CurrentVersion, responseMap)
+    val response = OffsetResponse(OffsetRequest.CurrentVersion, offsetRequest.correlationId, responseMap)
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
   }
 
@@ -458,7 +458,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       })
     topicsMetadata.foreach(metadata => trace("Sending topic metadata " + metadata.toString))
-    val response = new TopicMetadataResponse(metadataRequest.versionId, topicsMetadata.toSeq)
+    val response = new TopicMetadataResponse(metadataRequest.versionId, topicsMetadata.toSeq, metadataRequest.correlationId)
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
   }
 

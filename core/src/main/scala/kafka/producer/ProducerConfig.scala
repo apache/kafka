@@ -33,7 +33,7 @@ class ProducerConfig private (val props: VerifiableProperties)
   /** This is for bootstrapping and the producer will only use it for getting metadata
    * (topics, partitions and replicas). The socket connections for sending the actual data
    * will be established based on the broker information returned in the metadata. The
-   * format is host1:por1,host2:port2, and the list can be a subset of brokers or
+   * format is host1:port1,host2:port2, and the list can be a subset of brokers or
    * a VIP pointing to a subset of brokers.
    */
   val brokerList = props.getString("broker.list")

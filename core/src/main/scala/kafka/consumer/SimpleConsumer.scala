@@ -30,8 +30,12 @@ import kafka.cluster.Broker
 
 
 object SimpleConsumer extends Logging {
-  def earliestOrLatestOffset(broker: Broker, topic: String, partitionId: Int, earliestOrLatest: Long,
-                             clientId: String, isFromOrdinaryConsumer: Boolean): Long = {
+  def earliestOrLatestOffset(broker: Broker, 
+                             topic: String, 
+                             partitionId: Int, 
+                             earliestOrLatest: Long,
+                             clientId: String, 
+                             isFromOrdinaryConsumer: Boolean): Long = {
     var simpleConsumer: SimpleConsumer = null
     var producedOffset: Long = -1L
     try {
@@ -42,7 +46,7 @@ object SimpleConsumer extends Logging {
         new OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)))
       else
         new OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)),
-                          Request.DebuggingConsumerId)
+                          0, Request.DebuggingConsumerId)
       producedOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
     } catch {
       case e =>
@@ -55,8 +59,13 @@ object SimpleConsumer extends Logging {
     producedOffset
   }
 
-  def earliestOrLatestOffset(zkClient: ZkClient, topic: String, brokerId: Int, partitionId: Int,
-                             earliestOrLatest: Long, clientId: String, isFromOrdinaryConsumer: Boolean = true): Long = {
+  def earliestOrLatestOffset(zkClient: ZkClient, 
+                             topic: String, 
+                             brokerId: Int, 
+                             partitionId: Int,
+                             earliestOrLatest: Long, 
+                             clientId: String, 
+                             isFromOrdinaryConsumer: Boolean = true): Long = {
     val cluster = getCluster(zkClient)
     val broker = cluster.getBroker(brokerId) match {
       case Some(b) => b

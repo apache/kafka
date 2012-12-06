@@ -75,10 +75,11 @@ object SerializationTestUtils{
     TopicAndPartition(topic2, 3) -> PartitionFetchInfo(4000, 100)
   )
 
-  private val partitionMetaData0 = new PartitionMetadata(0, Some(new Broker(0, "creator", "localhost", 1011)), collection.immutable.Seq.empty)
-  private val partitionMetaData1 = new PartitionMetadata(1, Some(new Broker(0, "creator", "localhost", 1011)), collection.immutable.Seq.empty)
-  private val partitionMetaData2 = new PartitionMetadata(2, Some(new Broker(0, "creator", "localhost", 1011)), collection.immutable.Seq.empty)
-  private val partitionMetaData3 = new PartitionMetadata(3, Some(new Broker(0, "creator", "localhost", 1011)), collection.immutable.Seq.empty)
+  private val brokers = List(new Broker(0, "localhost", 1011), new Broker(1, "localhost", 1012), new Broker(2, "localhost", 1013))
+  private val partitionMetaData0 = new PartitionMetadata(0, Some(brokers.head), replicas = brokers, isr = brokers, errorCode = 0)
+  private val partitionMetaData1 = new PartitionMetadata(1, Some(brokers.head), replicas = brokers, isr = brokers.tail, errorCode = 1)
+  private val partitionMetaData2 = new PartitionMetadata(2, Some(brokers.head), replicas = brokers, isr = brokers, errorCode = 2)
+  private val partitionMetaData3 = new PartitionMetadata(3, Some(brokers.head), replicas = brokers, isr = brokers.tail.tail, errorCode = 3)
   private val partitionMetaDataSeq = Seq(partitionMetaData0, partitionMetaData1, partitionMetaData2, partitionMetaData3)
   private val topicmetaData1 = new TopicMetadata(topic1, partitionMetaDataSeq)
   private val topicmetaData2 = new TopicMetadata(topic2, partitionMetaDataSeq)
@@ -94,7 +95,7 @@ object SerializationTestUtils{
   def createTestLeaderAndIsrResponse() : LeaderAndIsrResponse = {
     val responseMap = Map(((topic1, 0), ErrorMapping.NoError),
                           ((topic2, 0), ErrorMapping.NoError))
-    new LeaderAndIsrResponse(1, responseMap)
+    new LeaderAndIsrResponse(1, 1, responseMap)
   }
 
   def createTestStopReplicaRequest() : StopReplicaRequest = {
@@ -104,7 +105,7 @@ object SerializationTestUtils{
   def createTestStopReplicaResponse() : StopReplicaResponse = {
     val responseMap = Map(((topic1, 0), ErrorMapping.NoError),
                           ((topic2, 0), ErrorMapping.NoError))
-    new StopReplicaResponse(1, responseMap.toMap)
+    new StopReplicaResponse(1, 0, responseMap.toMap)
   }
 
   def createTestProducerRequest: ProducerRequest = {
@@ -131,17 +132,17 @@ object SerializationTestUtils{
   )
 
   def createTestOffsetResponse: OffsetResponse = {
-    new OffsetResponse(OffsetRequest.CurrentVersion, collection.immutable.Map(
+    new OffsetResponse(OffsetRequest.CurrentVersion, 0, collection.immutable.Map(
       TopicAndPartition(topic1, 1) -> PartitionOffsetsResponse(ErrorMapping.NoError, Seq(1000l, 2000l, 3000l, 4000l)))
     )
   }
 
   def createTestTopicMetadataRequest: TopicMetadataRequest = {
-    new TopicMetadataRequest(1, "client 1", Seq(topic1, topic2))
+    new TopicMetadataRequest(1, "client 1", Seq(topic1, topic2), 1)
   }
 
   def createTestTopicMetadataResponse: TopicMetadataResponse = {
-    new TopicMetadataResponse(1, Seq(topicmetaData1, topicmetaData2))
+    new TopicMetadataResponse(1, Seq(topicmetaData1, topicmetaData2), 1)
   }
 }
 
