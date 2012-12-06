@@ -27,29 +27,25 @@ import kafka.api.ApiUtils._
 object FetchResponsePartitionData {
   def readFrom(buffer: ByteBuffer): FetchResponsePartitionData = {
     val error = buffer.getShort
-    val initialOffset = buffer.getLong
     val hw = buffer.getLong
     val messageSetSize = buffer.getInt
     val messageSetBuffer = buffer.slice()
     messageSetBuffer.limit(messageSetSize)
     buffer.position(buffer.position + messageSetSize)
-    new FetchResponsePartitionData(error, initialOffset,
-                                   hw, new ByteBufferMessageSet(messageSetBuffer))
+    new FetchResponsePartitionData(error, hw, new ByteBufferMessageSet(messageSetBuffer))
   }
 
   val headerSize =
     2 + /* error code */
-    8 + /* initialOffset */
     8 + /* high watermark */
     4 /* messageSetSize */
 }
 
-case class FetchResponsePartitionData(error: Short = ErrorMapping.NoError,
-                                      initialOffset:Long = 0L, hw: Long = -1L, messages: MessageSet) {
+case class FetchResponsePartitionData(error: Short = ErrorMapping.NoError, hw: Long = -1L, messages: MessageSet) {
 
   val sizeInBytes = FetchResponsePartitionData.headerSize + messages.sizeInBytes
 
-  def this(messages: MessageSet) = this(ErrorMapping.NoError, 0L, -1L, messages)
+  def this(messages: MessageSet) = this(ErrorMapping.NoError, -1L, messages)
   
 }
 
@@ -63,7 +59,6 @@ class PartitionDataSend(val partitionId: Int,
   private val buffer = ByteBuffer.allocate( 4 /** partitionId **/ + FetchResponsePartitionData.headerSize)
   buffer.putInt(partitionId)
   buffer.putShort(partitionData.error)
-  buffer.putLong(partitionData.initialOffset)
   buffer.putLong(partitionData.hw)
   buffer.putInt(partitionData.messages.sizeInBytes)
   buffer.rewind()

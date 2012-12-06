@@ -56,7 +56,7 @@ case class TopicMetadataResponse(versionId: Short,
     
   def extractBrokers(topicMetadatas: Seq[TopicMetadata]): Map[Int, Broker] = {
     val parts = topicsMetadata.flatMap(_.partitionsMetadata)
-    val brokers = parts.flatMap(_.replicas) ++ parts.map(_.leader).collect{case Some(l) => l}
+    val brokers = (parts.flatMap(_.replicas)) ++ (parts.map(_.leader).collect{case Some(l) => l})
     brokers.map(b => (b.id, b)).toMap
   }
 }

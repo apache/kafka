@@ -77,7 +77,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             val apiRequest = request.requestObj.asInstanceOf[FetchRequest]
             val fetchResponsePartitionData = apiRequest.requestInfo.map {
               case (topicAndPartition, data) =>
-                (topicAndPartition, FetchResponsePartitionData(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), 0, -1, null))
+                (topicAndPartition, FetchResponsePartitionData(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1, null))
             }
             val errorResponse = FetchResponse(apiRequest.versionId, apiRequest.correlationId, fetchResponsePartitionData)
             requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(errorResponse)))
@@ -326,19 +326,18 @@ class KafkaApis(val requestChannel: RequestChannel,
             BrokerTopicStats.getBrokerTopicStats(topic).bytesOutRate.mark(messages.sizeInBytes)
             BrokerTopicStats.getBrokerAllTopicStats.bytesOutRate.mark(messages.sizeInBytes)
             if (!isFetchFromFollower) {
-              new FetchResponsePartitionData(ErrorMapping.NoError, offset, highWatermark, messages)
+              new FetchResponsePartitionData(ErrorMapping.NoError, highWatermark, messages)
             } else {
               debug("Leader %d for topic %s partition %d received fetch request from follower %d"
                             .format(brokerId, topic, partition, fetchRequest.replicaId))
-              new FetchResponsePartitionData(ErrorMapping.NoError, offset, highWatermark, messages)
+              new FetchResponsePartitionData(ErrorMapping.NoError, highWatermark, messages)
             }
           } catch {
             case t: Throwable =>
               BrokerTopicStats.getBrokerTopicStats(topic).failedFetchRequestRate.mark()
               BrokerTopicStats.getBrokerAllTopicStats.failedFetchRequestRate.mark()
               error("error when processing request " + (topic, partition, offset, fetchSize), t)
-              new FetchResponsePartitionData(ErrorMapping.codeFor(t.getClass.asInstanceOf[Class[Throwable]]),
-                                             offset, -1L, MessageSet.Empty)
+              new FetchResponsePartitionData(ErrorMapping.codeFor(t.getClass.asInstanceOf[Class[Throwable]]), -1L, MessageSet.Empty)
           }
         (TopicAndPartition(topic, partition), partitionData)
     }
