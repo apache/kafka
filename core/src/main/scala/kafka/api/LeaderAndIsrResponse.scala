@@ -26,7 +26,6 @@ import collection.Map
 
 object LeaderAndIsrResponse {
   def readFrom(buffer: ByteBuffer): LeaderAndIsrResponse = {
-    val versionId = buffer.getShort
     val correlationId = buffer.getInt
     val errorCode = buffer.getShort
     val numEntries = buffer.getInt
@@ -37,19 +36,17 @@ object LeaderAndIsrResponse {
       val partitionErrorCode = buffer.getShort
       responseMap.put((topic, partition), partitionErrorCode)
     }
-    new LeaderAndIsrResponse(versionId, correlationId, responseMap, errorCode)
+    new LeaderAndIsrResponse(correlationId, responseMap, errorCode)
   }
 }
 
 
-case class LeaderAndIsrResponse(versionId: Short,
-                                correlationId: Int,
+case class LeaderAndIsrResponse(correlationId: Int,
                                 responseMap: Map[(String, Int), Short],
                                 errorCode: Short = ErrorMapping.NoError)
         extends RequestOrResponse {
   def sizeInBytes(): Int ={
     var size =
-      2 /* version id */ +
       4 /* correlation id */ + 
       2 /* error code */ +
       4 /* number of responses */
@@ -63,7 +60,6 @@ case class LeaderAndIsrResponse(versionId: Short,
   }
 
   def writeTo(buffer: ByteBuffer) {
-    buffer.putShort(versionId)
     buffer.putInt(correlationId)
     buffer.putShort(errorCode)
     buffer.putInt(responseMap.size)

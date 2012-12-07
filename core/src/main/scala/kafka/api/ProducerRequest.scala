@@ -25,7 +25,7 @@ import kafka.api.ApiUtils._
 
 
 object ProducerRequest {
-  val CurrentVersion: Short = 0
+  val CurrentVersion = 0.shortValue
 
   def readFrom(buffer: ByteBuffer): ProducerRequest = {
     val versionId: Short = buffer.getShort

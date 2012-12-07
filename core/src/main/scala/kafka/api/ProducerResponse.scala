@@ -25,7 +25,6 @@ import kafka.api.ApiUtils._
 
 object ProducerResponse {
   def readFrom(buffer: ByteBuffer): ProducerResponse = {
-    val versionId = buffer.getShort
     val correlationId = buffer.getInt
     val topicCount = buffer.getInt
     val statusPairs = (1 to topicCount).flatMap(_ => {
@@ -39,15 +38,14 @@ object ProducerResponse {
       })
     })
 
-    ProducerResponse(versionId, correlationId, Map(statusPairs:_*))
+    ProducerResponse(correlationId, Map(statusPairs:_*))
   }
 }
 
 case class ProducerResponseStatus(error: Short, offset: Long)
 
 
-case class ProducerResponse(versionId: Short,
-                            correlationId: Int,
+case class ProducerResponse(correlationId: Int,
                             status: Map[TopicAndPartition, ProducerResponseStatus]) extends RequestOrResponse {
 
   /**
@@ -59,7 +57,6 @@ case class ProducerResponse(versionId: Short,
 
   val sizeInBytes = {
     val groupedStatus = statusGroupedByTopic
-    2 + /* version id */
     4 + /* correlation id */
     4 + /* topic count */
     groupedStatus.foldLeft (0) ((foldedTopics, currTopic) => {
@@ -76,8 +73,6 @@ case class ProducerResponse(versionId: Short,
 
   def writeTo(buffer: ByteBuffer) {
     val groupedStatus = statusGroupedByTopic
-
-    buffer.putShort(versionId)
     buffer.putInt(correlationId)
     buffer.putInt(groupedStatus.size) // topic count
 

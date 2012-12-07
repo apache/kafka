@@ -79,7 +79,7 @@ case class PartitionStateInfo(val leaderIsrAndControllerEpoch: LeaderIsrAndContr
 }
 
 object LeaderAndIsrRequest {
-  val CurrentVersion = 1.shortValue()
+  val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
   val IsInit: Boolean = true
   val NotInit: Boolean = false

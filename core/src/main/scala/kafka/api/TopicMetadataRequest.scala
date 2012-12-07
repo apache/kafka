@@ -23,7 +23,7 @@ import collection.mutable.ListBuffer
 import kafka.utils.Logging
 
 object TopicMetadataRequest extends Logging {
-  val CurrentVersion = 1.shortValue()
+  val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
 
   /**

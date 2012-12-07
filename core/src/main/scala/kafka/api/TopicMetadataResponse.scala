@@ -23,27 +23,24 @@ import java.nio.ByteBuffer
 object TopicMetadataResponse {
 
   def readFrom(buffer: ByteBuffer): TopicMetadataResponse = {
-    val versionId = buffer.getShort
     val correlationId = buffer.getInt
     val brokerCount = buffer.getInt
     val brokers = (0 until brokerCount).map(_ => Broker.readFrom(buffer))
     val brokerMap = brokers.map(b => (b.id, b)).toMap
     val topicCount = buffer.getInt
     val topicsMetadata = (0 until topicCount).map(_ => TopicMetadata.readFrom(buffer, brokerMap))
-    new TopicMetadataResponse(versionId, topicsMetadata, correlationId)
+    new TopicMetadataResponse(topicsMetadata, correlationId)
   }
 }
 
-case class TopicMetadataResponse(versionId: Short,
-                                 topicsMetadata: Seq[TopicMetadata],
+case class TopicMetadataResponse(topicsMetadata: Seq[TopicMetadata],
                                  correlationId: Int) extends RequestOrResponse {
   val sizeInBytes: Int = {
     val brokers = extractBrokers(topicsMetadata).values
-    2 + 4 + 4 + brokers.map(_.sizeInBytes).sum + 4 + topicsMetadata.map(_.sizeInBytes).sum
+    4 + 4 + brokers.map(_.sizeInBytes).sum + 4 + topicsMetadata.map(_.sizeInBytes).sum
   }
 
   def writeTo(buffer: ByteBuffer) {
-    buffer.putShort(versionId)
     buffer.putInt(correlationId)
     /* brokers */
     val brokers = extractBrokers(topicsMetadata).values

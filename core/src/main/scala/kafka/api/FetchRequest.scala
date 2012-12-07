@@ -30,7 +30,7 @@ case class PartitionFetchInfo(offset: Long, fetchSize: Int)
 
 
 object FetchRequest {
-  val CurrentVersion = 1.shortValue()
+  val CurrentVersion = 0.shortValue
   val DefaultMaxWait = 0
   val DefaultMinBytes = 0
   val ReplicaFetcherClientId = "replica-fetcher"

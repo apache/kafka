@@ -25,7 +25,6 @@ import kafka.api.ApiUtils._
 object OffsetResponse {
 
   def readFrom(buffer: ByteBuffer): OffsetResponse = {
-    val versionId = buffer.getShort
     val correlationId = buffer.getInt
     val numTopics = buffer.getInt
     val pairs = (1 to numTopics).flatMap(_ => {
@@ -39,7 +38,7 @@ object OffsetResponse {
         (TopicAndPartition(topic, partition), PartitionOffsetsResponse(error, offsets))
       })
     })
-    OffsetResponse(versionId, correlationId, Map(pairs:_*))
+    OffsetResponse(correlationId, Map(pairs:_*))
   }
 
 }
@@ -48,8 +47,7 @@ object OffsetResponse {
 case class PartitionOffsetsResponse(error: Short, offsets: Seq[Long])
 
 
-case class OffsetResponse(versionId: Short,
-                          correlationId: Int,
+case class OffsetResponse(correlationId: Int,
                           partitionErrorAndOffsets: Map[TopicAndPartition, PartitionOffsetsResponse])
         extends RequestOrResponse {
 
@@ -58,7 +56,6 @@ case class OffsetResponse(versionId: Short,
   def hasError = partitionErrorAndOffsets.values.exists(_.error != ErrorMapping.NoError)
 
   val sizeInBytes = {
-    2 + /* versionId */
     4 + /* correlation id */
     4 + /* topic count */
     offsetsGroupedByTopic.foldLeft(0)((foldedTopics, currTopic) => {
@@ -77,7 +74,6 @@ case class OffsetResponse(versionId: Short,
   }
 
   def writeTo(buffer: ByteBuffer) {
-    buffer.putShort(versionId)
     buffer.putInt(correlationId)
     buffer.putInt(offsetsGroupedByTopic.size) // topic count
     offsetsGroupedByTopic.foreach {

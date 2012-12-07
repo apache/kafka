@@ -25,7 +25,7 @@ import kafka.network.InvalidRequestException
 
 
 object StopReplicaRequest extends Logging {
-  val CurrentVersion = 1.shortValue()
+  val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
   val DefaultAckTimeout = 100
 

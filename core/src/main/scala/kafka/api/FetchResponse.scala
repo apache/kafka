@@ -136,12 +136,10 @@ class TopicDataSend(val topicData: TopicData) extends Send {
 object FetchResponse {
 
   val headerSize =
-    2 + /* versionId */
     4 + /* correlationId */
     4 /* topic count */
 
   def readFrom(buffer: ByteBuffer): FetchResponse = {
-    val versionId = buffer.getShort
     val correlationId = buffer.getInt
     val topicCount = buffer.getInt
     val pairs = (1 to topicCount).flatMap(_ => {
@@ -151,13 +149,12 @@ object FetchResponse {
           (TopicAndPartition(topicData.topic, partitionId), partitionData)
       }
     })
-    FetchResponse(versionId, correlationId, Map(pairs:_*))
+    FetchResponse(correlationId, Map(pairs:_*))
   }
 }
 
 
-case class FetchResponse(versionId: Short,
-                         correlationId: Int,
+case class FetchResponse(correlationId: Int,
                          data: Map[TopicAndPartition, FetchResponsePartitionData])  {
 
   /**
@@ -206,7 +203,6 @@ class FetchResponseSend(val fetchResponse: FetchResponse) extends Send {
 
   private val buffer = ByteBuffer.allocate(4 /* for size */ + FetchResponse.headerSize)
   buffer.putInt(size)
-  buffer.putShort(fetchResponse.versionId)
   buffer.putInt(fetchResponse.correlationId)
   buffer.putInt(fetchResponse.dataGroupedByTopic.size) // topic count
   buffer.rewind()

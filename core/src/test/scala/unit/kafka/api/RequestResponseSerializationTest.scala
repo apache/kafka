@@ -95,7 +95,7 @@ object SerializationTestUtils{
   def createTestLeaderAndIsrResponse() : LeaderAndIsrResponse = {
     val responseMap = Map(((topic1, 0), ErrorMapping.NoError),
                           ((topic2, 0), ErrorMapping.NoError))
-    new LeaderAndIsrResponse(1, 1, responseMap)
+    new LeaderAndIsrResponse(1, responseMap)
   }
 
   def createTestStopReplicaRequest() : StopReplicaRequest = {
@@ -105,7 +105,7 @@ object SerializationTestUtils{
   def createTestStopReplicaResponse() : StopReplicaResponse = {
     val responseMap = Map(((topic1, 0), ErrorMapping.NoError),
                           ((topic2, 0), ErrorMapping.NoError))
-    new StopReplicaResponse(1, 0, responseMap.toMap)
+    new StopReplicaResponse(0, responseMap.toMap)
   }
 
   def createTestProducerRequest: ProducerRequest = {
@@ -113,7 +113,7 @@ object SerializationTestUtils{
   }
 
   def createTestProducerResponse: ProducerResponse =
-    ProducerResponse(1, 1, Map(
+    ProducerResponse(1, Map(
       TopicAndPartition(topic1, 0) -> ProducerResponseStatus(0.toShort, 10001),
       TopicAndPartition(topic2, 0) -> ProducerResponseStatus(0.toShort, 20001)
     ))
@@ -123,7 +123,7 @@ object SerializationTestUtils{
   }
 
   def createTestFetchResponse: FetchResponse = {
-    FetchResponse(1, 1, topicDataFetchResponse)
+    FetchResponse(1, topicDataFetchResponse)
   }
 
   def createTestOffsetRequest = new OffsetRequest(
@@ -132,7 +132,7 @@ object SerializationTestUtils{
   )
 
   def createTestOffsetResponse: OffsetResponse = {
-    new OffsetResponse(OffsetRequest.CurrentVersion, 0, collection.immutable.Map(
+    new OffsetResponse(0, collection.immutable.Map(
       TopicAndPartition(topic1, 1) -> PartitionOffsetsResponse(ErrorMapping.NoError, Seq(1000l, 2000l, 3000l, 4000l)))
     )
   }
@@ -142,7 +142,7 @@ object SerializationTestUtils{
   }
 
   def createTestTopicMetadataResponse: TopicMetadataResponse = {
-    new TopicMetadataResponse(1, Seq(topicmetaData1, topicmetaData2), 1)
+    new TopicMetadataResponse(Seq(topicmetaData1, topicmetaData2), 1)
   }
 }
 

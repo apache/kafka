@@ -23,7 +23,7 @@ import kafka.api.ApiUtils._
 
 
 object OffsetRequest {
-  val CurrentVersion = 1.shortValue()
+  val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
 
   val SmallestTimeString = "smallest"
