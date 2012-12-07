@@ -123,21 +123,20 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
                 # initialize signal handler
                 signal.signal(signal.SIGINT, self.signal_handler)
 
-                
-                # create "LOCAL" log directories for metrics, dashboards for each entity under this testcase
-                # for collecting logs from remote machines
-                kafka_system_test_utils.generate_testcase_log_dirs(self.systemTestEnv, self.testcaseEnv)
-    
                 # TestcaseEnv.testcaseConfigsList initialized by reading testcase properties file:
                 #   system_test/<suite_name>_testsuite/testcase_<n>/testcase_<n>_properties.json
                 self.testcaseEnv.testcaseConfigsList = system_test_utils.get_json_list_data(
                     self.testcaseEnv.testcasePropJsonPathName)
-    
-                # TestcaseEnv - initialize producer & consumer config / log file pathnames
-                kafka_system_test_utils.init_entity_props(self.systemTestEnv, self.testcaseEnv)
-
+                 
                 # clean up data directories specified in zookeeper.properties and kafka_server_<n>.properties
                 kafka_system_test_utils.cleanup_data_at_remote_hosts(self.systemTestEnv, self.testcaseEnv)
+
+                # create "LOCAL" log directories for metrics, dashboards for each entity under this testcase
+                # for collecting logs from remote machines
+                kafka_system_test_utils.generate_testcase_log_dirs(self.systemTestEnv, self.testcaseEnv)
+
+                # TestcaseEnv - initialize producer & consumer config / log file pathnames
+                kafka_system_test_utils.init_entity_props(self.systemTestEnv, self.testcaseEnv)
 
                 # generate remote hosts log/config dirs if not exist
                 kafka_system_test_utils.generate_testcase_log_dirs_in_remote_hosts(self.systemTestEnv, self.testcaseEnv)
