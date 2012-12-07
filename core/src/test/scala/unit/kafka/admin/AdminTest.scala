@@ -374,35 +374,38 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     var controllerId = ZkUtils.getController(zkClient)
     var controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
     var partitionsRemaining = controller.shutdownBroker(2)
-    assertEquals(0, partitionsRemaining)
-    var topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
-    var leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
-    assertTrue(leaderAfterShutdown != leaderBeforeShutdown)
-    assertEquals(2, topicMetadata.partitionsMetadata.head.isr.size)
+    try {
+      assertEquals(0, partitionsRemaining)
+      var topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
+      var leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
+      assertTrue(leaderAfterShutdown != leaderBeforeShutdown)
+      // assertEquals(2, topicMetadata.partitionsMetadata.head.isr.size)
+      assertEquals(2, controller.controllerContext.allLeaders(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
 
-    leaderBeforeShutdown = leaderAfterShutdown
-    controllerId = ZkUtils.getController(zkClient)
-    controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
-    partitionsRemaining = controller.shutdownBroker(1)
-    assertEquals(0, partitionsRemaining)
-    topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
-    leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
-    assertTrue(leaderAfterShutdown != leaderBeforeShutdown)
-    assertEquals(1, topicMetadata.partitionsMetadata.head.isr.size)
+      leaderBeforeShutdown = leaderAfterShutdown
+      controllerId = ZkUtils.getController(zkClient)
+      controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
+      partitionsRemaining = controller.shutdownBroker(1)
+      assertEquals(0, partitionsRemaining)
+      topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
+      leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
+      assertTrue(leaderAfterShutdown != leaderBeforeShutdown)
+      // assertEquals(1, topicMetadata.partitionsMetadata.head.isr.size)
+      assertEquals(1, controller.controllerContext.allLeaders(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
 
-    leaderBeforeShutdown = leaderAfterShutdown
-    controllerId = ZkUtils.getController(zkClient)
-    controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
-    partitionsRemaining = controller.shutdownBroker(0)
-    assertEquals(1, partitionsRemaining)
-    topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
-    leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
-    assertTrue(leaderAfterShutdown == leaderBeforeShutdown)
-    assertEquals(1, topicMetadata.partitionsMetadata.head.isr.size)
-
-    servers.foreach(_.shutdown())
-
-
+      leaderBeforeShutdown = leaderAfterShutdown
+      controllerId = ZkUtils.getController(zkClient)
+      controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
+      partitionsRemaining = controller.shutdownBroker(0)
+      assertEquals(1, partitionsRemaining)
+      topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
+      leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
+      assertTrue(leaderAfterShutdown == leaderBeforeShutdown)
+      assertEquals(1, controller.controllerContext.allLeaders(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
+    }
+    finally {
+      servers.foreach(_.shutdown())
+    }
   }
 
   private def checkIfReassignPartitionPathExists(): Boolean = {
