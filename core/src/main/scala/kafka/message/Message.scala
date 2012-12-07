@@ -51,7 +51,7 @@ object Message {
   /**
    * The current "magic" value
    */
-  val CurrentMagicValue: Byte = 2
+  val CurrentMagicValue: Byte = 0
 
   /**
    * Specifies the mask for the compression code. 2 bits to hold the compression codec.
