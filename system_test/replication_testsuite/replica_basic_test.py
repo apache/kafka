@@ -128,6 +128,11 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                     consumerMultiTopicsMode = self.testcaseEnv.testcaseArgumentsDict["consumer_multi_topics_mode"]
                 except:
                     pass
+                autoCreateTopic = "false"
+                try:
+                    autoCreateTopic = self.testcaseEnv.testcaseArgumentsDict["auto_create_topic"]
+                except:
+                    pass
 
 
                 # initialize self.testcaseEnv with user-defined environment variables (product specific)
@@ -179,10 +184,11 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                 self.anonLogger.info("sleeping for 5s")
                 time.sleep(5)
 
-                self.log_message("creating topics")
-                kafka_system_test_utils.create_topic(self.systemTestEnv, self.testcaseEnv)
-                self.anonLogger.info("sleeping for 5s")
-                time.sleep(5)
+                if autoCreateTopic.lower() == "false":
+                    self.log_message("creating topics")
+                    kafka_system_test_utils.create_topic(self.systemTestEnv, self.testcaseEnv)
+                    self.anonLogger.info("sleeping for 5s")
+                    time.sleep(5)
 
                 # =============================================
                 # start ConsoleConsumer if this is a Log Retention test                
