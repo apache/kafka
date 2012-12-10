@@ -591,12 +591,12 @@ private[kafka] class Log(val dir: File,
   def truncateAndStartWithNewOffset(newOffset: Long) {
     lock synchronized {
       val deletedSegments = segments.trunc(segments.view.size)
-      debug("Truncate and start log '" + name + "' to " + newOffset)
-      segments.append(new LogSegment(dir, 
+      info("Truncate and start log '" + name + "' to " + newOffset)
+      deleteSegments(deletedSegments)
+      segments.append(new LogSegment(dir,
                                      newOffset,
                                      indexIntervalBytes = indexIntervalBytes, 
                                      maxIndexSize = maxIndexSize))
-      deleteSegments(deletedSegments)
       this.nextOffset.set(newOffset)
     }
   }
