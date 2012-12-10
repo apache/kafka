@@ -433,17 +433,21 @@ object TestUtils extends Logging {
    * Execute the given block. If it throws an assert error, retry. Repeat
    * until no error is thrown or the time limit ellapses
    */
-  def retry(waitTime: Long, block: () => Unit) {
+  def retry(maxWaitMs: Long, block: () => Unit) {
+    var wait = 1L
     val startTime = System.currentTimeMillis()
     while(true) {
       try {
         block()
+        return
       } catch {
         case e: AssertionError =>
-          if(System.currentTimeMillis - startTime > waitTime)
+          if(System.currentTimeMillis - startTime > maxWaitMs) {
             throw e
-          else
-            Thread.sleep(100)
+          } else {
+            Thread.sleep(wait)
+            wait += math.min(wait, 1000)
+          }
       }
     }
   }

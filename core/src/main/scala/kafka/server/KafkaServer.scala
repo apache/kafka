@@ -40,7 +40,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   var replicaManager: ReplicaManager = null
   var apis: KafkaApis = null
   var kafkaController: KafkaController = null
-  val kafkaScheduler = new KafkaScheduler(4)
+  val kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
   var zkClient: ZkClient = null
 
   /**
@@ -53,7 +53,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     shutdownLatch = new CountDownLatch(1)
 
     /* start scheduler */
-    kafkaScheduler.startup
+    kafkaScheduler.startup()
 
     /* start log manager */
     logManager = new LogManager(config,

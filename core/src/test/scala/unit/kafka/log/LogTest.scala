@@ -66,7 +66,7 @@ class LogTest extends JUnitSuite {
 
     // create a log
     val log = new Log(logDir, 1000, config.maxMessageSize, 1000, rollMs, needsRecovery = false, time = time)
-    time.currentMs += rollMs + 1
+    time.sleep(rollMs + 1)
 
     // segment age is less than its limit
     log.append(set)
@@ -76,13 +76,13 @@ class LogTest extends JUnitSuite {
     assertEquals("There should still be exactly one segment.", 1, log.numberOfSegments)
 
     for(numSegments <- 2 until 4) {
-      time.currentMs += rollMs + 1
+      time.sleep(rollMs + 1)
       log.append(set)
       assertEquals("Changing time beyond rollMs and appending should create a new segment.", numSegments, log.numberOfSegments)
     }
 
     val numSegments = log.numberOfSegments
-    time.currentMs += rollMs + 1
+    time.sleep(rollMs + 1)
     log.append(new ByteBufferMessageSet())
     assertEquals("Appending an empty message set should not roll log even if succient time has passed.", numSegments, log.numberOfSegments)
   }

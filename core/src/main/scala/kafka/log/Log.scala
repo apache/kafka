@@ -394,7 +394,7 @@ class Log(val dir: File,
                                    maxIndexSize = maxIndexSize)
       val prev = segments.put(segment.baseOffset, segment)
       if(prev != null)
-        throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exsits".format(dir.getName, newOffset))
+        throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exists.".format(dir.getName, newOffset))
       segment
     }
   }

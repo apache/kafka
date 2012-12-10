@@ -52,26 +52,6 @@ object Utils extends Logging {
     new Runnable() {
       def run() = fun()
     }
-  
-  /**
-   * Wrap the given function in a java.lang.Runnable that logs any errors encountered
-   * @param fun A function
-   * @return A Runnable that just executes the function
-   */
-  def loggedRunnable(fun: () => Unit, name: String): Runnable =
-    new Runnable() {
-      def run() = {
-        Thread.currentThread().setName(name)
-        try {
-          fun()
-        }
-        catch {
-          case t =>
-            // log any error and the stack trace
-            error("error in loggedRunnable", t)
-        }
-      }
-    }
 
   /**
    * Create a daemon thread

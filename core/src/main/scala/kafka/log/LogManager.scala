@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io._
+import java.util.concurrent.TimeUnit
 import kafka.utils._
 import scala.collection._
 import kafka.common.{TopicAndPartition, KafkaException}
@@ -35,12 +36,13 @@ import kafka.server.KafkaConfig
  * A background thread handles log retention by periodically truncating excess log segments.
  */
 @threadsafe
-class LogManager(val config: KafkaConfig,
-                 scheduler: KafkaScheduler,
-                 private val time: Time) extends Logging {
+private[kafka] class LogManager(val config: KafkaConfig,
+                                scheduler: Scheduler,
+                                private val time: Time) extends Logging {
 
   val CleanShutdownFile = ".kafka_cleanshutdown"
   val LockFile = ".lock"
+  val InitialTaskDelayMs = 30*1000
   val logDirs: Array[File] = config.logDirs.map(new File(_)).toArray
   private val logFileSizeMap = config.logFileSizeMap
   private val logFlushInterval = config.flushInterval
@@ -138,15 +140,19 @@ class LogManager(val config: KafkaConfig,
   def startup() {
     /* Schedule the cleanup task to delete old logs */
     if(scheduler != null) {
-      info("Starting log cleaner every " + logCleanupIntervalMs + " ms")
-      scheduler.scheduleWithRate(cleanupLogs, "kafka-logcleaner-", 60 * 1000, logCleanupIntervalMs, false)
-      info("Starting log flusher every " + config.flushSchedulerThreadRate +
-           " ms with the following overrides " + logFlushIntervals)
-      scheduler.scheduleWithRate(flushDirtyLogs, 
-                                 "kafka-logflusher-",
-                                 config.flushSchedulerThreadRate, 
-                                 config.flushSchedulerThreadRate, 
-                                 isDaemon = false)
+      info("Starting log cleanup with a period of %d ms.".format(logCleanupIntervalMs))
+      scheduler.schedule("kafka-log-cleaner", 
+                         cleanupLogs, 
+                         delay = InitialTaskDelayMs, 
+                         period = logCleanupIntervalMs, 
+                         TimeUnit.MILLISECONDS)
+      info("Starting log flusher with a default period of %d ms with the following overrides: %s."
+          .format(config.defaultFlushIntervalMs, logFlushIntervals.map(e => e._1.toString + "=" + e._2.toString).mkString(", ")))
+      scheduler.schedule("kafka-log-flusher", 
+                         flushDirtyLogs, 
+                         delay = InitialTaskDelayMs, 
+                         period = config.flushSchedulerThreadRate, 
+                         TimeUnit.MILLISECONDS)
     }
   }
   

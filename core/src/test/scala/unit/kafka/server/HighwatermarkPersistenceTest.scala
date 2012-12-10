@@ -24,7 +24,7 @@ import org.junit._
 import org.junit.Assert._
 import kafka.common.KafkaException
 import kafka.cluster.Replica
-import kafka.utils.{SystemTime, KafkaScheduler, TestUtils, MockTime, Utils}
+import kafka.utils._
 
 class HighwatermarkPersistenceTest extends JUnit3Suite {
 

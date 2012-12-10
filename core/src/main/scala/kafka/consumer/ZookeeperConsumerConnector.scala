@@ -86,7 +86,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private var zkClient: ZkClient = null
   private var topicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]]
   private val topicThreadIdAndQueues = new Pool[(String,String), BlockingQueue[FetchedDataChunk]]
-  private val scheduler = new KafkaScheduler(1)
+  private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "kafka-consumer-scheduler-")
   private val messageStreamCreated = new AtomicBoolean(false)
 
   private var sessionExpirationListener: ZKSessionExpireListener = null
@@ -114,8 +114,11 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   if (config.autoCommit) {
     scheduler.startup
     info("starting auto committer every " + config.autoCommitIntervalMs + " ms")
-    scheduler.scheduleWithRate(autoCommit, "Kafka-consumer-autocommit-", config.autoCommitIntervalMs,
-      config.autoCommitIntervalMs, false)
+    scheduler.schedule("kafka-consumer-autocommit", 
+                       autoCommit, 
+                       delay = config.autoCommitIntervalMs,
+                       period = config.autoCommitIntervalMs, 
+                       unit = TimeUnit.MILLISECONDS)
   }
 
   KafkaMetricsReporter.startReporters(config.props)
@@ -160,7 +163,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         wildcardTopicWatcher.shutdown()
       try {
         if (config.autoCommit)
-          scheduler.shutdownNow()
+          scheduler.shutdown()
         fetcher match {
           case Some(f) => f.shutdown
           case None =>

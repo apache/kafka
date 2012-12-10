@@ -48,6 +48,9 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the number of io threads that the server uses for carrying out network requests */
   val numIoThreads = props.getIntInRange("io.threads", 8, (1, Int.MaxValue))
   
+  /* the number of threads to use for various background processing tasks */
+  val backgroundThreads = props.getIntInRange("background.threads", 4, (1, Int.MaxValue))
+  
   /* the number of queued requests allowed before blocking the network threads */
   val numQueuedRequests = props.getIntInRange("max.queued.requests", 500, (1, Int.MaxValue))
   

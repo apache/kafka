@@ -19,7 +19,18 @@ package kafka.utils
 
 import java.util.concurrent._
 
-class MockTime(@volatile var currentMs: Long) extends Time {
+/**
+ * A class used for unit testing things which depend on the Time interface.
+ * 
+ * This class never manually advances the clock, it only does so when you call
+ *   sleep(ms)
+ * 
+ * It also comes with an associated scheduler instance for managing background tasks in
+ * a deterministic way.
+ */
+class MockTime(@volatile private var currentMs: Long) extends Time {
+  
+  val scheduler = new MockScheduler(this)
   
   def this() = this(System.currentTimeMillis)
   
@@ -28,7 +39,11 @@ class MockTime(@volatile var currentMs: Long) extends Time {
   def nanoseconds: Long = 
     TimeUnit.NANOSECONDS.convert(currentMs, TimeUnit.MILLISECONDS)
 
-  def sleep(ms: Long): Unit = 
-    currentMs += ms
+  def sleep(ms: Long) {
+    this.currentMs += ms
+    scheduler.tick()
+  }
   
+  override def toString() = "MockTime(%d)".format(milliseconds)
+
 }
