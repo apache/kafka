@@ -48,7 +48,8 @@ import com.yammer.metrics.core.Gauge
  * 
  */
 @threadsafe
-class Log(val dir: File, 
+class Log(val dir: File,
+          val scheduler: Scheduler,
           val maxSegmentSize: Int,
           val maxMessageSize: Int, 
           val flushInterval: Int = Int.MaxValue,
@@ -56,6 +57,7 @@ class Log(val dir: File,
           val needsRecovery: Boolean, 
           val maxIndexSize: Int = (10*1024*1024),
           val indexIntervalBytes: Int = 4096,
+          val segmentDeleteDelayMs: Long = 60000,
           time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
@@ -90,22 +92,28 @@ class Log(val dir: File,
     val logSegments = new ConcurrentSkipListMap[Long, LogSegment]
     val ls = dir.listFiles()
     if(ls != null) {
-      for(file <- ls if file.isFile && file.toString.endsWith(LogFileSuffix)) {
-        if(!file.canRead)
-          throw new IOException("Could not read file " + file)
-        val filename = file.getName()
-        val start = filename.substring(0, filename.length - LogFileSuffix.length).toLong
-        val hasIndex = Log.indexFilename(dir, start).exists
-        val segment = new LogSegment(dir = dir, 
-                                     startOffset = start,
-                                     indexIntervalBytes = indexIntervalBytes, 
-                                     maxIndexSize = maxIndexSize)
-        if(!hasIndex) {
-          // this can only happen if someone manually deletes the index file
-          error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
-          segment.recover(maxMessageSize)
+      for(file <- ls if file.isFile) {
+        val filename = file.getName
+        if(filename.endsWith(DeletedFileSuffix)) {
+          val deleted = file.delete()
+          if(!deleted)
+            warn("Attempt to delete defunct segment file %s failed.".format(filename))
+        } else if(filename.endsWith(LogFileSuffix)) {
+          if(!file.canRead)
+            throw new IOException("Could not read file " + file)
+          val start = filename.substring(0, filename.length - LogFileSuffix.length).toLong
+          val hasIndex = Log.indexFilename(dir, start).exists
+          val segment = new LogSegment(dir = dir, 
+                                       startOffset = start,
+                                       indexIntervalBytes = indexIntervalBytes, 
+                                       maxIndexSize = maxIndexSize)
+          if(!hasIndex) {
+            // this can only happen if someone manually deletes the index file
+            error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
+            segment.recover(maxMessageSize)
+          }
+          logSegments.put(start, segment)
         }
-        logSegments.put(start, segment)
       }
     }
 
@@ -332,10 +340,8 @@ class Log(val dir: File,
         if(segments.size == numToDelete)
           roll()
         // remove the segments for lookups
-        deletable.foreach(d => segments.remove(d.baseOffset))
+        deletable.foreach(deleteSegment(_))
       }
-      // do not lock around actual file deletion, it isn't O(1) on many filesystems
-      deletable.foreach(_.delete())
     }
     numToDelete
   }
@@ -425,7 +431,7 @@ class Log(val dir: File,
   }
 
   /**
-   * Delete this log from the filesystem entirely
+   * Completely delete this log directory and all contents from the file system with no delay
    */
   def delete(): Unit = {
     logSegments.foreach(_.delete())
@@ -449,8 +455,7 @@ class Log(val dir: File,
         truncateFullyAndStartAt(targetOffset)
       } else {
         val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
-        deletable.foreach(s => segments.remove(s.baseOffset))
-        deletable.foreach(_.delete())
+        deletable.foreach(deleteSegment(_))
         activeSegment.truncateTo(targetOffset)
         this.nextOffset.set(targetOffset)
       }
@@ -465,8 +470,7 @@ class Log(val dir: File,
     debug("Truncate and start log '" + name + "' to " + newOffset)
     lock synchronized {
       val segmentsToDelete = logSegments.toList
-      segments.clear()
-      segmentsToDelete.foreach(_.delete())
+      segmentsToDelete.foreach(deleteSegment(_))
       segments.put(newOffset, 
                    new LogSegment(dir, 
                                   newOffset,
@@ -493,6 +497,41 @@ class Log(val dir: File,
   
   override def toString() = "Log(" + this.dir + ")"
   
+  /**
+   * This method performs an asynchronous log segment delete by doing the following:
+   * <ol>
+   *   <li>It removes the segment from the segment map so that it will no longer be used for reads.
+   *   <li>It renames the index and log files by appending .deleted to the respective file name
+   *   <li>It schedules an asynchronous delete operation to occur in the future
+   * </ol>
+   * This allows reads to happen concurrently without synchronization and without the possibility of physically
+   * deleting a file while it is being read from.
+   * 
+   * @param segment The log segment to schedule for deletion
+   */
+  private def deleteSegment(segment: LogSegment) {
+    info("Scheduling log segment %d for log %s for deletion.".format(segment.baseOffset, dir.getName))
+    lock synchronized {
+      segments.remove(segment.baseOffset)
+      val deletedLog = new File(segment.log.file.getPath + Log.DeletedFileSuffix)
+      val deletedIndex = new File(segment.index.file.getPath + Log.DeletedFileSuffix)
+      val renamedLog = segment.log.file.renameTo(deletedLog)
+      val renamedIndex = segment.index.file.renameTo(deletedIndex)
+      if(!renamedLog && segment.log.file.exists)
+        throw new KafkaStorageException("Failed to rename file %s to %s for log %s.".format(segment.log.file.getPath, deletedLog.getPath, name))
+      if(!renamedIndex && segment.index.file.exists)
+        throw new KafkaStorageException("Failed to rename file %s to %s for log %s.".format(segment.index.file.getPath, deletedIndex.getPath, name))
+      def asyncDeleteFiles() {
+        info("Deleting log segment %s for log %s.".format(segment.baseOffset, name))
+        if(!deletedLog.delete())
+          warn("Failed to delete log segment file %s for log %s.".format(deletedLog.getPath, name))
+        if(!deletedIndex.delete())
+          warn("Failed to delete index segment file %s for log %s.".format(deletedLog.getPath, name))
+      }
+      scheduler.schedule("delete-log-segment", asyncDeleteFiles, delay = segmentDeleteDelayMs)
+    }
+  }
+  
 }
 
 /**
@@ -501,6 +540,7 @@ class Log(val dir: File,
 object Log {
   val LogFileSuffix = ".log"
   val IndexFileSuffix = ".index"
+  val DeletedFileSuffix = ".deleted"
 
   /**
    * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros

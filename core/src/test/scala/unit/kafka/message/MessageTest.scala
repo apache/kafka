@@ -17,8 +17,8 @@
 
 package kafka.message
 
-import java.util._
 import java.nio._
+import java.util.HashMap
 import scala.collection._
 import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
@@ -45,7 +45,7 @@ class MessageTest extends JUnitSuite {
   }
   
   @Test
-  def testFieldValues = {
+  def testFieldValues {
     for(v <- messages) {
       TestUtils.checkEquals(ByteBuffer.wrap(v.payload), v.message.payload)
       assertEquals(Message.CurrentMagicValue, v.message.magic)
@@ -69,7 +69,7 @@ class MessageTest extends JUnitSuite {
   }
   
   @Test
-  def testEquality() = {
+  def testEquality() {
     for(v <- messages) {
       assertFalse("Should not equal null", v.message.equals(null))
       assertFalse("Should not equal a random string", v.message.equals("asdf"))
@@ -80,7 +80,7 @@ class MessageTest extends JUnitSuite {
   }
   
   @Test
-  def testIsHashable() = {
+  def testIsHashable() {
     // this is silly, but why not
     val m = new HashMap[Message, Message]()
     for(v <- messages)

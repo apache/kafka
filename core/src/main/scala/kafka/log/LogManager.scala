@@ -36,9 +36,9 @@ import kafka.server.KafkaConfig
  * A background thread handles log retention by periodically truncating excess log segments.
  */
 @threadsafe
-private[kafka] class LogManager(val config: KafkaConfig,
-                                scheduler: Scheduler,
-                                private val time: Time) extends Logging {
+class LogManager(val config: KafkaConfig,
+                 scheduler: Scheduler,
+                 private val time: Time) extends Logging {
 
   val CleanShutdownFile = ".kafka_cleanshutdown"
   val LockFile = ".lock"
@@ -116,7 +116,8 @@ private[kafka] class LogManager(val config: KafkaConfig,
             val topicPartition = parseTopicPartitionName(dir.getName)
             val rollIntervalMs = logRollMsMap.get(topicPartition.topic).getOrElse(this.logRollDefaultIntervalMs)
             val maxLogFileSize = logFileSizeMap.get(topicPartition.topic).getOrElse(config.logFileSize)
-            val log = new Log(dir, 
+            val log = new Log(dir,
+                              scheduler,
                               maxLogFileSize, 
                               config.maxMessageSize, 
                               logFlushInterval, 
@@ -124,6 +125,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
                               needsRecovery, 
                               config.logIndexMaxSizeBytes,
                               config.logIndexIntervalBytes,
+                              config.logDeleteDelayMs,
                               time)
             val previous = this.logs.put(topicPartition, log)
             if(previous != null)
@@ -198,6 +200,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
       val rollIntervalMs = logRollMsMap.get(topicAndPartition.topic).getOrElse(this.logRollDefaultIntervalMs)
       val maxLogFileSize = logFileSizeMap.get(topicAndPartition.topic).getOrElse(config.logFileSize)
       log = new Log(dir, 
+                    scheduler,
                     maxLogFileSize, 
                     config.maxMessageSize, 
                     logFlushInterval, 
@@ -205,6 +208,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
                     needsRecovery = false, 
                     config.logIndexMaxSizeBytes, 
                     config.logIndexIntervalBytes, 
+                    config.logDeleteDelayMs,
                     time)
       info("Created log for topic %s partition %d in %s.".format(topicAndPartition.topic, topicAndPartition.partition, dataDir.getAbsolutePath))
       logs.put(topicAndPartition, log)

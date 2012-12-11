@@ -115,6 +115,8 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
 
   /* the number of messages accumulated on a log partition before messages are flushed to disk */
   val flushInterval = props.getIntInRange("log.flush.interval", 500, (1, Int.MaxValue))
+  
+  val logDeleteDelayMs = props.getLongInRange("log.segment.delete.delay.ms", 60000, (0, Long.MaxValue))
 
   /* the maximum time in ms that a message in selected topics is kept in memory before flushed to disk, e.g., topic1:3000,topic2: 6000  */
   val flushIntervalMap = props.getMap("topic.flush.intervals.ms", _.toInt > 0).mapValues(_.toInt)

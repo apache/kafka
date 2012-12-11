@@ -16,7 +16,7 @@
  */
 package kafka.utils
 
-import scala.collection._
+import scala.collection.mutable.PriorityQueue
 import java.util.concurrent.TimeUnit
 
 /**
@@ -30,16 +30,13 @@ import java.util.concurrent.TimeUnit
  *   time.sleep(1001) // this should cause our scheduled task to fire
  * </code>
  *   
- * Two gotchas:
- * <ol>
- * <li> Incrementing the time by more than one task period will result in the correct number of executions of each scheduled task
- * but the order of these executions is not specified.
- * <li> Incrementing the time to the exact next execution time of a task will result in that task executing (it as if execution itself takes no time)
- * </ol>
+ * Incrementing the time to the exact next execution time of a task will result in that task executing (it as if execution itself takes no time).
  */
+@nonthreadsafe
 class MockScheduler(val time: Time) extends Scheduler {
   
-  var tasks = mutable.ArrayBuffer[MockScheduled]()
+  /* a priority queue of tasks ordered by next execution time */
+  var tasks = new PriorityQueue[MockTask]()
 
   def startup() {}
   
@@ -50,34 +47,38 @@ class MockScheduler(val time: Time) extends Scheduler {
   /**
    * Check for any tasks that need to execute. Since this is a mock scheduler this check only occurs
    * when this method is called and the execution happens synchronously in the calling thread.
-   * If you are using the scheduler associated with a MockTime instance this call will happen automatically.
+   * If you are using the scheduler associated with a MockTime instance this call be triggered automatically.
    */
   def tick() {
-    var tasks = mutable.ArrayBuffer[MockScheduled]()
     val now = time.milliseconds
-    for(task <- this.tasks) {
-      if(task.nextExecution <= now) {
-        if(task.period >= 0) {
-          val executions = (now - task.nextExecution) / task.period
-          for(i <- 0 to executions.toInt)
-            task.fun()
-          task.nextExecution += (executions + 1) * task.period
-          tasks += task
-        } else {
-          task.fun()
-        }
-      } else {
-        tasks += task
+    while(!tasks.isEmpty && tasks.head.nextExecution <= now) {
+      /* pop and execute the task with the lowest next execution time */
+      val curr = tasks.head
+      this.tasks = tasks.tail
+      curr.fun()
+      /* if the task is periodic, reschedule it and re-enqueue */
+      if(curr.periodic) {
+        curr.nextExecution += curr.period
+        this.tasks += curr
       }
     }
-    this.tasks = tasks
   }
   
   def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) {
-    tasks += MockScheduled(name, fun, time.milliseconds + delay, period = period)
+    tasks += MockTask(name, fun, time.milliseconds + delay, period = period)
     tick()
   }
   
 }
 
-case class MockScheduled(val name: String, val fun: () => Unit, var nextExecution: Long, val period: Long)
+case class MockTask(val name: String, val fun: () => Unit, var nextExecution: Long, val period: Long) extends Ordered[MockTask] {
+  def periodic = period >= 0
+  def compare(t: MockTask): Int = {
+    if(t.nextExecution == nextExecution)
+      return 0
+    else if (t.nextExecution < nextExecution)
+      return -1
+    else
+      return 1
+  }
+}

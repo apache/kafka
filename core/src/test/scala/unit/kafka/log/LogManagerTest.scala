@@ -85,19 +85,19 @@ class LogManagerTest extends JUnit3Suite {
   def testCleanupExpiredSegments() {
     val log = logManager.getOrCreateLog(name, 0)
     var offset = 0L
-    for(i <- 0 until 1000) {
+    for(i <- 0 until 200) {
       var set = TestUtils.singleMessageSet("test".getBytes())
       val info = log.append(set)
       offset = info.lastOffset
     }
-
     assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
-
-    // update the last modified time of all log segments
+    
     log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
-
+    
     time.sleep(maxLogAgeHours*60*60*1000 + 1)
-    assertEquals("Now there should only be only one segment.", 1, log.numberOfSegments)
+    assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
+    time.sleep(log.segmentDeleteDelayMs + 1)
+    assertEquals("Files should have been deleted", log.numberOfSegments * 2, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, log.read(offset+1, 1024).sizeInBytes)
 
     try {
@@ -131,18 +131,21 @@ class LogManagerTest extends JUnit3Suite {
     var offset = 0L
 
     // add a bunch of messages that should be larger than the retentionSize
-    for(i <- 0 until 1000) {
+    val numMessages = 200
+    for(i <- 0 until numMessages) {
       val set = TestUtils.singleMessageSet("test".getBytes())
       val info = log.append(set)
       offset = info.firstOffset
     }
 
     // should be exactly 100 full segments + 1 new empty one
-    assertEquals("There should be example 100 segments.", 100, log.numberOfSegments)
+    assertEquals("Check we have the expected number of segments.", numMessages * setSize / config.logFileSize, log.numberOfSegments)
 
     // this cleanup shouldn't find any expired segments but should delete some to reduce size
     time.sleep(logManager.InitialTaskDelayMs)
     assertEquals("Now there should be exactly 6 segments", 6, log.numberOfSegments)
+    time.sleep(log.segmentDeleteDelayMs + 1)
+    assertEquals("Files should have been deleted", log.numberOfSegments * 2, log.dir.list.length)
     assertEquals("Should get empty fetch off new log.", 0, log.read(offset + 1, 1024).sizeInBytes)
     try {
       log.read(0, 1024)

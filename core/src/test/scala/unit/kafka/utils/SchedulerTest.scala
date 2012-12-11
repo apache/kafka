@@ -67,6 +67,13 @@ class SchedulerTest {
   }
   
   @Test
+  def testReentrantTaskInMockScheduler() {
+    mockTime.scheduler.schedule("test1", () => mockTime.scheduler.schedule("test2", counter2.getAndIncrement, delay=0), delay=1)
+    mockTime.sleep(1)
+    assertEquals(1, counter2.get)
+  }
+  
+  @Test
   def testNonPeriodicTask() {
     scheduler.schedule("test", counter1.getAndIncrement, delay = 0)
     retry(30000, () => assertEquals(counter1.get, 1))
