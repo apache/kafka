@@ -30,7 +30,7 @@ import java.io._
  */
 
 object HighwaterMarkCheckpoint {
-  val highWatermarkFileName = ".highwatermark"
+  val highWatermarkFileName = "replication-offset-checkpoint"
   val currentHighwaterMarkFileVersion = 0
 }
 
