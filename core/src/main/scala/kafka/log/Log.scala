@@ -142,18 +142,27 @@ private[kafka] class Log(val dir: File,
     val logSegments = new ArrayList[LogSegment]
     val ls = dir.listFiles()
     if(ls != null) {
-      for(file <- ls if file.isFile && file.toString.endsWith(LogFileSuffix)) {
-        if(!file.canRead)
-          throw new IOException("Could not read file " + file)
+      for(file <- ls if file.isFile) {
         val filename = file.getName()
-        val start = filename.substring(0, filename.length - LogFileSuffix.length).toLong
-        // TODO: we should ideally rebuild any missing index files, instead of erroring out
-        if(!Log.indexFilename(dir, start).exists)
-          throw new IllegalStateException("Found log file with no corresponding index file.")
-        logSegments.add(new LogSegment(dir = dir, 
-                                       startOffset = start,
-                                       indexIntervalBytes = indexIntervalBytes, 
-                                       maxIndexSize = maxIndexSize))
+        if(!file.canRead) {
+          throw new IOException("Could not read file " + file)
+        } else if(filename.endsWith(IndexFileSuffix)) {
+          // ensure that we have a corresponding log file for this index file
+          val log = new File(file.getAbsolutePath.replace(IndexFileSuffix, LogFileSuffix))
+          if(!log.exists) {
+            warn("Found an orphaned index file, %s, with no corresponding log file.".format(file.getAbsolutePath))
+            file.delete()
+          }
+        } else if(filename.endsWith(LogFileSuffix)) {
+          val offset = filename.substring(0, filename.length - LogFileSuffix.length).toLong
+          // TODO: we should ideally rebuild any missing index files, instead of erroring out
+          if(!Log.indexFilename(dir, offset).exists)
+            throw new IllegalStateException("Found log file with no corresponding index file.")
+          logSegments.add(new LogSegment(dir = dir, 
+                                         startOffset = offset,
+                                         indexIntervalBytes = indexIntervalBytes, 
+                                         maxIndexSize = maxIndexSize))
+        }
       }
     }
 
