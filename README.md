@@ -19,21 +19,21 @@ The Kafka code is available from svn or a read only git mirror:
  * svn co http://svn.apache.org/repos/asf/incubator/kafka/trunk kafka
  * git clone git://git.apache.org/kafka.git
 
-To build: 
+To build for all supported versions of Scala: 
 
-1. ./sbt
-2. update - This downloads all the dependencies for all sub projects
-3. package - This will compile all sub projects and creates all the jars
+1. ./sbt +package
 
-Here are some useful sbt commands, to be executed at the sbt command prompt (./sbt) -
+To build for a particular version of Scala (either 2.8.0 or 2.9.1): 
 
-actions : Lists all the sbt commands and their descriptions
+1. ./sbt "++ 2.8.0 package" *or* ./sbt "++ 2.9.1 package"
+
+Here are some useful sbt commands, to be executed at the sbt command prompt (./sbt). Prefixing with "++<version> " runs the
+command for a specific Scala version, prefixing with "+" will perform the action for all versions of Scala, and no prefix
+runs the command for the default (2.8.0) version of Scala. -
+
+tasks : Lists all the sbt commands and their descriptions
 
 clean : Deletes all generated files (the target directory).
-
-clean-cache : Deletes the cache of artifacts downloaded for automatically managed dependencies.
-
-clean-lib : Deletes the managed library directory.
 
 compile : Compile all the sub projects, but not create the jars
 
@@ -41,7 +41,7 @@ test : Run all unit tests in all sub projects
 
 release-zip : Create all the jars, run unit tests and create a deployable release zip
 
-package-all: Creates jars for src, test, docs etc
+package: Creates jars for src, test, docs etc
 
 projects : List all the sub projects 
 
@@ -53,4 +53,5 @@ test-only package.test.TestName : Runs only the specified test in the current su
 
 run : Provides options to run any of the classes that have a main method. For example, you can switch to project java-examples, and run the examples there by executing "project java-examples" followed by "run" 
 
+For more details please see the [SBT documentation](https://github.com/harrah/xsbt/wiki)
 
