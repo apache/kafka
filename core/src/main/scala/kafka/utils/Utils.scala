@@ -22,7 +22,6 @@ import java.nio._
 import charset.Charset
 import java.nio.channels._
 import java.lang.management._
-import java.util.zip.CRC32
 import javax.management._
 import scala.collection._
 import scala.collection.mutable
@@ -328,7 +327,7 @@ object Utils extends Logging {
    * @return The CRC32
    */
   def crc32(bytes: Array[Byte], offset: Int, size: Int): Long = {
-    val crc = new CRC32()
+    val crc = new Crc32()
     crc.update(bytes, offset, size)
     crc.getValue()
   }
