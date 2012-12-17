@@ -21,8 +21,6 @@ import kafka.api._
 import kafka.network.{BlockingChannel, BoundedByteBufferSend, Receive}
 import kafka.utils._
 import java.util.Random
-import java.util.concurrent.TimeUnit
-import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 
 object SyncProducer {
   val RequestKey: Short = 0
@@ -39,7 +37,8 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   @volatile private var shutdown: Boolean = false
   private val blockingChannel = new BlockingChannel(config.host, config.port, BlockingChannel.UseDefaultBufferSize,
     config.bufferSize, config.requestTimeoutMs)
-  val producerRequestStats = new ProducerRequestStats(config.clientId + "-host_%s-port_%s".format(config.host, config.port))
+  val brokerInfo = "host_%s-port_%s".format(config.host, config.port)
+  val producerRequestStats = ProducerRequestStatsRegistry.getProducerRequestStats(config.clientId)
 
   trace("Instantiating Scala Sync Producer")
 
@@ -87,10 +86,17 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
    * Send a message
    */
   def send(producerRequest: ProducerRequest): ProducerResponse = {
-    producerRequestStats.requestSizeHist.update(producerRequest.sizeInBytes)
+    val requestSize = producerRequest.sizeInBytes
+    producerRequestStats.getProducerRequestStats(brokerInfo).requestSizeHist.update(requestSize)
+    producerRequestStats.getProducerRequestAllBrokersStats.requestSizeHist.update(requestSize)
+
     var response: Receive = null
-    producerRequestStats.requestTimer.time {
-      response = doSend(producerRequest)
+    val specificTimer = producerRequestStats.getProducerRequestStats(brokerInfo).requestTimer
+    val aggregateTimer = producerRequestStats.getProducerRequestAllBrokersStats.requestTimer
+    aggregateTimer.time {
+      specificTimer.time {
+        response = doSend(producerRequest)
+      }
     }
     ProducerResponse.readFrom(response.buffer)
   }
@@ -150,7 +156,3 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   }
 }
 
-class ProducerRequestStats(clientId: String) extends KafkaMetricsGroup {
-  val requestTimer = new KafkaTimer(newTimer(clientId + "-ProduceRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
-  val requestSizeHist = newHistogram(clientId + "-ProducerRequestSize")
-}

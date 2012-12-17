@@ -21,9 +21,36 @@ import async.AsyncProducerConfig
 import java.util.Properties
 import kafka.utils.{Utils, VerifiableProperties}
 import kafka.message.{CompressionCodec, NoCompressionCodec}
+import kafka.common.{InvalidConfigException, Config}
+
+object ProducerConfig extends Config {
+  def validate(config: ProducerConfig) {
+    validateClientId(config.clientId)
+    validateBatchSize(config.batchSize, config.queueSize)
+    validateProducerType(config.producerType)
+  }
+
+  def validateClientId(clientId: String) {
+    validateChars("clientid", clientId)
+  }
+
+  def validateBatchSize(batchSize: Int, queueSize: Int) {
+    if (batchSize > queueSize)
+      throw new InvalidConfigException("Batch size = " + batchSize + " can't be larger than queue size = " + queueSize)
+  }
+
+  def validateProducerType(producerType: String) {
+    producerType match {
+      case "sync" =>
+      case "async"=>
+      case _ => throw new InvalidConfigException("Invalid value " + producerType + " for producer.type, valid values are sync/async")
+    }
+  }
+}
 
 class ProducerConfig private (val props: VerifiableProperties)
         extends AsyncProducerConfig with SyncProducerConfigShared {
+  import ProducerConfig._
 
   def this(originalProps: Properties) {
     this(new VerifiableProperties(originalProps))
@@ -85,4 +112,6 @@ class ProducerConfig private (val props: VerifiableProperties)
   val producerRetries = props.getInt("producer.num.retries", 3)
 
   val producerRetryBackoffMs = props.getInt("producer.retry.backoff.ms", 100)
+
+  validate(this)
 }

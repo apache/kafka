@@ -50,7 +50,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
                                                            new AtomicLong(0),
                                                            new AtomicLong(0),
                                                            new AtomicInteger(0),
-                                                           new ConsumerTopicStats("")))
+                                                           ""))
 
   var fetcher: ConsumerFetcherManager = null
 
@@ -84,7 +84,9 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
   def sendMessages(messagesPerNode: Int): Int = {
     var count = 0
     for(conf <- configs) {
-      val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs), new DefaultEncoder(), new StringEncoder())
+      val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs),
+                                                                             new DefaultEncoder(),
+                                                                             new StringEncoder())
       val ms = 0.until(messagesPerNode).map(x => (conf.brokerId * 5 + x).toString.getBytes).toArray
       messages += conf.brokerId -> ms
       producer.send(ms.map(m => KeyedMessage[String, Array[Byte]](topic, topic, m)):_*)

@@ -29,10 +29,12 @@ class PartitionTopicInfo(val topic: String,
                          private val consumedOffset: AtomicLong,
                          private val fetchedOffset: AtomicLong,
                          private val fetchSize: AtomicInteger,
-                         private val consumerTopicStats: ConsumerTopicStats) extends Logging {
+                         private val clientId: String) extends Logging {
 
   debug("initial consumer offset of " + this + " is " + consumedOffset.get)
   debug("initial fetch offset of " + this + " is " + fetchedOffset.get)
+
+  private val consumerTopicStats = ConsumerTopicStatsRegistry.getConsumerTopicStat(clientId)
 
   def getConsumeOffset() = consumedOffset.get
 

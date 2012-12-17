@@ -35,12 +35,13 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
                              private val keyDecoder: Decoder[K],
                              private val valueDecoder: Decoder[V],
                              val enableShallowIterator: Boolean,
-                             val consumerTopicStats: ConsumerTopicStats)
+                             val clientId: String)
   extends IteratorTemplate[MessageAndMetadata[K, V]] with Logging {
 
   private var current: AtomicReference[Iterator[MessageAndOffset]] = new AtomicReference(null)
   private var currentTopicInfo: PartitionTopicInfo = null
   private var consumedOffset: Long = -1L
+  private val consumerTopicStats = ConsumerTopicStatsRegistry.getConsumerTopicStat(clientId)
 
   override def next(): MessageAndMetadata[K, V] = {
     val item = super.next()

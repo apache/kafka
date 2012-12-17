@@ -22,20 +22,15 @@ import java.util.Random
 import java.util.concurrent.{TimeUnit, LinkedBlockingQueue}
 import kafka.serializer.Encoder
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.common.{QueueFullException, InvalidConfigException}
+import kafka.common.QueueFullException
 import kafka.metrics._
 
 
 class Producer[K,V](config: ProducerConfig,
-                    private val eventHandler: EventHandler[K,V],
-                    private val producerStats: ProducerStats,
-                    private val producerTopicStats: ProducerTopicStats)  // only for unit testing
+                    private val eventHandler: EventHandler[K,V])  // only for unit testing
   extends Logging {
 
   private val hasShutdown = new AtomicBoolean(false)
-  if (config.batchSize > config.queueSize)
-    throw new InvalidConfigException("Batch size can't be larger than queue size.")
-
   private val queue = new LinkedBlockingQueue[KeyedMessage[K,V]](config.queueSize)
 
   private val random = new Random
@@ -53,30 +48,20 @@ class Producer[K,V](config: ProducerConfig,
                                                        config.batchSize,
                                                        config.clientId)
       producerSendThread.start()
-    case _ => throw new InvalidConfigException("Valid values for producer.type are sync/async")
   }
+
+  private val producerStats = ProducerStatsRegistry.getProducerStats(config.clientId)
+  private val producerTopicStats = ProducerTopicStatsRegistry.getProducerTopicStats(config.clientId)
 
   KafkaMetricsReporter.startReporters(config.props)
 
-  def this(t: (ProducerConfig, EventHandler[K,V], ProducerStats, ProducerTopicStats)) =
-    this(t._1, t._2, t._3, t._4)
-
   def this(config: ProducerConfig) =
-    this {
-      ClientId.validate(config.clientId)
-      val producerStats = new ProducerStats(config.clientId)
-      val producerTopicStats = new ProducerTopicStats(config.clientId)
-      (config,
-       new DefaultEventHandler[K,V](config,
-                                    Utils.createObject[Partitioner[K]](config.partitionerClass, config.props),
-                                    Utils.createObject[Encoder[V]](config.serializerClass, config.props),
-                                    Utils.createObject[Encoder[K]](config.keySerializerClass, config.props),
-                                    new ProducerPool(config),
-                                    producerStats = producerStats,
-                                    producerTopicStats = producerTopicStats),
-       producerStats,
-       producerTopicStats)
-    }
+    this(config,
+         new DefaultEventHandler[K,V](config,
+                                      Utils.createObject[Partitioner[K]](config.partitionerClass, config.props),
+                                      Utils.createObject[Encoder[V]](config.serializerClass, config.props),
+                                      Utils.createObject[Encoder[K]](config.keySerializerClass, config.props),
+                                      new ProducerPool(config)))
 
   /**
    * Sends the data, partitioned by key to the topic using either the
@@ -146,28 +131,4 @@ class Producer[K,V](config: ProducerConfig,
   }
 }
 
-@threadsafe
-class ProducerTopicMetrics(clientIdTopic: ClientIdAndTopic) extends KafkaMetricsGroup {
-  val messageRate = newMeter(clientIdTopic + "-MessagesPerSec",  "messages", TimeUnit.SECONDS)
-  val byteRate = newMeter(clientIdTopic + "-BytesPerSec",  "bytes", TimeUnit.SECONDS)
-}
-
-class ProducerTopicStats(clientId: String) {
-  private val valueFactory = (k: ClientIdAndTopic) => new ProducerTopicMetrics(k)
-  private val stats = new Pool[ClientIdAndTopic, ProducerTopicMetrics](Some(valueFactory))
-  private val allTopicStats = new ProducerTopicMetrics(new ClientIdAndTopic(clientId, "AllTopics"))
-
-  def getProducerAllTopicStats(): ProducerTopicMetrics = allTopicStats
-
-  def getProducerTopicStats(topic: String): ProducerTopicMetrics = {
-    stats.getAndMaybePut(new ClientIdAndTopic(clientId, topic))
-  }
-}
-
-class ProducerStats(clientId: String) extends KafkaMetricsGroup {
-  val serializationErrorRate = newMeter(clientId + "-SerializationErrorsPerSec",  "errors", TimeUnit.SECONDS)
-  val resendRate = newMeter(clientId + "-ResendsPerSec",  "resends", TimeUnit.SECONDS)
-  val failedSendRate = newMeter(clientId + "-FailedSendsPerSec",  "failed sends", TimeUnit.SECONDS)
-  val droppedMessageRate = newMeter(clientId + "-DroppedMessagesPerSec",  "drops", TimeUnit.SECONDS)
-}
 

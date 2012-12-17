@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.cluster.Broker
 import kafka.consumer.SimpleConsumer
-import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.common.{ClientIdAndBroker, TopicAndPartition, ErrorMapping}
 import collection.mutable
 import kafka.message.ByteBufferMessageSet
 import kafka.message.MessageAndOffset
@@ -27,7 +27,7 @@ import kafka.api.{FetchResponse, FetchResponsePartitionData, FetchRequestBuilder
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 import java.util.concurrent.atomic.AtomicLong
-import kafka.utils.{ClientIdAndTopic, Pool, ShutdownableThread}
+import kafka.utils.{Pool, ShutdownableThread}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
@@ -43,9 +43,10 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   private val partitionMapCond = partitionMapLock.newCondition()
   val simpleConsumer = new SimpleConsumer(sourceBroker.host, sourceBroker.port, socketTimeout, socketBufferSize, clientId)
   private val brokerInfo = "host_%s-port_%s".format(sourceBroker.host, sourceBroker.port)
-  val fetcherStats = new FetcherStats(clientId + "-" + brokerInfo)
+  private val metricId = new ClientIdAndBroker(clientId, brokerInfo)
+  val fetcherStats = new FetcherStats(metricId)
   val fetcherMetrics = fetcherStats.getFetcherStats(name + "-" + sourceBroker.id)
-  val fetcherLagStats = new FetcherLagStats(clientId + "-" + brokerInfo)
+  val fetcherLagStats = new FetcherLagStats(metricId)
 
   /* callbacks to be defined in subclass */
 
@@ -66,7 +67,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
 
   override def doWork() {
     val fetchRequestuilder = new FetchRequestBuilder().
-            clientId(clientId + "-" + brokerInfo).
+            clientId(clientId).
             replicaId(fetcherBrokerId).
             maxWait(maxWait).
             minBytes(minBytes)
@@ -184,10 +185,10 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   }
 }
 
-class FetcherLagMetrics(clientIdTopicPartition: ClientIdTopicPartition) extends KafkaMetricsGroup {
+class FetcherLagMetrics(metricId: ClientIdBrokerTopicPartition) extends KafkaMetricsGroup {
   private[this] var lagVal = new AtomicLong(-1L)
   newGauge(
-    clientIdTopicPartition + "-ConsumerLag",
+    metricId + "-ConsumerLag",
     new Gauge[Long] {
       def getValue = lagVal.get
     }
@@ -200,29 +201,34 @@ class FetcherLagMetrics(clientIdTopicPartition: ClientIdTopicPartition) extends 
   def lag = lagVal.get
 }
 
-class FetcherLagStats(clientId: String) {
-  private val valueFactory = (k: ClientIdTopicPartition) => new FetcherLagMetrics(k)
-  private val stats = new Pool[ClientIdTopicPartition, FetcherLagMetrics](Some(valueFactory))
+class FetcherLagStats(metricId: ClientIdAndBroker) {
+  private val valueFactory = (k: ClientIdBrokerTopicPartition) => new FetcherLagMetrics(k)
+  private val stats = new Pool[ClientIdBrokerTopicPartition, FetcherLagMetrics](Some(valueFactory))
 
   def getFetcherLagStats(topic: String, partitionId: Int): FetcherLagMetrics = {
-    stats.getAndMaybePut(new ClientIdTopicPartition(clientId, topic, partitionId))
+    stats.getAndMaybePut(new ClientIdBrokerTopicPartition(metricId.clientId, metricId.brokerInfo, topic, partitionId))
   }
 }
 
-class FetcherMetrics(clientIdTopic: ClientIdAndTopic) extends KafkaMetricsGroup {
-  val requestRate = newMeter(clientIdTopic + "-RequestsPerSec",  "requests", TimeUnit.SECONDS)
-  val byteRate = newMeter(clientIdTopic + "-BytesPerSec",  "bytes", TimeUnit.SECONDS)
+class FetcherMetrics(metricId: ClientIdBrokerTopic) extends KafkaMetricsGroup {
+  val requestRate = newMeter(metricId + "-RequestsPerSec",  "requests", TimeUnit.SECONDS)
+  val byteRate = newMeter(metricId + "-BytesPerSec",  "bytes", TimeUnit.SECONDS)
 }
 
-class FetcherStats(clientId: String) {
-  private val valueFactory = (k: ClientIdAndTopic) => new FetcherMetrics(k)
-  private val stats = new Pool[ClientIdAndTopic, FetcherMetrics](Some(valueFactory))
+class FetcherStats(metricId: ClientIdAndBroker) {
+  private val valueFactory = (k: ClientIdBrokerTopic) => new FetcherMetrics(k)
+  private val stats = new Pool[ClientIdBrokerTopic, FetcherMetrics](Some(valueFactory))
 
   def getFetcherStats(name: String): FetcherMetrics = {
-    stats.getAndMaybePut(new ClientIdAndTopic(clientId, name))
+    stats.getAndMaybePut(new ClientIdBrokerTopic(metricId.clientId, metricId.brokerInfo, name))
   }
 }
 
-case class ClientIdTopicPartition(clientId: String, topic: String, partitionId: Int) {
-  override def toString = "%s-%s-%d".format(clientId, topic, partitionId)
+case class ClientIdBrokerTopic(clientId: String, brokerInfo: String, topic: String) {
+  override def toString = "%s-%s-%s".format(clientId, brokerInfo, topic)
 }
+
+case class ClientIdBrokerTopicPartition(clientId: String, brokerInfo: String, topic: String, partitionId: Int) {
+  override def toString = "%s-%s-%s-%d".format(clientId, brokerInfo, topic, partitionId)
+}
+

@@ -19,9 +19,10 @@ package kafka.consumer
 
 import java.util.Properties
 import kafka.api.OffsetRequest
-import kafka.utils.{VerifiableProperties, ZKConfig}
+import kafka.utils._
+import kafka.common.{InvalidConfigException, Config}
 
-object ConsumerConfig {
+object ConsumerConfig extends Config {
   val SocketTimeout = 30 * 1000
   val SocketBufferSize = 64*1024
   val FetchSize = 1024 * 1024
@@ -43,6 +44,28 @@ object ConsumerConfig {
   val MirrorTopicsBlacklistProp = "mirror.topics.blacklist"
   val MirrorConsumerNumThreadsProp = "mirror.consumer.numthreads"
   val DefaultClientId = ""
+
+  def validate(config: ConsumerConfig) {
+    validateClientId(config.clientId)
+    validateGroupId(config.groupId)
+    validateAutoOffsetReset(config.autoOffsetReset)
+  }
+
+  def validateClientId(clientId: String) {
+    validateChars("clientid", clientId)
+  }
+
+  def validateGroupId(groupId: String) {
+    validateChars("groupid", groupId)
+  }
+
+  def validateAutoOffsetReset(autoOffsetReset: String) {
+    autoOffsetReset match {
+      case OffsetRequest.SmallestTimeString =>
+      case OffsetRequest.LargestTimeString =>
+      case _ => throw new InvalidConfigException("Wrong value " + autoOffsetReset + " of autoOffsetReset in ConsumerConfig")
+    }
+  }
 }
 
 class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(props) {
@@ -109,8 +132,10 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   val enableShallowIterator = props.getBoolean("shallowiterator.enable", false)
 
   /**
-   * Cliient id is specified by the kafka consumer client, used to distinguish different clients
+   * Client id is specified by the kafka consumer client, used to distinguish different clients
    */
   val clientId = props.getString("clientid", groupId)
+
+  validate(this)
 }
 

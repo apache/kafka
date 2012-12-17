@@ -24,7 +24,6 @@ import java.nio.channels._
 import java.util.Random
 import java.util.Properties
 import junit.framework.Assert._
-import kafka.api._
 import kafka.server._
 import kafka.producer._
 import kafka.message._

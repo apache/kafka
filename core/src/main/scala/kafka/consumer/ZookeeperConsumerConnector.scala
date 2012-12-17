@@ -20,7 +20,7 @@ package kafka.consumer
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import locks.ReentrantLock
-import scala.collection._
+import collection._
 import kafka.cluster._
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
@@ -35,6 +35,7 @@ import kafka.client.ClientUtils
 import com.yammer.metrics.core.Gauge
 import kafka.api.OffsetRequest
 import kafka.metrics._
+import scala.Some
 
 
 /**
@@ -80,7 +81,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                                 val enableFetcher: Boolean) // for testing only
         extends ConsumerConnector with Logging with KafkaMetricsGroup {
 
-  ClientId.validate(config.clientId)
   private val isShuttingDown = new AtomicBoolean(false)
   private val rebalanceLock = new Object
   private var fetcher: Option[ConsumerFetcherManager] = None
@@ -94,8 +94,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private var loadBalancerListener: ZKRebalancerListener = null
 
   private var wildcardTopicWatcher: ZookeeperTopicEventWatcher = null
-
-  private val consumerTopicStats = new ConsumerTopicStats(config.clientId)
 
   val consumerIdString = {
     var consumerUuid : String = null
@@ -198,7 +196,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       threadIdSet.map(_ => {
         val queue =  new LinkedBlockingQueue[FetchedDataChunk](config.maxQueuedChunks)
         val stream = new KafkaStream[K,V](
-          queue, config.consumerTimeoutMs, keyDecoder, valueDecoder, config.enableShallowIterator, consumerTopicStats)
+          queue, config.consumerTimeoutMs, keyDecoder, valueDecoder, config.enableShallowIterator, config.clientId)
         (queue, stream)
       })
     ).flatten.toList
@@ -601,8 +599,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                 SimpleConsumer.earliestOrLatestOffset(zkClient, topic, leader, partition, OffsetRequest.EarliestTime, config.clientId)
               case OffsetRequest.LargestTimeString =>
                 SimpleConsumer.earliestOrLatestOffset(zkClient, topic, leader, partition, OffsetRequest.LatestTime, config.clientId)
-              case _ =>
-                throw new InvalidConfigException("Wrong value in autoOffsetReset in ConsumerConfig")
             }
         }
       val queue = topicThreadIdAndQueues.get((topic, consumerThreadId))
@@ -615,7 +611,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                                  consumedOffset,
                                                  fetchedOffset,
                                                  new AtomicInteger(config.fetchSize),
-                                                 consumerTopicStats)
+                                                 config.clientId)
       partTopicInfoMap.put(partition, partTopicInfo)
       debug(partTopicInfo + " selected new offset " + offset)
     }
@@ -719,7 +715,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                           keyDecoder, 
                                           valueDecoder, 
                                           config.enableShallowIterator,
-                                          consumerTopicStats)
+                                          config.clientId)
         (queue, stream)
     }).toList
 

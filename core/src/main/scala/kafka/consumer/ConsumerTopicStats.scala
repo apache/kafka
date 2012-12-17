@@ -17,20 +17,25 @@
 
 package kafka.consumer
 
-import kafka.utils.{ClientIdAndTopic, Pool, threadsafe, Logging}
+import kafka.utils.{Pool, threadsafe, Logging}
 import java.util.concurrent.TimeUnit
 import kafka.metrics.KafkaMetricsGroup
+import kafka.common.ClientIdAndTopic
 
 @threadsafe
-class ConsumerTopicMetrics(clientIdTopic: ClientIdAndTopic) extends KafkaMetricsGroup {
-  val messageRate = newMeter(clientIdTopic + "-MessagesPerSec",  "messages", TimeUnit.SECONDS)
-  val byteRate = newMeter(clientIdTopic + "-BytesPerSec",  "bytes", TimeUnit.SECONDS)
+class ConsumerTopicMetrics(metricId: ClientIdAndTopic) extends KafkaMetricsGroup {
+  val messageRate = newMeter(metricId + "-MessagesPerSec",  "messages", TimeUnit.SECONDS)
+  val byteRate = newMeter(metricId + "-BytesPerSec",  "bytes", TimeUnit.SECONDS)
 }
 
+/**
+ * Tracks metrics for each topic the given consumer client has consumed data from.
+ * @param clientId The clientId of the given consumer client.
+ */
 class ConsumerTopicStats(clientId: String) extends Logging {
   private val valueFactory = (k: ClientIdAndTopic) => new ConsumerTopicMetrics(k)
   private val stats = new Pool[ClientIdAndTopic, ConsumerTopicMetrics](Some(valueFactory))
-  private val allTopicStats = new ConsumerTopicMetrics(new ClientIdAndTopic(clientId, "AllTopics"))
+  private val allTopicStats = new ConsumerTopicMetrics(new ClientIdAndTopic(clientId, "All.Topics")) // to differentiate from a topic named AllTopics
 
   def getConsumerAllTopicStats(): ConsumerTopicMetrics = allTopicStats
 
@@ -39,3 +44,14 @@ class ConsumerTopicStats(clientId: String) extends Logging {
   }
 }
 
+/**
+ * Stores the topic stats information of each consumer client in a (clientId -> ConsumerTopicStats) map.
+ */
+object ConsumerTopicStatsRegistry {
+  private val valueFactory = (k: String) => new ConsumerTopicStats(k)
+  private val globalStats = new Pool[String, ConsumerTopicStats](Some(valueFactory))
+
+  def getConsumerTopicStat(clientId: String) = {
+    globalStats.getAndMaybePut(clientId)
+  }
+}
