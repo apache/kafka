@@ -777,9 +777,28 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
 
         # testcase configurations:
         testcaseList = testcaseEnv.testcaseConfigsList
-        topic     = system_test_utils.get_data_by_lookup_keyval(testcaseList, "entity_id", entityId, "topic")
+
+        # get testcase arguments
+        # 1. topics
+        numTopicsForAutoGenString = -1
+        try:
+            numTopicsForAutoGenString = int(testcaseEnv.testcaseArgumentsDict["num_topics_for_auto_generated_string"])
+        except:
+            pass
+
+        topic = ""
+        if numTopicsForAutoGenString < 0:
+            topic = system_test_utils.get_data_by_lookup_keyval(testcaseList, "entity_id", entityId, "topic")
+        else:
+            topic = generate_topics_string("topic", numTopicsForAutoGenString)
+
+        # update this variable and will be used by data validation functions
+        testcaseEnv.consumerTopicsString = topic
+
+        # 2. consumer timeout
         timeoutMs = system_test_utils.get_data_by_lookup_keyval(testcaseList, "entity_id", entityId, "consumer-timeout-ms")
 
+        # 3. consumer formatter
         formatterOption = ""
         try:
             formatterOption = system_test_utils.get_data_by_lookup_keyval(testcaseList, "entity_id", entityId, "formatter")
@@ -789,6 +808,7 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
         if len(formatterOption) > 0:
             formatterOption = " --formatter " + formatterOption + " "
 
+        # get zk.connect
         zkConnectStr = ""
         if clusterName == "source":
             zkConnectStr = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
@@ -857,6 +877,34 @@ def start_producer_performance(systemTestEnv, testcaseEnv, kafka07Client):
         time.sleep(1)
         testcaseEnv.lock.release()
 
+def generate_topics_string(topicPrefix, numOfTopics):
+    # return a topics string in the following format:
+    # <topicPrefix>_0001,<topicPrefix>_0002,...
+    # eg. "topic_0001,topic_0002,...,topic_xxxx"
+
+    topicsStr = ""
+    counter   = 1
+    idx       = "1"
+    while counter <= numOfTopics:
+        if counter <= 9:
+            idx = "000" + str(counter)
+        elif counter <= 99:
+            idx = "00"  + str(counter)
+        elif counter <= 999:
+            idx = "0"  +  str(counter)
+        elif counter <= 9999:
+            idx = str(counter)
+        else:
+            raise Exception("Error: no. of topics must be under 10000 - current topics count : " + counter)
+
+        if len(topicsStr) == 0:
+            topicsStr = topicPrefix + "_" + idx
+        else:
+            topicsStr = topicsStr + "," + topicPrefix + "_" + idx
+
+        counter += 1
+    return topicsStr
+
 def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafka07Client):
     host              = producerConfig["hostname"]
     entityId          = producerConfig["entity_id"]
@@ -868,9 +916,24 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
     jmxPort           = system_test_utils.get_data_by_lookup_keyval(entityConfigList, "entity_id", entityId, "jmx_port")
     kafkaRunClassBin  = kafkaHome + "/bin/kafka-run-class.sh"
 
+    # get optional testcase arguments
+    numTopicsForAutoGenString = -1
+    try:
+        numTopicsForAutoGenString = int(testcaseEnv.testcaseArgumentsDict["num_topics_for_auto_generated_string"])
+    except:
+        pass
+
     # testcase configurations:
     testcaseConfigsList = testcaseEnv.testcaseConfigsList
-    topic          = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "topic")
+    topic = ""
+    if numTopicsForAutoGenString < 0:
+        topic      = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "topic")
+    else:
+        topic      = generate_topics_string("topic", numTopicsForAutoGenString)
+
+    # update this variable and will be used by data validation functions
+    testcaseEnv.producerTopicsString = topic
+
     threads        = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "threads")
     compCodec      = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "compression-codec")
     messageSize    = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "message-size")
@@ -1125,7 +1188,8 @@ def validate_data_matched(systemTestEnv, testcaseEnv):
 
     for prodPerfCfg in prodPerfCfgList:
         producerEntityId = prodPerfCfg["entity_id"]
-        topic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "topic")
+        #topic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "topic")
+        topic = testcaseEnv.producerTopicsString
         acks  = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "request-num-acks")
 
         consumerEntityIdList = system_test_utils.get_data_from_list_of_dicts( \
@@ -1133,7 +1197,8 @@ def validate_data_matched(systemTestEnv, testcaseEnv):
 
         matchingConsumerEntityId = None
         for consumerEntityId in consumerEntityIdList:
-            consumerTopic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", consumerEntityId, "topic")
+            #consumerTopic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", consumerEntityId, "topic")
+            consumerTopic = testcaseEnv.consumerTopicsString
             if consumerTopic in topic:
                 matchingConsumerEntityId = consumerEntityId
                 break
@@ -2042,14 +2107,14 @@ def validate_data_matched_in_multi_topics_from_single_consumer_producer(systemTe
 
     for prodPerfCfg in prodPerfCfgList:
         producerEntityId = prodPerfCfg["entity_id"]
-        topicStr = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "topic")
+        topicStr = testcaseEnv.producerTopicsString
         acks     = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "request-num-acks")
 
         consumerEntityIdList = system_test_utils.get_data_from_list_of_dicts(clusterEntityConfigDictList, "role", "console_consumer", "entity_id")
 
         matchingConsumerEntityId = None
         for consumerEntityId in consumerEntityIdList:
-            consumerTopic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", consumerEntityId, "topic")
+            consumerTopic = testcaseEnv.consumerTopicsString
             if consumerTopic in topicStr:
                 matchingConsumerEntityId = consumerEntityId
                 break
