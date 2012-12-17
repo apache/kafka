@@ -127,6 +127,11 @@ class TestcaseEnv():
 
         self.numProducerThreadsRunning = 0
 
+        # to be used when validating data match - these variables will be
+        # updated by kafka_system_test_utils.start_producer_in_thread
+        self.producerTopicsString = ""
+        self.consumerTopicsString = ""
+
     def initWithKnownTestCasePathName(self, testCasePathName):
         testcaseDirName = os.path.basename(testCasePathName)
         self.testcaseResultsDict["_test_case_name"] = testcaseDirName
