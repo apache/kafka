@@ -29,7 +29,7 @@ object ConsumerConfig extends Config {
   val MaxFetchSize = 10*FetchSize
   val DefaultFetcherBackoffMs = 1000
   val AutoCommit = true
-  val AutoCommitInterval = 10 * 1000
+  val AutoCommitInterval = 60 * 1000
   val MaxQueuedChunks = 10
   val MaxRebalanceRetries = 4
   val AutoOffsetReset = OffsetRequest.SmallestTimeString
