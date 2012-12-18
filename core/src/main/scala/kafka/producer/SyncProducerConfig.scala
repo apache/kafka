@@ -41,10 +41,7 @@ trait SyncProducerConfigShared {
   val maxMessageSize = props.getInt("max.message.size", 1000000)
 
   /* the client application sending the producer requests */
-  val correlationId = props.getInt("producer.request.correlation_id", SyncProducerConfig.DefaultCorrelationId)
-
-  /* the client application sending the producer requests */
-  val clientId = props.getString("producer.request.client_id",SyncProducerConfig.DefaultClientId)
+  val clientId = props.getString("clientid", SyncProducerConfig.DefaultClientId)
 
   /*
    * The required acks of the producer requests - negative value means ack
@@ -61,8 +58,7 @@ trait SyncProducerConfigShared {
 }
 
 object SyncProducerConfig {
-  val DefaultCorrelationId = -1
   val DefaultClientId = ""
   val DefaultRequiredAcks : Short = 0
-  val DefaultAckTimeoutMs = 500
+  val DefaultAckTimeoutMs = 1500
 }

@@ -20,8 +20,6 @@ package kafka.consumer
 import kafka.api._
 import kafka.network._
 import kafka.utils._
-import java.util.concurrent.TimeUnit
-import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 import kafka.utils.ZkUtils._
 import collection.immutable
 import kafka.common.{TopicAndPartition, KafkaException}
@@ -30,19 +28,23 @@ import kafka.cluster.Broker
 
 
 object SimpleConsumer extends Logging {
-  def earliestOrLatestOffset(broker: Broker, topic: String, partitionId: Int, earliestOrLatest: Long,
+  def earliestOrLatestOffset(broker: Broker, 
+                             topic: String, 
+                             partitionId: Int, 
+                             earliestOrLatest: Long,
+                             clientId: String, 
                              isFromOrdinaryConsumer: Boolean): Long = {
     var simpleConsumer: SimpleConsumer = null
     var producedOffset: Long = -1L
     try {
       simpleConsumer = new SimpleConsumer(broker.host, broker.port, ConsumerConfig.SocketTimeout,
-                                          ConsumerConfig.SocketBufferSize)
+                                          ConsumerConfig.SocketBufferSize, clientId)
       val topicAndPartition = TopicAndPartition(topic, partitionId)
       val request = if(isFromOrdinaryConsumer)
         new OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)))
       else
         new OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)),
-                          Request.DebuggingConsumerId)
+                          0, Request.DebuggingConsumerId)
       producedOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
     } catch {
       case e =>
@@ -55,15 +57,20 @@ object SimpleConsumer extends Logging {
     producedOffset
   }
 
-  def earliestOrLatestOffset(zkClient: ZkClient, topic: String, brokerId: Int, partitionId: Int,
-                             earliestOrLatest: Long, isFromOrdinaryConsumer: Boolean = true): Long = {
+  def earliestOrLatestOffset(zkClient: ZkClient, 
+                             topic: String, 
+                             brokerId: Int, 
+                             partitionId: Int,
+                             earliestOrLatest: Long, 
+                             clientId: String, 
+                             isFromOrdinaryConsumer: Boolean = true): Long = {
     val cluster = getCluster(zkClient)
     val broker = cluster.getBroker(brokerId) match {
       case Some(b) => b
       case None => throw new KafkaException("Broker " + brokerId + " is unavailable. Cannot issue " +
                                                     "getOffsetsBefore request")
     }
-    earliestOrLatestOffset(broker, topic, partitionId, earliestOrLatest, isFromOrdinaryConsumer)
+    earliestOrLatestOffset(broker, topic, partitionId, earliestOrLatest, clientId, isFromOrdinaryConsumer)
   }
 }
 
@@ -75,10 +82,14 @@ object SimpleConsumer extends Logging {
 class SimpleConsumer(val host: String,
                      val port: Int,
                      val soTimeout: Int,
-                     val bufferSize: Int) extends Logging {
+                     val bufferSize: Int,
+                     val clientId: String) extends Logging {
 
+  ConsumerConfig.validateClientId(clientId)
   private val lock = new Object()
   private val blockingChannel = new BlockingChannel(host, port, bufferSize, BlockingChannel.UseDefaultBufferSize, soTimeout)
+  val brokerInfo = "host_%s-port_%s".format(host, port)
+  private val fetchRequestAndResponseStats = FetchRequestAndResponseStatsRegistry.getFetchRequestAndResponseStats(clientId)
 
   private def connect(): BlockingChannel = {
     close
@@ -143,12 +154,17 @@ class SimpleConsumer(val host: String,
    */
   def fetch(request: FetchRequest): FetchResponse = {
     var response: Receive = null
-    FetchRequestAndResponseStat.requestTimer.time {
-      response = sendRequest(request)
+    val specificTimer = fetchRequestAndResponseStats.getFetchRequestAndResponseStats(brokerInfo).requestTimer
+    val aggregateTimer = fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.requestTimer
+    aggregateTimer.time {
+      specificTimer.time {
+        response = sendRequest(request)
+      }
     }
     val fetchResponse = FetchResponse.readFrom(response.buffer)
     val fetchedSize = fetchResponse.sizeInBytes
-    FetchRequestAndResponseStat.respondSizeHist.update(fetchedSize)
+    fetchRequestAndResponseStats.getFetchRequestAndResponseStats(brokerInfo).requestSizeHist.update(fetchedSize)
+    fetchRequestAndResponseStats.getFetchRequestAndResponseAllBrokersStats.requestSizeHist.update(fetchedSize)
     fetchResponse
   }
 
@@ -166,7 +182,3 @@ class SimpleConsumer(val host: String,
   }
 }
 
-object FetchRequestAndResponseStat extends KafkaMetricsGroup {
-  val requestTimer = new KafkaTimer(newTimer("FetchRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
-  val respondSizeHist = newHistogram("FetchResponseSize")
-}

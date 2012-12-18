@@ -17,7 +17,6 @@
 
 package kafka.serializer
 
-import kafka.message._
 import kafka.utils.VerifiableProperties
 
 /**
@@ -34,13 +33,6 @@ trait Decoder[T] {
  */
 class DefaultDecoder(props: VerifiableProperties = null) extends Decoder[Array[Byte]] {
   def fromBytes(bytes: Array[Byte]): Array[Byte] = bytes
-}
-
-/**
- * Decode messages without any key
- */
-class KeylessMessageDecoder(props: VerifiableProperties = null) extends Decoder[Message] {
-  def fromBytes(bytes: Array[Byte]) = new Message(bytes)
 }
 
 /**

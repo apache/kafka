@@ -18,7 +18,7 @@
 package kafka.integration
 
 import kafka.api.FetchRequestBuilder
-import kafka.message.{Message, ByteBufferMessageSet}
+import kafka.message.ByteBufferMessageSet
 import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._

@@ -29,8 +29,10 @@ import kafka.javaapi.OffsetRequest
 class SimpleConsumer(val host: String,
                      val port: Int,
                      val soTimeout: Int,
-                     val bufferSize: Int) {
-  private val underlying = new kafka.consumer.SimpleConsumer(host, port, soTimeout, bufferSize)
+                     val bufferSize: Int,
+                     val clientId: String) {
+
+  private val underlying = new kafka.consumer.SimpleConsumer(host, port, soTimeout, bufferSize, clientId)
 
   /**
    *  Fetch a set of messages from a topic. This version of the fetch method

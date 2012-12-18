@@ -131,6 +131,7 @@ def collect_logs_from_remote_hosts(systemTestEnv, testcaseEnv):
         hostname   = clusterEntityConfigDict["hostname"]
         entity_id  = clusterEntityConfigDict["entity_id"]
         role       = clusterEntityConfigDict["role"]
+        kafkaHome  = clusterEntityConfigDict["kafka_home"]
 
         logger.debug("entity_id : " + entity_id, extra=d)
         logger.debug("hostname  : " + hostname,  extra=d)
@@ -139,12 +140,19 @@ def collect_logs_from_remote_hosts(systemTestEnv, testcaseEnv):
         configPathName     = get_testcase_config_log_dir_pathname(testcaseEnv, role, entity_id, "config")
         metricsPathName    = get_testcase_config_log_dir_pathname(testcaseEnv, role, entity_id, "metrics")
         logPathName        = get_testcase_config_log_dir_pathname(testcaseEnv, role, entity_id, "default")
+        rmtLogPathName     = logPathName
+        rmtMetricsPathName = metricsPathName
+
+        if hostname != "localhost":
+            rmtConfigPathName  = replace_kafka_home(configPathName, kafkaHome)
+            rmtMetricsPathName = replace_kafka_home(metricsPathName, kafkaHome)
+            rmtLogPathName     = replace_kafka_home(logPathName, kafkaHome)
 
         # ==============================
         # collect entity log file
         # ==============================
         cmdList = ["scp",
-                   hostname + ":" + logPathName + "/*",
+                   hostname + ":" + rmtLogPathName + "/*",
                    logPathName]
         cmdStr  = " ".join(cmdList)
         logger.debug("executing command [" + cmdStr + "]", extra=d)
@@ -154,7 +162,7 @@ def collect_logs_from_remote_hosts(systemTestEnv, testcaseEnv):
         # collect entity metrics file
         # ==============================
         cmdList = ["scp",
-                   hostname + ":" + metricsPathName + "/*",
+                   hostname + ":" + rmtMetricsPathName + "/*",
                    metricsPathName]
         cmdStr  = " ".join(cmdList)
         logger.debug("executing command [" + cmdStr + "]", extra=d)
@@ -192,8 +200,13 @@ def collect_logs_from_remote_hosts(systemTestEnv, testcaseEnv):
     # collect dashboards file
     # ==============================
     dashboardsPathName = get_testcase_config_log_dir_pathname(testcaseEnv, role, entity_id, "dashboards")
+    rmtDashboardsPathName = dashboardsPathName
+
+    if hostname != "localhost":
+        rmtDashboardsPathName  = replace_kafka_home(dashboardsPathName, kafkaHome)
+
     cmdList = ["scp",
-               hostname + ":" + dashboardsPathName + "/*",
+               hostname + ":" + rmtDashboardsPathName + "/*",
                dashboardsPathName]
     cmdStr  = " ".join(cmdList)
     logger.debug("executing command [" + cmdStr + "]", extra=d)
@@ -207,6 +220,7 @@ def generate_testcase_log_dirs_in_remote_hosts(systemTestEnv, testcaseEnv):
         hostname   = clusterEntityConfigDict["hostname"]
         entity_id  = clusterEntityConfigDict["entity_id"]
         role       = clusterEntityConfigDict["role"]
+        kafkaHome  = clusterEntityConfigDict["kafka_home"]
 
         logger.debug("entity_id : " + entity_id, extra=d)
         logger.debug("hostname  : " + hostname, extra=d)
@@ -215,6 +229,11 @@ def generate_testcase_log_dirs_in_remote_hosts(systemTestEnv, testcaseEnv):
         configPathName     = get_testcase_config_log_dir_pathname(testcaseEnv, role, entity_id, "config")
         metricsPathName    = get_testcase_config_log_dir_pathname(testcaseEnv, role, entity_id, "metrics")
         dashboardsPathName = get_testcase_config_log_dir_pathname(testcaseEnv, role, entity_id, "dashboards")
+
+        if hostname != "localhost":
+            configPathName     = replace_kafka_home(configPathName, kafkaHome)
+            metricsPathName    = replace_kafka_home(metricsPathName, kafkaHome)
+            dashboardsPathName = replace_kafka_home(dashboardsPathName, kafkaHome)
 
         cmdList = ["ssh " + hostname,
                    "'mkdir -p",
@@ -443,9 +462,14 @@ def scp_file_to_remote_host(clusterEntityConfigDictList, testcaseEnv):
 
     for clusterEntityConfigDict in clusterEntityConfigDictList:
         hostname         = clusterEntityConfigDict["hostname"]
-        testcasePathName = testcaseEnv.testCaseBaseDir
+        kafkaHome        = clusterEntityConfigDict["kafka_home"]
+        localTestcasePathName  = testcaseEnv.testCaseBaseDir
+        remoteTestcasePathName = localTestcasePathName
 
-        cmdStr = "scp " + testcasePathName + "/config/* " + hostname + ":" + testcasePathName + "/config"
+        if hostname != "localhost":
+            remoteTestcasePathName = replace_kafka_home(localTestcasePathName, kafkaHome)
+
+        cmdStr = "scp " + localTestcasePathName + "/config/* " + hostname + ":" + remoteTestcasePathName + "/config"
         logger.debug("executing command [" + cmdStr + "]", extra=d)
         system_test_utils.sys_call(cmdStr)
 
@@ -586,10 +610,16 @@ def get_leader_elected_log_line(systemTestEnv, testcaseEnv, leaderAttributesDict
 
         hostname   = system_test_utils.get_data_by_lookup_keyval( \
                          clusterEntityConfigDictList, "entity_id", brokerEntityId, "hostname")
+        kafkaHome  = system_test_utils.get_data_by_lookup_keyval( \
+                         clusterEntityConfigDictList, "entity_id", brokerEntityId, "kafka_home")
         logFile    = system_test_utils.get_data_by_lookup_keyval( \
                          testcaseEnv.testcaseConfigsList, "entity_id", brokerEntityId, "log_filename")
 
         logPathName = get_testcase_config_log_dir_pathname(testcaseEnv, "broker", brokerEntityId, "default")
+
+        if hostname != "localhost":
+            logPathName = replace_kafka_home(logPathName, kafkaHome)
+
         cmdStrList = ["ssh " + hostname,
                       "\"grep -i -h '" + leaderAttributesDict["LEADER_ELECTION_COMPLETED_MSG"] + "' ",
                       logPathName + "/" + logFile + " | ",
@@ -658,6 +688,10 @@ def start_entity_in_background(systemTestEnv, testcaseEnv, entityId):
 
     configPathName = get_testcase_config_log_dir_pathname(testcaseEnv, role, entityId, "config")
     logPathName    = get_testcase_config_log_dir_pathname(testcaseEnv, role, entityId, "default")
+
+    if hostname != "localhost":
+        configPathName = replace_kafka_home(configPathName, kafkaHome)
+        logPathName    = replace_kafka_home(logPathName, kafkaHome)
 
     if role == "zookeeper":
         cmdList = ["ssh " + hostname,
@@ -728,20 +762,43 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
         jmxPort           = system_test_utils.get_data_by_lookup_keyval(clusterList, "entity_id", entityId, "jmx_port")
         kafkaRunClassBin  = kafkaHome + "/bin/kafka-run-class.sh"
 
-
         logger.info("starting console consumer", extra=d)
 
-        consumerLogPath     = get_testcase_config_log_dir_pathname(testcaseEnv, "console_consumer", entityId, "default")
+        consumerLogPath = get_testcase_config_log_dir_pathname(testcaseEnv, "console_consumer", entityId, "default")
+        metricsDir      = get_testcase_config_log_dir_pathname(testcaseEnv, "console_consumer", entityId, "metrics"),
+
+        if host != "localhost":
+            consumerLogPath = replace_kafka_home(consumerLogPath, kafkaHome)
+            #metricsDir      = replace_kafka_home(metricsDir, kafkaHome)
+
         consumerLogPathName = consumerLogPath + "/console_consumer.log"
 
         testcaseEnv.userDefinedEnvVarDict["consumerLogPathName"] = consumerLogPathName
 
         # testcase configurations:
         testcaseList = testcaseEnv.testcaseConfigsList
-        topic     = system_test_utils.get_data_by_lookup_keyval(testcaseList, "entity_id", entityId, "topic")
+
+        # get testcase arguments
+        # 1. topics
+        numTopicsForAutoGenString = -1
+        try:
+            numTopicsForAutoGenString = int(testcaseEnv.testcaseArgumentsDict["num_topics_for_auto_generated_string"])
+        except:
+            pass
+
+        topic = ""
+        if numTopicsForAutoGenString < 0:
+            topic = system_test_utils.get_data_by_lookup_keyval(testcaseList, "entity_id", entityId, "topic")
+        else:
+            topic = generate_topics_string("topic", numTopicsForAutoGenString)
+
+        # update this variable and will be used by data validation functions
+        testcaseEnv.consumerTopicsString = topic
+
+        # 2. consumer timeout
         timeoutMs = system_test_utils.get_data_by_lookup_keyval(testcaseList, "entity_id", entityId, "consumer-timeout-ms")
 
-
+        # 3. consumer formatter
         formatterOption = ""
         try:
             formatterOption = system_test_utils.get_data_by_lookup_keyval(testcaseList, "entity_id", entityId, "formatter")
@@ -751,6 +808,7 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
         if len(formatterOption) > 0:
             formatterOption = " --formatter " + formatterOption + " "
 
+        # get zk.connect
         zkConnectStr = ""
         if clusterName == "source":
             zkConnectStr = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
@@ -768,7 +826,7 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
                    "--topic " + topic,
                    "--consumer-timeout-ms " + timeoutMs,
                    "--csv-reporter-enabled",
-                   "--metrics-dir " + get_testcase_config_log_dir_pathname(testcaseEnv, "console_consumer", entityId, "metrics"),
+                   #"--metrics-dir " + metricsDir,
                    formatterOption,
                    "--from-beginning ",
                    " >> " + consumerLogPathName,
@@ -819,6 +877,34 @@ def start_producer_performance(systemTestEnv, testcaseEnv, kafka07Client):
         time.sleep(1)
         testcaseEnv.lock.release()
 
+def generate_topics_string(topicPrefix, numOfTopics):
+    # return a topics string in the following format:
+    # <topicPrefix>_0001,<topicPrefix>_0002,...
+    # eg. "topic_0001,topic_0002,...,topic_xxxx"
+
+    topicsStr = ""
+    counter   = 1
+    idx       = "1"
+    while counter <= numOfTopics:
+        if counter <= 9:
+            idx = "000" + str(counter)
+        elif counter <= 99:
+            idx = "00"  + str(counter)
+        elif counter <= 999:
+            idx = "0"  +  str(counter)
+        elif counter <= 9999:
+            idx = str(counter)
+        else:
+            raise Exception("Error: no. of topics must be under 10000 - current topics count : " + counter)
+
+        if len(topicsStr) == 0:
+            topicsStr = topicPrefix + "_" + idx
+        else:
+            topicsStr = topicsStr + "," + topicPrefix + "_" + idx
+
+        counter += 1
+    return topicsStr
+
 def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafka07Client):
     host              = producerConfig["hostname"]
     entityId          = producerConfig["entity_id"]
@@ -830,9 +916,24 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
     jmxPort           = system_test_utils.get_data_by_lookup_keyval(entityConfigList, "entity_id", entityId, "jmx_port")
     kafkaRunClassBin  = kafkaHome + "/bin/kafka-run-class.sh"
 
+    # get optional testcase arguments
+    numTopicsForAutoGenString = -1
+    try:
+        numTopicsForAutoGenString = int(testcaseEnv.testcaseArgumentsDict["num_topics_for_auto_generated_string"])
+    except:
+        pass
+
     # testcase configurations:
     testcaseConfigsList = testcaseEnv.testcaseConfigsList
-    topic          = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "topic")
+    topic = ""
+    if numTopicsForAutoGenString < 0:
+        topic      = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "topic")
+    else:
+        topic      = generate_topics_string("topic", numTopicsForAutoGenString)
+
+    # update this variable and will be used by data validation functions
+    testcaseEnv.producerTopicsString = topic
+
     threads        = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "threads")
     compCodec      = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "compression-codec")
     messageSize    = system_test_utils.get_data_by_lookup_keyval(testcaseConfigsList, "entity_id", entityId, "message-size")
@@ -860,7 +961,13 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
 
     logger.info("starting producer preformance", extra=d)
 
-    producerLogPath     = get_testcase_config_log_dir_pathname(testcaseEnv, "producer_performance", entityId, "default")
+    producerLogPath  = get_testcase_config_log_dir_pathname(testcaseEnv, "producer_performance", entityId, "default")
+    metricsDir       = get_testcase_config_log_dir_pathname(testcaseEnv, "producer_performance", entityId, "metrics")
+
+    if host != "localhost":
+        producerLogPath = replace_kafka_home(producerLogPath, kafkaHome)
+        metricsDir      = replace_kafka_home(metricsDir, kafkaHome)
+
     producerLogPathName = producerLogPath + "/producer_performance.log"
 
     testcaseEnv.userDefinedEnvVarDict["producerLogPathName"] = producerLogPathName
@@ -898,7 +1005,7 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
                        "--producer-retry-backoff-ms " + retryBackoffMs,
                        "--producer-num-retries " + numOfRetries,
                        "--csv-reporter-enabled",
-                       "--metrics-dir " + get_testcase_config_log_dir_pathname(testcaseEnv, "producer_performance", entityId, "metrics"),
+                       "--metrics-dir " + metricsDir,
                        boolArgumentsStr,
                        " >> " + producerLogPathName,
                        " & echo pid:$! > " + producerLogPath + "/entity_" + entityId + "_pid'"]
@@ -1016,6 +1123,11 @@ def create_topic(systemTestEnv, testcaseEnv):
         else:
             raise Exception("Empty zkConnectStr found")
 
+        testcaseBaseDir = testcaseEnv.testCaseBaseDir
+
+        if zkHost != "localhost":
+            testcaseBaseDir = replace_kafka_home(testcaseBaseDir, kafkaHome)
+
         for topic in topicsList:
             logger.info("creating topic: [" + topic + "] at: [" + zkConnectStr + "]", extra=d) 
             cmdList = ["ssh " + zkHost,
@@ -1025,7 +1137,7 @@ def create_topic(systemTestEnv, testcaseEnv):
                        " --zookeeper " + zkConnectStr,
                        " --replica "   + testcaseEnv.testcaseArgumentsDict["replica_factor"],
                        " --partition " + testcaseEnv.testcaseArgumentsDict["num_partition"] + " >> ",
-                       testcaseEnv.testCaseBaseDir + "/logs/create_source_cluster_topic.log'"]
+                       testcaseBaseDir + "/logs/create_source_cluster_topic.log'"]
     
             cmdStr = " ".join(cmdList)
             logger.debug("executing command: [" + cmdStr + "]", extra=d)
@@ -1076,7 +1188,8 @@ def validate_data_matched(systemTestEnv, testcaseEnv):
 
     for prodPerfCfg in prodPerfCfgList:
         producerEntityId = prodPerfCfg["entity_id"]
-        topic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "topic")
+        #topic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "topic")
+        topic = testcaseEnv.producerTopicsString
         acks  = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "request-num-acks")
 
         consumerEntityIdList = system_test_utils.get_data_from_list_of_dicts( \
@@ -1084,7 +1197,8 @@ def validate_data_matched(systemTestEnv, testcaseEnv):
 
         matchingConsumerEntityId = None
         for consumerEntityId in consumerEntityIdList:
-            consumerTopic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", consumerEntityId, "topic")
+            #consumerTopic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", consumerEntityId, "topic")
+            consumerTopic = testcaseEnv.consumerTopicsString
             if consumerTopic in topic:
                 matchingConsumerEntityId = consumerEntityId
                 break
@@ -1159,6 +1273,23 @@ def cleanup_data_at_remote_hosts(systemTestEnv, testcaseEnv):
 
     clusterEntityConfigDictList = systemTestEnv.clusterEntityConfigDictList
     testcaseConfigsList         = testcaseEnv.testcaseConfigsList
+    testCaseBaseDir             = testcaseEnv.testCaseBaseDir
+
+    # clean up the following directories in localhost
+    #     system_test/<xxxx_testsuite>/testcase_xxxx/config
+    #     system_test/<xxxx_testsuite>/testcase_xxxx/dashboards
+    #     system_test/<xxxx_testsuite>/testcase_xxxx/logs
+    logger.info("cleaning up test case dir: [" + testCaseBaseDir + "]", extra=d)
+
+    if "system_test" not in testCaseBaseDir:
+        logger.warn("possible destructive command [" + cmdStr + "]", extra=d)
+        logger.warn("check config file: system_test/cluster_config.properties", extra=d)
+        logger.warn("aborting test...", extra=d)
+        sys.exit(1)
+    else:
+        system_test_utils.sys_call("rm -rf " + testCaseBaseDir + "/config/*")
+        system_test_utils.sys_call("rm -rf " + testCaseBaseDir + "/dashboards/*")
+        system_test_utils.sys_call("rm -rf " + testCaseBaseDir + "/logs/*")
 
     for clusterEntityConfigDict in systemTestEnv.clusterEntityConfigDictList:
 
@@ -1166,9 +1297,13 @@ def cleanup_data_at_remote_hosts(systemTestEnv, testcaseEnv):
         entityId         = clusterEntityConfigDict["entity_id"]
         role             = clusterEntityConfigDict["role"]
         kafkaHome        = clusterEntityConfigDict["kafka_home"]
-        testCaseBaseDir  = testcaseEnv.testCaseBaseDir
         cmdStr           = ""
         dataDir          = ""
+
+        if hostname == "localhost":
+            remoteTestCaseBaseDir = testCaseBaseDir
+        else:
+            remoteTestCaseBaseDir = replace_kafka_home(testCaseBaseDir, kafkaHome)
 
         logger.info("cleaning up data dir on host: [" + hostname + "]", extra=d)
 
@@ -1199,25 +1334,30 @@ def cleanup_data_at_remote_hosts(systemTestEnv, testcaseEnv):
         # ============================
         if system_test_utils.remote_host_file_exists(hostname, kafkaHome + "/bin/kafka-run-class.sh"):
             # so kafkaHome is a real kafka installation
-            cmdStr = "ssh " + hostname + " \"find " + testCaseBaseDir + " -name '*.log' | xargs rm 2> /dev/null\""
+            cmdStr = "ssh " + hostname + " \"find " + remoteTestCaseBaseDir + " -name '*.log' | xargs rm 2> /dev/null\""
             logger.debug("executing command [" + cmdStr + "]", extra=d)
             system_test_utils.sys_call(cmdStr)
 
-            cmdStr = "ssh " + hostname + " \"find " + testCaseBaseDir + " -name '*_pid' | xargs rm 2> /dev/null\""
+            cmdStr = "ssh " + hostname + " \"find " + remoteTestCaseBaseDir + " -name '*_pid' | xargs rm 2> /dev/null\""
             logger.debug("executing command [" + cmdStr + "]", extra=d)
             system_test_utils.sys_call(cmdStr)
 
-            cmdStr = "ssh " + hostname + " \"find " + testCaseBaseDir + " -name '*.csv' | xargs rm 2> /dev/null\""
+            cmdStr = "ssh " + hostname + " \"find " + remoteTestCaseBaseDir + " -name '*.csv' | xargs rm 2> /dev/null\""
             logger.debug("executing command [" + cmdStr + "]", extra=d)
             system_test_utils.sys_call(cmdStr)
 
-            cmdStr = "ssh " + hostname + " \"find " + testCaseBaseDir + " -name '*.svg' | xargs rm 2> /dev/null\""
+            cmdStr = "ssh " + hostname + " \"find " + remoteTestCaseBaseDir + " -name '*.svg' | xargs rm 2> /dev/null\""
             logger.debug("executing command [" + cmdStr + "]", extra=d)
             system_test_utils.sys_call(cmdStr)
 
-            cmdStr = "ssh " + hostname + " \"find " + testCaseBaseDir + " -name '*.html' | xargs rm 2> /dev/null\""
+            cmdStr = "ssh " + hostname + " \"find " + remoteTestCaseBaseDir + " -name '*.html' | xargs rm 2> /dev/null\""
             logger.debug("executing command [" + cmdStr + "]", extra=d)
             system_test_utils.sys_call(cmdStr)
+
+def replace_kafka_home(systemTestSubDirPath, kafkaHome):
+    matchObj = re.match(".*(\/system_test\/.*)$", systemTestSubDirPath)
+    relativeSubDirPath = matchObj.group(1)
+    return kafkaHome + relativeSubDirPath
 
 def get_entity_log_directory(testCaseBaseDir, entity_id, role):
     return testCaseBaseDir + "/logs/" + role + "-" + entity_id
@@ -1602,6 +1742,9 @@ def start_simple_consumer(systemTestEnv, testcaseEnv, minStartingOffsetDict=None
         kafkaRunClassBin  = kafkaHome + "/bin/kafka-run-class.sh"
         consumerLogPath   = get_testcase_config_log_dir_pathname(testcaseEnv, "console_consumer", entityId, "default")
 
+        if host != "localhost":
+            consumerLogPath = replace_kafka_home(consumerLogPath, kafkaHome)
+
         # testcase configurations:
         testcaseList = testcaseEnv.testcaseConfigsList
         topic = system_test_utils.get_data_by_lookup_keyval(testcaseList, "entity_id", entityId, "topic")
@@ -1964,14 +2107,14 @@ def validate_data_matched_in_multi_topics_from_single_consumer_producer(systemTe
 
     for prodPerfCfg in prodPerfCfgList:
         producerEntityId = prodPerfCfg["entity_id"]
-        topicStr = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "topic")
+        topicStr = testcaseEnv.producerTopicsString
         acks     = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "request-num-acks")
 
         consumerEntityIdList = system_test_utils.get_data_from_list_of_dicts(clusterEntityConfigDictList, "role", "console_consumer", "entity_id")
 
         matchingConsumerEntityId = None
         for consumerEntityId in consumerEntityIdList:
-            consumerTopic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", consumerEntityId, "topic")
+            consumerTopic = testcaseEnv.consumerTopicsString
             if consumerTopic in topicStr:
                 matchingConsumerEntityId = consumerEntityId
                 break

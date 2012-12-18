@@ -89,7 +89,7 @@ object ConsoleConsumer extends Logging {
             .withRequiredArg
             .describedAs("class")
             .ofType(classOf[String])
-            .defaultsTo(classOf[NewlineMessageFormatter].getName)
+            .defaultsTo(classOf[DefaultMessageFormatter].getName)
     val messageFormatterArgOpt = parser.accepts("property")
             .withRequiredArg
             .describedAs("prop")
@@ -176,6 +176,7 @@ object ConsoleConsumer extends Logging {
       }
     })
 
+    var numMessages = 0L
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
     formatter.init(formatterArgs)
     try {
@@ -188,6 +189,7 @@ object ConsoleConsumer extends Logging {
       for(messageAndTopic <- iter) {
         try {
           formatter.writeTo(messageAndTopic.key, messageAndTopic.message, System.out)
+          numMessages += 1
         } catch {
           case e =>
             if (skipMessageOnError)
@@ -198,6 +200,7 @@ object ConsoleConsumer extends Logging {
         if(System.out.checkError()) {
           // This means no one is listening to our output stream any more, time to shutdown
           System.err.println("Unable to write to standard out, closing consumer.")
+          System.err.println("Consumed %d messages".format(numMessages))
           formatter.close()
           connector.shutdown()
           System.exit(1)
@@ -206,6 +209,7 @@ object ConsoleConsumer extends Logging {
     } catch {
       case e => error("Error processing message, stopping consumer: ", e)
     }
+    System.out.println("Consumed %d messages".format(numMessages))
     System.out.flush()
     formatter.close()
     connector.shutdown()
@@ -256,10 +260,27 @@ trait MessageFormatter {
   def close() {}
 }
 
-class NewlineMessageFormatter extends MessageFormatter {
+class DefaultMessageFormatter extends MessageFormatter {
+  var printKey = false
+  var keySeparator = "\t".getBytes
+  var lineSeparator = "\n".getBytes
+  
+  override def init(props: Properties) {
+    if(props.containsKey("print.key"))
+      printKey = props.getProperty("print.key").trim.toLowerCase.equals("true")
+    if(props.containsKey("key.separator"))
+      keySeparator = props.getProperty("key.separator").getBytes
+    if(props.containsKey("line.separator"))
+      lineSeparator = props.getProperty("line.separator").getBytes
+  }
+  
   def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
+    if(printKey) {
+      output.write(key)
+      output.write(keySeparator)
+    }
     output.write(value)
-    output.write('\n')
+    output.write(lineSeparator)
   }
 }
 

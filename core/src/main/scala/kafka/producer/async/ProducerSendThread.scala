@@ -19,7 +19,7 @@ package kafka.producer.async
 
 import kafka.utils.{SystemTime, Logging}
 import java.util.concurrent.{TimeUnit, CountDownLatch, BlockingQueue}
-import collection.mutable.ListBuffer
+import collection.mutable.ArrayBuffer
 import kafka.producer.KeyedMessage
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
@@ -28,12 +28,13 @@ class ProducerSendThread[K,V](val threadName: String,
                               val queue: BlockingQueue[KeyedMessage[K,V]],
                               val handler: EventHandler[K,V],
                               val queueTime: Long,
-                              val batchSize: Int) extends Thread(threadName) with Logging with KafkaMetricsGroup {
+                              val batchSize: Int,
+                              val clientId: String) extends Thread(threadName) with Logging with KafkaMetricsGroup {
 
   private val shutdownLatch = new CountDownLatch(1)
   private val shutdownCommand = new KeyedMessage[K,V]("shutdown", null.asInstanceOf[K], null.asInstanceOf[V])
 
-  newGauge("ProducerQueueSize-" + getId,
+  newGauge(clientId + "-ProducerQueueSize-" + getId,
           new Gauge[Int] {
             def getValue = queue.size
           })
@@ -57,7 +58,7 @@ class ProducerSendThread[K,V](val threadName: String,
 
   private def processEvents() {
     var lastSend = SystemTime.milliseconds
-    var events = new ListBuffer[KeyedMessage[K,V]]
+    var events = new ArrayBuffer[KeyedMessage[K,V]]
     var full: Boolean = false
 
     // drain the queue until you get a shutdown command
@@ -85,7 +86,7 @@ class ProducerSendThread[K,V](val threadName: String,
           // if either queue time has reached or batch size has reached, dispatch to event handler
           tryToHandle(events)
           lastSend = SystemTime.milliseconds
-          events = new ListBuffer[KeyedMessage[K,V]]
+          events = new ArrayBuffer[KeyedMessage[K,V]]
         }
     }
     // send the last batch of events

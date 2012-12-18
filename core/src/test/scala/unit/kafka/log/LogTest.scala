@@ -438,6 +438,33 @@ class LogTest extends JUnitSuite {
       log.append(set)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
   }
+  
+  /**
+   * When we open a log any index segments without an associated log segment should be deleted.
+   */
+  @Test
+  def testBogusIndexSegmentsAreRemoved() {
+    val bogusIndex1 = Log.indexFilename(logDir, 0)
+    val bogusIndex2 = Log.indexFilename(logDir, 5)
+    
+    val set = TestUtils.singleMessageSet("test".getBytes())
+    val log = new Log(logDir, 
+                      time.scheduler,
+                      maxSegmentSize = set.sizeInBytes * 5, 
+                      maxMessageSize = config.maxMessageSize,
+                      maxIndexSize = 1000, 
+                      indexIntervalBytes = 1, 
+                      needsRecovery = false)
+    
+    assertTrue("The first index file should have been replaced with a larger file", bogusIndex1.length > 0)
+    assertFalse("The second index file should have been deleted.", bogusIndex2.exists)
+    
+    // check that we can append to the log
+    for(i <- 0 until 10)
+      log.append(set)
+      
+    log.delete()
+  }
 
   /**
    * Verify that truncation works correctly after re-opening the log

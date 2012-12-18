@@ -17,7 +17,6 @@
 
 package kafka
 
-import message.Message
 import org.apache.log4j.PropertyConfigurator
 import kafka.utils.Logging
 import serializer.Encoder

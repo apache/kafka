@@ -81,11 +81,11 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     props.put("connect.timeout.ms", "300")
     props.put("reconnect.interval", "500")
     props.put("max.message.size", "100")
-    val correlationId = SyncProducerConfig.DefaultCorrelationId
+    val correlationId = 0
     val clientId = SyncProducerConfig.DefaultClientId
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
     val ack = SyncProducerConfig.DefaultRequiredAcks
-    val emptyRequest = new kafka.api.ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, Map[TopicAndPartition, MessageSet]())
+    val emptyRequest = new kafka.api.ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, Map[TopicAndPartition, ByteBufferMessageSet]())
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val response = producer.send(emptyRequest)
@@ -98,9 +98,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val props = new Properties()
     props.put("host", "localhost")
     props.put("port", server.socketServer.port.toString)
-    props.put("buffer.size", "102400")
-    props.put("connect.timeout.ms", "300")
-    props.put("reconnect.interval", "500")
+    props.put("max.message.size", 50000.toString)
     val producer = new SyncProducer(new SyncProducerConfig(props))
     CreateTopicCommand.createTopic(zkClient, "test", 1, 1)
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0, 500)

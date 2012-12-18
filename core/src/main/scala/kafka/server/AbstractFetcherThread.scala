@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.cluster.Broker
 import kafka.consumer.SimpleConsumer
-import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.common.{ClientIdAndBroker, TopicAndPartition, ErrorMapping}
 import collection.mutable
 import kafka.message.ByteBufferMessageSet
 import kafka.message.MessageAndOffset
@@ -38,12 +38,15 @@ import java.util.concurrent.locks.ReentrantLock
 abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroker: Broker, socketTimeout: Int, socketBufferSize: Int,
                                      fetchSize: Int, fetcherBrokerId: Int = -1, maxWait: Int = 0, minBytes: Int = 1)
   extends ShutdownableThread(name) {
-
   private val partitionMap = new mutable.HashMap[TopicAndPartition, Long] // a (topic, partition) -> offset map
   private val partitionMapLock = new ReentrantLock
   private val partitionMapCond = partitionMapLock.newCondition()
-  val simpleConsumer = new SimpleConsumer(sourceBroker.host, sourceBroker.port, socketTimeout, socketBufferSize)
-  val fetcherMetrics = FetcherStat.getFetcherStat(name + "-" + sourceBroker.id)
+  val simpleConsumer = new SimpleConsumer(sourceBroker.host, sourceBroker.port, socketTimeout, socketBufferSize, clientId)
+  private val brokerInfo = "host_%s-port_%s".format(sourceBroker.host, sourceBroker.port)
+  private val metricId = new ClientIdAndBroker(clientId, brokerInfo)
+  val fetcherStats = new FetcherStats(metricId)
+  val fetcherMetrics = fetcherStats.getFetcherStats(name + "-" + sourceBroker.id)
+  val fetcherLagStats = new FetcherLagStats(metricId)
 
   /* callbacks to be defined in subclass */
 
@@ -117,7 +120,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
                     case None => currentOffset.get
                   }
                   partitionMap.put(topicAndPartition, newOffset)
-                  FetcherLagMetrics.getFetcherLagMetrics(topic, partitionId).lag = partitionData.hw - newOffset
+                  fetcherLagStats.getFetcherLagStats(topic, partitionId).lag = partitionData.hw - newOffset
                   fetcherMetrics.byteRate.mark(validBytes)
                   // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
                   processPartitionData(topicAndPartition, currentOffset.get, partitionData)
@@ -182,10 +185,10 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   }
 }
 
-class FetcherLagMetrics(name: (String, Int)) extends KafkaMetricsGroup {
+class FetcherLagMetrics(metricId: ClientIdBrokerTopicPartition) extends KafkaMetricsGroup {
   private[this] var lagVal = new AtomicLong(-1L)
   newGauge(
-    name._1 + "-" + name._2 + "-ConsumerLag",
+    metricId + "-ConsumerLag",
     new Gauge[Long] {
       def getValue = lagVal.get
     }
@@ -198,25 +201,34 @@ class FetcherLagMetrics(name: (String, Int)) extends KafkaMetricsGroup {
   def lag = lagVal.get
 }
 
-object FetcherLagMetrics {
-  private val valueFactory = (k: (String, Int)) => new FetcherLagMetrics(k)
-  private val stats = new Pool[(String, Int), FetcherLagMetrics](Some(valueFactory))
+class FetcherLagStats(metricId: ClientIdAndBroker) {
+  private val valueFactory = (k: ClientIdBrokerTopicPartition) => new FetcherLagMetrics(k)
+  private val stats = new Pool[ClientIdBrokerTopicPartition, FetcherLagMetrics](Some(valueFactory))
 
-  def getFetcherLagMetrics(topic: String, partitionId: Int): FetcherLagMetrics = {
-    stats.getAndMaybePut( (topic, partitionId) )
+  def getFetcherLagStats(topic: String, partitionId: Int): FetcherLagMetrics = {
+    stats.getAndMaybePut(new ClientIdBrokerTopicPartition(metricId.clientId, metricId.brokerInfo, topic, partitionId))
   }
 }
 
-class FetcherStat(name: String) extends KafkaMetricsGroup {
-  val requestRate = newMeter(name + "RequestsPerSec",  "requests", TimeUnit.SECONDS)
-  val byteRate = newMeter(name + "BytesPerSec",  "bytes", TimeUnit.SECONDS)
+class FetcherMetrics(metricId: ClientIdBrokerTopic) extends KafkaMetricsGroup {
+  val requestRate = newMeter(metricId + "-RequestsPerSec",  "requests", TimeUnit.SECONDS)
+  val byteRate = newMeter(metricId + "-BytesPerSec",  "bytes", TimeUnit.SECONDS)
 }
 
-object FetcherStat {
-  private val valueFactory = (k: String) => new FetcherStat(k)
-  private val stats = new Pool[String, FetcherStat](Some(valueFactory))
+class FetcherStats(metricId: ClientIdAndBroker) {
+  private val valueFactory = (k: ClientIdBrokerTopic) => new FetcherMetrics(k)
+  private val stats = new Pool[ClientIdBrokerTopic, FetcherMetrics](Some(valueFactory))
 
-  def getFetcherStat(name: String): FetcherStat = {
-    stats.getAndMaybePut(name)
+  def getFetcherStats(name: String): FetcherMetrics = {
+    stats.getAndMaybePut(new ClientIdBrokerTopic(metricId.clientId, metricId.brokerInfo, name))
   }
 }
+
+case class ClientIdBrokerTopic(clientId: String, brokerInfo: String, topic: String) {
+  override def toString = "%s-%s-%s".format(clientId, brokerInfo, topic)
+}
+
+case class ClientIdBrokerTopicPartition(clientId: String, brokerInfo: String, topic: String, partitionId: Int) {
+  override def toString = "%s-%s-%s-%d".format(clientId, brokerInfo, topic, partitionId)
+}
+

@@ -223,7 +223,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     val liveAssignedReplicas = replicaAssignment.filter(r => controllerContext.liveBrokerIds.contains(r))
     liveAssignedReplicas.size match {
       case 0 =>
-        ControllerStat.offlinePartitionRate.mark()
+        ControllerStats.offlinePartitionRate.mark()
         throw new StateChangeFailedException(("During state change of partition %s from NEW to ONLINE, assigned replicas are " +
           "[%s], live brokers are [%s]. No assigned replica is alive").format(topicAndPartition,
           replicaAssignment.mkString(","), controllerContext.liveBrokerIds))
@@ -249,7 +249,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             // read the controller epoch
             val leaderIsrAndEpoch = ZkUtils.getLeaderIsrAndEpochForPartition(zkClient, topicAndPartition.topic,
               topicAndPartition.partition).get
-            ControllerStat.offlinePartitionRate.mark()
+            ControllerStats.offlinePartitionRate.mark()
             throw new StateChangeFailedException("Error while changing partition %s's state from New to Online"
               .format(topicAndPartition) + " since Leader and isr path already exists with value " +
               "%s and controller epoch %d".format(leaderIsrAndEpoch.leaderAndIsr.toString(), leaderIsrAndEpoch.controllerEpoch))

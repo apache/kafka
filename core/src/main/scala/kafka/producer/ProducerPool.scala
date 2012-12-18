@@ -26,13 +26,15 @@ import kafka.api.TopicMetadata
 import kafka.common.UnavailableProducerException
 
 
-object ProducerPool{
-  def createSyncProducer(configOpt: Option[ProducerConfig], broker: Broker): SyncProducer = {
+object ProducerPool {
+  /**
+   * Used in ProducerPool to initiate a SyncProducer connection with a broker.
+   */
+  def createSyncProducer(config: ProducerConfig, broker: Broker): SyncProducer = {
     val props = new Properties()
     props.put("host", broker.host)
     props.put("port", broker.port.toString)
-    if(configOpt.isDefined)
-      props.putAll(configOpt.get.props.props)
+    props.putAll(config.props.props)
     new SyncProducer(new SyncProducerConfig(props))
   }
 }
@@ -41,9 +43,9 @@ class ProducerPool(val config: ProducerConfig) extends Logging {
   private val syncProducers = new HashMap[Int, SyncProducer]
   private val lock = new Object()
 
-  def updateProducer(topicMetaDatas: Seq[TopicMetadata]) {
+  def updateProducer(topicMetadatas: Seq[TopicMetadata]) {
     val newBrokers = new collection.mutable.HashSet[Broker]
-    topicMetaDatas.foreach(tmd => {
+    topicMetadatas.foreach(tmd => {
       tmd.partitionsMetadata.foreach(pmd => {
         if(pmd.leader.isDefined)
           newBrokers+=(pmd.leader.get)
@@ -53,9 +55,9 @@ class ProducerPool(val config: ProducerConfig) extends Logging {
       newBrokers.foreach(b => {
         if(syncProducers.contains(b.id)){
           syncProducers(b.id).close()
-          syncProducers.put(b.id, ProducerPool.createSyncProducer(Some(config), b))
+          syncProducers.put(b.id, ProducerPool.createSyncProducer(config, b))
         } else
-          syncProducers.put(b.id, ProducerPool.createSyncProducer(Some(config), b))
+          syncProducers.put(b.id, ProducerPool.createSyncProducer(config, b))
       })
     }
   }

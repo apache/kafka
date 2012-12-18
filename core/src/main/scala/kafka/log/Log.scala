@@ -93,14 +93,23 @@ class Log(val dir: File,
     val ls = dir.listFiles()
     if(ls != null) {
       for(file <- ls if file.isFile) {
+        if(!file.canRead)
+          throw new IOException("Could not read file " + file)
         val filename = file.getName
         if(filename.endsWith(DeletedFileSuffix)) {
+          // if the file ends in .deleted, delete it
           val deleted = file.delete()
           if(!deleted)
             warn("Attempt to delete defunct segment file %s failed.".format(filename))
+        }  else if(filename.endsWith(IndexFileSuffix)) {
+          // if it is an index file, make sure it has a corresponding .log file
+          val logFile = new File(file.getAbsolutePath.replace(IndexFileSuffix, LogFileSuffix))
+          if(!logFile.exists) {
+            warn("Found an orphaned index file, %s, with no corresponding log file.".format(file.getAbsolutePath))
+            file.delete()
+          }
         } else if(filename.endsWith(LogFileSuffix)) {
-          if(!file.canRead)
-            throw new IOException("Could not read file " + file)
+          // if its a log file, load the corresponding log segment
           val start = filename.substring(0, filename.length - LogFileSuffix.length).toLong
           val hasIndex = Log.indexFilename(dir, start).exists
           val segment = new LogSegment(dir = dir, 

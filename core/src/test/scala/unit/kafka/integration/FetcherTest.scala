@@ -23,7 +23,6 @@ import scala.collection._
 import junit.framework.Assert._
 
 import kafka.cluster._
-import kafka.message._
 import kafka.server._
 import org.scalatest.junit.JUnit3Suite
 import kafka.consumer._
@@ -41,7 +40,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
     yield new KafkaConfig(props)
   val messages = new mutable.HashMap[Int, Seq[Array[Byte]]]
   val topic = "topic"
-  val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, c.brokerId.toString, "localhost", c.port)))
+  val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, "localhost", c.port)))
   val shutdown = ZookeeperConsumerConnector.shutdownCommand
   val queue = new LinkedBlockingQueue[FetchedDataChunk]
   val topicInfos = configs.map(c => new PartitionTopicInfo(topic,
@@ -50,7 +49,8 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
                                                            queue,
                                                            new AtomicLong(0),
                                                            new AtomicLong(0),
-                                                           new AtomicInteger(0)))
+                                                           new AtomicInteger(0),
+                                                           ""))
 
   var fetcher: ConsumerFetcherManager = null
 
@@ -84,7 +84,9 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
   def sendMessages(messagesPerNode: Int): Int = {
     var count = 0
     for(conf <- configs) {
-      val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs), new DefaultEncoder(), new StringEncoder())
+      val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs),
+                                                                             new DefaultEncoder(),
+                                                                             new StringEncoder())
       val ms = 0.until(messagesPerNode).map(x => (conf.brokerId * 5 + x).toString.getBytes).toArray
       messages += conf.brokerId -> ms
       producer.send(ms.map(m => KeyedMessage[String, Array[Byte]](topic, topic, m)):_*)

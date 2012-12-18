@@ -21,6 +21,7 @@ import scala.collection.JavaConversions._
 import joptsimple._
 import java.util.Properties
 import java.io._
+import kafka.common._
 import kafka.message._
 import kafka.serializer._
 
@@ -49,13 +50,18 @@ object ConsoleProducer {
                                .describedAs("timeout_ms")
                                .ofType(classOf[java.lang.Long])
                                .defaultsTo(1000)
-    val messageEncoderOpt = parser.accepts("message-encoder", "The class name of the message encoder implementation to use.")
+    val valueEncoderOpt = parser.accepts("value-serializer", "The class name of the message encoder implementation to use for serializing values.")
+                                 .withRequiredArg
+                                 .describedAs("encoder_class")
+                                 .ofType(classOf[java.lang.String])
+                                 .defaultsTo(classOf[StringEncoder].getName)
+    val keyEncoderOpt = parser.accepts("key-serializer", "The class name of the message encoder implementation to use for serializing keys.")
                                  .withRequiredArg
                                  .describedAs("encoder_class")
                                  .ofType(classOf[java.lang.String])
                                  .defaultsTo(classOf[StringEncoder].getName)
     val messageReaderOpt = parser.accepts("line-reader", "The class name of the class to use for reading lines from standard in. " + 
-                                                          "By default each line is read as a seperate message.")
+                                                          "By default each line is read as a separate message.")
                                   .withRequiredArg
                                   .describedAs("reader_class")
                                   .ofType(classOf[java.lang.String])
@@ -82,9 +88,11 @@ object ConsoleProducer {
     val compress = options.has(compressOpt)
     val batchSize = options.valueOf(batchSizeOpt)
     val sendTimeout = options.valueOf(sendTimeoutOpt)
-    val encoderClass = options.valueOf(messageEncoderOpt)
+    val keyEncoderClass = options.valueOf(keyEncoderOpt)
+    val valueEncoderClass = options.valueOf(valueEncoderOpt)
     val readerClass = options.valueOf(messageReaderOpt)
     val cmdLineProps = parseLineReaderArgs(options.valuesOf(propertyOpt))
+    cmdLineProps.put("topic", topic)
 
     val props = new Properties()
     props.put("broker.list", brokerList)
@@ -94,12 +102,13 @@ object ConsoleProducer {
     if(options.has(batchSizeOpt))
       props.put("batch.size", batchSize.toString)
     props.put("queue.time", sendTimeout.toString)
-    props.put("serializer.class", encoderClass)
+    props.put("key.serializer.class", keyEncoderClass)
+    props.put("serializer.class", valueEncoderClass)
 
-    val reader = Class.forName(readerClass).newInstance().asInstanceOf[MessageReader]
+    val reader = Class.forName(readerClass).newInstance().asInstanceOf[MessageReader[AnyRef, AnyRef]]
     reader.init(System.in, cmdLineProps)
 
-    val producer = new Producer[Any, Any](new ProducerConfig(props))
+    val producer = new Producer[AnyRef, AnyRef](new ProducerConfig(props))
 
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run() {
@@ -107,11 +116,11 @@ object ConsoleProducer {
       }
     })
 
-    var message: AnyRef = null
+    var message: KeyedMessage[AnyRef, AnyRef] = null
     do { 
       message = reader.readMessage()
       if(message != null)
-        producer.send(new KeyedMessage(topic, message))
+        producer.send(message)
     } while(message != null)
   }
 
@@ -127,19 +136,49 @@ object ConsoleProducer {
     props
   }
 
-  trait MessageReader { 
+  trait MessageReader[K,V] { 
     def init(inputStream: InputStream, props: Properties) {}
-    def readMessage(): AnyRef
+    def readMessage(): KeyedMessage[K,V]
     def close() {}
   }
 
-  class LineMessageReader extends MessageReader { 
+  class LineMessageReader extends MessageReader[String, String] {
+    var topic: String = null
     var reader: BufferedReader = null
+    var parseKey = false
+    var keySeparator = "\t"
+    var ignoreError = false
+    var lineNumber = 0
 
-    override def init(inputStream: InputStream, props: Properties) { 
+    override def init(inputStream: InputStream, props: Properties) {
+      topic = props.getProperty("topic")
+      if(props.containsKey("parse.key"))
+        parseKey = props.getProperty("parse.key").trim.toLowerCase.equals("true")
+      if(props.containsKey("key.seperator"))
+        keySeparator = props.getProperty("key.separator")
+      if(props.containsKey("ignore.error"))
+        ignoreError = props.getProperty("ignore.error").trim.toLowerCase.equals("true")
       reader = new BufferedReader(new InputStreamReader(inputStream))
     }
 
-    override def readMessage() = reader.readLine()
+    override def readMessage() = {
+      lineNumber += 1
+      val line = reader.readLine()
+      if(parseKey) {
+        line.indexOf(keySeparator) match {
+          case -1 =>
+            if(ignoreError)
+              new KeyedMessage(topic, line)
+            else
+              throw new KafkaException("No key found on line " + lineNumber + ": " + line)
+          case n =>
+            new KeyedMessage(topic,
+                             line.substring(0, n), 
+                             if(n + keySeparator.size > line.size) "" else line.substring(n + keySeparator.size))
+        }
+      } else {
+        new KeyedMessage(topic, line) 
+      }
+    }
   }
 }

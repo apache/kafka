@@ -25,7 +25,6 @@ import java.util.Properties
 import kafka.utils.Utils
 import kafka.producer.{KeyedMessage, Producer, ProducerConfig}
 import kafka.serializer._
-import kafka.message.Message
 import kafka.utils.TestUtils
 import org.apache.log4j.{Level, Logger}
 import org.I0Itec.zkclient.ZkClient

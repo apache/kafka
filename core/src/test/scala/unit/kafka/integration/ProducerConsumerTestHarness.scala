@@ -21,7 +21,6 @@ import kafka.consumer.SimpleConsumer
 import org.scalatest.junit.JUnit3Suite
 import java.util.Properties
 import kafka.producer.{ProducerConfig, Producer}
-import kafka.message.Message
 import kafka.utils.TestUtils
 import kafka.serializer._
 
@@ -44,10 +43,7 @@ trait ProducerConsumerTestHarness extends JUnit3Suite with KafkaServerTestHarnes
       props.put("producer.request.required.acks", "-1")
       props.put("serializer.class", classOf[StringEncoder].getName.toString)
       producer = new Producer(new ProducerConfig(props))
-      consumer = new SimpleConsumer(host,
-                                   port,
-                                   1000000,
-                                   64*1024)
+      consumer = new SimpleConsumer(host, port, 1000000, 64*1024, "")
     }
 
    override def tearDown() {

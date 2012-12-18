@@ -405,7 +405,7 @@ object Utils extends Logging {
   }
 
   /**
-   * This method gets comma seperated values which contains key,value pairs and returns a map of
+   * This method gets comma separated values which contains key,value pairs and returns a map of
    * key value pairs. the format of allCSVal is key1:val1, key2:val2 ....
    */
   def parseCsvMap(str: String): Map[String, String] = {

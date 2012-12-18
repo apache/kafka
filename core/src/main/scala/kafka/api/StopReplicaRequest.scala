@@ -25,12 +25,13 @@ import kafka.network.InvalidRequestException
 
 
 object StopReplicaRequest extends Logging {
-  val CurrentVersion = 1.shortValue()
+  val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
   val DefaultAckTimeout = 100
 
   def readFrom(buffer: ByteBuffer): StopReplicaRequest = {
     val versionId = buffer.getShort
+    val correlationId = buffer.getInt
     val clientId = readShortString(buffer)
     val ackTimeoutMs = buffer.getInt
     val controllerEpoch = buffer.getInt
@@ -45,11 +46,12 @@ object StopReplicaRequest extends Logging {
     (1 to topicPartitionPairCount) foreach { _ =>
       topicPartitionPairSet.add(readShortString(buffer), buffer.getInt)
     }
-    StopReplicaRequest(versionId, clientId, ackTimeoutMs, deletePartitions, topicPartitionPairSet.toSet, controllerEpoch)
+    StopReplicaRequest(versionId, correlationId, clientId, ackTimeoutMs, deletePartitions, topicPartitionPairSet.toSet, controllerEpoch)
   }
 }
 
 case class StopReplicaRequest(versionId: Short,
+                              correlationId: Int,
                               clientId: String,
                               ackTimeoutMs: Int,
                               deletePartitions: Boolean,
@@ -58,12 +60,13 @@ case class StopReplicaRequest(versionId: Short,
         extends RequestOrResponse(Some(RequestKeys.StopReplicaKey)) {
 
   def this(deletePartitions: Boolean, partitions: Set[(String, Int)], controllerEpoch: Int) = {
-    this(StopReplicaRequest.CurrentVersion, StopReplicaRequest.DefaultClientId, StopReplicaRequest.DefaultAckTimeout,
+    this(StopReplicaRequest.CurrentVersion, 0, StopReplicaRequest.DefaultClientId, StopReplicaRequest.DefaultAckTimeout,
          deletePartitions, partitions, controllerEpoch)
   }
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
+    buffer.putInt(correlationId)
     writeShortString(buffer, clientId)
     buffer.putInt(ackTimeoutMs)
     buffer.putInt(controllerEpoch)
@@ -78,6 +81,7 @@ case class StopReplicaRequest(versionId: Short,
   def sizeInBytes(): Int = {
     var size =
       2 + /* versionId */
+      4 + /* correlation id */
       ApiUtils.shortStringLength(clientId) +
       4 + /* ackTimeoutMs */
       4 + /* controller epoch */

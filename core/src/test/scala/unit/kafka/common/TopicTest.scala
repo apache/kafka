@@ -15,11 +15,11 @@
  * limitations under the License.
  */
 
-package kafka.utils
+package unit.kafka.common
 
 import junit.framework.Assert._
 import collection.mutable.ArrayBuffer
-import kafka.common.InvalidTopicException
+import kafka.common.{Topic, InvalidTopicException}
 import org.junit.Test
 
 class TopicTest {
@@ -34,7 +34,7 @@ class TopicTest {
     invalidTopicNames += longName
     val badChars = Array('/', '\\', ',', '\0', ':', "\"", '\'', ';', '*', '?', '.')
     for (weirdChar <- badChars) {
-      invalidTopicNames += "Is" + weirdChar + "funny"
+      invalidTopicNames += "Is" + weirdChar + "illegal"
     }
 
     for (i <- 0 until invalidTopicNames.size) {

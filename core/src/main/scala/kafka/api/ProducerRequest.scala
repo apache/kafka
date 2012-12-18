@@ -25,7 +25,7 @@ import kafka.api.ApiUtils._
 
 
 object ProducerRequest {
-  val CurrentVersion: Short = 0
+  val CurrentVersion = 0.shortValue
 
   def readFrom(buffer: ByteBuffer): ProducerRequest = {
     val versionId: Short = buffer.getShort
@@ -57,7 +57,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
                            clientId: String,
                            requiredAcks: Short,
                            ackTimeoutMs: Int,
-                           data: Map[TopicAndPartition, MessageSet])
+                           data: Map[TopicAndPartition, ByteBufferMessageSet])
     extends RequestOrResponse(Some(RequestKeys.ProduceKey)) {
 
   /**
@@ -69,7 +69,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
            clientId: String,
            requiredAcks: Short,
            ackTimeoutMs: Int,
-           data: Map[TopicAndPartition, MessageSet]) =
+           data: Map[TopicAndPartition, ByteBufferMessageSet]) =
     this(ProducerRequest.CurrentVersion, correlationId, clientId, requiredAcks, ackTimeoutMs, data)
 
   def writeTo(buffer: ByteBuffer) {
@@ -88,7 +88,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
         topicAndPartitionData.foreach(partitionAndData => {
           val partition = partitionAndData._1.partition
           val partitionMessageData = partitionAndData._2
-          val bytes = partitionMessageData.asInstanceOf[ByteBufferMessageSet].buffer
+          val bytes = partitionMessageData.buffer
           buffer.putInt(partition)
           buffer.putInt(bytes.limit)
           buffer.put(bytes)

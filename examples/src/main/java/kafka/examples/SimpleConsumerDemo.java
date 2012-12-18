@@ -59,7 +59,8 @@ public class SimpleConsumerDemo {
     SimpleConsumer simpleConsumer = new SimpleConsumer(KafkaProperties.kafkaServerURL,
                                                        KafkaProperties.kafkaServerPort,
                                                        KafkaProperties.connectionTimeOut,
-                                                       KafkaProperties.kafkaProducerBufferSize);
+                                                       KafkaProperties.kafkaProducerBufferSize,
+                                                       KafkaProperties.clientId);
 
     System.out.println("Testing single fetch");
     FetchRequest req = new FetchRequestBuilder()

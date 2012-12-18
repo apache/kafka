@@ -24,7 +24,7 @@ import kafka.producer.{KeyedMessage, ProducerConfig, Producer}
 import kafka.consumer._
 import kafka.utils.{Logging, ZkUtils}
 import kafka.api.OffsetRequest
-import kafka.message.{CompressionCodec, Message}
+import kafka.message.CompressionCodec
 
 object ReplayLogProducer extends Logging {
 

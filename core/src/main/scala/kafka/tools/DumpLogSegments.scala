@@ -57,8 +57,8 @@ object DumpLogSegments {
     val verifyOnly = if(options.has(verifyOpt)) true else false
     val files = options.valueOf(filesOpt).split(",")
 
-    val misMatchesForIndexFilesMap = new mutable.HashMap[String, List[(Int, Int)]]
-    val nonConsecutivePairsForLogFilesMap = new mutable.HashMap[String, List[(Int, Int)]]
+    val misMatchesForIndexFilesMap = new mutable.HashMap[String, List[(Long, Long)]]
+    val nonConsecutivePairsForLogFilesMap = new mutable.HashMap[String, List[(Long, Long)]]
 
     for(arg <- files) {
       val file = new File(arg)
@@ -89,7 +89,7 @@ object DumpLogSegments {
   }
   
   /* print out the contents of the index */
-  private def dumpIndex(file: File, verifyOnly: Boolean, misMatchesForIndexFilesMap: mutable.HashMap[String, List[(Int, Int)]]) {
+  private def dumpIndex(file: File, verifyOnly: Boolean, misMatchesForIndexFilesMap: mutable.HashMap[String, List[(Long, Long)]]) {
     val startOffset = file.getName().split("\\.")(0).toLong
     val logFileName = file.getAbsolutePath.split("\\.")(0) + Log.LogFileSuffix
     val logFile = new File(logFileName)
@@ -100,8 +100,8 @@ object DumpLogSegments {
       val partialFileMessageSet: FileMessageSet = messageSet.read(entry.position, messageSet.sizeInBytes())
       val messageAndOffset = partialFileMessageSet.head
       if(messageAndOffset.offset != entry.offset + index.baseOffset) {
-        var misMatchesSeq = misMatchesForIndexFilesMap.getOrElse(file.getName, List[(Int, Int)]())
-        misMatchesSeq ::=((entry.offset + index.baseOffset, messageAndOffset.offset).asInstanceOf[(Int, Int)])
+        var misMatchesSeq = misMatchesForIndexFilesMap.getOrElse(file.getName, List[(Long, Long)]())
+        misMatchesSeq ::=(entry.offset + index.baseOffset, messageAndOffset.offset)
         misMatchesForIndexFilesMap.put(file.getName, misMatchesSeq)
       }
       // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
@@ -113,7 +113,7 @@ object DumpLogSegments {
   }
   
   /* print out the contents of the log */
-  private def dumpLog(file: File, printContents: Boolean, nonConsecutivePairsForLogFilesMap: mutable.HashMap[String, List[(Int, Int)]]) {
+  private def dumpLog(file: File, printContents: Boolean, nonConsecutivePairsForLogFilesMap: mutable.HashMap[String, List[(Long, Long)]]) {
     val startOffset = file.getName().split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
     val messageSet = new FileMessageSet(file)
@@ -126,8 +126,8 @@ object DumpLogSegments {
         lastOffset = messageAndOffset.offset
       // If it's uncompressed message, its offset must be lastOffset + 1 no matter last message is compressed or uncompressed
       else if (msg.compressionCodec == NoCompressionCodec && messageAndOffset.offset != lastOffset +1) {
-        var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getName, List[(Int, Int)]())
-        nonConsecutivePairsSeq ::=((lastOffset, messageAndOffset.offset).asInstanceOf[(Int, Int)])
+        var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getName, List[(Long, Long)]())
+        nonConsecutivePairsSeq ::=(lastOffset, messageAndOffset.offset)
         nonConsecutivePairsForLogFilesMap.put(file.getName, nonConsecutivePairsSeq)
       }
       lastOffset = messageAndOffset.offset

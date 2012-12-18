@@ -26,7 +26,7 @@ import kafka.api.ApiUtils._
 
 object StopReplicaResponse {
   def readFrom(buffer: ByteBuffer): StopReplicaResponse = {
-    val versionId = buffer.getShort
+    val correlationId = buffer.getInt
     val errorCode = buffer.getShort
     val numEntries = buffer.getInt
 
@@ -37,17 +37,17 @@ object StopReplicaResponse {
       val partitionErrorCode = buffer.getShort()
       responseMap.put((topic, partition), partitionErrorCode)
     }
-    new StopReplicaResponse(versionId, responseMap.toMap, errorCode)
+    new StopReplicaResponse(correlationId, responseMap.toMap, errorCode)
   }
 }
 
 
-case class StopReplicaResponse(val versionId: Short,
+case class StopReplicaResponse(val correlationId: Int,
                                val responseMap: Map[(String, Int), Short],
                                val errorCode: Short = ErrorMapping.NoError) extends RequestOrResponse{
   def sizeInBytes(): Int ={
     var size =
-      2 /* version id */ +
+      4 /* correlation id */ + 
       2 /* error code */ +
       4 /* number of responses */
     for ((key, value) <- responseMap) {
@@ -60,7 +60,7 @@ case class StopReplicaResponse(val versionId: Short,
   }
 
   def writeTo(buffer: ByteBuffer) {
-    buffer.putShort(versionId)
+    buffer.putInt(correlationId)
     buffer.putShort(errorCode)
     buffer.putInt(responseMap.size)
     for ((key:(String, Int), value) <- responseMap){

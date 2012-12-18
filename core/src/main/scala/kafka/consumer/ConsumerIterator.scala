@@ -34,12 +34,14 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
                              consumerTimeoutMs: Int,
                              private val keyDecoder: Decoder[K],
                              private val valueDecoder: Decoder[V],
-                             val enableShallowIterator: Boolean)
+                             val enableShallowIterator: Boolean,
+                             val clientId: String)
   extends IteratorTemplate[MessageAndMetadata[K, V]] with Logging {
 
   private var current: AtomicReference[Iterator[MessageAndOffset]] = new AtomicReference(null)
   private var currentTopicInfo: PartitionTopicInfo = null
   private var consumedOffset: Long = -1L
+  private val consumerTopicStats = ConsumerTopicStatsRegistry.getConsumerTopicStat(clientId)
 
   override def next(): MessageAndMetadata[K, V] = {
     val item = super.next()
@@ -48,8 +50,8 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
     currentTopicInfo.resetConsumeOffset(consumedOffset)
     val topic = currentTopicInfo.topic
     trace("Setting %s consumed offset to %d".format(topic, consumedOffset))
-    ConsumerTopicStat.getConsumerTopicStat(topic).messageRate.mark()
-    ConsumerTopicStat.getConsumerAllTopicStat().messageRate.mark()
+    consumerTopicStats.getConsumerTopicStats(topic).messageRate.mark()
+    consumerTopicStats.getConsumerAllTopicStats().messageRate.mark()
     item
   }
 

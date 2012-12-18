@@ -29,7 +29,7 @@ import kafka.producer.KeyedMessage
 import kafka.javaapi.producer.Producer
 import kafka.utils.IntEncoder
 import kafka.utils.TestUtils._
-import kafka.utils.{Utils, Logging, TestUtils}
+import kafka.utils.{Logging, TestUtils}
 import kafka.consumer.{KafkaStream, ConsumerConfig}
 import kafka.zk.ZooKeeperTestHarness
 

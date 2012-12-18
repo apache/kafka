@@ -24,7 +24,6 @@ import kafka.server._
 import org.apache.log4j.{Level, Logger}
 import org.scalatest.junit.JUnit3Suite
 import kafka.utils.TestUtils
-import kafka.message.Message
 import kafka.serializer._
 import kafka.producer.{Producer, KeyedMessage}
 

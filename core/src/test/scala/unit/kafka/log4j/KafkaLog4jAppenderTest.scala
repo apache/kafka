@@ -24,7 +24,6 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{TestUtils, Utils, Logging}
 import junit.framework.Assert._
 import kafka.api.FetchRequestBuilder
-import kafka.message.Message
 import kafka.producer.async.MissingConfigException
 import kafka.serializer.Encoder
 import kafka.zk.ZooKeeperTestHarness
@@ -57,7 +56,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     logDirZk = new File(logDirZkPath)
     config = new KafkaConfig(propsZk)
     serverZk = TestUtils.createServer(config);
-    simpleConsumerZk = new SimpleConsumer("localhost", portZk, 1000000, 64*1024)
+    simpleConsumerZk = new SimpleConsumer("localhost", portZk, 1000000, 64*1024, "")
   }
 
   @After

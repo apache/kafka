@@ -105,7 +105,7 @@ class LogManager(val config: KafkaConfig,
     for(dir <- dirs) {
       /* check if this set of logs was shut down cleanly */
       val cleanShutDownFile = new File(dir, CleanShutdownFile)
-      val needsRecovery = cleanShutDownFile.exists
+      val needsRecovery = !cleanShutDownFile.exists
       cleanShutDownFile.delete
       /* load the logs */
       val subDirs = dir.listFiles()

@@ -23,7 +23,7 @@ import collection.mutable.ListBuffer
 import kafka.utils.Logging
 
 object TopicMetadataRequest extends Logging {
-  val CurrentVersion = 1.shortValue()
+  val CurrentVersion = 0.shortValue
   val DefaultClientId = ""
 
   /**
@@ -33,6 +33,7 @@ object TopicMetadataRequest extends Logging {
 
   def readFrom(buffer: ByteBuffer): TopicMetadataRequest = {
     val versionId = buffer.getShort
+    val correlationId = buffer.getInt
     val clientId = readShortString(buffer)
     val numTopics = readIntInRange(buffer, "number of topics", (0, Int.MaxValue))
     val topics = new ListBuffer[String]()
@@ -40,26 +41,28 @@ object TopicMetadataRequest extends Logging {
       topics += readShortString(buffer)
     val topicsList = topics.toList
     debug("topic = %s".format(topicsList.head))
-    new TopicMetadataRequest(versionId, clientId, topics.toList)
+    new TopicMetadataRequest(versionId, clientId, topics.toList, correlationId)
   }
 }
 
 case class TopicMetadataRequest(val versionId: Short,
                                 val clientId: String,
-                                val topics: Seq[String])
+                                val topics: Seq[String],
+                                val correlationId: Int)
  extends RequestOrResponse(Some(RequestKeys.MetadataKey)){
 
 def this(topics: Seq[String]) =
-  this(TopicMetadataRequest.CurrentVersion, TopicMetadataRequest.DefaultClientId, topics)
+  this(TopicMetadataRequest.CurrentVersion, TopicMetadataRequest.DefaultClientId, topics, 0)
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
+    buffer.putInt(correlationId) // correlation id not set yet
     writeShortString(buffer, clientId)
     buffer.putInt(topics.size)
     topics.foreach(topic => writeShortString(buffer, topic))
   }
 
   def sizeInBytes(): Int = {
-    2 + (2 + clientId.length) + 4 /* number of topics */ + topics.foldLeft(0)(_ + shortStringLength(_)) /* topics */
+    2 + 4 + shortStringLength(clientId) + 4 /* number of topics */ + topics.foldLeft(0)(_ + shortStringLength(_)) /* topics */
   }
 }

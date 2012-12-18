@@ -21,6 +21,7 @@ import joptsimple.OptionParser
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
 import scala.collection.mutable
+import kafka.common.Topic
 
 object CreateTopicCommand extends Logging {
 

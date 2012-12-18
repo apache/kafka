@@ -20,7 +20,7 @@ import java.io.File
 import kafka.consumer.SimpleConsumer
 import org.junit.Test
 import junit.framework.Assert._
-import kafka.message.{Message, ByteBufferMessageSet}
+import kafka.message.ByteBufferMessageSet
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.producer._
@@ -66,10 +66,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     server.startup()
 
     producer = new Producer[Int, String](new ProducerConfig(producerConfig))
-    val consumer = new SimpleConsumer(host,
-                                      port,
-                                      1000000,
-                                      64*1024)
+    val consumer = new SimpleConsumer(host, port, 1000000, 64*1024, "")
 
     waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
 

@@ -21,9 +21,36 @@ import async.AsyncProducerConfig
 import java.util.Properties
 import kafka.utils.{Utils, VerifiableProperties}
 import kafka.message.{CompressionCodec, NoCompressionCodec}
+import kafka.common.{InvalidConfigException, Config}
+
+object ProducerConfig extends Config {
+  def validate(config: ProducerConfig) {
+    validateClientId(config.clientId)
+    validateBatchSize(config.batchSize, config.queueSize)
+    validateProducerType(config.producerType)
+  }
+
+  def validateClientId(clientId: String) {
+    validateChars("clientid", clientId)
+  }
+
+  def validateBatchSize(batchSize: Int, queueSize: Int) {
+    if (batchSize > queueSize)
+      throw new InvalidConfigException("Batch size = " + batchSize + " can't be larger than queue size = " + queueSize)
+  }
+
+  def validateProducerType(producerType: String) {
+    producerType match {
+      case "sync" =>
+      case "async"=>
+      case _ => throw new InvalidConfigException("Invalid value " + producerType + " for producer.type, valid values are sync/async")
+    }
+  }
+}
 
 class ProducerConfig private (val props: VerifiableProperties)
         extends AsyncProducerConfig with SyncProducerConfigShared {
+  import ProducerConfig._
 
   def this(originalProps: Properties) {
     this(new VerifiableProperties(originalProps))
@@ -33,7 +60,7 @@ class ProducerConfig private (val props: VerifiableProperties)
   /** This is for bootstrapping and the producer will only use it for getting metadata
    * (topics, partitions and replicas). The socket connections for sending the actual data
    * will be established based on the broker information returned in the metadata. The
-   * format is host1:por1,host2:port2, and the list can be a subset of brokers or
+   * format is host1:port1,host2:port2, and the list can be a subset of brokers or
    * a VIP pointing to a subset of brokers.
    */
   val brokerList = props.getString("broker.list")
@@ -85,4 +112,6 @@ class ProducerConfig private (val props: VerifiableProperties)
    * The amount of time to wait in between retries
    */
   val producerRetryBackoffMs = props.getInt("producer.retry.backoff.ms", 100)
+
+  validate(this)
 }

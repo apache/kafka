@@ -109,7 +109,7 @@ public class KafkaETLContext {
         
         // read data from queue
         URI uri = _request.getURI();
-        _consumer = new SimpleConsumer(uri.getHost(), uri.getPort(), _timeout, _bufferSize);
+        _consumer = new SimpleConsumer(uri.getHost(), uri.getPort(), _timeout, _bufferSize, "KafkaETLContext");
         
         // get available offset range
         _offsetRange = getOffsetRange();

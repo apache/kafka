@@ -13,13 +13,14 @@
   "testcase_args": {
     "broker_type": "leader",
     "bounce_broker": "false",
-    "replica_factor": "8",
+    "replica_factor": "3",
     "num_partition": "2",
     "num_iteration": "1",
     "producer_multi_topics_mode": "true",
     "consumer_multi_topics_mode": "true",
     "sleep_seconds_between_producer_calls": "5",
     "message_producing_free_time_sec": "15",
+    "num_topics_for_auto_generated_string": "20",
     "num_messages_to_produce_per_producer_call": "50"
   },
   "entities": [
@@ -59,66 +60,21 @@
     },
     {
       "entity_id": "4",
-      "port": "9094",
-      "brokerid": "4",
-      "log.file.size": "1048576",
-      "log.dir": "/tmp/kafka_server_4_logs",
-      "log_filename": "kafka_server_9094.log",
-      "config_filename": "kafka_server_9094.properties"
-    },
-    {
-      "entity_id": "5",
-      "port": "9095",
-      "brokerid": "5",
-      "log.file.size": "1048576",
-      "log.dir": "/tmp/kafka_server_5_logs",
-      "log_filename": "kafka_server_9095.log",
-      "config_filename": "kafka_server_9095.properties"
-    },
-    {
-      "entity_id": "6",
-      "port": "9096",
-      "brokerid": "6",
-      "log.file.size": "1048576",
-      "log.dir": "/tmp/kafka_server_6_logs",
-      "log_filename": "kafka_server_9096.log",
-      "config_filename": "kafka_server_9096.properties"
-    },
-    {
-      "entity_id": "7",
-      "port": "9097",
-      "brokerid": "7",
-      "log.file.size": "1048576",
-      "log.dir": "/tmp/kafka_server_7_logs",
-      "log_filename": "kafka_server_9097.log",
-      "config_filename": "kafka_server_9097.properties"
-    },
-    {
-      "entity_id": "8",
-      "port": "9098",
-      "brokerid": "8",
-      "log.file.size": "1048576",
-      "log.dir": "/tmp/kafka_server_8_logs",
-      "log_filename": "kafka_server_9098.log",
-      "config_filename": "kafka_server_9098.properties"
-    },
-    {
-      "entity_id": "9",
-      "topic": "t001,t002,t003,t004,t005,t006,t007,t008,t009,t010,t011,t012,t013,t014,t015,t016,t017,t018,t019,t020",
+      "topic": "t001",
       "threads": "5",
       "compression-codec": "0",
       "message-size": "500",
       "message": "500",
       "request-num-acks": "-1",
       "producer-retry-backoff-ms": "3500",
-      "producer-num-retries": "5",
+      "producer-num-retries": "3",
       "async":"false",
       "log_filename": "producer_performance_9.log",
       "config_filename": "producer_performance_9.properties"
     },
     {
-      "entity_id": "10",
-      "topic": "t001,t002,t003,t004,t005,t006,t007,t008,t009,t010,t011,t012,t013,t014,t015,t016,t017,t018,t019,t020",
+      "entity_id": "5",
+      "topic": "t001",
       "groupid": "mytestgroup",
       "consumer-timeout-ms": "60000",
       "zookeeper": "localhost:2188",

@@ -28,10 +28,13 @@ class PartitionTopicInfo(val topic: String,
                          private val chunkQueue: BlockingQueue[FetchedDataChunk],
                          private val consumedOffset: AtomicLong,
                          private val fetchedOffset: AtomicLong,
-                         private val fetchSize: AtomicInteger) extends Logging {
+                         private val fetchSize: AtomicInteger,
+                         private val clientId: String) extends Logging {
 
   debug("initial consumer offset of " + this + " is " + consumedOffset.get)
   debug("initial fetch offset of " + this + " is " + fetchedOffset.get)
+
+  private val consumerTopicStats = ConsumerTopicStatsRegistry.getConsumerTopicStat(clientId)
 
   def getConsumeOffset() = consumedOffset.get
 
@@ -58,8 +61,8 @@ class PartitionTopicInfo(val topic: String,
       chunkQueue.put(new FetchedDataChunk(messages, this, fetchedOffset.get))
       fetchedOffset.set(next)
       debug("updated fetch offset of (%s) to %d".format(this, next))
-      ConsumerTopicStat.getConsumerTopicStat(topic).byteRate.mark(size)
-      ConsumerTopicStat.getConsumerAllTopicStat().byteRate.mark(size)
+      consumerTopicStats.getConsumerTopicStats(topic).byteRate.mark(size)
+      consumerTopicStats.getConsumerAllTopicStats().byteRate.mark(size)
     }
   }
   

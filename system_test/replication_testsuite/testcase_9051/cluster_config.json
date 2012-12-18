@@ -7,10 +7,8 @@
             "cluster_name": "source",
             "kafka_home": "default",
             "java_home": "default",
-            "jmx_port": "9900"
+            "jmx_port": "9990"
         },
-
-
         {
             "entity_id": "1",
             "hostname": "localhost",
@@ -18,7 +16,7 @@
             "cluster_name": "source",
             "kafka_home": "default",
             "java_home": "default",
-            "jmx_port": "9901"
+            "jmx_port": "9991"
         },
         {
             "entity_id": "2",
@@ -27,7 +25,7 @@
             "cluster_name": "source",
             "kafka_home": "default",
             "java_home": "default",
-            "jmx_port": "9902"
+            "jmx_port": "9992"
         },
         {
             "entity_id": "3",
@@ -36,72 +34,25 @@
             "cluster_name": "source",
             "kafka_home": "default",
             "java_home": "default",
-            "jmx_port": "9903"
+            "jmx_port": "9993"
         },
         {
             "entity_id": "4",
-            "hostname": "localhost",
-            "role": "broker",
-            "cluster_name": "source",
-            "kafka_home": "default",
-            "java_home": "default",
-            "jmx_port": "9904"
-        },
-        {
-            "entity_id": "5",
-            "hostname": "localhost",
-            "role": "broker",
-            "cluster_name": "source",
-            "kafka_home": "default",
-            "java_home": "default",
-            "jmx_port": "9905"
-        },
-        {
-            "entity_id": "6",
-            "hostname": "localhost",
-            "role": "broker",
-            "cluster_name": "source",
-            "kafka_home": "default",
-            "java_home": "default",
-            "jmx_port": "9906"
-        },
-        {
-            "entity_id": "7",
-            "hostname": "localhost",
-            "role": "broker",
-            "cluster_name": "source",
-            "kafka_home": "default",
-            "java_home": "default",
-            "jmx_port": "9907"
-        },
-        {
-            "entity_id": "8",
-            "hostname": "localhost",
-            "role": "broker",
-            "cluster_name": "source",
-            "kafka_home": "default",
-            "java_home": "default",
-            "jmx_port": "9908"
-        },
-
-
-        {
-            "entity_id": "9",
             "hostname": "localhost",
             "role": "producer_performance",
             "cluster_name": "source",
             "kafka_home": "default",
             "java_home": "default",
-            "jmx_port": "9909"
+            "jmx_port": "9997"
         },
         {
-            "entity_id": "10",
+            "entity_id": "5",
             "hostname": "localhost",
             "role": "console_consumer",
             "cluster_name": "source",
             "kafka_home": "default",
             "java_home": "default",
-            "jmx_port": "9910"
+            "jmx_port": "9998"
         }
     ]
 }
