@@ -40,8 +40,10 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val zkClient: ZkClient,
                 brokerId: Int) extends Logging {
 
-  private val producerRequestPurgatory = new ProducerRequestPurgatory
-  private val fetchRequestPurgatory = new FetchRequestPurgatory(requestChannel)
+  private val producerRequestPurgatory =
+    new ProducerRequestPurgatory(replicaManager.config.producerRequestPurgatoryPurgeInterval)
+  private val fetchRequestPurgatory =
+    new FetchRequestPurgatory(requestChannel, replicaManager.config.fetchRequestPurgatoryPurgeInterval)
   private val delayedRequestMetrics = new DelayedRequestMetrics
 
   private val requestLogger = Logger.getLogger("kafka.request.logger")
@@ -496,7 +498,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   /**
    * A holding pen for fetch requests waiting to be satisfied
    */
-  class FetchRequestPurgatory(requestChannel: RequestChannel) extends RequestPurgatory[DelayedFetch, MessageSet](brokerId) {
+  class FetchRequestPurgatory(requestChannel: RequestChannel, purgeInterval: Int)
+          extends RequestPurgatory[DelayedFetch, MessageSet](brokerId, purgeInterval) {
     this.logIdent = "[FetchRequestPurgatory-%d] ".format(brokerId)
 
     /**
@@ -633,7 +636,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   /**
    * A holding pen for produce requests waiting to be satisfied.
    */
-  private [kafka] class ProducerRequestPurgatory extends RequestPurgatory[DelayedProduce, RequestKey] {
+  private [kafka] class ProducerRequestPurgatory(purgeInterval: Int)
+          extends RequestPurgatory[DelayedProduce, RequestKey](brokerId, purgeInterval) {
     this.logIdent = "[ProducerRequestPurgatory-%d] ".format(brokerId)
 
     protected def checkSatisfied(followerFetchRequestKey: RequestKey,

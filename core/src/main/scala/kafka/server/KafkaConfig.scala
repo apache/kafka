@@ -161,5 +161,11 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   
   /* the frequency with which the highwater mark is saved out to disk */
   val highWaterMarkCheckpointIntervalMs = props.getLong("replica.highwatermark.checkpoint.ms", 5000L)
-  
+
+  /* the purge interval (in number of requests) of the fetch request purgatory */
+  val fetchRequestPurgatoryPurgeInterval = props.getInt("fetch.purgatory.purge.interval", 10000)
+
+  /* the purge interval (in number of requests) of the producer request purgatory */
+  val producerRequestPurgatoryPurgeInterval = props.getInt("producer.purgatory.purge.interval", 10000)
+
  }
