@@ -20,7 +20,6 @@ package kafka.server
 import java.util.Properties
 import kafka.message.Message
 import kafka.consumer.ConsumerConfig
-import java.net.InetAddress
 import kafka.utils.{VerifiableProperties, ZKConfig, Utils}
 
 /**
@@ -56,8 +55,9 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the port to listen and accept connections on */
   val port: Int = props.getInt("port", 6667)
 
-  /* hostname of broker. If not set, will pick up from the value returned from getLocalHost. If there are multiple interfaces getLocalHost may not be what you want. */
-  val hostName: String = props.getString("hostname", InetAddress.getLocalHost.getHostAddress)
+  /* hostname of broker. If this is set, it will only bind to this address.  If this is not set,
+   * it will bind to all interfaces, and publish one to ZK */
+  val hostName: String = props.getString("hostname", null)
 
   /* the SO_SNDBUFF buffer of the socket sever sockets */
   val socketSendBuffer: Int = props.getInt("socket.send.buffer", 100*1024)

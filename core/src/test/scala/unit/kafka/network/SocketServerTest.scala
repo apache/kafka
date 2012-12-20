@@ -34,6 +34,7 @@ import kafka.message.ByteBufferMessageSet
 class SocketServerTest extends JUnitSuite {
 
   val server: SocketServer = new SocketServer(0,
+                                              host = null,
                                               port = TestUtils.choosePort,
                                               numProcessorThreads = 1,
                                               maxQueuedRequests = 50,

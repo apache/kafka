@@ -21,6 +21,7 @@ import kafka.utils._
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
 import kafka.common._
+import java.net.InetAddress
 
 
 /**
@@ -41,8 +42,11 @@ class KafkaZooKeeper(config: KafkaConfig) extends Logging {
    }
 
   private def registerBrokerInZk() {
-    info("Registering broker " + brokerIdPath)
-    val hostName = config.hostName
+    val hostName = 
+      if(config.hostName == null || config.hostName.trim.isEmpty) 
+        InetAddress.getLocalHost.getCanonicalHostName 
+      else
+        config.hostName 
     ZkUtils.registerBrokerInZk(zkClient, config.brokerId, hostName, config.port)
   }
 
