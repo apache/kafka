@@ -47,7 +47,8 @@ class KafkaZooKeeper(config: KafkaConfig) extends Logging {
         InetAddress.getLocalHost.getCanonicalHostName 
       else
         config.hostName 
-    ZkUtils.registerBrokerInZk(zkClient, config.brokerId, hostName, config.port)
+    val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
+    ZkUtils.registerBrokerInZk(zkClient, config.brokerId, hostName, config.port, jmxPort)
   }
 
   /**

@@ -29,27 +29,32 @@ import scala.Some
 
 object ShutdownBroker extends Logging {
 
-  private case class ShutdownParams(zkConnect: String, brokerId: java.lang.Integer, jmxUrl: String)
+  private case class ShutdownParams(zkConnect: String, brokerId: java.lang.Integer)
 
   private def invokeShutdown(params: ShutdownParams): Boolean = {
     var zkClient: ZkClient = null
     try {
       zkClient = new ZkClient(params.zkConnect, 30000, 30000, ZKStringSerializer)
+
       val controllerBrokerId = ZkUtils.getController(zkClient)
-      val controllerOpt = ZkUtils.getBrokerInfo(zkClient, controllerBrokerId)
-      controllerOpt match {
-        case Some(controller) =>
-          val jmxUrl = new JMXServiceURL(params.jmxUrl)
+      ZkUtils.readDataMaybeNull(zkClient, ZkUtils.BrokerIdsPath + "/" + controllerBrokerId)._1 match {
+        case Some(controllerInfo) =>
+          val parsed = controllerInfo.split(":")
+          val controllerHost = parsed(0)
+          val controllerJmxPort = parsed(2)
+          val jmxUrl = new JMXServiceURL("service:jmx:rmi:///jndi/rmi://%s:%s/jmxrmi"
+                                         .format(controllerHost, controllerJmxPort))
+          info("Connecting to jmx url " + jmxUrl)
           val jmxc = JMXConnectorFactory.connect(jmxUrl, null)
           val mbsc = jmxc.getMBeanServerConnection
           val leaderPartitionsRemaining = mbsc.invoke(new ObjectName(KafkaController.MBeanName),
-            "shutdownBroker",
-            Array(params.brokerId),
-            Array(classOf[Int].getName)).asInstanceOf[Int]
+                                                      "shutdownBroker",
+                                                      Array(params.brokerId),
+                                                      Array(classOf[Int].getName)).asInstanceOf[Int]
           val shutdownComplete = (leaderPartitionsRemaining == 0)
           info("Shutdown status: " + (if (shutdownComplete)
-                  "complete" else
-                  "incomplete (broker still leads %d partitions)".format(leaderPartitionsRemaining)))
+            "complete" else
+            "incomplete (broker still leads %d partitions)".format(leaderPartitionsRemaining)))
           shutdownComplete
         case None =>
           error("Operation failed due to controller failure on %d.".format(controllerBrokerId))
@@ -88,11 +93,6 @@ object ShutdownBroker extends Logging {
             .describedAs("retry interval in ms (> 1000)")
             .ofType(classOf[java.lang.Integer])
             .defaultsTo(1000)
-    val jmxUrlOpt = parser.accepts("jmx.url", "Controller's JMX URL.")
-            .withRequiredArg
-            .describedAs("JMX url.")
-            .ofType(classOf[String])
-            .defaultsTo("service:jmx:rmi:///jndi/rmi://127.0.0.1:9999/jmxrmi")
 
     val options = parser.parse(args : _*)
     CommandLineUtils.checkRequiredArgs(parser, options, brokerOpt, zkConnectOpt)
@@ -100,8 +100,7 @@ object ShutdownBroker extends Logging {
     val retryIntervalMs = options.valueOf(retryIntervalOpt).intValue.max(1000)
     val numRetries = options.valueOf(numRetriesOpt).intValue
 
-    val shutdownParams =
-      ShutdownParams(options.valueOf(zkConnectOpt), options.valueOf(brokerOpt), options.valueOf(jmxUrlOpt))
+    val shutdownParams = ShutdownParams(options.valueOf(zkConnectOpt), options.valueOf(brokerOpt))
 
     if (!invokeShutdown(shutdownParams)) {
       (1 to numRetries).takeWhile(attempt => {
