@@ -31,11 +31,14 @@ object ApiUtils {
   def writeShortString(buffer: ByteBuffer, string: String) {
     if(string == null) {
       buffer.putShort(-1)
-    } else if(string.length > Short.MaxValue) {
-      throw new KafkaException("String exceeds the maximum size of " + Short.MaxValue + ".")
     } else {
-      buffer.putShort(string.length.asInstanceOf[Short])
-      buffer.put(string.getBytes(ProtocolEncoding))
+      val encodedString = string.getBytes(ProtocolEncoding)
+      if(encodedString.length > Short.MaxValue) {
+        throw new KafkaException("String exceeds the maximum size of " + Short.MaxValue + ".")
+      } else {
+        buffer.putShort(encodedString.length.asInstanceOf[Short])
+        buffer.put(encodedString)
+      }
     }
   }
   
