@@ -77,8 +77,8 @@ class HighwaterMarkCheckpoint(val path: String) extends Logging {
     try {
       hwFile.length() match {
         case 0 => 
-          warn("No previously checkpointed highwatermark value found for topic %s ".format(topic) +
-               "partition %d. Returning 0 as the highwatermark".format(partition))
+          warn("No highwatermark file is found. Returning 0 as the highwatermark for topic %s partition %d."
+            .format(topic, partition))
           0L
         case _ =>
           val hwFileReader = new BufferedReader(new FileReader(hwFile))
@@ -90,12 +90,10 @@ class HighwaterMarkCheckpoint(val path: String) extends Logging {
                 for(i <- 0 until numberOfHighWatermarks) yield {
                   val nextHwEntry = hwFileReader.readLine()
                   val partitionHwInfo = nextHwEntry.split(" ")
-                  val highwaterMark = partitionHwInfo.last.toLong
-                  val partitionId = partitionHwInfo.takeRight(2).head
-                  // find the index of partition
-                  val partitionIndex = nextHwEntry.indexOf(partitionId)
-                  val topic = nextHwEntry.substring(0, partitionIndex-1)
-                  (TopicAndPartition(topic, partitionId.toInt) -> highwaterMark)
+                  val topic = partitionHwInfo(0)
+                  val partitionId = partitionHwInfo(1).toInt
+                  val highWatermark = partitionHwInfo(2).toLong
+                  (TopicAndPartition(topic, partitionId) -> highWatermark)
                 }
               hwFileReader.close()
               val hwOpt = partitionHighWatermarks.toMap.get(TopicAndPartition(topic, partition))

@@ -23,6 +23,7 @@ import java.net._
 import java.io._
 import java.nio.channels._
 
+import kafka.common.KafkaException
 import kafka.utils._
 
 /**
@@ -32,6 +33,7 @@ import kafka.utils._
  *   M Handler threads that handle requests and produce responses back to the processor threads for writing.
  */
 class SocketServer(val brokerId: Int,
+                   val host: String,
                    val port: Int,
                    val numProcessorThreads: Int, 
                    val maxQueuedRequests: Int,
@@ -39,7 +41,7 @@ class SocketServer(val brokerId: Int,
   this.logIdent = "[Socket Server on Broker " + brokerId + "], "
   private val time = SystemTime
   private val processors = new Array[Processor](numProcessorThreads)
-  private var acceptor: Acceptor = new Acceptor(port, processors)
+  @volatile private var acceptor: Acceptor = null
   val requestChannel = new RequestChannel(numProcessorThreads, maxQueuedRequests)
 
   /**
@@ -54,6 +56,7 @@ class SocketServer(val brokerId: Int,
     requestChannel.addResponseListener((id:Int) => processors(id).wakeup())
    
     // start accepting connections
+    this.acceptor = new Acceptor(host, port, processors)
     Utils.newThread("kafka-acceptor", acceptor, false).start()
     acceptor.awaitStartup
     info("started")
@@ -64,10 +67,11 @@ class SocketServer(val brokerId: Int,
    */
   def shutdown() = {
     info("shutting down")
-    acceptor.shutdown
+    if(acceptor != null)
+      acceptor.shutdown()
     for(processor <- processors)
-      processor.shutdown
-    info("shutted down completely")
+      processor.shutdown()
+    info("shut down completely")
   }
 }
 
@@ -123,17 +127,14 @@ private[kafka] abstract class AbstractServerThread extends Runnable with Logging
 /**
  * Thread that accepts and configures new connections. There is only need for one of these
  */
-private[kafka] class Acceptor(val port: Int, private val processors: Array[Processor]) extends AbstractServerThread {
+private[kafka] class Acceptor(val host: String, val port: Int, private val processors: Array[Processor]) extends AbstractServerThread {
+  val serverChannel = openServerSocket(host, port)
 
   /**
    * Accept loop that checks for new connection attempts
    */
   def run() {
-    val serverChannel = ServerSocketChannel.open()
-    serverChannel.configureBlocking(false)
-    serverChannel.socket.bind(new InetSocketAddress(port))
     serverChannel.register(selector, SelectionKey.OP_ACCEPT);
-    info("Awaiting connections on port " + port)
     startupComplete()
     var currentProcessor = 0
     while(isRunning) {
@@ -163,6 +164,27 @@ private[kafka] class Acceptor(val port: Int, private val processors: Array[Proce
     swallowError(serverChannel.close())
     swallowError(selector.close())
     shutdownComplete()
+  }
+  
+  /*
+   * Create a server socket to listen for connections on.
+   */
+  def openServerSocket(host: String, port: Int): ServerSocketChannel = {
+    val socketAddress = 
+      if(host == null || host.trim.isEmpty)
+        new InetSocketAddress(port)
+      else
+        new InetSocketAddress(host, port)
+    val serverChannel = ServerSocketChannel.open()
+    serverChannel.configureBlocking(false)
+    try {
+      serverChannel.socket.bind(socketAddress)
+      info("Awaiting socket connections on %s:%d.".format(socketAddress.getHostName, port))
+    } catch {
+      case e: SocketException => 
+        throw new KafkaException("Socket server failed to bind to %s:%d: %s.".format(socketAddress.getHostName, port, e.getMessage), e)
+    }
+    serverChannel
   }
 
   /*
