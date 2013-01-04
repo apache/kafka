@@ -17,38 +17,37 @@
 
 package kafka.javaapi
 
-import kafka.common.TopicAndPartition
-import kafka.api.{Request, PartitionOffsetRequestInfo}
+import kafka.common.{TopicAndPartition, OffsetMetadataAndError}
 import collection.JavaConversions
 import java.nio.ByteBuffer
 
-
-class OffsetRequest(requestInfo: java.util.Map[TopicAndPartition, PartitionOffsetRequestInfo],
-                    versionId: Short,
-                    clientId: String) {
-
+class OffsetCommitRequest(groupId: String,
+                          requestInfo: java.util.Map[TopicAndPartition, OffsetMetadataAndError],
+                          versionId: Short,
+                          correlationId: Int,
+                          clientId: String) {
   val underlying = {
     val scalaMap = JavaConversions.asMap(requestInfo).toMap
-    kafka.api.OffsetRequest(
+    kafka.api.OffsetCommitRequest(
+      groupId = groupId,
       requestInfo = scalaMap,
       versionId = versionId,
-      clientId = clientId,
-      replicaId = Request.OrdinaryConsumerId
+      correlationId = correlationId,
+      clientId = clientId
     )
   }
-
 
 
   override def toString = underlying.toString
 
 
   override def equals(other: Any) = canEqual(other) && {
-    val otherOffsetRequest = other.asInstanceOf[kafka.javaapi.OffsetRequest]
+    val otherOffsetRequest = other.asInstanceOf[kafka.javaapi.OffsetCommitRequest]
     this.underlying.equals(otherOffsetRequest.underlying)
   }
 
 
-  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.OffsetRequest]
+  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.OffsetCommitRequest]
 
 
   override def hashCode = underlying.hashCode

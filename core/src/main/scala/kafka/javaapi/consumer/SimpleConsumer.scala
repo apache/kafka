@@ -21,7 +21,6 @@ import kafka.utils.threadsafe
 import kafka.javaapi.FetchResponse
 import kafka.javaapi.OffsetRequest
 
-
 /**
  * A consumer of kafka messages
  */
@@ -78,6 +77,26 @@ class SimpleConsumer(val host: String,
   def getOffsetsBefore(request: OffsetRequest): kafka.javaapi.OffsetResponse = {
     import kafka.javaapi.Implicits._
     underlying.getOffsetsBefore(request.underlying)
+  }
+
+  /**
+   * Commit offsets for a topic
+   * @param request a [[kafka.javaapi.OffsetCommitRequest]] object.
+   * @return a [[kafka.javaapi.OffsetCommitResponse]] object.
+   */
+  def commitOffsets(request: kafka.javaapi.OffsetCommitRequest): kafka.javaapi.OffsetCommitResponse = {
+    import kafka.javaapi.Implicits._
+    underlying.commitOffsets(request.underlying)
+  }
+
+  /**
+   * Fetch offsets for a topic
+   * @param request a [[kafka.javaapi.OffsetFetchRequest]] object.
+   * @return a [[kafka.javaapi.OffsetFetchResponse]] object.
+   */
+  def fetchOffsets(request: kafka.javaapi.OffsetFetchRequest): kafka.javaapi.OffsetFetchResponse = {
+    import kafka.javaapi.Implicits._
+    underlying.fetchOffsets(request.underlying)
   }
 
   def close() {

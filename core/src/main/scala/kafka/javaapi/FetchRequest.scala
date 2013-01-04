@@ -42,10 +42,6 @@ class FetchRequest(correlationId: Int,
     )
   }
 
-  def writeTo(buffer: ByteBuffer) { underlying.writeTo(buffer) }
-
-  def sizeInBytes = underlying.sizeInBytes
-
   override def toString = underlying.toString
 
   override def equals(other: Any) = canEqual(other) && {

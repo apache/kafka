@@ -107,7 +107,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // create the kafka request handler
     val requestChannel = new RequestChannel(2, 5)
-    val apis = new KafkaApis(requestChannel, replicaManager, zkClient, 1)
+    val apis = new KafkaApis(requestChannel, replicaManager, zkClient, 1, configs.head)
 
     // call the API (to be tested) to get metadata
     apis.handleTopicMetadataRequest(new RequestChannel.Request

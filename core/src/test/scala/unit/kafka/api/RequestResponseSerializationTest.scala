@@ -24,7 +24,7 @@ import java.nio.ByteBuffer
 import kafka.message.{Message, ByteBufferMessageSet}
 import kafka.cluster.Broker
 import collection.mutable._
-import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.common.{TopicAndPartition, ErrorMapping, OffsetMetadataAndError}
 import kafka.controller.LeaderIsrAndControllerEpoch
 
 
@@ -144,6 +144,36 @@ object SerializationTestUtils{
   def createTestTopicMetadataResponse: TopicMetadataResponse = {
     new TopicMetadataResponse(Seq(topicmetaData1, topicmetaData2), 1)
   }
+
+  def createTestOffsetCommitRequest: OffsetCommitRequest = {
+    new OffsetCommitRequest("group 1", collection.immutable.Map(
+      TopicAndPartition(topic1, 0) -> OffsetMetadataAndError(offset=42L, metadata="some metadata"),
+      TopicAndPartition(topic1, 1) -> OffsetMetadataAndError(offset=100L, metadata=OffsetMetadataAndError.NoMetadata)
+    ))
+  }
+
+  def createTestOffsetCommitResponse: OffsetCommitResponse = {
+    new OffsetCommitResponse(collection.immutable.Map(
+      TopicAndPartition(topic1, 0) -> ErrorMapping.NoError,
+      TopicAndPartition(topic1, 1) -> ErrorMapping.UnknownTopicOrPartitionCode
+    ))
+  }
+
+  def createTestOffsetFetchRequest: OffsetFetchRequest = {
+    new OffsetFetchRequest("group 1", Seq(
+      TopicAndPartition(topic1, 0),
+      TopicAndPartition(topic1, 1)
+    ))
+  }
+
+  def createTestOffsetFetchResponse: OffsetFetchResponse = {
+    new OffsetFetchResponse(collection.immutable.Map(
+      TopicAndPartition(topic1, 0) -> OffsetMetadataAndError(42L, "some metadata", ErrorMapping.NoError),
+      TopicAndPartition(topic1, 1) -> OffsetMetadataAndError(100L, OffsetMetadataAndError.NoMetadata,
+        ErrorMapping.UnknownTopicOrPartitionCode)
+    ))
+  }
+
 }
 
 class RequestResponseSerializationTest extends JUnitSuite {
@@ -158,6 +188,10 @@ class RequestResponseSerializationTest extends JUnitSuite {
   private val offsetResponse = SerializationTestUtils.createTestOffsetResponse
   private val topicMetadataRequest = SerializationTestUtils.createTestTopicMetadataRequest
   private val topicMetadataResponse = SerializationTestUtils.createTestTopicMetadataResponse
+  private val offsetCommitRequest = SerializationTestUtils.createTestOffsetCommitRequest
+  private val offsetCommitResponse = SerializationTestUtils.createTestOffsetCommitResponse
+  private val offsetFetchRequest = SerializationTestUtils.createTestOffsetFetchRequest
+  private val offsetFetchResponse = SerializationTestUtils.createTestOffsetFetchResponse
 
 
   @Test
@@ -238,5 +272,34 @@ class RequestResponseSerializationTest extends JUnitSuite {
     val deserializedTopicMetadataResponse = TopicMetadataResponse.readFrom(buffer)
     assertEquals("The original and deserialzed topicMetadataResponse should be the same", topicMetadataResponse,
                  deserializedTopicMetadataResponse)
+
+    buffer = ByteBuffer.allocate(offsetCommitRequest.sizeInBytes)
+    offsetCommitRequest.writeTo(buffer)
+    buffer.rewind()
+    val deserializedOffsetCommitRequest = OffsetCommitRequest.readFrom(buffer)
+    assertEquals("The original and deserialzed offsetCommitRequest should be the same", offsetCommitRequest, 
+      deserializedOffsetCommitRequest)
+
+    buffer = ByteBuffer.allocate(offsetCommitResponse.sizeInBytes)
+    offsetCommitResponse.writeTo(buffer)
+    buffer.rewind()
+    val deserializedOffsetCommitResponse = OffsetCommitResponse.readFrom(buffer)
+    assertEquals("The original and deserialzed offsetCommitResponse should be the same", offsetCommitResponse, 
+      deserializedOffsetCommitResponse)
+
+    buffer = ByteBuffer.allocate(offsetFetchRequest.sizeInBytes)
+    offsetFetchRequest.writeTo(buffer)
+    buffer.rewind()
+    val deserializedOffsetFetchRequest = OffsetFetchRequest.readFrom(buffer)
+    assertEquals("The original and deserialzed offsetFetchRequest should be the same", offsetFetchRequest, 
+      deserializedOffsetFetchRequest)
+
+    buffer = ByteBuffer.allocate(offsetFetchResponse.sizeInBytes)
+    offsetFetchResponse.writeTo(buffer)
+    buffer.rewind()
+    val deserializedOffsetFetchResponse = OffsetFetchResponse.readFrom(buffer)
+    assertEquals("The original and deserialzed offsetFetchResponse should be the same", offsetFetchResponse, 
+      deserializedOffsetFetchResponse)
+
   }
 }

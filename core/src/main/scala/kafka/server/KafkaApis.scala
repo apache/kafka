@@ -22,7 +22,7 @@ import kafka.api._
 import kafka.message._
 import kafka.network._
 import kafka.log._
-import kafka.utils.{Pool, SystemTime, Logging}
+import kafka.utils.{Pool, SystemTime, Logging, ZkUtils, ZKGroupTopicDirs}
 import org.apache.log4j.Logger
 import scala.collection._
 import kafka.network.RequestChannel.Response
@@ -39,7 +39,8 @@ import kafka.common._
 class KafkaApis(val requestChannel: RequestChannel,
                 val replicaManager: ReplicaManager,
                 val zkClient: ZkClient,
-                brokerId: Int) extends Logging {
+                val brokerId: Int,
+                val config: KafkaConfig) extends Logging {
 
   private val producerRequestPurgatory =
     new ProducerRequestPurgatory(replicaManager.config.producerRequestPurgatoryPurgeInterval)
@@ -62,6 +63,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.MetadataKey => handleTopicMetadataRequest(request)
         case RequestKeys.LeaderAndIsrKey => handleLeaderAndIsrRequest(request)
         case RequestKeys.StopReplicaKey => handleStopReplicaRequest(request)
+        case RequestKeys.OffsetCommitKey => handleOffsetCommitRequest(request)
+        case RequestKeys.OffsetFetchKey => handleOffsetFetchRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -117,6 +120,25 @@ class KafkaApis(val requestChannel: RequestChannel,
             }.toMap
             error("error when handling request %s".format(apiRequest), e)
             val errorResponse = StopReplicaResponse(apiRequest.correlationId, responseMap)
+            requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+          case RequestKeys.OffsetCommitKey =>
+            val apiRequest = request.requestObj.asInstanceOf[OffsetCommitRequest]
+            val responseMap = apiRequest.requestInfo.map {
+              case (topicAndPartition, offset) => (topicAndPartition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+            }.toMap
+            error("error when handling request %s".format(apiRequest), e)
+            val errorResponse = OffsetCommitResponse(requestInfo=responseMap, correlationId=apiRequest.correlationId)
+            requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+          case RequestKeys.OffsetFetchKey =>
+            val apiRequest = request.requestObj.asInstanceOf[OffsetFetchRequest]
+            val responseMap = apiRequest.requestInfo.map {
+              case (topicAndPartition) => (topicAndPartition, OffsetMetadataAndError(
+                offset=OffsetMetadataAndError.InvalidOffset, 
+                error=ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
+              ))
+            }.toMap
+            error("error when handling request %s".format(apiRequest), e)
+            val errorResponse = OffsetFetchResponse(requestInfo=responseMap, correlationId=apiRequest.correlationId)
             requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
         }
     } finally
@@ -522,6 +544,68 @@ class KafkaApis(val requestChannel: RequestChannel,
       })
     topicsMetadata.foreach(metadata => trace("Sending topic metadata " + metadata.toString))
     val response = new TopicMetadataResponse(topicsMetadata.toSeq, metadataRequest.correlationId)
+    requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+  }
+
+  /* 
+   * Service the Offset commit API
+   */
+  def handleOffsetCommitRequest(request: RequestChannel.Request) {
+    val offsetCommitRequest = request.requestObj.asInstanceOf[OffsetCommitRequest]
+    if(requestLogger.isTraceEnabled)
+      requestLogger.trace("Handling offset commit request " + offsetCommitRequest.toString)
+    trace("Handling offset commit request " + offsetCommitRequest.toString)
+    val responseInfo = offsetCommitRequest.requestInfo.map( t => {
+      val topicDirs = new ZKGroupTopicDirs(offsetCommitRequest.groupId, t._1.topic)
+      try {
+        if(t._2.metadata.length > config.offsetMetadataMaxSize) {
+          (t._1, ErrorMapping.OffsetMetadataTooLargeCode)
+        } else {
+          ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" +
+            t._1.partition, t._2.offset.toString)
+          (t._1, ErrorMapping.NoError)
+        }
+      } catch {
+        case e => 
+          (t._1, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+      }
+    })
+    val response = new OffsetCommitResponse(responseInfo, 
+                                        offsetCommitRequest.versionId, 
+                                        offsetCommitRequest.correlationId,
+                                        offsetCommitRequest.clientId)
+    requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+  }
+
+  /*
+   * Service the Offset fetch API
+   */
+  def handleOffsetFetchRequest(request: RequestChannel.Request) {
+    val offsetFetchRequest = request.requestObj.asInstanceOf[OffsetFetchRequest]
+    if(requestLogger.isTraceEnabled)
+      requestLogger.trace("Handling offset fetch request " + offsetFetchRequest.toString)
+    trace("Handling offset fetch request " + offsetFetchRequest.toString)
+    val responseInfo = offsetFetchRequest.requestInfo.map( t => {
+      val topicDirs = new ZKGroupTopicDirs(offsetFetchRequest.groupId, t.topic)
+      try {
+        val payloadOpt = ZkUtils.readDataMaybeNull(zkClient, topicDirs.consumerOffsetDir + "/" + t.partition)._1
+        payloadOpt match {
+          case Some(payload) => {
+            (t, OffsetMetadataAndError(offset=payload.toLong, error=ErrorMapping.NoError))
+          } 
+          case None => (t, OffsetMetadataAndError(OffsetMetadataAndError.InvalidOffset, OffsetMetadataAndError.NoMetadata,
+                          ErrorMapping.UnknownTopicOrPartitionCode))
+        }
+      } catch {
+        case e => 
+          (t, OffsetMetadataAndError(OffsetMetadataAndError.InvalidOffset, OffsetMetadataAndError.NoMetadata,
+             ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])))
+      }
+    })
+    val response = new OffsetFetchResponse(collection.immutable.Map(responseInfo: _*), 
+                                        offsetFetchRequest.versionId, 
+                                        offsetFetchRequest.correlationId,
+                                        offsetFetchRequest.clientId)
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
   }
 

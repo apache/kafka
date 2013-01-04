@@ -175,6 +175,20 @@ class SimpleConsumer(val host: String,
    */
   def getOffsetsBefore(request: OffsetRequest) = OffsetResponse.readFrom(sendRequest(request).buffer)
 
+  /**
+   * Commit offsets for a topic
+   * @param request a [[kafka.api.OffsetCommitRequest]] object.
+   * @return a [[kafka.api.OffsetCommitResponse]] object.
+   */
+  def commitOffsets(request: OffsetCommitRequest) = OffsetCommitResponse.readFrom(sendRequest(request).buffer)
+
+  /**
+   * Fetch offsets for a topic
+   * @param request a [[kafka.api.OffsetFetchRequest]] object.
+   * @return a [[kafka.api.OffsetFetchResponse]] object.
+   */
+  def fetchOffsets(request: OffsetFetchRequest) = OffsetFetchResponse.readFrom(sendRequest(request).buffer)
+
   private def getOrMakeConnection() {
     if(!blockingChannel.isConnected) {
       connect()

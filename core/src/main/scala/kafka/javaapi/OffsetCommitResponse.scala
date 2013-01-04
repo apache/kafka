@@ -18,39 +18,13 @@
 package kafka.javaapi
 
 import kafka.common.TopicAndPartition
-import kafka.api.{Request, PartitionOffsetRequestInfo}
 import collection.JavaConversions
-import java.nio.ByteBuffer
 
+class OffsetCommitResponse(private val underlying: kafka.api.OffsetCommitResponse) {
 
-class OffsetRequest(requestInfo: java.util.Map[TopicAndPartition, PartitionOffsetRequestInfo],
-                    versionId: Short,
-                    clientId: String) {
-
-  val underlying = {
-    val scalaMap = JavaConversions.asMap(requestInfo).toMap
-    kafka.api.OffsetRequest(
-      requestInfo = scalaMap,
-      versionId = versionId,
-      clientId = clientId,
-      replicaId = Request.OrdinaryConsumerId
-    )
+  def errors: java.util.Map[TopicAndPartition, Short] = {
+    JavaConversions.asMap(underlying.requestInfo) 
   }
-
-
-
-  override def toString = underlying.toString
-
-
-  override def equals(other: Any) = canEqual(other) && {
-    val otherOffsetRequest = other.asInstanceOf[kafka.javaapi.OffsetRequest]
-    this.underlying.equals(otherOffsetRequest.underlying)
-  }
-
-
-  def canEqual(other: Any) = other.isInstanceOf[kafka.javaapi.OffsetRequest]
-
-
-  override def hashCode = underlying.hashCode
 
 }
+

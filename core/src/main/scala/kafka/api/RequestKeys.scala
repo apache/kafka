@@ -27,6 +27,8 @@ object RequestKeys {
   val MetadataKey: Short = 3
   val LeaderAndIsrKey: Short = 4
   val StopReplicaKey: Short = 5
+  val OffsetCommitKey: Short = 6
+  val OffsetFetchKey: Short = 7
 
   val keyToNameAndDeserializerMap: Map[Short, (String, (ByteBuffer) => RequestOrResponse)]=
     Map(ProduceKey -> ("Produce", ProducerRequest.readFrom),
@@ -34,7 +36,9 @@ object RequestKeys {
         OffsetsKey -> ("Offsets", OffsetRequest.readFrom),
         MetadataKey -> ("Metadata", TopicMetadataRequest.readFrom),
         LeaderAndIsrKey -> ("LeaderAndIsr", LeaderAndIsrRequest.readFrom),
-        StopReplicaKey -> ("StopReplica", StopReplicaRequest.readFrom))
+        StopReplicaKey -> ("StopReplica", StopReplicaRequest.readFrom),
+        OffsetCommitKey -> ("OffsetCommit", OffsetCommitRequest.readFrom),
+        OffsetFetchKey -> ("OffsetFetch", OffsetFetchRequest.readFrom))
 
   def nameForKey(key: Short): String = {
     keyToNameAndDeserializerMap.get(key) match {

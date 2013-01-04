@@ -173,4 +173,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the purge interval (in number of requests) of the producer request purgatory */
   val producerRequestPurgatoryPurgeInterval = props.getInt("producer.purgatory.purge.interval", 10000)
 
+  /*********** Misc configuration ***********/
+  val offsetMetadataMaxSize = props.getInt("offset.metadata.max.size", 1024)
+
  }
