@@ -9,7 +9,7 @@ It is designed to support the following
 
 Kafka is aimed at providing a publish-subscribe solution that can handle all activity stream data and processing on a consumer-scale web site. This kind of activity (page views, searches, and other user actions) are a key ingredient in many of the social feature on the modern web. This data is typically handled by "logging" and ad hoc log aggregation solutions due to the throughput requirements. This kind of ad hoc solution is a viable solution to providing logging data to an offline analysis system like Hadoop, but is very limiting for building real-time processing. Kafka aims to unify offline and online processing by providing a mechanism for parallel load into Hadoop as well as the ability to partition real-time consumption over a cluster of machines.
 
-See our [web site](http://incubator.apache.org/kafka/) for more details on the project.
+See our [web site](http://kafka.apache.org/) for more details on the project.
 
 ## Contribution ##
 
