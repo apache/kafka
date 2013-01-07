@@ -20,6 +20,10 @@ import scala.xml.{Node, Elem}
 import scala.xml.transform.{RewriteRule, RuleTransformer}
 
 class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProject {
+  override def managedStyle = ManagedStyle.Maven
+  val publishTo = "Maven Repo" at "http://maven/content/repositories/repository.snapshots"
+  Credentials(Path.userHome / ".m2" / ".credentials", log)
+
   lazy val core = project("core", "core-kafka", new CoreKafkaProject(_))
   lazy val examples = project("examples", "java-examples", new KafkaExamplesProject(_), core)
   lazy val contrib = project("contrib", "contrib", new ContribProject(_))
@@ -60,27 +64,27 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
 
     def zkClientDep =
       <dependency>
-        <groupId>zkclient</groupId>
+        <groupId>com.101tec</groupId>
         <artifactId>zkclient</artifactId>
-        <version>20120522</version>
+        <version>0.2</version>
         <scope>compile</scope>
       </dependency>
 
-    def metricsDeps =
-      <dependencies>
-        <dependency>
-          <groupId>com.yammer.metrics</groupId>
-          <artifactId>metrics-core</artifactId>
-          <version>3.0.0-c0c8be71</version>
-          <scope>compile</scope>
-        </dependency>
-        <dependency>
-          <groupId>com.yammer.metrics</groupId>
-          <artifactId>metrics-annotations</artifactId>
-          <version>3.0.0-c0c8be71</version>
-          <scope>compile</scope>
-        </dependency>
-      </dependencies>
+    def metricsDepsCore =
+      <dependency>
+        <groupId>com.yammer.metrics</groupId>
+        <artifactId>metrics-core</artifactId>
+        <version>3.0.0-SNAPSHOT</version>
+        <scope>compile</scope>
+      </dependency>
+
+    def metricsDepsAnnotations =
+      <dependency>
+        <groupId>com.yammer.metrics</groupId>
+        <artifactId>metrics-annotation</artifactId>
+        <version>3.0.0-SNAPSHOT</version>
+        <scope>compile</scope>
+      </dependency>
 
     object ZkClientDepAdder extends RuleTransformer(new RewriteRule() {
       override def transform(node: Node): Seq[Node] = node match {
@@ -94,7 +98,7 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
     object MetricsDepAdder extends RuleTransformer(new RewriteRule() {
       override def transform(node: Node): Seq[Node] = node match {
         case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
-          Elem(prefix, "dependencies", attribs, scope, deps ++ metricsDeps:_*)
+          Elem(prefix, "dependencies", attribs, scope, deps ++ metricsDepsCore ++ metricsDepsAnnotations:_*)
         }
         case other => other
       }
@@ -104,7 +108,7 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
       MetricsDepAdder(ZkClientDepAdder(pom))
     }
 
-    override def artifactID = "kafka"
+    override def organization = "org.apache"
     override def filterScalaJars = false
 
     // build the executable jar's classpath.
@@ -276,7 +280,7 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
   trait CoreDependencies {
     val log4j = "log4j" % "log4j" % "1.2.15"
     val jopt = "net.sf.jopt-simple" % "jopt-simple" % "3.2"
-    val slf4jSimple = "org.slf4j" % "slf4j-simple" % "latest.release"
+    val slf4jSimple = "org.slf4j" % "slf4j-simple" % "1.6.4"
   }
   
   trait HadoopDependencies {
