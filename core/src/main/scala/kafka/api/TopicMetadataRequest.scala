@@ -40,7 +40,6 @@ object TopicMetadataRequest extends Logging {
     for(i <- 0 until numTopics)
       topics += readShortString(buffer)
     val topicsList = topics.toList
-    debug("topic = %s".format(topicsList.head))
     new TopicMetadataRequest(versionId, clientId, topics.toList, correlationId)
   }
 }

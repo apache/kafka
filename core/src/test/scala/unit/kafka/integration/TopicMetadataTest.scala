@@ -70,7 +70,27 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
       0 -> configs.head.brokerId
     )
     TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
-    val topicMetadata = mockLogManagerAndTestTopic(topic)
+    val topicMetadataRequest = new TopicMetadataRequest(List(topic))
+    val topicMetadata = mockLogManagerAndTestTopic(topicMetadataRequest)
+    assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
+    assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
+    val partitionMetadata = topicMetadata.head.partitionsMetadata
+    assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
+    assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
+    assertEquals(1, partitionMetadata.head.replicas.size)
+  }
+
+  def testGetAllTopicMetadata {
+    // create topic
+    val topic = "test"
+    CreateTopicCommand.createTopic(zkClient, topic, 1)
+    // set up leader for topic partition 0
+    val leaderForPartitionMap = Map(
+      0 -> configs.head.brokerId
+    )
+    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
+    val topicMetadataRequest = new TopicMetadataRequest(List())
+    val topicMetadata = mockLogManagerAndTestTopic(topicMetadataRequest)
     assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
     assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
     val partitionMetadata = topicMetadata.head.partitionsMetadata
@@ -83,7 +103,8 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     // auto create topic
     val topic = "test"
 
-    val topicMetadata = mockLogManagerAndTestTopic(topic)
+    val topicMetadataRequest = new TopicMetadataRequest(List(topic))
+    val topicMetadata = mockLogManagerAndTestTopic(topicMetadataRequest)
     assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
     assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
     val partitionMetadata = topicMetadata.head.partitionsMetadata
@@ -94,16 +115,14 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(ErrorMapping.LeaderNotAvailableCode, partitionMetadata.head.errorCode)
   }
 
-  private def mockLogManagerAndTestTopic(topic: String): Seq[TopicMetadata] = {
+  private def mockLogManagerAndTestTopic(request: TopicMetadataRequest): Seq[TopicMetadata] = {
     // topic metadata request only requires 1 call from the replica manager
     val replicaManager = EasyMock.createMock(classOf[ReplicaManager])
     EasyMock.expect(replicaManager.config).andReturn(configs.head).anyTimes()
     EasyMock.replay(replicaManager)
 
-    // create a topic metadata request
-    val topicMetadataRequest = new TopicMetadataRequest(List(topic))
 
-    val serializedMetadataRequest = TestUtils.createRequestByteBuffer(topicMetadataRequest)
+    val serializedMetadataRequest = TestUtils.createRequestByteBuffer(request)
 
     // create the kafka request handler
     val requestChannel = new RequestChannel(2, 5)

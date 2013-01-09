@@ -21,7 +21,6 @@ import kafka.admin.{CreateTopicCommand, AdminUtils}
 import kafka.api._
 import kafka.message._
 import kafka.network._
-import kafka.utils.{Pool, SystemTime, Logging}
 import org.apache.log4j.Logger
 import scala.collection._
 import kafka.network.RequestChannel.Response
@@ -30,6 +29,7 @@ import java.util.concurrent.atomic._
 import kafka.metrics.KafkaMetricsGroup
 import org.I0Itec.zkclient.ZkClient
 import kafka.common._
+import kafka.utils.{ZkUtils, Pool, SystemTime, Logging}
 
 
 /**
@@ -425,7 +425,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val topicsMetadata = new mutable.ArrayBuffer[TopicMetadata]()
     val config = replicaManager.config
-    val uniqueTopics = metadataRequest.topics.toSet
+    val uniqueTopics = {
+      if(metadataRequest.topics.size > 0)
+        metadataRequest.topics.toSet
+      else
+        ZkUtils.getAllTopics(zkClient).toSet
+    }
     val topicMetadataList = AdminUtils.fetchTopicMetadataFromZk(uniqueTopics, zkClient)
     topicMetadataList.foreach(
       topicAndMetadata => {
