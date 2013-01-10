@@ -113,5 +113,15 @@ class ProducerConfig private (val props: VerifiableProperties)
 
   val producerRetryBackoffMs = props.getInt("producer.retry.backoff.ms", 100)
 
+  /**
+   * The producer generally refreshes the topic metadata from brokers when there is a failure
+   * (partition missing, leader not available...). It will also poll regularly (default: every 10min
+   * so 600000ms). If you set this to a negative value, metadata will only get refreshed on failure.
+   * If you set this to zero, the metadata will get refreshed after each message sent (not recommended)
+   * Important note: the refresh happen only AFTER the message is sent, so if the producer never sends
+   * a message the metadata is never refreshed
+   */
+  val topicMetadataRefreshIntervalMs = props.getInt("producer.metadata.refresh.interval.ms", 600000)
+
   validate(this)
 }

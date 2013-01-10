@@ -24,9 +24,6 @@ private class DefaultPartitioner[T](props: VerifiableProperties = null) extends 
   private val random = new java.util.Random
   
   def partition(key: T, numPartitions: Int): Int = {
-    if(key == null)
-      random.nextInt(numPartitions)
-    else
-      Utils.abs(key.hashCode) % numPartitions
+    Utils.abs(key.hashCode) % numPartitions
   }
 }
