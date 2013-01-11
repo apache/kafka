@@ -44,6 +44,7 @@ class FileMessageSet private[kafka](val file: File,
   private val _size = new AtomicInteger(scala.math.min(channel.size().toInt, limit) - start)
 
   if (initChannelPositionToEnd) {
+    info("Creating or reloading log segment %s".format(file.getAbsolutePath))
     /* set the file position to the last byte in the file */
     channel.position(channel.size)
   }

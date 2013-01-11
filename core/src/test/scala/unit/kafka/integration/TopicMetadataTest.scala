@@ -51,7 +51,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     CreateTopicCommand.createTopic(zkClient, topic, 1)
 
     // create a topic metadata request
-    val topicMetadataRequest = new TopicMetadataRequest(List(topic))
+    val topicMetadataRequest = new TopicMetadataRequest(List(topic), 0)
 
     val serializedMetadataRequest = ByteBuffer.allocate(topicMetadataRequest.sizeInBytes + 2)
     topicMetadataRequest.writeTo(serializedMetadataRequest)
@@ -70,7 +70,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
       0 -> configs.head.brokerId
     )
     TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
-    val topicMetadataRequest = new TopicMetadataRequest(List(topic))
+    val topicMetadataRequest = new TopicMetadataRequest(List(topic), 0)
     val topicMetadata = mockLogManagerAndTestTopic(topicMetadataRequest)
     assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
     assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
@@ -89,7 +89,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
       0 -> configs.head.brokerId
     )
     TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
-    val topicMetadataRequest = new TopicMetadataRequest(List())
+    val topicMetadataRequest = new TopicMetadataRequest(List(), 0)
     val topicMetadata = mockLogManagerAndTestTopic(topicMetadataRequest)
     assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
     assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
@@ -103,7 +103,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     // auto create topic
     val topic = "test"
 
-    val topicMetadataRequest = new TopicMetadataRequest(List(topic))
+    val topicMetadataRequest = new TopicMetadataRequest(List(topic), 0)
     val topicMetadata = mockLogManagerAndTestTopic(topicMetadataRequest)
     assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
     assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)

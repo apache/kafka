@@ -70,7 +70,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             val apiRequest = request.requestObj.asInstanceOf[ProducerRequest]
             val producerResponseStatus = apiRequest.data.map {
               case (topicAndPartition, data) =>
-                (topicAndPartition, ProducerResponseStatus(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1l))
+                (topicAndPartition, ProducerResponseStatus(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1L))
             }
             val errorResponse = ProducerResponse(apiRequest.correlationId, producerResponseStatus)
             requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
@@ -125,8 +125,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleLeaderAndIsrRequest(request: RequestChannel.Request) {
     val leaderAndIsrRequest = request.requestObj.asInstanceOf[LeaderAndIsrRequest]
     if(requestLogger.isTraceEnabled)
-      requestLogger.trace("Handling leader and ISR request " + leaderAndIsrRequest)
-    trace("Handling leader and ISR request " + leaderAndIsrRequest)
+      requestLogger.trace("Handling LeaderAndIsrRequest v%d with correlation id %d from client %s: %s"
+            .format(leaderAndIsrRequest.versionId, leaderAndIsrRequest.correlationId, leaderAndIsrRequest.clientId, leaderAndIsrRequest.toString))
     try {
       val (response, error) = replicaManager.becomeLeaderOrFollower(leaderAndIsrRequest)
       val leaderAndIsrResponse = new LeaderAndIsrResponse(leaderAndIsrRequest.correlationId, response, error)
@@ -142,8 +142,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleStopReplicaRequest(request: RequestChannel.Request) {
     val stopReplicaRequest = request.requestObj.asInstanceOf[StopReplicaRequest]
     if(requestLogger.isTraceEnabled)
-      requestLogger.trace("Handling stop replica request " + stopReplicaRequest)
-    trace("Handling stop replica request " + stopReplicaRequest)
+      requestLogger.trace("Handling StopReplicaRequest v%d with correlation id %d from client %s: %s"
+            .format(stopReplicaRequest.versionId, stopReplicaRequest.correlationId, stopReplicaRequest.clientId, stopReplicaRequest.toString))
 
     val (response, error) = replicaManager.stopReplicas(stopReplicaRequest)
     val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.correlationId, response.toMap, error)
@@ -175,10 +175,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     val produceRequest = request.requestObj.asInstanceOf[ProducerRequest]
     val sTime = SystemTime.milliseconds
     if(requestLogger.isTraceEnabled)
-      requestLogger.trace("Handling producer request " + request.toString)
-    trace("Handling producer request " + request.toString)
+      requestLogger.trace("Handling ProducerRequest v%d with correlation id %d from client %s: %s"
+            .format(produceRequest.versionId, produceRequest.correlationId, produceRequest.clientId, produceRequest.toString))
 
-    val localProduceResults = appendToLocalLog(produceRequest.data)
+    val localProduceResults = appendToLocalLog(produceRequest)
     debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
 
     val numPartitionsInError = localProduceResults.count(_.error.isDefined)
@@ -236,7 +236,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   /**
    * Helper method for handling a parsed producer request
    */
-  private def appendToLocalLog(partitionAndData: Map[TopicAndPartition, MessageSet]): Iterable[ProduceResult] = {
+  private def appendToLocalLog(producerRequest: ProducerRequest): Iterable[ProduceResult] = {
+    val partitionAndData: Map[TopicAndPartition, MessageSet] = producerRequest.data
     trace("Append [%s] to local log ".format(partitionAndData.toString))
     partitionAndData.map {case (topicAndPartition, messages) =>
       BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesInRate.mark(messages.sizeInBytes)
@@ -259,7 +260,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case e =>
           BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).failedProduceRequestRate.mark()
           BrokerTopicStats.getBrokerAllTopicStats.failedProduceRequestRate.mark()
-          error("Error processing ProducerRequest on %s:%d".format(topicAndPartition.topic, topicAndPartition.partition), e)
+          error("Error processing ProducerRequest with correlation id %d from client %s on %s:%d"
+            .format(producerRequest.correlationId, producerRequest.clientId, topicAndPartition.topic, topicAndPartition.partition), e)
           new ProduceResult(topicAndPartition, e)
        }
     }
@@ -271,8 +273,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleFetchRequest(request: RequestChannel.Request) {
     val fetchRequest = request.requestObj.asInstanceOf[FetchRequest]
     if(requestLogger.isTraceEnabled)
-      requestLogger.trace("Handling fetch request " + fetchRequest.toString)
-    trace("Handling fetch request " + fetchRequest.toString)
+      requestLogger.trace("Handling FetchRequest v%d with correlation id %d from client %s: %s"
+            .format(fetchRequest.versionId, fetchRequest.correlationId, fetchRequest.clientId, fetchRequest.toString))
 
     if(fetchRequest.isFromFollower) {
       maybeUpdatePartitionHw(fetchRequest)
@@ -293,7 +295,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     if(fetchRequest.maxWait <= 0 ||
        bytesReadable >= fetchRequest.minBytes ||
        fetchRequest.numPartitions <= 0) {
-      debug("Returning fetch response %s for fetch request with correlation id %d".format(dataRead.values.map(_.error).mkString(","), fetchRequest.correlationId))
+      debug("Returning fetch response %s for fetch request with correlation id %d to client %s"
+        .format(dataRead.values.map(_.error).mkString(","), fetchRequest.correlationId, fetchRequest.clientId))
       val response = new FetchResponse(fetchRequest.correlationId, dataRead)
       requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(response)))
     } else {
@@ -380,8 +383,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleOffsetRequest(request: RequestChannel.Request) {
     val offsetRequest = request.requestObj.asInstanceOf[OffsetRequest]
     if(requestLogger.isTraceEnabled)
-      requestLogger.trace("Handling offset request " + offsetRequest.toString)
-    trace("Handling offset request " + offsetRequest.toString)
+      requestLogger.trace("Handling OffsetRequest v%d with correlation id %d from client %s: %s"
+            .format(offsetRequest.versionId, offsetRequest.correlationId, offsetRequest.clientId, offsetRequest.toString))
 
     val responseMap = offsetRequest.requestInfo.map(elem => {
       val (topicAndPartition, partitionOffsetRequestInfo) = elem
@@ -420,8 +423,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleTopicMetadataRequest(request: RequestChannel.Request) {
     val metadataRequest = request.requestObj.asInstanceOf[TopicMetadataRequest]
     if(requestLogger.isTraceEnabled)
-      requestLogger.trace("Handling topic metadata request " + metadataRequest.toString())
-    trace("Handling topic metadata request " + metadataRequest.toString())
+      requestLogger.trace("Handling TopicMetadataRequest v%d with correlation id %d from client %s: %s"
+            .format(metadataRequest.versionId, metadataRequest.correlationId, metadataRequest.clientId, metadataRequest.toString))
 
     val topicsMetadata = new mutable.ArrayBuffer[TopicMetadata]()
     val config = replicaManager.config
@@ -463,6 +466,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             topicsMetadata += topicAndMetadata
         }
       })
+    trace("Sending topic metadata for correlation id %d to client %s".format(metadataRequest.correlationId, metadataRequest.clientId))
     topicsMetadata.foreach(metadata => trace("Sending topic metadata " + metadata.toString))
     val response = new TopicMetadataResponse(topicsMetadata.toSeq, metadataRequest.correlationId)
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))

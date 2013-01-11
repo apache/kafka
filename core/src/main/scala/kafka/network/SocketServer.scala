@@ -319,7 +319,7 @@ private[kafka] class Processor(val id: Int,
     } else if(receive.complete) {
       val req = RequestChannel.Request(processor = id, requestKey = key, buffer = receive.buffer, startTimeMs = time.milliseconds)
       requestChannel.sendRequest(req)
-      trace("Recieved request, sending for processing by handler: " + req)
+      trace("Received request, sending for processing by handler: " + req)
       key.attach(null)
     } else {
       // more reading to be done

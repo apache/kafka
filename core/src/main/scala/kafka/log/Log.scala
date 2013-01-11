@@ -197,6 +197,7 @@ private[kafka] class Log(val dir: File,
    * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes from the end of the log.
    */
   private def recoverSegment(segment: LogSegment) {
+    info("Recovering log segment %s".format(segment.messageSet.file.getAbsolutePath))
     segment.index.truncate()
     var validBytes = 0
     var lastIndexEntry = 0
@@ -392,6 +393,10 @@ private[kafka] class Log(val dir: File,
    */
   def markDeletedWhile(predicate: LogSegment => Boolean): Seq[LogSegment] = {
     lock synchronized {
+      debug("Garbage collecting log..")
+      debug("Segments of log %s : %s ".format(this.name, segments.view.mkString(",")))
+      debug("Index files for log %s: %s".format(this.name, segments.view.map(_.index.file.exists()).mkString(",")))
+      debug("Data files for log %s: %s".format(this.name, segments.view.map(_.messageSet.file.exists()).mkString(",")))
       val view = segments.view
       val deletable = view.takeWhile(predicate)
       for(seg <- deletable)
@@ -426,11 +431,17 @@ private[kafka] class Log(val dir: File,
    * Roll the log over if necessary
    */
   private def maybeRoll(segment: LogSegment): LogSegment = {
-    if ((segment.messageSet.sizeInBytes > maxLogFileSize) ||
-       ((segment.firstAppendTime.isDefined) && (time.milliseconds - segment.firstAppendTime.get > rollIntervalMs)) ||
-       segment.index.isFull)
+    if(segment.messageSet.sizeInBytes > maxLogFileSize) {
+      info("Rolling %s due to full data log".format(name))
       roll()
-    else
+    } else if((segment.firstAppendTime.isDefined) && (time.milliseconds - segment.firstAppendTime.get > rollIntervalMs)) {
+      info("Rolling %s due to time based rolling".format(name))
+      roll()
+    } else if(segment.index.isFull) {
+      info("Rolling %s due to full index maxIndexSize = %d, entries = %d, maxEntries = %d"
+        .format(name, segment.index.maxIndexSize, segment.index.entries(), segment.index.maxEntries))
+      roll()
+    } else
       segment
   }
 
@@ -451,10 +462,10 @@ private[kafka] class Log(val dir: File,
     val logFile = logFilename(dir, newOffset)
     val indexFile = indexFilename(dir, newOffset)
     for(file <- List(logFile, indexFile); if file.exists) {
-      warn("Newly rolled segment file " + file.getName + " already exists; deleting it first")
+      warn("Newly rolled segment file " + file.getAbsolutePath + " already exists; deleting it first")
       file.delete()
     }
-    debug("Rolling log '" + name + "' to " + logFile.getName + " and " + indexFile.getName)
+    info("Rolling log '" + name + "' to " + logFile.getAbsolutePath + " and " + indexFile.getAbsolutePath)
     segments.view.lastOption match {
       case Some(segment) => segment.index.trimToValidSize()
       case None => 
@@ -462,7 +473,7 @@ private[kafka] class Log(val dir: File,
 
     val segmentsView = segments.view
     if(segmentsView.size > 0 && segmentsView.last.start == newOffset)
-      throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exsits".format(dir.getName, newOffset))
+      throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exists".format(dir.getName, newOffset))
 
     val segment = new LogSegment(dir, 
                                  startOffset = newOffset,
@@ -555,6 +566,10 @@ private[kafka] class Log(val dir: File,
       } else {
         total += 1
       }
+      if(segment.messageSet.file.exists())
+        error("Data log file %s still exists".format(segment.messageSet.file.getAbsolutePath))
+      if(segment.index.file.exists())
+        error("Index file %s still exists".format(segment.index.file.getAbsolutePath))
     }
     total
   }

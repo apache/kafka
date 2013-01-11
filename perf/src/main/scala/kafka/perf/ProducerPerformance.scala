@@ -197,6 +197,7 @@ object ProducerPerformance extends Logging {
       props.put("batch.size", config.batchSize.toString)
       props.put("queue.enqueueTimeout.ms", "-1")
     }
+    props.put("clientid", "ProducerPerformance")
     props.put("producer.request.required.acks", config.producerRequestRequiredAcks.toString)
     props.put("producer.request.timeout.ms", config.producerRequestTimeoutMs.toString)
     props.put("producer.num.retries", config.producerNumRetries.toString)

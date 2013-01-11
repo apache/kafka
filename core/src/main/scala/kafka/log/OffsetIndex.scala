@@ -83,16 +83,19 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
         Utils.swallow(raf.close())
       }
     }
-  
-  /* the maximum number of entries this index can hold */
-  def maxEntries = mmap.limit / 8
-  
+
   /* the number of entries in the index */
   private var size = new AtomicInteger(mmap.position / 8)
   
   /* the last offset in the index */
   var lastOffset = readLastOffset()
   
+  info("Created index file %s with maxEntries = %d, maxIndexSize = %d, entries = %d, lastOffset = %d"
+    .format(file.getAbsolutePath, maxEntries, maxIndexSize, entries(), lastOffset))
+
+  /* the maximum number of entries this index can hold */
+  def maxEntries = mmap.limit / 8
+
   /**
    * The last offset written to the index
    */
@@ -262,6 +265,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
    * Delete this index file
    */
   def delete(): Boolean = {
+    info("Deleting index " + this.file.getAbsolutePath)
     this.file.delete()
   }
   
