@@ -209,7 +209,7 @@ object ConsoleConsumer extends Logging {
     } catch {
       case e => error("Error processing message, stopping consumer: ", e)
     }
-    System.out.println("Consumed %d messages".format(numMessages))
+    System.err.println("Consumed %d messages".format(numMessages))
     System.out.flush()
     formatter.close()
     connector.shutdown()
