@@ -59,7 +59,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           producerTopicStats.getProducerAllTopicStats.byteRate.mark(dataSize)
       }
       var outstandingProduceRequests = serializedData
-      var remainingRetries = config.producerRetries + 1
+      var remainingRetries = config.messageSendMaxRetries + 1
       val correlationIdStart = correlationId.get()
       while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {
         topicMetadataToRefresh ++= outstandingProduceRequests.map(_.topic)
@@ -72,7 +72,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         outstandingProduceRequests = dispatchSerializedData(outstandingProduceRequests)
         if (outstandingProduceRequests.size > 0)  {
           // back off and update the topic metadata cache before attempting another send operation
-          Thread.sleep(config.producerRetryBackoffMs)
+          Thread.sleep(config.retryBackoffMs)
           // get topics of the outstanding produce requests and refresh metadata for those
           Utils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.topic).toSet, correlationId.getAndIncrement))
           remainingRetries -= 1
@@ -81,9 +81,10 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       }
       if(outstandingProduceRequests.size > 0) {
         producerStats.failedSendRate.mark()
+
         val correlationIdEnd = correlationId.get()
         error("Failed to send the following requests with correlation ids in [%d,%d]: %s".format(correlationIdStart, correlationIdEnd-1, outstandingProduceRequests))
-        throw new FailedToSendMessageException("Failed to send messages after " + config.producerRetries + " tries.", null)
+        throw new FailedToSendMessageException("Failed to send messages after " + config.messageSendMaxRetries + " tries.", null)
       }
     }
   }
@@ -231,7 +232,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       messagesPerTopic.keys.toSeq
     } else if(messagesPerTopic.size > 0) {
       val currentCorrelationId = correlationId.getAndIncrement
-      val producerRequest = new ProducerRequest(currentCorrelationId, config.clientId, config.requiredAcks,
+      val producerRequest = new ProducerRequest(currentCorrelationId, config.clientId, config.requestRequiredAcks,
         config.requestTimeoutMs, messagesPerTopic)
       var failedTopicPartitions = Seq.empty[TopicAndPartition]
       try {

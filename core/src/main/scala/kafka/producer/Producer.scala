@@ -31,7 +31,7 @@ class Producer[K,V](config: ProducerConfig,
   extends Logging {
 
   private val hasShutdown = new AtomicBoolean(false)
-  private val queue = new LinkedBlockingQueue[KeyedMessage[K,V]](config.queueSize)
+  private val queue = new LinkedBlockingQueue[KeyedMessage[K,V]](config.queueBufferingMaxMessages)
 
   private val random = new Random
   private var sync: Boolean = true
@@ -44,8 +44,8 @@ class Producer[K,V](config: ProducerConfig,
       producerSendThread = new ProducerSendThread[K,V]("ProducerSendThread-" + asyncProducerID, 
                                                        queue,
                                                        eventHandler, 
-                                                       config.queueTime, 
-                                                       config.batchSize,
+                                                       config.queueBufferingMaxMs,
+                                                       config.batchNumMessages,
                                                        config.clientId)
       producerSendThread.start()
   }
@@ -87,17 +87,17 @@ class Producer[K,V](config: ProducerConfig,
 
   private def asyncSend(messages: Seq[KeyedMessage[K,V]]) {
     for (message <- messages) {
-      val added = config.enqueueTimeoutMs match {
+      val added = config.queueEnqueueTimeoutMs match {
         case 0  =>
           queue.offer(message)
         case _  =>
           try {
-            config.enqueueTimeoutMs < 0 match {
+            config.queueEnqueueTimeoutMs < 0 match {
             case true =>
               queue.put(message)
               true
             case _ =>
-              queue.offer(message, config.enqueueTimeoutMs, TimeUnit.MILLISECONDS)
+              queue.offer(message, config.queueEnqueueTimeoutMs, TimeUnit.MILLISECONDS)
             }
           }
           catch {

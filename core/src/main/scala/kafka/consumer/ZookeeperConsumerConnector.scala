@@ -112,7 +112,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   connectZk()
   createFetcher()
-  if (config.autoCommit) {
+  if (config.autoCommitEnable) {
     scheduler.startup
     info("starting auto committer every " + config.autoCommitIntervalMs + " ms")
     scheduler.scheduleWithRate(autoCommit, "Kafka-consumer-autocommit-", config.autoCommitIntervalMs,
@@ -160,14 +160,14 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       if (wildcardTopicWatcher != null)
         wildcardTopicWatcher.shutdown()
       try {
-        if (config.autoCommit)
+        if (config.autoCommitEnable)
           scheduler.shutdownNow()
         fetcher match {
           case Some(f) => f.shutdown
           case None =>
         }
         sendShutdownToAllQueues()
-        if (config.autoCommit)
+        if (config.autoCommitEnable)
           commitOffsets()
         if (zkClient != null) {
           zkClient.close()
@@ -194,9 +194,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     // make a list of (queue,stream) pairs, one pair for each threadId
     val queuesAndStreams = topicThreadIds.values.map(threadIdSet =>
       threadIdSet.map(_ => {
-        val queue =  new LinkedBlockingQueue[FetchedDataChunk](config.maxQueuedChunks)
+        val queue =  new LinkedBlockingQueue[FetchedDataChunk](config.queuedMaxMessages)
         val stream = new KafkaStream[K,V](
-          queue, config.consumerTimeoutMs, keyDecoder, valueDecoder, config.enableShallowIterator, config.clientId)
+          queue, config.consumerTimeoutMs, keyDecoder, valueDecoder, config.shallowIteratorEnable, config.clientId)
         (queue, stream)
       })
     ).flatten.toList
@@ -365,7 +365,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     def syncedRebalance() {
       rebalanceLock synchronized {
-        for (i <- 0 until config.maxRebalanceRetries) {
+        for (i <- 0 until config.rebalanceMaxRetries) {
           info("begin rebalancing consumer " + consumerIdString + " try #" + i)
           var done = false
           val cluster = getCluster(zkClient)
@@ -393,7 +393,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         }
       }
 
-      throw new ConsumerRebalanceFailedException(consumerIdString + " can't rebalance after " + config.maxRebalanceRetries +" retries")
+      throw new ConsumerRebalanceFailedException(consumerIdString + " can't rebalance after " + config.rebalanceMaxRetries +" retries")
     }
 
     private def rebalance(cluster: Cluster): Boolean = {
@@ -610,7 +610,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                                  queue,
                                                  consumedOffset,
                                                  fetchedOffset,
-                                                 new AtomicInteger(config.fetchSize),
+                                                 new AtomicInteger(config.fetchMessageMaxBytes),
                                                  config.clientId)
       partTopicInfoMap.put(partition, partTopicInfo)
       debug(partTopicInfo + " selected new offset " + offset)
@@ -709,12 +709,12 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     private val wildcardQueuesAndStreams = (1 to numStreams)
       .map(e => {
-        val queue = new LinkedBlockingQueue[FetchedDataChunk](config.maxQueuedChunks)
+        val queue = new LinkedBlockingQueue[FetchedDataChunk](config.queuedMaxMessages)
         val stream = new KafkaStream[K,V](queue, 
                                           config.consumerTimeoutMs, 
                                           keyDecoder, 
                                           valueDecoder, 
-                                          config.enableShallowIterator,
+                                          config.shallowIteratorEnable,
                                           config.clientId)
         (queue, stream)
     }).toList

@@ -36,24 +36,22 @@ class SyncProducerConfig private (val props: VerifiableProperties) extends SyncP
 trait SyncProducerConfigShared {
   val props: VerifiableProperties
   
-  val bufferSize = props.getInt("buffer.size", 100*1024)
-
-  val maxMessageSize = props.getInt("max.message.size", 1000000)
+  val sendBufferBytes = props.getInt("send.buffer.bytes", 100*1024)
 
   /* the client application sending the producer requests */
-  val clientId = props.getString("clientid", SyncProducerConfig.DefaultClientId)
+  val clientId = props.getString("client.id", SyncProducerConfig.DefaultClientId)
 
   /*
    * The required acks of the producer requests - negative value means ack
    * after the replicas in ISR have caught up to the leader's offset
    * corresponding to this produce request.
    */
-  val requiredAcks = props.getShort("producer.request.required.acks", SyncProducerConfig.DefaultRequiredAcks)
+  val requestRequiredAcks = props.getShort("request.required.acks", SyncProducerConfig.DefaultRequiredAcks)
 
   /*
    * The ack timeout of the producer requests. Value must be non-negative and non-zero
    */
-  val requestTimeoutMs = props.getIntInRange("producer.request.timeout.ms", SyncProducerConfig.DefaultAckTimeoutMs,
+  val requestTimeoutMs = props.getIntInRange("request.timeout.ms", SyncProducerConfig.DefaultAckTimeoutMs,
                                              (1, Integer.MAX_VALUE))
 }
 

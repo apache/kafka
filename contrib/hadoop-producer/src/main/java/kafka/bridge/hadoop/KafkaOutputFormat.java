@@ -119,10 +119,9 @@ public class KafkaOutputFormat<W extends BytesWritable> extends OutputFormat<Nul
     job.setInt("kafka.output.compression_codec", compressionCodec);
 
     props.setProperty("producer.type", producerType);
-    props.setProperty("buffer.size", Integer.toString(bufSize));
+    props.setProperty("send.buffer.bytes", Integer.toString(bufSize));
     props.setProperty("connect.timeout.ms", Integer.toString(timeout));
     props.setProperty("reconnect.interval", Integer.toString(interval));
-    props.setProperty("max.message.size", Integer.toString(maxSize));
     props.setProperty("compression.codec", Integer.toString(compressionCodec));
 
     if (uri.getScheme().equals("kafka")) {

@@ -63,8 +63,8 @@ class AsyncProducerTest extends JUnit3Suite {
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("producer.type", "async")
-    props.put("queue.size", "10")
-    props.put("batch.size", "1")
+    props.put("queue.buffering.max.messages", "10")
+    props.put("batch.num.messages", "1")
 
     val config = new ProducerConfig(props)
     val produceData = getProduceData(12)
@@ -87,7 +87,7 @@ class AsyncProducerTest extends JUnit3Suite {
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("producer.type", "async")
-    props.put("batch.size", "1")
+    props.put("batch.num.messages", "1")
 
     val config = new ProducerConfig(props)
     val produceData = getProduceData(10)
@@ -358,7 +358,7 @@ class AsyncProducerTest extends JUnit3Suite {
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("producer.type", "async")
-    props.put("batch.size", "5")
+    props.put("batch.num.messages", "5")
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
 
     val config = new ProducerConfig(props)

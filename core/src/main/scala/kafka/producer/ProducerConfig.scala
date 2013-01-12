@@ -26,12 +26,12 @@ import kafka.common.{InvalidConfigException, Config}
 object ProducerConfig extends Config {
   def validate(config: ProducerConfig) {
     validateClientId(config.clientId)
-    validateBatchSize(config.batchSize, config.queueSize)
+    validateBatchSize(config.batchNumMessages, config.queueBufferingMaxMessages)
     validateProducerType(config.producerType)
   }
 
   def validateClientId(clientId: String) {
-    validateChars("clientid", clientId)
+    validateChars("client.id", clientId)
   }
 
   def validateBatchSize(batchSize: Int, queueSize: Int) {
@@ -101,17 +101,16 @@ class ProducerConfig private (val props: VerifiableProperties)
    */
   val compressedTopics = Utils.parseCsvList(props.getString("compressed.topics", null))
 
-  /**
-   * The producer using the zookeeper software load balancer maintains a ZK cache that gets
-   * updated by the zookeeper watcher listeners. During some events like a broker bounce, the
-   * producer ZK cache can get into an inconsistent state, for a small time period. In this time
-   * period, it could end up picking a broker partition that is unavailable. When this happens, the
-   * ZK cache needs to be updated.
-   * This parameter specifies the number of times the producer attempts to refresh this ZK cache.
-   */
-  val producerRetries = props.getInt("producer.num.retries", 3)
+  /** The leader may be unavailable transiently, which can fail the sending of a message.
+    *  This property specifies the number of retries when such failures occur.
+    */
+  val messageSendMaxRetries = props.getInt("message.send.max.retries", 3)
 
-  val producerRetryBackoffMs = props.getInt("producer.retry.backoff.ms", 100)
+  /** Before each retry, the producer refreshes the metadata of relevant topics. Since leader
+    * election takes a bit of time, this property specifies the amount of time that the producer
+    * waits before refreshing the metadata.
+    */
+  val retryBackoffMs = props.getInt("retry.backoff.ms", 100)
 
   /**
    * The producer generally refreshes the topic metadata from brokers when there is a failure
@@ -121,7 +120,7 @@ class ProducerConfig private (val props: VerifiableProperties)
    * Important note: the refresh happen only AFTER the message is sent, so if the producer never sends
    * a message the metadata is never refreshed
    */
-  val topicMetadataRefreshIntervalMs = props.getInt("producer.metadata.refresh.interval.ms", 600000)
+  val topicMetadataRefreshIntervalMs = props.getInt("topic.metadata.refresh.interval.ms", 600000)
 
   validate(this)
 }

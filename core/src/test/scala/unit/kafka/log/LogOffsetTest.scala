@@ -198,15 +198,15 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   private def createBrokerConfig(nodeId: Int, port: Int): Properties = {
     val props = new Properties
-    props.put("brokerid", nodeId.toString)
+    props.put("broker.id", nodeId.toString)
     props.put("port", port.toString)
     props.put("log.dir", getLogDir.getAbsolutePath)
-    props.put("log.flush.interval", "1")
+    props.put("log.flush.interval.messages", "1")
     props.put("enable.zookeeper", "false")
     props.put("num.partitions", "20")
     props.put("log.retention.hours", "10")
     props.put("log.cleanup.interval.mins", "5")
-    props.put("log.file.size", logSize.toString)
+    props.put("log.segment.bytes", logSize.toString)
     props.put("zk.connect", zkConnect.toString)
     props
   }

@@ -140,13 +140,13 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     props1.put("serializer.class", "kafka.serializer.StringEncoder")
     props1.put("partitioner.class", "kafka.utils.StaticPartitioner")
     props1.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
-    props1.put("producer.request.required.acks", "2")
-    props1.put("producer.request.timeout.ms", "1000")
+    props1.put("request.required.acks", "2")
+    props1.put("request.timeout.ms", "1000")
 
     val props2 = new util.Properties()
     props2.putAll(props1)
-    props2.put("producer.request.required.acks", "3")
-    props2.put("producer.request.timeout.ms", "1000")
+    props2.put("request.required.acks", "3")
+    props2.put("request.timeout.ms", "1000")
 
     val producerConfig1 = new ProducerConfig(props1)
     val producerConfig2 = new ProducerConfig(props2)
@@ -198,8 +198,8 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props.put("producer.request.timeout.ms", "2000")
-//    props.put("producer.request.required.acks", "-1")
+    props.put("request.timeout.ms", "2000")
+//    props.put("request.required.acks", "-1")
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
 
     // create topic
@@ -256,7 +256,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props.put("producer.request.timeout.ms", String.valueOf(timeoutMs))
+    props.put("request.timeout.ms", String.valueOf(timeoutMs))
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
 
     val config = new ProducerConfig(props)
@@ -300,7 +300,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     // make sure we don't wait fewer than numRetries*timeoutMs milliseconds
     // we do this because the DefaultEventHandler retries a number of times
-    assertTrue((t2-t1) >= timeoutMs*config.producerRetries)
+    assertTrue((t2-t1) >= timeoutMs*config.messageSendMaxRetries)
   }
 }
 

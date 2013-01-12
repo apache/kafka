@@ -40,8 +40,8 @@ class LogManagerTest extends JUnit3Suite {
   override def setUp() {
     super.setUp()
     config = new KafkaConfig(TestUtils.createBrokerConfig(0, -1)) {
-                   override val logFileSize = 1024
-                   override val flushInterval = 10000
+                   override val logSegmentBytes = 1024
+                   override val logFlushIntervalMessages = 10000
                    override val logRetentionHours = maxLogAgeHours
                  }
     scheduler.startup
@@ -114,10 +114,10 @@ class LogManagerTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, -1)
     logManager.shutdown()
     config = new KafkaConfig(props) {
-      override val logFileSize = (10 * (setSize - 1)) // each segment will be 10 messages
-      override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Long]
+      override val logSegmentBytes = (10 * (setSize - 1)) // each segment will be 10 messages
+      override val logRetentionBytes = (5 * 10 * setSize + 10).asInstanceOf[Long]
       override val logRetentionHours = retentionHours
-      override val flushInterval = 100
+      override val logFlushIntervalMessages = 100
       override val logRollHours = maxRollInterval
     }
     logManager = new LogManager(config, scheduler, time)
@@ -158,11 +158,11 @@ class LogManagerTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, -1)
     logManager.shutdown()
     config = new KafkaConfig(props) {
-                   override val logFileSize = 1024 *1024 *1024
-                   override val flushSchedulerThreadRate = 50
-                   override val flushInterval = Int.MaxValue
+                   override val logSegmentBytes = 1024 *1024 *1024
+                   override val logFlushSchedulerIntervalMs = 50
+                   override val logFlushIntervalMessages = Int.MaxValue
                    override val logRollHours = maxRollInterval
-                   override val flushIntervalMap = Map("timebasedflush" -> 100)
+                   override val logFlushIntervalMsPerTopicMap = Map("timebasedflush" -> 100)
                  }
     logManager = new LogManager(config, scheduler, time)
     logManager.startup
@@ -173,7 +173,7 @@ class LogManagerTest extends JUnit3Suite {
     }
     val ellapsed = System.currentTimeMillis - log.getLastFlushedTime
     assertTrue("The last flush time has to be within defaultflushInterval of current time (was %d)".format(ellapsed),
-                     ellapsed < 2*config.flushSchedulerThreadRate)
+                     ellapsed < 2*config.logFlushSchedulerIntervalMs)
   }
   
   @Test
@@ -183,7 +183,7 @@ class LogManagerTest extends JUnit3Suite {
     val dirs = Seq(TestUtils.tempDir().getAbsolutePath, 
                    TestUtils.tempDir().getAbsolutePath, 
                    TestUtils.tempDir().getAbsolutePath)
-    props.put("log.directories", dirs.mkString(","))
+    props.put("log.dirs", dirs.mkString(","))
     logManager.shutdown()
     logManager = new LogManager(new KafkaConfig(props), scheduler, time)
     

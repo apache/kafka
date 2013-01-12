@@ -41,7 +41,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val props = new Properties()
     props.put("host", "localhost")
     props.put("port", server.socketServer.port.toString)
-    props.put("buffer.size", "102400")
+    props.put("send.buffer.bytes", "102400")
     props.put("connect.timeout.ms", "500")
     props.put("reconnect.interval", "1000")
     val producer = new SyncProducer(new SyncProducerConfig(props))
@@ -77,10 +77,9 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val props = new Properties()
     props.put("host", "localhost")
     props.put("port", server.socketServer.port.toString)
-    props.put("buffer.size", "102400")
+    props.put("send.buffer.bytes", "102400")
     props.put("connect.timeout.ms", "300")
     props.put("reconnect.interval", "500")
-    props.put("max.message.size", "100")
     val correlationId = 0
     val clientId = SyncProducerConfig.DefaultClientId
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
@@ -98,12 +97,11 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val props = new Properties()
     props.put("host", "localhost")
     props.put("port", server.socketServer.port.toString)
-    props.put("max.message.size", 50000.toString)
     val producer = new SyncProducer(new SyncProducerConfig(props))
     CreateTopicCommand.createTopic(zkClient, "test", 1, 1)
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0, 500)
 
-    val message1 = new Message(new Array[Byte](configs(0).maxMessageSize + 1))
+    val message1 = new Message(new Array[Byte](configs(0).messageMaxBytes + 1))
     val messageSet1 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message1)
     val response1 = producer.send(TestUtils.produceRequest("test", 0, messageSet1))
 
@@ -111,7 +109,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     Assert.assertEquals(ErrorMapping.MessageSizeTooLargeCode, response1.status(TopicAndPartition("test", 0)).error)
     Assert.assertEquals(-1L, response1.status(TopicAndPartition("test", 0)).offset)
 
-    val safeSize = configs(0).maxMessageSize - Message.MessageOverhead - MessageSet.LogOverhead - 1
+    val safeSize = configs(0).messageMaxBytes - Message.MessageOverhead - MessageSet.LogOverhead - 1
     val message2 = new Message(new Array[Byte](safeSize))
     val messageSet2 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message2)
     val response2 = producer.send(TestUtils.produceRequest("test", 0, messageSet2))
@@ -127,10 +125,9 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val props = new Properties()
     props.put("host", "localhost")
     props.put("port", server.socketServer.port.toString)
-    props.put("buffer.size", "102400")
+    props.put("send.buffer.bytes", "102400")
     props.put("connect.timeout.ms", "300")
     props.put("reconnect.interval", "500")
-    props.put("max.message.size", "100")
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
@@ -179,8 +176,8 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val props = new Properties()
     props.put("host", "localhost")
     props.put("port", server.socketServer.port.toString)
-    props.put("buffer.size", "102400")
-    props.put("producer.request.timeout.ms", String.valueOf(timeoutMs))
+    props.put("send.buffer.bytes", "102400")
+    props.put("request.timeout.ms", String.valueOf(timeoutMs))
     val producer = new SyncProducer(new SyncProducerConfig(props))
 
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))

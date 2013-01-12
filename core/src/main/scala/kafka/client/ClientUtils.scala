@@ -61,7 +61,7 @@ object ClientUtils extends Logging{
   def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], clientId: String): TopicMetadataResponse = {
     val props = new Properties()
     props.put("broker.list", brokers.map(_.getConnectionString()).mkString(","))
-    props.put("clientid", clientId)
+    props.put("client.id", clientId)
     val producerConfig = new ProducerConfig(props)
     fetchTopicMetadata(topics, brokers, producerConfig, 0)
   }

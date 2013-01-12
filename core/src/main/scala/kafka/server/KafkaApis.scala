@@ -41,9 +41,9 @@ class KafkaApis(val requestChannel: RequestChannel,
                 brokerId: Int) extends Logging {
 
   private val producerRequestPurgatory =
-    new ProducerRequestPurgatory(replicaManager.config.producerRequestPurgatoryPurgeInterval)
+    new ProducerRequestPurgatory(replicaManager.config.producerPurgatoryPurgeIntervalRequests)
   private val fetchRequestPurgatory =
-    new FetchRequestPurgatory(requestChannel, replicaManager.config.fetchRequestPurgatoryPurgeInterval)
+    new FetchRequestPurgatory(requestChannel, replicaManager.config.fetchPurgatoryPurgeIntervalRequests)
   private val delayedRequestMetrics = new DelayedRequestMetrics
 
   private val requestLogger = Logger.getLogger("kafka.request.logger")
@@ -442,7 +442,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           case ErrorMapping.UnknownTopicOrPartitionCode =>
             try {
               /* check if auto creation of topics is turned on */
-              if (config.autoCreateTopics) {
+              if (config.autoCreateTopicsEnable) {
                 try {
                   CreateTopicCommand.createTopic(zkClient, topicAndMetadata.topic, config.numPartitions, config.defaultReplicationFactor)
                   info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
