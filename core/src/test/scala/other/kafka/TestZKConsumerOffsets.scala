@@ -31,7 +31,7 @@ object TestZKConsumerOffsets {
     val topic = args(1)
     val autoOffsetReset = args(2)    
     val props = Utils.loadProps(args(0))
-    props.put("autooffset.reset", "largest")
+    props.put("auto.offset.reset", "largest")
     
     val config = new ConsumerConfig(props)
     val consumerConnector: ConsumerConnector = Consumer.create(config)

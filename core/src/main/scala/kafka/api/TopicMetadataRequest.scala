@@ -39,30 +39,32 @@ object TopicMetadataRequest extends Logging {
     val topics = new ListBuffer[String]()
     for(i <- 0 until numTopics)
       topics += readShortString(buffer)
-    val topicsList = topics.toList
-    debug("topic = %s".format(topicsList.head))
-    new TopicMetadataRequest(versionId, clientId, topics.toList, correlationId)
+    new TopicMetadataRequest(versionId, correlationId, clientId, topics.toList)
   }
 }
 
 case class TopicMetadataRequest(val versionId: Short,
+                                val correlationId: Int,
                                 val clientId: String,
-                                val topics: Seq[String],
-                                val correlationId: Int)
+                                val topics: Seq[String])
  extends RequestOrResponse(Some(RequestKeys.MetadataKey)){
 
-def this(topics: Seq[String]) =
-  this(TopicMetadataRequest.CurrentVersion, TopicMetadataRequest.DefaultClientId, topics, 0)
+  def this(topics: Seq[String], correlationId: Int) =
+    this(TopicMetadataRequest.CurrentVersion, correlationId, TopicMetadataRequest.DefaultClientId, topics)
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
-    buffer.putInt(correlationId) // correlation id not set yet
+    buffer.putInt(correlationId)
     writeShortString(buffer, clientId)
     buffer.putInt(topics.size)
     topics.foreach(topic => writeShortString(buffer, topic))
   }
 
   def sizeInBytes(): Int = {
-    2 + 4 + shortStringLength(clientId) + 4 /* number of topics */ + topics.foldLeft(0)(_ + shortStringLength(_)) /* topics */
+    2 +  /* version id */
+    4 + /* correlation id */
+    shortStringLength(clientId)  + /* client id */
+    4 + /* number of topics */
+    topics.foldLeft(0)(_ + shortStringLength(_)) /* topics */
   }
 }

@@ -23,7 +23,6 @@ import scala.collection.Map
 import kafka.common.TopicAndPartition
 import kafka.api.ApiUtils._
 
-
 object ProducerRequest {
   val CurrentVersion = 0.shortValue
 

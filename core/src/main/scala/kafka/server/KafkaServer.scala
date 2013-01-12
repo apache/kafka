@@ -65,8 +65,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                     config.hostName,
                                     config.port,
                                     config.numNetworkThreads,
-                                    config.numQueuedRequests,
-                                    config.maxSocketRequestSize)
+                                    config.queuedMaxRequests,
+                                    config.socketRequestMaxBytes)
 
     socketServer.startup
 

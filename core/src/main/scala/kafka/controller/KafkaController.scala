@@ -34,6 +34,7 @@ import org.I0Itec.zkclient.{IZkDataListener, IZkStateListener, ZkClient}
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
 import scala.Some
 import kafka.common.TopicAndPartition
+import java.util.concurrent.atomic.AtomicInteger
 
 class ControllerContext(val zkClient: ZkClient,
                         var controllerChannelManager: ControllerChannelManager = null,
@@ -42,6 +43,7 @@ class ControllerContext(val zkClient: ZkClient,
                         val brokerShutdownLock: Object = new Object,
                         var epoch: Int = KafkaController.InitialControllerEpoch - 1,
                         var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion - 1,
+                        val correlationId: AtomicInteger = new AtomicInteger(0),
                         var allTopics: Set[String] = Set.empty,
                         var partitionReplicaAssignment: mutable.Map[TopicAndPartition, Seq[Int]] = mutable.Map.empty,
                         var allLeaders: mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = mutable.Map.empty,
@@ -186,7 +188,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
             }
           }
       }
-      brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.liveBrokers)
+      brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement, controllerContext.liveBrokers)
 
       val partitionsRemaining = replicatedPartitionsBrokerLeads().toSet
       debug("Remaining partitions to move on broker %d: %s".format(id, partitionsRemaining.mkString(",")))

@@ -30,14 +30,14 @@ class ConsumerFetcherThread(name: String,
                             partitionMap: Map[TopicAndPartition, PartitionTopicInfo],
                             val consumerFetcherManager: ConsumerFetcherManager)
         extends AbstractFetcherThread(name = name, 
-                                      clientId = config.clientId,
+                                      clientId = config.clientId + "-" + name,
                                       sourceBroker = sourceBroker,
                                       socketTimeout = config.socketTimeoutMs,
-                                      socketBufferSize = config.socketBufferSize, 
-                                      fetchSize = config.fetchSize,
+                                      socketBufferSize = config.socketReceiveBufferBytes,
+                                      fetchSize = config.fetchMessageMaxBytes,
                                       fetcherBrokerId = Request.OrdinaryConsumerId,
-                                      maxWait = config.maxFetchWaitMs,
-                                      minBytes = config.minFetchBytes) {
+                                      maxWait = config.fetchWaitMaxMs,
+                                      minBytes = config.fetchMinBytes) {
 
   // process fetched data
   def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: FetchResponsePartitionData) {

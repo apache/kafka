@@ -123,8 +123,8 @@ object TestUtils extends Logging {
    */
   def createBrokerConfig(nodeId: Int, port: Int): Properties = {
     val props = new Properties
-    props.put("brokerid", nodeId.toString)
-    props.put("hostname", "localhost")
+    props.put("broker.id", nodeId.toString)
+    props.put("host.name", "localhost")
     props.put("port", port.toString)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
     props.put("zk.connect", TestZKUtils.zookeeperConnect)
@@ -139,13 +139,13 @@ object TestUtils extends Logging {
                                consumerTimeout: Long = -1): Properties = {
     val props = new Properties
     props.put("zk.connect", zkConnect)
-    props.put("groupid", groupId)
-    props.put("consumerid", consumerId)
+    props.put("group.id", groupId)
+    props.put("consumer.id", consumerId)
     props.put("consumer.timeout.ms", consumerTimeout.toString)
-    props.put("zk.sessiontimeout.ms", "400")
-    props.put("zk.synctime.ms", "200")
-    props.put("autocommit.interval.ms", "1000")
-    props.put("rebalance.retries.max", "4")
+    props.put("zk.session.timeout.ms", "400")
+    props.put("zk.sync.time.ms", "200")
+    props.put("auto.commit.interval.ms", "1000")
+    props.put("rebalance.max.retries", "4")
 
     props
   }
@@ -292,7 +292,7 @@ object TestUtils extends Logging {
                            keyEncoder: Encoder[K] = new DefaultEncoder()): Producer[K, V] = {
     val props = new Properties()
     props.put("broker.list", brokerList)
-    props.put("buffer.size", "65536")
+    props.put("send.buffer.bytes", "65536")
     props.put("connect.timeout.ms", "100000")
     props.put("reconnect.interval", "10000")
     props.put("serializer.class", encoder.getClass.getCanonicalName)
@@ -306,10 +306,10 @@ object TestUtils extends Logging {
     props.put("producer.type", "sync")
     props.put("broker.list", brokerList)
     props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
-    props.put("buffer.size", bufferSize.toString)
+    props.put("send.buffer.bytes", bufferSize.toString)
     props.put("connect.timeout.ms", connectTimeout.toString)
     props.put("reconnect.interval", reconnectInterval.toString)
-    props.put("producer.request.timeout.ms", 30000.toString)
+    props.put("request.timeout.ms", 30000.toString)
     props.put("serializer.class", classOf[StringEncoder].getName.toString)
     props
   }

@@ -39,8 +39,8 @@ class LogManagerTest extends JUnit3Suite {
   override def setUp() {
     super.setUp()
     config = new KafkaConfig(TestUtils.createBrokerConfig(0, -1)) {
-                   override val logFileSize = 1024
-                   override val flushInterval = 10000
+                   override val logSegmentBytes = 1024
+                   override val logFlushIntervalMessages = 10000
                    override val logRetentionHours = maxLogAgeHours
                  }
     logManager = new LogManager(config, time.scheduler, time)
@@ -119,8 +119,8 @@ class LogManagerTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, -1)
     logManager.shutdown()
     config = new KafkaConfig(props) {
-      override val logFileSize = (10 * (setSize - 1)) // each segment will be 10 messages
-      override val logRetentionSize = (5 * 10 * setSize + 10).asInstanceOf[Long]
+      override val logSegmentBytes = (10 * (setSize - 1)) // each segment will be 10 messages
+      override val logRetentionBytes = (5 * 10 * setSize + 10).asInstanceOf[Long]
       override val logRollHours = maxRollInterval
     }
     logManager = new LogManager(config, time.scheduler, time)
@@ -139,7 +139,7 @@ class LogManagerTest extends JUnit3Suite {
     }
 
     // should be exactly 100 full segments + 1 new empty one
-    assertEquals("Check we have the expected number of segments.", numMessages * setSize / config.logFileSize, log.numberOfSegments)
+    assertEquals("Check we have the expected number of segments.", numMessages * setSize / config.logSegmentBytes, log.numberOfSegments)
 
     // this cleanup shouldn't find any expired segments but should delete some to reduce size
     time.sleep(logManager.InitialTaskDelayMs)
@@ -165,9 +165,9 @@ class LogManagerTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, -1)
     logManager.shutdown()
     config = new KafkaConfig(props) {
-                   override val flushSchedulerThreadRate = 1000
-                   override val defaultFlushIntervalMs = 1000
-                   override val flushInterval = Int.MaxValue
+                   override val logFlushSchedulerIntervalMs = 1000
+                   override val logFlushIntervalMs = 1000
+                   override val logFlushIntervalMessages = Int.MaxValue
                  }
     logManager = new LogManager(config, time.scheduler, time)
     logManager.startup
@@ -191,7 +191,7 @@ class LogManagerTest extends JUnit3Suite {
     val dirs = Seq(TestUtils.tempDir().getAbsolutePath, 
                    TestUtils.tempDir().getAbsolutePath, 
                    TestUtils.tempDir().getAbsolutePath)
-    props.put("log.directories", dirs.mkString(","))
+    props.put("log.dirs", dirs.mkString(","))
     logManager.shutdown()
     logManager = new LogManager(new KafkaConfig(props), time.scheduler, time)
     

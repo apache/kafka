@@ -182,9 +182,9 @@ public class KafkaMigrationTool
       Properties kafkaConsumerProperties_07 = new Properties();
       kafkaConsumerProperties_07.load(new FileInputStream(consumerConfigFile_07));
       /** Disable shallow iteration because the message format is different between 07 and 08, we have to get each individual message **/
-      if(kafkaConsumerProperties_07.getProperty("shallowiterator.enable", "").equals("true")){
+      if(kafkaConsumerProperties_07.getProperty("shallow.iterator.enable", "").equals("true")){
         logger.warn("Shallow iterator should not be used in the migration tool");
-        kafkaConsumerProperties_07.setProperty("shallowiterator.enable", "false");
+        kafkaConsumerProperties_07.setProperty("shallow.iterator.enable", "false");
       }
       Object consumerConfig_07 = ConsumerConfigConstructor_07.newInstance(kafkaConsumerProperties_07);
 

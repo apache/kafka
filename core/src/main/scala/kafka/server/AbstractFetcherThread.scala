@@ -66,7 +66,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   }
 
   override def doWork() {
-    val fetchRequestuilder = new FetchRequestBuilder().
+    val fetchRequestBuilder = new FetchRequestBuilder().
             clientId(clientId).
             replicaId(fetcherBrokerId).
             maxWait(maxWait).
@@ -78,14 +78,14 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
         partitionMapCond.await()
       partitionMap.foreach {
         case((topicAndPartition, offset)) =>
-          fetchRequestuilder.addFetch(topicAndPartition.topic, topicAndPartition.partition,
+          fetchRequestBuilder.addFetch(topicAndPartition.topic, topicAndPartition.partition,
                            offset, fetchSize)
       }
     } finally {
       partitionMapLock.unlock()
     }
 
-    val fetchRequest = fetchRequestuilder.build()
+    val fetchRequest = fetchRequestBuilder.build()
     val partitionsWithError = new mutable.HashSet[TopicAndPartition]
     var response: FetchResponse = null
     try {

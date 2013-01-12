@@ -52,11 +52,11 @@ object ConsumerConfig extends Config {
   }
 
   def validateClientId(clientId: String) {
-    validateChars("clientid", clientId)
+    validateChars("client.id", clientId)
   }
 
   def validateGroupId(groupId: String) {
-    validateChars("groupid", groupId)
+    validateChars("group.id", groupId)
   }
 
   def validateAutoOffsetReset(autoOffsetReset: String) {
@@ -77,38 +77,38 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   }
 
   /** a string that uniquely identifies a set of consumers within the same consumer group */
-  val groupId = props.getString("groupid")
+  val groupId = props.getString("group.id")
 
   /** consumer id: generated automatically if not set.
    *  Set this explicitly for only testing purpose. */
-  val consumerId: Option[String] = Option(props.getString("consumerid", null))
+  val consumerId: Option[String] = Option(props.getString("consumer.id", null))
 
   /** the socket timeout for network requests. The actual timeout set will be max.fetch.wait + socket.timeout.ms. */
   val socketTimeoutMs = props.getInt("socket.timeout.ms", SocketTimeout)
   
   /** the socket receive buffer for network requests */
-  val socketBufferSize = props.getInt("socket.buffersize", SocketBufferSize)
+  val socketReceiveBufferBytes = props.getInt("socket.receive.buffer.bytes", SocketBufferSize)
   
   /** the number of byes of messages to attempt to fetch */
-  val fetchSize = props.getInt("fetch.size", FetchSize)
+  val fetchMessageMaxBytes = props.getInt("fetch.message.max.bytes", FetchSize)
   
   /** if true, periodically commit to zookeeper the offset of messages already fetched by the consumer */
-  val autoCommit = props.getBoolean("autocommit.enable", AutoCommit)
+  val autoCommitEnable = props.getBoolean("auto.commit.enable", AutoCommit)
   
   /** the frequency in ms that the consumer offsets are committed to zookeeper */
-  val autoCommitIntervalMs = props.getInt("autocommit.interval.ms", AutoCommitInterval)
+  val autoCommitIntervalMs = props.getInt("auto.commit.interval.ms", AutoCommitInterval)
 
   /** max number of messages buffered for consumption */
-  val maxQueuedChunks = props.getInt("queuedchunks.max", MaxQueuedChunks)
+  val queuedMaxMessages = props.getInt("queued.max.messages", MaxQueuedChunks)
 
   /** max number of retries during rebalance */
-  val maxRebalanceRetries = props.getInt("rebalance.retries.max", MaxRebalanceRetries)
+  val rebalanceMaxRetries = props.getInt("rebalance.max.retries", MaxRebalanceRetries)
   
   /** the minimum amount of data the server should return for a fetch request. If insufficient data is available the request will block */
-  val minFetchBytes = props.getInt("min.fetch.bytes", MinFetchBytes)
+  val fetchMinBytes = props.getInt("fetch.min.bytes", MinFetchBytes)
   
-  /** the maximum amount of time the server will block before answering the fetch request if there isn't sufficient data to immediate satisfy min.fetch.bytes */
-  val maxFetchWaitMs = props.getInt("max.fetch.wait.ms", MaxFetchWaitMs)
+  /** the maximum amount of time the server will block before answering the fetch request if there isn't sufficient data to immediately satisfy fetch.min.bytes */
+  val fetchWaitMaxMs = props.getInt("fetch.wait.max.ms", MaxFetchWaitMs)
   
   /** backoff time between retries during rebalance */
   val rebalanceBackoffMs = props.getInt("rebalance.backoff.ms", zkSyncTimeMs)
@@ -120,7 +120,7 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
      smallest : automatically reset the offset to the smallest offset
      largest : automatically reset the offset to the largest offset
      anything else: throw exception to the consumer */
-  val autoOffsetReset = props.getString("autooffset.reset", AutoOffsetReset)
+  val autoOffsetReset = props.getString("auto.offset.reset", AutoOffsetReset)
 
   /** throw a timeout exception to the consumer if no message is available for consumption after the specified interval */
   val consumerTimeoutMs = props.getInt("consumer.timeout.ms", ConsumerTimeoutMs)
@@ -129,12 +129,12 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
    *  Typically, it's only used for mirroring raw messages from one kafka cluster to another to save the
    *  overhead of decompression.
    *  */
-  val enableShallowIterator = props.getBoolean("shallowiterator.enable", false)
+  val shallowIteratorEnable = props.getBoolean("shallow.iterator.enable", false)
 
   /**
    * Client id is specified by the kafka consumer client, used to distinguish different clients
    */
-  val clientId = props.getString("clientid", groupId)
+  val clientId = props.getString("client.id", groupId)
 
   validate(this)
 }

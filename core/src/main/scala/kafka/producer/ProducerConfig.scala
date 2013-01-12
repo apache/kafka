@@ -26,12 +26,12 @@ import kafka.common.{InvalidConfigException, Config}
 object ProducerConfig extends Config {
   def validate(config: ProducerConfig) {
     validateClientId(config.clientId)
-    validateBatchSize(config.batchSize, config.queueSize)
+    validateBatchSize(config.batchNumMessages, config.queueBufferingMaxMessages)
     validateProducerType(config.producerType)
   }
 
   def validateClientId(clientId: String) {
-    validateChars("clientid", clientId)
+    validateChars("client.id", clientId)
   }
 
   def validateBatchSize(batchSize: Int, queueSize: Int) {
@@ -101,17 +101,26 @@ class ProducerConfig private (val props: VerifiableProperties)
    */
   val compressedTopics = Utils.parseCsvList(props.getString("compressed.topics", null))
 
-  /**
-   * If a request fails it is possible to have the producer automatically retry. This is controlled by this setting.
-   * Note that not all errors mean that the message was lost--for example if the network connection is lost we will
-   * get a socket exception--in this case enabling retries can result in duplicate messages.
-   */
-  val producerRetries = props.getInt("producer.num.retries", 3)
+  /** The leader may be unavailable transiently, which can fail the sending of a message.
+    *  This property specifies the number of retries when such failures occur.
+    */
+  val messageSendMaxRetries = props.getInt("message.send.max.retries", 3)
+
+  /** Before each retry, the producer refreshes the metadata of relevant topics. Since leader
+    * election takes a bit of time, this property specifies the amount of time that the producer
+    * waits before refreshing the metadata.
+    */
+  val retryBackoffMs = props.getInt("retry.backoff.ms", 100)
 
   /**
-   * The amount of time to wait in between retries
+   * The producer generally refreshes the topic metadata from brokers when there is a failure
+   * (partition missing, leader not available...). It will also poll regularly (default: every 10min
+   * so 600000ms). If you set this to a negative value, metadata will only get refreshed on failure.
+   * If you set this to zero, the metadata will get refreshed after each message sent (not recommended)
+   * Important note: the refresh happen only AFTER the message is sent, so if the producer never sends
+   * a message the metadata is never refreshed
    */
-  val producerRetryBackoffMs = props.getInt("producer.retry.backoff.ms", 100)
+  val topicMetadataRefreshIntervalMs = props.getInt("topic.metadata.refresh.interval.ms", 600000)
 
   validate(this)
 }

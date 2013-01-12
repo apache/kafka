@@ -37,7 +37,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
    * @return a sequence of (brokerId, numPartitions). Returns a zero-length
    * sequence if no brokers are available.
    */
-  def getBrokerPartitionInfo(topic: String): Seq[PartitionAndLeader] = {
+  def getBrokerPartitionInfo(topic: String, correlationId: Int): Seq[PartitionAndLeader] = {
     debug("Getting broker partition info for topic %s".format(topic))
     // check if the cache has metadata for this topic
     val topicMetadata = topicPartitionInfo.get(topic)
@@ -46,7 +46,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
         case Some(m) => m
         case None =>
           // refresh the topic metadata cache
-          updateInfo(Set(topic))
+          updateInfo(Set(topic), correlationId)
           val topicMetadata = topicPartitionInfo.get(topic)
           topicMetadata match {
             case Some(m) => m
@@ -70,9 +70,9 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
    * It updates the cache by issuing a get topic metadata request to a random broker.
    * @param topics the topics for which the metadata is to be fetched
    */
-  def updateInfo(topics: Set[String]) {
+  def updateInfo(topics: Set[String], correlationId: Int) {
     var topicsMetadata: Seq[TopicMetadata] = Nil
-    val topicMetadataResponse = ClientUtils.fetchTopicMetadata(topics, brokers, producerConfig)
+    val topicMetadataResponse = ClientUtils.fetchTopicMetadata(topics, brokers, producerConfig, correlationId)
     topicsMetadata = topicMetadataResponse.topicsMetadata
     // throw partition specific exception
     topicsMetadata.foreach(tmd =>{

@@ -28,9 +28,9 @@ import kafka.producer.{ProducerConfig, KeyedMessage, Producer}
 class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
-    override val replicaMaxLagTimeMs = 5000L
-    override val replicaMaxLagBytes = 10L
-    override val replicaMinBytes = 20
+    override val replicaLagTimeMaxMs = 5000L
+    override val replicaLagMaxMessages = 10L
+    override val replicaFetchMinBytes = 20
   })
   val topic = "new-topic"
   val partitionId = 0
@@ -50,7 +50,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   
   val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
   producerProps.put("key.serializer.class", classOf[IntEncoder].getName.toString)
-  producerProps.put("producer.request.required.acks", "-1")
+  producerProps.put("request.required.acks", "-1")
 
 
   def testHWCheckpointNoFailuresSingleLogSegment {

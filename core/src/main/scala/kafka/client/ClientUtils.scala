@@ -20,22 +20,23 @@ object ClientUtils extends Logging{
    * @param producerConfig The producer's config
    * @return topic metadata response
    */
-  def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], producerConfig: ProducerConfig): TopicMetadataResponse = {
+  def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], producerConfig: ProducerConfig, correlationId: Int): TopicMetadataResponse = {
     var fetchMetaDataSucceeded: Boolean = false
     var i: Int = 0
-    val topicMetadataRequest = new TopicMetadataRequest(topics.toSeq)
+    val topicMetadataRequest = new TopicMetadataRequest(TopicMetadataRequest.CurrentVersion, correlationId, producerConfig.clientId, topics.toSeq)
     var topicMetadataResponse: TopicMetadataResponse = null
     var t: Throwable = null
     while(i < brokers.size && !fetchMetaDataSucceeded) {
       val producer: SyncProducer = ProducerPool.createSyncProducer(producerConfig, brokers(i))
-      info("Fetching metadata for topic %s".format(topics))
+      info("Fetching metadata with correlation id %d for %d topic(s) %s".format(correlationId, topics.size, topics))
       try {
         topicMetadataResponse = producer.send(topicMetadataRequest)
         fetchMetaDataSucceeded = true
       }
       catch {
         case e =>
-          warn("fetching topic metadata for topics [%s] from broker [%s] failed".format(topics, brokers(i).toString), e)
+          warn("Fetching topic metadata with correlation id %d for topics [%s] from broker [%s] failed"
+            .format(correlationId, topics, brokers(i).toString), e)
           t = e
       } finally {
         i = i + 1
@@ -44,6 +45,8 @@ object ClientUtils extends Logging{
     }
     if(!fetchMetaDataSucceeded){
       throw new KafkaException("fetching topic metadata for topics [%s] from broker [%s] failed".format(topics, brokers), t)
+    } else {
+      debug("Successfully fetched metadata for %d topic(s) %s".format(topics.size, topics))
     }
     return topicMetadataResponse
   }
@@ -58,9 +61,9 @@ object ClientUtils extends Logging{
   def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], clientId: String): TopicMetadataResponse = {
     val props = new Properties()
     props.put("broker.list", brokers.map(_.getConnectionString()).mkString(","))
-    props.put("clientid", clientId)
+    props.put("client.id", clientId)
     val producerConfig = new ProducerConfig(props)
-    fetchTopicMetadata(topics, brokers, producerConfig)
+    fetchTopicMetadata(topics, brokers, producerConfig, 0)
   }
 
   /**

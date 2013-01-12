@@ -31,11 +31,11 @@ class ReplicaFetcherThread(name:String,
                                 clientId = FetchRequest.ReplicaFetcherClientId,
                                 sourceBroker = sourceBroker,
                                 socketTimeout = brokerConfig.replicaSocketTimeoutMs,
-                                socketBufferSize = brokerConfig.replicaSocketBufferSize,
-                                fetchSize = brokerConfig.replicaFetchSize,
+                                socketBufferSize = brokerConfig.replicaSocketReceiveBufferBytes,
+                                fetchSize = brokerConfig.replicaFetchMaxBytes,
                                 fetcherBrokerId = brokerConfig.brokerId,
-                                maxWait = brokerConfig.replicaMaxWaitTimeMs,
-                                minBytes = brokerConfig.replicaMinBytes) {
+                                maxWait = brokerConfig.replicaFetchWaitMaxMs,
+                                minBytes = brokerConfig.replicaFetchMinBytes) {
 
   // process fetched data
   def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: FetchResponsePartitionData) {

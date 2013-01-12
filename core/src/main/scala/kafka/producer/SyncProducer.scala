@@ -36,7 +36,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   private val lock = new Object()
   @volatile private var shutdown: Boolean = false
   private val blockingChannel = new BlockingChannel(config.host, config.port, BlockingChannel.UseDefaultBufferSize,
-    config.bufferSize, config.requestTimeoutMs)
+    config.sendBufferBytes, config.requestTimeoutMs)
   val brokerInfo = "host_%s-port_%s".format(config.host, config.port)
   val producerRequestStats = ProducerRequestStatsRegistry.getProducerRequestStats(config.clientId)
 

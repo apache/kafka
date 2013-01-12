@@ -21,12 +21,11 @@ import kafka.common._
 import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
 import kafka.producer._
 import kafka.serializer.Encoder
-import kafka.utils.{Utils, Logging}
+import kafka.utils.{Utils, Logging, SystemTime}
 import scala.collection.{Seq, Map}
-import scala.collection.mutable.{ArrayBuffer, HashMap}
+import scala.collection.mutable.{ArrayBuffer, HashMap, Set}
 import java.util.concurrent.atomic._
 import kafka.api.{TopicMetadata, ProducerRequest}
-
 
 class DefaultEventHandler[K,V](config: ProducerConfig,
                                private val partitioner: Partitioner[K],
@@ -38,10 +37,14 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   val isSync = ("sync" == config.producerType)
 
   val partitionCounter = new AtomicInteger(0)
-  val correlationCounter = new AtomicInteger(0)
+  val correlationId = new AtomicInteger(0)
   val brokerPartitionInfo = new BrokerPartitionInfo(config, producerPool, topicPartitionInfos)
 
   private val lock = new Object()
+
+  private val topicMetadataRefreshInterval = config.topicMetadataRefreshIntervalMs
+  private var lastTopicMetadataRefreshTime = 0L
+  private val topicMetadataToRefresh = Set.empty[String]
 
   private val producerStats = ProducerStatsRegistry.getProducerStats(config.clientId)
   private val producerTopicStats = ProducerTopicStatsRegistry.getProducerTopicStats(config.clientId)
@@ -56,22 +59,32 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           producerTopicStats.getProducerAllTopicStats.byteRate.mark(dataSize)
       }
       var outstandingProduceRequests = serializedData
-      var remainingRetries = config.producerRetries + 1
+      var remainingRetries = config.messageSendMaxRetries + 1
+      val correlationIdStart = correlationId.get()
       while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {
+        topicMetadataToRefresh ++= outstandingProduceRequests.map(_.topic)
+        if (topicMetadataRefreshInterval >= 0 &&
+            SystemTime.milliseconds - lastTopicMetadataRefreshTime > topicMetadataRefreshInterval) {
+          Utils.swallowError(brokerPartitionInfo.updateInfo(topicMetadataToRefresh.toSet, correlationId.getAndIncrement))
+          topicMetadataToRefresh.clear
+          lastTopicMetadataRefreshTime = SystemTime.milliseconds
+        }
         outstandingProduceRequests = dispatchSerializedData(outstandingProduceRequests)
         if (outstandingProduceRequests.size > 0)  {
           // back off and update the topic metadata cache before attempting another send operation
-          Thread.sleep(config.producerRetryBackoffMs)
+          Thread.sleep(config.retryBackoffMs)
           // get topics of the outstanding produce requests and refresh metadata for those
-          Utils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.topic).toSet))
+          Utils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.topic).toSet, correlationId.getAndIncrement))
           remainingRetries -= 1
           producerStats.resendRate.mark()
         }
       }
       if(outstandingProduceRequests.size > 0) {
         producerStats.failedSendRate.mark()
-        error("Failed to send the following requests: " + outstandingProduceRequests)
-        throw new FailedToSendMessageException("Failed to send messages after " + config.producerRetries + " tries.", null)
+
+        val correlationIdEnd = correlationId.get()
+        error("Failed to send the following requests with correlation ids in [%d,%d]: %s".format(correlationIdStart, correlationIdEnd-1, outstandingProduceRequests))
+        throw new FailedToSendMessageException("Failed to send messages after " + config.messageSendMaxRetries + " tries.", null)
       }
     }
   }
@@ -133,9 +146,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     try {
       for (message <- messages) {
         val topicPartitionsList = getPartitionListForTopic(message)
-        val totalNumPartitions = topicPartitionsList.length
-
-        val partitionIndex = getPartition(message.key, totalNumPartitions)
+        val partitionIndex = getPartition(message.key, topicPartitionsList)
         val brokerPartition = topicPartitionsList(partitionIndex)
 
         // postpone the failure until the send operation, so that requests for other brokers are handled correctly
@@ -170,8 +181,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   }
 
   private def getPartitionListForTopic(m: KeyedMessage[K,Message]): Seq[PartitionAndLeader] = {
-    debug("Getting the number of broker partitions registered for topic: " + m.topic)
-    val topicPartitionsList = brokerPartitionInfo.getBrokerPartitionInfo(m.topic)
+    val topicPartitionsList = brokerPartitionInfo.getBrokerPartitionInfo(m.topic, correlationId.getAndIncrement)
     debug("Broker partitions registered for topic: %s are %s"
       .format(m.topic, topicPartitionsList.map(p => p.partitionId).mkString(",")))
     val totalNumPartitions = topicPartitionsList.length
@@ -184,17 +194,24 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
    * Retrieves the partition id and throws an UnknownTopicOrPartitionException if
    * the value of partition is not between 0 and numPartitions-1
    * @param key the partition key
-   * @param numPartitions the total number of available partitions
+   * @param topicPartitionList the list of available partitions
    * @return the partition id
    */
-  private def getPartition(key: K, numPartitions: Int): Int = {
+  private def getPartition(key: K, topicPartitionList: Seq[PartitionAndLeader]): Int = {
+    val numPartitions = topicPartitionList.size
     if(numPartitions <= 0)
       throw new UnknownTopicOrPartitionException("Invalid number of partitions: " + numPartitions +
         "\n Valid values are > 0")
     val partition =
-      if(key == null)
-        Utils.abs(partitionCounter.getAndIncrement()) % numPartitions
-      else
+      if(key == null) {
+        // If the key is null, we don't really need a partitioner so we just send to the next
+        // available partition
+        val availablePartitions = topicPartitionList.filter(_.leaderBrokerIdOpt.isDefined)
+        if (availablePartitions.isEmpty)
+          throw new LeaderNotAvailableException("No leader for any partition")
+        val index = Utils.abs(partitionCounter.getAndIncrement()) % availablePartitions.size
+        availablePartitions(index).partitionId
+      } else
         partitioner.partition(key, numPartitions)
     if(partition < 0 || partition >= numPartitions)
       throw new UnknownTopicOrPartitionException("Invalid partition id : " + partition +
@@ -214,13 +231,17 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       warn("Failed to send to broker %d with data %s".format(brokerId, messagesPerTopic))
       messagesPerTopic.keys.toSeq
     } else if(messagesPerTopic.size > 0) {
-      val producerRequest = new ProducerRequest(correlationCounter.getAndIncrement(), config.clientId, config.requiredAcks,
+      val currentCorrelationId = correlationId.getAndIncrement
+      val producerRequest = new ProducerRequest(currentCorrelationId, config.clientId, config.requestRequiredAcks,
         config.requestTimeoutMs, messagesPerTopic)
+      var failedTopicPartitions = Seq.empty[TopicAndPartition]
       try {
         val syncProducer = producerPool.getProducer(brokerId)
+        debug("Producer sending messages with correlation id %d for topics %s to broker %d on %s:%d"
+          .format(currentCorrelationId, messagesPerTopic, brokerId, syncProducer.config.host, syncProducer.config.port))
         val response = syncProducer.send(producerRequest)
-        debug("Producer sent messages for topics %s to broker %d on %s:%d"
-          .format(messagesPerTopic, brokerId, syncProducer.config.host, syncProducer.config.port))
+        debug("Producer sent messages with correlation id %d for topics %s to broker %d on %s:%d"
+          .format(currentCorrelationId, messagesPerTopic, brokerId, syncProducer.config.host, syncProducer.config.port))
         if (response.status.size != producerRequest.data.size)
           throw new KafkaException("Incomplete response (%s) for producer request (%s)"
             .format(response, producerRequest))
@@ -229,11 +250,16 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           successfullySentData.foreach(m => messagesPerTopic(m._1).foreach(message =>
             trace("Successfully sent message: %s".format(Utils.readString(message.message.payload)))))
         }
-        response.status.filter(_._2.error != ErrorMapping.NoError).toSeq
-          .map(partitionStatus => partitionStatus._1)
+        failedTopicPartitions = response.status.filter(_._2.error != ErrorMapping.NoError).toSeq
+                                    .map(partitionStatus => partitionStatus._1)
+        if(failedTopicPartitions.size > 0)
+          error("Produce request with correlation id %d failed due to response %s. List of failed topic partitions is %s"
+            .format(currentCorrelationId, response.toString, failedTopicPartitions.mkString(",")))
+        failedTopicPartitions
       } catch {
         case t: Throwable =>
-          warn("failed to send to broker %d with data %s".format(brokerId, messagesPerTopic), t)
+          warn("Failed to send producer request with correlation id %d to broker %d with data %s"
+            .format(currentCorrelationId, brokerId, messagesPerTopic), t)
           messagesPerTopic.keys.toSeq
       }
     } else {

@@ -83,7 +83,10 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
         Utils.swallow(raf.close())
       }
     }
-  
+
+  info("Created index file %s with maxEntries = %d, maxIndexSize = %d, entries = %d, lastOffset = %d"
+    .format(file.getAbsolutePath, maxEntries, maxIndexSize, entries(), lastOffset))
+
   /**
    * The maximum number of eight-byte entries this index can hold
    */
@@ -94,7 +97,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
   
   /* the last offset in the index */
   var lastOffset = readLastOffset()
-  
+
   /**
    * The last offset written to the index
    */
@@ -274,6 +277,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
    * Delete this index file
    */
   def delete(): Boolean = {
+    info("Deleting index " + this.file.getAbsolutePath)
     this.file.delete()
   }
   

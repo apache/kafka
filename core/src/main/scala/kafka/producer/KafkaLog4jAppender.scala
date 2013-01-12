@@ -73,8 +73,8 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
     //These have default values in ProducerConfig and AsyncProducerConfig. We don't care if they're not specified
     if(producerType != null) props.put("producer.type", producerType)
     if(compressionCodec != null) props.put("compression.codec", compressionCodec)
-    if(enqueueTimeout != null) props.put("queue.enqueueTimeout.ms", enqueueTimeout)
-    if(queueSize != null) props.put("queue.size", queueSize)
+    if(enqueueTimeout != null) props.put("queue.enqueue.timeout.ms", enqueueTimeout)
+    if(queueSize != null) props.put("queue.buffering.max.messages", queueSize)
     val config : ProducerConfig = new ProducerConfig(props)
     producer = new Producer[String, String](config)
     LogLog.debug("Kafka producer connected to " +  config.brokerList)

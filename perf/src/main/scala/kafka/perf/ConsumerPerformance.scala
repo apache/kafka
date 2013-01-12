@@ -74,7 +74,7 @@ object ConsumerPerformance {
     if(!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get*1.0)/(1024*1024)
       println(("%s, %s, %d, %.4f, %.4f, %d, %.4f").format(config.dateFormat.format(startMs), config.dateFormat.format(endMs),
-        config.consumerConfig.fetchSize, totalMBRead, totalMBRead/elapsedSecs, totalMessagesRead.get,
+        config.consumerConfig.fetchMessageMaxBytes, totalMBRead, totalMBRead/elapsedSecs, totalMessagesRead.get,
         totalMessagesRead.get/elapsedSecs))
     }
     System.exit(0)
@@ -124,10 +124,10 @@ object ConsumerPerformance {
     }
 
     val props = new Properties
-    props.put("groupid", options.valueOf(groupIdOpt))
-    props.put("socket.buffer.size", options.valueOf(socketBufferSizeOpt).toString)
-    props.put("fetch.size", options.valueOf(fetchSizeOpt).toString)
-    props.put("autooffset.reset", if(options.has(resetBeginningOffsetOpt)) "largest" else "smallest")
+    props.put("group.id", options.valueOf(groupIdOpt))
+    props.put("socket.receive.buffer.bytes", options.valueOf(socketBufferSizeOpt).toString)
+    props.put("fetch.message.max.bytes", options.valueOf(fetchSizeOpt).toString)
+    props.put("auto.offset.reset", if(options.has(resetBeginningOffsetOpt)) "largest" else "smallest")
     props.put("zk.connect", options.valueOf(zkConnectOpt))
     props.put("consumer.timeout.ms", "5000")
     val consumerConfig = new ConsumerConfig(props)
@@ -190,7 +190,7 @@ object ConsumerPerformance {
       val totalMBRead = (bytesRead*1.0)/(1024*1024)
       val mbRead = ((bytesRead - lastBytesRead)*1.0)/(1024*1024)
       println(("%s, %d, %d, %.4f, %.4f, %d, %.4f").format(config.dateFormat.format(endMs), id,
-        config.consumerConfig.fetchSize, totalMBRead,
+        config.consumerConfig.fetchMessageMaxBytes, totalMBRead,
         1000.0*(mbRead/elapsedMs), messagesRead, ((messagesRead - lastMessagesRead)/elapsedMs)*1000.0))
     }
 

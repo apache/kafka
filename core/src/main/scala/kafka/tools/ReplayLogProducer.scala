@@ -42,12 +42,12 @@ object ReplayLogProducer extends Logging {
 
     // consumer properties
     val consumerProps = new Properties
-    consumerProps.put("groupid", GroupId)
+    consumerProps.put("group.id", GroupId)
     consumerProps.put("zk.connect", config.zkConnect)
     consumerProps.put("consumer.timeout.ms", "10000")
-    consumerProps.put("autooffset.reset", OffsetRequest.SmallestTimeString)
-    consumerProps.put("fetch.size", (1024*1024).toString)
-    consumerProps.put("socket.buffer.size", (2 * 1024 * 1024).toString)
+    consumerProps.put("auto.offset.reset", OffsetRequest.SmallestTimeString)
+    consumerProps.put("fetch.message.max.bytes", (1024*1024).toString)
+    consumerProps.put("socket.receive.buffer.bytes", (2 * 1024 * 1024).toString)
     val consumerConfig = new ConsumerConfig(consumerProps)
     val consumerConnector: ConsumerConnector = Consumer.create(consumerConfig)
     val topicMessageStreams = consumerConnector.createMessageStreams(Predef.Map(config.inputTopic -> config.numThreads))
@@ -141,10 +141,10 @@ object ReplayLogProducer extends Logging {
     val props = new Properties()
     props.put("broker.list", config.brokerList)
     props.put("reconnect.interval", Integer.MAX_VALUE.toString)
-    props.put("buffer.size", (64*1024).toString)
+    props.put("send.buffer.bytes", (64*1024).toString)
     props.put("compression.codec", config.compressionCodec.codec.toString)
-    props.put("batch.size", config.batchSize.toString)
-    props.put("queue.enqueueTimeout.ms", "-1")
+    props.put("batch.num.messages", config.batchSize.toString)
+    props.put("queue.enqueue.timeout.ms", "-1")
     
     if(config.isAsync)
       props.put("producer.type", "async")

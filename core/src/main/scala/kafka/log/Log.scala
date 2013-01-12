@@ -371,11 +371,17 @@ class Log(val dir: File,
    */
   private def maybeRoll(): LogSegment = {
     val segment = activeSegment
-    if ((segment.size > maxSegmentSize) ||
-       (segment.size > 0 && time.milliseconds - segment.created > rollIntervalMs) ||
-       segment.index.isFull)
+    if (segment.size > maxSegmentSize) {
+      info("Rolling %s due to full data log".format(name))
       roll()
-    else
+    } else if (segment.size > 0 && time.milliseconds - segment.created > rollIntervalMs) {
+      info("Rolling %s due to time based rolling".format(name))
+      roll()
+    } else if (segment.index.isFull) {
+      info("Rolling %s due to full index maxIndexSize = %d, entries = %d, maxEntries = %d"
+        .format(name, segment.index.maxIndexSize, segment.index.entries(), segment.index.maxEntries))
+      roll()
+    } else
       segment
   }
   
@@ -398,7 +404,7 @@ class Log(val dir: File,
         file.delete()
       }
     
-      debug("Rolling log '" + name + "' to " + logFile.getName + " and " + indexFile.getName)
+      info("Rolling log '" + name + "' to " + logFile.getName + " and " + indexFile.getName)
       segments.lastEntry() match {
         case null => 
         case entry => entry.getValue.index.trimToValidSize()
@@ -446,7 +452,7 @@ class Log(val dir: File,
     logSegments.foreach(_.delete())
     Utils.rm(dir)
   }
-  
+
   /**
    * Truncate this log so that it ends with the greatest offset < targetOffset.
    * @param targetOffset The offset to truncate to, an upper bound on all offsets in the log after truncation is complete.

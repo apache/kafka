@@ -43,10 +43,10 @@ public class Consumer extends Thread
   {
     Properties props = new Properties();
     props.put("zk.connect", KafkaProperties.zkConnect);
-    props.put("groupid", KafkaProperties.groupId);
-    props.put("zk.sessiontimeout.ms", "400");
-    props.put("zk.synctime.ms", "200");
-    props.put("autocommit.interval.ms", "1000");
+    props.put("group.id", KafkaProperties.groupId);
+    props.put("zk.session.timeout.ms", "400");
+    props.put("zk.sync.time.ms", "200");
+    props.put("auto.commit.interval.ms", "1000");
 
     return new ConsumerConfig(props);
 

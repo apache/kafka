@@ -35,9 +35,9 @@ object TestEndToEndLatency {
     val topic = "test"
     
     val consumerProps = new Properties()
-    consumerProps.put("groupid", topic)
+    consumerProps.put("group.id", topic)
     consumerProps.put("auto.commit", "true")
-    consumerProps.put("autooffset.reset", "largest")
+    consumerProps.put("auto.offset.reset", "largest")
     consumerProps.put("zk.connect", zkConnect)
     consumerProps.put("socket.timeout.ms", 1201000.toString)
     
