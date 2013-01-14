@@ -128,7 +128,7 @@ object ConsoleProducer {
       props.put("batch.num.messages", batchSize.toString)
     props.put("queue.buffering.max.ms", sendTimeout.toString)
     props.put("queue.buffering.max.messages", queueSize.toString)
-    props.put("queue.enqueueTimeout.ms", queueEnqueueTimeoutMs.toString)
+    props.put("queue.enqueue.timeout.ms", queueEnqueueTimeoutMs.toString)
     props.put("request.required.acks", requestRequiredAcks.toString)
     props.put("request.timeout.ms", requestTimeoutMs.toString)
     props.put("key.serializer.class", keyEncoderClass)
@@ -137,20 +137,26 @@ object ConsoleProducer {
     val reader = Class.forName(readerClass).newInstance().asInstanceOf[MessageReader[AnyRef, AnyRef]]
     reader.init(System.in, cmdLineProps)
 
-    val producer = new Producer[AnyRef, AnyRef](new ProducerConfig(props))
+    try {
+        val producer = new Producer[AnyRef, AnyRef](new ProducerConfig(props))
 
-    Runtime.getRuntime.addShutdownHook(new Thread() {
-      override def run() {
-        producer.close()
-      }
-    })
+        Runtime.getRuntime.addShutdownHook(new Thread() {
+          override def run() {
+            producer.close()
+          }
+        })
 
-    var message: KeyedMessage[AnyRef, AnyRef] = null
-    do { 
-      message = reader.readMessage()
-      if(message != null)
-        producer.send(message)
-    } while(message != null)
+        var message: KeyedMessage[AnyRef, AnyRef] = null
+        do {
+          message = reader.readMessage()
+          if(message != null)
+            producer.send(message)
+        } while(message != null)
+    } catch {
+      case e: Exception =>
+        e.printStackTrace
+        System.exit(1)
+    }
     System.exit(0)
   }
 
