@@ -269,14 +269,14 @@ private[kafka] class Log(val dir: File,
           // assign offsets to the messageset
           val offsets = 
             if(assignOffsets) {
-              val firstOffset = nextOffset.get
-              validMessages = validMessages.assignOffsets(nextOffset, messageSetInfo.codec)
-              val lastOffset = nextOffset.get - 1
+              val offsetCounter = new AtomicLong(nextOffset.get)
+              val firstOffset = offsetCounter.get
+              validMessages = validMessages.assignOffsets(offsetCounter, messageSetInfo.codec)
+              val lastOffset = offsetCounter.get - 1
               (firstOffset, lastOffset)
             } else {
               if(!messageSetInfo.offsetsMonotonic)
                 throw new IllegalArgumentException("Out of order offsets found in " + messages)
-              nextOffset.set(messageSetInfo.lastOffset + 1)
               (messageSetInfo.firstOffset, messageSetInfo.lastOffset)
             }
           
@@ -284,6 +284,9 @@ private[kafka] class Log(val dir: File,
           trace("Appending message set to %s offset: %d nextOffset: %d messageSet: %s"
                 .format(this.name, offsets._1, nextOffset.get(), validMessages))
           segment.append(offsets._1, validMessages)
+          
+          // advance the log end offset
+          nextOffset.set(offsets._2 + 1)
           
           // return the offset at which the messages were appended
           offsets
