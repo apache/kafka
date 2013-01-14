@@ -31,8 +31,8 @@
     {
       "entity_id": "1",
       "port": "9091",
-      "brokerid": "1",
-      "log.file.size": "102400",
+      "broker.id": "1",
+      "log.segment.size": "102400",
       "log.dir": "/tmp/kafka_server_1_logs",
       "log_filename": "kafka_server_9091.log",
       "config_filename": "kafka_server_9091.properties"
@@ -40,8 +40,8 @@
     {
       "entity_id": "2",
       "port": "9092",
-      "brokerid": "2",
-      "log.file.size": "102400",
+      "broker.id": "2",
+      "log.segment.size": "102400",
       "log.dir": "/tmp/kafka_server_2_logs",
       "log_filename": "kafka_server_9092.log",
       "config_filename": "kafka_server_9092.properties"
@@ -49,8 +49,8 @@
     {
       "entity_id": "3",
       "port": "9093",
-      "brokerid": "3",
-      "log.file.size": "102400",
+      "broker.id": "3",
+      "log.segment.size": "102400",
       "log.dir": "/tmp/kafka_server_3_logs",
       "log_filename": "kafka_server_9093.log",
       "config_filename": "kafka_server_9093.properties"
@@ -70,7 +70,7 @@
     {
       "entity_id": "5",
       "topic": "test_1",
-      "groupid": "mytestgroup",
+      "group.id": "mytestgroup",
       "consumer-timeout-ms": "10000",
       "zookeeper": "localhost:2188",
       "log_filename": "console_consumer.log",

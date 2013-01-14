@@ -54,8 +54,8 @@
     {
       "entity_id": "4",
       "port": "9091",
-      "brokerid": "1",
-      "log.file.size": "10240",
+      "broker.id": "1",
+      "log.segment.size": "10240",
       "log.dir": "/tmp/kafka_server_4_logs",
       "log_filename": "kafka_server_4.log",
       "config_filename": "kafka_server_4.properties"
@@ -63,8 +63,8 @@
     {
       "entity_id": "5",
       "port": "9092",
-      "brokerid": "2",
-      "log.file.size": "10240",
+      "broker.id": "2",
+      "log.segment.size": "10240",
       "log.dir": "/tmp/kafka_server_5_logs",
       "log_filename": "kafka_server_5.log",
       "config_filename": "kafka_server_5.properties"
@@ -72,8 +72,8 @@
     {
       "entity_id": "6",
       "port": "9093",
-      "brokerid": "3",
-      "log.file.size": "10240",
+      "broker.id": "3",
+      "log.segment.size": "10240",
       "log.dir": "/tmp/kafka_server_6_logs",
       "log_filename": "kafka_server_6.log",
       "config_filename": "kafka_server_6.properties"
@@ -81,8 +81,8 @@
     {
       "entity_id": "7",
       "port": "9094",
-      "brokerid": "4",
-      "log.file.size": "10240",
+      "broker.id": "4",
+      "log.segment.size": "10240",
       "log.dir": "/tmp/kafka_server_7_logs",
       "log_filename": "kafka_server_7.log",
       "config_filename": "kafka_server_7.properties"
@@ -90,8 +90,8 @@
     {
       "entity_id": "8",
       "port": "9095",
-      "brokerid": "5",
-      "log.file.size": "10240",
+      "broker.id": "5",
+      "log.segment.size": "10240",
       "log.dir": "/tmp/kafka_server_8_logs",
       "log_filename": "kafka_server_8.log",
       "config_filename": "kafka_server_8.properties"
@@ -99,8 +99,8 @@
     {
       "entity_id": "9",
       "port": "9096",
-      "brokerid": "6",
-      "log.file.size": "10240",
+      "broker.id": "6",
+      "log.segment.size": "10240",
       "log.dir": "/tmp/kafka_server_9_logs",
       "log_filename": "kafka_server_9.log",
       "config_filename": "kafka_server_9.properties"
@@ -134,7 +134,7 @@
     {
       "entity_id": "12",
       "topic": "test_1",
-      "groupid": "mytestgroup",
+      "group.id": "mytestgroup",
       "consumer-timeout-ms": "10000",
       "log_filename": "console_consumer_12.log",
       "config_filename": "console_consumer_12.properties"
@@ -142,7 +142,7 @@
     {
       "entity_id": "13",
       "topic": "test_2",
-      "groupid": "mytestgroup",
+      "group.id": "mytestgroup",
       "consumer-timeout-ms": "10000",
       "log_filename": "console_consumer_13.log",
       "config_filename": "console_consumer_13.properties"

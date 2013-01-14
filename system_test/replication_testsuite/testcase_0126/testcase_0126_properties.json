@@ -31,8 +31,8 @@
     {
       "entity_id": "1",
       "port": "9091",
-      "brokerid": "1",
-      "log.file.size": "102400",
+      "broker.id": "1",
+      "log.segment.size": "102400",
       "log.dir": "/tmp/kafka_server_1_logs",
       "log.index.interval.bytes": "490",
       "log_filename": "kafka_server_9091.log",
@@ -41,8 +41,8 @@
     {
       "entity_id": "2",
       "port": "9092",
-      "brokerid": "2",
-      "log.file.size": "102400",
+      "broker.id": "2",
+      "log.segment.size": "102400",
       "log.dir": "/tmp/kafka_server_2_logs",
       "log.index.interval.bytes": "490",
       "log_filename": "kafka_server_9092.log",
@@ -51,8 +51,8 @@
     {
       "entity_id": "3",
       "port": "9093",
-      "brokerid": "3",
-      "log.file.size": "102400",
+      "broker.id": "3",
+      "log.segment.size": "102400",
       "log.dir": "/tmp/kafka_server_3_logs",
       "log.index.interval.bytes": "490",
       "log_filename": "kafka_server_9093.log",
@@ -85,7 +85,7 @@
     {
       "entity_id": "6",
       "topic": "test_1",
-      "groupid": "mytestgroup",
+      "group.id": "mytestgroup",
       "consumer-timeout-ms": "10000",
       "log_filename": "console_consumer_6.log",
       "config_filename": "console_consumer_6.properties"
@@ -93,7 +93,7 @@
     {
       "entity_id": "7",
       "topic": "test_2",
-      "groupid": "mytestgroup",
+      "group.id": "mytestgroup",
       "consumer-timeout-ms": "10000",
       "log_filename": "console_consumer_7.log",
       "config_filename": "console_consumer_7.properties"

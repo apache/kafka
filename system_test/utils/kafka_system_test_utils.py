@@ -418,11 +418,21 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
                         logger.error("Unknown cluster name: " + clusterName, extra=d)
                         sys.exit(1)
 
+                    zeroSevenClient = "false"
+                    try:
+                        zeroSevenClient = tcCfg["07_client"]
+                    except:
+                        pass
+
                     addedCSVConfig = {}
                     addedCSVConfig["kafka.csv.metrics.dir"] = get_testcase_config_log_dir_pathname(testcaseEnv, "broker", clusterCfg["entity_id"], "metrics") 
                     addedCSVConfig["kafka.metrics.polling.interval.secs"] = "5" 
                     addedCSVConfig["kafka.metrics.reporters"] = "kafka.metrics.KafkaCSVMetricsReporter" 
                     addedCSVConfig["kafka.csv.metrics.reporter.enabled"] = "true"
+
+                    if zeroSevenClient == "true":
+                        addedCSVConfig["brokerid"] = tcCfg["brokerid"]
+
                     copy_file_with_dict_values(cfgTemplatePathname + "/server.properties",
                         cfgDestPathname + "/" + tcCfg["config_filename"], tcCfg, addedCSVConfig)
 
@@ -1916,7 +1926,7 @@ def get_controller_attributes(systemTestEnv, testcaseEnv):
         brokerid = line.rstrip('\n')
         controllerDict["brokerid"]  = brokerid
         controllerDict["entity_id"] = system_test_utils.get_data_by_lookup_keyval(
-                                          tcConfigsList, "brokerid", brokerid, "entity_id")
+                                          tcConfigsList, "broker.id", brokerid, "entity_id")
     return controllerDict
 
 def getMinCommonStartingOffset(systemTestEnv, testcaseEnv, clusterName="source"):

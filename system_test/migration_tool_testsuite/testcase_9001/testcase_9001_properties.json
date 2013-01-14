@@ -29,6 +29,7 @@
       "entity_id": "1",
       "port": "9091",
       "brokerid": "1",
+      "07_client": "true",
       "log.file.size": "51200",
       "log.dir": "/tmp/kafka_server_1_logs",
       "log_filename": "kafka_server_1.log",
@@ -38,6 +39,7 @@
       "entity_id": "2",
       "port": "9092",
       "brokerid": "2",
+      "07_client": "true",
       "log.file.size": "51200",
       "log.dir": "/tmp/kafka_server_2_logs",
       "log_filename": "kafka_server_2.log",
@@ -47,6 +49,7 @@
       "entity_id": "3",
       "port": "9093",
       "brokerid": "3",
+      "07_client": "true",
       "log.file.size": "51200",
       "log.dir": "/tmp/kafka_server_3_logs",
       "log_filename": "kafka_server_3.log",
@@ -55,8 +58,8 @@
     {
       "entity_id": "4",
       "port": "9094",
-      "brokerid": "4",
-      "log.file.size": "51200",
+      "broker.id": "4",
+      "log.segment.size": "51200",
       "log.dir": "/tmp/kafka_server_4_logs",
       "log_filename": "kafka_server_4.log",
       "config_filename": "kafka_server_4.properties"
@@ -64,8 +67,8 @@
     {
       "entity_id": "5",
       "port": "9095",
-      "brokerid": "5",
-      "log.file.size": "51200",
+      "broker.id": "5",
+      "log.segment.size": "51200",
       "log.dir": "/tmp/kafka_server_5_logs",
       "log_filename": "kafka_server_5.log",
       "config_filename": "kafka_server_5.properties"
@@ -73,8 +76,8 @@
     {
       "entity_id": "6",
       "port": "9096",
-      "brokerid": "6",
-      "log.file.size": "51200",
+      "broker.id": "6",
+      "log.segment.size": "51200",
       "log.dir": "/tmp/kafka_server_6_logs",
       "log_filename": "kafka_server_6.log",
       "config_filename": "kafka_server_6.properties"
@@ -94,7 +97,7 @@
     {
       "entity_id": "8",
       "topic": "test_1",
-      "groupid": "mytestgroup",
+      "group.id": "mytestgroup",
       "consumer-timeout-ms": "10000",
       "log_filename": "console_consumer_8.log",
       "formatter": "kafka.consumer.ChecksumMessageFormatter",
