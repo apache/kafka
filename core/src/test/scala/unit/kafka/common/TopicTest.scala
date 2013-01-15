@@ -32,7 +32,7 @@ class TopicTest {
     for (i <- 1 to 6)
       longName += longName
     invalidTopicNames += longName
-    val badChars = Array('/', '\\', ',', '\0', ':', "\"", '\'', ';', '*', '?', '.')
+    val badChars = Array('/', '\\', ',', '\0', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
     for (weirdChar <- badChars) {
       invalidTopicNames += "Is" + weirdChar + "illegal"
     }
@@ -48,7 +48,7 @@ class TopicTest {
     }
 
     val validTopicNames = new ArrayBuffer[String]()
-    validTopicNames += ("valid", "TOPIC", "nAmEs", "ar6", "VaL1d", "_0-9_")
+    validTopicNames += ("valid", "TOPIC", "nAmEs", "ar6", "VaL1d", "_0-9_.")
     for (i <- 0 until validTopicNames.size) {
       try {
         Topic.validate(validTopicNames(i))

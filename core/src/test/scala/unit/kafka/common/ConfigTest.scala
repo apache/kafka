@@ -29,7 +29,7 @@ class ConfigTest {
   @Test
   def testInvalidClientIds() {
     val invalidClientIds = new ArrayBuffer[String]()
-    val badChars = Array('/', '\\', ',', '\0', ':', "\"", '\'', ';', '*', '?', '.', ' ', '\t', '\r', '\n', '=')
+    val badChars = Array('/', '\\', ',', '\0', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
     for (weirdChar <- badChars) {
       invalidClientIds += "Is" + weirdChar + "illegal"
     }
@@ -45,7 +45,7 @@ class ConfigTest {
     }
 
     val validClientIds = new ArrayBuffer[String]()
-    validClientIds += ("valid", "CLIENT", "iDs", "ar6", "VaL1d", "_0-9_", "")
+    validClientIds += ("valid", "CLIENT", "iDs", "ar6", "VaL1d", "_0-9_.", "")
     for (i <- 0 until validClientIds.size) {
       try {
         ProducerConfig.validateClientId(validClientIds(i))
@@ -59,7 +59,7 @@ class ConfigTest {
   @Test
   def testInvalidGroupIds() {
     val invalidGroupIds = new ArrayBuffer[String]()
-    val badChars = Array('/', '\\', ',', '\0', ':', "\"", '\'', ';', '*', '?', '.', ' ', '\t', '\r', '\n', '=')
+    val badChars = Array('/', '\\', ',', '\0', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
     for (weirdChar <- badChars) {
       invalidGroupIds += "Is" + weirdChar + "illegal"
     }
@@ -75,7 +75,7 @@ class ConfigTest {
     }
 
     val validGroupIds = new ArrayBuffer[String]()
-    validGroupIds += ("valid", "GROUP", "iDs", "ar6", "VaL1d", "_0-9_", "")
+    validGroupIds += ("valid", "GROUP", "iDs", "ar6", "VaL1d", "_0-9_.", "")
     for (i <- 0 until validGroupIds.size) {
       try {
         ConsumerConfig.validateGroupId(validGroupIds(i))
