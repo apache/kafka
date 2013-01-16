@@ -58,19 +58,36 @@ object FetchRequest {
   }
 }
 
-case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
-                        correlationId: Int = FetchRequest.DefaultCorrelationId,
-                        clientId: String = ConsumerConfig.DefaultClientId,
-                        replicaId: Int = Request.OrdinaryConsumerId,
-                        maxWait: Int = FetchRequest.DefaultMaxWait,
-                        minBytes: Int = FetchRequest.DefaultMinBytes,
-                        requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
+case class FetchRequest private[kafka] (versionId: Short = FetchRequest.CurrentVersion,
+                                        correlationId: Int = FetchRequest.DefaultCorrelationId,
+                                        clientId: String = ConsumerConfig.DefaultClientId,
+                                        replicaId: Int = Request.OrdinaryConsumerId,
+                                        maxWait: Int = FetchRequest.DefaultMaxWait,
+                                        minBytes: Int = FetchRequest.DefaultMinBytes,
+                                        requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
         extends RequestOrResponse(Some(RequestKeys.FetchKey)) {
 
   /**
    * Partitions the request info into a map of maps (one for each topic).
    */
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
+
+  /**
+   *  Public constructor for the clients
+   */
+  def this(correlationId: Int,
+           clientId: String,
+           maxWait: Int,
+           minBytes: Int,
+           requestInfo: Map[TopicAndPartition, PartitionFetchInfo]) {
+    this(versionId = FetchRequest.CurrentVersion,
+         correlationId = correlationId,
+         clientId = clientId,
+         replicaId = Request.OrdinaryConsumerId,
+         maxWait = maxWait,
+         minBytes= minBytes,
+         requestInfo = requestInfo)
+  }
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putShort(versionId)
@@ -144,7 +161,10 @@ class FetchRequestBuilder() {
     this
   }
 
-  def replicaId(replicaId: Int): FetchRequestBuilder = {
+  /**
+   * Only for internal use. Clients shouldn't set replicaId.
+   */
+  private[kafka] def replicaId(replicaId: Int): FetchRequestBuilder = {
     this.replicaId = replicaId
     this
   }
