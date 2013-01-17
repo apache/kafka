@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.cluster.Broker
-import kafka.consumer.SimpleConsumer
 import kafka.common.{ClientIdAndBroker, TopicAndPartition, ErrorMapping}
 import collection.mutable
 import kafka.message.ByteBufferMessageSet
@@ -30,6 +29,7 @@ import java.util.concurrent.atomic.AtomicLong
 import kafka.utils.{Pool, ShutdownableThread}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
+import kafka.consumer.{PartitionTopicInfo, SimpleConsumer}
 
 
 /**
@@ -125,10 +125,16 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
                   // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
                   processPartitionData(topicAndPartition, currentOffset.get, partitionData)
                 case ErrorMapping.OffsetOutOfRangeCode =>
-                  val newOffset = handleOffsetOutOfRange(topicAndPartition)
-                  partitionMap.put(topicAndPartition, newOffset)
-                  warn("current offset %d for topic %s partition %d out of range; reset offset to %d"
-                    .format(currentOffset.get, topic, partitionId, newOffset))
+                  try {
+                    val newOffset = handleOffsetOutOfRange(topicAndPartition)
+                    partitionMap.put(topicAndPartition, newOffset)
+                    warn("current offset %d for topic %s partition %d out of range; reset offset to %d"
+                      .format(currentOffset.get, topic, partitionId, newOffset))
+                  } catch {
+                    case e =>
+                      warn("error getting offset for %s %d to broker %d".format(topic, partitionId, sourceBroker.id), e)
+                      partitionsWithError += topicAndPartition
+                  }
                 case _ =>
                   warn("error for %s %d to broker %d".format(topic, partitionId, sourceBroker.id),
                     ErrorMapping.exceptionFor(partitionData.error))
@@ -150,7 +156,10 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   def addPartition(topic: String, partitionId: Int, initialOffset: Long) {
     partitionMapLock.lock()
     try {
-      partitionMap.put(TopicAndPartition(topic, partitionId), initialOffset)
+      val topicPartition = TopicAndPartition(topic, partitionId)
+      partitionMap.put(
+          topicPartition,
+          if (PartitionTopicInfo.isOffsetInvalid(initialOffset)) handleOffsetOutOfRange(topicPartition) else initialOffset)
       partitionMapCond.signalAll()
     } finally {
       partitionMapLock.unlock()

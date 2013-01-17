@@ -19,9 +19,8 @@ package kafka.server
 
 import kafka.cluster.Broker
 import kafka.message.ByteBufferMessageSet
-import kafka.common.TopicAndPartition
+import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.api.{FetchRequest, PartitionOffsetRequestInfo, OffsetRequest, FetchResponsePartitionData}
-
 
 class ReplicaFetcherThread(name:String,
                            sourceBroker: Broker,
@@ -64,7 +63,11 @@ class ReplicaFetcherThread(name:String,
       replicaId = brokerConfig.brokerId,
       requestInfo = Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.EarliestTime, 1))
     )
-    val offset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
+    val partitionErrorAndOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition)
+    val offset = partitionErrorAndOffset.error match {
+      case ErrorMapping.NoError => partitionErrorAndOffset.offsets.head
+      case _ => throw ErrorMapping.exceptionFor(partitionErrorAndOffset.error)
+    }
     val replica = replicaMgr.getReplica(topicAndPartition.topic, topicAndPartition.partition).get
     replica.log.get.truncateAndStartWithNewOffset(offset)
     offset
