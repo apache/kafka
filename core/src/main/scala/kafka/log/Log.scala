@@ -196,19 +196,20 @@ class Log(val dir: File,
         if(assignOffsets) {
            // assign offsets to the messageset
           appendInfo.firstOffset = nextOffset.get
-          validMessages = validMessages.assignOffsets(nextOffset, appendInfo.codec)
-          appendInfo.lastOffset = nextOffset.get - 1
+          val offsetCounter = new AtomicLong(nextOffset.get)
+          validMessages = validMessages.assignOffsets(offsetCounter, appendInfo.codec)
+          appendInfo.lastOffset = offsetCounter.get - 1
         } else {
           // we are taking the offsets we are given
           if(!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffset.get)
               throw new IllegalArgumentException("Out of order offsets found in " + messages)
-          nextOffset.set(appendInfo.lastOffset + 1)
         }
-          
+
         // now append to the log
         trace("Appending message set to %s with offsets %d to %d.".format(name, appendInfo.firstOffset, appendInfo.lastOffset))
         segment.append(appendInfo.firstOffset, validMessages)
-          
+        nextOffset.set(appendInfo.lastOffset + 1)
+
         // maybe flush the log and index
         maybeFlush(appendInfo.count)
         

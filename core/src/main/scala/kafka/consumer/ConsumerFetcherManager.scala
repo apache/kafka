@@ -72,9 +72,13 @@ class ConsumerFetcherManager(private val consumerIdString: String,
           leaderForPartitionsMap.foreach{
             case(topicAndPartition, leaderBroker) =>
               val pti = partitionMap(topicAndPartition)
-              addFetcher(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset(), leaderBroker)
+              try {
+                  addFetcher(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset(), leaderBroker)
+                  noLeaderPartitionSet -= topicAndPartition
+              } catch {
+                case t => warn("Failed to add fetcher for %s to broker %s".format(topicAndPartition, leaderBroker), t)
+              }
           }
-          noLeaderPartitionSet --= leaderForPartitionsMap.keySet
 
           shutdownIdleFetcherThreads()
         } catch {

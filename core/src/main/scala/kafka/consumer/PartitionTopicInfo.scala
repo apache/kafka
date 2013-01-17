@@ -23,7 +23,6 @@ import kafka.message._
 import kafka.utils.Logging
 
 class PartitionTopicInfo(val topic: String,
-                         val brokerId: Int,
                          val partitionId: Int,
                          private val chunkQueue: BlockingQueue[FetchedDataChunk],
                          private val consumedOffset: AtomicLong,
@@ -70,7 +69,7 @@ class PartitionTopicInfo(val topic: String,
    * Get the next fetch offset after this message set
    */
   private def nextOffset(messages: ByteBufferMessageSet): Long = {
-    var nextOffset = -1L
+    var nextOffset = PartitionTopicInfo.InvalidOffset
     val iter = messages.shallowIterator
     while(iter.hasNext)
       nextOffset = iter.next.nextOffset
@@ -79,4 +78,10 @@ class PartitionTopicInfo(val topic: String,
 
   override def toString(): String = topic + ":" + partitionId.toString + ": fetched offset = " + fetchedOffset.get +
     ": consumed offset = " + consumedOffset.get
+}
+
+object PartitionTopicInfo {
+  val InvalidOffset = -1L
+
+  def isOffsetInvalid(offset: Long) = offset < 0L
 }

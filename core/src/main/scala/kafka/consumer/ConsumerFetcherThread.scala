@@ -22,6 +22,7 @@ import kafka.server.AbstractFetcherThread
 import kafka.message.ByteBufferMessageSet
 import kafka.api.{PartitionOffsetRequestInfo, Request, OffsetRequest, FetchResponsePartitionData}
 import kafka.common.TopicAndPartition
+import kafka.common.ErrorMapping
 
 
 class ConsumerFetcherThread(name: String,
@@ -57,7 +58,11 @@ class ConsumerFetcherThread(name: String,
       case _ => startTimestamp = OffsetRequest.LatestTime
     }
     val request = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(startTimestamp, 1)))
-    val newOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
+    val partitionErrorAndOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition)
+    val newOffset = partitionErrorAndOffset.error match {
+      case ErrorMapping.NoError => partitionErrorAndOffset.offsets.head
+      case _ => throw ErrorMapping.exceptionFor(partitionErrorAndOffset.error)
+    }
     val pti = partitionMap(topicAndPartition)
     pti.resetFetchOffset(newOffset)
     pti.resetConsumeOffset(newOffset)

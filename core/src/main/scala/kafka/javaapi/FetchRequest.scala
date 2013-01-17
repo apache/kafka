@@ -18,14 +18,12 @@
 package kafka.javaapi
 
 import scala.collection.JavaConversions
-import kafka.api.PartitionFetchInfo
 import java.nio.ByteBuffer
 import kafka.common.TopicAndPartition
-
+import kafka.api.{Request, PartitionFetchInfo}
 
 class FetchRequest(correlationId: Int,
                    clientId: String,
-                   replicaId: Int,
                    maxWait: Int,
                    minBytes: Int,
                    requestInfo: java.util.Map[TopicAndPartition, PartitionFetchInfo]) {
@@ -35,7 +33,7 @@ class FetchRequest(correlationId: Int,
     kafka.api.FetchRequest(
       correlationId = correlationId,
       clientId = clientId,
-      replicaId = replicaId,
+      replicaId = Request.OrdinaryConsumerId,
       maxWait = maxWait,
       minBytes = minBytes,
       requestInfo = scalaMap

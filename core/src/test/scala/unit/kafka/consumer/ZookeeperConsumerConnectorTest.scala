@@ -312,7 +312,6 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     assertEquals(topic, topicRegistry.map(r => r._1).head)
     val topicsAndPartitionsInRegistry = topicRegistry.map(r => (r._1, r._2.map(p => p._2)))
     val brokerPartition = topicsAndPartitionsInRegistry.head._2.head
-    assertEquals(0, brokerPartition.brokerId)
     assertEquals(0, brokerPartition.partitionId)
 
     // also check partition ownership
