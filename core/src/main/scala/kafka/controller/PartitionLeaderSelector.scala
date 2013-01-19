@@ -177,7 +177,8 @@ class ControlledShutdownLeaderSelector(controllerContext: ControllerContext)
         (LeaderAndIsr(newLeader, currentLeaderEpoch + 1, newIsr, currentLeaderIsrZkPathVersion + 1),
          liveAssignedReplicas)
       case None =>
-        throw new StateChangeFailedException("No other replicas in ISR for %s-%s.".format(topic, partition))
+        throw new StateChangeFailedException(("No other replicas in ISR %s for [%s,%d] besides current leader %d and" +
+          " shutting down brokers %s").format(currentLeaderAndIsr.isr.mkString(","), topic, partition, currentLeader, controllerContext.shuttingDownBrokerIds.mkString(",")))
     }
   }
 

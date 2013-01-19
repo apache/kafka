@@ -151,6 +151,15 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         case OfflinePartition =>
           // pre: partition should be in Online state
           assertValidPreviousStates(topicAndPartition, List(NewPartition, OnlinePartition), OfflinePartition)
+          // mark the partition offline by setting the leader to -1
+          // read the current leader and isr path
+          val leaderIsrAndControllerEpoch = controller.controllerContext.allLeaders(topicAndPartition)
+          leaderIsrAndControllerEpoch.leaderAndIsr.leader = -1
+          leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch += 1
+          leaderIsrAndControllerEpoch.leaderAndIsr.zkVersion += 1
+          ZkUtils.updatePersistentPath(zkClient,
+            ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
+            ZkUtils.leaderAndIsrZkData(leaderIsrAndControllerEpoch.leaderAndIsr, controller.epoch))
           // should be called when the leader for a partition is no longer alive
           info("Partition [%s, %d] state changed from Online to Offline".format(topic, partition))
           partitionState.put(topicAndPartition, OfflinePartition)
