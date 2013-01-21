@@ -33,7 +33,7 @@ trait AsyncProducerConfig {
    * -ve: enqueue will block indefinitely if the queue is full
    * +ve: enqueue will block up to this many milliseconds if the queue is full
    */
-  val queueEnqueueTimeoutMs = props.getInt("queue.enqueue.timeout.ms", 0)
+  val queueEnqueueTimeoutMs = props.getInt("queue.enqueue.timeout.ms", -1)
 
   /** the number of messages batched at the producer */
   val batchNumMessages = props.getInt("batch.num.messages", 200)
