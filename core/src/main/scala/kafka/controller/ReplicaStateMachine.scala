@@ -140,14 +140,14 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               // check if the leader for this partition is alive or even exists
                 controllerContext.allLeaders.get(topicAndPartition) match {
                 case Some(leaderIsrAndControllerEpoch) =>
-                  controllerContext.liveBrokerIds.contains(leaderIsrAndControllerEpoch.leaderAndIsr.leader) match {
-                    case true => // leader is alive
-                      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId),
-                                                                          topic, partition, leaderIsrAndControllerEpoch,
-                                                                          replicaAssignment.size)
-                      replicaState.put((topic, partition, replicaId), OnlineReplica)
-                      info("Replica %d for partition [%s, %d] state changed to OnlineReplica".format(replicaId, topic, partition))
-                    case false => // ignore partitions whose leader is not alive
+                  val leader = leaderIsrAndControllerEpoch.leaderAndIsr.leader
+                  if (controllerContext.liveOrShuttingDownBrokerIds.contains(leader)) {
+                    brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId),
+                                                                        topic, partition, leaderIsrAndControllerEpoch,
+                                                                        replicaAssignment.size)
+                    replicaState.put((topic, partition, replicaId), OnlineReplica)
+                    info("Replica %d for partition [%s, %d] state changed to OnlineReplica"
+                         .format(replicaId, topic, partition))
                   }
                 case None => // ignore partitions who don't have a leader yet
               }
