@@ -101,11 +101,6 @@ object ProducerPerformance extends Logging {
             .describedAs("number of threads")
             .ofType(classOf[java.lang.Integer])
             .defaultsTo(1)
-    val compressionCodecOption = parser.accepts("compression-codec", "If set, messages are sent compressed")
-            .withRequiredArg
-            .describedAs("supported codec: NoCompressionCodec as 0, GZIPCompressionCodec as 1, SnappyCompressionCodec as 2")
-            .ofType(classOf[java.lang.Integer])
-            .defaultsTo(0)
     val initialMessageIdOpt = parser.accepts("initial-message-id", "The is used for generating test data, If set, messages will be tagged with an " +
             "ID and sent by producer starting from this ID sequentially. Message content will be String type and " +
             "in the form of 'Message:000...1:xxx...'")
@@ -117,15 +112,6 @@ object ProducerPerformance extends Logging {
             .describedAs("message send time gap")
             .ofType(classOf[java.lang.Integer])
             .defaultsTo(0)
-    val produceRequestTimeoutMsOpt = parser.accepts("request-timeout-ms", "The produce request timeout in ms")
-      .withRequiredArg()
-      .ofType(classOf[java.lang.Integer])
-      .defaultsTo(3000)
-    val produceRequestRequiredAcksOpt = parser.accepts("request-num-acks", "Number of acks required for producer request " +
-      "to complete")
-      .withRequiredArg()
-      .ofType(classOf[java.lang.Integer])
-      .defaultsTo(-1)
     val csvMetricsReporterEnabledOpt = parser.accepts("csv-reporter-enabled", "If set, the CSV metrics reporter will be enabled")
     val metricsDirectoryOpt = parser.accepts("metrics-dir", "If csv-reporter-enable is set, and this parameter is" +
             "set, the csv metrics will be outputed here")
