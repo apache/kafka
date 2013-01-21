@@ -65,6 +65,7 @@ class AsyncProducerTest extends JUnit3Suite {
     props.put("producer.type", "async")
     props.put("queue.buffering.max.messages", "10")
     props.put("batch.num.messages", "1")
+    props.put("queue.enqueue.timeout.ms", "0")
 
     val config = new ProducerConfig(props)
     val produceData = getProduceData(12)
