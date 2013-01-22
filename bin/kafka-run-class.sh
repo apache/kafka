@@ -22,12 +22,20 @@ fi
 
 base_dir=$(dirname $0)/..
 
-for file in $base_dir/project/boot/scala-2.8.0/lib/*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
+library=~/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-2.8.0.jar
+CLASSPATH=$CLASSPATH:$library
+compiler=~/.ivy2/cache/org.scala-lang/scala-compiler/jars/scala-compiler-2.8.0.jar
+CLASSPATH=$CLASSPATH:$compiler
+log4j=~/.ivy2/cache/log4j/log4j/jars/log4j-1.2.15.jar
+CLASSPATH=$CLASSPATH:$log4j
+slf=~/.ivy2/cache/org.slf4j/slf4j-api/jars/slf4j-api-1.6.4.jar
+CLASSPATH=$CLASSPATH:$slf
+zookeeper=~/.ivy2/cache/org.apache.zookeeper/zookeeper/jars/zookeeper-3.3.4.jar
+CLASSPATH=$CLASSPATH:$zookeeper
+jopt=~/.ivy2//cache/net.sf.jopt-simple/jopt-simple/jars/jopt-simple-3.2.jar
+CLASSPATH=$CLASSPATH:$jopt
 
-for file in $base_dir/core/target/scala_2.8.0/*.jar;
+for file in $base_dir/core/target/scala-2.8.0/*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done

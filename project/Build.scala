@@ -34,7 +34,7 @@ object KafkaBuild extends Build {
     libraryDependencies ++= Seq(
       "log4j"                 % "log4j"        % "1.2.15",
       "net.sf.jopt-simple"    % "jopt-simple"  % "3.2",
-      "org.slf4j"             % "slf4j-simple" % "latest.release"
+      "org.slf4j"             % "slf4j-simple" % "1.6.4"
     ),
     // The issue is going from log4j 1.2.14 to 1.2.15, the developers added some features which required
     // some dependencies on various sun and javax packages.
