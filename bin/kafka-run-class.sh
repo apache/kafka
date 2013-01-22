@@ -45,12 +45,12 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/perf/target/scala_2.8.0/kafka*.jar;
+for file in $base_dir/perf/target/scala-2.8.0/kafka*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/core/lib_managed/scala_2.8.0/compile/*.jar;
+for file in $base_dir/core/lib_managed/scala-2.8.0/compile/*.jar;
 do
   if [ ${file##*/} != "sbt-launch.jar" ]; then
     CLASSPATH=$CLASSPATH:$file
