@@ -166,31 +166,34 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
         }
       }
 
+      val partitionsRemaining = replicatedPartitionsBrokerLeads().toSet
+
       /*
       * Force the shutting down broker out of the ISR of partitions that it
       * follows, and shutdown the corresponding replica fetcher threads.
       * This is really an optimization, so no need to register any callback
       * to wait until completion.
       */
-      brokerRequestBatch.newBatch()
-      allPartitionsAndReplicationFactorOnBroker foreach {
-        case(topicAndPartition, replicationFactor) =>
-          val (topic, partition) = topicAndPartition.asTuple
-          if (controllerContext.allLeaders(topicAndPartition).leaderAndIsr.leader != id) {
-            brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topic, partition, deletePartition = false)
-            removeReplicaFromIsr(topic, partition, id) match {
-              case Some(updatedLeaderIsrAndControllerEpoch) =>
-                brokerRequestBatch.addLeaderAndIsrRequestForBrokers(
-                  Seq(updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader), topic, partition,
-                  updatedLeaderIsrAndControllerEpoch, replicationFactor)
-              case None =>
-              // ignore
+      if (partitionsRemaining.size == 0) {
+        brokerRequestBatch.newBatch()
+        allPartitionsAndReplicationFactorOnBroker foreach {
+          case(topicAndPartition, replicationFactor) =>
+            val (topic, partition) = topicAndPartition.asTuple
+            if (controllerContext.allLeaders(topicAndPartition).leaderAndIsr.leader != id) {
+              brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topic, partition, deletePartition = false)
+              removeReplicaFromIsr(topic, partition, id) match {
+                case Some(updatedLeaderIsrAndControllerEpoch) =>
+                  brokerRequestBatch.addLeaderAndIsrRequestForBrokers(
+                    Seq(updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader), topic, partition,
+                    updatedLeaderIsrAndControllerEpoch, replicationFactor)
+                case None =>
+                // ignore
+              }
             }
-          }
+        }
+        brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement, controllerContext.liveBrokers)
       }
-      brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement, controllerContext.liveBrokers)
 
-      val partitionsRemaining = replicatedPartitionsBrokerLeads().toSet
       debug("Remaining partitions to move on broker %d: %s".format(id, partitionsRemaining.mkString(",")))
       partitionsRemaining.size
     }
