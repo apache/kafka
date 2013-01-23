@@ -48,7 +48,7 @@ object PartitionStateInfo {
     val leader = buffer.getInt
     val leaderEpoch = buffer.getInt
     val isrString = readShortString(buffer)
-    val isr = isrString.split(",").map(_.toInt).toList
+    val isr = Utils.parseCsvList(isrString).map(_.toInt).toList
     val zkVersion = buffer.getInt
     val replicationFactor = buffer.getInt
     PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, leaderEpoch, isr, zkVersion), controllerEpoch),

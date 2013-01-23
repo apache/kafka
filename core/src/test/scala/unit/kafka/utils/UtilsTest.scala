@@ -62,4 +62,16 @@ class UtilsTest extends JUnitSuite {
     }
   }
 
+  @Test
+  def testCsvList() {
+    val emptyString:String = ""
+    val nullString:String = null
+    val emptyList = Utils.parseCsvList(emptyString)
+    val emptyListFromNullString = Utils.parseCsvList(nullString)
+    val emptyStringList = Seq.empty[String]
+    assertTrue(emptyList!=null)
+    assertTrue(emptyListFromNullString!=null)
+    assertTrue(emptyStringList.equals(emptyListFromNullString))
+    assertTrue(emptyStringList.equals(emptyList))
+  }
 }

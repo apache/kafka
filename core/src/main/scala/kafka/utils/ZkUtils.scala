@@ -95,10 +95,11 @@ object ZkUtils extends Logging {
   : Option[LeaderIsrAndControllerEpoch] = {
     Json.parseFull(leaderAndIsrStr) match {
       case Some(m) =>
-        val leader = m.asInstanceOf[Map[String, String]].get("leader").get.toInt
-        val epoch = m.asInstanceOf[Map[String, String]].get("leaderEpoch").get.toInt
-        val isrString = m.asInstanceOf[Map[String, String]].get("ISR").get
-        val controllerEpoch = m.asInstanceOf[Map[String, String]].get("controllerEpoch").get.toInt
+        val leaderIsrAndEpochInfo = m.asInstanceOf[Map[String, String]]
+        val leader = leaderIsrAndEpochInfo.get("leader").get.toInt
+        val epoch = leaderIsrAndEpochInfo.get("leaderEpoch").get.toInt
+        val isrString = leaderIsrAndEpochInfo.get("ISR").get
+        val controllerEpoch = leaderIsrAndEpochInfo.get("controllerEpoch").get.toInt
         val isr = Utils.parseCsvList(isrString).map(r => r.toInt)
         val zkPathVersion = stat.getVersion
         debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for topic %s and partition %d".format(leader, epoch,
@@ -201,7 +202,7 @@ object ZkUtils extends Logging {
     val jsonDataMap = new HashMap[String, String]
     jsonDataMap.put("leader", leaderAndIsr.leader.toString)
     jsonDataMap.put("leaderEpoch", leaderAndIsr.leaderEpoch.toString)
-    jsonDataMap.put("ISR", leaderAndIsr.isr.mkString(","))
+    jsonDataMap.put("ISR", if(leaderAndIsr.isr.isEmpty) "" else leaderAndIsr.isr.mkString(","))
     jsonDataMap.put("controllerEpoch", controllerEpoch.toString)
     Utils.stringMapToJson(jsonDataMap)
   }
