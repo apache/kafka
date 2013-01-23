@@ -20,6 +20,21 @@ then
   exit 1
 fi
 
+snappy=~/.ivy2/cache/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.4.1.jar
+CLASSPATH=$CLASSPATH:$snappy
+library=~/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-2.8.0.jar
+CLASSPATH=$CLASSPATH:$library
+compiler=~/.ivy2/cache/org.scala-lang/scala-compiler/jars/scala-compiler-2.8.0.jar
+CLASSPATH=$CLASSPATH:$compiler
+log4j=~/.ivy2/cache/log4j/log4j/jars/log4j-1.2.15.jar
+CLASSPATH=$CLASSPATH:$log4j
+slf=~/.ivy2/cache/org.slf4j/slf4j-api/jars/slf4j-api-1.6.4.jar
+CLASSPATH=$CLASSPATH:$slf
+zookeeper=~/.ivy2/cache/org.apache.zookeeper/zookeeper/jars/zookeeper-3.3.4.jar
+CLASSPATH=$CLASSPATH:$zookeeper
+jopt=~/.ivy2//cache/net.sf.jopt-simple/jopt-simple/jars/jopt-simple-3.2.jar
+CLASSPATH=$CLASSPATH:$jopt
+
 base_dir=$(dirname $0)/../../../..
 kafka_07_lib_dir=$(dirname $0)/../lib
 
