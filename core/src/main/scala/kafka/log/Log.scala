@@ -369,7 +369,7 @@ private[kafka] class Log(val dir: File,
    * Read a message set from the log. 
    * startOffset - The logical offset to begin reading at
    * maxLength - The maximum number of bytes to read
-   * maxOffset - The maximum logical offset to include in the resulting message set
+   * maxOffset - The first offset not included in the read
    */
   def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None): MessageSet = {
     trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
