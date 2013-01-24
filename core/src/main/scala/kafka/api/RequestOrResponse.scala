@@ -18,6 +18,8 @@ package kafka.api
  */
 
 import java.nio._
+import kafka.network.RequestChannel
+import kafka.utils.Logging
 
 object Request {
   val OrdinaryConsumerId: Int = -1
@@ -25,10 +27,12 @@ object Request {
 }
 
 
-private[kafka] abstract class RequestOrResponse(val requestId: Option[Short] = None) {
+private[kafka] abstract class RequestOrResponse(val requestId: Option[Short] = None) extends Logging{
 
   def sizeInBytes: Int
   
   def writeTo(buffer: ByteBuffer): Unit
-  
+
+  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {}
 }
+

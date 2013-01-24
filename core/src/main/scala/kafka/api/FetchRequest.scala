@@ -21,9 +21,10 @@ import java.nio.ByteBuffer
 import kafka.utils.nonthreadsafe
 import kafka.api.ApiUtils._
 import scala.collection.immutable.Map
-import kafka.common.TopicAndPartition
+import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.consumer.ConsumerConfig
 import java.util.concurrent.atomic.AtomicInteger
+import kafka.network.{RequestChannel}
 
 
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
@@ -137,6 +138,28 @@ case class FetchRequest private[kafka] (versionId: Short = FetchRequest.CurrentV
   def isFromLowLevelConsumer = replicaId == Request.DebuggingConsumerId
 
   def numPartitions = requestInfo.size
+
+  override def toString(): String = {
+    val fetchRequest = new StringBuilder
+    fetchRequest.append("Name: " + this.getClass.getSimpleName)
+    fetchRequest.append("; Version: " + versionId)
+    fetchRequest.append("; CorrelationId: " + correlationId)
+    fetchRequest.append("; ClientId: " + clientId)
+    fetchRequest.append("; ReplicaId: " + replicaId)
+    fetchRequest.append("; MaxWait: " + maxWait + " ms")
+    fetchRequest.append("; MinBytes: " + minBytes + " bytes")
+    fetchRequest.append("; RequestInfo: " + requestInfo.mkString(","))
+    fetchRequest.toString()
+  }
+
+  override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
+    val fetchResponsePartitionData = requestInfo.map {
+      case (topicAndPartition, data) =>
+        (topicAndPartition, FetchResponsePartitionData(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1, null))
+    }
+    val errorResponse = FetchResponse(correlationId, fetchResponsePartitionData)
+    requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(errorResponse)))
+  }
 }
 
 
