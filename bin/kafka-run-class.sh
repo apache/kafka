@@ -22,19 +22,29 @@ fi
 
 base_dir=$(dirname $0)/..
 
-snappy=~/.ivy2/cache/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.4.1.jar
+
+USER_HOME=$(eval echo ~${USER})
+ivyPath=$(echo "$USER_HOME/.ivy2/cache")
+
+snappy=$(echo "$ivyPath/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.4.1.jar")
 CLASSPATH=$CLASSPATH:$snappy
-library=~/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-2.8.0.jar
+
+library=$(echo "$ivyPath/org.scala-lang/scala-library/jars/scala-library-2.8.0.jar")
 CLASSPATH=$CLASSPATH:$library
-compiler=~/.ivy2/cache/org.scala-lang/scala-compiler/jars/scala-compiler-2.8.0.jar
+
+compiler=~$(echo "$ivyPath/org.scala-lang/scala-compiler/jars/scala-compiler-2.8.0.jar")
 CLASSPATH=$CLASSPATH:$compiler
-log4j=~/.ivy2/cache/log4j/log4j/jars/log4j-1.2.15.jar
+
+log4j=$(echo "$ivyPath/log4j/log4j/jars/log4j-1.2.15.jar")
 CLASSPATH=$CLASSPATH:$log4j
-slf=~/.ivy2/cache/org.slf4j/slf4j-api/jars/slf4j-api-1.6.4.jar
+
+slf=$(echo "$ivyPath/org.slf4j/slf4j-api/jars/slf4j-api-1.6.4.jar")
 CLASSPATH=$CLASSPATH:$slf
-zookeeper=~/.ivy2/cache/org.apache.zookeeper/zookeeper/jars/zookeeper-3.3.4.jar
+
+zookeeper=$(echo "$ivyPath/org.apache.zookeeper/zookeeper/jars/zookeeper-3.3.4.jar")
 CLASSPATH=$CLASSPATH:$zookeeper
-jopt=~/.ivy2//cache/net.sf.jopt-simple/jopt-simple/jars/jopt-simple-3.2.jar
+
+jopt=$(echo "$ivyPath/net.sf.jopt-simple/jopt-simple/jars/jopt-simple-3.2.jar")
 CLASSPATH=$CLASSPATH:$jopt
 
 for file in $base_dir/core/target/scala-2.8.0/*.jar;
@@ -52,21 +62,18 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/core/lib_managed/scala-2.8.0/compile/*.jar;
-do
-  if [ ${file##*/} != "sbt-launch.jar" ]; then
-    CLASSPATH=$CLASSPATH:$file
-  fi
-done
 if [ -z "$KAFKA_JMX_OPTS" ]; then
   KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
 fi
+
 if [ -z "$KAFKA_OPTS" ]; then
   KAFKA_OPTS="-Xmx512M -server  -Dlog4j.configuration=file:$base_dir/config/log4j.properties"
 fi
+
 if [  $JMX_PORT ]; then
   KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Dcom.sun.management.jmxremote.port=$JMX_PORT "
 fi
+
 if [ -z "$JAVA_HOME" ]; then
   JAVA="java"
 else
