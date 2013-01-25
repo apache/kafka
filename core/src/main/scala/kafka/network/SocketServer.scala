@@ -313,11 +313,12 @@ private[kafka] class Processor(val id: Int,
       key.attach(receive)
     }
     val read = receive.readFrom(socketChannel)
-    trace(read + " bytes read from " + socketChannel.socket.getRemoteSocketAddress())
+    val address = socketChannel.socket.getRemoteSocketAddress();
+    trace(read + " bytes read from " + address)
     if(read < 0) {
       close(key)
     } else if(receive.complete) {
-      val req = RequestChannel.Request(processor = id, requestKey = key, buffer = receive.buffer, startTimeMs = time.milliseconds)
+      val req = RequestChannel.Request(processor = id, requestKey = key, buffer = receive.buffer, startTimeMs = time.milliseconds, remoteAddress = address)
       requestChannel.sendRequest(req)
       trace("Received request, sending for processing by handler: " + req)
       key.attach(null)

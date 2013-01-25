@@ -55,7 +55,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handle(request: RequestChannel.Request) {
     try{
       if(requestLogger.isTraceEnabled)
-        requestLogger.trace("Handling request: %s".format(request.requestObj))
+        requestLogger.trace("Handling request: " + request.requestObj + " from client: " + request.remoteAddress)
       request.requestId match {
         case RequestKeys.ProduceKey => handleProducerRequest(request)
         case RequestKeys.FetchKey => handleFetchRequest(request)
