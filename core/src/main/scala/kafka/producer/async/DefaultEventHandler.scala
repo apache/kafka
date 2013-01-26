@@ -228,7 +228,8 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
    */
   private def send(brokerId: Int, messagesPerTopic: Map[TopicAndPartition, ByteBufferMessageSet]) = {
     if(brokerId < 0) {
-      warn("Failed to send to broker %d with data %s".format(brokerId, messagesPerTopic))
+      warn("Failed to send data %s since partitions %s don't have a leader".format(messagesPerTopic.map(_._2),
+        messagesPerTopic.map(_._1.toString).mkString(",")))
       messagesPerTopic.keys.toSeq
     } else if(messagesPerTopic.size > 0) {
       val currentCorrelationId = correlationId.getAndIncrement
@@ -238,10 +239,10 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       try {
         val syncProducer = producerPool.getProducer(brokerId)
         debug("Producer sending messages with correlation id %d for topics %s to broker %d on %s:%d"
-          .format(currentCorrelationId, messagesPerTopic, brokerId, syncProducer.config.host, syncProducer.config.port))
+          .format(currentCorrelationId, messagesPerTopic.keySet.mkString(","), brokerId, syncProducer.config.host, syncProducer.config.port))
         val response = syncProducer.send(producerRequest)
         debug("Producer sent messages with correlation id %d for topics %s to broker %d on %s:%d"
-          .format(currentCorrelationId, messagesPerTopic, brokerId, syncProducer.config.host, syncProducer.config.port))
+          .format(currentCorrelationId, messagesPerTopic.keySet.mkString(","), brokerId, syncProducer.config.host, syncProducer.config.port))
         if (response.status.size != producerRequest.data.size)
           throw new KafkaException("Incomplete response (%s) for producer request (%s)"
             .format(response, producerRequest))

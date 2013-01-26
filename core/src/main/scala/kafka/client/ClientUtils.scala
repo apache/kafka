@@ -58,10 +58,11 @@ object ClientUtils extends Logging{
    * @param clientId The client's identifier
    * @return topic metadata response
    */
-  def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], clientId: String): TopicMetadataResponse = {
+  def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], clientId: String, timeoutMs: Int): TopicMetadataResponse = {
     val props = new Properties()
     props.put("broker.list", brokers.map(_.getConnectionString()).mkString(","))
     props.put("client.id", clientId)
+    props.put("request.timeout.ms", timeoutMs.toString)
     val producerConfig = new ProducerConfig(props)
     fetchTopicMetadata(topics, brokers, producerConfig, 0)
   }

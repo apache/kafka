@@ -290,7 +290,7 @@ public class KafkaMigrationTool
         }
         logger.info(String.format("Migration thread %s finishes running", threadName));
       } catch (Throwable t){
-        System.out.println("Migration thread failure due to " + t);
+        logger.fatal("Migration thread failure due to ", t);
         t.printStackTrace(System.out);
       }
     }

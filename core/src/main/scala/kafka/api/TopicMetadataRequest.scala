@@ -20,7 +20,10 @@ package kafka.api
 import java.nio.ByteBuffer
 import kafka.api.ApiUtils._
 import collection.mutable.ListBuffer
-import kafka.utils.Logging
+import kafka.network.{BoundedByteBufferSend, RequestChannel}
+import kafka.common.ErrorMapping
+import kafka.network.RequestChannel.Response
+import kafka.utils.{Logging}
 
 object TopicMetadataRequest extends Logging {
   val CurrentVersion = 0.shortValue
@@ -66,5 +69,23 @@ case class TopicMetadataRequest(val versionId: Short,
     shortStringLength(clientId)  + /* client id */
     4 + /* number of topics */
     topics.foldLeft(0)(_ + shortStringLength(_)) /* topics */
+  }
+
+  override def toString(): String = {
+    val topicMetadataRequest = new StringBuilder
+    topicMetadataRequest.append("Name: " + this.getClass.getSimpleName)
+    topicMetadataRequest.append("; Version: " + versionId)
+    topicMetadataRequest.append("; CorrelationId: " + correlationId)
+    topicMetadataRequest.append("; ClientId: " + clientId)
+    topicMetadataRequest.append("; Topics: " + topics.mkString(","))
+    topicMetadataRequest.toString()
+  }
+
+  override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
+    val topicMetadata = topics.map {
+      topic => TopicMetadata(topic, Nil, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+    }
+    val errorResponse = TopicMetadataResponse(topicMetadata, correlationId)
+    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
   }
 }

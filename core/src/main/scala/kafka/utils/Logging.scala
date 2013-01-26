@@ -28,7 +28,7 @@ trait Logging {
   // Force initialization to register Log4jControllerMBean
   private val log4jController = Log4jController
 
-  private def msgWithLogIdent(msg: String) = "%s%s".format(logIdent, msg)
+  private def msgWithLogIdent(msg: String) = logIdent + msg
 
   def trace(msg: => String): Unit = {
     if (logger.isTraceEnabled())

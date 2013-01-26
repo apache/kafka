@@ -100,7 +100,8 @@ class LogSegment(val log: FileMessageSet,
       throw new IllegalArgumentException("Invalid max size for log read (%d)".format(maxSize))
     if(maxSize == 0)
       return MessageSet.Empty
-      
+    
+    val logSize = log.sizeInBytes // this may change, need to save a consistent copy
     val startPosition = translateOffset(startOffset)
     
     // if the start position is already off the end of the log, return null
@@ -120,7 +121,7 @@ class LogSegment(val log: FileMessageSet,
           val mapping = translateOffset(offset, startPosition.position)
           val endPosition = 
             if(mapping == null)
-              log.sizeInBytes() // the max offset is off the end of the log, use the end of the file
+              logSize // the max offset is off the end of the log, use the end of the file
             else
               mapping.position
           min(endPosition - startPosition.position, maxSize) 

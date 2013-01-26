@@ -130,7 +130,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           assertValidPreviousStates(topicAndPartition, List(NonExistentPartition), NewPartition)
           assignReplicasToPartitions(topic, partition)
           partitionState.put(topicAndPartition, NewPartition)
-          info("Partition [%s, %d] state changed from NotExists to New with assigned replicas ".format(topic, partition) +
+          info("Partition %s state changed from NotExists to New with assigned replicas ".format(topicAndPartition) +
             "%s".format(controllerContext.partitionReplicaAssignment(topicAndPartition).mkString(",")))
         case OnlinePartition =>
           assertValidPreviousStates(topicAndPartition, List(NewPartition, OnlinePartition, OfflinePartition), OnlinePartition)
@@ -144,7 +144,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
               electLeaderForPartition(topic, partition, leaderSelector)
             case _ => // should never come here since illegal previous states are checked above
           }
-          info("Partition [%s, %d] state changed from %s to OnlinePartition with leader %d".format(topic, partition,
+          info("Partition %s state changed from %s to OnlinePartition with leader %d".format(topicAndPartition,
             partitionState(topicAndPartition), controllerContext.allLeaders(topicAndPartition).leaderAndIsr.leader))
           partitionState.put(topicAndPartition, OnlinePartition)
            // post: partition has a leader
@@ -152,18 +152,18 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           // pre: partition should be in Online state
           assertValidPreviousStates(topicAndPartition, List(NewPartition, OnlinePartition), OfflinePartition)
           // should be called when the leader for a partition is no longer alive
-          info("Partition [%s, %d] state changed from Online to Offline".format(topic, partition))
+          info("Partition %s state changed from Online to Offline".format(topicAndPartition))
           partitionState.put(topicAndPartition, OfflinePartition)
           // post: partition has no alive leader
         case NonExistentPartition =>
           // pre: partition could be in either of the above states
           assertValidPreviousStates(topicAndPartition, List(OfflinePartition), NonExistentPartition)
-          info("Partition [%s, %d] state changed from Offline to NotExists".format(topic, partition))
+          info("Partition %s state changed from Offline to NotExists".format(topicAndPartition))
           partitionState.put(topicAndPartition, NonExistentPartition)
           // post: partition state is deleted from all brokers and zookeeper
       }
     } catch {
-      case t: Throwable => error("State change for partition [%s, %d] ".format(topic, partition) +
+      case t: Throwable => error("State change for partition %s ".format(topicAndPartition) +
         "from %s to %s failed".format(currState, targetState), t)
     }
   }
@@ -266,8 +266,9 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * @param leaderSelector      Specific leader selector (e.g., offline/reassigned/etc.)
    */
   def electLeaderForPartition(topic: String, partition: Int, leaderSelector: PartitionLeaderSelector) {
+    val topicAndPartition = TopicAndPartition(topic, partition)
     // handle leader election for the partitions whose leader is no longer alive
-    info("Electing leader for partition [%s, %d]".format(topic, partition))
+    info("Electing leader for partition %s".format(topicAndPartition))
     try {
       var zookeeperPathUpdateSucceeded: Boolean = false
       var newLeaderAndIsr: LeaderAndIsr = null
@@ -281,7 +282,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             "means the current controller with epoch %d went through a soft failure and another ".format(controller.epoch) +
             "controller was elected with epoch %d. Aborting state change by this controller".format(controllerEpoch))
         // elect new leader or throw exception
-        val (leaderAndIsr, replicas) = leaderSelector.selectLeader(topic, partition, currentLeaderAndIsr)
+        val (leaderAndIsr, replicas) = leaderSelector.selectLeader(topicAndPartition, currentLeaderAndIsr)
         val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(zkClient,
           ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
           ZkUtils.leaderAndIsrZkData(leaderAndIsr, controller.epoch), currentLeaderAndIsr.zkVersion)
@@ -293,15 +294,15 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       val newLeaderIsrAndControllerEpoch = new LeaderIsrAndControllerEpoch(newLeaderAndIsr, controller.epoch)
       // update the leader cache
       controllerContext.allLeaders.put(TopicAndPartition(topic, partition), newLeaderIsrAndControllerEpoch)
-      info("Elected leader %d for Offline partition [%s, %d]".format(newLeaderAndIsr.leader, topic, partition))
+      info("Elected leader %d for Offline partition %s".format(newLeaderAndIsr.leader, topicAndPartition))
       // store new leader and isr info in cache
       brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasForThisPartition, topic, partition,
         newLeaderIsrAndControllerEpoch, controllerContext.partitionReplicaAssignment(TopicAndPartition(topic, partition)).size)
     } catch {
-      case poe: PartitionOfflineException => throw new PartitionOfflineException("All replicas for partition [%s, %d] are dead."
-        .format(topic, partition) + " Marking this partition offline", poe)
+      case poe: PartitionOfflineException => throw new PartitionOfflineException("All replicas for partition %s are dead."
+        .format(topicAndPartition) + " Marking this partition offline", poe)
       case sce => throw new StateChangeFailedException(("Error while electing leader for partition " +
-        " [%s, %d] due to: %s.").format(topic, partition, sce.getMessage), sce)
+        " %s due to: %s.").format(topicAndPartition, sce.getMessage), sce)
     }
     debug("After leader election, leader cache is updated to %s".format(controllerContext.allLeaders.map(l => (l._1, l._2))))
   }
@@ -315,11 +316,12 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   }
 
   private def getLeaderIsrAndEpochOrThrowException(topic: String, partition: Int): LeaderIsrAndControllerEpoch = {
+    val topicAndPartition = TopicAndPartition(topic, partition)
     ZkUtils.getLeaderIsrAndEpochForPartition(zkClient, topic, partition) match {
       case Some(currentLeaderIsrAndEpoch) => currentLeaderIsrAndEpoch
       case None =>
         throw new StateChangeFailedException("Leader and ISR information doesn't exist for partition " +
-          "[%s, %d] in %s state".format(topic, partition, partitionState(TopicAndPartition(topic, partition))))
+          "%s in %s state".format(topicAndPartition, partitionState(topicAndPartition)))
     }
   }
 

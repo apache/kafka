@@ -18,8 +18,10 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.common.TopicAndPartition
+import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.api.ApiUtils._
+import kafka.network.{BoundedByteBufferSend, RequestChannel}
+import kafka.network.RequestChannel.Response
 
 
 object OffsetRequest {
@@ -104,4 +106,24 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
 
   def isFromOrdinaryClient = replicaId == Request.OrdinaryConsumerId
   def isFromDebuggingClient = replicaId == Request.DebuggingConsumerId
+
+  override def toString(): String = {
+    val offsetRequest = new StringBuilder
+    offsetRequest.append("Name: " + this.getClass.getSimpleName)
+    offsetRequest.append("; Version: " + versionId)
+    offsetRequest.append("; CorrelationId: " + correlationId)
+    offsetRequest.append("; ClientId: " + clientId)
+    offsetRequest.append("; RequestInfo: " + requestInfo.mkString(","))
+    offsetRequest.append("; ReplicaId: " + replicaId)
+    offsetRequest.toString()
+  }
+
+  override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
+    val partitionOffsetResponseMap = requestInfo.map {
+      case (topicAndPartition, partitionOffsetRequest) =>
+        (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), null))
+    }
+    val errorResponse = OffsetResponse(correlationId, partitionOffsetResponseMap)
+    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+  }
 }

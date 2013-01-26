@@ -166,31 +166,34 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
         }
       }
 
+      val partitionsRemaining = replicatedPartitionsBrokerLeads().toSet
+
       /*
       * Force the shutting down broker out of the ISR of partitions that it
       * follows, and shutdown the corresponding replica fetcher threads.
       * This is really an optimization, so no need to register any callback
       * to wait until completion.
       */
-      brokerRequestBatch.newBatch()
-      allPartitionsAndReplicationFactorOnBroker foreach {
-        case(topicAndPartition, replicationFactor) =>
-          val (topic, partition) = topicAndPartition.asTuple
-          if (controllerContext.allLeaders(topicAndPartition).leaderAndIsr.leader != id) {
-            brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topic, partition, deletePartition = false)
-            removeReplicaFromIsr(topic, partition, id) match {
-              case Some(updatedLeaderIsrAndControllerEpoch) =>
-                brokerRequestBatch.addLeaderAndIsrRequestForBrokers(
-                  Seq(updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader), topic, partition,
-                  updatedLeaderIsrAndControllerEpoch, replicationFactor)
-              case None =>
-              // ignore
+      if (partitionsRemaining.size == 0) {
+        brokerRequestBatch.newBatch()
+        allPartitionsAndReplicationFactorOnBroker foreach {
+          case(topicAndPartition, replicationFactor) =>
+            val (topic, partition) = topicAndPartition.asTuple
+            if (controllerContext.allLeaders(topicAndPartition).leaderAndIsr.leader != id) {
+              brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topic, partition, deletePartition = false)
+              removeReplicaFromIsr(topic, partition, id) match {
+                case Some(updatedLeaderIsrAndControllerEpoch) =>
+                  brokerRequestBatch.addLeaderAndIsrRequestForBrokers(
+                    Seq(updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader), topic, partition,
+                    updatedLeaderIsrAndControllerEpoch, replicationFactor)
+                case None =>
+                // ignore
+              }
             }
-          }
+        }
+        brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement, controllerContext.liveBrokers)
       }
-      brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement, controllerContext.liveBrokers)
 
-      val partitionsRemaining = replicatedPartitionsBrokerLeads().toSet
       debug("Remaining partitions to move on broker %d: %s".format(id, partitionsRemaining.mkString(",")))
       partitionsRemaining.size
     }
@@ -668,7 +671,9 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
               "means the current controller with epoch %d went through a soft failure and another ".format(epoch) +
               "controller was elected with epoch %d. Aborting state change by this controller".format(controllerEpoch))
           if (leaderAndIsr.isr.contains(replicaId)) {
-            val newLeaderAndIsr = new LeaderAndIsr(leaderAndIsr.leader, leaderAndIsr.leaderEpoch + 1,
+            // if the replica to be removed from the ISR is also the leader, set the new leader value to -1
+            val newLeader = if(replicaId == leaderAndIsr.leader) -1 else leaderAndIsr.leader
+            val newLeaderAndIsr = new LeaderAndIsr(newLeader, leaderAndIsr.leaderEpoch + 1,
               leaderAndIsr.isr.filter(b => b != replicaId), leaderAndIsr.zkVersion + 1)
             // update the new leadership decision in zookeeper or retry
             val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(
@@ -680,8 +685,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
 
             finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(newLeaderAndIsr, epoch))
             if (updateSucceeded)
-              info("New leader and ISR for partition [%s, %d] is %s"
-                   .format(topic, partition, newLeaderAndIsr.toString()))
+              info("New leader and ISR for partition %s is %s".format(topicAndPartition, newLeaderAndIsr.toString()))
             updateSucceeded
           } else {
             warn("Cannot remove replica %d from ISR of %s. Leader = %d ; ISR = %s"
@@ -718,7 +722,6 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
         partitionStateMachine.shutdown()
         replicaStateMachine.shutdown()
         if(controllerContext.controllerChannelManager != null) {
-          info("session expires, clean up the state")
           controllerContext.controllerChannelManager.shutdown()
           controllerContext.controllerChannelManager = null
         }
@@ -763,13 +766,11 @@ class PartitionsReassignedListener(controller: KafkaController) extends IZkDataL
           assignedReplicasOpt match {
             case Some(assignedReplicas) =>
               if(assignedReplicas == newReplicas) {
-                throw new KafkaException("Partition %s to be reassigned is already assigned to replicas"
-                  .format(topicAndPartition) +
+                throw new KafkaException("Partition %s to be reassigned is already assigned to replicas".format(topicAndPartition) +
                   " %s. Ignoring request for partition reassignment".format(newReplicas.mkString(",")))
               } else {
                 if(aliveNewReplicas == newReplicas) {
-                  info("Handling reassignment of partition %s to new replicas %s".format(topicAndPartition,
-                    newReplicas.mkString(",")))
+                  info("Handling reassignment of partition %s to new replicas %s".format(topicAndPartition, newReplicas.mkString(",")))
                   val context = createReassignmentContextForPartition(topic, partition, newReplicas)
                   controllerContext.partitionsBeingReassigned.put(topicAndPartition, context)
                   controller.onPartitionReassignment(topicAndPartition, context)
@@ -848,18 +849,18 @@ class ReassignedPartitionsIsrChangeListener(controller: KafkaController, topic: 
                 val caughtUpReplicas = reassignedReplicas & leaderAndIsr.isr.toSet
                 if(caughtUpReplicas == reassignedReplicas) {
                   // resume the partition reassignment process
-                  info("%d/%d replicas have caught up with the leader for partition [%s, %d] being reassigned."
-                    .format(caughtUpReplicas.size, reassignedReplicas.size, topic, partition) +
+                  info("%d/%d replicas have caught up with the leader for partition %s being reassigned."
+                    .format(caughtUpReplicas.size, reassignedReplicas.size, topicAndPartition) +
                     "Resuming partition reassignment")
                   controller.onPartitionReassignment(topicAndPartition, reassignedPartitionContext)
                 }
                 else {
-                  info("%d/%d replicas have caught up with the leader for partition [%s, %d] being reassigned."
-                    .format(caughtUpReplicas.size, reassignedReplicas.size, topic, partition) +
+                  info("%d/%d replicas have caught up with the leader for partition %s being reassigned."
+                    .format(caughtUpReplicas.size, reassignedReplicas.size, topicAndPartition) +
                     "Replica(s) %s still need to catch up".format((reassignedReplicas -- leaderAndIsr.isr.toSet).mkString(",")))
                 }
-              case None => error("Error handling reassignment of partition [%s, %d] to replicas %s as it was never created"
-                .format(topic, partition, reassignedReplicas.mkString(",")))
+              case None => error("Error handling reassignment of partition %s to replicas %s as it was never created"
+                .format(topicAndPartition, reassignedReplicas.mkString(",")))
             }
           case None =>
         }

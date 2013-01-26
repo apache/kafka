@@ -421,7 +421,7 @@ object Utils extends Logging {
    * Whitespace surrounding the comma will be removed.
    */
   def parseCsvList(csvList: String): Seq[String] = {
-    if(csvList == null)
+    if(csvList == null || csvList.isEmpty)
       Seq.empty[String]
     else {
       csvList.split("\\s*,\\s*").filter(v => !v.equals(""))

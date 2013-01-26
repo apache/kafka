@@ -110,14 +110,14 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
           leaderIsrAndControllerEpochOpt match {
             case Some(leaderIsrAndControllerEpoch) =>
               if(leaderIsrAndControllerEpoch.leaderAndIsr.leader == replicaId)
-                throw new StateChangeFailedException("Replica %d for partition [%s, %d] cannot be moved to NewReplica"
-                  .format(replicaId, topic, partition) + "state as it is being requested to become leader")
+                throw new StateChangeFailedException("Replica %d for partition %s cannot be moved to NewReplica"
+                  .format(replicaId, topicAndPartition) + "state as it is being requested to become leader")
               brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId),
                                                                   topic, partition, leaderIsrAndControllerEpoch, replicaAssignment.size)
             case None => // new leader request will be sent to this replica when one gets elected
           }
           replicaState.put((topic, partition, replicaId), NewReplica)
-          info("Replica %d for partition [%s, %d] state changed to NewReplica".format(replicaId, topic, partition))
+          info("Replica %d for partition %s state changed to NewReplica".format(replicaId, topicAndPartition))
         case NonExistentReplica =>
           assertValidPreviousStates(topic, partition, replicaId, List(OfflineReplica), targetState)
           // send stop replica command
@@ -126,7 +126,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
           val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
           controllerContext.partitionReplicaAssignment.put(topicAndPartition,
             currentAssignedReplicas.filterNot(_ == replicaId))
-          info("Replica %d for partition [%s, %d] state changed to NonExistentReplica".format(replicaId, topic, partition))
+          info("Replica %d for partition %s state changed to NonExistentReplica".format(replicaId, topicAndPartition))
           replicaState.remove((topic, partition, replicaId))
         case OnlineReplica =>
           assertValidPreviousStates(topic, partition, replicaId, List(NewReplica, OnlineReplica, OfflineReplica), targetState)
@@ -135,7 +135,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               // add this replica to the assigned replicas list for its partition
               val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
               controllerContext.partitionReplicaAssignment.put(topicAndPartition, currentAssignedReplicas :+ replicaId)
-              info("Replica %d for partition [%s, %d] state changed to OnlineReplica".format(replicaId, topic, partition))
+              info("Replica %d for partition %s state changed to OnlineReplica".format(replicaId, topicAndPartition))
             case _ =>
               // check if the leader for this partition is alive or even exists
                 controllerContext.allLeaders.get(topicAndPartition) match {
@@ -146,7 +146,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                                                                           topic, partition, leaderIsrAndControllerEpoch,
                                                                           replicaAssignment.size)
                       replicaState.put((topic, partition, replicaId), OnlineReplica)
-                      info("Replica %d for partition [%s, %d] state changed to OnlineReplica".format(replicaId, topic, partition))
+                      info("Replica %d for partition %s state changed to OnlineReplica".format(replicaId, topicAndPartition))
                     case false => // ignore partitions whose leader is not alive
                   }
                 case None => // ignore partitions who don't have a leader yet
@@ -156,30 +156,31 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
         case OfflineReplica =>
           assertValidPreviousStates(topic, partition, replicaId, List(NewReplica, OnlineReplica), targetState)
           // As an optimization, the controller removes dead replicas from the ISR
-          val leaderAndIsrIsEmpty: Boolean = controllerContext.allLeaders.get(topicAndPartition) match {
-            case Some(currLeaderIsrAndControllerEpoch) =>
-              if (currLeaderIsrAndControllerEpoch.leaderAndIsr.isr.contains(replicaId))
-                controller.removeReplicaFromIsr(topic, partition, replicaId) match {
-                  case Some(updatedLeaderIsrAndControllerEpoch) =>
-                    // send the shrunk ISR state change request only to the leader
-                    brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader),
-                                                                        topic, partition, updatedLeaderIsrAndControllerEpoch,
-                                                                        replicaAssignment.size)
-                    replicaState.put((topic, partition, replicaId), OfflineReplica)
-                    info("Replica %d for partition [%s, %d] state changed to OfflineReplica".format(replicaId, topic, partition))
-                    info("Removed offline replica %d from ISR for partition [%s, %d]".format(replicaId, topic, partition))
-                    false
-                  case None =>
-                    true
-                }
-              else false
-            case None =>
-              true
-          }
+          val leaderAndIsrIsEmpty: Boolean =
+            controllerContext.allLeaders.get(topicAndPartition) match {
+              case Some(currLeaderIsrAndControllerEpoch) =>
+                if (currLeaderIsrAndControllerEpoch.leaderAndIsr.isr.contains(replicaId))
+                  controller.removeReplicaFromIsr(topic, partition, replicaId) match {
+                    case Some(updatedLeaderIsrAndControllerEpoch) =>
+                      // send the shrunk ISR state change request only to the leader
+                      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader),
+                        topic, partition, updatedLeaderIsrAndControllerEpoch,
+                        replicaAssignment.size)
+                      replicaState.put((topic, partition, replicaId), OfflineReplica)
+                      info("Replica %d for partition %s state changed to OfflineReplica".format(replicaId, topicAndPartition))
+                      info("Removed offline replica %d from ISR for partition %s".format(replicaId, topicAndPartition))
+                      false
+                    case None =>
+                      true
+                  }
+                else false
+              case None =>
+                true
+            }
           if (leaderAndIsrIsEmpty)
             throw new StateChangeFailedException(
-              "Failed to change state of replica %d for partition [%s, %d] since the leader and isr path in zookeeper is empty"
-              .format(replicaId, topic, partition))
+              "Failed to change state of replica %d for partition %s since the leader and isr path in zookeeper is empty"
+              .format(replicaId, topicAndPartition))
       }
     }
     catch {

@@ -23,6 +23,9 @@ import kafka.utils._
 import kafka.api.ApiUtils._
 import kafka.cluster.Broker
 import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.network.{BoundedByteBufferSend, RequestChannel}
+import kafka.common.ErrorMapping
+import kafka.network.RequestChannel.Response
 
 
 object LeaderAndIsr {
@@ -48,7 +51,7 @@ object PartitionStateInfo {
     val leader = buffer.getInt
     val leaderEpoch = buffer.getInt
     val isrString = readShortString(buffer)
-    val isr = isrString.split(",").map(_.toInt).toList
+    val isr = Utils.parseCsvList(isrString).map(_.toInt).toList
     val zkVersion = buffer.getInt
     val replicationFactor = buffer.getInt
     PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, leaderEpoch, isr, zkVersion), controllerEpoch),
@@ -156,5 +159,26 @@ case class LeaderAndIsrRequest (versionId: Short,
     for(broker <- leaders)
       size += broker.sizeInBytes /* broker info */
     size
+  }
+
+  override def toString(): String = {
+    val leaderAndIsrRequest = new StringBuilder
+    leaderAndIsrRequest.append("Name: " + this.getClass.getSimpleName)
+    leaderAndIsrRequest.append("; Version: " + versionId)
+    leaderAndIsrRequest.append("; CorrelationId: " + correlationId)
+    leaderAndIsrRequest.append("; ClientId: " + clientId)
+    leaderAndIsrRequest.append("; AckTimeoutMs: " + ackTimeoutMs + " ms")
+    leaderAndIsrRequest.append("; ControllerEpoch: " + controllerEpoch)
+    leaderAndIsrRequest.append("; PartitionStateInfo: " + partitionStateInfos.mkString(","))
+    leaderAndIsrRequest.append("; Leaders: " + leaders.mkString(","))
+    leaderAndIsrRequest.toString()
+  }
+
+  override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
+    val responseMap = partitionStateInfos.map {
+      case (topicAndPartition, partitionAndState) => (topicAndPartition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+    }
+    val errorResponse = LeaderAndIsrResponse(correlationId, responseMap)
+    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
   }
 }

@@ -79,6 +79,11 @@ object ConsoleConsumer extends Logging {
             .describedAs("size")
             .ofType(classOf[java.lang.Integer])
             .defaultsTo(2 * 1024 * 1024)
+    val socketTimeoutMsOpt = parser.accepts("socket-timeout-ms", "The socket timeout used for the connection to the broker")
+            .withRequiredArg
+            .describedAs("ms")
+            .ofType(classOf[java.lang.Integer])
+            .defaultsTo(ConsumerConfig.SocketTimeout)
     val consumerTimeoutMsOpt = parser.accepts("consumer-timeout-ms", "consumer throws timeout exception after waiting this much " +
             "of time without incoming messages")
             .withRequiredArg
@@ -146,6 +151,7 @@ object ConsoleConsumer extends Logging {
     val props = new Properties()
     props.put("group.id", options.valueOf(groupIdOpt))
     props.put("socket.receive.buffer.bytes", options.valueOf(socketBufferSizeOpt).toString)
+    props.put("socket.timeout.ms", options.valueOf(socketTimeoutMsOpt).toString)
     props.put("fetch.message.max.bytes", options.valueOf(fetchSizeOpt).toString)
     props.put("fetch.min.bytes", options.valueOf(minFetchBytesOpt).toString)
     props.put("fetch.wait.max.ms", options.valueOf(maxWaitMsOpt).toString)
