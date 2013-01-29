@@ -16,13 +16,14 @@
 */
 package kafka.server
 
-import kafka.log.LogManager
+import kafka.log._
+import java.io.File
 import org.I0Itec.zkclient.ZkClient
 import org.scalatest.junit.JUnit3Suite
 import org.easymock.EasyMock
 import org.junit._
 import org.junit.Assert._
-import kafka.common.KafkaException
+import kafka.common._
 import kafka.cluster.Replica
 import kafka.utils._
 
@@ -30,7 +31,14 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
 
   val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_))
   val topic = "foo"
-  val logManagers = configs.map(config => new LogManager(config, new KafkaScheduler(1), new MockTime))
+  val logManagers = configs.map(config => new LogManager(logDirs = config.logDirs.map(new File(_)).toArray,
+                                                         topicConfigs = Map(),
+                                                         defaultConfig = LogConfig(),
+                                                         cleanerConfig = CleanerConfig(),
+                                                         flushCheckMs = 30000,
+                                                         retentionCheckMs = 30000,
+                                                         scheduler = new KafkaScheduler(1),
+                                                         time = new MockTime))
     
   @After
   def teardown() {
@@ -133,7 +141,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
   }
 
   def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long = {
-    replicaManager.highWatermarkCheckpoints(replicaManager.config.logDirs(0)).read(topic, partition)
+    replicaManager.highWatermarkCheckpoints(replicaManager.config.logDirs(0)).read.getOrElse(TopicAndPartition(topic, partition), 0L)
   }
   
 }

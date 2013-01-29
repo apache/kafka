@@ -23,12 +23,13 @@ trait Logging {
   val loggerName = this.getClass.getName
   lazy val logger = Logger.getLogger(loggerName)
 
-  protected var logIdent = ""
+  protected var logIdent: String = null
 
   // Force initialization to register Log4jControllerMBean
   private val log4jController = Log4jController
 
-  private def msgWithLogIdent(msg: String) = logIdent + msg
+  private def msgWithLogIdent(msg: String) = 
+    if(logIdent == null) msg else logIdent + msg
 
   def trace(msg: => String): Unit = {
     if (logger.isTraceEnabled())

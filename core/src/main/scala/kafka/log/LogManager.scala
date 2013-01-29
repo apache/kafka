@@ -36,31 +36,30 @@ import kafka.server.KafkaConfig
  * A background thread handles log retention by periodically truncating excess log segments.
  */
 @threadsafe
-class LogManager(val config: KafkaConfig,
+class LogManager(val logDirs: Array[File],
+                 val topicConfigs: Map[String, LogConfig],
+                 val defaultConfig: LogConfig,
+                 val cleanerConfig: CleanerConfig,
+                 val flushCheckMs: Long,
+                 val retentionCheckMs: Long,
                  scheduler: Scheduler,
                  private val time: Time) extends Logging {
 
   val CleanShutdownFile = ".kafka_cleanshutdown"
   val LockFile = ".lock"
   val InitialTaskDelayMs = 30*1000
-  val logDirs: Array[File] = config.logDirs.map(new File(_)).toArray
-  private val logFileSizeMap = config.logSegmentBytesPerTopicMap
-  private val logFlushInterval = config.logFlushIntervalMessages
-  private val logFlushIntervals = config.logFlushIntervalMsPerTopicMap
   private val logCreationLock = new Object
-  private val logRetentionSizeMap = config.logRetentionBytesPerTopicMap
-  private val logRetentionMsMap = config.logRetentionHoursPerTopicMap.map(e => (e._1, e._2 * 60 * 60 * 1000L)) // convert hours to ms
-  private val logRollMsMap = config.logRollHoursPerTopicMap.map(e => (e._1, e._2 * 60 * 60 * 1000L))
-  private val logRollDefaultIntervalMs = 1000L * 60 * 60 * config.logRollHours
-  private val logCleanupIntervalMs = 1000L * 60 * config.logCleanupIntervalMins
-  private val logCleanupDefaultAgeMs = 1000L * 60 * 60 * config.logRetentionHours
-
-  this.logIdent = "[Log Manager on Broker " + config.brokerId + "] "
   private val logs = new Pool[TopicAndPartition, Log]()
   
   createAndValidateLogDirs(logDirs)
   private var dirLocks = lockLogDirs(logDirs)
   loadLogs(logDirs)
+  
+  private val cleaner: LogCleaner = 
+    if(cleanerConfig.enableCleaner)
+      new LogCleaner(cleanerConfig, logDirs, logs, time = time)
+    else
+      null
   
   /**
    * Create and check validity of the given directories, specifically:
@@ -114,18 +113,11 @@ class LogManager(val config: KafkaConfig,
           if(dir.isDirectory){
             info("Loading log '" + dir.getName + "'")
             val topicPartition = parseTopicPartitionName(dir.getName)
-            val rollIntervalMs = logRollMsMap.get(topicPartition.topic).getOrElse(this.logRollDefaultIntervalMs)
-            val maxLogFileSize = logFileSizeMap.get(topicPartition.topic).getOrElse(config.logSegmentBytes)
-            val log = new Log(dir,
+            val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
+            val log = new Log(dir, 
+                              config,
+                              needsRecovery,
                               scheduler,
-                              maxLogFileSize,
-                              config.messageMaxBytes,
-                              logFlushInterval, 
-                              rollIntervalMs, 
-                              needsRecovery, 
-                              config.logIndexSizeMaxBytes,
-                              config.logIndexIntervalBytes,
-                              config.logDeleteDelayMs,
                               time)
             val previous = this.logs.put(topicPartition, log)
             if(previous != null)
@@ -142,20 +134,41 @@ class LogManager(val config: KafkaConfig,
   def startup() {
     /* Schedule the cleanup task to delete old logs */
     if(scheduler != null) {
-      info("Starting log cleanup with a period of %d ms.".format(logCleanupIntervalMs))
-      scheduler.schedule("kafka-log-cleaner", 
+      info("Starting log cleanup with a period of %d ms.".format(retentionCheckMs))
+      scheduler.schedule("kafka-log-retention", 
                          cleanupLogs, 
                          delay = InitialTaskDelayMs, 
-                         period = logCleanupIntervalMs, 
+                         period = retentionCheckMs, 
                          TimeUnit.MILLISECONDS)
-      info("Starting log flusher with a default period of %d ms with the following overrides: %s."
-          .format(config.logFlushIntervalMs, logFlushIntervals.map(e => e._1.toString + "=" + e._2.toString).mkString(", ")))
+      info("Starting log flusher with a default period of %d ms.".format(flushCheckMs))
       scheduler.schedule("kafka-log-flusher", 
                          flushDirtyLogs, 
                          delay = InitialTaskDelayMs, 
-                         period = config.logFlushSchedulerIntervalMs,
+                         period = flushCheckMs, 
                          TimeUnit.MILLISECONDS)
     }
+    if(cleanerConfig.enableCleaner)
+      cleaner.startup()
+  }
+  
+  /**
+   * Close all the logs
+   */
+  def shutdown() {
+    debug("Shutting down.")
+    try {
+      // stop the cleaner first
+      if(cleaner != null)
+        Utils.swallow(cleaner.shutdown())
+      // close the logs
+      allLogs.foreach(_.close())
+      // mark that the shutdown was clean by creating the clean shutdown marker file
+      logDirs.foreach(dir => Utils.swallow(new File(dir, CleanShutdownFile).createNewFile()))
+    } finally {
+      // regardless of whether the close succeeded, we need to unlock the data directories
+      dirLocks.foreach(_.destroy())
+    }
+    debug("Shutdown complete.")
   }
   
   /**
@@ -197,18 +210,10 @@ class LogManager(val config: KafkaConfig,
       val dataDir = nextLogDir()
       val dir = new File(dataDir, topicAndPartition.topic + "-" + topicAndPartition.partition)
       dir.mkdirs()
-      val rollIntervalMs = logRollMsMap.get(topicAndPartition.topic).getOrElse(this.logRollDefaultIntervalMs)
-      val maxLogFileSize = logFileSizeMap.get(topicAndPartition.topic).getOrElse(config.logSegmentBytes)
       log = new Log(dir, 
+                    defaultConfig,
+                    needsRecovery = false,
                     scheduler,
-                    maxLogFileSize, 
-                    config.messageMaxBytes,
-                    logFlushInterval, 
-                    rollIntervalMs, 
-                    needsRecovery = false, 
-                    config.logIndexSizeMaxBytes,
-                    config.logIndexIntervalBytes, 
-                    config.logDeleteDelayMs,
                     time)
       info("Created log for topic %s partition %d in %s.".format(topicAndPartition.topic, topicAndPartition.partition, dataDir.getAbsolutePath))
       logs.put(topicAndPartition, log)
@@ -242,8 +247,7 @@ class LogManager(val config: KafkaConfig,
   private def cleanupExpiredSegments(log: Log): Int = {
     val startMs = time.milliseconds
     val topic = parseTopicPartitionName(log.name).topic
-    val logCleanupThresholdMs = logRetentionMsMap.get(topic).getOrElse(this.logCleanupDefaultAgeMs)
-    log.deleteOldSegments(startMs - _.lastModified > logCleanupThresholdMs)
+    log.deleteOldSegments(startMs - _.lastModified > log.config.retentionMs)
   }
 
   /**
@@ -252,10 +256,9 @@ class LogManager(val config: KafkaConfig,
    */
   private def cleanupSegmentsToMaintainSize(log: Log): Int = {
     val topic = parseTopicPartitionName(log.dir.getName).topic
-    val maxLogRetentionSize = logRetentionSizeMap.get(topic).getOrElse(config.logRetentionBytes)
-    if(maxLogRetentionSize < 0 || log.size < maxLogRetentionSize)
+    if(log.config.retentionSize < 0 || log.size < log.config.retentionSize)
       return 0
-    var diff = log.size - maxLogRetentionSize
+    var diff = log.size - log.config.retentionSize
     def shouldDelete(segment: LogSegment) = {
       if(diff - segment.size >= 0) {
         diff -= segment.size
@@ -274,29 +277,12 @@ class LogManager(val config: KafkaConfig,
     debug("Beginning log cleanup...")
     var total = 0
     val startMs = time.milliseconds
-    for(log <- allLogs) {
+    for(log <- allLogs; if !log.config.dedupe) {
       debug("Garbage collecting '" + log.name + "'")
       total += cleanupExpiredSegments(log) + cleanupSegmentsToMaintainSize(log)
     }
     debug("Log cleanup completed. " + total + " files deleted in " +
                   (time.milliseconds - startMs) / 1000 + " seconds")
-  }
-
-  /**
-   * Close all the logs
-   */
-  def shutdown() {
-    debug("Shutting down.")
-    try {
-      // close the logs
-      allLogs.foreach(_.close())
-      // mark that the shutdown was clean by creating the clean shutdown marker file
-      logDirs.foreach(dir => Utils.swallow(new File(dir, CleanShutdownFile).createNewFile()))
-    } finally {
-      // regardless of whether the close succeeded, we need to unlock the data directories
-      dirLocks.foreach(_.destroy())
-    }
-    debug("Shutdown complete.")
   }
 
   /**
@@ -312,13 +298,9 @@ class LogManager(val config: KafkaConfig,
     for ((topicAndPartition, log) <- logs) {
       try {
         val timeSinceLastFlush = time.milliseconds - log.lastFlushTime
-        
-        var logFlushInterval = config.logFlushIntervalMs
-        if(logFlushIntervals.contains(topicAndPartition.topic))
-          logFlushInterval = logFlushIntervals(topicAndPartition.topic)
-        debug("Checking if flush is needed on " + topicAndPartition.topic + " flush interval  " + logFlushInterval +
+        debug("Checking if flush is needed on " + topicAndPartition.topic + " flush interval  " + log.config.flushMs +
               " last flushed " + log.lastFlushTime + " time since last flush: " + timeSinceLastFlush)
-        if(timeSinceLastFlush >= logFlushInterval)
+        if(timeSinceLastFlush >= log.config.flushMs)
           log.flush
       } catch {
         case e =>

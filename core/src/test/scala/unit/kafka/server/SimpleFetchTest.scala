@@ -68,7 +68,6 @@ class SimpleFetchTest extends JUnit3Suite {
 
     val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
     EasyMock.expect(logManager.getLog(topic, partitionId)).andReturn(Some(log)).anyTimes()
-    EasyMock.expect(logManager.config).andReturn(configs.head).anyTimes()
     EasyMock.replay(logManager)
 
     val replicaManager = EasyMock.createMock(classOf[kafka.server.ReplicaManager])
@@ -135,7 +134,6 @@ class SimpleFetchTest extends JUnit3Suite {
 
     val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
     EasyMock.expect(logManager.getLog(topic, 0)).andReturn(Some(log)).anyTimes()
-    EasyMock.expect(logManager.config).andReturn(configs.head).anyTimes()
     EasyMock.replay(logManager)
 
     val replicaManager = EasyMock.createMock(classOf[kafka.server.ReplicaManager])

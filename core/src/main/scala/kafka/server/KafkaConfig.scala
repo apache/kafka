@@ -103,9 +103,37 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
 
   /* the maximum size of the log for some specific topic before deleting it */
   val logRetentionBytesPerTopicMap = props.getMap("log.retention.bytes.per.topic", _.toLong > 0).mapValues(_.toLong)
-
+  
   /* the frequency in minutes that the log cleaner checks whether any log is eligible for deletion */
-  val logCleanupIntervalMins = props.getIntInRange("log.cleanup.interval.mins", 10, (1, Int.MaxValue))
+  val logCleanupIntervalMs = props.getLongInRange("log.retention.check.interval.ms", 5*60*1000, (1, Long.MaxValue))
+  
+  /* the default cleanup policy for segments beyond the retention window, must be either "delete" or "dedupe" */
+  val logCleanupPolicy = props.getString("log.cleanup.policy", "delete")
+  
+  /* a per-topic override for the cleanup policy for segments beyond the retention window */
+  val logCleanupPolicyMap = props.getMap("topic.log.cleanup.policy")
+  
+  /* the number of background threads to use for log cleaning */
+  val logCleanerThreads = props.getIntInRange("log.cleaner.threads", 1, (0, Int.MaxValue))
+  
+  /* the log cleaner will be throttled so that the sum of its read and write i/o will be less than this value on average */
+  val logCleanerIoMaxBytesPerSecond = props.getDouble("log.cleaner.io.max.bytes.per.second", Double.MaxValue)
+  
+  /* the total memory used for log deduplication across all cleaner threads */
+  val logCleanerDedupeBufferSize = props.getIntInRange("log.cleaner.dedupe.buffer.size", 500*1024*1024, (0, Int.MaxValue))
+  require(logCleanerDedupeBufferSize / logCleanerThreads > 1024*1024, "log.cleaner.dedupe.buffer.size must be at least 1MB per cleaner thread.")
+  
+  /* the total memory used for log cleaner I/O buffers across all cleaner threads */
+  val logCleanerIoBufferSize = props.getIntInRange("log.cleaner.io.buffer.size", 4*1024*1024, (0, Int.MaxValue))
+  
+  /* the amount of time to sleep when there are no logs to clean */
+  val logCleanerBackoffMs = props.getLongInRange("log.cleaner.backoff.ms", 30*1000, (0L, Long.MaxValue))
+  
+  /* the minimum ratio of dirty log to total log for a log to eligible for cleaning */
+  val logCleanerMinCleanRatio = props.getDouble("log.cleaner.min.cleanable.ratio", 0.5)
+  
+  /* should we enable log cleaning? */
+  val logCleanerEnable = props.getBoolean("log.cleaner.enable", false)
   
   /* the maximum size in bytes of the offset index */
   val logIndexSizeMaxBytes = props.getIntInRange("log.index.size.max.bytes", 10*1024*1024, (4, Int.MaxValue))
@@ -116,6 +144,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the number of messages accumulated on a log partition before messages are flushed to disk */
   val logFlushIntervalMessages = props.getIntInRange("log.flush.interval.messages", 500, (1, Int.MaxValue))
 
+  /* the amount of time to wait before deleting a file from the filesystem */
   val logDeleteDelayMs = props.getLongInRange("log.segment.delete.delay.ms", 60000, (0, Long.MaxValue))
 
   /* the maximum time in ms that a message in selected topics is kept in memory before flushed to disk, e.g., topic1:3000,topic2: 6000  */

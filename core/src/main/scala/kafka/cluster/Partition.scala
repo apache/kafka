@@ -23,7 +23,7 @@ import kafka.api.LeaderAndIsr
 import kafka.server.ReplicaManager
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
-import kafka.common.ErrorMapping
+import kafka.common._
 import kafka.controller.{LeaderIsrAndControllerEpoch, KafkaController}
 
 
@@ -75,11 +75,11 @@ class Partition(val topic: String,
       case None =>
         if (isReplicaLocal(replicaId)) {
           val log = logManager.getOrCreateLog(topic, partitionId)
-          val offset = replicaManager.highWatermarkCheckpoints(log.dir.getParent).read(topic, partitionId).min(log.logEndOffset)
+          val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParent) 
+          val offset = checkpoint.read.getOrElse(TopicAndPartition(topic, partitionId), 0L).min(log.logEndOffset)
           val localReplica = new Replica(replicaId, this, time, offset, Some(log))
           addReplicaIfNotExists(localReplica)
-        }
-        else {
+        } else {
           val remoteReplica = new Replica(replicaId, this, time)
           addReplicaIfNotExists(remoteReplica)
         }

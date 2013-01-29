@@ -161,6 +161,21 @@ class LogSegmentTest extends JUnit3Suite {
   }
   
   /**
+   * Test that we can change the file suffixes for the log and index files
+   */
+  @Test
+  def testChangeFileSuffixes() {
+    val seg = createSegment(40)
+    val logFile = seg.log.file
+    val indexFile = seg.index.file
+    seg.changeFileSuffixes("", ".deleted")
+    assertEquals(logFile.getAbsolutePath + ".deleted", seg.log.file.getAbsolutePath)
+    assertEquals(indexFile.getAbsolutePath + ".deleted", seg.index.file.getAbsolutePath)
+    assertTrue(seg.log.file.exists)
+    assertTrue(seg.index.file.exists)
+  }
+  
+  /**
    * Create a segment with some data and an index. Then corrupt the index,
    * and recover the segment, the entries should all be readable.
    */

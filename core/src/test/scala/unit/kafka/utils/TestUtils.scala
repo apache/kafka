@@ -43,6 +43,8 @@ import kafka.common.TopicAndPartition
  * Utility functions to help with testing
  */
 object TestUtils extends Logging {
+  
+  val IoTmpDir = System.getProperty("java.io.tmpdir")
 
   val Letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
   val Digits = "0123456789"
@@ -74,8 +76,7 @@ object TestUtils extends Logging {
    * Create a temporary directory
    */
   def tempDir(): File = {
-    val ioDir = System.getProperty("java.io.tmpdir")
-    val f = new File(ioDir, "kafka-" + random.nextInt(1000000))
+    val f = new File(IoTmpDir, "kafka-" + random.nextInt(1000000))
     f.mkdirs()
     f.deleteOnExit()
     f
@@ -154,8 +155,8 @@ object TestUtils extends Logging {
    * Wrap the message in a message set
    * @param payload The bytes of the message
    */
-  def singleMessageSet(payload: Array[Byte], codec: CompressionCodec = NoCompressionCodec) =
-    new ByteBufferMessageSet(compressionCodec = codec, messages = new Message(payload))
+  def singleMessageSet(payload: Array[Byte], codec: CompressionCodec = NoCompressionCodec, key: Array[Byte] = null) =
+    new ByteBufferMessageSet(compressionCodec = codec, messages = new Message(payload, key))
 
   /**
    * Generate an array of random bytes
@@ -497,7 +498,7 @@ object TestUtils extends Logging {
 }
 
 object TestZKUtils {
-  val zookeeperConnect = "127.0.0.1:2182"
+  val zookeeperConnect = "127.0.0.1:" + TestUtils.choosePort()
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {

@@ -18,11 +18,13 @@ package kafka.server
 
 import org.scalatest.junit.JUnit3Suite
 import org.junit.Assert._
+import java.io.File
 import kafka.admin.CreateTopicCommand
 import kafka.utils.TestUtils._
 import kafka.utils.IntEncoder
 import kafka.utils.{Utils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
+import kafka.common._
 import kafka.producer.{ProducerConfig, KeyedMessage, Producer}
 
 class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
@@ -44,8 +46,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   val message = "hello"
 
   var producer: Producer[Int, String] = null
-  var hwFile1: HighwaterMarkCheckpoint = new HighwaterMarkCheckpoint(configProps1.logDirs(0))
-  var hwFile2: HighwaterMarkCheckpoint = new HighwaterMarkCheckpoint(configProps2.logDirs(0))
+  var hwFile1: OffsetCheckpoint = new OffsetCheckpoint(new File(configProps1.logDirs(0), ReplicaManager.HighWatermarkFilename))
+  var hwFile2: OffsetCheckpoint = new OffsetCheckpoint(new File(configProps2.logDirs(0), ReplicaManager.HighWatermarkFilename))
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
   
   val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
@@ -80,9 +82,9 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     servers.foreach(server => server.replicaManager.checkpointHighWatermarks())
     producer.close()
-    val leaderHW = hwFile1.read(topic, 0)
+    val leaderHW = hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L)
     assertEquals(numMessages, leaderHW)
-    val followerHW = hwFile2.read(topic, 0)
+    val followerHW = hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L)
     assertEquals(numMessages, followerHW)
     servers.foreach(server => { server.shutdown(); Utils.rm(server.config.logDirs(0))})
   }
@@ -104,7 +106,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
     
-    assertEquals(0L, hwFile1.read(topic, 0))
+    assertEquals(0L, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
 
     sendMessages(1)
     Thread.sleep(1000)
@@ -112,7 +114,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // kill the server hosting the preferred replica
     server1.shutdown()
-    assertEquals(hw, hwFile1.read(topic, 0))
+    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
 
     // check if leader moves to the other server
     leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500, leader)
@@ -125,10 +127,10 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue("Leader must remain on broker 1, in case of zookeeper session expiration it can move to broker 0",
       leader.isDefined && (leader.get == 0 || leader.get == 1))
 
-    assertEquals(hw, hwFile1.read(topic, 0))
+    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
     // since server 2 was never shut down, the hw value of 30 is probably not checkpointed to disk yet
     server2.shutdown()
-    assertEquals(hw, hwFile2.read(topic, 0))
+    assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
 
     server2.startup()
     leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500, leader)
@@ -144,8 +146,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(server => server.shutdown())
     producer.close()
-    assertEquals(hw, hwFile1.read(topic, 0))
-    assertEquals(hw, hwFile2.read(topic, 0))
+    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
     servers.foreach(server => Utils.rm(server.config.logDirs))
   }
 
@@ -155,8 +157,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     server2 = TestUtils.createServer(configs.last)
     servers ++= List(server1, server2)
 
-    hwFile1 = new HighwaterMarkCheckpoint(server1.config.logDirs(0))
-    hwFile2 = new HighwaterMarkCheckpoint(server2.config.logDirs(0))
+    hwFile1 = new OffsetCheckpoint(new File(server1.config.logDirs(0), ReplicaManager.HighWatermarkFilename))
+    hwFile2 = new OffsetCheckpoint(new File(server2.config.logDirs(0), ReplicaManager.HighWatermarkFilename))
 
     producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
@@ -176,9 +178,9 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(server => server.shutdown())
     producer.close()
-    val leaderHW = hwFile1.read(topic, 0)
+    val leaderHW = hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L)
     assertEquals(hw, leaderHW)
-    val followerHW = hwFile2.read(topic, 0)
+    val followerHW = hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L)
     assertEquals(hw, followerHW)
     servers.foreach(server => Utils.rm(server.config.logDirs))
   }
@@ -189,8 +191,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     server2 = TestUtils.createServer(configs.last)
     servers ++= List(server1, server2)
 
-    hwFile1 = new HighwaterMarkCheckpoint(server1.config.logDirs(0))
-    hwFile2 = new HighwaterMarkCheckpoint(server2.config.logDirs(0))
+    hwFile1 = new OffsetCheckpoint(new File(server1.config.logDirs(0), ReplicaManager.HighWatermarkFilename))
+    hwFile2 = new OffsetCheckpoint(new File(server2.config.logDirs(0), ReplicaManager.HighWatermarkFilename))
 
     producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
@@ -212,21 +214,21 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     // kill the server hosting the preferred replica
     server1.shutdown()
     server2.shutdown()
-    assertEquals(hw, hwFile1.read(topic, 0))
-    assertEquals(hw, hwFile2.read(topic, 0))
+    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
 
     server2.startup()
     // check if leader moves to the other server
     leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500, leader)
     assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
 
-    assertEquals(hw, hwFile1.read(topic, 0))
+    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
 
     // bring the preferred replica back
     server1.startup()
 
-    assertEquals(hw, hwFile1.read(topic, 0))
-    assertEquals(hw, hwFile2.read(topic, 0))
+    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
 
     sendMessages(2)
     hw += 2
@@ -237,8 +239,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(server => server.shutdown())
     producer.close()
-    assertEquals(hw, hwFile1.read(topic, 0))
-    assertEquals(hw, hwFile2.read(topic, 0))
+    assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
+    assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
     servers.foreach(server => Utils.rm(server.config.logDirs))
   }
 

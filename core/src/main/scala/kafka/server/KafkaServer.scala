@@ -18,9 +18,12 @@
 package kafka.server
 
 import kafka.network.SocketServer
+import kafka.log.LogConfig
+import kafka.log.CleanerConfig
 import kafka.log.LogManager
 import kafka.utils._
 import java.util.concurrent._
+import java.io.File
 import atomic.AtomicBoolean
 import org.I0Itec.zkclient.ZkClient
 import kafka.controller.{ControllerStats, KafkaController}
@@ -56,9 +59,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     kafkaScheduler.startup()
 
     /* start log manager */
-    logManager = new LogManager(config,
-                                kafkaScheduler,
-                                time)
+    logManager = createLogManager(config)
     logManager.startup()
 
     socketServer = new SocketServer(config.brokerId,
@@ -138,6 +139,50 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   def awaitShutdown(): Unit = shutdownLatch.await()
 
   def getLogManager(): LogManager = logManager
+  
+  private def createLogManager(config: KafkaConfig): LogManager = {
+    val topics = config.logCleanupPolicyMap.keys ++ 
+                 config.logSegmentBytesPerTopicMap.keys ++ 
+                 config.logFlushIntervalMsPerTopicMap.keys ++ 
+                 config.logRollHoursPerTopicMap.keys ++ 
+                 config.logRetentionBytesPerTopicMap.keys ++ 
+                 config.logRetentionHoursPerTopicMap.keys
+    val defaultLogConfig = LogConfig(segmentSize = config.logSegmentBytes, 
+                                     segmentMs = 60 * 60 * 1000 * config.logRollHours,
+                                     flushInterval = config.logFlushIntervalMessages,
+                                     flushMs = config.logFlushIntervalMs.toLong,
+                                     retentionSize = config.logRetentionBytes,
+                                     retentionMs = 60 * 60 * 1000 * config.logRetentionHours,
+                                     maxMessageSize = config.messageMaxBytes,
+                                     maxIndexSize = config.logIndexSizeMaxBytes,
+                                     indexInterval = config.logIndexIntervalBytes,
+                                     fileDeleteDelayMs = config.logDeleteDelayMs,
+                                     minCleanableRatio = config.logCleanerMinCleanRatio,
+                                     dedupe = config.logCleanupPolicy.trim.toLowerCase == "dedupe")
+    val logConfigs = for(topic <- topics) yield 
+      topic -> defaultLogConfig.copy(segmentSize = config.logSegmentBytesPerTopicMap.getOrElse(topic, config.logSegmentBytes), 
+                                     segmentMs = 60 * 60 * 1000 * config.logRollHoursPerTopicMap.getOrElse(topic, config.logRollHours),
+                                     flushMs = config.logFlushIntervalMsPerTopicMap.getOrElse(topic, config.logFlushIntervalMs).toLong,
+                                     retentionSize = config.logRetentionBytesPerTopicMap.getOrElse(topic, config.logRetentionBytes),
+                                     retentionMs = 60 * 60 * 1000 * config.logRetentionHoursPerTopicMap.getOrElse(topic, config.logRetentionHours),
+                                     dedupe = config.logCleanupPolicyMap.getOrElse(topic, config.logCleanupPolicy).trim.toLowerCase == "dedupe")
+    val cleanerConfig = CleanerConfig(numThreads = config.logCleanerThreads,
+                                      dedupeBufferSize = config.logCleanerDedupeBufferSize,
+                                      ioBufferSize = config.logCleanerIoBufferSize,
+                                      maxMessageSize = config.messageMaxBytes,
+                                      maxIoBytesPerSecond = config.logCleanerIoMaxBytesPerSecond,
+                                      backOffMs = config.logCleanerBackoffMs,
+                                      enableCleaner = config.logCleanerEnable)
+    new LogManager(logDirs = config.logDirs.map(new File(_)).toArray,
+                   topicConfigs = logConfigs.toMap,
+                   defaultConfig = defaultLogConfig,
+                   cleanerConfig = cleanerConfig,
+                   flushCheckMs = config.logFlushSchedulerIntervalMs,
+                   retentionCheckMs = config.logCleanupIntervalMs,
+                   scheduler = kafkaScheduler,
+                   time = time)
+  }
+
 }
 
 

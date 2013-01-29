@@ -27,6 +27,7 @@ import scala.collection._
 import scala.collection.mutable
 import java.util.Properties
 import kafka.common.KafkaException
+import kafka.common.KafkaStorageException
 
 
 /**
@@ -159,7 +160,7 @@ object Utils extends Logging {
    * @param log The log method to use for logging. E.g. logger.warn
    * @param action The action to execute
    */
-  def swallow(log: (Object, Throwable) => Unit, action: => Unit) = {
+  def swallow(log: (Object, Throwable) => Unit, action: => Unit) {
     try {
       action
     } catch {
@@ -527,5 +528,38 @@ object Utils extends Logging {
    * This is different from java.lang.Math.abs or scala.math.abs in that they return Int.MinValue (!).
    */
   def abs(n: Int) = n & 0x7fffffff
+  
+  /**
+   * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
+   */
+  def replaceSuffix(s: String, oldSuffix: String, newSuffix: String): String = {
+    if(!s.endsWith(oldSuffix))
+      throw new IllegalArgumentException("Expected string to end with '%s' but string is '%s'".format(oldSuffix, s))
+    s.substring(0, s.length - oldSuffix.length) + newSuffix
+  }
+
+  /**
+   * Create a file with the given path
+   * @param path The path to create
+   * @throw KafkaStorageException If the file create fails
+   * @return The created file
+   */
+  def createFile(path: String): File = {
+    val f = new File(path)
+    val created = f.createNewFile()
+    if(!created)
+      throw new KafkaStorageException("Failed to create file %s.".format(path))
+    f
+  }
+  
+  /**
+   * Read a big-endian integer from a byte array
+   */
+  def readInt(bytes: Array[Byte], offset: Int): Int = {
+    ((bytes(offset) & 0xFF) << 24) |
+    ((bytes(offset + 1) & 0xFF) << 16) |
+    ((bytes(offset + 2) & 0xFF) << 8) |
+    (bytes(offset + 3) & 0xFF)
+  }
   
 }

@@ -32,7 +32,6 @@ import java.util.concurrent.TimeUnit
  *   
  * Incrementing the time to the exact next execution time of a task will result in that task executing (it as if execution itself takes no time).
  */
-@nonthreadsafe
 class MockScheduler(val time: Time) extends Scheduler {
   
   /* a priority queue of tasks ordered by next execution time */
@@ -41,7 +40,9 @@ class MockScheduler(val time: Time) extends Scheduler {
   def startup() {}
   
   def shutdown() {
-    tasks.clear()
+    this synchronized {
+      tasks.clear()
+    }
   }
   
   /**
@@ -50,23 +51,26 @@ class MockScheduler(val time: Time) extends Scheduler {
    * If you are using the scheduler associated with a MockTime instance this call be triggered automatically.
    */
   def tick() {
-    val now = time.milliseconds
-    while(!tasks.isEmpty && tasks.head.nextExecution <= now) {
-      /* pop and execute the task with the lowest next execution time */
-      val curr = tasks.head
-      this.tasks = tasks.tail
-      curr.fun()
-      /* if the task is periodic, reschedule it and re-enqueue */
-      if(curr.periodic) {
-        curr.nextExecution += curr.period
-        this.tasks += curr
+    this synchronized {
+      val now = time.milliseconds
+      while(!tasks.isEmpty && tasks.head.nextExecution <= now) {
+        /* pop and execute the task with the lowest next execution time */
+        val curr = tasks.dequeue
+        curr.fun()
+        /* if the task is periodic, reschedule it and re-enqueue */
+        if(curr.periodic) {
+          curr.nextExecution += curr.period
+          this.tasks += curr
+        }
       }
     }
   }
   
   def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) {
-    tasks += MockTask(name, fun, time.milliseconds + delay, period = period)
-    tick()
+    this synchronized {
+      tasks += MockTask(name, fun, time.milliseconds + delay, period = period)
+      tick()
+    }
   }
   
 }

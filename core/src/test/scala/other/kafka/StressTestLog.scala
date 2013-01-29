@@ -34,15 +34,11 @@ object StressTestLog {
     val dir = TestUtils.tempDir()
     val time = new MockTime
     val log = new Log(dir = dir,
-                      scheduler = time.scheduler,
-                      maxSegmentSize = 64*1024*1024,
-                      maxMessageSize = Int.MaxValue, 
-                      flushInterval = Int.MaxValue, 
-                      rollIntervalMs = Long.MaxValue, 
+                      config = LogConfig(segmentSize = 64*1024*1024,
+                                         maxMessageSize = Int.MaxValue,
+                                         maxIndexSize = 1024*1024),
                       needsRecovery = false,
-                      maxIndexSize = 1024*1024,
-                      indexIntervalBytes = 4096,
-                      segmentDeleteDelayMs = 60000,
+                      scheduler = time.scheduler,
                       time = time)
     val writer = new WriterThread(log)
     writer.start()

@@ -73,7 +73,7 @@ object ByteBufferMessageSet {
     new ByteBufferMessageSet(outputBuffer)
   }
     
-  private def writeMessage(buffer: ByteBuffer, message: Message, offset: Long) {
+  private[kafka] def writeMessage(buffer: ByteBuffer, message: Message, offset: Long) {
     buffer.putLong(offset)
     buffer.putInt(message.size)
     buffer.put(message.buffer)
@@ -150,7 +150,7 @@ class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends Message
           return allDone()
         val offset = topIter.getLong()
         val size = topIter.getInt()
-        if(size < 0)
+        if(size < 0 || size < Message.MinHeaderSize)
           throw new InvalidMessageException("Message found with corrupt size (" + size + ")")
         
         // we have an incomplete message
