@@ -46,6 +46,11 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   private val metricId = new ClientIdAndBroker(clientId, brokerInfo)
   val fetcherStats = new FetcherStats(metricId)
   val fetcherLagStats = new FetcherLagStats(metricId)
+  val fetchRequestBuilder = new FetchRequestBuilder().
+          clientId(clientId).
+          replicaId(fetcherBrokerId).
+          maxWait(maxWait).
+          minBytes(minBytes)
 
   /* callbacks to be defined in subclass */
 
@@ -65,12 +70,6 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   }
 
   override def doWork() {
-    val fetchRequestBuilder = new FetchRequestBuilder().
-            clientId(clientId).
-            replicaId(fetcherBrokerId).
-            maxWait(maxWait).
-            minBytes(minBytes)
-
     partitionMapLock.lock()
     try {
       while (partitionMap.isEmpty)
