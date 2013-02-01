@@ -16,19 +16,16 @@
  */
 package kafka.bridge.hadoop;
 
-
 import java.io.IOException;
 import java.net.URI;
-import java.util.Properties;
+import java.util.*;
 
 import kafka.common.KafkaException;
 import kafka.javaapi.producer.Producer;
-import kafka.message.Message;
 import kafka.producer.ProducerConfig;
+
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.BytesWritable;
-import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.OutputCommitter;
@@ -38,26 +35,26 @@ import org.apache.hadoop.mapreduce.TaskAttemptContext;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputCommitter;
 import org.apache.log4j.Logger;
 
-public class KafkaOutputFormat<W extends BytesWritable> extends OutputFormat<NullWritable, W>
+public class KafkaOutputFormat<K, V> extends OutputFormat<K, V>
 {
   private Logger log = Logger.getLogger(KafkaOutputFormat.class);
 
   public static final String KAFKA_URL = "kafka.output.url";
-  /** Bytes to buffer before the OutputFormat does a send */
+  /** Bytes to buffer before the OutputFormat does a send (i.e., the amortization window) */
   public static final int KAFKA_QUEUE_SIZE = 10*1024*1024;
 
-  /** Default value for Kafka's connect.timeout.ms */
-  public static final int KAFKA_PRODUCER_CONNECT_TIMEOUT = 30*1000;
-  /** Default value for Kafka's reconnect.interval*/
-  public static final int KAFKA_PRODUCER_RECONNECT_INTERVAL = 1000;
-  /** Default value for Kafka's buffer.size */
-  public static final int KAFKA_PRODUCER_BUFFER_SIZE = 64*1024;
-  /** Default value for Kafka's max.message.size */
-  public static final int KAFKA_PRODUCER_MAX_MESSAGE_SIZE = 1024*1024;
-  /** Default value for Kafka's producer.type */
-  public static final String KAFKA_PRODUCER_PRODUCER_TYPE = "sync";
-  /** Default value for Kafka's compression.codec */
-  public static final int KAFKA_PRODUCER_COMPRESSION_CODEC = 0;
+  public static final String KAFKA_CONFIG_PREFIX = "kafka.output";
+  private static final Map<String, String> kafkaConfigMap;
+  static {
+    Map<String, String> cMap = new HashMap<String, String>();
+
+    // default Hadoop producer configs
+    cMap.put("producer.type",       "sync");
+    cMap.put("send.buffer.bytes",   Integer.toString(64*1024));
+    cMap.put("compression.codec",   Integer.toString(1));
+
+    kafkaConfigMap = Collections.unmodifiableMap(cMap);
+  }
 
   public KafkaOutputFormat()
   {
@@ -91,7 +88,7 @@ public class KafkaOutputFormat<W extends BytesWritable> extends OutputFormat<Nul
   }
 
   @Override
-  public RecordWriter<NullWritable, W> getRecordWriter(TaskAttemptContext context) throws IOException, InterruptedException
+  public RecordWriter<K, V> getRecordWriter(TaskAttemptContext context) throws IOException, InterruptedException
   {
     Path outputPath = getOutputPath(context);
     if (outputPath == null)
@@ -102,58 +99,44 @@ public class KafkaOutputFormat<W extends BytesWritable> extends OutputFormat<Nul
     Properties props = new Properties();
     String topic;
 
-    final int queueSize = job.getInt("kafka.output.queue_size", KAFKA_QUEUE_SIZE);
-    final int timeout = job.getInt("kafka.output.connect_timeout", KAFKA_PRODUCER_CONNECT_TIMEOUT);
-    final int interval = job.getInt("kafka.output.reconnect_interval", KAFKA_PRODUCER_RECONNECT_INTERVAL);
-    final int bufSize = job.getInt("kafka.output.bufsize", KAFKA_PRODUCER_BUFFER_SIZE);
-    final int maxSize = job.getInt("kafka.output.max_msgsize", KAFKA_PRODUCER_MAX_MESSAGE_SIZE);
-    final String producerType = job.get("kafka.output.producer_type", KAFKA_PRODUCER_PRODUCER_TYPE);
-    final int compressionCodec = job.getInt("kafka.output.compression_codec", KAFKA_PRODUCER_COMPRESSION_CODEC);
+    props.putAll(kafkaConfigMap);                       // inject default configuration
+    for (Map.Entry<String, String> m : job) {           // handle any overrides
+      if (!m.getKey().startsWith(KAFKA_CONFIG_PREFIX))
+        continue;
+      if (m.getKey().equals(KAFKA_URL))
+        continue;
 
-    job.setInt("kafka.output.queue_size", queueSize);
-    job.setInt("kafka.output.connect_timeout", timeout);
-    job.setInt("kafka.output.reconnect_interval", interval);
-    job.setInt("kafka.output.bufsize", bufSize);
-    job.setInt("kafka.output.max_msgsize", maxSize);
-    job.set("kafka.output.producer_type", producerType);
-    job.setInt("kafka.output.compression_codec", compressionCodec);
+      String kafkaKeyName = m.getKey().substring(KAFKA_CONFIG_PREFIX.length()+1);
+      props.setProperty(kafkaKeyName, m.getValue());    // set Kafka producer property
+    }
 
-    props.setProperty("producer.type", producerType);
-    props.setProperty("send.buffer.bytes", Integer.toString(bufSize));
-    props.setProperty("connect.timeout.ms", Integer.toString(timeout));
-    props.setProperty("reconnect.interval", Integer.toString(interval));
-    props.setProperty("compression.codec", Integer.toString(compressionCodec));
+    // inject Kafka producer props back into jobconf for easier debugging
+    for (Map.Entry<Object, Object> m : props.entrySet()) {
+      job.set(KAFKA_CONFIG_PREFIX + "." + m.getKey().toString(), m.getValue().toString());
+    }
+
+    // KafkaOutputFormat specific parameters
+    final int queueSize = job.getInt(KAFKA_CONFIG_PREFIX + ".queue.size", KAFKA_QUEUE_SIZE);
+    job.setInt(KAFKA_CONFIG_PREFIX + ".queue.size", queueSize);
 
     if (uri.getScheme().equals("kafka")) {
-      // using the legacy direct broker list
+      // using the direct broker list
       // URL: kafka://<kafka host>/<topic>
       // e.g. kafka://kafka-server:9000,kafka-server2:9000/foobar
-
-      // Just enumerate broker_ids, as it really doesn't matter what they are as long as they're unique
-      // (KAFKA-258 will remove the broker_id requirement)
-      StringBuilder brokerListBuilder = new StringBuilder();
-      String delim = "";
-      int brokerId = 0;
-      for (String serverPort : uri.getAuthority().split(",")) {
-        brokerListBuilder.append(delim).append(String.format("%d:%s", brokerId, serverPort));
-        delim = ",";
-        brokerId++;
-      }
-      String brokerList = brokerListBuilder.toString();
-
+      String brokerList = uri.getAuthority();
       props.setProperty("broker.list", brokerList);
-      job.set("kafka.broker.list", brokerList);
+      job.set(KAFKA_CONFIG_PREFIX + ".broker.list", brokerList);
 
       if (uri.getPath() == null || uri.getPath().length() <= 1)
         throw new KafkaException("no topic specified in kafka uri");
 
-      topic = uri.getPath().substring(1);             // ignore the initial '/' in the path
-      job.set("kafka.output.topic", topic);
+      topic = uri.getPath().substring(1);               // ignore the initial '/' in the path
+      job.set(KAFKA_CONFIG_PREFIX + ".topic", topic);
       log.info(String.format("using kafka broker %s (topic %s)", brokerList, topic));
     } else
       throw new KafkaException("missing scheme from kafka uri (must be kafka://)");
 
-    Producer<Integer, Message> producer = new Producer<Integer, Message>(new ProducerConfig(props));
-    return new KafkaRecordWriter<W>(producer, topic, queueSize);
+    Producer<Object, byte[]> producer = new Producer<Object, byte[]>(new ProducerConfig(props));
+    return new KafkaRecordWriter<K, V>(producer, topic, queueSize);
   }
 }
