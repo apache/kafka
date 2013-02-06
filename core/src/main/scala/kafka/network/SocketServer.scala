@@ -71,6 +71,7 @@ class SocketServer(val brokerId: Int,
       acceptor.shutdown()
     for(processor <- processors)
       processor.shutdown()
+    requestChannel.shutdown
     info("shut down completely")
   }
 }

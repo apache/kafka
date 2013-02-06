@@ -32,7 +32,7 @@ class KafkaRequestHandler(id: Int, brokerId: Int, val requestChannel: RequestCha
     while(true) {
       try {
         val req = requestChannel.receiveRequest()
-        if(req eq RequestChannel.AllDone){
+        if(req eq RequestChannel.AllDone) {
           trace("receives shut down command, shut down".format(brokerId, id))
           return
         }

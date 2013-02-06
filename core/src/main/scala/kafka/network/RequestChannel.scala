@@ -126,6 +126,10 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
   def addResponseListener(onResponse: Int => Unit) { 
     responseListeners ::= onResponse
   }
+
+  def shutdown() {
+    requestQueue.clear
+  }
 }
 
 object RequestMetrics {
