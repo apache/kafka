@@ -85,7 +85,7 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
 
   /* background thread expiring requests that have been waiting too long */
   private val expiredRequestReaper = new ExpiredRequestReaper
-  private val expirationThread = Utils.daemonThread("request-expiration-task", expiredRequestReaper)
+  private val expirationThread = Utils.newThread(name="request-expiration-task", runnable=expiredRequestReaper, daemon=false)
   expirationThread.start()
 
   /**
@@ -241,7 +241,6 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
     def shutdown() {
       debug("Shutting down.")
       running.set(false)
-      expirationThread.interrupt()
       shutdownLatch.await()
       debug("Shut down complete.")
     }
