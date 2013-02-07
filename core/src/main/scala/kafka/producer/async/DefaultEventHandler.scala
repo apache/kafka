@@ -83,7 +83,8 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         producerStats.failedSendRate.mark()
 
         val correlationIdEnd = correlationId.get()
-        error("Failed to send the following requests with correlation ids in [%d,%d]: %s".format(correlationIdStart, correlationIdEnd-1, outstandingProduceRequests))
+        error("Failed to send requests for topics %s with correlation ids in [%d,%d]".format(outstandingProduceRequests.map(_.topic).mkString(","),
+          correlationIdStart, correlationIdEnd-1))
         throw new FailedToSendMessageException("Failed to send messages after " + config.messageSendMaxRetries + " tries.", null)
       }
     }
@@ -228,8 +229,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
    */
   private def send(brokerId: Int, messagesPerTopic: Map[TopicAndPartition, ByteBufferMessageSet]) = {
     if(brokerId < 0) {
-      warn("Failed to send data %s since partitions %s don't have a leader".format(messagesPerTopic.map(_._2),
-        messagesPerTopic.map(_._1.toString).mkString(",")))
+      warn("Failed to send data since partitions %s don't have a leader".format(messagesPerTopic.map(_._1).mkString(",")))
       messagesPerTopic.keys.toSeq
     } else if(messagesPerTopic.size > 0) {
       val currentCorrelationId = correlationId.getAndIncrement
@@ -259,8 +259,8 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         failedTopicPartitions
       } catch {
         case t: Throwable =>
-          warn("Failed to send producer request with correlation id %d to broker %d with data %s"
-            .format(currentCorrelationId, brokerId, messagesPerTopic), t)
+          warn("Failed to send producer request with correlation id %d to broker %d with data for partitions %s"
+            .format(currentCorrelationId, brokerId, messagesPerTopic.map(_._1).mkString(",")), t)
           messagesPerTopic.keys.toSeq
       }
     } else {
