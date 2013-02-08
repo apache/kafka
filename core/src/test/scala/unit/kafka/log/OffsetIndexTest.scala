@@ -86,7 +86,7 @@ class OffsetIndexTest extends JUnitSuite {
       val offset = idx.baseOffset + i + 1
       idx.append(offset, i)
     }
-    assertWriteFails("Append should fail on a full index", idx, idx.maxEntries + 1, classOf[IllegalStateException])
+    assertWriteFails("Append should fail on a full index", idx, idx.maxEntries + 1, classOf[IllegalArgumentException])
   }
   
   @Test(expected = classOf[IllegalArgumentException])
@@ -105,7 +105,9 @@ class OffsetIndexTest extends JUnitSuite {
     val idxRo = new OffsetIndex(file = idx.file, baseOffset = idx.baseOffset)
     assertEquals(first, idxRo.lookup(first.offset))
     assertEquals(sec, idxRo.lookup(sec.offset))
-    assertWriteFails("Append should fail on read-only index", idxRo, 53, classOf[IllegalStateException])
+    assertEquals(sec.offset, idxRo.lastOffset)
+    assertEquals(2, idxRo.entries)
+    assertWriteFails("Append should fail on read-only index", idxRo, 53, classOf[IllegalArgumentException])
   }
   
   @Test
