@@ -126,6 +126,8 @@ private[kafka] class Log(val dir: File,
     
   /* Calculate the offset of the next message */
   private var nextOffset: AtomicLong = new AtomicLong(segments.view.last.nextOffset())
+  
+  debug("Completed load of log %s with log end offset %d".format(name, logEndOffset))
 
   newGauge(name + "-" + "NumLogSegments",
            new Gauge[Int] { def getValue = numberOfSegments })
@@ -275,8 +277,10 @@ private[kafka] class Log(val dir: File,
               val lastOffset = offsetCounter.get - 1
               (firstOffset, lastOffset)
             } else {
-              if(!messageSetInfo.offsetsMonotonic)
-                throw new IllegalArgumentException("Out of order offsets found in " + messages)
+              require(messageSetInfo.offsetsMonotonic, "Out of order offsets found in " + messages)
+              require(messageSetInfo.firstOffset >= nextOffset.get, 
+                      "Attempt to append a message set beginning with offset %d to a log with log end offset %d."
+                      .format(messageSetInfo.firstOffset, nextOffset.get))
               (messageSetInfo.firstOffset, messageSetInfo.lastOffset)
             }
           
