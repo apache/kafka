@@ -89,13 +89,25 @@ abstract class MultiSend[S <: Send](val sends: List[S]) extends Send {
   private var current = sends
   var totalWritten = 0
 
+  /**
+   *  This method continues to write to the socket buffer till an incomplete
+   *  write happens. On an incomplete write, it returns to the caller to give it
+   *  a chance to schedule other work till the buffered write completes.
+   */
   def writeTo(channel: GatheringByteChannel): Int = {
     expectIncomplete
-    val written = current.head.writeTo(channel)
-    totalWritten += written
-    if(current.head.complete)
-      current = current.tail
-    written
+    var totalWrittenPerCall = 0
+    var sendComplete: Boolean = false
+    do {
+      val written = current.head.writeTo(channel)
+      totalWritten += written
+      totalWrittenPerCall += written
+      sendComplete = current.head.complete
+      if(sendComplete)
+        current = current.tail
+    } while (!complete && sendComplete)
+    trace("Bytes written as part of multisend call : " + totalWrittenPerCall +  "Total bytes written so far : " + totalWritten + "Expected bytes to write : " + expectedBytesToWrite)
+    totalWrittenPerCall
   }
   
   def complete: Boolean = {

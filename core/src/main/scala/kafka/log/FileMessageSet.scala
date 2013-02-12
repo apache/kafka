@@ -71,7 +71,7 @@ class FileMessageSet private[kafka](val file: File,
   }
   
   /**
-   * Search forward for the file position of the last offset that is great than or equal to the target offset 
+   * Search forward for the file position of the last offset that is greater than or equal to the target offset
    * and return its physical position. If no such offsets are found, return null.
    */
   private[log] def searchFor(targetOffset: Long, startingPosition: Int): OffsetPosition = {
@@ -97,8 +97,18 @@ class FileMessageSet private[kafka](val file: File,
   /**
    * Write some of this set to the given channel, return the amount written
    */
-  def writeTo(destChannel: GatheringByteChannel, writePosition: Long, size: Int): Int =
-    channel.transferTo(start + writePosition, scala.math.min(size, sizeInBytes), destChannel).toInt
+  def writeTo(destChannel: GatheringByteChannel, writePosition: Long, size: Int): Int = {
+    // Ensure that the underlying size has not changed.
+    val newSize = scala.math.min(channel.size().toInt, limit) - start
+    if (newSize < _size.get()) {
+      throw new KafkaException("Size of FileMessageSet %s has been truncated during write: old size %d, new size %d"
+        .format(file.getAbsolutePath, _size.get(), newSize))
+    }
+    val bytesTransferred = channel.transferTo(start + writePosition, scala.math.min(size, sizeInBytes), destChannel).toInt
+    trace("FileMessageSet " + file.getAbsolutePath + " : bytes transferred : " + bytesTransferred
+      + " bytes requested for transfer : " + scala.math.min(size, sizeInBytes))
+    bytesTransferred
+  }
   
   /**
    * Get an iterator over the messages in the set. We only do shallow iteration here.
