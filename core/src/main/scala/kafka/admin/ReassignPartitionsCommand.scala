@@ -26,7 +26,7 @@ object ReassignPartitionsCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser
-    val jsonFileOpt = parser.accepts("path to json file", "REQUIRED: The JSON file with the list of partitions and the " +
+    val jsonFileOpt = parser.accepts("path-to-json-file", "REQUIRED: The JSON file with the list of partitions and the " +
       "new replicas they should be reassigned to in the following format - \n" +
        "[{\"topic\": \"foo\", \"partition\": \"1\", \"replicas\": \"1,2,3\" }]")
       .withRequiredArg

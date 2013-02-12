@@ -26,7 +26,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser
-    val jsonFileOpt = parser.accepts("path to json file", "The JSON file with the list of partitions " +
+    val jsonFileOpt = parser.accepts("path-to-json-file", "The JSON file with the list of partitions " +
       "for which preferred replica leader election should be done, in the following format - \n" +
        "[{\"topic\": \"foo\", \"partition\": \"1\"}, {\"topic\": \"foobar\", \"partition\": \"2\"}]. \n" +
       "Defaults to all existing partitions")
