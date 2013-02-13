@@ -192,7 +192,16 @@ private[kafka] class Log(val dir: File,
       if(needsRecovery)
         recoverSegment(logSegments.get(logSegments.size - 1))
     }
-    new SegmentList(logSegments.toArray(new Array[LogSegment](logSegments.size)))
+
+    val segmentList = logSegments.toArray(new Array[LogSegment](logSegments.size))
+    // Check for the index file of every segment, if it's empty or its last offset is greater than its base offset.
+    for (s <- segmentList) {
+      require(s.index.entries == 0 || s.index.lastOffset > s.index.baseOffset,
+              "Corrupt index found, index file (%s) has non-zero size but the last offset is %d and the base offset is %d"
+                .format(s.index.file.getAbsolutePath, s.index.lastOffset, s.index.baseOffset))
+    }
+
+    new SegmentList(segmentList)
   }
   
   /**

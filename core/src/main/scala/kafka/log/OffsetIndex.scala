@@ -92,7 +92,6 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
   
   info("Loaded index file %s with maxEntries = %d, maxIndexSize = %d, entries = %d, lastOffset = %d, file position = %d"
     .format(file.getAbsolutePath, maxEntries, maxIndexSize, entries(), lastOffset, mmap.position))
-  require(entries == 0 || lastOffset > this.baseOffset, "Corrupt index found, index file (%s) has non-zero size but last offset is %d.".format(file.getAbsolutePath, lastOffset))
 
   /* the maximum number of entries this index can hold */
   def maxEntries = mmap.limit / 8
@@ -130,7 +129,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
    * Return -1 if the least entry in the index is larger than the target offset or the index is empty
    */
   private def indexSlotFor(idx: ByteBuffer, targetOffset: Long): Int = {
-    // we only store the difference from the baseoffset so calculate that
+    // we only store the difference from the base offset so calculate that
     val relOffset = targetOffset - baseOffset
     
     // check if the index is empty
@@ -197,7 +196,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
   /**
    * Truncate the entire index
    */
-  def truncate() = truncateTo(this.baseOffset)
+  def truncate() = truncateToEntries(0)
   
   /**
    * Remove all entries from the index which have an offset greater than or equal to the given offset.
@@ -220,10 +219,17 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
           slot
         else
           slot + 1
-      this.size.set(newEntries)
-      mmap.position(this.size.get * 8)
-      this.lastOffset = readLastOffset
+      truncateToEntries(newEntries)
     }
+  }
+
+  /**
+   * Truncates index to a known number of entries.
+   */
+  private def truncateToEntries(entries: Int) {
+    this.size.set(entries)
+    mmap.position(this.size.get * 8)
+    this.lastOffset = readLastOffset
   }
   
   /**
