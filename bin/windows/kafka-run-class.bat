@@ -25,11 +25,30 @@ set BASE_DIR=%CD%\..
 set CLASSPATH=
 echo %BASE_DIR%
 
-for %%i in (%BASE_DIR%\project\boot\scala-2.8.0\lib\*.jar) do (
-	call :concat %%i
-)
+set ivyPath=%USERPROFILE%\.ivy2\cache
 
-for %%i in (%BASE_DIR%\core\target\scala_2.8.0\*.jar) do (
+set snappy=%ivyPath%/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.4.1.jar
+	call :concat %snappy%
+
+set library=%ivyPath%/org.scala-lang/scala-library/jars/scala-library-2.8.0.jar
+	call :concat %library%
+
+set compiler=%ivyPath%/org.scala-lang/scala-compiler/jars/scala-compiler-2.8.0.jar
+	call :concat %compiler%
+
+set log4j=%ivyPath%/log4j/log4j/jars/log4j-1.2.15.jar
+	call :concat %log4j%
+
+set slf=%ivyPath%/org.slf4j/slf4j-api/jars/slf4j-api-1.6.4.jar
+	call :concat %slf%
+
+set zookeeper=%ivyPath%/org.apache.zookeeper/zookeeper/jars/zookeeper-3.3.4.jar
+	call :concat %zookeeper%
+
+set jopt=%ivyPath%/net.sf.jopt-simple/jopt-simple/jars/jopt-simple-3.2.jar
+	call :concat %jopt%
+
+for %%i in (%BASE_DIR%\core\target\scala-2.8.0\*.jar) do (
 	call :concat %%i
 )
 
@@ -37,11 +56,7 @@ for %%i in (%BASE_DIR%\core\lib\*.jar) do (
 	call :concat %%i
 )
 
-for %%i in (%BASE_DIR%\perf\target\scala_2.8.0/kafka*.jar) do (
-	call :concat %%i
-)
-
-for %%i in (%BASE_DIR%\core\lib_managed\scala_2.8.0\compile\*.jar) do (
+for %%i in (%BASE_DIR%\perf\target\scala-2.8.0/kafka*.jar) do (
 	call :concat %%i
 )
 
