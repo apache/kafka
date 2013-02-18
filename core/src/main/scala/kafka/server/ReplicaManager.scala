@@ -92,6 +92,8 @@ class ReplicaManager(val config: KafkaConfig,
   def startup() {
     // start ISR expiration thread
     kafkaScheduler.scheduleWithRate(maybeShrinkIsr, "isr-expiration-thread-", 0, config.replicaLagTimeMaxMs)
+    // start high watermark checkpoint thread
+    startHighWaterMarksCheckPointThread()
   }
 
   def stopReplica(topic: String, partitionId: Int, deletePartition: Boolean): Short  = {
