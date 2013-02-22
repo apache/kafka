@@ -32,7 +32,6 @@ class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
   def startup() {
     try {
       server.startup()
-      serverConfig.verify()
     }
     catch {
       case e =>
