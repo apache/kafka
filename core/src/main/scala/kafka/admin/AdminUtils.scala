@@ -63,9 +63,9 @@ object AdminUtils extends Logging {
     val ret = new mutable.HashMap[Int, List[String]]()
     val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
 
-    var secondReplicaShift = -1
+    var secondReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
     for (i <- 0 until nPartitions) {
-      if (i % brokerList.size == 0)
+      if (i > 0 && (i % brokerList.size == 0))
         secondReplicaShift += 1
       val firstReplicaIndex = (i + startIndex) % brokerList.size
       var replicaList = List(brokerList(firstReplicaIndex))
