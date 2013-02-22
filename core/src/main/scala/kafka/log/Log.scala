@@ -292,7 +292,15 @@ private[kafka] class Log(val dir: File,
                       .format(messageSetInfo.firstOffset, nextOffset.get))
               (messageSetInfo.firstOffset, messageSetInfo.lastOffset)
             }
-          
+
+          // Check if the message sizes are valid. This check is done after assigning offsets to ensure the comparison
+          // happens with the new message size (after re-compression, if any)
+          for(messageAndOffset <- validMessages.shallowIterator) {
+            if(MessageSet.entrySize(messageAndOffset.message) > maxMessageSize)
+              throw new MessageSizeTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
+                .format(MessageSet.entrySize(messageAndOffset.message), maxMessageSize))
+          }
+
           // now append to the log
           trace("Appending message set to %s offset: %d nextOffset: %d messageSet: %s"
                 .format(this.name, offsets._1, nextOffset.get(), validMessages))
@@ -321,8 +329,7 @@ private[kafka] class Log(val dir: File,
   
   /**
    * Validate the following:
-   * 1. each message is not too large
-   * 2. each message matches its CRC
+   * 1. each message matches its CRC
    * 
    * Also compute the following quantities:
    * 1. First offset in the message set
@@ -346,12 +353,10 @@ private[kafka] class Log(val dir: File,
       // update the last offset seen
       lastOffset = messageAndOffset.offset
 
-      // check the validity of the message by checking CRC and message size
+      // check the validity of the message by checking CRC
       val m = messageAndOffset.message
       m.ensureValid()
-      if(MessageSet.entrySize(m) > maxMessageSize)
-        throw new MessageSizeTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d.".format(MessageSet.entrySize(m), maxMessageSize))
-      
+
       messageCount += 1;
       
       val messageCodec = m.compressionCodec
