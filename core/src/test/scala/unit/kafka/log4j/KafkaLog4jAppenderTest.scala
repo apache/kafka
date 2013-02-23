@@ -36,7 +36,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
 
   var logDirZk: File = null
   var config: KafkaConfig = null
-  var serverZk: KafkaServer = null
+  var server: KafkaServer = null
 
   var simpleConsumerZk: SimpleConsumer = null
 
@@ -55,14 +55,14 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     val logDirZkPath = propsZk.getProperty("log.dir")
     logDirZk = new File(logDirZkPath)
     config = new KafkaConfig(propsZk)
-    serverZk = TestUtils.createServer(config);
+    server = TestUtils.createServer(config);
     simpleConsumerZk = new SimpleConsumer("localhost", portZk, 1000000, 64*1024, "")
   }
 
   @After
   override def tearDown() {
     simpleConsumerZk.close
-    serverZk.shutdown
+    server.shutdown
     Utils.rm(logDirZk)
     super.tearDown()
   }
@@ -164,6 +164,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     props.put("log4j.appender.KAFKA.brokerList", TestUtils.getBrokerListStrFromConfigs(Seq(config)))
     props.put("log4j.appender.KAFKA.Topic", "test-topic")
     props.put("log4j.logger.kafka.log4j", "INFO,KAFKA")
+    props.put("log4j.appender.KAFKA.requiredNumAcks", "1")
     props
   }
 }

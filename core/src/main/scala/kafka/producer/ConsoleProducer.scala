@@ -87,7 +87,12 @@ object ConsoleProducer {
                                   .describedAs("reader_class")
                                   .ofType(classOf[java.lang.String])
                                   .defaultsTo(classOf[LineMessageReader].getName)
-    val propertyOpt = parser.accepts("property", "A mechanism to pass user-defined properties in the form key=value to the message reader. " + 
+    val socketBufferSizeOpt = parser.accepts("socket-buffer-size", "The size of the tcp RECV size.")
+                                  .withRequiredArg
+                                  .describedAs("size")
+                                  .ofType(classOf[java.lang.Integer])
+                                  .defaultsTo(1024*100)
+    val propertyOpt = parser.accepts("property", "A mechanism to pass user-defined properties in the form key=value to the message reader. " +
                                                  "This allows custom configuration for a user-defined message reader.")
                             .withRequiredArg
                             .describedAs("prop")
@@ -116,6 +121,7 @@ object ConsoleProducer {
     val keyEncoderClass = options.valueOf(keyEncoderOpt)
     val valueEncoderClass = options.valueOf(valueEncoderOpt)
     val readerClass = options.valueOf(messageReaderOpt)
+    val socketBuffer = options.valueOf(socketBufferSizeOpt)
     val cmdLineProps = parseLineReaderArgs(options.valuesOf(propertyOpt))
     cmdLineProps.put("topic", topic)
 
@@ -133,7 +139,7 @@ object ConsoleProducer {
     props.put("request.timeout.ms", requestTimeoutMs.toString)
     props.put("key.serializer.class", keyEncoderClass)
     props.put("serializer.class", valueEncoderClass)
-
+    props.put("send.buffer.bytes", socketBuffer.toString)
     val reader = Class.forName(readerClass).newInstance().asInstanceOf[MessageReader[AnyRef, AnyRef]]
     reader.init(System.in, cmdLineProps)
 

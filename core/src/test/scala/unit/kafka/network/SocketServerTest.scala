@@ -21,7 +21,6 @@ import java.net._
 import java.io._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
-import kafka.utils.TestUtils
 import java.util.Random
 import junit.framework.Assert._
 import kafka.producer.SyncProducerConfig
@@ -29,13 +28,14 @@ import kafka.api.ProducerRequest
 import java.nio.ByteBuffer
 import kafka.common.TopicAndPartition
 import kafka.message.ByteBufferMessageSet
+import java.nio.channels.SelectionKey
 
 
 class SocketServerTest extends JUnitSuite {
 
   val server: SocketServer = new SocketServer(0,
                                               host = null,
-                                              port = TestUtils.choosePort,
+                                              port = kafka.utils.TestUtils.choosePort,
                                               numProcessorThreads = 1,
                                               maxQueuedRequests = 50,
                                               maxRequestSize = 50)
@@ -102,4 +102,36 @@ class SocketServerTest extends JUnitSuite {
     receiveResponse(socket)
   }
 
+  @Test
+  def testPipelinedRequestOrdering() {
+    val socket = connect()
+    val correlationId = -1
+    val clientId = SyncProducerConfig.DefaultClientId
+    val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
+    val ack: Short = 0
+    val emptyRequest =
+      new ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, Map[TopicAndPartition, ByteBufferMessageSet]())
+
+    val byteBuffer = ByteBuffer.allocate(emptyRequest.sizeInBytes)
+    emptyRequest.writeTo(byteBuffer)
+    byteBuffer.rewind()
+    val serializedBytes = new Array[Byte](byteBuffer.remaining)
+    byteBuffer.get(serializedBytes)
+
+    sendRequest(socket, 0, serializedBytes)
+    sendRequest(socket, 0, serializedBytes)
+
+    // here the socket server should've read only the first request completely and since the response is not sent yet
+    // the selection key should not be readable
+    val request = server.requestChannel.receiveRequest
+    Assert.assertFalse((request.requestKey.asInstanceOf[SelectionKey].interestOps & SelectionKey.OP_READ) == SelectionKey.OP_READ)
+
+    server.requestChannel.sendResponse(new RequestChannel.Response(0, request, null))
+
+    // if everything is working correctly, until you send a response for the first request,
+    // the 2nd request will not be read by the socket server
+    val request2 = server.requestChannel.receiveRequest
+    server.requestChannel.sendResponse(new RequestChannel.Response(0, request2, null))
+    Assert.assertFalse((request.requestKey.asInstanceOf[SelectionKey].interestOps & SelectionKey.OP_READ) == SelectionKey.OP_READ)
+  }
 }

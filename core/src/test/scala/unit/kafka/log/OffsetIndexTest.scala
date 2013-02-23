@@ -24,7 +24,7 @@ import org.junit._
 import org.scalatest.junit.JUnitSuite
 import scala.collection._
 import scala.util.Random
-import kafka.utils._
+import kafka.utils.TestUtils
 
 class OffsetIndexTest extends JUnitSuite {
   

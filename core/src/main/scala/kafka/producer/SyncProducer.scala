@@ -62,7 +62,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   /**
    * Common functionality for the public send methods
    */
-  private def doSend(request: RequestOrResponse): Receive = {
+  private def doSend(request: RequestOrResponse, readResponse: Boolean = true): Receive = {
     lock synchronized {
       verifyRequest(request)
       getOrMakeConnection()
@@ -70,7 +70,10 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
       var response: Receive = null
       try {
         blockingChannel.send(request)
-        response = blockingChannel.receive()
+        if(readResponse)
+          response = blockingChannel.receive()
+        else
+          trace("Skipping reading response")
       } catch {
         case e: java.io.IOException =>
           // no way to tell if write succeeded. Disconnect and re-throw exception to let client handle retry
@@ -83,7 +86,8 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   }
 
   /**
-   * Send a message
+   * Send a message. If the producerRequest had required.request.acks=0, then the
+   * returned response object is null
    */
   def send(producerRequest: ProducerRequest): ProducerResponse = {
     val requestSize = producerRequest.sizeInBytes
@@ -95,10 +99,13 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     val aggregateTimer = producerRequestStats.getProducerRequestAllBrokersStats.requestTimer
     aggregateTimer.time {
       specificTimer.time {
-        response = doSend(producerRequest)
+        response = doSend(producerRequest, if(producerRequest.requiredAcks == 0) false else true)
       }
     }
-    ProducerResponse.readFrom(response.buffer)
+    if(producerRequest.requiredAcks != 0)
+      ProducerResponse.readFrom(response.buffer)
+    else
+      null
   }
 
   def send(request: TopicMetadataRequest): TopicMetadataResponse = {
