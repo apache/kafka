@@ -82,9 +82,9 @@ class BrokerTopicMetrics(name: String) extends KafkaMetricsGroup {
 object BrokerTopicStats extends Logging {
   private val valueFactory = (k: String) => new BrokerTopicMetrics(k)
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
-  private val allTopicStats = new BrokerTopicMetrics("AllTopics")
+  private val allTopicsStats = new BrokerTopicMetrics("AllTopics")
 
-  def getBrokerAllTopicStats(): BrokerTopicMetrics = allTopicStats
+  def getBrokerAllTopicsStats(): BrokerTopicMetrics = allTopicsStats
 
   def getBrokerTopicStats(topic: String): BrokerTopicMetrics = {
     stats.getAndMaybePut(topic + "-")

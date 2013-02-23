@@ -56,7 +56,7 @@ class Partition(val topic: String,
   private def isReplicaLocal(replicaId: Int) : Boolean = (replicaId == localBrokerId)
 
   newGauge(
-    topic + "-" + partitionId + "UnderReplicated",
+    topic + "-" + partitionId + "-UnderReplicated",
     new Gauge[Int] {
       def getValue = {
         if (isUnderReplicated) 1 else 0

@@ -97,7 +97,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
    *  Forces some dynamic jmx beans to be registered on server startup.
    */
   private def registerStats() {
-    BrokerTopicStats.getBrokerAllTopicStats()
+    BrokerTopicStats.getBrokerAllTopicsStats()
     ControllerStats.offlinePartitionRate
     ControllerStats.uncleanLeaderElectionRate
   }

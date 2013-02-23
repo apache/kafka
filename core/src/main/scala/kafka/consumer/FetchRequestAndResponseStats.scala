@@ -23,8 +23,8 @@ import java.util.concurrent.TimeUnit
 import kafka.common.ClientIdAndBroker
 
 class FetchRequestAndResponseMetrics(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
-  val requestTimer = new KafkaTimer(newTimer(metricId + "-FetchRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
-  val requestSizeHist = newHistogram(metricId + "-FetchResponseSize")
+  val requestTimer = new KafkaTimer(newTimer(metricId + "FetchRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+  val requestSizeHist = newHistogram(metricId + "FetchResponseSize")
 }
 
 /**
@@ -34,12 +34,12 @@ class FetchRequestAndResponseMetrics(metricId: ClientIdAndBroker) extends KafkaM
 class FetchRequestAndResponseStats(clientId: String) {
   private val valueFactory = (k: ClientIdAndBroker) => new FetchRequestAndResponseMetrics(k)
   private val stats = new Pool[ClientIdAndBroker, FetchRequestAndResponseMetrics](Some(valueFactory))
-  private val allBrokersStats = new FetchRequestAndResponseMetrics(new ClientIdAndBroker(clientId, "All.Brokers"))
+  private val allBrokersStats = new FetchRequestAndResponseMetrics(new ClientIdAndBroker(clientId, "AllBrokers"))
 
   def getFetchRequestAndResponseAllBrokersStats(): FetchRequestAndResponseMetrics = allBrokersStats
 
   def getFetchRequestAndResponseStats(brokerInfo: String): FetchRequestAndResponseMetrics = {
-    stats.getAndMaybePut(new ClientIdAndBroker(clientId, brokerInfo))
+    stats.getAndMaybePut(new ClientIdAndBroker(clientId, brokerInfo + "-"))
   }
 }
 

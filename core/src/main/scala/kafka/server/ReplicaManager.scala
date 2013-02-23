@@ -58,6 +58,12 @@ class ReplicaManager(val config: KafkaConfig,
     }
   )
   newGauge(
+    "PartitionCount",
+    new Gauge[Int] {
+      def getValue = allPartitions.size
+    }
+  )
+  newGauge(
     "UnderReplicatedPartitions",
     new Gauge[Int] {
       def getValue = {

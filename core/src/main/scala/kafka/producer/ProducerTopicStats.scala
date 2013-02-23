@@ -24,8 +24,9 @@ import java.util.concurrent.TimeUnit
 
 @threadsafe
 class ProducerTopicMetrics(metricId: ClientIdAndTopic) extends KafkaMetricsGroup {
-  val messageRate = newMeter(metricId + "-MessagesPerSec",  "messages", TimeUnit.SECONDS)
-  val byteRate = newMeter(metricId + "-BytesPerSec",  "bytes", TimeUnit.SECONDS)
+  val messageRate = newMeter(metricId + "MessagesPerSec", "messages", TimeUnit.SECONDS)
+  val byteRate = newMeter(metricId + "BytesPerSec", "bytes", TimeUnit.SECONDS)
+  val droppedMessageRate = newMeter(metricId + "DroppedMessagesPerSec", "drops", TimeUnit.SECONDS)
 }
 
 /**
@@ -35,12 +36,12 @@ class ProducerTopicMetrics(metricId: ClientIdAndTopic) extends KafkaMetricsGroup
 class ProducerTopicStats(clientId: String) {
   private val valueFactory = (k: ClientIdAndTopic) => new ProducerTopicMetrics(k)
   private val stats = new Pool[ClientIdAndTopic, ProducerTopicMetrics](Some(valueFactory))
-  private val allTopicStats = new ProducerTopicMetrics(new ClientIdAndTopic(clientId, "All.Topics")) // to differentiate from a topic named AllTopics
+  private val allTopicsStats = new ProducerTopicMetrics(new ClientIdAndTopic(clientId, "AllTopics")) // to differentiate from a topic named AllTopics
 
-  def getProducerAllTopicStats(): ProducerTopicMetrics = allTopicStats
+  def getProducerAllTopicsStats(): ProducerTopicMetrics = allTopicsStats
 
   def getProducerTopicStats(topic: String): ProducerTopicMetrics = {
-    stats.getAndMaybePut(new ClientIdAndTopic(clientId, topic))
+    stats.getAndMaybePut(new ClientIdAndTopic(clientId, topic + "-"))
   }
 }
 

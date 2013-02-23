@@ -56,7 +56,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         keyed =>
           val dataSize = keyed.message.payloadSize
           producerTopicStats.getProducerTopicStats(keyed.topic).byteRate.mark(dataSize)
-          producerTopicStats.getProducerAllTopicStats.byteRate.mark(dataSize)
+          producerTopicStats.getProducerAllTopicsStats.byteRate.mark(dataSize)
       }
       var outstandingProduceRequests = serializedData
       var remainingRetries = config.messageSendMaxRetries + 1
