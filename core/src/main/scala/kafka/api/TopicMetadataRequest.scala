@@ -23,7 +23,7 @@ import collection.mutable.ListBuffer
 import kafka.network.{BoundedByteBufferSend, RequestChannel}
 import kafka.common.ErrorMapping
 import kafka.network.RequestChannel.Response
-import kafka.utils.{Logging}
+import kafka.utils.Logging
 
 object TopicMetadataRequest extends Logging {
   val CurrentVersion = 0.shortValue

@@ -21,15 +21,15 @@ import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.server.KafkaConfig
-import kafka.utils.{ZkUtils, TestUtils}
+import kafka.utils.{Logging, ZkUtils, TestUtils}
 import kafka.common.{TopicExistsException, ErrorMapping, TopicAndPartition}
 
 
-class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
+class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
 
   @Test
   def testReplicaAssignment() {
-    val brokerList = List("0", "1", "2", "3", "4")
+    val brokerList = List(0, 1, 2, 3, 4)
 
     // test 0 replication factor
     try {
@@ -54,16 +54,16 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     // correct assignment
     {
       val expectedAssignment = Map(
-        0 -> List("0", "1", "2"),
-        1 -> List("1", "2", "3"),
-        2 -> List("2", "3", "4"),
-        3 -> List("3", "4", "0"),
-        4 -> List("4", "0", "1"),
-        5 -> List("0", "2", "3"),
-        6 -> List("1", "3", "4"),
-        7 -> List("2", "4", "0"),
-        8 -> List("3", "0", "1"),
-        9 -> List("4", "1", "2")
+        0 -> List(0, 1, 2),
+        1 -> List(1, 2, 3),
+        2 -> List(2, 3, 4),
+        3 -> List(3, 4, 0),
+        4 -> List(4, 0, 1),
+        5 -> List(0, 2, 3),
+        6 -> List(1, 3, 4),
+        7 -> List(2, 4, 0),
+        8 -> List(3, 0, 1),
+        9 -> List(4, 1, 2)
       )
 
       val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerList, 10, 3, 0)
@@ -74,7 +74,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testManualReplicaAssignment() {
-    val brokerList = Set("0", "1", "2", "3", "4")
+    val brokerList = Set(0, 1, 2, 3, 4)
 
     // duplicated brokers
     try {
@@ -113,8 +113,8 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     {
       val replicationAssignmentStr = "0:1:2,1:2:3"
       val expectedReplicationAssignment = Map(
-        0 -> List("0", "1", "2"),
-        1 -> List("1", "2", "3")
+        0 -> List(0, 1, 2),
+        1 -> List(1, 2, 3)
       )
       val actualReplicationAssignment = CreateTopicCommand.getManualReplicaAssignment(replicationAssignmentStr, brokerList)
       assertEquals(expectedReplicationAssignment.size, actualReplicationAssignment.size)
@@ -127,18 +127,18 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Test
   def testTopicCreationInZK() {
     val expectedReplicaAssignment = Map(
-      0  -> List("0", "1", "2"),
-      1  -> List("1", "2", "3"),
-      2  -> List("2", "3", "4"),
-      3  -> List("3", "4", "0"),
-      4  -> List("4", "0", "1"),
-      5  -> List("0", "2", "3"),
-      6  -> List("1", "3", "4"),
-      7  -> List("2", "4", "0"),
-      8  -> List("3", "0", "1"),
-      9  -> List("4", "1", "2"),
-      10 -> List("1", "2", "3"),
-      11 -> List("1", "3", "4")
+      0  -> List(0, 1, 2),
+      1  -> List(1, 2, 3),
+      2  -> List(2, 3, 4),
+      3  -> List(3, 4, 0),
+      4  -> List(4, 0, 1),
+      5  -> List(0, 2, 3),
+      6  -> List(1, 3, 4),
+      7  -> List(2, 4, 0),
+      8  -> List(3, 0, 1),
+      9  -> List(4, 1, 2),
+      10 -> List(1, 2, 3),
+      11 -> List(1, 3, 4)
     )
     val leaderForPartitionMap = Map(
       0 -> 0,
@@ -161,7 +161,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
     // create leaders for all partitions
     TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
     val actualReplicaAssignment = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient).partitionsMetadata.map(p => p.replicas)
-    val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id.toString).toList).toList
+    val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id).toList).toList
     assertEquals(expectedReplicaAssignment.size, actualReplicaList.size)
     for(i <- 0 until actualReplicaList.size)
       assertEquals(expectedReplicaAssignment.get(i).get, actualReplicaList(i))
@@ -178,8 +178,8 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Test
   def testGetTopicMetadata() {
     val expectedReplicaAssignment = Map(
-      0 -> List("0", "1", "2"),
-      1 -> List("1", "2", "3")
+      0 -> List(0, 1, 2),
+      1 -> List(1, 2, 3)
     )
     val leaderForPartitionMap = Map(
       0 -> 0,
@@ -200,7 +200,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
         assertNotNull("partition metadata list cannot be null", newTopicMetadata.partitionsMetadata)
         assertEquals("partition metadata list length should be 2", 2, newTopicMetadata.partitionsMetadata.size)
         val actualReplicaAssignment = newTopicMetadata.partitionsMetadata.map(p => p.replicas)
-        val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id.toString).toList).toList
+        val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id).toList).toList
         assertEquals(expectedReplicaAssignment.size, actualReplicaList.size)
         for(i <- 0 until actualReplicaList.size) {
           assertEquals(expectedReplicaAssignment(i), actualReplicaList(i))
@@ -210,7 +210,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testPartitionReassignmentWithLeaderInNewReplicas() {
-    val expectedReplicaAssignment = Map(0  -> List("0", "1", "2"))
+    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     // create brokers
     val servers = TestUtils.createBrokerConfigs(4).map(b => TestUtils.createServer(new KafkaConfig(b)))
@@ -235,7 +235,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testPartitionReassignmentWithLeaderNotInNewReplicas() {
-    val expectedReplicaAssignment = Map(0  -> List("0", "1", "2"))
+    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     // create brokers
     val servers = TestUtils.createBrokerConfigs(4).map(b => TestUtils.createServer(new KafkaConfig(b)))
@@ -261,7 +261,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testPartitionReassignmentNonOverlappingReplicas() {
-    val expectedReplicaAssignment = Map(0  -> List("0", "1"))
+    val expectedReplicaAssignment = Map(0  -> List(0, 1))
     val topic = "test"
     // create brokers
     val servers = TestUtils.createBrokerConfigs(4).map(b => TestUtils.createServer(new KafkaConfig(b)))
@@ -304,7 +304,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testResumePartitionReassignmentThatWasCompleted() {
-    val expectedReplicaAssignment = Map(0  -> List("0", "1"))
+    val expectedReplicaAssignment = Map(0  -> List(0, 1))
     val topic = "test"
     // create the topic
     AdminUtils.createTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
@@ -339,7 +339,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testBasicPreferredReplicaElection() {
-    val expectedReplicaAssignment = Map(1  -> List("0", "1", "2"))
+    val expectedReplicaAssignment = Map(1  -> List(0, 1, 2))
     val topic = "test"
     val partition = 1
     val preferredReplica = 0
@@ -360,7 +360,8 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testShutdownBroker() {
-    val expectedReplicaAssignment = Map(1  -> List("0", "1", "2"))
+    info("inside testShutdownBroker")
+    val expectedReplicaAssignment = Map(1  -> List(0, 1, 2))
     val topic = "test"
     val partition = 1
     // create brokers

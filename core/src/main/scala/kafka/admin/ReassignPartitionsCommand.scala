@@ -99,8 +99,7 @@ class ReassignPartitionsCommand(zkClient: ZkClient, partitions: collection.immut
   def reassignPartitions(): Boolean = {
     try {
       val validPartitions = partitions.filter(p => validatePartition(zkClient, p._1.topic, p._1.partition))
-      val jsonReassignmentData = Utils.mapToJson(validPartitions.map(p =>
-        ("%s,%s".format(p._1.topic, p._1.partition)) -> p._2.map(_.toString)))
+      val jsonReassignmentData = Utils.mapWithSeqValuesToJson(validPartitions.map(p => ("%s,%s".format(p._1.topic, p._1.partition)) -> p._2))
       ZkUtils.createPersistentPath(zkClient, ZkUtils.ReassignPartitionsPath, jsonReassignmentData)
       true
     }catch {

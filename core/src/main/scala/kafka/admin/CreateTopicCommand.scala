@@ -48,8 +48,8 @@ object CreateTopicCommand extends Logging {
                            .defaultsTo(1)
     val replicaAssignmentOpt = parser.accepts("replica-assignment-list", "for manually assigning replicas to brokers")
                            .withRequiredArg
-                           .describedAs("broker_id_for_part1_replica1 : broker_id_for_part1_replica2 , " +
-                                        "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
+                           .describedAs("broker_id_for_part1_replica1 : broker_id_for_part1_replica2, " +
+                                        "broker_id_for_part2_replica1 : broker_id_for_part2_replica2, ...")
                            .ofType(classOf[String])
                            .defaultsTo("")
 
@@ -96,11 +96,11 @@ object CreateTopicCommand extends Logging {
     AdminUtils.createTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment, zkClient)
   }
 
-  def getManualReplicaAssignment(replicaAssignmentList: String, availableBrokerList: Set[String]): Map[Int, List[String]] = {
+  def getManualReplicaAssignment(replicaAssignmentList: String, availableBrokerList: Set[Int]): Map[Int, List[Int]] = {
     val partitionList = replicaAssignmentList.split(",")
-    val ret = new mutable.HashMap[Int, List[String]]()
+    val ret = new mutable.HashMap[Int, List[Int]]()
     for (i <- 0 until partitionList.size) {
-      val brokerList = partitionList(i).split(":").map(s => s.trim())
+      val brokerList = partitionList(i).split(":").map(s => s.trim().toInt)
       if (brokerList.size <= 0)
         throw new AdministrationException("replication factor must be larger than 0")
       if (brokerList.size != brokerList.toSet.size)
