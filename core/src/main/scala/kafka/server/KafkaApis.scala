@@ -23,13 +23,13 @@ import kafka.message._
 import kafka.network._
 import org.apache.log4j.Logger
 import scala.collection._
-import kafka.network.RequestChannel.Response
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic._
 import kafka.metrics.KafkaMetricsGroup
 import org.I0Itec.zkclient.ZkClient
 import kafka.common._
 import kafka.utils.{ZkUtils, Pool, SystemTime, Logging}
+import kafka.network.RequestChannel.Response
 
 
 /**
@@ -127,8 +127,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val allPartitionHaveReplicationFactorOne =
       !produceRequest.data.keySet.exists(
         m => replicaManager.getReplicationFactorForPartition(m.topic, m.partition) != 1)
-    if (produceRequest.requiredAcks == 0 ||
-        produceRequest.requiredAcks == 1 ||
+    if(produceRequest.requiredAcks == 0) {
+      // send a fake producer response if producer request.required.acks = 0. This mimics the behavior of a 0.7 producer
+      // and is tuned for very high throughput
+      requestChannel.sendResponse(new RequestChannel.Response(request.processor, request, null))
+    } else if (produceRequest.requiredAcks == 1 ||
         produceRequest.numPartitions <= 0 ||
         allPartitionHaveReplicationFactorOne ||
         numPartitionsInError == produceRequest.numPartitions) {

@@ -18,7 +18,6 @@
 package kafka.producer
 
 import java.net.SocketTimeoutException
-import java.util.Properties
 import junit.framework.Assert
 import kafka.admin.CreateTopicCommand
 import kafka.integration.KafkaServerTestHarness
@@ -38,16 +37,13 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   @Test
   def testReachableServer() {
     val server = servers.head
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", server.socketServer.port.toString)
-    props.put("send.buffer.bytes", "102400")
-    props.put("connect.timeout.ms", "500")
-    props.put("reconnect.interval", "1000")
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
+
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val firstStart = SystemTime.milliseconds
     try {
-      val response = producer.send(TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes))))
+      val response = producer.send(TestUtils.produceRequest("test", 0,
+        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
       Assert.assertNotNull(response)
     } catch {
       case e: Exception => Assert.fail("Unexpected failure sending message to broker. " + e.getMessage)
@@ -56,7 +52,8 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     Assert.assertTrue((firstEnd-firstStart) < 500)
     val secondStart = SystemTime.milliseconds
     try {
-      val response = producer.send(TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes))))
+      val response = producer.send(TestUtils.produceRequest("test", 0,
+        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
       Assert.assertNotNull(response)
     } catch {
       case e: Exception => Assert.fail("Unexpected failure sending message to broker. " + e.getMessage)
@@ -64,7 +61,8 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val secondEnd = SystemTime.milliseconds
     Assert.assertTrue((secondEnd-secondStart) < 500)
     try {
-      val response = producer.send(TestUtils.produceRequest("test", 0, new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes))))
+      val response = producer.send(TestUtils.produceRequest("test", 0,
+        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)), acks = 1))
       Assert.assertNotNull(response)
     } catch {
       case e: Exception => Assert.fail("Unexpected failure sending message to broker. " + e.getMessage)
@@ -74,36 +72,31 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   @Test
   def testEmptyProduceRequest() {
     val server = servers.head
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", server.socketServer.port.toString)
-    props.put("send.buffer.bytes", "102400")
-    props.put("connect.timeout.ms", "300")
-    props.put("reconnect.interval", "500")
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
+
     val correlationId = 0
     val clientId = SyncProducerConfig.DefaultClientId
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
-    val ack = SyncProducerConfig.DefaultRequiredAcks
+    val ack: Short = 1
     val emptyRequest = new kafka.api.ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, Map[TopicAndPartition, ByteBufferMessageSet]())
-
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val response = producer.send(emptyRequest)
+    Assert.assertTrue(response != null)
     Assert.assertTrue(!response.hasError && response.status.size == 0)
   }
 
   @Test
   def testMessageSizeTooLarge() {
     val server = servers.head
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", server.socketServer.port.toString)
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
+
     val producer = new SyncProducer(new SyncProducerConfig(props))
     CreateTopicCommand.createTopic(zkClient, "test", 1, 1)
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0, 500)
 
     val message1 = new Message(new Array[Byte](configs(0).messageMaxBytes + 1))
     val messageSet1 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message1)
-    val response1 = producer.send(TestUtils.produceRequest("test", 0, messageSet1))
+    val response1 = producer.send(TestUtils.produceRequest("test", 0, messageSet1, acks = 1))
 
     Assert.assertEquals(1, response1.status.count(_._2.error != ErrorMapping.NoError))
     Assert.assertEquals(ErrorMapping.MessageSizeTooLargeCode, response1.status(TopicAndPartition("test", 0)).error)
@@ -112,7 +105,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val safeSize = configs(0).messageMaxBytes - Message.MessageOverhead - MessageSet.LogOverhead - 1
     val message2 = new Message(new Array[Byte](safeSize))
     val messageSet2 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message2)
-    val response2 = producer.send(TestUtils.produceRequest("test", 0, messageSet2))
+    val response2 = producer.send(TestUtils.produceRequest("test", 0, messageSet2, acks = 1))
 
     Assert.assertEquals(1, response1.status.count(_._2.error != ErrorMapping.NoError))
     Assert.assertEquals(ErrorMapping.NoError, response2.status(TopicAndPartition("test", 0)).error)
@@ -122,12 +115,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   @Test
   def testProduceCorrectlyReceivesResponse() {
     val server = servers.head
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", server.socketServer.port.toString)
-    props.put("send.buffer.bytes", "102400")
-    props.put("connect.timeout.ms", "300")
-    props.put("reconnect.interval", "500")
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
@@ -173,15 +161,11 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val timeoutMs = 500
 
     val server = servers.head
-    val props = new Properties()
-    props.put("host", "localhost")
-    props.put("port", server.socketServer.port.toString)
-    props.put("send.buffer.bytes", "102400")
-    props.put("request.timeout.ms", String.valueOf(timeoutMs))
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
     val producer = new SyncProducer(new SyncProducerConfig(props))
 
     val messages = new ByteBufferMessageSet(NoCompressionCodec, new Message(messageBytes))
-    val request = TestUtils.produceRequest("topic1", 0, messages)
+    val request = TestUtils.produceRequest("topic1", 0, messages, acks = 1)
 
     // stop IO threads and request handling, but leave networking operational
     // any requests should be accepted and queue up, but not handled
@@ -196,8 +180,21 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
       case e => Assert.fail("Unexpected exception when expecting timeout: " + e)
     }
     val t2 = SystemTime.milliseconds
-
     // make sure we don't wait fewer than timeoutMs for a response
     Assert.assertTrue((t2-t1) >= timeoutMs)
+  }
+
+  @Test
+  def testProduceRequestWithNoResponse() {
+    val server = servers.head
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
+    val correlationId = 0
+    val clientId = SyncProducerConfig.DefaultClientId
+    val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
+    val ack: Short = 0
+    val emptyRequest = new kafka.api.ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, Map[TopicAndPartition, ByteBufferMessageSet]())
+    val producer = new SyncProducer(new SyncProducerConfig(props))
+    val response = producer.send(emptyRequest)
+    Assert.assertTrue(response == null)
   }
 }

@@ -44,7 +44,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testCleanShutdown() {
     var server = new KafkaServer(config)
     server.startup()
-    val producerConfig = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(Seq(config)), 64*1024, 100000, 10000)
+    val producerConfig = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(Seq(config)))
     producerConfig.put("key.serializer.class", classOf[IntEncoder].getName.toString)
     var producer = new Producer[Int, String](new ProducerConfig(producerConfig))
 

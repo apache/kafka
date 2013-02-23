@@ -301,16 +301,25 @@ object TestUtils extends Logging {
     new Producer[K, V](new ProducerConfig(props))
   }
 
-  def getProducerConfig(brokerList: String, bufferSize: Int, connectTimeout: Int,
-                        reconnectInterval: Int): Properties = {
+  def getProducerConfig(brokerList: String, partitioner: String = "kafka.producer.DefaultPartitioner"): Properties = {
     val props = new Properties()
-    props.put("producer.type", "sync")
     props.put("broker.list", brokerList)
-    props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
-    props.put("send.buffer.bytes", bufferSize.toString)
-    props.put("connect.timeout.ms", connectTimeout.toString)
-    props.put("reconnect.interval", reconnectInterval.toString)
-    props.put("request.timeout.ms", 30000.toString)
+    props.put("partitioner.class", partitioner)
+    props.put("message.send.max.retries", "3")
+    props.put("retry.backoff.ms", "1000")
+    props.put("request.timeout.ms", "500")
+    props.put("request.required.acks", "-1")
+    props.put("serializer.class", classOf[StringEncoder].getName.toString)
+
+    props
+  }
+
+  def getSyncProducerConfig(port: Int): Properties = {
+    val props = new Properties()
+    props.put("host", "localhost")
+    props.put("port", port.toString)
+    props.put("request.timeout.ms", "500")
+    props.put("request.required.acks", "1")
     props.put("serializer.class", classOf[StringEncoder].getName.toString)
     props
   }

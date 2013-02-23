@@ -26,7 +26,7 @@ import kafka.common.QueueFullException
 import kafka.metrics._
 
 
-class Producer[K,V](config: ProducerConfig,
+class Producer[K,V](val config: ProducerConfig,
                     private val eventHandler: EventHandler[K,V])  // only for unit testing
   extends Logging {
 
