@@ -40,8 +40,7 @@ class Producer[K,V](val config: ProducerConfig,
     case "sync" =>
     case "async" =>
       sync = false
-      val asyncProducerID = random.nextInt(Int.MaxValue)
-      producerSendThread = new ProducerSendThread[K,V]("ProducerSendThread-" + asyncProducerID, 
+      producerSendThread = new ProducerSendThread[K,V]("ProducerSendThread-" + config.clientId,
                                                        queue,
                                                        eventHandler, 
                                                        config.queueBufferingMaxMs,

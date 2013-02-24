@@ -21,9 +21,10 @@ import java.util.Arrays
 import java.nio.ByteBuffer
 import org.apache.log4j.Logger
 import org.scalatest.junit.JUnitSuite
-import org.junit.Test
 import org.junit.Assert._
 import kafka.common.KafkaException
+import org.junit.{Test}
+import kafka.tools.KafkaMigrationTool
 
 
 class UtilsTest extends JUnitSuite {
@@ -53,7 +54,7 @@ class UtilsTest extends JUnitSuite {
     assertEquals(2, its.next())
     assertEquals(1, its.next())
   }
-  
+
   @Test
   def testReadBytes() {
     for(testCase <- List("", "a", "abcd")) {

@@ -646,6 +646,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val topicThreadId = e._1
       val q = e._2._1
       topicThreadIdAndQueues.put(topicThreadId, q)
+      debug("Adding topicThreadId %s and queue %s to topicThreadIdAndQueues data structure".format(topicThreadId, q.toString))
       newGauge(
         config.clientId + "-" + config.groupId + "-" + topicThreadId._1 + "-" + topicThreadId._2 + "-FetchQueueSize",
         new Gauge[Int] {

@@ -25,6 +25,7 @@ import java.lang.management._
 import java.util.zip.CRC32
 import javax.management._
 import scala.collection._
+import mutable.ListBuffer
 import scala.collection.mutable
 import java.util.Properties
 import kafka.common.KafkaException
@@ -572,5 +573,4 @@ object Utils extends Logging {
    * This is different from java.lang.Math.abs or scala.math.abs in that they return Int.MinValue (!).
    */
   def abs(n: Int) = n & 0x7fffffff
-  
 }
