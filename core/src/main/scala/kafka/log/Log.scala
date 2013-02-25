@@ -282,7 +282,11 @@ private[kafka] class Log(val dir: File,
             if(assignOffsets) {
               val offsetCounter = new AtomicLong(nextOffset.get)
               val firstOffset = offsetCounter.get
-              validMessages = validMessages.assignOffsets(offsetCounter, messageSetInfo.codec)
+              try {
+                validMessages = validMessages.assignOffsets(offsetCounter, messageSetInfo.codec)
+              } catch {
+                case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
+              }
               val lastOffset = offsetCounter.get - 1
               (firstOffset, lastOffset)
             } else {

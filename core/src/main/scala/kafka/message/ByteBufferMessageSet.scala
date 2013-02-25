@@ -62,11 +62,13 @@ object ByteBufferMessageSet {
     val inputStream: InputStream = new ByteBufferBackedInputStream(message.payload)
     val intermediateBuffer = new Array[Byte](1024)
     val compressed = CompressionFactory(message.compressionCodec, inputStream)
-    Stream.continually(compressed.read(intermediateBuffer)).takeWhile(_ > 0).foreach { dataRead =>
-      outputStream.write(intermediateBuffer, 0, dataRead)
+    try {
+      Stream.continually(compressed.read(intermediateBuffer)).takeWhile(_ > 0).foreach { dataRead =>
+        outputStream.write(intermediateBuffer, 0, dataRead)
+      }
+    } finally {
+      compressed.close()
     }
-    compressed.close()
-
     val outputBuffer = ByteBuffer.allocate(outputStream.size)
     outputBuffer.put(outputStream.toByteArray)
     outputBuffer.rewind
