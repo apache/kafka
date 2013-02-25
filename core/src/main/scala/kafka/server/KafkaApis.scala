@@ -476,7 +476,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val responseInfo = offsetCommitRequest.requestInfo.map( t => {
       val topicDirs = new ZKGroupTopicDirs(offsetCommitRequest.groupId, t._1.topic)
       try {
-        if(t._2.metadata.length > config.offsetMetadataMaxSize) {
+        if(t._2.metadata != null && t._2.metadata.length > config.offsetMetadataMaxSize) {
           (t._1, ErrorMapping.OffsetMetadataTooLargeCode)
         } else {
           ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" +

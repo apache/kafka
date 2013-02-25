@@ -171,4 +171,14 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   }
 
+  @Test
+  def testNullMetadata() {
+    val topicAndPartition = TopicAndPartition("null-metadata", 0)
+    val commitRequest = OffsetCommitRequest("test-group", Map(topicAndPartition -> OffsetMetadataAndError(
+      offset=42L,
+      metadata=null
+    )))
+    val commitResponse = simpleConsumer.commitOffsets(commitRequest)
+    assertEquals(ErrorMapping.NoError, commitResponse.requestInfo.get(topicAndPartition).get)
+  }
 }
