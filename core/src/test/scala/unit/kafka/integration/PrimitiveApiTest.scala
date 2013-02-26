@@ -332,6 +332,13 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     TestUtils.waitUntilTrue(() => { servers.head.logManager.getLog("test3", 0).get.logEndOffset == 2 }, 1000)
     TestUtils.waitUntilTrue(() => { servers.head.logManager.getLog("test4", 0).get.logEndOffset == 2 }, 1000)
 
+    val replicaId = servers.head.config.brokerId
+    val hwWaitMs = config.replicaHighWatermarkCheckpointIntervalMs
+    TestUtils.waitUntilTrue(() => { servers.head.replicaManager.getReplica("test1", 0, replicaId).get.highWatermark == 2 }, hwWaitMs)
+    TestUtils.waitUntilTrue(() => { servers.head.replicaManager.getReplica("test2", 0, replicaId).get.highWatermark == 2 }, hwWaitMs)
+    TestUtils.waitUntilTrue(() => { servers.head.replicaManager.getReplica("test3", 0, replicaId).get.highWatermark == 2 }, hwWaitMs)
+    TestUtils.waitUntilTrue(() => { servers.head.replicaManager.getReplica("test4", 0, replicaId).get.highWatermark == 2 }, hwWaitMs)
+
     // test if the consumer received the messages in the correct order when producer has enabled request pipelining
     val request = builder.build()
     val response = consumer.fetch(request)
