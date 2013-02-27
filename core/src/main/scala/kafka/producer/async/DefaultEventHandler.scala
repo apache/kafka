@@ -81,7 +81,6 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       }
       if(outstandingProduceRequests.size > 0) {
         producerStats.failedSendRate.mark()
-
         val correlationIdEnd = correlationId.get()
         error("Failed to send requests for topics %s with correlation ids in [%d,%d]".format(outstandingProduceRequests.map(_.topic).mkString(","),
           correlationIdStart, correlationIdEnd-1))

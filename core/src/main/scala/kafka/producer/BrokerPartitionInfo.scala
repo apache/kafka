@@ -80,10 +80,11 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
       if(tmd.errorCode == ErrorMapping.NoError){
         topicPartitionInfo.put(tmd.topic, tmd)
       } else
-        warn("Metadata for topic [%s] is erroneous: [%s]".format(tmd.topic, tmd), ErrorMapping.exceptionFor(tmd.errorCode))
+        warn("Error while fetching metadata for topic [%s]: [%s]".format(tmd.topic, tmd), ErrorMapping.exceptionFor(tmd.errorCode))
       tmd.partitionsMetadata.foreach(pmd =>{
         if (pmd.errorCode != ErrorMapping.NoError){
-          debug("Metadata for topic partition [%s, %d] is errornous: [%s]".format(tmd.topic, pmd.partitionId, pmd), ErrorMapping.exceptionFor(pmd.errorCode))
+          warn("Error while fetching metadata for topic partition [%s,%d]: [%s]".format(tmd.topic, pmd.partitionId, pmd),
+               ErrorMapping.exceptionFor(pmd.errorCode))
         }
       })
     })
