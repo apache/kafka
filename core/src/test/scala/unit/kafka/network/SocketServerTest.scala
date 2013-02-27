@@ -60,8 +60,10 @@ class SocketServerTest extends JUnitSuite {
   /* A simple request handler that just echos back the response */
   def processRequest(channel: RequestChannel) {
     val request = channel.receiveRequest
-    val id = request.buffer.getShort
-    val send = new BoundedByteBufferSend(request.buffer.slice)
+    val byteBuffer = ByteBuffer.allocate(request.requestObj.sizeInBytes)
+    request.requestObj.writeTo(byteBuffer)
+    byteBuffer.rewind()
+    val send = new BoundedByteBufferSend(byteBuffer)
     channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
   }
 
@@ -80,7 +82,7 @@ class SocketServerTest extends JUnitSuite {
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
     val ack = SyncProducerConfig.DefaultRequiredAcks
     val emptyRequest =
-      new ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, Map[TopicAndPartition, ByteBufferMessageSet]())
+      new ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]())
 
     val byteBuffer = ByteBuffer.allocate(emptyRequest.sizeInBytes)
     emptyRequest.writeTo(byteBuffer)
@@ -110,7 +112,7 @@ class SocketServerTest extends JUnitSuite {
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
     val ack: Short = 0
     val emptyRequest =
-      new ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, Map[TopicAndPartition, ByteBufferMessageSet]())
+      new ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]())
 
     val byteBuffer = ByteBuffer.allocate(emptyRequest.sizeInBytes)
     emptyRequest.writeTo(byteBuffer)

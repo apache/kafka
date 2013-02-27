@@ -61,7 +61,7 @@ object SerializationTestUtils{
         case(partitionDataMessage, partition) =>
           (TopicAndPartition(topic, partition), partitionDataMessage)
       })
-    collection.immutable.Map(groupedData:_*)
+    collection.mutable.Map(groupedData:_*)
   }
 
   private val requestInfos = collection.immutable.Map(
