@@ -194,7 +194,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
         brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement, controllerContext.liveBrokers)
       }
 
-      debug("Remaining partitions to move on broker %d: %s".format(id, partitionsRemaining.mkString(",")))
+      debug("Remaining partitions to move from broker %d: %s".format(id, partitionsRemaining.mkString(",")))
       partitionsRemaining.size
     }
   }

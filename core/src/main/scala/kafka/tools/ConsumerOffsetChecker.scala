@@ -20,10 +20,10 @@ package kafka.tools
 
 import joptsimple._
 import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{ZkUtils, ZKStringSerializer, Logging}
+import kafka.utils.{Json, ZkUtils, ZKStringSerializer, Logging}
 import kafka.consumer.SimpleConsumer
 import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest}
-import kafka.common.TopicAndPartition
+import kafka.common.{BrokerNotAvailableException, TopicAndPartition}
 import scala.collection._
 
 
@@ -31,19 +31,27 @@ object ConsumerOffsetChecker extends Logging {
 
   private val consumerMap: mutable.Map[Int, Option[SimpleConsumer]] = mutable.Map()
 
-  private val BrokerIpPattern = """^([^:]+):(\d+).*$""".r
-  // e.g., 127.0.0.1:9092:9999 (with JMX port)
-
   private def getConsumer(zkClient: ZkClient, bid: Int): Option[SimpleConsumer] = {
-    val brokerInfo = ZkUtils.readDataMaybeNull(zkClient, "/brokers/ids/%s".format(bid))._1
-    val consumer = brokerInfo match {
-      case Some(BrokerIpPattern(ip, port)) =>
-        Some(new SimpleConsumer(ip, port.toInt, 10000, 100000, "ConsumerOffsetChecker"))
-      case _ =>
-        error("Could not parse broker info %s with regex %s".format(brokerInfo, BrokerIpPattern.toString()))
+    try {
+      ZkUtils.readDataMaybeNull(zkClient, ZkUtils.BrokerIdsPath + "/" + bid)._1 match {
+        case Some(brokerInfoString) =>
+          Json.parseFull(brokerInfoString) match {
+            case Some(m) =>
+              val brokerInfo = m.asInstanceOf[Map[String, Any]]
+              val host = brokerInfo.get("host").get.asInstanceOf[String]
+              val port = brokerInfo.get("port").get.asInstanceOf[Int]
+              Some(new SimpleConsumer(host, port, 10000, 100000, "ConsumerOffsetChecker"))
+            case None =>
+              throw new BrokerNotAvailableException("Broker id %d does not exist".format(bid))
+          }
+        case None =>
+          throw new BrokerNotAvailableException("Broker id %d does not exist".format(bid))
+      }
+    } catch {
+      case t: Throwable =>
+        error("Could not parse broker info", t)
         None
     }
-    consumer
   }
 
   private def processPartition(zkClient: ZkClient,

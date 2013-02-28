@@ -100,9 +100,13 @@ object ExportZkOffsets extends Logging {
           for (bidPid <- bidPidList) {
             val zkGrpTpDir = new ZKGroupTopicDirs(consumerGrp,topic)
             val offsetPath = zkGrpTpDir.consumerOffsetDir + "/" + bidPid
-            val offsetVal  = ZkUtils.readDataMaybeNull(zkClient, offsetPath)._1
-            fileWriter.write(offsetPath + ":" + offsetVal + "\n")
-            debug(offsetPath + " => " + offsetVal)
+            ZkUtils.readDataMaybeNull(zkClient, offsetPath)._1 match {
+              case Some(offsetVal) =>
+                fileWriter.write(offsetPath + ":" + offsetVal + "\n")
+                debug(offsetPath + " => " + offsetVal)
+              case None =>
+                error("Could not retrieve offset value from " + offsetPath)
+            }
           }
         }
       }      
