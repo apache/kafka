@@ -35,11 +35,11 @@ private[kafka] object Broker {
       Json.parseFull(brokerInfoString) match {
         case Some(m) =>
           val brokerInfo = m.asInstanceOf[Map[String, Any]]
-          val host = brokerInfo.get("host").get.toString
+          val host = brokerInfo.get("host").get.asInstanceOf[String]
           val port = brokerInfo.get("port").get.asInstanceOf[Int]
           new Broker(id, host, port)
         case None =>
-          throw new BrokerNotAvailableException("Broker id %s does not exist".format(id))
+          throw new BrokerNotAvailableException("Broker id %d does not exist".format(id))
       }
     } catch {
       case t => throw new KafkaException("Failed to parse the broker info from zookeeper: " + brokerInfoString, t)
