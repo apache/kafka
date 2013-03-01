@@ -29,7 +29,6 @@ object OffsetFetchResponse extends Logging {
 
   def readFrom(buffer: ByteBuffer): OffsetFetchResponse = {
     // Read values from the envelope
-    val versionId = buffer.getShort
     val correlationId = buffer.getInt
     val clientId = readShortString(buffer)
 
@@ -46,12 +45,11 @@ object OffsetFetchResponse extends Logging {
         (TopicAndPartition(topic, partitionId), OffsetMetadataAndError(offset, metadata, error))
       })
     })
-    OffsetFetchResponse(Map(pairs:_*), versionId, correlationId, clientId)
+    OffsetFetchResponse(Map(pairs:_*), correlationId, clientId)
   }
 }
 
 case class OffsetFetchResponse(requestInfo: Map[TopicAndPartition, OffsetMetadataAndError],
-                               versionId: Short = OffsetFetchResponse.CurrentVersion,
                                correlationId: Int = 0,
                                clientId: String = OffsetFetchResponse.DefaultClientId)
     extends RequestOrResponse {
@@ -60,7 +58,6 @@ case class OffsetFetchResponse(requestInfo: Map[TopicAndPartition, OffsetMetadat
 
   def writeTo(buffer: ByteBuffer) {
     // Write envelope
-    buffer.putShort(versionId)
     buffer.putInt(correlationId)
     writeShortString(buffer, clientId)
 
@@ -79,7 +76,6 @@ case class OffsetFetchResponse(requestInfo: Map[TopicAndPartition, OffsetMetadat
   }
 
   override def sizeInBytes = 
-    2 + /* versionId */
     4 + /* correlationId */
     shortStringLength(clientId) +
     4 + /* topic count */

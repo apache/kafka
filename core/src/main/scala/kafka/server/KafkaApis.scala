@@ -489,7 +489,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     })
     val response = new OffsetCommitResponse(responseInfo, 
-                                        offsetCommitRequest.versionId, 
                                         offsetCommitRequest.correlationId,
                                         offsetCommitRequest.clientId)
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
@@ -521,7 +520,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     })
     val response = new OffsetFetchResponse(collection.immutable.Map(responseInfo: _*), 
-                                        offsetFetchRequest.versionId, 
                                         offsetFetchRequest.correlationId,
                                         offsetFetchRequest.clientId)
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
