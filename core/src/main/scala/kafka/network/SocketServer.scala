@@ -35,7 +35,7 @@ import kafka.utils._
 class SocketServer(val brokerId: Int,
                    val host: String,
                    val port: Int,
-                   val numProcessorThreads: Int, 
+                   val numProcessorThreads: Int,
                    val maxQueuedRequests: Int,
                    val maxRequestSize: Int = Int.MaxValue) extends Logging {
   this.logIdent = "[Socket Server on Broker " + brokerId + "], "
@@ -71,6 +71,7 @@ class SocketServer(val brokerId: Int,
       acceptor.shutdown()
     for(processor <- processors)
       processor.shutdown()
+    requestChannel.shutdown
     info("shut down completely")
   }
 }
@@ -205,7 +206,7 @@ private[kafka] class Acceptor(val host: String, val port: Int, private val proce
  * each of which has its own selectors
  */
 private[kafka] class Processor(val id: Int,
-                               val time: Time, 
+                               val time: Time,
                                val maxRequestSize: Int,
                                val requestChannel: RequestChannel) extends AbstractServerThread {
   
@@ -218,7 +219,9 @@ private[kafka] class Processor(val id: Int,
       configureNewConnections()
       // register any new responses for writing
       processNewResponses()
+      val startSelectTime = SystemTime.milliseconds
       val ready = selector.select(300)
+      trace("Processor id " + id + " selection time = " + (SystemTime.milliseconds - startSelectTime) + " ms")
       if(ready > 0) {
         val keys = selector.selectedKeys()
         val iter = keys.iterator()
@@ -258,11 +261,21 @@ private[kafka] class Processor(val id: Int,
   private def processNewResponses() {
     var curr = requestChannel.receiveResponse(id)
     while(curr != null) {
-      trace("Socket server received response to send, registering for write: " + curr)
       val key = curr.request.requestKey.asInstanceOf[SelectionKey]
       try {
-        key.interestOps(SelectionKey.OP_WRITE)
-        key.attach(curr)
+        if(curr.responseSend == null) {
+          // a null response send object indicates that there is no response to send to the client.
+          // In this case, we just want to turn the interest ops to READ to be able to read more pipelined requests
+          // that are sitting in the server's socket buffer
+          trace("Socket server received empty response to send, registering for read: " + curr)
+          key.interestOps(SelectionKey.OP_READ)
+          key.attach(null)
+          curr.request.updateRequestMetrics
+        } else {
+          trace("Socket server received response to send, registering for write: " + curr)
+          key.interestOps(SelectionKey.OP_WRITE)
+          key.attach(curr)
+        }
       } catch {
         case e: CancelledKeyException => {
           debug("Ignoring response for closed socket.")
@@ -297,7 +310,7 @@ private[kafka] class Processor(val id: Int,
   private def configureNewConnections() {
     while(newConnections.size() > 0) {
       val channel = newConnections.poll()
-      debug("Listening to new connection from " + channel.socket.getRemoteSocketAddress)
+      debug("Processor " + id + " listening to new connection from " + channel.socket.getRemoteSocketAddress)
       channel.register(selector, SelectionKey.OP_READ)
     }
   }
@@ -320,10 +333,12 @@ private[kafka] class Processor(val id: Int,
     } else if(receive.complete) {
       val req = RequestChannel.Request(processor = id, requestKey = key, buffer = receive.buffer, startTimeMs = time.milliseconds, remoteAddress = address)
       requestChannel.sendRequest(req)
-      trace("Received request, sending for processing by handler: " + req)
       key.attach(null)
+      // explicitly reset interest ops to not READ, no need to wake up the selector just yet
+      key.interestOps(key.interestOps & (~SelectionKey.OP_READ))
     } else {
       // more reading to be done
+      trace("Did not finish reading, registering for read again on connection " + socketChannel.socket.getRemoteSocketAddress())
       key.interestOps(SelectionKey.OP_READ)
       wakeup()
     }
@@ -339,12 +354,14 @@ private[kafka] class Processor(val id: Int,
     if(responseSend == null)
       throw new IllegalStateException("Registered for write interest but no response attached to key.")
     val written = responseSend.writeTo(socketChannel)
-    trace(written + " bytes written to " + socketChannel.socket.getRemoteSocketAddress())
+    trace(written + " bytes written to " + socketChannel.socket.getRemoteSocketAddress() + " using key " + key)
     if(responseSend.complete) {
       response.request.updateRequestMetrics()
       key.attach(null)
+      trace("Finished writing, registering for read on connection " + socketChannel.socket.getRemoteSocketAddress())
       key.interestOps(SelectionKey.OP_READ)
     } else {
+      trace("Did not finish writing, registering for write again on connection " + socketChannel.socket.getRemoteSocketAddress())
       key.interestOps(SelectionKey.OP_WRITE)
       wakeup()
     }

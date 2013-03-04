@@ -98,7 +98,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
    *  Forces some dynamic jmx beans to be registered on server startup.
    */
   private def registerStats() {
-    BrokerTopicStats.getBrokerAllTopicStats()
+    BrokerTopicStats.getBrokerAllTopicsStats()
     ControllerStats.offlinePartitionRate
     ControllerStats.uncleanLeaderElectionRate
   }
@@ -111,6 +111,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     info("shutting down")
     val canShutdown = isShuttingDown.compareAndSet(false, true);
     if (canShutdown) {
+      if(socketServer != null)
+        Utils.swallow(socketServer.shutdown())
       if(requestHandlerPool != null)
         Utils.swallow(requestHandlerPool.shutdown())
       Utils.swallow(kafkaScheduler.shutdown())
@@ -120,8 +122,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         Utils.swallow(kafkaZookeeper.shutdown())
       if(replicaManager != null)
         Utils.swallow(replicaManager.shutdown())
-      if(socketServer != null)
-        Utils.swallow(socketServer.shutdown())
       if(logManager != null)
         Utils.swallow(logManager.shutdown())
 

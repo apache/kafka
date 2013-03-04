@@ -41,7 +41,7 @@ case class LeaderAndIsr(var leader: Int, var leaderEpoch: Int, var isr: List[Int
     jsonDataMap.put("leader", leader.toString)
     jsonDataMap.put("leaderEpoch", leaderEpoch.toString)
     jsonDataMap.put("ISR", isr.mkString(","))
-    Utils.stringMapToJson(jsonDataMap)
+    Utils.mapToJson(jsonDataMap, valueInQuotes = true)
   }
 }
 

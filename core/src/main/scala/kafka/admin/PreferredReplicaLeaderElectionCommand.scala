@@ -26,7 +26,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser
-    val jsonFileOpt = parser.accepts("path to json file", "The JSON file with the list of partitions " +
+    val jsonFileOpt = parser.accepts("path-to-json-file", "The JSON file with the list of partitions " +
       "for which preferred replica leader election should be done, in the following format - \n" +
        "[{\"topic\": \"foo\", \"partition\": \"1\"}, {\"topic\": \"foobar\", \"partition\": \"2\"}]. \n" +
       "Defaults to all existing partitions")
@@ -92,9 +92,9 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   def writePreferredReplicaElectionData(zkClient: ZkClient,
                                         partitionsUndergoingPreferredReplicaElection: scala.collection.Set[TopicAndPartition]) {
     val zkPath = ZkUtils.PreferredReplicaLeaderElectionPath
-    val jsonData = Utils.arrayToJson(partitionsUndergoingPreferredReplicaElection.map { p =>
-      Utils.stringMapToJson(Map(("topic" -> p.topic), ("partition" -> p.partition.toString)))
-    }.toArray)
+    val jsonData = Utils.seqToJson(partitionsUndergoingPreferredReplicaElection.map { p =>
+      Utils.mapToJson(Map(("topic" -> p.topic), ("partition" -> p.partition.toString)), valueInQuotes = true)
+    }.toSeq.sorted, valueInQuotes = false)
     try {
       ZkUtils.createPersistentPath(zkClient, zkPath, jsonData)
       info("Created preferred replica election path with %s".format(jsonData))

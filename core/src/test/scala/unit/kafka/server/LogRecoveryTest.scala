@@ -50,7 +50,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   var hwFile2: OffsetCheckpoint = new OffsetCheckpoint(new File(configProps2.logDirs(0), ReplicaManager.HighWatermarkFilename))
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
   
-  val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), 64*1024, 100000, 10000)
+  val producerProps = getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs))
   producerProps.put("key.serializer.class", classOf[IntEncoder].getName.toString)
   producerProps.put("request.required.acks", "-1")
 

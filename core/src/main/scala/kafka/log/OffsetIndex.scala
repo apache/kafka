@@ -90,8 +90,8 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   /* the last offset in the index */
   var lastOffset = readLastOffset()
   
-  info("Created index file %s with maxEntries = %d, maxIndexSize = %d, entries = %d, lastOffset = %d"
-       .format(file.getAbsolutePath, maxEntries, maxIndexSize, entries(), lastOffset))
+  info("Loaded index file %s with maxEntries = %d, maxIndexSize = %d, entries = %d, lastOffset = %d, file position = %d"
+    .format(file.getAbsolutePath, maxEntries, maxIndexSize, entries(), lastOffset, mmap.position))
 
   /**
    * The last offset written to the index
@@ -139,7 +139,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
    * @return The slot found or -1 if the least entry in the index is larger than the target offset or the index is empty
    */
   private def indexSlotFor(idx: ByteBuffer, targetOffset: Long): Int = {
-    // we only store the difference from the baseoffset so calculate that
+    // we only store the difference from the base offset so calculate that
     val relOffset = targetOffset - baseOffset
     
     // check if the index is empty
@@ -189,15 +189,14 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
    */
   def append(offset: Long, position: Int) {
     this synchronized {
-      if(isFull)
-        throw new IllegalStateException("Attempt to append to a full index (size = " + size + ").")
-      if(size.get > 0 && offset <= lastOffset)
-        throw new IllegalArgumentException("Attempt to append an offset (%d) to position %d no larger than the last offset appended (%d).".format(offset, entries, lastOffset))
+      require(!isFull, "Attempt to append to a full index (size = " + size + ").")
+      require(size.get == 0 || offset > lastOffset, "Attempt to append an offset (%d) to position %d no larger than the last offset appended (%d).".format(offset, entries, lastOffset))
       debug("Adding index entry %d => %d to %s.".format(offset, position, file.getName))
       this.mmap.putInt((offset - baseOffset).toInt)
       this.mmap.putInt(position)
       this.size.incrementAndGet()
       this.lastOffset = offset
+      require(entries * 8 == mmap.position, entries + " entries but file position in index is " + mmap.position + ".")
     }
   }
   
@@ -209,7 +208,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   /**
    * Truncate the entire index, deleting all entries
    */
-  def truncate() = truncateTo(this.baseOffset)
+  def truncate() = truncateToEntries(0)
   
   /**
    * Remove all entries from the index which have an offset greater than or equal to the given offset.
@@ -232,17 +231,28 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
           slot
         else
           slot + 1
-      this.size.set(newEntries)
-      mmap.position(this.size.get * 8)
-      this.lastOffset = readLastOffset
+      truncateToEntries(newEntries)
     }
+  }
+
+  /**
+   * Truncates index to a known number of entries.
+   */
+  private def truncateToEntries(entries: Int) {
+    this.size.set(entries)
+    mmap.position(this.size.get * 8)
+    this.lastOffset = readLastOffset
   }
   
   /**
    * Trim this segment to fit just the valid entries, deleting all trailing unwritten bytes from
    * the file.
    */
-  def trimToValidSize() = resize(entries * 8)
+  def trimToValidSize() {
+    this synchronized {
+      resize(entries * 8)
+    }
+  }
 
   /**
    * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in
@@ -257,7 +267,9 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
       val roundedNewSize = roundToExactMultiple(newSize, 8)
       try {
         raf.setLength(roundedNewSize)
+        val position = this.mmap.position
         this.mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
+        this.mmap.position(position)
       } finally {
         Utils.swallow(raf.close())
       }

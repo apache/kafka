@@ -444,17 +444,20 @@ object Utils extends Logging {
   def nullOrEmpty(s: String): Boolean = s == null || s.equals("")
 
   /**
-   * Format a Map[String, String] as JSON
+   * Format a Map[String, String] as JSON object.
    */
-  def stringMapToJson(jsonDataMap: Map[String, String]): String = {
+  def mapToJson(jsonDataMap: Map[String, String], valueInQuotes: Boolean): String = {
     val builder = new StringBuilder
     builder.append("{ ")
     var numElements = 0
-    for ( (key, value) <- jsonDataMap) {
+    for ( (key, value) <- jsonDataMap.toList.sorted) {
       if (numElements > 0)
-        builder.append(",")
+        builder.append(", ")
       builder.append("\"" + key + "\":")
-      builder.append("\"" + value + "\"")
+      if (valueInQuotes)
+        builder.append("\"" + value + "\"")
+      else
+        builder.append(value)
       numElements += 1
     }
     builder.append(" }")
@@ -462,39 +465,60 @@ object Utils extends Logging {
   }
 
   /**
-   * Format an arbitrary map as JSON
+   * Format a Seq[String] as JSON array.
    */
-  def mapToJson[T <: Any](map: Map[String, Seq[String]]): String = {
-    val builder = new StringBuilder
-    builder.append("{ ")
-    var numElements = 0
-    for ( (key, value) <- map ) {
-      if (numElements > 0)
-        builder.append(",")
-      builder.append("\"" + key + "\": ")
-      builder.append("[%s]".format(value.map("\""+_+"\"").mkString(",")))
-      numElements += 1
-    }
-    builder.append(" }")
-    builder.toString
-  }
-
-  /**
-   * Format a string array as json
-   */
-  def arrayToJson[T <: Any](arr: Array[String]): String = {
+  def seqToJson(jsonData: Seq[String], valueInQuotes: Boolean): String = {
     val builder = new StringBuilder
     builder.append("[ ")
-    var numElements = 0
-    for ( value <- arr ) {
-      if (numElements > 0)
-        builder.append(",")
-      builder.append(" " + value + "  ")
-      numElements += 1
-    }
+    if (valueInQuotes)
+      builder.append(jsonData.map("\"" + _ + "\"")).mkString(", ")
+    else
+      builder.append(jsonData.mkString(", "))
     builder.append(" ]")
     builder.toString
   }
+
+  /**
+   * Format a Map[String, Seq[Int]] as JSON
+   */
+
+  def mapWithSeqValuesToJson(jsonDataMap: Map[String, Seq[Int]]): String = {
+    val builder = new StringBuilder
+    builder.append("{ ")
+    var numElements = 0
+    for ((key, value) <- jsonDataMap.toList.sortBy(_._1)) {
+      if (numElements > 0)
+        builder.append(", ")
+      builder.append("\"" + key + "\": ")
+      builder.append(Utils.seqToJson(value.map(_.toString), valueInQuotes = false))
+      numElements += 1
+    }
+    builder.append(" }")
+    builder.toString
+  }
+
+
+  /**
+   * Merge arbitrary JSON objects.
+   */
+  def mergeJsonObjects(objects: Seq[String]): String = {
+    val builder = new StringBuilder
+    builder.append("{ ")
+    var obs = List[String]()
+    objects.foreach(ob => obs = obs ::: getJsonContents(ob).split(',').toList)
+    obs = obs.sorted.map(_.trim)
+    builder.append(obs.mkString(", "))
+    builder.append(" }")
+    builder.toString
+  }
+
+  /**
+   * Get the contents of a JSON object or array.
+   */
+  def getJsonContents(str: String): String = {
+    str.trim().substring(1, str.length - 1)
+  }
+
 
 
   /**
@@ -528,7 +552,7 @@ object Utils extends Logging {
    * This is different from java.lang.Math.abs or scala.math.abs in that they return Int.MinValue (!).
    */
   def abs(n: Int) = n & 0x7fffffff
-  
+
   /**
    * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
    */

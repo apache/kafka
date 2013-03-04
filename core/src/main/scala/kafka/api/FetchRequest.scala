@@ -24,7 +24,7 @@ import scala.collection.immutable.Map
 import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.consumer.ConsumerConfig
 import java.util.concurrent.atomic.AtomicInteger
-import kafka.network.{RequestChannel}
+import kafka.network.RequestChannel
 
 
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
@@ -201,5 +201,9 @@ class FetchRequestBuilder() {
     this
   }
 
-  def build() = FetchRequest(versionId, correlationId.getAndIncrement, clientId, replicaId, maxWait, minBytes, requestMap.toMap)
+  def build() = {
+    val fetchRequest = FetchRequest(versionId, correlationId.getAndIncrement, clientId, replicaId, maxWait, minBytes, requestMap.toMap)
+    requestMap.clear()
+    fetchRequest
+  }
 }

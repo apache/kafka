@@ -18,9 +18,10 @@
 package kafka.cluster
 
 import kafka.utils.Utils._
+import kafka.utils.Json
 import kafka.api.ApiUtils._
 import java.nio.ByteBuffer
-import kafka.common.BrokerNotAvailableException
+import kafka.common.{KafkaException, BrokerNotAvailableException}
 
 /**
  * A Kafka broker
@@ -30,8 +31,19 @@ private[kafka] object Broker {
   def createBroker(id: Int, brokerInfoString: String): Broker = {
     if(brokerInfoString == null)
       throw new BrokerNotAvailableException("Broker id %s does not exist".format(id))
-    val brokerInfo = brokerInfoString.split(":")
-    new Broker(id, brokerInfo(0), brokerInfo(1).toInt)
+    try {
+      Json.parseFull(brokerInfoString) match {
+        case Some(m) =>
+          val brokerInfo = m.asInstanceOf[Map[String, Any]]
+          val host = brokerInfo.get("host").get.asInstanceOf[String]
+          val port = brokerInfo.get("port").get.asInstanceOf[Int]
+          new Broker(id, host, port)
+        case None =>
+          throw new BrokerNotAvailableException("Broker id %d does not exist".format(id))
+      }
+    } catch {
+      case t => throw new KafkaException("Failed to parse the broker info from zookeeper: " + brokerInfoString, t)
+    }
   }
 
   def readFrom(buffer: ByteBuffer): Broker = {

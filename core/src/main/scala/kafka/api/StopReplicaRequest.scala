@@ -23,7 +23,7 @@ import kafka.api.ApiUtils._
 import kafka.network.{BoundedByteBufferSend, RequestChannel, InvalidRequestException}
 import kafka.common.ErrorMapping
 import kafka.network.RequestChannel.Response
-import kafka.utils.{Logging}
+import kafka.utils.Logging
 
 
 object StopReplicaRequest extends Logging {

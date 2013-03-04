@@ -32,7 +32,7 @@ class KafkaRequestHandler(id: Int, brokerId: Int, val requestChannel: RequestCha
     while(true) {
       try {
         val req = requestChannel.receiveRequest()
-        if(req eq RequestChannel.AllDone){
+        if(req eq RequestChannel.AllDone) {
           trace("receives shut down command, shut down".format(brokerId, id))
           return
         }
@@ -82,9 +82,9 @@ class BrokerTopicMetrics(name: String) extends KafkaMetricsGroup {
 object BrokerTopicStats extends Logging {
   private val valueFactory = (k: String) => new BrokerTopicMetrics(k)
   private val stats = new Pool[String, BrokerTopicMetrics](Some(valueFactory))
-  private val allTopicStats = new BrokerTopicMetrics("AllTopics")
+  private val allTopicsStats = new BrokerTopicMetrics("AllTopics")
 
-  def getBrokerAllTopicStats(): BrokerTopicMetrics = allTopicStats
+  def getBrokerAllTopicsStats(): BrokerTopicMetrics = allTopicsStats
 
   def getBrokerTopicStats(topic: String): BrokerTopicMetrics = {
     stats.getAndMaybePut(topic + "-")

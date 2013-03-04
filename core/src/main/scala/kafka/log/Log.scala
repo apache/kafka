@@ -74,6 +74,8 @@ class Log(val dir: File,
   /* Calculate the offset of the next message */
   private val nextOffset: AtomicLong = new AtomicLong(activeSegment.nextOffset())
 
+  debug("Completed load of log %s with log end offset %d".format(name, logEndOffset))
+
   newGauge(name + "-" + "NumLogSegments",
            new Gauge[Int] { def getValue = numberOfSegments })
 
@@ -165,6 +167,14 @@ class Log(val dir: File,
         active.recover(config.maxMessageSize)
       }
     }
+
+    // Check for the index file of every segment, if it's empty or its last offset is greater than its base offset.
+    for (s <- asIterable(logSegments.values)) {
+      require(s.index.entries == 0 || s.index.lastOffset > s.index.baseOffset,
+              "Corrupt index found, index file (%s) has non-zero size but the last offset is %d and the base offset is %d"
+              .format(s.index.file.getAbsolutePath, s.index.lastOffset, s.index.baseOffset))
+    }
+
     logSegments
   }
 
@@ -223,12 +233,24 @@ class Log(val dir: File,
           // assign offsets to the messageset
           appendInfo.firstOffset = nextOffset.get
           val offset = new AtomicLong(nextOffset.get)
-          validMessages = validMessages.assignOffsets(offset, appendInfo.codec)
+          try {
+            validMessages = validMessages.assignOffsets(offset, appendInfo.codec)
+          } catch {
+            case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
+          }
           appendInfo.lastOffset = offset.get - 1
         } else {
           // we are taking the offsets we are given
           if(!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffset.get)
             throw new IllegalArgumentException("Out of order offsets found in " + messages)
+        }
+
+        // Check if the message sizes are valid. This check is done after assigning offsets to ensure the comparison
+        // happens with the new message size (after re-compression, if any)
+        for(messageAndOffset <- validMessages.shallowIterator) {
+          if(MessageSet.entrySize(messageAndOffset.message) > config.maxMessageSize)
+            throw new MessageSizeTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
+              .format(MessageSet.entrySize(messageAndOffset.message), config.maxMessageSize))
         }
 
         // now append to the log
@@ -260,7 +282,6 @@ class Log(val dir: File,
   /**
    * Validate the following:
    * <ol>
-   * <li> each message is not too large
    * <li> each message matches its CRC
    * </ol>
    * 
@@ -288,12 +309,9 @@ class Log(val dir: File,
       // update the last offset seen
       lastOffset = messageAndOffset.offset
 
-      // check the validity of the message by checking CRC and message size
+      // check the validity of the message by checking CRC
       val m = messageAndOffset.message
       m.ensureValid()
-      if(MessageSet.entrySize(m) > config.maxMessageSize)
-        throw new MessageSizeTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d.".format(MessageSet.entrySize(m), config.maxMessageSize))
-      
       messageCount += 1;
       
       val messageCodec = m.compressionCodec

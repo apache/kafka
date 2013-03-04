@@ -51,11 +51,18 @@ class ReplicaManager(val config: KafkaConfig,
   this.logIdent = "Replica Manager on Broker " + config.brokerId + ": "
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   val highWatermarkCheckpoints = config.logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, ReplicaManager.HighWatermarkFilename)))).toMap
+  private var hwThreadInitialized = false
 
   newGauge(
     "LeaderCount",
     new Gauge[Int] {
       def getValue = leaderPartitions.size
+    }
+  )
+  newGauge(
+    "PartitionCount",
+    new Gauge[Int] {
+      def getValue = allPartitions.size
     }
   )
   newGauge(
@@ -209,6 +216,12 @@ class ReplicaManager(val config: KafkaConfig,
         responseMap.put(topicAndPartition, errorCode)
       }
       info("Completed leader and isr request %s".format(leaderAndISRRequest))
+      // we initialize highwatermark thread after the first leaderisrrequest. This ensures that all the partitions
+      // have been completely populated before starting the checkpointing there by avoiding weird race conditions
+      if (!hwThreadInitialized) {
+        startHighWaterMarksCheckPointThread()
+        hwThreadInitialized = true
+      }
       replicaFetcherManager.shutdownIdleFetcherThreads()
       (responseMap, ErrorMapping.NoError)
     }

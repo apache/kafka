@@ -16,18 +16,18 @@
  */
 package kafka.bridge.examples;
 
-
 import java.io.IOException;
 import kafka.bridge.hadoop.KafkaOutputFormat;
 import org.apache.hadoop.fs.Path;
-import org.apache.hadoop.io.BytesWritable;
-import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
 
+/**
+ * Publish a text file line by line to a Kafka topic
+ */
 public class TextPublisher
 {
   public static void main(String[] args) throws Exception
@@ -40,8 +40,6 @@ public class TextPublisher
     Job job = new Job();
 
     job.setJarByClass(TextPublisher.class);
-    job.setOutputKeyClass(NullWritable.class);
-    job.setOutputValueClass(BytesWritable.class);
     job.setInputFormatClass(TextInputFormat.class);
     job.setOutputFormatClass(KafkaOutputFormat.class);
 
@@ -56,12 +54,12 @@ public class TextPublisher
     }
   }
 
-  public static class TheMapper extends Mapper<Object, Object, NullWritable, BytesWritable>
+  public static class TheMapper extends Mapper<Object, Text, Object, Object>
   {
     @Override
-    protected void map(Object key, Object value, Context context) throws IOException, InterruptedException
+    protected void map(Object key, Text value, Context context) throws IOException, InterruptedException
     {
-      context.write(NullWritable.get(), new BytesWritable(((Text) value).getBytes()));
+      context.write(null, value.getBytes());
     }
   }
 }

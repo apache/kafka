@@ -246,7 +246,7 @@ object ProducerPerformance extends Logging {
       while(j < messagesPerThread) {
         try {
           config.topics.foreach(
-            topic =>{
+            topic => {
               val (producerData, bytesSent_) = generateProducerData(topic, j)
               bytesSent += bytesSent_
               producer.send(producerData)

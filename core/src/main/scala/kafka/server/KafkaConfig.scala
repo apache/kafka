@@ -29,10 +29,9 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
 
   def this(originalProps: Properties) {
     this(new VerifiableProperties(originalProps))
+    props.verify()
   }
 
-  def verify() = props.verify()
-  
   /*********** General Configuration ***********/
   
   /* the broker id for this server */

@@ -125,7 +125,7 @@ class TopicDataSend(val topicData: TopicData) extends Send {
     if(buffer.hasRemaining)
       written += channel.write(buffer)
     if(!buffer.hasRemaining && !sends.complete) {
-      written += sends.writeCompletely(channel)
+      written += sends.writeTo(channel)
     }
     sent += written
     written
@@ -220,7 +220,7 @@ class FetchResponseSend(val fetchResponse: FetchResponse) extends Send {
     if(buffer.hasRemaining)
       written += channel.write(buffer)
     if(!buffer.hasRemaining && !sends.complete) {
-      written += sends.writeCompletely(channel)
+      written += sends.writeTo(channel)
     }
     sent += written
     written

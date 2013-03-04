@@ -25,6 +25,7 @@ import javax.management.remote.{JMXServiceURL, JMXConnectorFactory}
 import javax.management.ObjectName
 import kafka.controller.KafkaController
 import scala.Some
+import kafka.common.BrokerNotAvailableException
 
 
 object ShutdownBroker extends Logging {
@@ -35,15 +36,22 @@ object ShutdownBroker extends Logging {
     var zkClient: ZkClient = null
     try {
       zkClient = new ZkClient(params.zkConnect, 30000, 30000, ZKStringSerializer)
-
       val controllerBrokerId = ZkUtils.getController(zkClient)
       ZkUtils.readDataMaybeNull(zkClient, ZkUtils.BrokerIdsPath + "/" + controllerBrokerId)._1 match {
         case Some(controllerInfo) =>
-          val parsed = controllerInfo.split(":")
-          val controllerHost = parsed(0)
-          val controllerJmxPort = parsed(2)
-          val jmxUrl = new JMXServiceURL("service:jmx:rmi:///jndi/rmi://%s:%s/jmxrmi"
-                                         .format(controllerHost, controllerJmxPort))
+          var controllerHost: String = null
+          var controllerJmxPort: Int = -1
+          try {
+            Json.parseFull(controllerInfo) match {
+              case Some(m) =>
+                val brokerInfo = m.asInstanceOf[Map[String, Any]]
+                controllerHost = brokerInfo.get("host").get.toString
+                controllerJmxPort = brokerInfo.get("jmx_port").get.asInstanceOf[Int]
+              case None =>
+                throw new BrokerNotAvailableException("Broker id %d does not exist".format(controllerBrokerId))
+            }
+          }
+          val jmxUrl = new JMXServiceURL("service:jmx:rmi:///jndi/rmi://%s:%d/jmxrmi".format(controllerHost, controllerJmxPort))
           info("Connecting to jmx url " + jmxUrl)
           val jmxc = JMXConnectorFactory.connect(jmxUrl, null)
           val mbsc = jmxc.getMBeanServerConnection
@@ -52,21 +60,17 @@ object ShutdownBroker extends Logging {
                                                       Array(params.brokerId),
                                                       Array(classOf[Int].getName)).asInstanceOf[Int]
           val shutdownComplete = (leaderPartitionsRemaining == 0)
-          info("Shutdown status: " + (if (shutdownComplete)
-            "complete" else
-            "incomplete (broker still leads %d partitions)".format(leaderPartitionsRemaining)))
+          info("Shutdown status: " +
+            (if (shutdownComplete) "complete" else "incomplete (broker still leads %d partitions)".format(leaderPartitionsRemaining)))
           shutdownComplete
         case None =>
-          error("Operation failed due to controller failure on %d.".format(controllerBrokerId))
-          false
+          throw new BrokerNotAvailableException("Broker id %d does not exist".format(controllerBrokerId))
       }
-    }
-    catch {
+    } catch {
       case t: Throwable =>
-        error("Operation failed due to %s.".format(t.getMessage), t)
+        error("Operation failed due to controller failure", t)
         false
-    }
-    finally {
+    } finally {
       if (zkClient != null)
         zkClient.close()
     }

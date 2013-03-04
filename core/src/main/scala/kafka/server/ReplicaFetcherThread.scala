@@ -19,8 +19,8 @@ package kafka.server
 
 import kafka.cluster.Broker
 import kafka.message.ByteBufferMessageSet
-import kafka.common.{TopicAndPartition, ErrorMapping}
-import kafka.api.{FetchRequest, PartitionOffsetRequestInfo, OffsetRequest, FetchResponsePartitionData}
+import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest, FetchResponsePartitionData}
+import kafka.common.{KafkaStorageException, TopicAndPartition, ErrorMapping}
 
 class ReplicaFetcherThread(name:String,
                            sourceBroker: Broker,
@@ -34,26 +34,33 @@ class ReplicaFetcherThread(name:String,
                                 fetchSize = brokerConfig.replicaFetchMaxBytes,
                                 fetcherBrokerId = brokerConfig.brokerId,
                                 maxWait = brokerConfig.replicaFetchWaitMaxMs,
-                                minBytes = brokerConfig.replicaFetchMinBytes) {
+                                minBytes = brokerConfig.replicaFetchMinBytes,
+                                isInterruptible = false) {
 
   // process fetched data
   def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: FetchResponsePartitionData) {
-    val topic = topicAndPartition.topic
-    val partitionId = topicAndPartition.partition
-    val replica = replicaMgr.getReplica(topic, partitionId).get
-    val messageSet = partitionData.messages.asInstanceOf[ByteBufferMessageSet]
+    try {
+      val topic = topicAndPartition.topic
+      val partitionId = topicAndPartition.partition
+      val replica = replicaMgr.getReplica(topic, partitionId).get
+      val messageSet = partitionData.messages.asInstanceOf[ByteBufferMessageSet]
 
-    if (fetchOffset != replica.logEndOffset)
-      throw new RuntimeException("Offset mismatch: fetched offset = %d, log end offset = %d.".format(fetchOffset, replica.logEndOffset))
-    trace("Follower %d has replica log end offset %d. Received %d messages and leader hw %d"
-          .format(replica.brokerId, replica.logEndOffset, messageSet.sizeInBytes, partitionData.hw))
-    replica.log.get.append(messageSet, assignOffsets = false)
-    trace("Follower %d has replica log end offset %d after appending %d bytes of messages"
-          .format(replica.brokerId, replica.logEndOffset, messageSet.sizeInBytes))
-    val followerHighWatermark = replica.logEndOffset.min(partitionData.hw)
-    replica.highWatermark = followerHighWatermark
-    trace("Follower %d set replica highwatermark for topic %s partition %d to %d"
-          .format(replica.brokerId, topic, partitionId, followerHighWatermark))
+      if (fetchOffset != replica.logEndOffset)
+        throw new RuntimeException("Offset mismatch: fetched offset = %d, log end offset = %d.".format(fetchOffset, replica.logEndOffset))
+      trace("Follower %d has replica log end offset %d. Received %d messages and leader hw %d"
+            .format(replica.brokerId, replica.logEndOffset, messageSet.sizeInBytes, partitionData.hw))
+      replica.log.get.append(messageSet, assignOffsets = false)
+      trace("Follower %d has replica log end offset %d after appending %d bytes of messages"
+            .format(replica.brokerId, replica.logEndOffset, messageSet.sizeInBytes))
+      val followerHighWatermark = replica.logEndOffset.min(partitionData.hw)
+      replica.highWatermark = followerHighWatermark
+      trace("Follower %d set replica highwatermark for topic %s partition %d to %d"
+            .format(replica.brokerId, topic, partitionId, followerHighWatermark))
+    } catch {
+      case e: KafkaStorageException =>
+        fatal("Disk error while replicating data.", e)
+        Runtime.getRuntime.halt(1)
+    }
   }
 
   // handle a partition whose offset is out of range and return a new fetch offset

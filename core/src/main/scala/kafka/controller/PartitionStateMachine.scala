@@ -299,8 +299,9 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasForThisPartition, topic, partition,
         newLeaderIsrAndControllerEpoch, controllerContext.partitionReplicaAssignment(TopicAndPartition(topic, partition)).size)
     } catch {
-      case poe: PartitionOfflineException => throw new PartitionOfflineException("All replicas for partition %s are dead."
-        .format(topicAndPartition) + " Marking this partition offline", poe)
+      case poe: PartitionOfflineException => throw new PartitionOfflineException("All replicas %s for partition %s are dead."
+        .format(controllerContext.partitionReplicaAssignment(topicAndPartition).mkString(","), topicAndPartition) +
+        " Marking this partition offline", poe)
       case sce => throw new StateChangeFailedException(("Error while electing leader for partition " +
         " %s due to: %s.").format(topicAndPartition, sce.getMessage), sce)
     }

@@ -56,7 +56,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         keyed =>
           val dataSize = keyed.message.payloadSize
           producerTopicStats.getProducerTopicStats(keyed.topic).byteRate.mark(dataSize)
-          producerTopicStats.getProducerAllTopicStats.byteRate.mark(dataSize)
+          producerTopicStats.getProducerAllTopicsStats.byteRate.mark(dataSize)
       }
       var outstandingProduceRequests = serializedData
       var remainingRetries = config.messageSendMaxRetries + 1
@@ -81,9 +81,10 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       }
       if(outstandingProduceRequests.size > 0) {
         producerStats.failedSendRate.mark()
-
         val correlationIdEnd = correlationId.get()
-        error("Failed to send the following requests with correlation ids in [%d,%d]: %s".format(correlationIdStart, correlationIdEnd-1, outstandingProduceRequests))
+        error("Failed to send requests for topics %s with correlation ids in [%d,%d]"
+          .format(outstandingProduceRequests.map(_.topic).toSet.mkString(","),
+          correlationIdStart, correlationIdEnd-1))
         throw new FailedToSendMessageException("Failed to send messages after " + config.messageSendMaxRetries + " tries.", null)
       }
     }
@@ -141,8 +142,8 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     serializedMessages
   }
 
-  def partitionAndCollate(messages: Seq[KeyedMessage[K,Message]]): Option[Map[Int, Map[TopicAndPartition, Seq[KeyedMessage[K,Message]]]]] = {
-    val ret = new HashMap[Int, Map[TopicAndPartition, Seq[KeyedMessage[K,Message]]]]
+  def partitionAndCollate(messages: Seq[KeyedMessage[K,Message]]): Option[Map[Int, collection.mutable.Map[TopicAndPartition, Seq[KeyedMessage[K,Message]]]]] = {
+    val ret = new HashMap[Int, collection.mutable.Map[TopicAndPartition, Seq[KeyedMessage[K,Message]]]]
     try {
       for (message <- messages) {
         val topicPartitionsList = getPartitionListForTopic(message)
@@ -226,10 +227,9 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
    * @param messagesPerTopic the messages as a map from (topic, partition) -> messages
    * @return the set (topic, partitions) messages which incurred an error sending or processing
    */
-  private def send(brokerId: Int, messagesPerTopic: Map[TopicAndPartition, ByteBufferMessageSet]) = {
+  private def send(brokerId: Int, messagesPerTopic: collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]) = {
     if(brokerId < 0) {
-      warn("Failed to send data %s since partitions %s don't have a leader".format(messagesPerTopic.map(_._2),
-        messagesPerTopic.map(_._1.toString).mkString(",")))
+      warn("Failed to send data since partitions %s don't have a leader".format(messagesPerTopic.map(_._1).mkString(",")))
       messagesPerTopic.keys.toSeq
     } else if(messagesPerTopic.size > 0) {
       val currentCorrelationId = correlationId.getAndIncrement
@@ -243,24 +243,26 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         val response = syncProducer.send(producerRequest)
         debug("Producer sent messages with correlation id %d for topics %s to broker %d on %s:%d"
           .format(currentCorrelationId, messagesPerTopic.keySet.mkString(","), brokerId, syncProducer.config.host, syncProducer.config.port))
-        if (response.status.size != producerRequest.data.size)
-          throw new KafkaException("Incomplete response (%s) for producer request (%s)"
-            .format(response, producerRequest))
-        if (logger.isTraceEnabled) {
-          val successfullySentData = response.status.filter(_._2.error == ErrorMapping.NoError)
-          successfullySentData.foreach(m => messagesPerTopic(m._1).foreach(message =>
-            trace("Successfully sent message: %s".format(Utils.readString(message.message.payload)))))
-        }
-        failedTopicPartitions = response.status.filter(_._2.error != ErrorMapping.NoError).toSeq
-                                    .map(partitionStatus => partitionStatus._1)
-        if(failedTopicPartitions.size > 0)
-          error("Produce request with correlation id %d failed due to response %s. List of failed topic partitions is %s"
-            .format(currentCorrelationId, response.toString, failedTopicPartitions.mkString(",")))
-        failedTopicPartitions
+        if(response != null) {
+          if (response.status.size != producerRequest.data.size)
+            throw new KafkaException("Incomplete response (%s) for producer request (%s)".format(response, producerRequest))
+          if (logger.isTraceEnabled) {
+            val successfullySentData = response.status.filter(_._2.error == ErrorMapping.NoError)
+            successfullySentData.foreach(m => messagesPerTopic(m._1).foreach(message =>
+              trace("Successfully sent message: %s".format(Utils.readString(message.message.payload)))))
+          }
+          failedTopicPartitions = response.status.filter(_._2.error != ErrorMapping.NoError).toSeq
+            .map(partitionStatus => partitionStatus._1)
+          if(failedTopicPartitions.size > 0)
+            error("Produce request with correlation id %d failed due to response %s. List of failed topic partitions is %s"
+              .format(currentCorrelationId, response.toString, failedTopicPartitions.mkString(",")))
+          failedTopicPartitions
+        } else
+          Seq.empty[TopicAndPartition]
       } catch {
         case t: Throwable =>
-          warn("Failed to send producer request with correlation id %d to broker %d with data %s"
-            .format(currentCorrelationId, brokerId, messagesPerTopic), t)
+          warn("Failed to send producer request with correlation id %d to broker %d with data for partitions %s"
+            .format(currentCorrelationId, brokerId, messagesPerTopic.map(_._1).mkString(",")), t)
           messagesPerTopic.keys.toSeq
       }
     } else {
@@ -268,7 +270,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     }
   }
 
-  private def groupMessagesToSet(messagesPerTopicAndPartition: Map[TopicAndPartition, Seq[KeyedMessage[K,Message]]]) = {
+  private def groupMessagesToSet(messagesPerTopicAndPartition: collection.mutable.Map[TopicAndPartition, Seq[KeyedMessage[K,Message]]]) = {
     /** enforce the compressed.topics config here.
       *  If the compression codec is anything other than NoCompressionCodec,
       *    Enable compression only for specified topics if any

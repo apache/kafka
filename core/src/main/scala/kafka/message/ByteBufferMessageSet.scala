@@ -40,14 +40,16 @@ object ByteBufferMessageSet {
       val byteArrayStream = new ByteArrayOutputStream(MessageSet.messageSetSize(messages))
       val output = new DataOutputStream(CompressionFactory(compressionCodec, byteArrayStream))
       var offset = -1L
-      for(message <- messages) {
-        offset = offsetCounter.getAndIncrement
-        output.writeLong(offset)
-        output.writeInt(message.size)
-        output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
+      try {
+        for(message <- messages) {
+          offset = offsetCounter.getAndIncrement
+          output.writeLong(offset)
+          output.writeInt(message.size)
+          output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
+        }
+      } finally {
+        output.close()
       }
-      output.close()
-      
       val bytes = byteArrayStream.toByteArray
       val message = new Message(bytes, compressionCodec)
       val buffer = ByteBuffer.allocate(message.size + MessageSet.LogOverhead)
@@ -62,11 +64,13 @@ object ByteBufferMessageSet {
     val inputStream: InputStream = new ByteBufferBackedInputStream(message.payload)
     val intermediateBuffer = new Array[Byte](1024)
     val compressed = CompressionFactory(message.compressionCodec, inputStream)
-    Stream.continually(compressed.read(intermediateBuffer)).takeWhile(_ > 0).foreach { dataRead =>
-      outputStream.write(intermediateBuffer, 0, dataRead)
+    try {
+      Stream.continually(compressed.read(intermediateBuffer)).takeWhile(_ > 0).foreach { dataRead =>
+        outputStream.write(intermediateBuffer, 0, dataRead)
+      }
+    } finally {
+      compressed.close()
     }
-    compressed.close()
-
     val outputBuffer = ByteBuffer.allocate(outputStream.size)
     outputBuffer.put(outputStream.toByteArray)
     outputBuffer.rewind

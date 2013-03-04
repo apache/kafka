@@ -26,7 +26,7 @@ import kafka.common.QueueFullException
 import kafka.metrics._
 
 
-class Producer[K,V](config: ProducerConfig,
+class Producer[K,V](val config: ProducerConfig,
                     private val eventHandler: EventHandler[K,V])  // only for unit testing
   extends Logging {
 
@@ -40,8 +40,7 @@ class Producer[K,V](config: ProducerConfig,
     case "sync" =>
     case "async" =>
       sync = false
-      val asyncProducerID = random.nextInt(Int.MaxValue)
-      producerSendThread = new ProducerSendThread[K,V]("ProducerSendThread-" + asyncProducerID, 
+      producerSendThread = new ProducerSendThread[K,V]("ProducerSendThread-" + config.clientId,
                                                        queue,
                                                        eventHandler, 
                                                        config.queueBufferingMaxMs,
@@ -50,7 +49,6 @@ class Producer[K,V](config: ProducerConfig,
       producerSendThread.start()
   }
 
-  private val producerStats = ProducerStatsRegistry.getProducerStats(config.clientId)
   private val producerTopicStats = ProducerTopicStatsRegistry.getProducerTopicStats(config.clientId)
 
   KafkaMetricsReporter.startReporters(config.props)
@@ -81,7 +79,7 @@ class Producer[K,V](config: ProducerConfig,
   private def recordStats(messages: Seq[KeyedMessage[K,V]]) {
     for (message <- messages) {
       producerTopicStats.getProducerTopicStats(message.topic).messageRate.mark()
-      producerTopicStats.getProducerAllTopicStats.messageRate.mark()
+      producerTopicStats.getProducerAllTopicsStats.messageRate.mark()
     }
   }
 
@@ -106,7 +104,8 @@ class Producer[K,V](config: ProducerConfig,
           }
       }
       if(!added) {
-        producerStats.droppedMessageRate.mark()
+        producerTopicStats.getProducerTopicStats(message.topic).droppedMessageRate.mark()
+        producerTopicStats.getProducerAllTopicsStats.droppedMessageRate.mark()
         error("Event queue is full of unsent messages, could not send event: " + message.toString)
         throw new QueueFullException("Event queue is full of unsent messages, could not send event: " + message.toString)
       }else {

@@ -199,7 +199,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("partitioner.class", "kafka.utils.StaticPartitioner")
     props.put("request.timeout.ms", "2000")
-//    props.put("request.required.acks", "-1")
+    props.put("request.required.acks", "1")
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
 
     // create topic
@@ -258,6 +258,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     props.put("partitioner.class", "kafka.utils.StaticPartitioner")
     props.put("request.timeout.ms", String.valueOf(timeoutMs))
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    props.put("request.required.acks", "1")
 
     val config = new ProducerConfig(props)
     val producer = new Producer[String, String](config)

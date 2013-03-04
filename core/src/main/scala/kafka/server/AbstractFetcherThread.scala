@@ -22,7 +22,6 @@ import kafka.common.{ClientIdAndBroker, TopicAndPartition, ErrorMapping}
 import collection.mutable
 import kafka.message.ByteBufferMessageSet
 import kafka.message.MessageAndOffset
-import kafka.api.{FetchResponse, FetchResponsePartitionData, FetchRequestBuilder}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 import java.util.concurrent.atomic.AtomicLong
@@ -30,14 +29,16 @@ import kafka.utils.{Pool, ShutdownableThread}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kafka.consumer.{PartitionTopicInfo, SimpleConsumer}
+import kafka.api.{FetchRequest, FetchResponse, FetchResponsePartitionData, FetchRequestBuilder}
 
 
 /**
  *  Abstract class for fetching data from multiple partitions from the same broker.
  */
 abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroker: Broker, socketTimeout: Int, socketBufferSize: Int,
-                                     fetchSize: Int, fetcherBrokerId: Int = -1, maxWait: Int = 0, minBytes: Int = 1)
-  extends ShutdownableThread(name) {
+                                     fetchSize: Int, fetcherBrokerId: Int = -1, maxWait: Int = 0, minBytes: Int = 1,
+                                     isInterruptible: Boolean = true)
+  extends ShutdownableThread(name, isInterruptible) {
   private val partitionMap = new mutable.HashMap[TopicAndPartition, Long] // a (topic, partition) -> offset map
   private val partitionMapLock = new ReentrantLock
   private val partitionMapCond = partitionMapLock.newCondition()
@@ -46,6 +47,11 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   private val metricId = new ClientIdAndBroker(clientId, brokerInfo)
   val fetcherStats = new FetcherStats(metricId)
   val fetcherLagStats = new FetcherLagStats(metricId)
+  val fetchRequestBuilder = new FetchRequestBuilder().
+          clientId(clientId).
+          replicaId(fetcherBrokerId).
+          maxWait(maxWait).
+          minBytes(minBytes)
 
   /* callbacks to be defined in subclass */
 
@@ -65,16 +71,10 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   }
 
   override def doWork() {
-    val fetchRequestBuilder = new FetchRequestBuilder().
-            clientId(clientId).
-            replicaId(fetcherBrokerId).
-            maxWait(maxWait).
-            minBytes(minBytes)
-
     partitionMapLock.lock()
     try {
-      while (partitionMap.isEmpty)
-        partitionMapCond.await()
+      if (partitionMap.isEmpty)
+        partitionMapCond.await(200L, TimeUnit.MILLISECONDS)
       partitionMap.foreach {
         case((topicAndPartition, offset)) =>
           fetchRequestBuilder.addFetch(topicAndPartition.topic, topicAndPartition.partition,
@@ -85,6 +85,11 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
     }
 
     val fetchRequest = fetchRequestBuilder.build()
+    if (!fetchRequest.requestInfo.isEmpty)
+      processFetchRequest(fetchRequest)
+  }
+
+  private def processFetchRequest(fetchRequest: FetchRequest) {
     val partitionsWithError = new mutable.HashSet[TopicAndPartition]
     var response: FetchResponse = null
     try {
