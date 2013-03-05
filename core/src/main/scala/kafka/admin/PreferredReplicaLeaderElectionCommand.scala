@@ -42,11 +42,11 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
     val options = parser.parse(args : _*)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, jsonFileOpt, zkConnectOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
 
     val jsonFile = options.valueOf(jsonFileOpt)
     val zkConnect = options.valueOf(zkConnectOpt)
-    val jsonString = Utils.readFileAsString(jsonFile)
+    val jsonString = if(jsonFile != "") Utils.readFileAsString(jsonFile) else ""
     var zkClient: ZkClient = null
 
     try {
@@ -54,15 +54,6 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       val partitionsForPreferredReplicaElection =
         if(jsonFile == "") ZkUtils.getAllPartitions(zkClient) else parsePreferredReplicaJsonData(jsonString)
       val preferredReplicaElectionCommand = new PreferredReplicaLeaderElectionCommand(zkClient, partitionsForPreferredReplicaElection)
-
-      // attach shutdown handler to catch control-c
-      Runtime.getRuntime().addShutdownHook(new Thread() {
-        override def run() = {
-          // delete the admin path so it can be retried
-          ZkUtils.deletePathRecursive(zkClient, ZkUtils.PreferredReplicaLeaderElectionPath)
-          zkClient.close()
-        }
-      })
 
       preferredReplicaElectionCommand.moveLeaderToPreferredReplica()
       println("Successfully started preferred replica election for partitions %s".format(partitionsForPreferredReplicaElection))

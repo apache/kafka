@@ -71,14 +71,6 @@ object ReassignPartitionsCommand extends Logging {
       zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
       val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, partitionsToBeReassigned)
 
-      // attach shutdown handler to catch control-c
-      Runtime.getRuntime().addShutdownHook(new Thread() {
-        override def run() = {
-          // delete the admin path so it can be retried
-          ZkUtils.deletePathRecursive(zkClient, ZkUtils.ReassignPartitionsPath)
-        }
-      })
-
       if(reassignPartitionsCommand.reassignPartitions())
         println("Successfully started reassignment of partitions %s".format(partitionsToBeReassigned))
       else
