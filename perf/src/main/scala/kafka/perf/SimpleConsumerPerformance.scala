@@ -134,7 +134,7 @@ object SimpleConsumerPerformance {
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1024*1024)
     val clientIdOpt = parser.accepts("clientId", "The ID of this client.")
-                           .withOptionalArg
+                           .withRequiredArg
                            .describedAs("clientId")
                            .ofType(classOf[String])
                            .defaultsTo("SimpleConsumerPerformanceClient")

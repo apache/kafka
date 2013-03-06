@@ -30,17 +30,7 @@ object DumpLogSegments {
   def main(args: Array[String]) {
     val parser = new OptionParser
     val printOpt = parser.accepts("print-data-log", "if set, printing the messages content when dumping data logs")
-                           .withOptionalArg
-                           .describedAs("print data log content")
-                           .ofType(classOf[java.lang.Boolean])
-                           .defaultsTo(false)
-
     val verifyOpt = parser.accepts("verify-index-only", "if set, just verify the index log without printing its content")
-                           .withOptionalArg
-                           .describedAs("just verify the index log")
-                           .ofType(classOf[java.lang.Boolean])
-                           .defaultsTo(false)
-
     val filesOpt = parser.accepts("files", "REQUIRED: The comma separated list of data and index log files to be dumped")
                            .withRequiredArg
                            .describedAs("file1, file2, ...")

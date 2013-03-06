@@ -54,12 +54,12 @@ object SimpleConsumerShell extends Logging {
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(UseLeaderReplica)
     val offsetOpt = parser.accepts("offset", "The offset id to consume from, default to -2 which means from beginning; while value -1 means from end")
-                           .withOptionalArg()
+                           .withRequiredArg
                            .describedAs("consume offset")
                            .ofType(classOf[java.lang.Long])
                            .defaultsTo(OffsetRequest.EarliestTime)
     val clientIdOpt = parser.accepts("clientId", "The ID of this client.")
-                           .withOptionalArg
+                           .withRequiredArg
                            .describedAs("clientId")
                            .ofType(classOf[String])
                            .defaultsTo("SimpleConsumerShell")
@@ -78,10 +78,6 @@ object SimpleConsumerShell extends Logging {
                            .describedAs("prop")
                            .ofType(classOf[String])
     val printOffsetOpt = parser.accepts("print-offsets", "Print the offsets returned by the iterator")
-                           .withOptionalArg
-                           .describedAs("print offsets")
-                           .ofType(classOf[java.lang.Boolean])
-                           .defaultsTo(false)
     val maxWaitMsOpt = parser.accepts("max-wait-ms", "The max amount of time each fetch request waits.")
                            .withRequiredArg
                            .describedAs("ms")
