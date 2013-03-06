@@ -54,12 +54,12 @@ object ProducerRequest {
 }
 
 case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
-                           correlationId: Int,
+                           override val correlationId: Int,
                            clientId: String,
                            requiredAcks: Short,
                            ackTimeoutMs: Int,
                            data: collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet])
-    extends RequestOrResponse(Some(RequestKeys.ProduceKey)) {
+    extends RequestOrResponse(Some(RequestKeys.ProduceKey), correlationId) {
 
   /**
    * Partitions the data into a map of maps (one for each topic).

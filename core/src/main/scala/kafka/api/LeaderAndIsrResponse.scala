@@ -41,10 +41,10 @@ object LeaderAndIsrResponse {
 }
 
 
-case class LeaderAndIsrResponse(correlationId: Int,
+case class LeaderAndIsrResponse(override val correlationId: Int,
                                 responseMap: Map[(String, Int), Short],
                                 errorCode: Short = ErrorMapping.NoError)
-        extends RequestOrResponse {
+    extends RequestOrResponse(correlationId = correlationId) {
   def sizeInBytes(): Int ={
     var size =
       4 /* correlation id */ + 

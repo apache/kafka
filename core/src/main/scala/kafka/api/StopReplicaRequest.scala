@@ -53,13 +53,13 @@ object StopReplicaRequest extends Logging {
 }
 
 case class StopReplicaRequest(versionId: Short,
-                              correlationId: Int,
+                              override val correlationId: Int,
                               clientId: String,
                               ackTimeoutMs: Int,
                               deletePartitions: Boolean,
                               partitions: Set[(String, Int)],
                               controllerEpoch: Int)
-        extends RequestOrResponse(Some(RequestKeys.StopReplicaKey)) {
+        extends RequestOrResponse(Some(RequestKeys.StopReplicaKey), correlationId) {
 
   def this(deletePartitions: Boolean, partitions: Set[(String, Int)], controllerEpoch: Int, correlationId: Int) = {
     this(StopReplicaRequest.CurrentVersion, correlationId, StopReplicaRequest.DefaultClientId, StopReplicaRequest.DefaultAckTimeout,

@@ -42,9 +42,10 @@ object StopReplicaResponse {
 }
 
 
-case class StopReplicaResponse(val correlationId: Int,
+case class StopReplicaResponse(override val correlationId: Int,
                                val responseMap: Map[(String, Int), Short],
-                               val errorCode: Short = ErrorMapping.NoError) extends RequestOrResponse{
+                               val errorCode: Short = ErrorMapping.NoError)
+    extends RequestOrResponse(correlationId = correlationId) {
   def sizeInBytes(): Int ={
     var size =
       4 /* correlation id */ + 
