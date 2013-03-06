@@ -19,7 +19,6 @@ package kafka.api
 
 import java.nio._
 import kafka.message._
-import scala.collection.Map
 import kafka.api.ApiUtils._
 import kafka.common._
 import kafka.network.RequestChannel.Response
