@@ -125,12 +125,6 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   /** throw a timeout exception to the consumer if no message is available for consumption after the specified interval */
   val consumerTimeoutMs = props.getInt("consumer.timeout.ms", ConsumerTimeoutMs)
 
-  /** Use shallow iterator over compressed messages directly. This feature should be used very carefully.
-   *  Typically, it's only used for mirroring raw messages from one kafka cluster to another to save the
-   *  overhead of decompression.
-   *  */
-  val shallowIteratorEnable = props.getBoolean("shallow.iterator.enable", false)
-
   /**
    * Client id is specified by the kafka consumer client, used to distinguish different clients
    */
