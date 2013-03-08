@@ -25,30 +25,36 @@ import java.net.InetAddress
 
 
 /**
- * Handles registering broker with zookeeper in the following path:
+ * This class registers the broker in zookeeper to allow 
+ * other brokers and consumers to detect failures. It uses an ephemeral znode with the path:
  *   /brokers/[0...N] --> host:port
+ *   
+ * Right now our definition of health is fairly naive. If we register in zk we are healthy, otherwise
+ * we are dead.
  */
-class KafkaZooKeeper(config: KafkaConfig) extends Logging {
+class KafkaHealthcheck(private val brokerId: Int, 
+                       private val host: String, 
+                       private val port: Int, 
+                       private val zkClient: ZkClient) extends Logging {
 
-  val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + config.brokerId
-  private var zkClient: ZkClient = null
+  val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + brokerId
+  
+  def startup() {
+    zkClient.subscribeStateChanges(new SessionExpireListener)
+    register()
+  }
 
-   def startup() {
-     /* start client */
-     info("connecting to ZK: " + config.zkConnect)
-     zkClient = KafkaZookeeperClient.getZookeeperClient(config)
-     zkClient.subscribeStateChanges(new SessionExpireListener)
-     registerBrokerInZk()
-   }
-
-  private def registerBrokerInZk() {
+  /**
+   * Register this broker as "alive" in zookeeper
+   */
+  def register() {
     val hostName = 
-      if(config.hostName == null || config.hostName.trim.isEmpty) 
+      if(host == null || host.trim.isEmpty) 
         InetAddress.getLocalHost.getCanonicalHostName 
       else
-        config.hostName 
+        host
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-    ZkUtils.registerBrokerInZk(zkClient, config.brokerId, hostName, config.port, jmxPort)
+    ZkUtils.registerBrokerInZk(zkClient, brokerId, hostName, port, jmxPort)
   }
 
   /**
@@ -70,21 +76,11 @@ class KafkaZooKeeper(config: KafkaConfig) extends Logging {
      */
     @throws(classOf[Exception])
     def handleNewSession() {
-      info("re-registering broker info in ZK for broker " + config.brokerId)
-      registerBrokerInZk()
+      info("re-registering broker info in ZK for broker " + brokerId)
+      register()
       info("done re-registering broker")
       info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
     }
   }
 
-  def shutdown() {
-    if (zkClient != null) {
-      info("Closing zookeeper client...")
-      zkClient.close()
-    }
-  }
-
-  def getZookeeperClient = {
-    zkClient
-  }
 }

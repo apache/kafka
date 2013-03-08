@@ -577,6 +577,25 @@ object Utils extends Logging {
   }
   
   /**
+   * Turn a properties map into a string
+   */
+  def asString(props: Properties): String = {
+    val writer = new StringWriter()
+    props.store(writer, "")
+    writer.toString
+  }
+  
+  /**
+   * Read some properties with the given default values
+   */
+  def readProps(s: String, defaults: Properties): Properties = {
+    val reader = new StringReader(s)
+    val props = new Properties(defaults)
+    props.load(reader)
+    props
+  }
+  
+  /**
    * Read a big-endian integer from a byte array
    */
   def readInt(bytes: Array[Byte], offset: Int): Int = {

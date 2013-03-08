@@ -20,6 +20,7 @@ package kafka.consumer
 
 import java.util.concurrent._
 import java.util.concurrent.atomic._
+import java.util.Properties
 import scala.collection._
 import junit.framework.Assert._
 
@@ -27,7 +28,7 @@ import kafka.message._
 import kafka.server._
 import kafka.utils.TestUtils._
 import kafka.utils._
-import kafka.admin.CreateTopicCommand
+import kafka.admin.AdminUtils
 import org.junit.Test
 import kafka.serializer._
 import kafka.cluster.{Broker, Cluster}
@@ -60,7 +61,7 @@ class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
 
   override def setUp() {
     super.setUp
-    CreateTopicCommand.createTopic(zkClient, topic, 1, 1, configs.head.brokerId.toString)
+    AdminUtils.createTopicWithAssignment(zkClient, topic, Map(0 -> Seq(configs.head.brokerId)), new Properties)
     waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
   }
 

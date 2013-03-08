@@ -17,9 +17,11 @@
 package kafka.cluster
 
 import scala.collection._
+import kafka.admin.AdminUtils
 import kafka.utils._
 import java.lang.Object
 import kafka.api.LeaderAndIsr
+import kafka.log.LogConfig
 import kafka.server.ReplicaManager
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
@@ -74,7 +76,8 @@ class Partition(val topic: String,
       case Some(replica) => replica
       case None =>
         if (isReplicaLocal(replicaId)) {
-          val log = logManager.getOrCreateLog(topic, partitionId)
+          val config = LogConfig.fromProps(logManager.defaultConfig.toProps, AdminUtils.fetchTopicConfig(zkClient, topic))
+          val log = logManager.createLog(TopicAndPartition(topic, partitionId), config)
           val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParent) 
           val offset = checkpoint.read.getOrElse(TopicAndPartition(topic, partitionId), 0L).min(log.logEndOffset)
           val localReplica = new Replica(replicaId, this, time, offset, Some(log))

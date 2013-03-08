@@ -32,8 +32,7 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
   val topic = "test_topic"
   val group = "default_group"
   val testConsumer = "consumer"
-  val BrokerPort = 9892
-  val configs = List(new KafkaConfig(TestUtils.createBrokerConfig(0, BrokerPort)))
+  val configs = List(new KafkaConfig(TestUtils.createBrokerConfig(0)))
   val NumMessages = 10
   val LargeOffset = 10000
   val SmallOffset = -1

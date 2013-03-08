@@ -18,6 +18,7 @@
 package kafka.server
 
 import kafka.network.SocketServer
+import kafka.admin._
 import kafka.log.LogConfig
 import kafka.log.CleanerConfig
 import kafka.log.LogManager
@@ -39,7 +40,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   var socketServer: SocketServer = null
   var requestHandlerPool: KafkaRequestHandlerPool = null
   var logManager: LogManager = null
-  var kafkaZookeeper: KafkaZooKeeper = null
+  var kafkaHealthcheck: KafkaHealthcheck = null
+  var topicConfigManager: TopicConfigManager = null
   var replicaManager: ReplicaManager = null
   var apis: KafkaApis = null
   var kafkaController: KafkaController = null
@@ -57,9 +59,12 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
     /* start scheduler */
     kafkaScheduler.startup()
+    
+    /* setup zookeeper */
+    zkClient = initZk()
 
     /* start log manager */
-    logManager = createLogManager(config)
+    logManager = createLogManager(zkClient)
     logManager.startup()
 
     socketServer = new SocketServer(config.brokerId,
@@ -68,30 +73,39 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                     config.numNetworkThreads,
                                     config.queuedMaxRequests,
                                     config.socketRequestMaxBytes)
+    socketServer.startup()
 
-    socketServer.startup
-
-    /* start client */
-    kafkaZookeeper = new KafkaZooKeeper(config)
-    // starting relevant replicas and leader election for partitions assigned to this broker
-    kafkaZookeeper.startup
-
-    info("Connecting to ZK: " + config.zkConnect)
-
-    replicaManager = new ReplicaManager(config, time, kafkaZookeeper.getZookeeperClient, kafkaScheduler, logManager)
-
-    kafkaController = new KafkaController(config, kafkaZookeeper.getZookeeperClient)
-    apis = new KafkaApis(socketServer.requestChannel, replicaManager, kafkaZookeeper.getZookeeperClient, config.brokerId, config)
+    replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler, logManager)
+    kafkaController = new KafkaController(config, zkClient)
+    
+    /* start processing requests */
+    apis = new KafkaApis(socketServer.requestChannel, replicaManager, zkClient, config.brokerId, config)
     requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
-    Mx4jLoader.maybeLoad
+   
+    Mx4jLoader.maybeLoad()
 
-    // start the replica manager
     replicaManager.startup()
-    // start the controller
+
     kafkaController.startup()
-    // register metrics beans
+    
+    topicConfigManager = new TopicConfigManager(zkClient, logManager)
+    topicConfigManager.startup()
+    
+    /* tell everyone we are alive */
+    kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, config.hostName, config.port, zkClient)
+    kafkaHealthcheck.startup()
+
+    
     registerStats()
+    
     info("started")
+  }
+  
+  private def initZk(): ZkClient = {
+    info("Connecting to zookeeper on " + config.zkConnect)
+    val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
+    ZkUtils.setupCommonPaths(zkClient)
+    zkClient
   }
 
   /**
@@ -118,15 +132,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       Utils.swallow(kafkaScheduler.shutdown())
       if(apis != null)
         Utils.swallow(apis.close())
-      if(kafkaZookeeper != null)
-        Utils.swallow(kafkaZookeeper.shutdown())
       if(replicaManager != null)
         Utils.swallow(replicaManager.shutdown())
       if(logManager != null)
         Utils.swallow(logManager.shutdown())
-
       if(kafkaController != null)
         Utils.swallow(kafkaController.shutdown())
+      if(zkClient != null)
+        Utils.swallow(zkClient.close())
 
       shutdownLatch.countDown()
       info("shut down completed")
@@ -140,13 +153,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
   def getLogManager(): LogManager = logManager
   
-  private def createLogManager(config: KafkaConfig): LogManager = {
-    val topics = config.logCleanupPolicyMap.keys ++ 
-                 config.logSegmentBytesPerTopicMap.keys ++ 
-                 config.logFlushIntervalMsPerTopicMap.keys ++ 
-                 config.logRollHoursPerTopicMap.keys ++ 
-                 config.logRetentionBytesPerTopicMap.keys ++ 
-                 config.logRetentionHoursPerTopicMap.keys
+  private def createLogManager(zkClient: ZkClient): LogManager = {
     val defaultLogConfig = LogConfig(segmentSize = config.logSegmentBytes, 
                                      segmentMs = 60 * 60 * 1000 * config.logRollHours,
                                      flushInterval = config.logFlushIntervalMessages,
@@ -159,13 +166,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                      fileDeleteDelayMs = config.logDeleteDelayMs,
                                      minCleanableRatio = config.logCleanerMinCleanRatio,
                                      dedupe = config.logCleanupPolicy.trim.toLowerCase == "dedupe")
-    val logConfigs = for(topic <- topics) yield 
-      topic -> defaultLogConfig.copy(segmentSize = config.logSegmentBytesPerTopicMap.getOrElse(topic, config.logSegmentBytes), 
-                                     segmentMs = 60 * 60 * 1000 * config.logRollHoursPerTopicMap.getOrElse(topic, config.logRollHours),
-                                     flushMs = config.logFlushIntervalMsPerTopicMap.getOrElse(topic, config.logFlushIntervalMs).toLong,
-                                     retentionSize = config.logRetentionBytesPerTopicMap.getOrElse(topic, config.logRetentionBytes),
-                                     retentionMs = 60 * 60 * 1000 * config.logRetentionHoursPerTopicMap.getOrElse(topic, config.logRetentionHours),
-                                     dedupe = config.logCleanupPolicyMap.getOrElse(topic, config.logCleanupPolicy).trim.toLowerCase == "dedupe")
+    val defaultProps = defaultLogConfig.toProps
+    val configs = AdminUtils.fetchAllTopicConfigs(zkClient).mapValues(LogConfig.fromProps(defaultProps, _))
+    // read the log configurations from zookeeper
     val cleanerConfig = CleanerConfig(numThreads = config.logCleanerThreads,
                                       dedupeBufferSize = config.logCleanerDedupeBufferSize,
                                       ioBufferSize = config.logCleanerIoBufferSize,
@@ -174,7 +177,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                       backOffMs = config.logCleanerBackoffMs,
                                       enableCleaner = config.logCleanerEnable)
     new LogManager(logDirs = config.logDirs.map(new File(_)).toArray,
-                   topicConfigs = logConfigs.toMap,
+                   topicConfigs = configs,
                    defaultConfig = defaultLogConfig,
                    cleanerConfig = cleanerConfig,
                    flushCheckMs = config.logFlushSchedulerIntervalMs,

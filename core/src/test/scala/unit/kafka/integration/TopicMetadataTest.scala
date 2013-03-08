@@ -19,7 +19,7 @@ package kafka.integration
 
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
-import kafka.admin.CreateTopicCommand
+import kafka.admin.AdminUtils
 import java.nio.ByteBuffer
 import junit.framework.Assert._
 import org.easymock.EasyMock
@@ -48,7 +48,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testTopicMetadataRequest {
     // create topic
     val topic = "test"
-    CreateTopicCommand.createTopic(zkClient, topic, 1)
+    AdminUtils.createTopic(zkClient, topic, 1, 1)
 
     // create a topic metadata request
     val topicMetadataRequest = new TopicMetadataRequest(List(topic), 0)
@@ -64,7 +64,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testBasicTopicMetadata {
     // create topic
     val topic = "test"
-    CreateTopicCommand.createTopic(zkClient, topic, 1)
+    AdminUtils.createTopic(zkClient, topic, 1, 1)
     // set up leader for topic partition 0
     val leaderForPartitionMap = Map(
       0 -> configs.head.brokerId
@@ -83,7 +83,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testGetAllTopicMetadata {
     // create topic
     val topic = "test"
-    CreateTopicCommand.createTopic(zkClient, topic, 1)
+    AdminUtils.createTopic(zkClient, topic, 1, 1)
     // set up leader for topic partition 0
     val leaderForPartitionMap = Map(
       0 -> configs.head.brokerId

@@ -175,7 +175,7 @@ class ReplicaManager(val config: KafkaConfig,
           case Some(leaderReplica) => leaderReplica
           case None =>
             throw new LeaderNotAvailableException("Leader not local for topic %s partition %d on broker %d"
-                    .format(topic, partitionId, config.brokerId))
+                                                  .format(topic, partitionId, config.brokerId))
         }
     }
   }

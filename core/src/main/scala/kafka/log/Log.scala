@@ -49,7 +49,7 @@ import com.yammer.metrics.core.Gauge
  */
 @threadsafe
 class Log(val dir: File,
-          val config: LogConfig,
+          @volatile var config: LogConfig,
           val needsRecovery: Boolean,
           val scheduler: Scheduler,
           time: Time = SystemTime) extends Logging with KafkaMetricsGroup {

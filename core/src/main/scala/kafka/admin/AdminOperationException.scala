@@ -13,23 +13,11 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 
-package kafka.common
+package kafka.admin
 
-import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{ZKStringSerializer, ZKConfig}
-import java.util.concurrent.atomic.AtomicReference
-
-object KafkaZookeeperClient {
-  private val INSTANCE = new AtomicReference[ZkClient](null)
-
-  def getZookeeperClient(config: ZKConfig): ZkClient = {
-    // TODO: This cannot be a singleton since unit tests break if we do that
-//    INSTANCE.compareAndSet(null, new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-//                                              ZKStringSerializer))
-    INSTANCE.set(new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-                                              ZKStringSerializer))
-    INSTANCE.get()
-  }
+class AdminOperationException(val error: String, cause: Throwable) extends RuntimeException(error, cause) {
+  def this(error: Throwable) = this(error.getMessage, error)
+  def this(msg: String) = this(msg, null)
 }

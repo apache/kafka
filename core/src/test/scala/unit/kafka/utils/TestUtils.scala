@@ -23,6 +23,7 @@ import java.nio._
 import java.nio.channels._
 import java.util.Random
 import java.util.Properties
+import junit.framework.AssertionFailedError
 import junit.framework.Assert._
 import kafka.server._
 import kafka.producer._
@@ -122,7 +123,7 @@ object TestUtils extends Logging {
   /**
    * Create a test config for the given node id
    */
-  def createBrokerConfig(nodeId: Int, port: Int): Properties = {
+  def createBrokerConfig(nodeId: Int, port: Int = choosePort()): Properties = {
     val props = new Properties
     props.put("broker.id", nodeId.toString)
     props.put("host.name", "localhost")
@@ -448,18 +449,20 @@ object TestUtils extends Logging {
    * Execute the given block. If it throws an assert error, retry. Repeat
    * until no error is thrown or the time limit ellapses
    */
-  def retry(maxWaitMs: Long, block: () => Unit) {
+  def retry(maxWaitMs: Long)(block: => Unit) {
     var wait = 1L
     val startTime = System.currentTimeMillis()
     while(true) {
       try {
-        block()
+        block
         return
       } catch {
-        case e: AssertionError =>
-          if(System.currentTimeMillis - startTime > maxWaitMs) {
+        case e: AssertionFailedError =>
+          val ellapsed = System.currentTimeMillis - startTime 
+          if(ellapsed > maxWaitMs) {
             throw e
           } else {
+            info("Attempt failed, sleeping for " + wait + ", and then retrying.")
             Thread.sleep(wait)
             wait += math.min(wait, 1000)
           }

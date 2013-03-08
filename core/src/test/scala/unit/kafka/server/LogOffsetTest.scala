@@ -26,7 +26,7 @@ import org.junit.{After, Before, Test}
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
-import kafka.admin.CreateTopicCommand
+import kafka.admin.AdminUtils
 import kafka.api.{PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
 import kafka.utils.TestUtils._
 import kafka.common.{ErrorMapping, TopicAndPartition}
@@ -82,10 +82,10 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
     // setup brokers in zookeeper as owners of partitions for this test
-    CreateTopicCommand.createTopic(zkClient, topic, 1, 1, "1")
+    AdminUtils.createTopic(zkClient, topic, 1, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topic, part)
+    val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
 
     val message = new Message(Integer.toString(42).getBytes())
     for(i <- 0 until 20)
@@ -120,7 +120,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val topic = topicPartition.split("-").head
 
     // setup brokers in zookeeper as owners of partitions for this test
-    CreateTopicCommand.createTopic(zkClient, topic, 1, 1, "1")
+    AdminUtils.createTopic(zkClient, topic, 1, 1)
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
 
     var offsetChanged = false
@@ -145,10 +145,10 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
     // setup brokers in zookeeper as owners of partitions for this test
-    CreateTopicCommand.createTopic(zkClient, topic, 3, 1, "1,1,1")
+    AdminUtils.createTopic(zkClient, topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topic, part)
+    val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
     val message = new Message(Integer.toString(42).getBytes())
     for(i <- 0 until 20)
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))
@@ -174,10 +174,10 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val part = Integer.valueOf(topicPartition.split("-").last).intValue
 
     // setup brokers in zookeeper as owners of partitions for this test
-    CreateTopicCommand.createTopic(zkClient, topic, 3, 1, "1,1,1")
+    AdminUtils.createTopic(zkClient, topic, 3, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.getOrCreateLog(topic, part)
+    val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
     val message = new Message(Integer.toString(42).getBytes())
     for(i <- 0 until 20)
       log.append(new ByteBufferMessageSet(NoCompressionCodec, message))

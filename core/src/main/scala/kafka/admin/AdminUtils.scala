@@ -18,9 +18,13 @@
 package kafka.admin
 
 import java.util.Random
+import java.util.Properties
 import kafka.api.{TopicMetadata, PartitionMetadata}
 import kafka.cluster.Broker
 import kafka.utils.{Logging, ZkUtils}
+import kafka.log.LogConfig
+import kafka.server.TopicConfigManager
+import kafka.utils.{Logging, Utils, ZkUtils, Json}
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import scala.collection._
@@ -30,7 +34,7 @@ import scala.Some
 
 object AdminUtils extends Logging {
   val rand = new Random
-  val AdminEpoch = -1
+  val TopicConfigChangeZnodePrefix = "config_change_"
 
   /**
    * There are 2 goals of replica assignment:
@@ -50,33 +54,74 @@ object AdminUtils extends Logging {
    * p3        p4        p0        p1        p2       (3nd replica)
    * p7        p8        p9        p5        p6       (3nd replica)
    */
-  def assignReplicasToBrokers(brokerList: Seq[Int], nPartitions: Int, replicationFactor: Int,
+  def assignReplicasToBrokers(brokers: Seq[Int], 
+                              partitions: Int, 
+                              replicationFactor: Int,
                               fixedStartIndex: Int = -1)  // for testing only
   : Map[Int, Seq[Int]] = {
-    if (nPartitions <= 0)
-      throw new AdministrationException("number of partitions must be larger than 0")
+    if (partitions <= 0)
+      throw new AdminOperationException("number of partitions must be larger than 0")
     if (replicationFactor <= 0)
-      throw new AdministrationException("replication factor must be larger than 0")
-    if (replicationFactor > brokerList.size)
-      throw new AdministrationException("replication factor: " + replicationFactor +
-        " larger than available brokers: " + brokerList.size)
+      throw new AdminOperationException("replication factor must be larger than 0")
+    if (replicationFactor > brokers.size)
+      throw new AdminOperationException("replication factor: " + replicationFactor +
+        " larger than available brokers: " + brokers.size)
     val ret = new mutable.HashMap[Int, List[Int]]()
-    val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
+    val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokers.size)
 
-    var secondReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
-    for (i <- 0 until nPartitions) {
-      if (i > 0 && (i % brokerList.size == 0))
+    var secondReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokers.size)
+    for (i <- 0 until partitions) {
+      if (i > 0 && (i % brokers.size == 0))
         secondReplicaShift += 1
-      val firstReplicaIndex = (i + startIndex) % brokerList.size
-      var replicaList = List(brokerList(firstReplicaIndex))
+      val firstReplicaIndex = (i + startIndex) % brokers.size
+      var replicaList = List(brokers(firstReplicaIndex))
       for (j <- 0 until replicationFactor - 1)
-        replicaList ::= brokerList(getWrappedIndex(firstReplicaIndex, secondReplicaShift, j, brokerList.size))
+        replicaList ::= brokers(replicaIndex(firstReplicaIndex, secondReplicaShift, j, brokers.size))
       ret.put(i, replicaList.reverse)
     }
     ret.toMap
   }
+  
+  def deleteTopic(zkClient: ZkClient, topic: String) {
+    zkClient.deleteRecursive(ZkUtils.getTopicPath(topic))
+    zkClient.deleteRecursive(ZkUtils.getTopicConfigPath(topic))
+  }
+  
+  def topicExists(zkClient: ZkClient, topic: String): Boolean = 
+    zkClient.exists(ZkUtils.getTopicPath(topic))
+    
+  def createTopic(zkClient: ZkClient,
+                  topic: String,
+                  partitions: Int, 
+                  replicationFactor: Int, 
+                  topicConfig: Properties = new Properties) {
+    val brokerList = ZkUtils.getSortedBrokerList(zkClient)
+    val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, partitions, replicationFactor)
+    AdminUtils.createTopicWithAssignment(zkClient, topic, replicaAssignment, topicConfig)
+  }
+                  
+  def createTopicWithAssignment(zkClient: ZkClient, 
+                                topic: String, 
+                                partitionReplicaAssignment: Map[Int, Seq[Int]], 
+                                config: Properties = new Properties) {
+    // validate arguments
+    Topic.validate(topic)
+    LogConfig.validate(config)
+    require(partitionReplicaAssignment.values.map(_.size).toSet.size == 1, "All partitions should have the same number of replicas.")
 
-  def createTopicPartitionAssignmentPathInZK(topic: String, replicaAssignment: Map[Int, Seq[Int]], zkClient: ZkClient) {
+    val topicPath = ZkUtils.getTopicPath(topic)
+    if(zkClient.exists(topicPath))
+      throw new TopicExistsException("Topic \"%s\" already exists.".format(topic))
+    partitionReplicaAssignment.values.foreach(reps => require(reps.size == reps.toSet.size, "Duplicate replica assignment found: "  + partitionReplicaAssignment))
+    
+    // write out the config if there is any, this isn't transactional with the partition assignments
+    writeTopicConfig(zkClient, topic, config)
+    
+    // create the partition assignment
+    writeTopicPartitionAssignment(zkClient, topic, partitionReplicaAssignment)
+  }
+  
+  private def writeTopicPartitionAssignment(zkClient: ZkClient, topic: String, replicaAssignment: Map[Int, Seq[Int]]) {
     try {
       val zkPath = ZkUtils.getTopicPath(topic)
       val jsonPartitionData = ZkUtils.replicaAssignmentZkdata(replicaAssignment.map(e => (e._1.toString -> e._2)))
@@ -84,9 +129,61 @@ object AdminUtils extends Logging {
       debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionData))
     } catch {
       case e: ZkNodeExistsException => throw new TopicExistsException("topic %s already exists".format(topic))
-      case e2 => throw new AdministrationException(e2.toString)
+      case e2 => throw new AdminOperationException(e2.toString)
     }
   }
+  
+  /**
+   * Update the config for an existing topic and create a change notification so the change will propagate to other brokers
+   */
+  def changeTopicConfig(zkClient: ZkClient, topic: String, config: Properties) {
+    LogConfig.validate(config)
+    if(!topicExists(zkClient, topic))
+      throw new AdminOperationException("Topic \"%s\" does not exist.".format(topic))
+    
+    // write the new config--may not exist if there were previously no overrides
+    writeTopicConfig(zkClient, topic, config)
+    
+    // create the change notification
+    zkClient.createPersistentSequential(ZkUtils.TopicConfigChangesPath + "/" + TopicConfigChangeZnodePrefix, Json.encode(topic))
+  }
+  
+  /**
+   * Write out the topic config to zk, if there is any
+   */
+  private def writeTopicConfig(zkClient: ZkClient, topic: String, config: Properties) {
+    if(config.size > 0) {
+      val map = Map("version" -> 1, "config" -> JavaConversions.asMap(config))
+      ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicConfigPath(topic), Json.encode(map))
+    }
+  }
+  
+  /**
+   * Read the topic config (if any) from zk
+   */
+  def fetchTopicConfig(zkClient: ZkClient, topic: String): Properties = {
+    val str: String = zkClient.readData(ZkUtils.getTopicConfigPath(topic), true)
+    val props = new Properties()
+    if(str != null) {
+      Json.parseFull(str) match {
+        case None => // there are no config overrides
+        case Some(map: Map[String, _]) => 
+          require(map("version") == 1)
+          map.get("config") match {
+            case Some(config: Map[String, String]) =>
+              for((k,v) <- config)
+                props.setProperty(k, v)
+            case _ => throw new IllegalArgumentException("Invalid topic config: " + str)
+          }
+
+        case o => throw new IllegalArgumentException("Unexpected value in config: "  + str)
+      }
+    }
+    props
+  }
+
+  def fetchAllTopicConfigs(zkClient: ZkClient): Map[String, Properties] =
+    ZkUtils.getAllTopics(zkClient).map(topic => (topic, fetchTopicConfig(zkClient, topic))).toMap
 
   def fetchTopicMetadataFromZk(topic: String, zkClient: ZkClient): TopicMetadata =
     fetchTopicMetadataFromZk(topic, zkClient, new mutable.HashMap[Int, Broker])
@@ -158,12 +255,8 @@ object AdminUtils extends Logging {
     }
   }
 
-  private def getWrappedIndex(firstReplicaIndex: Int, secondReplicaShift: Int, replicaIndex: Int, nBrokers: Int): Int = {
+  private def replicaIndex(firstReplicaIndex: Int, secondReplicaShift: Int, replicaIndex: Int, nBrokers: Int): Int = {
     val shift = 1 + (secondReplicaShift + replicaIndex) % (nBrokers - 1)
     (firstReplicaIndex + shift) % nBrokers
   }
-}
-
-class AdministrationException(val errorMessage: String) extends RuntimeException(errorMessage) {
-  def this() = this(null)
 }

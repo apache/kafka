@@ -26,7 +26,7 @@ import org.scalatest.junit.JUnit3Suite
 import org.apache.log4j.{Level, Logger}
 import kafka.message._
 import kafka.serializer._
-import kafka.admin.CreateTopicCommand
+import kafka.admin.AdminUtils
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils._
 import kafka.producer.{ProducerConfig, KeyedMessage, Producer}
@@ -298,7 +298,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val zkClient = new ZkClient(zookeeperConnect, 6000, 30000, ZKStringSerializer)
 
     // create topic topic1 with 1 partition on broker 0
-    CreateTopicCommand.createTopic(zkClient, topic, 1, 1, "0")
+    AdminUtils.createTopic(zkClient, topic, 1, 1)
 
     // send some messages to each broker
     val sentMessages1 = sendMessages(configs.head, nMessages, "batch1", NoCompressionCodec, 1)

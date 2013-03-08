@@ -10,7 +10,7 @@ object CommandLineUtils extends Logging {
     def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
       for(arg <- required) {
         if(!options.has(arg)) {
-          error("Missing required argument \"" + arg + "\"")
+          System.err.println("Missing required argument \"" + arg + "\"")
           parser.printHelpOn(System.err)
           System.exit(1)
         }

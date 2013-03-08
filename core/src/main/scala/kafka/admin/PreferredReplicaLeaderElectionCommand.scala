@@ -85,7 +85,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
           val partition = m.asInstanceOf[Map[String, String]].get("partition").get.toInt
           TopicAndPartition(topic, partition)
         }
-      case None => throw new AdministrationException("Preferred replica election data is empty")
+      case None => throw new AdminOperationException("Preferred replica election data is empty")
     }
   }
 
@@ -102,9 +102,9 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       case nee: ZkNodeExistsException =>
         val partitionsUndergoingPreferredReplicaElection =
           PreferredReplicaLeaderElectionCommand.parsePreferredReplicaJsonData(ZkUtils.readData(zkClient, zkPath)._1)
-        throw new AdministrationException("Preferred replica leader election currently in progress for " +
+        throw new AdminOperationException("Preferred replica leader election currently in progress for " +
           "%s. Aborting operation".format(partitionsUndergoingPreferredReplicaElection))
-      case e2 => throw new AdministrationException(e2.toString)
+      case e2 => throw new AdminOperationException(e2.toString)
     }
   }
 }

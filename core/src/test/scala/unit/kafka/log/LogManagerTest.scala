@@ -58,7 +58,7 @@ class LogManagerTest extends JUnit3Suite {
    */
   @Test
   def testCreateLog() {
-    val log = logManager.getOrCreateLog(name, 0)
+    val log = logManager.createLog(TopicAndPartition(name, 0), logConfig)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
     log.append(TestUtils.singleMessageSet("test".getBytes()))
@@ -69,7 +69,7 @@ class LogManagerTest extends JUnit3Suite {
    */
   @Test
   def testGetNonExistentLog() {
-    val log = logManager.getLog(name, 0)
+    val log = logManager.getLog(TopicAndPartition(name, 0))
     assertEquals("No log should be found.", None, log)
     val logFile = new File(logDir, name + "-0")
     assertTrue(!logFile.exists)
@@ -80,7 +80,7 @@ class LogManagerTest extends JUnit3Suite {
    */
   @Test
   def testCleanupExpiredSegments() {
-    val log = logManager.getOrCreateLog(name, 0)
+    val log = logManager.createLog(TopicAndPartition(name, 0), logConfig)
     var offset = 0L
     for(i <- 0 until 200) {
       var set = TestUtils.singleMessageSet("test".getBytes())
@@ -120,7 +120,7 @@ class LogManagerTest extends JUnit3Suite {
     logManager.startup
 
     // create a log
-    val log = logManager.getOrCreateLog(name, 0)
+    val log = logManager.createLog(TopicAndPartition(name, 0), config)
     var offset = 0L
 
     // add a bunch of messages that should be larger than the retentionSize
@@ -158,7 +158,7 @@ class LogManagerTest extends JUnit3Suite {
     val config = logConfig.copy(flushMs = 1000)
     logManager = new LogManager(Array(logDir), Map(), config, cleanerConfig, 1000L, 1000L, time.scheduler, time)
     logManager.startup
-    val log = logManager.getOrCreateLog(name, 0)
+    val log = logManager.createLog(TopicAndPartition(name, 0), config)
     val lastFlush = log.lastFlushTime
     for(i <- 0 until 200) {
       var set = TestUtils.singleMessageSet("test".getBytes())
@@ -182,7 +182,7 @@ class LogManagerTest extends JUnit3Suite {
     
     // verify that logs are always assigned to the least loaded partition
     for(partition <- 0 until 20) {
-      logManager.getOrCreateLog("test", partition)
+      logManager.createLog(TopicAndPartition("test", partition), logConfig)
       assertEquals("We should have created the right number of logs", partition + 1, logManager.allLogs.size)
       val counts = logManager.allLogs.groupBy(_.dir.getParent).values.map(_.size)
       assertTrue("Load should balance evenly", counts.max <= counts.min + 1)

@@ -27,7 +27,7 @@ import org.junit.Assert._
 import org.junit.Test
 import kafka.utils._
 import java.util
-import kafka.admin.{AdminUtils, CreateTopicCommand}
+import kafka.admin.AdminUtils
 import util.Properties
 import kafka.api.FetchRequestBuilder
 import kafka.common.{KafkaException, ErrorMapping, FailedToSendMessageException}
@@ -77,17 +77,15 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     // restore set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.ERROR)
     server1.shutdown
-    server1.awaitShutdown()
     server2.shutdown
-    server2.awaitShutdown()
     Utils.rm(server1.config.logDirs)
     Utils.rm(server2.config.logDirs)
     super.tearDown()
   }
 
-
+  @Test
   def testUpdateBrokerPartitionInfo() {
-    CreateTopicCommand.createTopic(zkClient, "new-topic", 1, 2)
+    AdminUtils.createTopic(zkClient, "new-topic", 1, 2)
     assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
       AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
@@ -152,7 +150,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     val producerConfig2 = new ProducerConfig(props2)
 
     // create topic with 1 partition and await leadership
-    CreateTopicCommand.createTopic(zkClient, "new-topic", 1, 2)
+    AdminUtils.createTopic(zkClient, "new-topic", 1, 2)
     assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
       AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
@@ -203,7 +201,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
 
     // create topic
-    CreateTopicCommand.createTopic(zkClient, "new-topic", 4, 2, "0,0,0,0")
+    AdminUtils.createTopicWithAssignment(zkClient, "new-topic", Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)))
     assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
       AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
@@ -213,13 +211,8 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     val config = new ProducerConfig(props)
     val producer = new Producer[String, String](config)
-    try {
-      // Available partition ids should be 0, 1, 2 and 3, all lead and hosted only
-      // on broker 0
-      producer.send(new KeyedMessage[String, String]("new-topic", "test", "test1"))
-    } catch {
-      case e => fail("Unexpected exception: " + e)
-    }
+    // Available partition ids should be 0, 1, 2 and 3, all lead and hosted only on broker 0
+    producer.send(new KeyedMessage[String, String]("new-topic", "test", "test1"))
 
     // kill the broker
     server1.shutdown
@@ -264,7 +257,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     val producer = new Producer[String, String](config)
 
     // create topics in ZK
-    CreateTopicCommand.createTopic(zkClient, "new-topic", 4, 2, "0:1,0:1,0:1,0:1")
+    AdminUtils.createTopicWithAssignment(zkClient, "new-topic", Map(0->Seq(0,1)))
     assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
       AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)

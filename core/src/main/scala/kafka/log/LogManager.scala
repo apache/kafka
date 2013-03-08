@@ -174,9 +174,8 @@ class LogManager(val logDirs: Array[File],
   /**
    * Get the log if it exists, otherwise return None
    */
-  def getLog(topic: String, partition: Int): Option[Log] = {
-    val topicAndPartiton = TopicAndPartition(topic, partition)
-    val log = logs.get(topicAndPartiton)
+  def getLog(topicAndPartition: TopicAndPartition): Option[Log] = {
+    val log = logs.get(topicAndPartition)
     if (log == null)
       None
     else
@@ -184,21 +183,10 @@ class LogManager(val logDirs: Array[File],
   }
 
   /**
-   * Create the log if it does not exist, otherwise just return it
-   */
-  def getOrCreateLog(topic: String, partition: Int): Log = {
-    val topicAndPartition = TopicAndPartition(topic, partition)
-    logs.get(topicAndPartition) match {
-      case null => createLogIfNotExists(topicAndPartition)
-      case log: Log => log
-    }
-  }
-
-  /**
    * Create a log for the given topic and the given partition
    * If the log already exists, just return a copy of the existing log
    */
-  private def createLogIfNotExists(topicAndPartition: TopicAndPartition): Log = {
+  def createLog(topicAndPartition: TopicAndPartition, config: LogConfig): Log = {
     logCreationLock synchronized {
       var log = logs.get(topicAndPartition)
       
@@ -211,12 +199,16 @@ class LogManager(val logDirs: Array[File],
       val dir = new File(dataDir, topicAndPartition.topic + "-" + topicAndPartition.partition)
       dir.mkdirs()
       log = new Log(dir, 
-                    defaultConfig,
+                    config,
                     needsRecovery = false,
                     scheduler,
                     time)
-      info("Created log for topic %s partition %d in %s.".format(topicAndPartition.topic, topicAndPartition.partition, dataDir.getAbsolutePath))
       logs.put(topicAndPartition, log)
+      info("Created log for topic %s partition %d in %s with properties {%s}."
+           .format(topicAndPartition.topic, 
+                   topicAndPartition.partition, 
+                   dataDir.getAbsolutePath,
+                   JavaConversions.asMap(config.toProps).mkString(", ")))
       log
     }
   }
@@ -289,6 +281,11 @@ class LogManager(val logDirs: Array[File],
    * Get all the partition logs
    */
   def allLogs(): Iterable[Log] = logs.values
+  
+  /**
+   * Get a map of TopicAndPartition => Log
+   */
+  def logsByTopicPartition = logs.toMap
 
   /**
    * Flush any log which has exceeded its flush interval and has unwritten messages.

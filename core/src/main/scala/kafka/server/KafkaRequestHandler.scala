@@ -67,7 +67,7 @@ class KafkaRequestHandlerPool(val brokerId: Int,
       handler.shutdown
     for(thread <- threads)
       thread.join
-    info("shutted down completely")
+    info("shut down completely")
   }
 }
 
