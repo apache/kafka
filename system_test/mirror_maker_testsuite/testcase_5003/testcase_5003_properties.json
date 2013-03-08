@@ -55,7 +55,7 @@
       "entity_id": "4",
       "port": "9091",
       "broker.id": "1",
-      "log.segment.size": "10240",
+      "log.segment.bytes": "10240",
       "log.dir": "/tmp/kafka_server_4_logs",
       "log_filename": "kafka_server_4.log",
       "config_filename": "kafka_server_4.properties"
@@ -64,7 +64,7 @@
       "entity_id": "5",
       "port": "9092",
       "broker.id": "2",
-      "log.segment.size": "10240",
+      "log.segment.bytes": "10240",
       "log.dir": "/tmp/kafka_server_5_logs",
       "log_filename": "kafka_server_5.log",
       "config_filename": "kafka_server_5.properties"
@@ -73,7 +73,7 @@
       "entity_id": "6",
       "port": "9093",
       "broker.id": "3",
-      "log.segment.size": "10240",
+      "log.segment.bytes": "10240",
       "log.dir": "/tmp/kafka_server_6_logs",
       "log_filename": "kafka_server_6.log",
       "config_filename": "kafka_server_6.properties"
@@ -82,7 +82,7 @@
       "entity_id": "7",
       "port": "9094",
       "broker.id": "4",
-      "log.segment.size": "10240",
+      "log.segment.bytes": "10240",
       "log.dir": "/tmp/kafka_server_7_logs",
       "log_filename": "kafka_server_7.log",
       "config_filename": "kafka_server_7.properties"
@@ -91,7 +91,7 @@
       "entity_id": "8",
       "port": "9095",
       "broker.id": "5",
-      "log.segment.size": "10240",
+      "log.segment.bytes": "10240",
       "log.dir": "/tmp/kafka_server_8_logs",
       "log_filename": "kafka_server_8.log",
       "config_filename": "kafka_server_8.properties"
@@ -100,7 +100,7 @@
       "entity_id": "9",
       "port": "9096",
       "broker.id": "6",
-      "log.segment.size": "10240",
+      "log.segment.bytes": "10240",
       "log.dir": "/tmp/kafka_server_9_logs",
       "log_filename": "kafka_server_9.log",
       "config_filename": "kafka_server_9.properties"
