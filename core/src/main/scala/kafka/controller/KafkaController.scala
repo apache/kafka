@@ -74,6 +74,7 @@ trait KafkaControllerMBean {
 
 object KafkaController {
   val MBeanName = "kafka.controller:type=KafkaController,name=ControllerOps"
+  val stateChangeLogger = "state.change.logger"
   val InitialControllerEpoch = 1
   val InitialControllerEpochZkVersion = 1
 }

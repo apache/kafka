@@ -35,7 +35,6 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .withRequiredArg
       .describedAs("list of partitions for which preferred replica leader election needs to be triggered")
       .ofType(classOf[String])
-      .defaultsTo("")
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the " +
       "form host:port. Multiple URLS can be given to allow fail-over.")
       .withRequiredArg
@@ -46,15 +45,16 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
     CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
 
-    val jsonFile = options.valueOf(jsonFileOpt)
     val zkConnect = options.valueOf(zkConnectOpt)
-    val jsonString = if(jsonFile != "") Utils.readFileAsString(jsonFile) else ""
     var zkClient: ZkClient = null
 
     try {
       zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
       val partitionsForPreferredReplicaElection =
-        if(jsonFile == "") ZkUtils.getAllPartitions(zkClient) else parsePreferredReplicaJsonData(jsonString)
+        if (!options.has(jsonFileOpt))
+          ZkUtils.getAllPartitions(zkClient)
+        else
+          parsePreferredReplicaJsonData(Utils.readFileAsString(options.valueOf(jsonFileOpt)))
       val preferredReplicaElectionCommand = new PreferredReplicaLeaderElectionCommand(zkClient, partitionsForPreferredReplicaElection)
 
       preferredReplicaElectionCommand.moveLeaderToPreferredReplica()

@@ -45,7 +45,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   val brokerRequestBatch = new ControllerBrokerRequestBatch(controller.sendRequest, controller.config.brokerId)
   private val isShuttingDown = new AtomicBoolean(false)
   this.logIdent = "[Replica state machine on controller " + controller.config.brokerId + "]: "
-  private val stateChangeLogger = Logger.getLogger("state.change.logger")
+  private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
 
   /**
    * Invoked on successful controller election. First registers a broker change listener since that triggers all

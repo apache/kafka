@@ -26,17 +26,12 @@ import collection.mutable
 import kafka.api._
 import org.apache.log4j.Logger
 
-class ControllerChannelManager private (config: KafkaConfig) extends Logging {
-  private var controllerContext: ControllerContext = null
+class ControllerChannelManager (private val controllerContext: ControllerContext, config: KafkaConfig) extends Logging {
   private val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
   private val brokerLock = new Object
   this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
 
-  def this(controllerContext: ControllerContext, config : KafkaConfig) {
-    this(config)
-    this.controllerContext = controllerContext
-    controllerContext.liveBrokers.foreach(addNewBroker(_))
-  }
+  controllerContext.liveBrokers.foreach(addNewBroker(_))
 
   def startup() = {
     brokerLock synchronized {
@@ -114,7 +109,7 @@ class RequestSendThread(val controllerId: Int,
                         val channel: BlockingChannel)
   extends ShutdownableThread("Controller-%d-to-broker-%d-send-thread".format(controllerId, toBrokerId)) {
   private val lock = new Object()
-  private val stateChangeLogger = Logger.getLogger("state.change.logger")
+  private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
 
   override def doWork(): Unit = {
     val queueItem = queue.take()
@@ -154,7 +149,7 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
   val leaderAndIsrRequestMap = new mutable.HashMap[Int, mutable.HashMap[(String, Int), PartitionStateInfo]]
   val stopReplicaRequestMap = new mutable.HashMap[Int, Seq[(String, Int)]]
   val stopAndDeleteReplicaRequestMap = new mutable.HashMap[Int, Seq[(String, Int)]]
-  private val stateChangeLogger = Logger.getLogger("state.change.logger")
+  private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
 
   def newBatch() {
     // raise error if the previous batch is not empty
@@ -212,8 +207,9 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
             if (replicas.size > 0) {
               debug("The stop replica request (delete = %s) sent to broker %d is %s"
                 .format(deletePartitions, broker, replicas.mkString(",")))
-              sendRequest(broker, new StopReplicaRequest(deletePartitions,
-                Set.empty[(String, Int)] ++ replicas, controllerEpoch, correlationId), null)
+              val stopReplicaRequest = new StopReplicaRequest(deletePartitions, Set.empty[(String, Int)] ++ replicas, controllerId,
+                                                              controllerEpoch, correlationId)
+              sendRequest(broker, stopReplicaRequest, null)
             }
         }
         m.clear()

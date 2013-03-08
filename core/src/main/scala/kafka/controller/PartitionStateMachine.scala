@@ -47,7 +47,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   val offlinePartitionSelector = new OfflinePartitionLeaderSelector(controllerContext)
   private val isShuttingDown = new AtomicBoolean(false)
   this.logIdent = "[Partition state machine on Controller " + controllerId + "]: "
-  private val stateChangeLogger = Logger.getLogger("state.change.logger")
+  private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
 
   /**
    * Invoked on successful controller election. First registers a topic change listener since that triggers all
