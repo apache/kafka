@@ -67,7 +67,9 @@ class Partition(val topic: String,
   )
 
   def isUnderReplicated(): Boolean = {
-    inSyncReplicas.size < replicationFactor
+    leaderIsrUpdateLock synchronized {
+      inSyncReplicas.size < replicationFactor
+    }
   }
 
   def getOrCreateReplica(replicaId: Int = localBrokerId): Replica = {
@@ -339,12 +341,14 @@ class Partition(val topic: String,
   }
 
   override def toString(): String = {
-    val partitionString = new StringBuilder
-    partitionString.append("Topic: " + topic)
-    partitionString.append("; Partition: " + partitionId)
-    partitionString.append("; Leader: " + leaderReplicaIdOpt)
-    partitionString.append("; AssignedReplicas: " + assignedReplicaMap.keys.mkString(","))
-    partitionString.append("; InSyncReplicas: " + inSyncReplicas.map(_.brokerId).mkString(","))
-    partitionString.toString()
+    leaderIsrUpdateLock synchronized {
+      val partitionString = new StringBuilder
+      partitionString.append("Topic: " + topic)
+      partitionString.append("; Partition: " + partitionId)
+      partitionString.append("; Leader: " + leaderReplicaIdOpt)
+      partitionString.append("; AssignedReplicas: " + assignedReplicaMap.keys.mkString(","))
+      partitionString.append("; InSyncReplicas: " + inSyncReplicas.map(_.brokerId).mkString(","))
+      partitionString.toString()
+    }
   }
 }

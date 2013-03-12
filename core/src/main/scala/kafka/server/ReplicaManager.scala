@@ -57,7 +57,11 @@ class ReplicaManager(val config: KafkaConfig,
   newGauge(
     "LeaderCount",
     new Gauge[Int] {
-      def getValue = leaderPartitions.size
+      def getValue = {
+        leaderPartitionsLock synchronized {
+          leaderPartitions.size
+        }
+      }
     }
   )
   newGauge(
