@@ -27,6 +27,8 @@ import kafka.producer._
 import kafka.consumer._
 import kafka.serializer._
 import kafka.utils._
+import kafka.log.FileMessageSet
+import kafka.log.Log
 
 /**
  * This is a torture test that runs against an existing broker. Here is how it works:
@@ -66,6 +68,11 @@ object TestLogCleaning {
                           .describedAs("count")
                           .ofType(classOf[java.lang.Integer])
                           .defaultsTo(1)
+    val percentDeletesOpt = parser.accepts("percent-deletes", "The percentage of updates that are deletes.")
+    		                      .withRequiredArg
+    		                      .describedAs("percent")
+    		                      .ofType(classOf[java.lang.Integer])
+    		                      .defaultsTo(0)
     val zkConnectOpt = parser.accepts("zk", "Zk url.")
                              .withRequiredArg
                              .describedAs("url")
@@ -75,9 +82,17 @@ object TestLogCleaning {
                              .describedAs("ms")
                              .ofType(classOf[java.lang.Integer])
                              .defaultsTo(0)
-    val cleanupOpt = parser.accepts("cleanup", "Delete temp files when done.")
+    val dumpOpt = parser.accepts("dump", "Dump the message contents of a topic partition that contains test data from this test to standard out.")
+                        .withRequiredArg
+                        .describedAs("directory")
+                        .ofType(classOf[String])
     
     val options = parser.parse(args:_*)
+    
+    if(options.has(dumpOpt)) {
+      dumpLog(new File(options.valueOf(dumpOpt)))
+      System.exit(0)
+    }
     
     if(!options.has(brokerOpt) || !options.has(zkConnectOpt) || !options.has(numMessagesOpt)) {
       parser.printHelpOn(System.err)
@@ -86,83 +101,146 @@ object TestLogCleaning {
     
     // parse options
     val messages = options.valueOf(numMessagesOpt).longValue
+    val percentDeletes = options.valueOf(percentDeletesOpt).intValue
     val dups = options.valueOf(numDupsOpt).intValue
     val brokerUrl = options.valueOf(brokerOpt)
     val topicCount = options.valueOf(topicsOpt).intValue
     val zkUrl = options.valueOf(zkConnectOpt)
     val sleepSecs = options.valueOf(sleepSecsOpt).intValue
-    val cleanup = options.has(cleanupOpt)
     
     val testId = new Random().nextInt(Int.MaxValue)
     val topics = (0 until topicCount).map("log-cleaner-test-" + testId + "-" + _).toArray
     
     println("Producing %d messages...".format(messages))
-    val producedDataFile = produceMessages(brokerUrl, topics, messages, dups, cleanup)
+    val producedDataFile = produceMessages(brokerUrl, topics, messages, dups, percentDeletes)
     println("Sleeping for %d seconds...".format(sleepSecs))
     Thread.sleep(sleepSecs * 1000)
     println("Consuming messages...")
-    val consumedDataFile = consumeMessages(zkUrl, topics, cleanup)
+    val consumedDataFile = consumeMessages(zkUrl, topics)
     
     val producedLines = lineCount(producedDataFile)
     val consumedLines = lineCount(consumedDataFile)
     val reduction = 1.0 - consumedLines.toDouble/producedLines.toDouble
     println("%d rows of data produced, %d rows of data consumed (%.1f%% reduction).".format(producedLines, consumedLines, 100 * reduction))
     
-    println("Validating output files...")
-    validateOutput(externalSort(producedDataFile), externalSort(consumedDataFile))
-    println("All done.")
+    println("Deduplicating and validating output files...")
+    validateOutput(producedDataFile, consumedDataFile)
+    producedDataFile.delete()
+    consumedDataFile.delete()
+  }
+  
+  def dumpLog(dir: File) {
+    require(dir.exists, "Non-existant directory: " + dir.getAbsolutePath)
+    for(file <- dir.list.sorted; if file.endsWith(Log.LogFileSuffix)) {
+      val ms = new FileMessageSet(new File(dir, file))
+      for(entry <- ms) {
+        val key = Utils.readString(entry.message.key)
+        val content = 
+          if(entry.message.isNull)
+            null
+          else
+            Utils.readString(entry.message.payload)
+        println("offset = %s, key = %s, content = %s".format(entry.offset, key, content))
+      }
+    }
   }
   
   def lineCount(file: File): Int = io.Source.fromFile(file).getLines.size
   
-  def validateOutput(produced: BufferedReader, consumed: BufferedReader) {
-    while(true) {
-      val prod = readFinalValue(produced)
-      val cons = readFinalValue(consumed)
-      if(prod == null && cons == null) {
-        return
-      } else if(prod != cons) {
-        System.err.println("Validation failed prod = %s, cons = %s!".format(prod, cons))
-        System.exit(1)
+  def validateOutput(producedDataFile: File, consumedDataFile: File) {
+    val producedReader = externalSort(producedDataFile)
+    val consumedReader = externalSort(consumedDataFile)
+    val produced = valuesIterator(producedReader)
+    val consumed = valuesIterator(consumedReader)
+    val producedDedupedFile = new File(producedDataFile.getAbsolutePath + ".deduped")
+    val producedDeduped = new BufferedWriter(new FileWriter(producedDedupedFile), 1024*1024)
+    val consumedDedupedFile = new File(consumedDataFile.getAbsolutePath + ".deduped")
+    val consumedDeduped = new BufferedWriter(new FileWriter(consumedDedupedFile), 1024*1024)
+    var total = 0
+    var mismatched = 0
+    while(produced.hasNext && consumed.hasNext) {
+      val p = produced.next()
+      producedDeduped.write(p.toString)
+      producedDeduped.newLine()
+      val c = consumed.next()
+      consumedDeduped.write(c.toString)
+      consumedDeduped.newLine()
+      if(p != c)
+        mismatched += 1
+      total += 1
+    }
+    producedDeduped.close()
+    consumedDeduped.close()
+    require(!produced.hasNext, "Additional values produced not found in consumer log.")
+    require(!consumed.hasNext, "Additional values consumed not found in producer log.")
+    println("Validated " + total + " values, " + mismatched + " mismatches.")
+    require(mismatched == 0, "Non-zero number of row mismatches.")
+    // if all the checks worked out we can delete the deduped files
+    producedDedupedFile.delete()
+    consumedDedupedFile.delete()
+  }
+  
+  def valuesIterator(reader: BufferedReader) = {
+    new IteratorTemplate[TestRecord] {
+      def makeNext(): TestRecord = {
+        var next = readNext(reader)
+        while(next != null && next.delete)
+          next = readNext(reader)
+        if(next == null)
+          allDone()
+        else
+          next
       }
     }
   }
   
-  def readFinalValue(reader: BufferedReader): (String, Int, Int) = {
-    def readTuple() = {
-      val line = reader.readLine
-      if(line == null)
-        null
-      else
-        line.split("\t")
-    }
-    var prev = readTuple()
-    if(prev == null)
+  def readNext(reader: BufferedReader): TestRecord = {
+    var line = reader.readLine()
+    if(line == null)
       return null
+    var curr = new TestRecord(line)
     while(true) {
-      reader.mark(1024)
-      val curr = readTuple()
-      if(curr == null || curr(0) != prev(0) || curr(1) != prev(1)) {
-        reader.reset()
-        return (prev(0), prev(1).toInt, prev(2).toInt)
-      } else {
-        prev = curr
-      }
+      line = peekLine(reader)
+      if(line == null)
+        return curr
+      val next = new TestRecord(line)
+      if(next == null || next.topicAndKey != curr.topicAndKey)
+        return curr
+      curr = next
+      reader.readLine()
     }
-    return null
+    null
+  }
+  
+  def peekLine(reader: BufferedReader) = {
+    reader.mark(4096)
+    val line = reader.readLine
+    reader.reset()
+    line
   }
   
   def externalSort(file: File): BufferedReader = {
-    val builder = new ProcessBuilder("sort", "--key=1,2", "--stable", "--buffer-size=20%", file.getAbsolutePath)
+    val builder = new ProcessBuilder("sort", "--key=1,2", "--stable", "--buffer-size=20%", "--temporary-directory=" + System.getProperty("java.io.tmpdir"), file.getAbsolutePath)
     val process = builder.start()
-    new BufferedReader(new InputStreamReader(process.getInputStream()))
+    new Thread() {
+      override def run() {
+        val exitCode = process.waitFor()
+        if(exitCode != 0) {
+          System.err.println("Process exited abnormally.")
+          while(process.getErrorStream.available > 0) {
+            System.err.write(process.getErrorStream().read())
+          }
+        }
+      }
+    }.start()
+    new BufferedReader(new InputStreamReader(process.getInputStream()), 10*1024*1024)
   }
   
   def produceMessages(brokerUrl: String, 
                       topics: Array[String], 
                       messages: Long, 
-                      dups: Int, 
-                      cleanup: Boolean): File = {
+                      dups: Int,
+                      percentDeletes: Int): File = {
     val producerProps = new Properties
     producerProps.setProperty("producer.type", "async")
     producerProps.setProperty("broker.list", brokerUrl)
@@ -174,36 +252,49 @@ object TestLogCleaning {
     val rand = new Random(1)
     val keyCount = (messages / dups).toInt
     val producedFile = File.createTempFile("kafka-log-cleaner-produced-", ".txt")
-    if(cleanup)
-      producedFile.deleteOnExit()
+    println("Logging produce requests to " + producedFile.getAbsolutePath)
     val producedWriter = new BufferedWriter(new FileWriter(producedFile), 1024*1024)
     for(i <- 0L until (messages * topics.length)) {
       val topic = topics((i % topics.length).toInt)
       val key = rand.nextInt(keyCount)
-      producer.send(KeyedMessage(topic = topic, key = key.toString, message = i.toString))
-      producedWriter.write("%s\t%s\t%s\n".format(topic, key, i))
+      val delete = i % 100 < percentDeletes
+      val msg = 
+        if(delete)
+          KeyedMessage[String, String](topic = topic, key = key.toString, message = null)
+        else
+          KeyedMessage[String, String](topic = topic, key = key.toString, message = i.toString)
+      producer.send(msg)
+      producedWriter.write(TestRecord(topic, key, i, delete).toString)
+      producedWriter.newLine()
     }
     producedWriter.close()
     producer.close()
     producedFile
   }
   
-  def consumeMessages(zkUrl: String, topics: Array[String], cleanup: Boolean): File = {
+  def makeConsumer(zkUrl: String, topics: Array[String]): ZookeeperConsumerConnector = {
     val consumerProps = new Properties
     consumerProps.setProperty("group.id", "log-cleaner-test-" + new Random().nextInt(Int.MaxValue))
     consumerProps.setProperty("zk.connect", zkUrl)
-    consumerProps.setProperty("consumer.timeout.ms", (5*1000).toString)
-    val connector = new ZookeeperConsumerConnector(new ConsumerConfig(consumerProps))
+    consumerProps.setProperty("consumer.timeout.ms", (10*1000).toString)
+    new ZookeeperConsumerConnector(new ConsumerConfig(consumerProps))
+  }
+  
+  def consumeMessages(zkUrl: String, topics: Array[String]): File = {
+    val connector = makeConsumer(zkUrl, topics)
     val streams = connector.createMessageStreams(topics.map(topic => (topic, 1)).toMap, new StringDecoder, new StringDecoder)
     val consumedFile = File.createTempFile("kafka-log-cleaner-consumed-", ".txt")
-    if(cleanup)
-      consumedFile.deleteOnExit()
+    println("Logging consumed messages to " + consumedFile.getAbsolutePath)
     val consumedWriter = new BufferedWriter(new FileWriter(consumedFile))
     for(topic <- topics) {
       val stream = streams(topic).head
       try {
-        for(item <- stream)
-          consumedWriter.write("%s\t%s\t%s\n".format(topic, item.key, item.message))
+        for(item <- stream) {
+          val delete = item.message == null
+          val value = if(delete) -1L else item.message.toLong
+          consumedWriter.write(TestRecord(topic, item.key.toInt, value, delete).toString)
+          consumedWriter.newLine()
+        }
       } catch {
         case e: ConsumerTimeoutException => 
       }
@@ -213,4 +304,11 @@ object TestLogCleaning {
     consumedFile
   }
   
+}
+
+case class TestRecord(val topic: String, val key: Int, val value: Long, val delete: Boolean) {
+  def this(pieces: Array[String]) = this(pieces(0), pieces(1).toInt, pieces(2).toLong, pieces(3) == "d")
+  def this(line: String) = this(line.split("\t"))
+  override def toString() = topic + "\t" +  key + "\t" + value + "\t" + (if(delete) "d" else "u")
+  def topicAndKey = topic + key
 }

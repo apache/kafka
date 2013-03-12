@@ -32,6 +32,7 @@ import kafka.common._
  * @param maxIndexSize The maximum size of an index file
  * @param indexInterval The approximate number of bytes between index entries
  * @param fileDeleteDelayMs The time to wait before deleting a file from the filesystem
+ * @param deleteRetentionMs The time to retain delete markers in the log. Only applicable for logs that are being compacted.
  * @param minCleanableRatio The ratio of bytes that are available for cleaning to the bytes already cleaned
  * @param dedupe Should old segments in this log be deleted or deduplicated?
  */
@@ -45,6 +46,7 @@ case class LogConfig(val segmentSize: Int = 1024*1024,
                      val maxIndexSize: Int = 1024*1024,
                      val indexInterval: Int = 4096,
                      val fileDeleteDelayMs: Long = 60*1000,
+                     val deleteRetentionMs: Long = 24 * 60 * 60 * 1000L,
                      val minCleanableRatio: Double = 0.5,
                      val dedupe: Boolean = false) {
   
@@ -60,6 +62,7 @@ case class LogConfig(val segmentSize: Int = 1024*1024,
     props.put(RententionMsProp, retentionMs.toString)
     props.put(MaxMessageBytesProp, maxMessageSize.toString)
     props.put(IndexIntervalBytesProp, indexInterval.toString)
+    props.put(DeleteRetentionMsProp, deleteRetentionMs.toString)
     props.put(FileDeleteDelayMsProp, fileDeleteDelayMs.toString)
     props.put(MinCleanableDirtyRatioProp, minCleanableRatio.toString)
     props.put(CleanupPolicyProp, if(dedupe) "dedupe" else "delete")
@@ -78,6 +81,7 @@ object LogConfig {
   val RententionMsProp = "retention.ms"
   val MaxMessageBytesProp = "max.message.bytes"
   val IndexIntervalBytesProp = "index.interval.bytes"
+  val DeleteRetentionMsProp = "delete.retention.ms"
   val FileDeleteDelayMsProp = "file.delete.delay.ms"
   val MinCleanableDirtyRatioProp = "min.cleanable.dirty.ratio"
   val CleanupPolicyProp = "cleanup.policy"
@@ -92,6 +96,7 @@ object LogConfig {
                         MaxMessageBytesProp,
                         IndexIntervalBytesProp,
                         FileDeleteDelayMsProp,
+                        DeleteRetentionMsProp,
                         MinCleanableDirtyRatioProp,
                         CleanupPolicyProp)
     
@@ -110,6 +115,7 @@ object LogConfig {
                   maxMessageSize = props.getProperty(MaxMessageBytesProp).toInt,
                   indexInterval = props.getProperty(IndexIntervalBytesProp).toInt,
                   fileDeleteDelayMs = props.getProperty(FileDeleteDelayMsProp).toInt,
+                  deleteRetentionMs = props.getProperty(DeleteRetentionMsProp).toLong,
                   minCleanableRatio = props.getProperty(MinCleanableDirtyRatioProp).toDouble,
                   dedupe = props.getProperty(CleanupPolicyProp).trim.toLowerCase == "dedupe")
   }

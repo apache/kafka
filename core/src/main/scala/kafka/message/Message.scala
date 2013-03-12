@@ -101,7 +101,9 @@ class Message(val buffer: ByteBuffer) {
                              Message.KeySizeLength + 
                              (if(key == null) 0 else key.length) + 
                              Message.ValueSizeLength + 
-                             (if(payloadSize >= 0) payloadSize else bytes.length - payloadOffset)))
+                             (if(bytes == null) 0 
+                              else if(payloadSize >= 0) payloadSize 
+                              else bytes.length - payloadOffset)))
     // skip crc, we will fill that in at the end
     buffer.position(MagicOffset)
     buffer.put(CurrentMagicValue)
@@ -115,9 +117,12 @@ class Message(val buffer: ByteBuffer) {
       buffer.putInt(key.length)
       buffer.put(key, 0, key.length)
     }
-    val size = if(payloadSize >= 0) payloadSize else bytes.length - payloadOffset
+    val size = if(bytes == null) -1
+               else if(payloadSize >= 0) payloadSize 
+               else bytes.length - payloadOffset
     buffer.putInt(size)
-    buffer.put(bytes, payloadOffset, size)
+    if(bytes != null)
+      buffer.put(bytes, payloadOffset, size)
     buffer.rewind()
     
     // now compute the checksum and fill it in
@@ -184,6 +189,11 @@ class Message(val buffer: ByteBuffer) {
    * The length of the message value in bytes
    */
   def payloadSize: Int = buffer.getInt(payloadSizeOffset)
+  
+  /**
+   * Is the payload of this message null
+   */
+  def isNull(): Boolean = payloadSize < 0
   
   /**
    * The magic version of this message

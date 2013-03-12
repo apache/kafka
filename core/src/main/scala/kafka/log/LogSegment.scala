@@ -249,5 +249,12 @@ class LogSegment(val log: FileMessageSet,
    * The last modified time of this log segment as a unix time stamp
    */
   def lastModified = log.file.lastModified
-
+  
+  /**
+   * Change the last modified time for this log segment
+   */
+  def lastModified_=(ms: Long) = {
+    log.file.setLastModified(ms)
+    index.file.setLastModified(ms)
+  }
 }

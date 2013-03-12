@@ -38,7 +38,7 @@ class MessageTest extends JUnitSuite {
   @Before
   def setUp(): Unit = {
     val keys = Array(null, "key".getBytes, "".getBytes)
-    val vals = Array("value".getBytes, "".getBytes)
+    val vals = Array("value".getBytes, "".getBytes, null)
     val codecs = Array(NoCompressionCodec, GZIPCompressionCodec)
     for(k <- keys; v <- vals; codec <- codecs)
       messages += new MessageTestVal(k, v, codec, new Message(v, k, codec))
@@ -47,7 +47,12 @@ class MessageTest extends JUnitSuite {
   @Test
   def testFieldValues {
     for(v <- messages) {
-      TestUtils.checkEquals(ByteBuffer.wrap(v.payload), v.message.payload)
+      if(v.payload == null) {
+        assertTrue(v.message.isNull)
+        assertEquals("Payload should be null", null, v.message.payload)
+      } else {
+        TestUtils.checkEquals(ByteBuffer.wrap(v.payload), v.message.payload)
+      }
       assertEquals(Message.CurrentMagicValue, v.message.magic)
       if(v.message.hasKey)
         TestUtils.checkEquals(ByteBuffer.wrap(v.key), v.message.key)

@@ -18,6 +18,7 @@
 package kafka.utils
 
 import java.util.Properties
+import java.util.Collections
 import scala.collection._
 
 class VerifiableProperties(val props: Properties) extends Logging {
@@ -194,9 +195,8 @@ class VerifiableProperties(val props: Properties) extends Logging {
 
   def verify() {
     info("Verifying properties")
-    val specifiedProperties = props.propertyNames()
-    while (specifiedProperties.hasMoreElements) {
-      val key = specifiedProperties.nextElement().asInstanceOf[String]
+    val propNames = JavaConversions.asBuffer(Collections.list(props.propertyNames)).map(_.toString).sorted
+    for(key <- propNames) {
       if (!referenceSet.contains(key))
         warn("Property %s is not valid".format(key))
       else

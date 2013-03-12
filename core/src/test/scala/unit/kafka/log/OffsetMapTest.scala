@@ -29,11 +29,12 @@ class OffsetMapTest extends JUnitSuite {
     validateMap(10)
     validateMap(100)
     validateMap(1000)
+    validateMap(5000)
   }
   
   @Test
   def testClear() {
-    val map = new SkimpyOffsetMap(4000, 0.75)
+    val map = new SkimpyOffsetMap(4000)
     for(i <- 0 until 10)
       map.put(key(i), i)
     for(i <- 0 until 10)
@@ -43,45 +44,33 @@ class OffsetMapTest extends JUnitSuite {
       assertEquals(map.get(key(i)), -1L)
   }
   
-  @Test
-  def testCapacity() {
-    val map = new SkimpyOffsetMap(1024, 0.75)
-    var i = 0
-    while(map.size < map.capacity) {
-      map.put(key(i), i)
-      i += 1
-    }
-    // now the map is full, it should throw an exception
-    intercept[IllegalStateException] {
-      map.put(key(i), i)
-    }
-  }
-  
   def key(key: Int) = ByteBuffer.wrap(key.toString.getBytes)
   
-  def validateMap(items: Int) {
-    val map = new SkimpyOffsetMap(items * 2 * 24, 0.75)
+  def validateMap(items: Int, loadFactor: Double = 0.5): SkimpyOffsetMap = {
+    val map = new SkimpyOffsetMap((items/loadFactor * 24).toInt)
     for(i <- 0 until items)
       map.put(key(i), i)
     var misses = 0
-    for(i <- 0 until items) {
-      map.get(key(i)) match {
-        case -1L => misses += 1
-        case offset => assertEquals(i.toLong, offset) 
-      }
-    }
-    println("Miss rate: " + (misses.toDouble / items))
+    for(i <- 0 until items)
+      assertEquals(map.get(key(i)), i.toLong)
+    map
   }
   
 }
 
 object OffsetMapTest {
   def main(args: Array[String]) {
-    if(args.length != 1) {
-      System.err.println("USAGE: java OffsetMapTest size")
+    if(args.length != 2) {
+      System.err.println("USAGE: java OffsetMapTest size load")
       System.exit(1)
     }
     val test = new OffsetMapTest()
-    test.validateMap(args(0).toInt)
+    val size = args(0).toInt
+    val load = args(1).toDouble
+    val start = System.nanoTime
+    val map = test.validateMap(size, load)
+    val ellapsedMs = (System.nanoTime - start) / 1000.0 / 1000.0
+    println(map.size + " entries in map of size " + map.slots + " in " + ellapsedMs + " ms")
+    println("Collision rate: %.1f%%".format(100*map.collisionRate))
   }
 }

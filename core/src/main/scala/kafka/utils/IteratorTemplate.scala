@@ -32,16 +32,21 @@ object FAILED extends State
 abstract class IteratorTemplate[T] extends Iterator[T] with java.util.Iterator[T] {
   
   private var state: State = NOT_READY
-  private var nextItem: Option[T] = None
+  private var nextItem = null.asInstanceOf[T]
 
   def next(): T = {
     if(!hasNext())
       throw new NoSuchElementException()
     state = NOT_READY
-    nextItem match {
-      case Some(item) => item
-      case None => throw new IllegalStateException("Expected item but none found.")
-    }
+    if(nextItem == null)
+      throw new IllegalStateException("Expected item but none found.")
+    nextItem
+  }
+  
+  def peek(): T = {
+    if(!hasNext())
+      throw new NoSuchElementException()
+    nextItem
   }
   
   def hasNext(): Boolean = {
@@ -58,7 +63,7 @@ abstract class IteratorTemplate[T] extends Iterator[T] with java.util.Iterator[T
   
   def maybeComputeNext(): Boolean = {
     state = FAILED
-    nextItem = Some(makeNext())
+    nextItem = makeNext()
     if(state == DONE) {
       false
     } else {

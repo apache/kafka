@@ -23,22 +23,22 @@ import java.nio.ByteBuffer
 import kafka.utils._
 
 trait OffsetMap {
-  def capacity: Int
+  def slots: Int
   def put(key: ByteBuffer, offset: Long)
   def get(key: ByteBuffer): Long
   def clear()
   def size: Int
-  def utilization: Double = size.toDouble / capacity
+  def utilization: Double = size.toDouble / slots
 }
 
 /**
- * An approximate map used for deduplicating the log.
+ * An hash table used for deduplicating the log. This hash table uses a cryptographicly secure hash of the key as a proxy for the key
+ * for comparisons and to save space on object overhead. Collisions are resolved by probing. This hash table does not support deletes.
  * @param memory The amount of memory this map can use
- * @param maxLoadFactor The maximum percent full this offset map can be
  * @param hashAlgorithm The hash algorithm instance to use: MD2, MD5, SHA-1, SHA-256, SHA-384, SHA-512
  */
 @nonthreadsafe
-class SkimpyOffsetMap(val memory: Int, val maxLoadFactor: Double, val hashAlgorithm: String = "MD5") extends OffsetMap {
+class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extends OffsetMap {
   private val bytes = ByteBuffer.allocate(memory)
   
   /* the hash algorithm instance to use, defualt is MD5 */
@@ -54,8 +54,11 @@ class SkimpyOffsetMap(val memory: Int, val maxLoadFactor: Double, val hashAlgori
   /* number of entries put into the map */
   private var entries = 0
   
-  /* a byte added as a prefix to all keys to make collisions non-static in repeated uses. Changed in clear(). */
-  private var salt: Byte = 0
+  /* number of lookups on the map */
+  private var lookups = 0L
+  
+  /* the number of probes for all lookups */
+  private var probes = 0L
   
   /**
    * The number of bytes of space each entry uses (the number of bytes in the hash plus an 8 byte offset)
@@ -63,40 +66,66 @@ class SkimpyOffsetMap(val memory: Int, val maxLoadFactor: Double, val hashAlgori
   val bytesPerEntry = hashSize + 8
   
   /**
-   * The maximum number of entries this map can contain before it exceeds the max load factor
+   * The maximum number of entries this map can contain
    */
-  override val capacity: Int = (maxLoadFactor * memory / bytesPerEntry).toInt
+  val slots: Int = (memory / bytesPerEntry).toInt
   
   /**
-   * Associate a offset with a key.
+   * Associate this offset to the given key.
    * @param key The key
    * @param offset The offset
    */
   override def put(key: ByteBuffer, offset: Long) {
-    if(size + 1 > capacity)
-      throw new IllegalStateException("Attempt to add to a full offset map with a maximum capacity of %d.".format(capacity))
-    hash(key, hash1)
-    bytes.position(offsetFor(hash1))
+    require(entries < slots, "Attempt to add a new entry to a full offset map.")
+    lookups += 1
+    hashInto(key, hash1)
+    // probe until we find the first empty slot
+    var attempt = 0
+    var pos = positionOf(hash1, attempt)  
+    while(!isEmpty(pos)) {
+      bytes.position(pos)
+      bytes.get(hash2)
+      if(Arrays.equals(hash1, hash2)) {
+        // we found an existing entry, overwrite it and return (size does not change)
+        bytes.putLong(offset)
+        return
+      }
+      attempt += 1
+      pos = positionOf(hash1, attempt)
+    }
+    // found an empty slot, update it--size grows by 1
+    bytes.position(pos)
     bytes.put(hash1)
     bytes.putLong(offset)
     entries += 1
   }
   
   /**
-   * Get the offset associated with this key. This method is approximate,
-   * it may not find an offset previously stored, but cannot give a wrong offset.
+   * Check that there is no entry at the given position
+   */
+  private def isEmpty(position: Int): Boolean = 
+    bytes.getLong(position) == 0 && bytes.getLong(position + 8) == 0 && bytes.getLong(position + 16) == 0
+  
+  /**
+   * Get the offset associated with this key.
    * @param key The key
    * @return The offset associated with this key or -1 if the key is not found
    */
   override def get(key: ByteBuffer): Long = {
-    hash(key, hash1)
-    bytes.position(offsetFor(hash1))
-    bytes.get(hash2)
-    // if the computed hash equals the stored hash return the stored offset
-    if(Arrays.equals(hash1, hash2))
-      bytes.getLong()
-    else
-      -1L
+    lookups += 1
+    hashInto(key, hash1)
+    // search for the hash of this key by repeated probing until we find the hash we are looking for or we find an empty slot
+    var attempt = 0
+    var pos = 0
+    do {
+      pos = positionOf(hash1, attempt)
+      bytes.position(pos)
+      if(isEmpty(pos))
+        return -1L
+      bytes.get(hash2)
+      attempt += 1
+    } while(!Arrays.equals(hash1, hash2))
+    bytes.getLong()
   }
   
   /**
@@ -105,7 +134,8 @@ class SkimpyOffsetMap(val memory: Int, val maxLoadFactor: Double, val hashAlgori
    */
   override def clear() {
     this.entries = 0
-    this.salt = (this.salt + 1).toByte
+    this.lookups = 0L
+    this.probes = 0L
     Arrays.fill(bytes.array, bytes.arrayOffset, bytes.arrayOffset + bytes.limit, 0.toByte)
   }
   
@@ -115,19 +145,32 @@ class SkimpyOffsetMap(val memory: Int, val maxLoadFactor: Double, val hashAlgori
   override def size: Int = entries
   
   /**
-   * Choose a slot in the array for this hash
+   * The rate of collisions in the lookups
    */
-  private def offsetFor(hash: Array[Byte]): Int = 
-    bytesPerEntry * (Utils.abs(Utils.readInt(hash, 0)) % capacity)
+  def collisionRate: Double = 
+    (this.probes - this.lookups) / this.lookups.toDouble
+  
+  /**
+   * Calculate the ith probe position. We first try reading successive integers from the hash itself
+   * then if all of those fail we degrade to linear probing.
+   * @param hash The hash of the key to find the position for
+   * @param attempt The ith probe
+   * @return The byte offset in the buffer at which the ith probing for the given hash would reside
+   */
+  private def positionOf(hash: Array[Byte], attempt: Int): Int = {
+    val probe = Utils.readInt(hash, math.min(attempt, hashSize - 4)) + math.max(0, attempt - hashSize + 4)
+    val slot = Utils.abs(probe) % slots
+    this.probes += 1
+    slot * bytesPerEntry
+  }
   
   /**
    * The offset at which we have stored the given key
    * @param key The key to hash
    * @param buffer The buffer to store the hash into
    */
-  private def hash(key: ByteBuffer, buffer: Array[Byte]) {
+  private def hashInto(key: ByteBuffer, buffer: Array[Byte]) {
     key.mark()
-    digest.update(salt)
     digest.update(key)
     key.reset()
     digest.digest(buffer, 0, hashSize)

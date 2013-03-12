@@ -249,7 +249,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           if (logger.isTraceEnabled) {
             val successfullySentData = response.status.filter(_._2.error == ErrorMapping.NoError)
             successfullySentData.foreach(m => messagesPerTopic(m._1).foreach(message =>
-              trace("Successfully sent message: %s".format(Utils.readString(message.message.payload)))))
+              trace("Successfully sent message: %s".format(if(message.message.isNull) null else Utils.readString(message.message.payload)))))
           }
           failedTopicPartitions = response.status.filter(_._2.error != ErrorMapping.NoError).toSeq
             .map(partitionStatus => partitionStatus._1)
@@ -257,8 +257,9 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
             error("Produce request with correlation id %d failed due to response %s. List of failed topic partitions is %s"
               .format(currentCorrelationId, response.toString, failedTopicPartitions.mkString(",")))
           failedTopicPartitions
-        } else
+        } else {
           Seq.empty[TopicAndPartition]
+        }
       } catch {
         case t: Throwable =>
           warn("Failed to send producer request with correlation id %d to broker %d with data for partitions %s"

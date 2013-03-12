@@ -569,4 +569,17 @@ class LogTest extends JUnitSuite {
     assertEquals("The deleted segments should be gone.", 1, log.numberOfSegments)
   }
   
+  @Test
+  def testAppendMessageWithNullPayload() {
+    var log = new Log(logDir,
+                      LogConfig(),
+                      needsRecovery = false,
+                      time.scheduler,
+                      time)
+    log.append(new ByteBufferMessageSet(new Message(bytes = null)))
+    val ms = log.read(0, 4096, None)
+    assertEquals(0, ms.head.offset)
+    assertTrue("Message payload should be null.", ms.head.message.isNull)
+  }
+  
 }

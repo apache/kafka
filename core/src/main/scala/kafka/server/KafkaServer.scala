@@ -163,6 +163,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                      maxMessageSize = config.messageMaxBytes,
                                      maxIndexSize = config.logIndexSizeMaxBytes,
                                      indexInterval = config.logIndexIntervalBytes,
+                                     deleteRetentionMs = config.logCleanerDeleteRetentionMs,
                                      fileDeleteDelayMs = config.logDeleteDelayMs,
                                      minCleanableRatio = config.logCleanerMinCleanRatio,
                                      dedupe = config.logCleanupPolicy.trim.toLowerCase == "dedupe")
@@ -171,6 +172,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     // read the log configurations from zookeeper
     val cleanerConfig = CleanerConfig(numThreads = config.logCleanerThreads,
                                       dedupeBufferSize = config.logCleanerDedupeBufferSize,
+                                      dedupeBufferLoadFactor = config.logCleanerDedupeBufferLoadFactor,
                                       ioBufferSize = config.logCleanerIoBufferSize,
                                       maxMessageSize = config.messageMaxBytes,
                                       maxIoBytesPerSecond = config.logCleanerIoMaxBytesPerSecond,

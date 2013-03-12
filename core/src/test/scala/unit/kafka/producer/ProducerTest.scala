@@ -288,13 +288,36 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
       case e: FailedToSendMessageException => /* success */
       case e: Exception => fail("Not expected", e)
     } finally {
-      producer.close
+      producer.close()
     }
     val t2 = SystemTime.milliseconds
 
     // make sure we don't wait fewer than numRetries*timeoutMs milliseconds
     // we do this because the DefaultEventHandler retries a number of times
     assertTrue((t2-t1) >= timeoutMs*config.messageSendMaxRetries)
+  }
+  
+  @Test
+  def testSendNullMessage() {
+    val props = new Properties()
+    props.put("serializer.class", "kafka.serializer.StringEncoder")
+    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
+    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    
+    val config = new ProducerConfig(props)
+    val producer = new Producer[String, String](config)
+    try {
+
+      // create topic
+      AdminUtils.createTopic(zkClient, "new-topic", 2, 1)
+      assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
+        AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
+    
+      producer.send(new KeyedMessage[String, String]("new-topic", "key", null))
+    } finally {
+      producer.close()
+    }
   }
 }
 

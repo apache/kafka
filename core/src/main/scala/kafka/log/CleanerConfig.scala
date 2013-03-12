@@ -30,8 +30,8 @@ package kafka.log
  * @param hashAlgorithm The hash algorithm to use in key comparison.
  */
 case class CleanerConfig(val numThreads: Int = 1, 
-                         val dedupeBufferSize: Int = 4*1024*1024,
-                         val dedupeBufferLoadFactor: Double = 0.75,
+                         val dedupeBufferSize: Long = 4*1024*1024L,
+                         val dedupeBufferLoadFactor: Double = 0.9d,
                          val ioBufferSize: Int = 1024*1024,
                          val maxMessageSize: Int = 32*1024*1024,
                          val maxIoBytesPerSecond: Double = Double.MaxValue,

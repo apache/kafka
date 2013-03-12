@@ -159,13 +159,14 @@ class FileMessageSet private[kafka](@volatile var file: File,
   def iterator(maxMessageSize: Int): Iterator[MessageAndOffset] = {
     new IteratorTemplate[MessageAndOffset] {
       var location = start
+      val sizeOffsetBuffer = ByteBuffer.allocate(12)
       
       override def makeNext(): MessageAndOffset = {
         if(location >= end)
           return allDone()
           
         // read the size of the item
-        val sizeOffsetBuffer = ByteBuffer.allocate(12)
+        sizeOffsetBuffer.rewind()
         channel.read(sizeOffsetBuffer, location)
         if(sizeOffsetBuffer.hasRemaining)
           return allDone()
