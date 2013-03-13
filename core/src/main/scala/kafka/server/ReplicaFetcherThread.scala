@@ -83,18 +83,18 @@ class ReplicaFetcherThread(name:String,
     val leaderEndOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, OffsetRequest.LatestTime, brokerConfig.brokerId)
     if (leaderEndOffset < log.logEndOffset) {
       log.truncateTo(leaderEndOffset)
-      return leaderEndOffset
+      leaderEndOffset
+    } else {
+      /**
+       * The follower could have been down for a long time and when it starts up, its end offset could be smaller than the leader's
+       * start offset because the leader has deleted old logs (log.logEndOffset < leaderStartOffset).
+       *
+       * Roll out a new log at the follower with the start offset equal to the current leader's start offset and continue fetching.
+       */
+      val leaderStartOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, OffsetRequest.EarliestTime, brokerConfig.brokerId)
+      log.truncateAndStartWithNewOffset(leaderStartOffset)
+      leaderStartOffset
     }
-
-    /**
-     * The follower could have been down for a long time and when it starts up, its end offset could be smaller than the leader's
-     * start offset because the leader has deleted old logs (log.logEndOffset < leaderStartOffset).
-     *
-     * Roll out a new log at the follower with the start offset equal to the current leader's start offset and continue fetching.
-     */
-    val leaderStartOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, OffsetRequest.EarliestTime, brokerConfig.brokerId)
-    log.truncateAndStartWithNewOffset(leaderStartOffset)
-    leaderStartOffset
   }
 
   // any logic for partitions whose leader has changed

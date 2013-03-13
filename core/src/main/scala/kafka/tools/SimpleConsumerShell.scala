@@ -165,9 +165,8 @@ object SimpleConsumerShell extends Logging {
       val simpleConsumer = new SimpleConsumer(fetchTargetBroker.host, fetchTargetBroker.port, ConsumerConfig.SocketTimeout,
                                               ConsumerConfig.SocketBufferSize, clientId)
       try {
-        startingOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition = TopicAndPartition(topic, partitionId),
-                                                               earliestOrLatest = startingOffset,
-                                                               isFromOrdinaryConsumer = false)
+        startingOffset = simpleConsumer.earliestOrLatestOffset(TopicAndPartition(topic, partitionId), startingOffset,
+                                                               Request.DebuggingConsumerId)
       } catch {
         case t: Throwable =>
           System.err.println("Error in getting earliest or latest offset due to: " + Utils.stackTrace(t))

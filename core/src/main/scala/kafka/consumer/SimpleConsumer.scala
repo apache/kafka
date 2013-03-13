@@ -136,22 +136,12 @@ class SimpleConsumer(val host: String,
    * Get the earliest or latest offset of a given topic, partition.
    * @param topicAndPartition Topic and partition of which the offset is needed.
    * @param earliestOrLatest A value to indicate earliest or latest offset.
-   * @param consumerId Id of the consumer which could be a client or a follower broker.
-   * @param isFromOrdinaryConsumer Boolean to specify ordinary consumer or debugging consumer.
+   * @param consumerId Id of the consumer which could be a consumer client, SimpleConsumerShell or a follower broker.
    * @return Requested offset.
    */
-  def earliestOrLatestOffset(topicAndPartition: TopicAndPartition,
-                             earliestOrLatest: Long,
-                             consumerId: Int = Request.OrdinaryConsumerId,
-                             isFromOrdinaryConsumer: Boolean = true): Long = {
-    val request =
-      if(isFromOrdinaryConsumer)
-       OffsetRequest(requestInfo = Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)),
-                     replicaId = consumerId)
-      else
-       OffsetRequest(requestInfo = Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)),
-                     replicaId = Request.DebuggingConsumerId)
-
+  def earliestOrLatestOffset(topicAndPartition: TopicAndPartition, earliestOrLatest: Long, consumerId: Int): Long = {
+    val request = OffsetRequest(requestInfo = Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)),
+                                replicaId = consumerId)
     val partitionErrorAndOffset = getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition)
     val offset = partitionErrorAndOffset.error match {
       case ErrorMapping.NoError => partitionErrorAndOffset.offsets.head
