@@ -63,7 +63,8 @@ object ConsumerConfig extends Config {
     autoOffsetReset match {
       case OffsetRequest.SmallestTimeString =>
       case OffsetRequest.LargestTimeString =>
-      case _ => throw new InvalidConfigException("Wrong value " + autoOffsetReset + " of autoOffsetReset in ConsumerConfig")
+      case _ => throw new InvalidConfigException("Wrong value " + autoOffsetReset + " of auto.offset.reset in ConsumerConfig; " +
+                                                 "Valid values are " + OffsetRequest.SmallestTimeString + " and " + OffsetRequest.LargestTimeString)
     }
   }
 }

@@ -24,6 +24,7 @@ import kafka.client.ClientUtils
 import kafka.api.{OffsetRequest, FetchRequestBuilder, Request}
 import kafka.cluster.Broker
 import scala.collection.JavaConversions._
+import kafka.common.TopicAndPartition
 
 /**
  * Command line program to dump out messages to standard out using the simple consumer
@@ -160,8 +161,22 @@ object SimpleConsumerShell extends Logging {
       System.err.println("Invalid starting offset: %d".format(startingOffset))
       System.exit(1)
     }
-    if(startingOffset < 0)
-      startingOffset = SimpleConsumer.earliestOrLatestOffset(fetchTargetBroker, topic, partitionId, startingOffset, clientId, false)
+    if (startingOffset < 0) {
+      val simpleConsumer = new SimpleConsumer(fetchTargetBroker.host, fetchTargetBroker.port, ConsumerConfig.SocketTimeout,
+                                              ConsumerConfig.SocketBufferSize, clientId)
+      try {
+        startingOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition = TopicAndPartition(topic, partitionId),
+                                                               earliestOrLatest = startingOffset,
+                                                               isFromOrdinaryConsumer = false)
+      } catch {
+        case t: Throwable =>
+          System.err.println("Error in getting earliest or latest offset due to: " + Utils.stackTrace(t))
+          System.exit(1)
+      } finally {
+        if (simpleConsumer != null)
+          simpleConsumer.close()
+      }
+    }
 
     // initializing formatter
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
