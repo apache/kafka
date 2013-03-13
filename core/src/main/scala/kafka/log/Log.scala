@@ -260,7 +260,7 @@ private[kafka] class Log(val dir: File,
    */
   def append(messages: ByteBufferMessageSet, assignOffsets: Boolean = true): (Long, Long) = {
     val messageSetInfo = analyzeAndValidateMessageSet(messages)
-    
+
     // if we have any valid messages, append them to the log
     if(messageSetInfo.count == 0) {
       (-1L, -1L)
@@ -270,7 +270,9 @@ private[kafka] class Log(val dir: File,
 
       try {
         // they are valid, insert them in the log
-        val offsets = lock synchronized {
+        val offsetsAndNumAppendedMessages = lock synchronized {
+          val firstOffset = nextOffset.get
+
           // maybe roll the log if this segment is full
           val segment = maybeRoll(segments.view.last)
           
@@ -312,16 +314,17 @@ private[kafka] class Log(val dir: File,
           
           // advance the log end offset
           nextOffset.set(offsets._2 + 1)
-          
+          val numAppendedMessages = (nextOffset.get - firstOffset).toInt
+
           // return the offset at which the messages were appended
-          offsets
+          (offsets._1, offsets._2, numAppendedMessages)
         }
         
         // maybe flush the log and index
-        maybeFlush(messageSetInfo.count)
+        maybeFlush(offsetsAndNumAppendedMessages._3)
         
         // return the first and last offset
-        offsets
+        (offsetsAndNumAppendedMessages._1, offsetsAndNumAppendedMessages._2)
       } catch {
         case e: IOException => throw new KafkaStorageException("I/O exception in append to log '%s'".format(name), e)
       }
