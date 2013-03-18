@@ -379,15 +379,15 @@ class LogTest extends JUnitSuite {
                         needsRecovery = true)
       val messages = List("one", "two", "three", "four", "five", "six")
       val ms = new ByteBufferMessageSet(compressionCodec = codec, 
-                                        offsetCounter = new AtomicLong(5), 
+                                        offsetCounter = new AtomicLong(0),
                                         messages = messages.map(s => new Message(s.getBytes)):_*)
-      val firstOffset = ms.shallowIterator.toList.head.offset
-      val lastOffset = ms.shallowIterator.toList.last.offset
+      val firstOffset = ms.toList.head.offset
+      val lastOffset = ms.toList.last.offset
       val (first, last) = log.append(ms, assignOffsets = false)
       assertEquals(last + 1, log.logEndOffset)
       assertEquals(firstOffset, first)
       assertEquals(lastOffset, last)
-      assertTrue(log.read(5, 64*1024).size > 0)
+      assertTrue(log.read(0, 64*1024).size > 0)
       log.delete()
     }
   }
