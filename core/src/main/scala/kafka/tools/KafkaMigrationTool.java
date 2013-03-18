@@ -251,9 +251,10 @@ public class KafkaMigrationTool {
         thread.start();
         migrationThreads.add(thread);
       }
+
       // start producer threads
       for (int i = 0; i < numProducers; i++) {
-        kafkaProducerProperties_08.put("client.id", String.valueOf(i) + "-" + i);
+        kafkaProducerProperties_08.put("client.id", kafkaProducerProperties_08.getProperty("client.id") + "-" + i);
         ProducerConfig producerConfig_08 = new ProducerConfig(kafkaProducerProperties_08);
         Producer producer = new Producer(producerConfig_08);
         ProducerThread producerThread = new ProducerThread(producerDataChannel, producer, i);
