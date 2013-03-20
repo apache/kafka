@@ -290,6 +290,11 @@ class DefaultMessageFormatter extends MessageFormatter {
   }
 }
 
+class NoOpMessageFormatter extends MessageFormatter {
+  override def init(props: Properties) {}
+  def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {}
+}
+
 class ChecksumMessageFormatter extends MessageFormatter {
   private var topicStr: String = _
 
