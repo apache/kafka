@@ -34,7 +34,8 @@ object KafkaBuild extends Build {
     libraryDependencies ++= Seq(
       "log4j"                 % "log4j"        % "1.2.15",
       "net.sf.jopt-simple"    % "jopt-simple"  % "3.2",
-      "org.slf4j"             % "slf4j-simple" % "1.6.4"
+      "org.slf4j"             % "slf4j-simple" % "1.6.4",
+      "com.101tec"            % "zkclient"     % "0.2"
     ),
     // The issue is going from log4j 1.2.14 to 1.2.15, the developers added some features which required
     // some dependencies on various sun and javax packages.
@@ -100,9 +101,9 @@ object KafkaBuild extends Build {
   // POM Tweaking for core:
   def zkClientDep =
     <dependency>
-      <groupId>zkclient</groupId>
+      <groupId>com.101tec</groupId>
       <artifactId>zkclient</artifactId>
-      <version>20120522</version>
+      <version>0.2</version>
       <scope>compile</scope>
     </dependency>
 
@@ -116,7 +117,7 @@ object KafkaBuild extends Build {
       </dependency>
       <dependency>
         <groupId>com.yammer.metrics</groupId>
-        <artifactId>metrics-annotations</artifactId>
+        <artifactId>metrics-annotation</artifactId>
         <version>3.0.0-c0c8be71</version>
         <scope>compile</scope>
       </dependency>
