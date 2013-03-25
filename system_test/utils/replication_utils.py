@@ -65,3 +65,6 @@ class ReplicationUtils(object):
         self.controllerAttributesDict["REGX_CONTROLLER_STARTUP_PATTERN"] = "\[(.*?)\] .* \[Controller (.*?)\]: " + \
             self.controllerAttributesDict["CONTROLLER_STARTUP_COMPLETE_MSG"]
 
+        # Data Loss Percentage Threshold in Ack = 1 cases
+        self.ackOneDataLossThresholdPercent = 5.0
+

@@ -77,6 +77,8 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
             self.testSuiteAbsPathName, SystemTestEnv.SYSTEM_TEST_CASE_PREFIX)
         testCasePathNameList.sort()
 
+        replicationUtils = ReplicationUtils(self)
+
         # =============================================================
         # launch each testcase one by one: testcase_1, testcase_2, ...
         # =============================================================
@@ -423,16 +425,15 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                 self.log_message("validating data matched")
 
                 if logRetentionTest.lower() == "true":
-                    kafka_system_test_utils.validate_simple_consumer_data_matched_across_replicas(self.systemTestEnv, self.testcaseEnv)
-                    kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
+                    kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv, replicationUtils)
                 elif consumerMultiTopicsMode.lower() == "true":
-                    #kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv)
-                    kafka_system_test_utils.validate_data_matched_in_multi_topics_from_single_consumer_producer(self.systemTestEnv, self.testcaseEnv)
+                    kafka_system_test_utils.validate_data_matched_in_multi_topics_from_single_consumer_producer(
+                        self.systemTestEnv, self.testcaseEnv, replicationUtils)
                 else:
                     kafka_system_test_utils.validate_simple_consumer_data_matched_across_replicas(self.systemTestEnv, self.testcaseEnv)
-                    #kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv)
-                    kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
-
+                    kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv)
+                    kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv, replicationUtils)
+ 
                 # =============================================
                 # draw graphs
                 # =============================================

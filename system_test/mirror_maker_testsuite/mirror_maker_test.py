@@ -76,6 +76,8 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
             self.testSuiteAbsPathName, SystemTestEnv.SYSTEM_TEST_CASE_PREFIX)
         testCasePathNameList.sort()
 
+        replicationUtils = ReplicationUtils(self)
+
         # =============================================================
         # launch each testcase one by one: testcase_1, testcase_2, ...
         # =============================================================
@@ -282,9 +284,8 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
                 # validate the data matched and checksum
                 # =============================================
                 self.log_message("validating data matched")
-                #kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv)
-                kafka_system_test_utils.validate_simple_consumer_data_matched(self.systemTestEnv, self.testcaseEnv)
-                kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv)
+                kafka_system_test_utils.validate_data_matched(self.systemTestEnv, self.testcaseEnv, replicationUtils)
+                kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv, "source")
                 kafka_system_test_utils.validate_broker_log_segment_checksum(self.systemTestEnv, self.testcaseEnv, "target")
 
                 # =============================================
