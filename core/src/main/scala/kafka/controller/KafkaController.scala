@@ -251,7 +251,9 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
    * Returns true if this broker is the current controller.
    */
   def isActive(): Boolean = {
-    controllerContext.controllerChannelManager != null
+    controllerContext.controllerLock synchronized {
+      controllerContext.controllerChannelManager != null
+    }
   }
 
   /**
