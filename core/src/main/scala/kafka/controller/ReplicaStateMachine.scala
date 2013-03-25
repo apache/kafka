@@ -42,7 +42,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   private val controllerId = controller.config.brokerId
   private val zkClient = controllerContext.zkClient
   var replicaState: mutable.Map[(String, Int, Int), ReplicaState] = mutable.Map.empty
-  val brokerRequestBatch = new ControllerBrokerRequestBatch(controller.sendRequest, controller.config.brokerId)
+  val brokerRequestBatch = new ControllerBrokerRequestBatch(controller.sendRequest, controllerId, controller.clientId)
   private val isShuttingDown = new AtomicBoolean(false)
   this.logIdent = "[Replica state machine on controller " + controller.config.brokerId + "]: "
   private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
@@ -143,7 +143,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                                         .format(controllerId, controller.epoch, replicaId, topicAndPartition))
             case _ =>
               // check if the leader for this partition is alive or even exists
-                controllerContext.allLeaders.get(topicAndPartition) match {
+                controllerContext.partitionLeadershipInfo.get(topicAndPartition) match {
                 case Some(leaderIsrAndControllerEpoch) =>
                   controllerContext.liveBrokerIds.contains(leaderIsrAndControllerEpoch.leaderAndIsr.leader) match {
                     case true => // leader is alive
@@ -163,7 +163,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
           assertValidPreviousStates(topic, partition, replicaId, List(NewReplica, OnlineReplica), targetState)
           // As an optimization, the controller removes dead replicas from the ISR
           val leaderAndIsrIsEmpty: Boolean =
-            controllerContext.allLeaders.get(topicAndPartition) match {
+            controllerContext.partitionLeadershipInfo.get(topicAndPartition) match {
               case Some(currLeaderIsrAndControllerEpoch) =>
                 if (currLeaderIsrAndControllerEpoch.leaderAndIsr.isr.contains(replicaId))
                   controller.removeReplicaFromIsr(topic, partition, replicaId) match {

@@ -381,7 +381,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       var leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
       assertTrue(leaderAfterShutdown != leaderBeforeShutdown)
       // assertEquals(2, topicMetadata.partitionsMetadata.head.isr.size)
-      assertEquals(2, controller.controllerContext.allLeaders(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
+      assertEquals(2, controller.controllerContext.partitionLeadershipInfo(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
 
       leaderBeforeShutdown = leaderAfterShutdown
       controllerId = ZkUtils.getController(zkClient)
@@ -392,7 +392,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
       assertTrue(leaderAfterShutdown != leaderBeforeShutdown)
       // assertEquals(1, topicMetadata.partitionsMetadata.head.isr.size)
-      assertEquals(1, controller.controllerContext.allLeaders(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
+      assertEquals(1, controller.controllerContext.partitionLeadershipInfo(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
 
       leaderBeforeShutdown = leaderAfterShutdown
       controllerId = ZkUtils.getController(zkClient)
@@ -402,7 +402,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
       leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
       assertTrue(leaderAfterShutdown == leaderBeforeShutdown)
-      assertEquals(1, controller.controllerContext.allLeaders(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
+      assertEquals(1, controller.controllerContext.partitionLeadershipInfo(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
     }
     finally {
       servers.foreach(_.shutdown())

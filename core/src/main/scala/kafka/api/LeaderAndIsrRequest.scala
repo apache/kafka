@@ -83,7 +83,6 @@ case class PartitionStateInfo(val leaderIsrAndControllerEpoch: LeaderIsrAndContr
 
 object LeaderAndIsrRequest {
   val CurrentVersion = 0.shortValue
-  val DefaultClientId = ""
   val IsInit: Boolean = true
   val NotInit: Boolean = false
   val DefaultAckTimeout: Int = 1000
@@ -126,9 +125,9 @@ case class LeaderAndIsrRequest (versionId: Short,
     extends RequestOrResponse(Some(RequestKeys.LeaderAndIsrKey), correlationId) {
 
   def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo], liveBrokers: Set[Broker], controllerId: Int,
-           controllerEpoch: Int, correlationId: Int) = {
-    this(LeaderAndIsrRequest.CurrentVersion, correlationId, LeaderAndIsrRequest.DefaultClientId, LeaderAndIsrRequest.DefaultAckTimeout,
-      controllerId, controllerEpoch, partitionStateInfos, liveBrokers)
+           controllerEpoch: Int, correlationId: Int, clientId: String) = {
+    this(LeaderAndIsrRequest.CurrentVersion, correlationId, clientId, LeaderAndIsrRequest.DefaultAckTimeout,
+         controllerId, controllerEpoch, partitionStateInfos, liveBrokers)
   }
 
   def writeTo(buffer: ByteBuffer) {

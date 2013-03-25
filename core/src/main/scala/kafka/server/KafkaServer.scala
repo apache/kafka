@@ -98,8 +98,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
    */
   private def registerStats() {
     BrokerTopicStats.getBrokerAllTopicsStats()
-    ControllerStats.offlinePartitionRate
     ControllerStats.uncleanLeaderElectionRate
+    ControllerStats.leaderElectionTimer
   }
 
   /**
