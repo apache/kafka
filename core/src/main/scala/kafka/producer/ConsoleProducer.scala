@@ -196,7 +196,7 @@ object ConsoleProducer {
       topic = props.getProperty("topic")
       if(props.containsKey("parse.key"))
         parseKey = props.getProperty("parse.key").trim.toLowerCase.equals("true")
-      if(props.containsKey("key.seperator"))
+      if(props.containsKey("key.separator"))
         keySeparator = props.getProperty("key.separator")
       if(props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.toLowerCase.equals("true")
