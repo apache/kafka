@@ -273,9 +273,12 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     info("New broker startup callback for %s".format(newBrokers.mkString(",")))
 
     val newBrokersSet = newBrokers.toSet
-    // update partition state machine
-    partitionStateMachine.triggerOnlinePartitionStateChange()
+    // the very first thing to do when a new broker comes up is send it the entire list of partitions that it is
+    // supposed to host. Based on that the broker starts the high watermark threads for the input list of partitions
     replicaStateMachine.handleStateChanges(getAllReplicasOnBroker(zkClient, controllerContext.allTopics.toSeq, newBrokers), OnlineReplica)
+    // when a new broker comes up, the controller needs to trigger leader election for all new and offline partitions
+    // to see if these brokers can become leaders for some/all of those
+    partitionStateMachine.triggerOnlinePartitionStateChange()
 
     // check if reassignment of some partitions need to be restarted
     val partitionsWithReplicasOnNewBrokers = controllerContext.partitionsBeingReassigned.filter{
