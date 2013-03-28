@@ -386,8 +386,14 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
 
   def onPreferredReplicaElection(partitions: Set[TopicAndPartition]) {
     info("Starting preferred replica leader election for partitions %s".format(partitions.mkString(",")))
-    controllerContext.partitionsUndergoingPreferredReplicaElection ++= partitions
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, preferredReplicaPartitionLeaderSelector)
+    try {
+      controllerContext.partitionsUndergoingPreferredReplicaElection ++= partitions
+      partitionStateMachine.handleStateChanges(partitions, OnlinePartition, preferredReplicaPartitionLeaderSelector)
+    } catch {
+      case e => error("Error completing preferred replica leader election for partitions %s".format(partitions.mkString(",")), e)
+    } finally {
+      removePartitionsFromPreferredReplicaElection(partitions)
+    }
   }
 
   /**
@@ -910,20 +916,15 @@ class PreferredReplicaElectionListener(controller: KafkaController) extends IZkD
    */
   @throws(classOf[Exception])
   def handleDataChange(dataPath: String, data: Object) {
-    debug("Preferred replica election listener fired for path %s. Record partitions to undergo preferred replica election" +
-      " %s".format(dataPath, data.toString))
-    val partitionsForPreferredReplicaElection =
-      PreferredReplicaLeaderElectionCommand.parsePreferredReplicaJsonData(data.toString)
-    val newPartitions = partitionsForPreferredReplicaElection -- controllerContext.partitionsUndergoingPreferredReplicaElection
+    debug("Preferred replica election listener fired for path %s. Record partitions to undergo preferred replica election %s"
+            .format(dataPath, data.toString))
+    val partitionsForPreferredReplicaElection = PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(data.toString)
+
     controllerContext.controllerLock synchronized {
-      try {
-        controller.onPreferredReplicaElection(newPartitions)
-      } catch {
-        case e => error("Error completing preferred replica leader election for partitions %s"
-          .format(partitionsForPreferredReplicaElection.mkString(",")), e)
-      } finally {
-        controller.removePartitionsFromPreferredReplicaElection(newPartitions)
-      }
+      info("These partitions are already undergoing preferred replica election: %s"
+             .format(controllerContext.partitionsUndergoingPreferredReplicaElection.mkString(",")))
+      val newPartitions = partitionsForPreferredReplicaElection -- controllerContext.partitionsUndergoingPreferredReplicaElection
+      controller.onPreferredReplicaElection(newPartitions)
     }
   }
 

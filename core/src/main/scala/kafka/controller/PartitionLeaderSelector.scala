@@ -18,7 +18,7 @@ package kafka.controller
 
 import kafka.api.LeaderAndIsr
 import kafka.utils.Logging
-import kafka.common.{TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
+import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
 
 trait PartitionLeaderSelector {
 
@@ -125,9 +125,9 @@ with Logging {
     val preferredReplica = assignedReplicas.head
     // check if preferred replica is the current leader
     val currentLeader = controllerContext.partitionLeadershipInfo(topicAndPartition).leaderAndIsr.leader
-    if(currentLeader == preferredReplica) {
-      throw new StateChangeFailedException("Preferred replica %d is already the current leader for partition %s"
-        .format(preferredReplica, topicAndPartition))
+    if (currentLeader == preferredReplica) {
+      throw new LeaderElectionNotNeededException("Preferred replica %d is already the current leader for partition %s"
+                                                   .format(preferredReplica, topicAndPartition))
     } else {
       info("Current leader %d for partition %s is not the preferred replica.".format(currentLeader, topicAndPartition) +
         " Trigerring preferred replica leader election")

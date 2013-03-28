@@ -332,7 +332,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     val preferredReplicaElectionZkData = ZkUtils.readData(zkClient,
         ZkUtils.PreferredReplicaLeaderElectionPath)._1
     val partitionsUndergoingPreferredReplicaElection =
-      PreferredReplicaLeaderElectionCommand.parsePreferredReplicaJsonData(preferredReplicaElectionZkData)
+      PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(preferredReplicaElectionZkData)
     assertEquals("Preferred replica election ser-de failed", partitionsForPreferredReplicaElection,
       partitionsUndergoingPreferredReplicaElection)
   }

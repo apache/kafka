@@ -633,22 +633,7 @@ object ZkUtils extends Logging {
     // read the partitions and their new replica list
     val jsonPartitionListOpt = readDataMaybeNull(zkClient, PreferredReplicaLeaderElectionPath)._1
     jsonPartitionListOpt match {
-      case Some(jsonPartitionList) => parsePreferredReplicaElectionData(jsonPartitionList)
-      case None => Set.empty[TopicAndPartition]
-    }
-  }
-
-  def parsePreferredReplicaElectionData(jsonData: String):Set[TopicAndPartition] = {
-    Json.parseFull(jsonData) match {
-      case Some(m) =>
-        val topicAndPartitions = m.asInstanceOf[Array[Map[String, String]]]
-        val partitions = topicAndPartitions.map { p =>
-          val topicPartitionMap = p
-          val topic = topicPartitionMap.get("topic").get
-          val partition = topicPartitionMap.get("partition").get.toInt
-          TopicAndPartition(topic, partition)
-        }
-        Set.empty[TopicAndPartition] ++ partitions
+      case Some(jsonPartitionList) => PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(jsonPartitionList)
       case None => Set.empty[TopicAndPartition]
     }
   }
