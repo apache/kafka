@@ -26,7 +26,7 @@ class Producer[K,V](private val underlying: kafka.producer.Producer[K,V]) // for
   /**
    * Sends the data to a single topic, partitioned by key, using either the
    * synchronous or the asynchronous producer
-   * @param producerData the producer data object that encapsulates the topic, key and message data
+   * @param message the producer data object that encapsulates the topic, key and message data
    */
   def send(message: KeyedMessage[K,V]) {
     underlying.send(message)
@@ -34,7 +34,7 @@ class Producer[K,V](private val underlying: kafka.producer.Producer[K,V]) // for
 
   /**
    * Use this API to send data to multiple topics
-   * @param producerData list of producer data objects that encapsulate the topic, key and message data
+   * @param messages list of producer data objects that encapsulate the topic, key and message data
    */
   def send(messages: java.util.List[KeyedMessage[K,V]]) {
     import collection.JavaConversions._

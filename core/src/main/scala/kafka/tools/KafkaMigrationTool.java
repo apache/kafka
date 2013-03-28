@@ -220,7 +220,7 @@ public class KafkaMigrationTool {
       kafkaProducerProperties_08.setProperty("serializer.class", "kafka.serializer.DefaultEncoder");
       // create a producer channel instead
       int queueSize = options.valueOf(queueSizeOpt);
-      ProducerDataChannel<KeyedMessage<String, byte[]>> producerDataChannel = new ProducerDataChannel<KeyedMessage<String, byte[]>>(queueSize);
+      ProducerDataChannel<KeyedMessage<byte[], byte[]>> producerDataChannel = new ProducerDataChannel<KeyedMessage<byte[], byte[]>>(queueSize);
       int threadId = 0;
 
       Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -279,8 +279,7 @@ public class KafkaMigrationTool {
     }
   }
 
-
-  private static class ProducerDataChannel<T> {
+  static class ProducerDataChannel<T> {
     private final int producerQueueSize;
     private final BlockingQueue<T> producerRequestQueue;
 
@@ -300,14 +299,14 @@ public class KafkaMigrationTool {
 
   private static class MigrationThread extends Thread {
     private final Object stream;
-    private final ProducerDataChannel<KeyedMessage<String, byte[]>> producerDataChannel;
+    private final ProducerDataChannel<KeyedMessage<byte[], byte[]>> producerDataChannel;
     private final int threadId;
     private final String threadName;
     private final org.apache.log4j.Logger logger;
     private CountDownLatch shutdownComplete = new CountDownLatch(1);
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
 
-    MigrationThread(Object _stream, ProducerDataChannel<KeyedMessage<String, byte[]>> _producerDataChannel, int _threadId) {
+    MigrationThread(Object _stream, ProducerDataChannel<KeyedMessage<byte[], byte[]>> _producerDataChannel, int _threadId) {
       stream = _stream;
       producerDataChannel = _producerDataChannel;
       threadId = _threadId;
@@ -336,7 +335,7 @@ public class KafkaMigrationTool {
           ((ByteBuffer)payload_07).get(bytes);
           if(logger.isDebugEnabled())
             logger.debug("Migration thread " + threadId + " sending message of size " + bytes.length + " to topic "+ topic);
-          KeyedMessage<String, byte[]> producerData = new KeyedMessage((String)topic, null, bytes);
+          KeyedMessage<byte[], byte[]> producerData = new KeyedMessage((String)topic, null, bytes);
           producerDataChannel.sendRequest(producerData);
         }
         logger.info("Migration thread " + threadName + " finished running");
@@ -362,17 +361,17 @@ public class KafkaMigrationTool {
     }
   }
 
-  private static class ProducerThread extends Thread {
-    private final ProducerDataChannel<KeyedMessage<String, byte[]>> producerDataChannel;
-    private final Producer<String, byte[]> producer;
+  static class ProducerThread extends Thread {
+    private final ProducerDataChannel<KeyedMessage<byte[], byte[]>> producerDataChannel;
+    private final Producer<byte[], byte[]> producer;
     private final int threadId;
     private String threadName;
     private org.apache.log4j.Logger logger;
     private CountDownLatch shutdownComplete = new CountDownLatch(1);
-    private KeyedMessage<String, byte[]> shutdownMessage = new KeyedMessage("shutdown", null, null);
+    private KeyedMessage<byte[], byte[]> shutdownMessage = new KeyedMessage("shutdown", null, null);
 
-    public ProducerThread(ProducerDataChannel<KeyedMessage<String, byte[]>> _producerDataChannel,
-                          Producer<String, byte[]> _producer,
+    public ProducerThread(ProducerDataChannel<KeyedMessage<byte[], byte[]>> _producerDataChannel,
+                          Producer<byte[], byte[]> _producer,
                           int _threadId) {
       producerDataChannel = _producerDataChannel;
       producer = _producer;
@@ -385,7 +384,7 @@ public class KafkaMigrationTool {
     public void run() {
       try{
         while(true) {
-          KeyedMessage<String, byte[]> data = producerDataChannel.receiveRequest();
+          KeyedMessage<byte[], byte[]> data = producerDataChannel.receiveRequest();
           if(!data.equals(shutdownMessage))
             producer.send(data);
           else
