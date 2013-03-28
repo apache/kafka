@@ -43,13 +43,17 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   private val noLeaderPartitionSet = new mutable.HashSet[TopicAndPartition]
   private val lock = new ReentrantLock
   private val cond = lock.newCondition()
-  private val leaderFinderThread = new ShutdownableThread(consumerIdString + "-leader-finder-thread"){
+  private var leaderFinderThread: ShutdownableThread = null
+
+  private class LeaderFinderThread(name: String) extends ShutdownableThread(name) {
     // thread responsible for adding the fetcher to the right broker when leader is available
     override def doWork() {
       lock.lock()
       try {
-        if (noLeaderPartitionSet.isEmpty)
+        if (noLeaderPartitionSet.isEmpty) {
+          trace("No partition for leader election.")
           cond.await()
+        }
 
         try {
           trace("Partitions without leader %s".format(noLeaderPartitionSet))
@@ -93,8 +97,6 @@ class ConsumerFetcherManager(private val consumerIdString: String,
       Thread.sleep(config.refreshLeaderBackoffMs)
     }
   }
-  leaderFinderThread.start()
-
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: Broker): AbstractFetcherThread = {
     new ConsumerFetcherThread(
@@ -103,8 +105,9 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   }
 
   def startConnections(topicInfos: Iterable[PartitionTopicInfo], cluster: Cluster) {
-    if (!leaderFinderThread.isRunning.get())
-      throw new RuntimeException("%s already shutdown".format(name))
+    leaderFinderThread = new LeaderFinderThread(consumerIdString + "-leader-finder-thread")
+    leaderFinderThread.start()
+
     lock.lock()
     try {
       partitionMap = topicInfos.map(tpi => (TopicAndPartition(tpi.topic, tpi.partitionId), tpi)).toMap
@@ -116,16 +119,17 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     }
   }
 
-  def stopAllConnections() {
-    lock.lock()
-    // first, clear noLeaderPartitionSet so that no more fetchers can be added to leader_finder_thread
-    noLeaderPartitionSet.clear()
-    // second, clear partitionMap
-    partitionMap = null
-    lock.unlock()
+  def stopConnections() {
+    info("Stopping leader finder thread")
+    if (leaderFinderThread != null) {
+      leaderFinderThread.shutdown()
+      leaderFinderThread = null
+    }
 
-    // third, stop all existing fetchers
+    info("Stopping all fetchers")
     closeAllFetchers()
+
+    info("All connections stopped")
   }
 
   def addPartitionsWithError(partitionList: Iterable[TopicAndPartition]) {
@@ -140,12 +144,5 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     } finally {
       lock.unlock()
     }
-  }
-
-  def shutdown() {
-    info("shutting down")
-    leaderFinderThread.shutdown()
-    stopAllConnections()
-    info("shutdown completed")
   }
 }

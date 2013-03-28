@@ -159,7 +159,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   }
 
   def addPartition(topic: String, partitionId: Int, initialOffset: Long) {
-    partitionMapLock.lock()
+    partitionMapLock.lockInterruptibly()
     try {
       val topicPartition = TopicAndPartition(topic, partitionId)
       partitionMap.put(
@@ -172,7 +172,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   }
 
   def removePartition(topic: String, partitionId: Int) {
-    partitionMapLock.lock()
+    partitionMapLock.lockInterruptibly()
     try {
       partitionMap.remove(TopicAndPartition(topic, partitionId))
     } finally {
@@ -180,17 +180,8 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
     }
   }
 
-  def hasPartition(topic: String, partitionId: Int): Boolean = {
-    partitionMapLock.lock()
-    try {
-      partitionMap.get(TopicAndPartition(topic, partitionId)).isDefined
-    } finally {
-      partitionMapLock.unlock()
-    }
-  }
-
   def partitionCount() = {
-    partitionMapLock.lock()
+    partitionMapLock.lockInterruptibly()
     try {
       partitionMap.size
     } finally {
