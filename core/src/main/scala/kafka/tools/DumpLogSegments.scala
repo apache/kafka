@@ -145,7 +145,7 @@ object DumpLogSegments {
           print(" keysize: " + msg.keySize)
         if(printContents) {
           if(msg.hasKey)
-            print(" key: " + Utils.readString(messageAndOffset.message.payload, "UTF-8"))
+            print(" key: " + Utils.readString(messageAndOffset.message.key, "UTF-8"))
           print(" payload: " + Utils.readString(messageAndOffset.message.payload, "UTF-8"))
         }
         println()
