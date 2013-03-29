@@ -195,7 +195,7 @@ class Partition(val topic: String,
           replicaFetcherManager.addFetcher(topic, partitionId, localReplica.logEndOffset, leaderBroker)
         case None => // leader went down
           stateChangeLogger.trace("Broker %d aborted the become-follower state change with correlation id %d from " +
-            " controller %d epoch %d since leader %d for partition [%s,%d] became unavailable during the state change operation"
+            " controller %d epoch %d since leader %d for partition [%s,%d] is unavailable during the state change operation"
                                      .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch,
                                               newLeaderBrokerId, topic, partitionId))
       }

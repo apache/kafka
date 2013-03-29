@@ -143,21 +143,18 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OnlineReplica"
                                         .format(controllerId, controller.epoch, replicaId, topicAndPartition))
             case _ =>
-              // check if the leader for this partition is alive or even exists
-                controllerContext.partitionLeadershipInfo.get(topicAndPartition) match {
+              // check if the leader for this partition ever existed
+              controllerContext.partitionLeadershipInfo.get(topicAndPartition) match {
                 case Some(leaderIsrAndControllerEpoch) =>
-                  controllerContext.liveBrokerIds.contains(leaderIsrAndControllerEpoch.leaderAndIsr.leader) match {
-                    case true => // leader is alive
-                      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId),
-                                                                          topic, partition, leaderIsrAndControllerEpoch,
-                                                                          replicaAssignment.size)
-                      replicaState.put((topic, partition, replicaId), OnlineReplica)
-                      stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OnlineReplica"
-                                                .format(controllerId, controller.epoch, replicaId, topicAndPartition))
-                    case false => // ignore partitions whose leader is not alive
-                  }
-                case None => // ignore partitions who don't have a leader yet
+                  brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId), topic, partition, leaderIsrAndControllerEpoch,
+                    replicaAssignment.size)
+                  replicaState.put((topic, partition, replicaId), OnlineReplica)
+                  stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OnlineReplica"
+                    .format(controllerId, controller.epoch, replicaId, topicAndPartition))
+                case None => // that means the partition was never in OnlinePartition state, this means the broker never
+                  // started a log for that partition and does not have a high watermark value for this partition
               }
+
           }
           replicaState.put((topic, partition, replicaId), OnlineReplica)
         case OfflineReplica =>
