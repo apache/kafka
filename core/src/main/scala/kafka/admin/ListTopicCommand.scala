@@ -26,7 +26,7 @@ object ListTopicCommand {
 
   def main(args: Array[String]): Unit = {
     val parser = new OptionParser
-    val topicOpt = parser.accepts("topic", "REQUIRED: The topic to be deleted.")
+    val topicOpt = parser.accepts("topic", "REQUIRED: The topic to be listed. Defaults to all existing topics.")
                          .withRequiredArg
                          .describedAs("topic")
                          .ofType(classOf[String])
@@ -55,7 +55,7 @@ object ListTopicCommand {
       zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
 
       if (topic == "")
-        topicList = ZkUtils.getChildren(zkClient, ZkUtils.BrokerTopicsPath)
+        topicList = ZkUtils.getChildren(zkClient, ZkUtils.BrokerTopicsPath).sorted
       else
         topicList = List(topic)
 

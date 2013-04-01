@@ -108,6 +108,17 @@ case class PartitionMetadata(partitionId: Int,
     buffer.putInt(isr.size)
     isr.foreach(r => buffer.putInt(r.id))
   }
+
+  override def toString(): String = {
+    val partitionMetadataString = new StringBuilder
+    partitionMetadataString.append("\tpartition " + partitionId)
+    partitionMetadataString.append("\tleader: " + (if(leader.isDefined) formatBroker(leader.get) else "none"))
+    partitionMetadataString.append("\treplicas: " + replicas.map(formatBroker).mkString(","))
+    partitionMetadataString.append("\tisr: " + isr.map(formatBroker).mkString(","))
+    partitionMetadataString.toString()
+  }
+
+  private def formatBroker(broker: Broker) = broker.id + " (" + broker.host + ":" + broker.port + ")"
 }
 
 
