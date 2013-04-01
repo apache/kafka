@@ -242,6 +242,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
       replicaStateMachine.startup()
       Utils.registerMBean(this, KafkaController.MBeanName)
       info("Broker %d is ready to serve as the new controller with epoch %d".format(config.brokerId, epoch))
+      initializeAndMaybeTriggerPartitionReassignment()
+      initializeAndMaybeTriggerPreferredReplicaElection()
     }
     else
       info("Controller has been shut down, aborting startup/failover")
@@ -483,8 +485,6 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     info("Currently active brokers in the cluster: %s".format(controllerContext.liveBrokerIds))
     info("Currently shutting brokers in the cluster: %s".format(controllerContext.shuttingDownBrokerIds))
     info("Current list of topics in the cluster: %s".format(controllerContext.allTopics))
-    initializeAndMaybeTriggerPartitionReassignment()
-    initializeAndMaybeTriggerPreferredReplicaElection()
   }
 
   private def initializeAndMaybeTriggerPartitionReassignment() {

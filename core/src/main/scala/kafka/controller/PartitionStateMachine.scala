@@ -44,7 +44,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   private val zkClient = controllerContext.zkClient
   var partitionState: mutable.Map[TopicAndPartition, PartitionState] = mutable.Map.empty
   val brokerRequestBatch = new ControllerBrokerRequestBatch(controller.sendRequest, controllerId, controller.clientId)
-  private val isShuttingDown = new AtomicBoolean(false)
+  private val isRunning = new AtomicBoolean(false)
   private val noOpPartitionLeaderSelector = new NoOpLeaderSelector(controllerContext)
   this.logIdent = "[Partition state machine on Controller " + controllerId + "]: "
   private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
@@ -55,9 +55,9 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * the OnlinePartition state change for all new or offline partitions.
    */
   def startup() {
-    isShuttingDown.set(false)
     // initialize partition state
     initializePartitionState()
+    isRunning.set(true)
     // try to move partitions to online state
     triggerOnlinePartitionStateChange()
     info("Started partition state machine with initial state -> " + partitionState.toString())
@@ -72,7 +72,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * Invoked on controller shutdown.
    */
   def shutdown() {
-    isShuttingDown.compareAndSet(false, true)
+    isRunning.compareAndSet(true, false)
     partitionState.clear()
   }
 
@@ -125,6 +125,10 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   private def handleStateChange(topic: String, partition: Int, targetState: PartitionState,
                                 leaderSelector: PartitionLeaderSelector) {
     val topicAndPartition = TopicAndPartition(topic, partition)
+    if (!isRunning.get)
+      throw new StateChangeFailedException(("Controller %d epoch %d initiated state change for partition %s to %s failed because " +
+                                            "the partition state machine has not started")
+                                              .format(controllerId, controller.epoch, topicAndPartition, targetState))
     val currState = partitionState.getOrElseUpdate(topicAndPartition, NonExistentPartition)
     try {
       targetState match {
@@ -352,7 +356,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
     @throws(classOf[Exception])
     def handleChildChange(parentPath : String, children : java.util.List[String]) {
-      if(!isShuttingDown.get()) {
+      if(isRunning.get) {
         controllerContext.controllerLock synchronized {
           try {
             debug("Topic change listener fired for path %s with children %s".format(parentPath, children.mkString(",")))
