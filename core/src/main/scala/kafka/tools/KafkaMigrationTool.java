@@ -385,8 +385,10 @@ public class KafkaMigrationTool {
       try{
         while(true) {
           KeyedMessage<byte[], byte[]> data = producerDataChannel.receiveRequest();
-          if(!data.equals(shutdownMessage))
+          if(!data.equals(shutdownMessage)) {
             producer.send(data);
+            if(logger.isDebugEnabled()) logger.debug("Sending message %s".format(new String(data.message())));
+          }
           else
             break;
         }
@@ -410,6 +412,7 @@ public class KafkaMigrationTool {
     public void awaitShutdown() {
       try {
         shutdownComplete.await();
+        producer.close();
         logger.info("Producer thread " + threadName + " shutdown complete");
       } catch(InterruptedException ie) {
         logger.warn("Interrupt during shutdown of ProducerThread", ie);
