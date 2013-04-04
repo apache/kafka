@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.cluster.Broker
-import kafka.common.{ClientIdAndBroker, TopicAndPartition, ErrorMapping}
 import collection.mutable
 import kafka.message.ByteBufferMessageSet
 import kafka.message.MessageAndOffset
@@ -30,6 +29,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kafka.consumer.{PartitionTopicInfo, SimpleConsumer}
 import kafka.api.{FetchRequest, FetchResponse, FetchResponsePartitionData, FetchRequestBuilder}
+import kafka.common.{KafkaException, ClientIdAndBroker, TopicAndPartition, ErrorMapping}
 
 
 /**
@@ -118,17 +118,23 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
             if (currentOffset.isDefined && fetchRequest.requestInfo(topicAndPartition).offset == currentOffset.get) {
               partitionData.error match {
                 case ErrorMapping.NoError =>
-                  val messages = partitionData.messages.asInstanceOf[ByteBufferMessageSet]
-                  val validBytes = messages.validBytes
-                  val newOffset = messages.lastOption match {
-                    case Some(m: MessageAndOffset) => m.nextOffset
-                    case None => currentOffset.get
+                  try {
+                    val messages = partitionData.messages.asInstanceOf[ByteBufferMessageSet]
+                    val validBytes = messages.validBytes
+                    val newOffset = messages.shallowIterator.toSeq.lastOption match {
+                      case Some(m: MessageAndOffset) => m.nextOffset
+                      case None => currentOffset.get
+                    }
+                    partitionMap.put(topicAndPartition, newOffset)
+                    fetcherLagStats.getFetcherLagStats(topic, partitionId).lag = partitionData.hw - newOffset
+                    fetcherStats.byteRate.mark(validBytes)
+                    // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
+                    processPartitionData(topicAndPartition, currentOffset.get, partitionData)
+                  } catch {
+                    case e =>
+                      throw new KafkaException("error processing data for topic %s partititon %d offset %d"
+                                               .format(topic, partitionId, currentOffset.get), e)
                   }
-                  partitionMap.put(topicAndPartition, newOffset)
-                  fetcherLagStats.getFetcherLagStats(topic, partitionId).lag = partitionData.hw - newOffset
-                  fetcherStats.byteRate.mark(validBytes)
-                  // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
-                  processPartitionData(topicAndPartition, currentOffset.get, partitionData)
                 case ErrorMapping.OffsetOutOfRangeCode =>
                   try {
                     val newOffset = handleOffsetOutOfRange(topicAndPartition)
