@@ -121,6 +121,16 @@
             "kafka_home": "default",
             "java_home": "default",
             "jmx_port": "9112"
+        },
+
+        {
+            "entity_id": "13",
+            "hostname": "localhost",
+            "role": "console_consumer",
+            "cluster_name":"source",
+            "kafka_home": "default",
+            "java_home": "default",
+            "jmx_port": "9113"
         }
     ]
 }

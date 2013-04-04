@@ -168,13 +168,13 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
                 
                 self.log_message("starting mirror makers")
                 kafka_system_test_utils.start_mirror_makers(self.systemTestEnv, self.testcaseEnv)
-                self.anonLogger.info("sleeping for 5s")
-                time.sleep(5)
+                self.anonLogger.info("sleeping for 10s")
+                time.sleep(10)
 
-                self.log_message("creating topics")
-                kafka_system_test_utils.create_topic(self.systemTestEnv, self.testcaseEnv)
-                self.anonLogger.info("sleeping for 5s")
-                time.sleep(5)
+                #self.log_message("creating topics")
+                #kafka_system_test_utils.create_topic(self.systemTestEnv, self.testcaseEnv)
+                #self.anonLogger.info("sleeping for 5s")
+                #time.sleep(5)
 
                 
                 # =============================================
@@ -192,7 +192,7 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
                 # =============================================
                 i = 1
                 numIterations = int(self.testcaseEnv.testcaseArgumentsDict["num_iteration"])
-                bouncedEntityDownTimeSec = 1
+                bouncedEntityDownTimeSec = 15
                 try:
                     bouncedEntityDownTimeSec = int(self.testcaseEnv.testcaseArgumentsDict["bounced_entity_downtime_sec"])
                 except:
@@ -253,6 +253,17 @@ class MirrorMakerTest(ReplicationUtils, SetupUtils):
                     time.sleep(1)
                     self.testcaseEnv.lock.release()
                     time.sleep(2)
+
+                self.anonLogger.info("sleeping for 15s")
+                time.sleep(15)
+                self.anonLogger.info("terminate Mirror Maker")
+                cmdStr = "ps auxw | grep Mirror | grep -v grep | tr -s ' ' | cut -f2 -d ' ' | xargs kill -15"
+                subproc = system_test_utils.sys_call_return_subproc(cmdStr)
+                for line in subproc.stdout.readlines():
+                    line = line.rstrip('\n')
+                    self.anonLogger.info("#### ["+line+"]")
+                self.anonLogger.info("sleeping for 15s")
+                time.sleep(15)
 
                 # =============================================
                 # starting consumer
