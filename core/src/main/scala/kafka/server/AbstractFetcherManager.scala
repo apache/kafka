@@ -46,7 +46,7 @@ abstract class AbstractFetcherManager(protected val name: String, numFetchers: I
           fetcherThread.start
       }
       fetcherThread.addPartition(topic, partitionId, initialOffset)
-      info("adding fetcher on topic %s, partion %d, initOffset %d to broker %d with fetcherId %d"
+      info("adding fetcher on topic %s, partition %d, initOffset %d to broker %d with fetcherId %d"
           .format(topic, partitionId, initialOffset, sourceBroker.id, key.fetcherId))
     }
   }

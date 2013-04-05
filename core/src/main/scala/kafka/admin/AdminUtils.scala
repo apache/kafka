@@ -136,7 +136,7 @@ object AdminUtils extends Logging {
           new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
         } catch {
           case e =>
-            error("Error while fetching metadata for partition [%s,%d]".format(topic, partition), e)
+            debug("Error while fetching metadata for partition [%s,%d]".format(topic, partition), e)
             new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo,
               ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
         }

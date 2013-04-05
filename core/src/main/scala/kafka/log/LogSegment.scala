@@ -135,7 +135,7 @@ class LogSegment(val messageSet: FileMessageSet,
   
   /**
    * Calculate the offset that would be used for the next message to be append to this segment.
-   * Not that this is expensive.
+   * Note that this is expensive.
    */
   def nextOffset(): Long = {
     val ms = read(index.lastOffset, messageSet.sizeInBytes, None)

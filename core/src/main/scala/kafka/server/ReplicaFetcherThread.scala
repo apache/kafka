@@ -83,6 +83,8 @@ class ReplicaFetcherThread(name:String,
     val leaderEndOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, OffsetRequest.LatestTime, brokerConfig.brokerId)
     if (leaderEndOffset < log.logEndOffset) {
       log.truncateTo(leaderEndOffset)
+      warn("Replica %d for partition %s reset its fetch offset to current leader %d's latest offset %d"
+        .format(brokerConfig.brokerId, topicAndPartition, sourceBroker.id, leaderEndOffset))
       leaderEndOffset
     } else {
       /**
@@ -93,6 +95,8 @@ class ReplicaFetcherThread(name:String,
        */
       val leaderStartOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, OffsetRequest.EarliestTime, brokerConfig.brokerId)
       log.truncateAndStartWithNewOffset(leaderStartOffset)
+      warn("Replica %d for partition %s reset its fetch offset to current leader %d's start offset %d"
+        .format(brokerConfig.brokerId, topicAndPartition, sourceBroker.id, leaderStartOffset))
       leaderStartOffset
     }
   }

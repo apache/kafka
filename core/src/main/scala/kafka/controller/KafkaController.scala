@@ -238,8 +238,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
       partitionStateMachine.registerListeners()
       replicaStateMachine.registerListeners()
       initializeControllerContext()
-      partitionStateMachine.startup()
       replicaStateMachine.startup()
+      partitionStateMachine.startup()
       Utils.registerMBean(this, KafkaController.MBeanName)
       info("Broker %d is ready to serve as the new controller with epoch %d".format(config.brokerId, epoch))
       initializeAndMaybeTriggerPartitionReassignment()
@@ -523,16 +523,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
 
   private def updateLeaderAndIsrCache() {
     val leaderAndIsrInfo = ZkUtils.getPartitionLeaderAndIsrForTopics(zkClient, controllerContext.allTopics.toSeq)
-    for((topicPartition, leaderIsrAndControllerEpoch) <- leaderAndIsrInfo) {
-      // If the leader specified in the leaderAndIsr is no longer alive, there is no need to recover it
-      controllerContext.liveBrokerIds.contains(leaderIsrAndControllerEpoch.leaderAndIsr.leader) match {
-        case true =>
-          controllerContext.partitionLeadershipInfo.put(topicPartition, leaderIsrAndControllerEpoch)
-        case false =>
-          debug("While refreshing controller's leader and isr cache, leader %d for ".format(leaderIsrAndControllerEpoch.leaderAndIsr.leader) +
-            "partition %s is dead, just ignore it".format(topicPartition))
-      }
-    }
+    for((topicPartition, leaderIsrAndControllerEpoch) <- leaderAndIsrInfo)
+      controllerContext.partitionLeadershipInfo.put(topicPartition, leaderIsrAndControllerEpoch)
   }
 
   private def areReplicasInIsr(topic: String, partition: Int, replicas: Seq[Int]): Boolean = {
@@ -982,7 +974,16 @@ case class ReassignedPartitionsContext(var newReplicas: Seq[Int] = Seq.empty,
 
 case class PartitionAndReplica(topic: String, partition: Int, replica: Int)
 
-case class LeaderIsrAndControllerEpoch(val leaderAndIsr: LeaderAndIsr, controllerEpoch: Int)
+case class LeaderIsrAndControllerEpoch(val leaderAndIsr: LeaderAndIsr, controllerEpoch: Int) {
+  override def toString(): String = {
+    val leaderAndIsrInfo = new StringBuilder
+    leaderAndIsrInfo.append("(Leader:" + leaderAndIsr.leader)
+    leaderAndIsrInfo.append(",ISR:" + leaderAndIsr.isr.mkString(","))
+    leaderAndIsrInfo.append(",LeaderEpoch:" + leaderAndIsr.leaderEpoch)
+    leaderAndIsrInfo.append(",ControllerEpoch:" + controllerEpoch + ")")
+    leaderAndIsrInfo.toString()
+  }
+}
 
 object ControllerStats extends KafkaMetricsGroup {
   val uncleanLeaderElectionRate = newMeter("UncleanLeaderElectionsPerSec", "elections", TimeUnit.SECONDS)

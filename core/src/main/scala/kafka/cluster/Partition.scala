@@ -166,7 +166,7 @@ class Partition(val topic: String,
    *  4. start a fetcher to the new leader
    */
   def makeFollower(controllerId: Int, topic: String, partitionId: Int, leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
-                   liveBrokers: Set[Broker], correlationId: Int): Boolean = {
+                   aliveLeaders: Set[Broker], correlationId: Int): Boolean = {
     leaderIsrUpdateLock synchronized {
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
       if (leaderEpoch >= leaderAndIsr.leaderEpoch) {
@@ -185,7 +185,7 @@ class Partition(val topic: String,
       // on the leader
       val localReplica = getOrCreateReplica()
       val newLeaderBrokerId: Int = leaderAndIsr.leader
-      liveBrokers.find(_.id == newLeaderBrokerId) match {
+      aliveLeaders.find(_.id == newLeaderBrokerId) match {
         case Some(leaderBroker) =>
           // stop fetcher thread to previous leader
           replicaFetcherManager.removeFetcher(topic, partitionId)

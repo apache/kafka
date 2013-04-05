@@ -82,9 +82,8 @@ object ListTopicCommand {
       case ErrorMapping.UnknownTopicOrPartitionCode =>
         println("topic " + topic + " doesn't exist!")
       case _ =>
-        println("topic: " + topic)
         for (part <- topicMetaData.partitionsMetadata)
-          println(part.toString)
+          println("topic: " + topic + "\t" + part.toString)
     }
   }
 }

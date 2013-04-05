@@ -115,6 +115,7 @@ case class PartitionMetadata(partitionId: Int,
     partitionMetadataString.append("\tleader: " + (if(leader.isDefined) formatBroker(leader.get) else "none"))
     partitionMetadataString.append("\treplicas: " + replicas.map(formatBroker).mkString(","))
     partitionMetadataString.append("\tisr: " + isr.map(formatBroker).mkString(","))
+    partitionMetadataString.append("\tisUnderReplicated: %s".format(if(isr.size < replicas.size) "true" else "false"))
     partitionMetadataString.toString()
   }
 
