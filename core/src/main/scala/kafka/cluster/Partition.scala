@@ -179,13 +179,16 @@ class Partition(val topic: String,
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
+      // make sure local replica exists. This reads the last check pointed high watermark from disk. On startup, it is
+      // important to ensure that this operation happens for every single partition in a leader and isr request, else
+      // some high watermark values could be overwritten with 0. This leads to replicas fetching from the earliest offset
+      // on the leader
+      val localReplica = getOrCreateReplica()
       val newLeaderBrokerId: Int = leaderAndIsr.leader
       liveBrokers.find(_.id == newLeaderBrokerId) match {
         case Some(leaderBroker) =>
           // stop fetcher thread to previous leader
           replicaFetcherManager.removeFetcher(topic, partitionId)
-          // make sure local replica exists
-          val localReplica = getOrCreateReplica()
           localReplica.log.get.truncateTo(localReplica.highWatermark)
           inSyncReplicas = Set.empty[Replica]
           leaderEpoch = leaderAndIsr.leaderEpoch
