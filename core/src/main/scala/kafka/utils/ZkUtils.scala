@@ -328,12 +328,12 @@ object ZkUtils extends Logging {
   def conditionalUpdatePersistentPath(client: ZkClient, path: String, data: String, expectVersion: Int): (Boolean, Int) = {
     try {
       val stat = client.writeData(path, data, expectVersion)
-      info("Conditional update of zkPath %s with value %s and expected version %d succeeded, returning the new version: %d"
+      debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
         .format(path, data, expectVersion, stat.getVersion))
       (true, stat.getVersion)
     } catch {
       case e: Exception =>
-        error("Conditional update of zkPath %s with data %s and expected version %d failed".format(path, data,
+        error("Conditional update of path %s with data %s and expected version %d failed".format(path, data,
           expectVersion), e)
         (false, -1)
     }
@@ -346,13 +346,13 @@ object ZkUtils extends Logging {
   def conditionalUpdatePersistentPathIfExists(client: ZkClient, path: String, data: String, expectVersion: Int): (Boolean, Int) = {
     try {
       val stat = client.writeData(path, data, expectVersion)
-      info("Conditional update of zkPath %s with value %s and expected version %d succeeded, returning the new version: %d"
+      debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
         .format(path, data, expectVersion, stat.getVersion))
       (true, stat.getVersion)
     } catch {
       case nne: ZkNoNodeException => throw nne
       case e: Exception =>
-        error("Conditional update of zkPath %s with data %s and expected version %d failed".format(path, data,
+        error("Conditional update of path %s with data %s and expected version %d failed".format(path, data,
           expectVersion), e)
         (false, -1)
     }

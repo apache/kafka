@@ -53,8 +53,8 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext) exten
         val currentLeaderIsrZkPathVersion = currentLeaderAndIsr.zkVersion
         val newLeaderAndIsr = liveBrokersInIsr.isEmpty match {
           case true =>
-            debug("No broker is ISR is alive, picking the leader from the alive assigned replicas: %s"
-              .format(liveAssignedReplicasToThisPartition.mkString(",")))
+            debug("No broker in ISR is alive for %s. Pick the leader from the alive assigned replicas: %s"
+              .format(topicAndPartition, liveAssignedReplicasToThisPartition.mkString(",")))
             liveAssignedReplicasToThisPartition.isEmpty match {
               case true =>
                 throw new NoReplicaOnlineException(("No replica for partition " +
@@ -63,13 +63,13 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext) exten
               case false =>
                 ControllerStats.uncleanLeaderElectionRate.mark()
                 val newLeader = liveAssignedReplicasToThisPartition.head
-                warn("No broker in ISR is alive, elected leader from the alive replicas is [%s], ".format(newLeader) +
-                  "There's potential data loss")
+                warn("No broker in ISR is alive for %s. Elect leader from broker %s. There's potential data loss."
+                     .format(topicAndPartition, newLeader))
                 new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, List(newLeader), currentLeaderIsrZkPathVersion + 1)
             }
           case false =>
             val newLeader = liveBrokersInIsr.head
-            debug("Some broker in ISR is alive, selecting the leader from the ISR: " + newLeader)
+            debug("Some broker in ISR is alive for %s. Select %d from ISR to be the leader.".format(topicAndPartition, newLeader))
             new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, liveBrokersInIsr.toList, currentLeaderIsrZkPathVersion + 1)
         }
         info("Selected new leader and ISR %s for offline partition %s".format(newLeaderAndIsr.toString(), topicAndPartition))

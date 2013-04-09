@@ -131,7 +131,7 @@ class ReplicaManager(val config: KafkaConfig,
   def stopReplicas(stopReplicaRequest: StopReplicaRequest): (mutable.Map[(String, Int), Short], Short) = {
     val responseMap = new collection.mutable.HashMap[(String, Int), Short]
     if(stopReplicaRequest.controllerEpoch < controllerEpoch) {
-      stateChangeLogger.error("Broker %d received stop replica request from an old controller epoch %d."
+      stateChangeLogger.warn("Broker %d received stop replica request from an old controller epoch %d."
         .format(localBrokerId, stopReplicaRequest.controllerEpoch) +
             " Latest known controller epoch is %d " + controllerEpoch)
       (responseMap, ErrorMapping.StaleControllerEpochCode)
@@ -196,14 +196,14 @@ class ReplicaManager(val config: KafkaConfig,
 
   def becomeLeaderOrFollower(leaderAndISRRequest: LeaderAndIsrRequest): (collection.Map[(String, Int), Short], Short) = {
     leaderAndISRRequest.partitionStateInfos.foreach(p =>
-      stateChangeLogger.trace("Broker %d handling LeaderAndIsr request correlationId %d received from controller %d epoch %d for partition [%s,%d]"
+      stateChangeLogger.trace("Broker %d handling LeaderAndIsr request correlation id %d received from controller %d epoch %d for partition [%s,%d]"
                                 .format(localBrokerId, leaderAndISRRequest.correlationId, leaderAndISRRequest.controllerId,
                                         leaderAndISRRequest.controllerEpoch, p._1._1, p._1._2)))
     info("Handling LeaderAndIsr request %s".format(leaderAndISRRequest))
 
     val responseMap = new collection.mutable.HashMap[(String, Int), Short]
     if(leaderAndISRRequest.controllerEpoch < controllerEpoch) {
-      stateChangeLogger.error("Broker %d received LeaderAndIsr request correlationId %d with an old controllerEpoch %d, latest known controllerEpoch is %d"
+      stateChangeLogger.warn("Broker %d received LeaderAndIsr request correlation id %d with an old controller epoch %d. Latest known controller epoch is %d"
                                 .format(localBrokerId, leaderAndISRRequest.controllerEpoch, leaderAndISRRequest.correlationId, controllerEpoch))
       (responseMap, ErrorMapping.StaleControllerEpochCode)
     }else {

@@ -205,10 +205,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           Runtime.getRuntime.halt(1)
           null
         case utpe: UnknownTopicOrPartitionException =>
-          warn(utpe.getMessage)
+          warn("Produce request: " + utpe.getMessage)
           new ProduceResult(topicAndPartition, utpe)
         case nle: NotLeaderForPartitionException =>
-          warn(nle.getMessage)
+          warn("Produce request: " + nle.getMessage)
           new ProduceResult(topicAndPartition, nle)
         case e =>
           BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).failedProduceRequestRate.mark()
@@ -291,15 +291,17 @@ class KafkaApis(val requestChannel: RequestChannel,
             // since failed fetch requests metric is supposed to indicate failure of a broker in handling a fetch request
             // for a partition it is the leader for
             case utpe: UnknownTopicOrPartitionException =>
-              warn(utpe.getMessage)
+              warn("Fetch request: " + utpe.getMessage)
               new FetchResponsePartitionData(ErrorMapping.codeFor(utpe.getClass.asInstanceOf[Class[Throwable]]), -1L, MessageSet.Empty)
             case nle: NotLeaderForPartitionException =>
-              warn(nle.getMessage)
+              warn("Fetch request: " + nle.getMessage)
               new FetchResponsePartitionData(ErrorMapping.codeFor(nle.getClass.asInstanceOf[Class[Throwable]]), -1L, MessageSet.Empty)
             case t =>
               BrokerTopicStats.getBrokerTopicStats(topic).failedFetchRequestRate.mark()
               BrokerTopicStats.getBrokerAllTopicsStats.failedFetchRequestRate.mark()
-              error("error when processing request " + (topic, partition, offset, fetchSize), t)
+              error("Error when processing fetch request for topic %s partition %d offset %d from %s with correlation id %d"
+                    .format(topic, partition, offset, if (isFetchFromFollower) "follower" else "consumer", fetchRequest.correlationId),
+                    t)
               new FetchResponsePartitionData(ErrorMapping.codeFor(t.getClass.asInstanceOf[Class[Throwable]]), -1L, MessageSet.Empty)
           }
         (TopicAndPartition(topic, partition), partitionData)

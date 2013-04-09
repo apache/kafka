@@ -135,7 +135,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           } else {
             // currently, if in async mode, we just log the serialization error. We need to revisit
             // this when doing kafka-496
-            error("Error serializing message ", t)
+            error("Error serializing message for topic %s".format(e.topic), t)
           }
       }
     }

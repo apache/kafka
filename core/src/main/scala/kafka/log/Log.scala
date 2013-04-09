@@ -127,7 +127,7 @@ private[kafka] class Log(val dir: File,
   /* Calculate the offset of the next message */
   private var nextOffset: AtomicLong = new AtomicLong(segments.view.last.nextOffset())
   
-  debug("Completed load of log %s with log end offset %d".format(name, logEndOffset))
+  info("Completed load of log %s with log end offset %d".format(name, logEndOffset))
 
   newGauge(name + "-" + "NumLogSegments",
            new Gauge[Int] { def getValue = numberOfSegments })
