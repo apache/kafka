@@ -17,7 +17,6 @@
 
 import sbt._
 import Keys._
-import java.io.File
 
 import scala.xml.{Node, Elem}
 import scala.xml.transform.{RewriteRule, RuleTransformer}
@@ -78,66 +77,18 @@ object KafkaBuild extends Build {
        </dependencies>
   )
 
-  val coreSettings = Seq(
-    pomPostProcess := { (pom: Node) => MetricsDepAdder(ZkClientDepAdder(pom)) }
-  )
-
   val runRat = TaskKey[Unit]("run-rat-task", "Runs Apache rat on Kafka")
   val runRatTask = runRat := {
     "bin/run-rat.sh" !
   }
 
   lazy val kafka    = Project(id = "Kafka", base = file(".")).aggregate(core, examples, contrib, perf).settings((commonSettings ++ runRatTask): _*)
-  lazy val core     = Project(id = "core", base = file("core")).settings(commonSettings: _*).settings(coreSettings: _*)
+  lazy val core     = Project(id = "core", base = file("core")).settings(commonSettings: _*)
   lazy val examples = Project(id = "java-examples", base = file("examples")).settings(commonSettings :_*) dependsOn (core)
   lazy val perf     = Project(id = "perf", base = file("perf")).settings((Seq(name := "kafka-perf") ++ commonSettings):_*) dependsOn (core)
 
   lazy val contrib        = Project(id = "contrib", base = file("contrib")).aggregate(hadoopProducer, hadoopConsumer).settings(commonSettings :_*)
   lazy val hadoopProducer = Project(id = "hadoop-producer", base = file("contrib/hadoop-producer")).settings(hadoopSettings ++ commonSettings: _*) dependsOn (core)
   lazy val hadoopConsumer = Project(id = "hadoop-consumer", base = file("contrib/hadoop-consumer")).settings(hadoopSettings ++ commonSettings: _*) dependsOn (core)
-
-
-  // POM Tweaking for core:
-  def zkClientDep =
-    <dependency>
-      <groupId>zkclient</groupId>
-      <artifactId>zkclient</artifactId>
-      <version>20120522</version>
-      <scope>compile</scope>
-    </dependency>
-
-  def metricsDeps =
-    <dependencies>
-      <dependency>
-        <groupId>com.yammer.metrics</groupId>
-        <artifactId>metrics-core</artifactId>
-        <version>3.0.0-c0c8be71</version>
-        <scope>compile</scope>
-      </dependency>
-      <dependency>
-        <groupId>com.yammer.metrics</groupId>
-        <artifactId>metrics-annotations</artifactId>
-        <version>3.0.0-c0c8be71</version>
-        <scope>compile</scope>
-      </dependency>
-    </dependencies>
-
-  object ZkClientDepAdder extends RuleTransformer(new RewriteRule() {
-    override def transform(node: Node): Seq[Node] = node match {
-      case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
-        Elem(prefix, "dependencies", attribs, scope, deps ++ zkClientDep:_*)
-      }
-      case other => other
-    }
-  })
-
-  object MetricsDepAdder extends RuleTransformer(new RewriteRule() {
-    override def transform(node: Node): Seq[Node] = node match {
-      case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
-        Elem(prefix, "dependencies", attribs, scope, deps ++ metricsDeps:_*)
-      }
-      case other => other
-    }
-  })
 
 }

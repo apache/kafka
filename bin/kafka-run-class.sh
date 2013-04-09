@@ -22,42 +22,15 @@ fi
 
 base_dir=$(dirname $0)/..
 
+SCALA_VERSION=2.8.0
 
-USER_HOME=$(eval echo ~${USER})
-ivyPath=$(echo "$USER_HOME/.ivy2/cache")
-
-snappy=$(echo "$ivyPath/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.4.1.jar")
-CLASSPATH=$CLASSPATH:$snappy
-
-library=$(echo "$ivyPath/org.scala-lang/scala-library/jars/scala-library-2.8.0.jar")
-CLASSPATH=$CLASSPATH:$library
-
-compiler=~$(echo "$ivyPath/org.scala-lang/scala-compiler/jars/scala-compiler-2.8.0.jar")
-CLASSPATH=$CLASSPATH:$compiler
-
-log4j=$(echo "$ivyPath/log4j/log4j/jars/log4j-1.2.15.jar")
-CLASSPATH=$CLASSPATH:$log4j
-
-slf=$(echo "$ivyPath/org.slf4j/slf4j-api/jars/slf4j-api-1.6.4.jar")
-CLASSPATH=$CLASSPATH:$slf
-
-zookeeper=$(echo "$ivyPath/org.apache.zookeeper/zookeeper/jars/zookeeper-3.3.4.jar")
-CLASSPATH=$CLASSPATH:$zookeeper
-
-jopt=$(echo "$ivyPath/net.sf.jopt-simple/jopt-simple/jars/jopt-simple-3.2.jar")
-CLASSPATH=$CLASSPATH:$jopt
-
+# assume all dependencies have been packaged into one jar with sbt-assembly's task "assembly-package-dependency"
 for file in $base_dir/core/target/scala-2.8.0/*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/core/lib/*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
-for file in $base_dir/perf/target/scala-2.8.0/kafka*.jar;
+for file in $base_dir/perf/target/scala-${SCALA_VERSION}/kafka*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done

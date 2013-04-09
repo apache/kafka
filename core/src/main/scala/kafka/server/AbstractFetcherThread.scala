@@ -201,7 +201,7 @@ class FetcherLagMetrics(metricId: ClientIdBrokerTopicPartition) extends KafkaMet
   newGauge(
     metricId + "-ConsumerLag",
     new Gauge[Long] {
-      def getValue = lagVal.get
+      def value = lagVal.get
     }
   )
 

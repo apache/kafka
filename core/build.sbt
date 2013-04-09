@@ -1,5 +1,6 @@
 import sbt._
 import Keys._
+import AssemblyKeys._
 
 name := "kafka"
 
@@ -11,8 +12,10 @@ libraryDependencies <+= scalaVersion("org.scala-lang" % "scala-compiler" % _ )
 
 libraryDependencies ++= Seq(
   "org.apache.zookeeper"  % "zookeeper"   % "3.3.4",
-  "com.github.sgroschupf" % "zkclient"    % "0.1",
+  "com.101tec"            % "zkclient"     % "0.2",
   "org.xerial.snappy"     % "snappy-java" % "1.0.4.1",
+  "com.yammer.metrics"    % "metrics-core" % "2.2.0",
+  "com.yammer.metrics"    % "metrics-annotation" % "2.2.0",
   "org.easymock"          % "easymock"    % "3.0" % "test",
   "junit"                 % "junit"       % "4.1" % "test"
 )
@@ -24,4 +27,5 @@ libraryDependencies <<= (scalaVersion, libraryDependencies) { (sv, deps) =>
   })
 }
 
+assemblySettings
 
