@@ -120,11 +120,11 @@ class ReplicaManager(val config: KafkaConfig,
         leaderPartitionsLock synchronized {
           leaderPartitions -= replica.partition
         }
-        allPartitions.remove((topic, partitionId))
-        info("After removing partition [%s,%d], the rest of allReplicas is: [%s]".format(topic, partitionId, allPartitions))
+        if(deletePartition)
+          allPartitions.remove((topic, partitionId))
       case None => //do nothing if replica no longer exists
     }
-    stateChangeLogger.trace("Broker %d finished handling stop replica [%s,%d]".format(localBrokerId, topic, partitionId))
+    stateChangeLogger.trace("Broker %d finished handling stop replica for partition [%s,%d]".format(localBrokerId, topic, partitionId))
     errorCode
   }
 
@@ -168,7 +168,7 @@ class ReplicaManager(val config: KafkaConfig,
     if(replicaOpt.isDefined)
       return replicaOpt.get
     else
-      throw new ReplicaNotAvailableException("Replica %d is not available for partiton [%s,%d] yet".format(config.brokerId, topic, partition))
+      throw new ReplicaNotAvailableException("Replica %d is not available for partition [%s,%d]".format(config.brokerId, topic, partition))
   }
 
   def getLeaderReplicaIfLocal(topic: String, partitionId: Int): Replica =  {
@@ -230,10 +230,9 @@ class ReplicaManager(val config: KafkaConfig,
             errorCode = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
         }
         responseMap.put(topicAndPartition, errorCode)
-        leaderAndISRRequest.partitionStateInfos.foreach(p =>
-          stateChangeLogger.trace("Broker %d handled LeaderAndIsr request correlationId %d received from controller %d epoch %d for partition [%s,%d]"
-                                    .format(localBrokerId, leaderAndISRRequest.correlationId, leaderAndISRRequest.controllerId,
-                                            leaderAndISRRequest.controllerEpoch, p._1._1, p._1._2)))
+        stateChangeLogger.trace("Broker %d handled LeaderAndIsr request correlationId %d received from controller %d epoch %d for partition [%s,%d]"
+          .format(localBrokerId, leaderAndISRRequest.correlationId, leaderAndISRRequest.controllerId, leaderAndISRRequest.controllerEpoch,
+          topicAndPartition._1, topicAndPartition._2))
       }
       info("Handled leader and isr request %s".format(leaderAndISRRequest))
       // we initialize highwatermark thread after the first leaderisrrequest. This ensures that all the partitions

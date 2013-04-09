@@ -46,13 +46,13 @@ abstract class AbstractFetcherManager(protected val name: String, numFetchers: I
           fetcherThread.start
       }
       fetcherThread.addPartition(topic, partitionId, initialOffset)
-      info("adding fetcher on topic %s, partition %d, initOffset %d to broker %d with fetcherId %d"
+      info("Adding fetcher for partition [%s,%d], initOffset %d to broker %d with fetcherId %d"
           .format(topic, partitionId, initialOffset, sourceBroker.id, key.fetcherId))
     }
   }
 
   def removeFetcher(topic: String, partitionId: Int) {
-    info("removing fetcher on topic %s, partition %d".format(topic, partitionId))
+    info("Removing fetcher for partition [%s,%d]".format(topic, partitionId))
     mapLock synchronized {
       for ((key, fetcher) <- fetcherThreadMap) {
         fetcher.removePartition(topic, partitionId)
