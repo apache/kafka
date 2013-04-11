@@ -23,9 +23,10 @@ import kafka.api.LeaderAndIsr
 import kafka.server.ReplicaManager
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
-import kafka.common.ErrorMapping
+import kafka.common.{NotLeaderForPartitionException, ErrorMapping}
 import kafka.controller.{LeaderIsrAndControllerEpoch, KafkaController}
 import org.apache.log4j.Logger
+import kafka.message.ByteBufferMessageSet
 
 
 /**
@@ -259,7 +260,11 @@ class Partition(val topic: String,
     }
   }
 
-  def maybeIncrementLeaderHW(leaderReplica: Replica) {
+  /**
+   * There is no need to acquire the leaderIsrUpdate lock here since all callers of this private API acquire that lock
+   * @param leaderReplica
+   */
+  private def maybeIncrementLeaderHW(leaderReplica: Replica) {
     val allLogEndOffsets = inSyncReplicas.map(_.logEndOffset)
     val newHighWatermark = allLogEndOffsets.min
     val oldHighWatermark = leaderReplica.highWatermark
@@ -313,6 +318,23 @@ class Partition(val topic: String,
     val slowReplicas = candidateReplicas.filter(r => r.logEndOffset >= 0 && (leaderLogEndOffset - r.logEndOffset) > keepInSyncMessages)
     debug("Slow replicas for topic %s partition %d are %s".format(topic, partitionId, slowReplicas.map(_.brokerId).mkString(",")))
     stuckReplicas ++ slowReplicas
+  }
+
+  def appendMessagesToLeader(messages: ByteBufferMessageSet): (Long, Long) = {
+    leaderIsrUpdateLock synchronized {
+      val leaderReplicaOpt = leaderReplicaIfLocal()
+      leaderReplicaOpt match {
+        case Some(leaderReplica) =>
+          val log = leaderReplica.log.get
+          val (start, end) = log.append(messages, assignOffsets = true)
+          // we may need to increment high watermark since ISR could be down to 1
+          maybeIncrementLeaderHW(leaderReplica)
+          (start, end)
+        case None =>
+          throw new NotLeaderForPartitionException("Leader not local for partition [%s,%d] on broker %d"
+            .format(topic, partitionId, localBrokerId))
+      }
+    }
   }
 
   private def updateIsr(newIsr: Set[Replica]) {

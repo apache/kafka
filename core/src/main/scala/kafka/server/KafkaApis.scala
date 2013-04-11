@@ -188,11 +188,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       BrokerTopicStats.getBrokerAllTopicsStats.bytesInRate.mark(messages.sizeInBytes)
 
       try {
-        val localReplica = replicaManager.getLeaderReplicaIfLocal(topicAndPartition.topic, topicAndPartition.partition)
-        val log = localReplica.log.get
-        val (start, end) = log.append(messages.asInstanceOf[ByteBufferMessageSet], assignOffsets = true)
-        // we may need to increment high watermark since ISR could be down to 1
-        localReplica.partition.maybeIncrementLeaderHW(localReplica)
+        val partitionOpt = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
+        val (start, end) =
+          partitionOpt match {
+            case Some(partition) => partition.appendMessagesToLeader(messages.asInstanceOf[ByteBufferMessageSet])
+            case None => throw new UnknownTopicOrPartitionException("Partition %s doesn't exist on %d"
+              .format(topicAndPartition, brokerId))
+
+          }
         trace("%d bytes written to log %s-%d beginning at offset %d and ending at offset %d"
               .format(messages.size, topicAndPartition.topic, topicAndPartition.partition, start, end))
         ProduceResult(topicAndPartition, start, end)

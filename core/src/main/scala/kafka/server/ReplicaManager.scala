@@ -175,12 +175,12 @@ class ReplicaManager(val config: KafkaConfig,
     val partitionOpt = getPartition(topic, partitionId)
     partitionOpt match {
       case None =>
-        throw new UnknownTopicOrPartitionException("Topic %s partition %d doesn't exist on %d".format(topic, partitionId, config.brokerId))
+        throw new UnknownTopicOrPartitionException("Partition [%s,%d] doesn't exist on %d".format(topic, partitionId, config.brokerId))
       case Some(partition) =>
         partition.leaderReplicaIfLocal match {
           case Some(leaderReplica) => leaderReplica
           case None =>
-            throw new NotLeaderForPartitionException("Leader not local for topic %s partition %d on broker %d"
+            throw new NotLeaderForPartitionException("Leader not local for partition [%s,%d] on broker %d"
                     .format(topic, partitionId, config.brokerId))
         }
     }
