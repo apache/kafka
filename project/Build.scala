@@ -17,17 +17,23 @@
 
 import sbt._
 import Keys._
+import Process._
 
 import scala.xml.{Node, Elem}
 import scala.xml.transform.{RewriteRule, RuleTransformer}
 
 object KafkaBuild extends Build {
+  val buildNumber = SettingKey[String]("build-number", "Build number defaults to $BUILD_NUMBER environment variable")
+  val releaseName = SettingKey[String]("release-name", "the full name of this release")
   val commonSettings = Seq(
-    version := "0.8-SNAPSHOT",
     organization := "org.apache",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     crossScalaVersions := Seq("2.8.0","2.8.2", "2.9.1", "2.9.2"),
     scalaVersion := "2.8.0",
+    buildNumber := System.getProperty("build.number", "SNAPSHOT"),
+    buildNumber <<= buildNumber { build => if (build == "") "SNAPSHOT" else build},
+    version <<= buildNumber  { build  => "0.8-" + build},
+    releaseName <<= (name, version, scalaVersion) {(name, version, scalaVersion) => name + "_" + scalaVersion + "-" + version},
     javacOptions ++= Seq("-Xlint:unchecked", "-source", "1.5"),
     parallelExecution in Test := false, // Prevent tests from overrunning each other
     libraryDependencies ++= Seq(
@@ -77,12 +83,40 @@ object KafkaBuild extends Build {
        </dependencies>
   )
 
+
   val runRat = TaskKey[Unit]("run-rat-task", "Runs Apache rat on Kafka")
   val runRatTask = runRat := {
     "bin/run-rat.sh" !
   }
 
-  lazy val kafka    = Project(id = "Kafka", base = file(".")).aggregate(core, examples, contrib, perf).settings((commonSettings ++ runRatTask): _*)
+  val release = TaskKey[Unit]("release", "Creates a deployable release directory file with dependencies, config, and scripts.")
+  val releaseTask = release <<= ( packageBin in (core, Compile), dependencyClasspath in (core, Runtime), exportedProducts in Compile,
+    target, releaseName in core ) map { (packageBin, deps, products, target, releaseName) =>
+      val jarFiles = deps.files.filter(f => !products.files.contains(f) && f.getName.endsWith(".jar"))
+      val destination = target / "RELEASE" / releaseName
+      IO.copyFile(packageBin, destination / packageBin.getName)
+      IO.copy(jarFiles.map { f => (f, destination / "libs" / f.getName) })
+      IO.copyDirectory(file("config"), destination / "config")
+      IO.copyDirectory(file("bin"), destination / "bin")
+      for {file <- (destination / "bin").listFiles} { file.setExecutable(true, true) }
+      IO.zip(Path.allSubpaths(target/"RELEASE"), target/"%s.zip".format(releaseName))
+  }
+
+  val releaseZip = TaskKey[Unit]("release-zip", "Creates a deployable zip file with dependencies, config, and scripts.")
+  val releaseZipTask = releaseZip <<= (release, target, releaseName in core) map { (release, target, releaseName) => 
+    IO.zip(Path.allSubpaths(target/"RELEASE"), target/ "RELEASE" / "%s.zip".format(releaseName))
+  }
+
+  val releaseTar = TaskKey[Unit]("release-tar", "Creates a deployable tar.gz file with dependencies, config, and scripts.")
+  val releaseTarTask = releaseTar <<= ( release, target, releaseName in core) map { (release, target, releaseName) =>
+    Process(Seq("tar", "czf", "%s.tar.gz".format(releaseName), releaseName), target / "RELEASE").! match {
+        case 0 => ()
+        case n => sys.error("Failed to run native tar application!")
+      }
+  }
+
+  lazy val kafka    = Project(id = "Kafka", base = file(".")).aggregate(core, examples, contrib, perf).settings((commonSettings ++
+    runRatTask ++ releaseTask ++ releaseZipTask ++ releaseTarTask): _*)
   lazy val core     = Project(id = "core", base = file("core")).settings(commonSettings: _*)
   lazy val examples = Project(id = "java-examples", base = file("examples")).settings(commonSettings :_*) dependsOn (core)
   lazy val perf     = Project(id = "perf", base = file("perf")).settings((Seq(name := "kafka-perf") ++ commonSettings):_*) dependsOn (core)

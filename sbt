@@ -13,4 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-java -Xmx1024M -XX:MaxPermSize=512m -jar `dirname $0`/lib/sbt-launch.jar "$@"
+java -Xmx1024M -XX:MaxPermSize=512m -Dbuild.number="$BUILD_NUMBER" -jar `dirname $0`/lib/sbt-launch.jar "$@"

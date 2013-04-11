@@ -35,6 +35,17 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
+# classpath addition for release
+for file in $base_dir/libs/*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
+for file in $base_dir/kafka*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
 if [ -z "$KAFKA_JMX_OPTS" ]; then
   KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
 fi
