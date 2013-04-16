@@ -154,7 +154,7 @@ class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends Message
           return allDone()
         val offset = topIter.getLong()
         val size = topIter.getInt()
-        if(size < 0)
+        if(size < Message.MinHeaderSize)
           throw new InvalidMessageException("Message found with corrupt size (" + size + ")")
         
         // we have an incomplete message

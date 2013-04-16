@@ -19,8 +19,7 @@ package kafka.server
 
 import kafka.cluster.Broker
 import collection.mutable
-import kafka.message.ByteBufferMessageSet
-import kafka.message.MessageAndOffset
+import kafka.message.{InvalidMessageException, ByteBufferMessageSet, MessageAndOffset}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 import java.util.concurrent.atomic.AtomicLong
@@ -131,8 +130,14 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
                     // Once we hand off the partition data to the subclass, we can't mess with it any more in this thread
                     processPartitionData(topicAndPartition, currentOffset.get, partitionData)
                   } catch {
+                    case ime: InvalidMessageException =>
+                      // we log the error and continue. This ensures two things
+                      // 1. If there is a corrupt message in a topic partition, it does not bring the fetcher thread down and cause other topic partition to also lag
+                      // 2. If the message is corrupt due to a transient state in the log (truncation, partial writes can cause this), we simply continue and
+                      //    should get fixed in the subsequent fetches
+                      logger.warn("Found invalid messages during fetch for partition [" + topic + "," + partitionId + "] offset " + currentOffset.get + " error " + ime.getMessage)
                     case e =>
-                      throw new KafkaException("error processing data for topic %s partititon %d offset %d"
+                      throw new KafkaException("error processing data for partition [%s,%d] offset %d"
                                                .format(topic, partitionId, currentOffset.get), e)
                   }
                 case ErrorMapping.OffsetOutOfRangeCode =>
