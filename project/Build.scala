@@ -30,9 +30,9 @@ object KafkaBuild extends Build {
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     crossScalaVersions := Seq("2.8.0","2.8.2", "2.9.1", "2.9.2"),
     scalaVersion := "2.8.0",
-    buildNumber := System.getProperty("build.number", "SNAPSHOT"),
-    buildNumber <<= buildNumber { build => if (build == "") "SNAPSHOT" else build},
-    version <<= buildNumber  { build  => "0.8-" + build},
+    version := "0.8.0-SNAPSHOT",
+    buildNumber := System.getProperty("build.number", ""),
+    version <<= (buildNumber, version)  { (build, version)  => if (build == "") version else version + "+" + build},
     releaseName <<= (name, version, scalaVersion) {(name, version, scalaVersion) => name + "_" + scalaVersion + "-" + version},
     javacOptions ++= Seq("-Xlint:unchecked", "-source", "1.5"),
     parallelExecution in Test := false, // Prevent tests from overrunning each other
@@ -99,12 +99,13 @@ object KafkaBuild extends Build {
       IO.copyDirectory(file("config"), destination / "config")
       IO.copyDirectory(file("bin"), destination / "bin")
       for {file <- (destination / "bin").listFiles} { file.setExecutable(true, true) }
-      IO.zip(Path.allSubpaths(target/"RELEASE"), target/"%s.zip".format(releaseName))
   }
 
   val releaseZip = TaskKey[Unit]("release-zip", "Creates a deployable zip file with dependencies, config, and scripts.")
   val releaseZipTask = releaseZip <<= (release, target, releaseName in core) map { (release, target, releaseName) => 
-    IO.zip(Path.allSubpaths(target/"RELEASE"), target/ "RELEASE" / "%s.zip".format(releaseName))
+    val zipPath = target / "RELEASE" / "%s.zip".format(releaseName)
+    IO.delete(zipPath)
+    IO.zip((target/"RELEASE" ** releaseName ***) x relativeTo(target/"RELEASE"), zipPath)
   }
 
   val releaseTar = TaskKey[Unit]("release-tar", "Creates a deployable tar.gz file with dependencies, config, and scripts.")
