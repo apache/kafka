@@ -35,7 +35,9 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 
@@ -133,6 +135,13 @@ public class KafkaMigrationTool
       .describedAs("Java regex (String)")
       .ofType(String.class);
 
+    ArgumentAcceptingOptionSpec<Integer> queueSizeOpt
+      =  parser.accepts("queue.size", "Number of messages that are buffered between the 0.7 consumer and 0.8 producer")
+      .withRequiredArg()
+      .describedAs("Queue size in terms of number of messages")
+      .ofType(Integer.class)
+      .defaultsTo(10000);
+
     OptionSpecBuilder helpOpt
       = parser.accepts("help", "Print this message.");
 
@@ -211,7 +220,8 @@ public class KafkaMigrationTool
       kafkaProducerProperties_08.load(new FileInputStream(producerConfigFile_08));
       kafkaProducerProperties_08.setProperty("serializer.class", "kafka.serializer.DefaultEncoder");
       // create a producer channel instead
-      ProducerDataChannel<KeyedMessage<String, byte[]>> producerDataChannel = new ProducerDataChannel<KeyedMessage<String, byte[]>>(numProducers);
+      int queueSize = options.valueOf(queueSizeOpt);
+      ProducerDataChannel<KeyedMessage<String, byte[]>> producerDataChannel = new ProducerDataChannel<KeyedMessage<String, byte[]>>(queueSize);
       int threadId = 0;
 
       Runtime.getRuntime().addShutdownHook(new Thread() {
@@ -242,9 +252,11 @@ public class KafkaMigrationTool
         thread.start();
         migrationThreads.add(thread);
       }
+
+      String clientId = kafkaProducerProperties_08.getProperty("client.id");
       // start producer threads
       for (int i = 0; i < numProducers; i++) {
-        kafkaProducerProperties_08.put("client.id", String.valueOf(i) + "-" + i);
+        kafkaProducerProperties_08.put("client.id", clientId + "-" + i);
         ProducerConfig producerConfig_08 = new ProducerConfig(kafkaProducerProperties_08);
         Producer producer = new Producer(producerConfig_08);
         ProducerThread producerThread = new ProducerThread(producerDataChannel, producer, i);

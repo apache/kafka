@@ -20,7 +20,7 @@ package kafka.common
 import util.matching.Regex
 
 object Topic {
-  private val legalChars = "[a-zA-Z0-9\\._\\-]"
+  val legalChars = "[a-zA-Z0-9\\._\\-]"
   private val maxNameLength = 255
   private val rgx = new Regex(legalChars + "+")
 

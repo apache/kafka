@@ -27,6 +27,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.common._
 import kafka.controller.{LeaderIsrAndControllerEpoch, KafkaController}
+import org.apache.log4j.Logger
 
 
 /**
@@ -53,7 +54,8 @@ class Partition(val topic: String,
    * In addition to the leader, the controller can also send the epoch of the controller that elected the leader for
    * each partition. */
   private var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
-  this.logIdent = "Partition [%s, %d] on broker %d: ".format(topic, partitionId, localBrokerId)
+  this.logIdent = "Partition [%s,%d] on broker %d: ".format(topic, partitionId, localBrokerId)
+  private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
 
   private def isReplicaLocal(replicaId: Int) : Boolean = (replicaId == localBrokerId)
 
@@ -67,7 +69,9 @@ class Partition(val topic: String,
   )
 
   def isUnderReplicated(): Boolean = {
-    inSyncReplicas.size < replicationFactor
+    leaderIsrUpdateLock synchronized {
+      inSyncReplicas.size < replicationFactor
+    }
   }
 
   def getOrCreateReplica(replicaId: Int = localBrokerId): Replica = {
@@ -127,15 +131,17 @@ class Partition(val topic: String,
    *  3. reset LogEndOffset for remote replicas (there could be old LogEndOffset from the time when this broker was the leader last time)
    *  4. set the new leader and ISR
    */
-  def makeLeader(topic: String, partitionId: Int, leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch): Boolean = {
+  def makeLeader(controllerId: Int, topic: String, partitionId: Int,
+                 leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch, correlationId: Int): Boolean = {
     leaderIsrUpdateLock synchronized {
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
       if (leaderEpoch >= leaderAndIsr.leaderEpoch){
-        info("Current leader epoch [%d] is larger or equal to the requested leader epoch [%d], discard the become leader request"
-          .format(leaderEpoch, leaderAndIsr.leaderEpoch))
+        stateChangeLogger.trace(("Broker %d discarded the become-leader request with correlation id %d from " +
+                                 "controller %d epoch %d for partition [%s,%d] since current leader epoch %d is >= the request's leader epoch %d")
+                                   .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch, topic,
+                                           partitionId, leaderEpoch, leaderAndIsr.leaderEpoch))
         return false
       }
-      trace("Started to become leader at the request %s".format(leaderAndIsr.toString()))
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
@@ -162,22 +168,21 @@ class Partition(val topic: String,
    *  3. set the leader and set ISR to empty
    *  4. start a fetcher to the new leader
    */
-  def makeFollower(topic: String, partitionId: Int, leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
-                   liveBrokers: Set[Broker]): Boolean = {
+  def makeFollower(controllerId: Int, topic: String, partitionId: Int, leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
+                   liveBrokers: Set[Broker], correlationId: Int): Boolean = {
     leaderIsrUpdateLock synchronized {
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-      if (leaderEpoch >= leaderAndIsr.leaderEpoch){
-        info("Current leader epoch [%d] is larger or equal to the requested leader epoch [%d], discard the become follower request"
-          .format(leaderEpoch, leaderAndIsr.leaderEpoch))
+      if (leaderEpoch >= leaderAndIsr.leaderEpoch) {
+        stateChangeLogger.trace(("Broker %d discarded the become-follower request with correlation id %d from " +
+                                 "controller %d epoch %d for partition [%s,%d] since current leader epoch %d is >= the request's leader epoch %d")
+                                   .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch, topic,
+                                           partitionId, leaderEpoch, leaderAndIsr.leaderEpoch))
         return false
       }
-      trace("Started to become follower at the request %s".format(leaderAndIsr.toString()))
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
       val newLeaderBrokerId: Int = leaderAndIsr.leader
-      info("Starting the follower state transition to follow leader %d for topic %s partition %d"
-        .format(newLeaderBrokerId, topic, partitionId))
       liveBrokers.find(_.id == newLeaderBrokerId) match {
         case Some(leaderBroker) =>
           // stop fetcher thread to previous leader
@@ -192,8 +197,10 @@ class Partition(val topic: String,
           // start fetcher thread to current leader
           replicaFetcherManager.addFetcher(topic, partitionId, localReplica.logEndOffset, leaderBroker)
         case None => // leader went down
-          warn("Aborting become follower state change on %d since leader %d for ".format(localBrokerId, newLeaderBrokerId) +
-          " topic %s partition %d became unavailble during the state change operation".format(topic, partitionId))
+          stateChangeLogger.trace("Broker %d aborted the become-follower state change with correlation id %d from " +
+            " controller %d epoch %d since leader %d for partition [%s,%d] became unavailable during the state change operation"
+                                     .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch,
+                                              newLeaderBrokerId, topic, partitionId))
       }
       true
     }
@@ -201,7 +208,7 @@ class Partition(val topic: String,
 
   def updateLeaderHWAndMaybeExpandIsr(replicaId: Int, offset: Long) {
     leaderIsrUpdateLock synchronized {
-      debug("Recording follower %d position %d for topic %s partition %d.".format(replicaId, offset, topic, partitionId))
+      debug("Recording follower %d position %d for partition [%s,%d].".format(replicaId, offset, topic, partitionId))
       val replica = getOrCreateReplica(replicaId)
       replica.logEndOffset = offset
 
@@ -337,12 +344,14 @@ class Partition(val topic: String,
   }
 
   override def toString(): String = {
-    val partitionString = new StringBuilder
-    partitionString.append("Topic: " + topic)
-    partitionString.append("; Partition: " + partitionId)
-    partitionString.append("; Leader: " + leaderReplicaIdOpt)
-    partitionString.append("; AssignedReplicas: " + assignedReplicaMap.keys.mkString(","))
-    partitionString.append("; InSyncReplicas: " + inSyncReplicas.map(_.brokerId).mkString(","))
-    partitionString.toString()
+    leaderIsrUpdateLock synchronized {
+      val partitionString = new StringBuilder
+      partitionString.append("Topic: " + topic)
+      partitionString.append("; Partition: " + partitionId)
+      partitionString.append("; Leader: " + leaderReplicaIdOpt)
+      partitionString.append("; AssignedReplicas: " + assignedReplicaMap.keys.mkString(","))
+      partitionString.append("; InSyncReplicas: " + inSyncReplicas.map(_.brokerId).mkString(","))
+      partitionString.toString()
+    }
   }
 }

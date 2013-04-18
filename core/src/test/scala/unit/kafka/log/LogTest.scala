@@ -215,7 +215,7 @@ class LogTest extends JUnitSuite {
     val log = new Log(logDir, logConfig.copy(segmentSize = 100), needsRecovery = false, time.scheduler, time = time)
     val numMessages = 100
     val messageSets = (0 until numMessages).map(i => TestUtils.singleMessageSet(i.toString.getBytes))
-    val offsets = messageSets.map(log.append(_).firstOffset)
+    messageSets.foreach(log.append(_))
     log.flush
 
     /* do successive reads to ensure all our messages are there */

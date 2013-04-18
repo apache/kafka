@@ -77,7 +77,7 @@ class LogCleanerIntegrationTest extends JUnitSuite {
   def writeDups(numKeys: Int, numDups: Int, log: Log): Seq[(Int, Int)] = {
     for(dup <- 0 until numDups; key <- 0 until numKeys) yield {
       val count = counter
-      val appendInfo = log.append(TestUtils.singleMessageSet(payload = counter.toString.getBytes, key = key.toString.getBytes), assignOffsets = true)
+      log.append(TestUtils.singleMessageSet(payload = counter.toString.getBytes, key = key.toString.getBytes), assignOffsets = true)
       counter += 1
       (key, count)
     }

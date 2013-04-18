@@ -36,6 +36,7 @@ object StopReplicaRequest extends Logging {
     val correlationId = buffer.getInt
     val clientId = readShortString(buffer)
     val ackTimeoutMs = buffer.getInt
+    val controllerId = buffer.getInt
     val controllerEpoch = buffer.getInt
     val deletePartitions = buffer.get match {
       case 1 => true
@@ -48,22 +49,24 @@ object StopReplicaRequest extends Logging {
     (1 to topicPartitionPairCount) foreach { _ =>
       topicPartitionPairSet.add(readShortString(buffer), buffer.getInt)
     }
-    StopReplicaRequest(versionId, correlationId, clientId, ackTimeoutMs, deletePartitions, topicPartitionPairSet.toSet, controllerEpoch)
+    StopReplicaRequest(versionId, correlationId, clientId, ackTimeoutMs, controllerId, controllerEpoch,
+                       deletePartitions, topicPartitionPairSet.toSet)
   }
 }
 
 case class StopReplicaRequest(versionId: Short,
-                              correlationId: Int,
+                              override val correlationId: Int,
                               clientId: String,
                               ackTimeoutMs: Int,
+                              controllerId: Int,
+                              controllerEpoch: Int,
                               deletePartitions: Boolean,
-                              partitions: Set[(String, Int)],
-                              controllerEpoch: Int)
-        extends RequestOrResponse(Some(RequestKeys.StopReplicaKey)) {
+                              partitions: Set[(String, Int)])
+        extends RequestOrResponse(Some(RequestKeys.StopReplicaKey), correlationId) {
 
-  def this(deletePartitions: Boolean, partitions: Set[(String, Int)], controllerEpoch: Int, correlationId: Int) = {
+  def this(deletePartitions: Boolean, partitions: Set[(String, Int)], controllerId: Int, controllerEpoch: Int, correlationId: Int) = {
     this(StopReplicaRequest.CurrentVersion, correlationId, StopReplicaRequest.DefaultClientId, StopReplicaRequest.DefaultAckTimeout,
-         deletePartitions, partitions, controllerEpoch)
+         controllerId, controllerEpoch, deletePartitions, partitions)
   }
 
   def writeTo(buffer: ByteBuffer) {
@@ -71,6 +74,7 @@ case class StopReplicaRequest(versionId: Short,
     buffer.putInt(correlationId)
     writeShortString(buffer, clientId)
     buffer.putInt(ackTimeoutMs)
+    buffer.putInt(controllerId)
     buffer.putInt(controllerEpoch)
     buffer.put(if (deletePartitions) 1.toByte else 0.toByte)
     buffer.putInt(partitions.size)
@@ -86,6 +90,7 @@ case class StopReplicaRequest(versionId: Short,
       4 + /* correlation id */
       ApiUtils.shortStringLength(clientId) +
       4 + /* ackTimeoutMs */
+      4 + /* controller id*/
       4 + /* controller epoch */
       1 + /* deletePartitions */
       4 /* partition count */
@@ -104,6 +109,7 @@ case class StopReplicaRequest(versionId: Short,
     stopReplicaRequest.append("; ClientId: " + clientId)
     stopReplicaRequest.append("; AckTimeoutMs: " + ackTimeoutMs + " ms")
     stopReplicaRequest.append("; DeletePartitions: " + deletePartitions)
+    stopReplicaRequest.append("; ControllerId: " + controllerId)
     stopReplicaRequest.append("; ControllerEpoch: " + controllerEpoch)
     stopReplicaRequest.append("; Partitions: " + partitions.mkString(","))
     stopReplicaRequest.toString()

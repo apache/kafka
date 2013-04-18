@@ -45,7 +45,7 @@ trait KafkaMetricsGroup extends Logging {
   def newMeter(name: String, eventType: String, timeUnit: TimeUnit) =
     Metrics.defaultRegistry().newMeter(metricName(name), eventType, timeUnit)
 
-  def newHistogram(name: String, biased: Boolean = false) =
+  def newHistogram(name: String, biased: Boolean = true) =
     Metrics.defaultRegistry().newHistogram(metricName(name), biased)
 
   def newTimer(name: String, durationUnit: TimeUnit, rateUnit: TimeUnit) =

@@ -198,7 +198,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       threadIdSet.map(_ => {
         val queue =  new LinkedBlockingQueue[FetchedDataChunk](config.queuedMaxMessages)
         val stream = new KafkaStream[K,V](
-          queue, config.consumerTimeoutMs, keyDecoder, valueDecoder, config.shallowIteratorEnable, config.clientId)
+          queue, config.consumerTimeoutMs, keyDecoder, valueDecoder, config.clientId)
         (queue, stream)
       })
     ).flatten.toList
@@ -216,8 +216,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private def registerConsumerInZK(dirs: ZKGroupDirs, consumerIdString: String, topicCount: TopicCount) = {
     info("begin registering consumer " + consumerIdString + " in ZK")
     val consumerRegistrationInfo =
-      Utils.mergeJsonObjects(Seq(Utils.mapToJson(Map("version" -> 1.toString, "subscription" -> topicCount.dbString), valueInQuotes = false),
-                                 Utils.mapToJson(Map("pattern" -> topicCount.pattern), valueInQuotes = true)))
+      Utils.mergeJsonFields(Utils.mapToJsonFields(Map("version" -> 1.toString, "subscription" -> topicCount.dbString), valueInQuotes = false)
+                             ++ Utils.mapToJsonFields(Map("pattern" -> topicCount.pattern), valueInQuotes = true))
     createEphemeralPathExpectConflict(zkClient, dirs.consumerRegistryDir + "/" + consumerIdString, consumerRegistrationInfo)
     info("end registering consumer " + consumerIdString + " in ZK")
   }
@@ -698,7 +698,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                           config.consumerTimeoutMs, 
                                           keyDecoder, 
                                           valueDecoder, 
-                                          config.shallowIteratorEnable,
                                           config.clientId)
         (queue, stream)
     }).toList

@@ -24,6 +24,7 @@ import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException, 
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import collection._
 import kafka.api.LeaderAndIsr
+import mutable.ListBuffer
 import org.apache.zookeeper.data.Stat
 import java.util.concurrent.locks.{ReentrantLock, Condition}
 import kafka.admin._
@@ -190,8 +191,9 @@ object ZkUtils extends Logging {
   def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, port: Int, jmxPort: Int) {
     val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
     val brokerInfo =
-      Utils.mergeJsonObjects(Seq(Utils.mapToJson(Map("host" -> host), valueInQuotes = true),
-                                 Utils.mapToJson(Map("version" -> 1.toString, "jmx_port" -> jmxPort.toString, "port" -> port.toString), valueInQuotes = false)))
+      Utils.mergeJsonFields(Utils.mapToJsonFields(Map("host" -> host), valueInQuotes = true) ++
+                             Utils.mapToJsonFields(Map("version" -> 1.toString, "jmx_port" -> jmxPort.toString, "port" -> port.toString),
+                                                   valueInQuotes = false))
     try {
       createEphemeralPathExpectConflict(zkClient, brokerIdPath, brokerInfo)
     } catch {
@@ -216,7 +218,7 @@ object ZkUtils extends Logging {
    * Get JSON partition to replica map from zookeeper.
    */
   def replicaAssignmentZkdata(map: Map[String, Seq[Int]]): String = {
-    val jsonReplicaAssignmentMap = Utils.mapWithSeqValuesToJson(map.map(e => (e._1.toString -> e._2)))
+    val jsonReplicaAssignmentMap = Utils.mapWithSeqValuesToJson(map)
     Utils.mapToJson(Map("version" -> 1.toString, "partitions" -> jsonReplicaAssignmentMap), valueInQuotes = false)
   }
 
@@ -564,26 +566,41 @@ object ZkUtils extends Logging {
     jsonPartitionMapOpt match {
       case Some(jsonPartitionMap) =>
         val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
-        reassignedPartitions.map { p =>
-          val newReplicas = p._2
-          (p._1 -> new ReassignedPartitionsContext(newReplicas))
-        }
+        reassignedPartitions.map(p => (p._1 -> new ReassignedPartitionsContext(p._2)))
       case None => Map.empty[TopicAndPartition, ReassignedPartitionsContext]
     }
   }
 
-  def parsePartitionReassignmentData(jsonData: String):Map[TopicAndPartition, Seq[Int]] = {
+  def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] = {
+    val reassignedPartitions: mutable.Map[TopicAndPartition, Seq[Int]] = mutable.Map()
     Json.parseFull(jsonData) match {
       case Some(m) =>
-        val replicaMap = m.asInstanceOf[Map[String, Seq[Int]]]
-        replicaMap.map { reassignedPartitions =>
-          val topic = reassignedPartitions._1.split(",").head.trim
-          val partition = reassignedPartitions._1.split(",").last.trim.toInt
-          val newReplicas = reassignedPartitions._2
-          TopicAndPartition(topic, partition) -> newReplicas
+        m.asInstanceOf[Map[String, Any]].get("partitions") match {
+          case Some(partitionsSeq) =>
+            partitionsSeq.asInstanceOf[Seq[Map[String, Any]]].foreach(p => {
+              val topic = p.get("topic").get.asInstanceOf[String]
+              val partition = p.get("partition").get.asInstanceOf[Int]
+              val newReplicas = p.get("replicas").get.asInstanceOf[Seq[Int]]
+              reassignedPartitions += TopicAndPartition(topic, partition) -> newReplicas
+            })
+          case None =>
         }
-      case None => Map.empty[TopicAndPartition, Seq[Int]]
+      case None =>
     }
+    reassignedPartitions
+  }
+
+  def getPartitionReassignmentZkData(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
+    var jsonPartitionsData: mutable.ListBuffer[String] = ListBuffer[String]()
+    for (p <- partitionsToBeReassigned) {
+      val jsonReplicasData = Utils.seqToJson(p._2.map(_.toString), valueInQuotes = false)
+      val jsonTopicData = Utils.mapToJsonFields(Map("topic" -> p._1.topic), valueInQuotes = true)
+      val jsonPartitionData = Utils.mapToJsonFields(Map("partition" -> p._1.partition.toString, "replicas" -> jsonReplicasData),
+                                                    valueInQuotes = false)
+      jsonPartitionsData += Utils.mergeJsonFields(jsonTopicData ++ jsonPartitionData)
+    }
+    Utils.mapToJson(Map("version" -> 1.toString, "partitions" -> Utils.seqToJson(jsonPartitionsData.toSeq, valueInQuotes = false)),
+                    valueInQuotes = false)
   }
 
   def updatePartitionReassignmentData(zkClient: ZkClient, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]) {
@@ -593,11 +610,11 @@ object ZkUtils extends Logging {
         deletePath(zkClient, zkPath)
         info("No more partitions need to be reassigned. Deleting zk path %s".format(zkPath))
       case _ =>
-        val jsonData = Utils.mapWithSeqValuesToJson(partitionsToBeReassigned.map(p => ("%s,%s".format(p._1.topic, p._1.partition)) -> p._2))
+        val jsonData = getPartitionReassignmentZkData(partitionsToBeReassigned)
         try {
           updatePersistentPath(zkClient, zkPath, jsonData)
           info("Updated partition reassignment path with %s".format(jsonData))
-        }catch {
+        } catch {
           case nne: ZkNoNodeException =>
             ZkUtils.createPersistentPath(zkClient, zkPath, jsonData)
             debug("Created path %s with %s for partition reassignment".format(zkPath, jsonData))

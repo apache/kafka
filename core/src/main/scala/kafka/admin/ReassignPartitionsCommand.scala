@@ -28,7 +28,7 @@ object ReassignPartitionsCommand extends Logging {
     val parser = new OptionParser
     val jsonFileOpt = parser.accepts("path-to-json-file", "REQUIRED: The JSON file with the list of partitions and the " +
       "new replicas they should be reassigned to in the following format - \n" +
-       "[{\"topic\": \"foo\", \"partition\": \"1\", \"replicas\": \"1,2,3\" }]")
+       "{\"partitions\":\n\t[{\"topic\": \"foo\",\n\t  \"partition\": 1,\n\t  \"replicas\": [1,2,3] }]\n}")
       .withRequiredArg
       .describedAs("partition reassignment json file path")
       .ofType(classOf[String])
@@ -55,29 +55,12 @@ object ReassignPartitionsCommand extends Logging {
 
     try {
       // read the json file into a string
-      val partitionsToBeReassigned = Json.parseFull(jsonString) match {
-        case Some(reassignedPartitions) =>
-          val partitions = reassignedPartitions.asInstanceOf[Array[Map[String, String]]]
-          partitions.map { m =>
-            val topic = m.asInstanceOf[Map[String, String]].get("topic").get
-            val partition = m.asInstanceOf[Map[String, String]].get("partition").get.toInt
-            val replicasList = m.asInstanceOf[Map[String, String]].get("replicas").get
-            val newReplicas = replicasList.split(",").map(_.toInt)
-            (TopicAndPartition(topic, partition), newReplicas.toSeq)
-          }.toMap
-        case None => throw new AdminCommandFailedException("Partition reassignment data file %s is empty".format(jsonFile))
-      }
+      val partitionsToBeReassigned = ZkUtils.parsePartitionReassignmentData(jsonString)
+      if (partitionsToBeReassigned.isEmpty)
+        throw new AdminCommandFailedException("Partition reassignment data file %s is empty".format(jsonFile))
 
       zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
       val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, partitionsToBeReassigned)
-
-      // attach shutdown handler to catch control-c
-      Runtime.getRuntime().addShutdownHook(new Thread() {
-        override def run() = {
-          // delete the admin path so it can be retried
-          ZkUtils.deletePathRecursive(zkClient, ZkUtils.ReassignPartitionsPath)
-        }
-      })
 
       if(reassignPartitionsCommand.reassignPartitions())
         println("Successfully started reassignment of partitions %s".format(partitionsToBeReassigned))
@@ -94,15 +77,15 @@ object ReassignPartitionsCommand extends Logging {
   }
 }
 
-class ReassignPartitionsCommand(zkClient: ZkClient, partitions: collection.immutable.Map[TopicAndPartition, Seq[Int]])
+class ReassignPartitionsCommand(zkClient: ZkClient, partitions: collection.Map[TopicAndPartition, collection.Seq[Int]])
   extends Logging {
   def reassignPartitions(): Boolean = {
     try {
       val validPartitions = partitions.filter(p => validatePartition(zkClient, p._1.topic, p._1.partition))
-      val jsonReassignmentData = Utils.mapWithSeqValuesToJson(validPartitions.map(p => ("%s,%s".format(p._1.topic, p._1.partition)) -> p._2))
+      val jsonReassignmentData = ZkUtils.getPartitionReassignmentZkData(validPartitions)
       ZkUtils.createPersistentPath(zkClient, ZkUtils.ReassignPartitionsPath, jsonReassignmentData)
       true
-    }catch {
+    } catch {
       case ze: ZkNodeExistsException =>
         val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient)
         throw new AdminCommandFailedException("Partition reassignment currently in " +

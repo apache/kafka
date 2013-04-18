@@ -211,13 +211,13 @@ class Log(val dir: File,
    * 
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * 
-   * @return Information about the appended messages including the first and last offset
+   * @return Information about the appended messages including the first and last offset.
    */
   def append(messages: ByteBufferMessageSet, assignOffsets: Boolean = true): LogAppendInfo = {
     val appendInfo = analyzeAndValidateMessageSet(messages)
     
     // if we have any valid messages, append them to the log
-    if(appendInfo.count == 0)
+    if(appendInfo.shallowCount == 0)
       return appendInfo
       
     // trim any invalid bytes or partial messages before appending it to the on-disk log
@@ -226,12 +226,13 @@ class Log(val dir: File,
     try {
       // they are valid, insert them in the log
       lock synchronized {
+        appendInfo.firstOffset = nextOffset.get
+
         // maybe roll the log if this segment is full
         val segment = maybeRoll()
-          
+
         if(assignOffsets) {
           // assign offsets to the messageset
-          appendInfo.firstOffset = nextOffset.get
           val offset = new AtomicLong(nextOffset.get)
           try {
             validMessages = validMessages.assignOffsets(offset, appendInfo.codec)
@@ -254,15 +255,16 @@ class Log(val dir: File,
         }
 
         // now append to the log
-        trace("Appending message set to %s with offsets %d to %d.".format(name, appendInfo.firstOffset, appendInfo.lastOffset))
         segment.append(appendInfo.firstOffset, validMessages)
-        
+
         // increment the log end offset
         nextOffset.set(appendInfo.lastOffset + 1)
-          
-        // maybe flush the log and index
-        maybeFlush(appendInfo.count)
-        
+
+        trace("Appended message set to log %s with first offset: %d, next offset: %d, and messages: %s"
+                .format(this.name, appendInfo.firstOffset, nextOffset.get(), validMessages))
+
+        maybeFlush(appendInfo.shallowCount)
+
         appendInfo
       }
     } catch {
@@ -277,7 +279,7 @@ class Log(val dir: File,
    * @param count The number of messages
    * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
    */
-  case class LogAppendInfo(var firstOffset: Long, var lastOffset: Long, codec: CompressionCodec, count: Int, offsetsMonotonic: Boolean)
+  case class LogAppendInfo(var firstOffset: Long, var lastOffset: Long, codec: CompressionCodec, shallowCount: Int, offsetsMonotonic: Boolean)
   
   /**
    * Validate the following:

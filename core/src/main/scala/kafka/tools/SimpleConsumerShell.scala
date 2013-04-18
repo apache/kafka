@@ -24,6 +24,7 @@ import kafka.client.ClientUtils
 import kafka.api.{OffsetRequest, FetchRequestBuilder, Request}
 import kafka.cluster.Broker
 import scala.collection.JavaConversions._
+import kafka.common.TopicAndPartition
 
 /**
  * Command line program to dump out messages to standard out using the simple consumer
@@ -54,12 +55,12 @@ object SimpleConsumerShell extends Logging {
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(UseLeaderReplica)
     val offsetOpt = parser.accepts("offset", "The offset id to consume from, default to -2 which means from beginning; while value -1 means from end")
-                           .withOptionalArg()
+                           .withRequiredArg
                            .describedAs("consume offset")
                            .ofType(classOf[java.lang.Long])
                            .defaultsTo(OffsetRequest.EarliestTime)
     val clientIdOpt = parser.accepts("clientId", "The ID of this client.")
-                           .withOptionalArg
+                           .withRequiredArg
                            .describedAs("clientId")
                            .ofType(classOf[String])
                            .defaultsTo("SimpleConsumerShell")
@@ -78,15 +79,16 @@ object SimpleConsumerShell extends Logging {
                            .describedAs("prop")
                            .ofType(classOf[String])
     val printOffsetOpt = parser.accepts("print-offsets", "Print the offsets returned by the iterator")
-                           .withOptionalArg
-                           .describedAs("print offsets")
-                           .ofType(classOf[java.lang.Boolean])
-                           .defaultsTo(false)
     val maxWaitMsOpt = parser.accepts("max-wait-ms", "The max amount of time each fetch request waits.")
                            .withRequiredArg
                            .describedAs("ms")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1000)
+    val maxMessagesOpt = parser.accepts("max-messages", "The number of messages to consume")
+                           .withRequiredArg
+                           .describedAs("max-messages")
+                           .ofType(classOf[java.lang.Integer])
+                           .defaultsTo(Integer.MAX_VALUE)
     val skipMessageOnErrorOpt = parser.accepts("skip-message-on-error", "If there is an error when processing a message, " +
         "skip it instead of halt.")
     val noWaitAtEndOfLogOpt = parser.accepts("no-wait-at-logend",
@@ -108,6 +110,7 @@ object SimpleConsumerShell extends Logging {
     val fetchSize = options.valueOf(fetchSizeOpt).intValue
     val clientId = options.valueOf(clientIdOpt).toString
     val maxWaitMs = options.valueOf(maxWaitMsOpt).intValue()
+    val maxMessages = options.valueOf(maxMessagesOpt).intValue
 
     val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
     val printOffsets = if(options.has(printOffsetOpt)) true else false
@@ -164,21 +167,36 @@ object SimpleConsumerShell extends Logging {
       System.err.println("Invalid starting offset: %d".format(startingOffset))
       System.exit(1)
     }
-    if(startingOffset < 0)
-      startingOffset = SimpleConsumer.earliestOrLatestOffset(fetchTargetBroker, topic, partitionId, startingOffset, clientId, false)
+    if (startingOffset < 0) {
+      val simpleConsumer = new SimpleConsumer(fetchTargetBroker.host, fetchTargetBroker.port, ConsumerConfig.SocketTimeout,
+                                              ConsumerConfig.SocketBufferSize, clientId)
+      try {
+        startingOffset = simpleConsumer.earliestOrLatestOffset(TopicAndPartition(topic, partitionId), startingOffset,
+                                                               Request.DebuggingConsumerId)
+      } catch {
+        case t: Throwable =>
+          System.err.println("Error in getting earliest or latest offset due to: " + Utils.stackTrace(t))
+          System.exit(1)
+      } finally {
+        if (simpleConsumer != null)
+          simpleConsumer.close()
+      }
+    }
 
     // initializing formatter
     val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
     formatter.init(formatterArgs)
 
-    info("Starting simple consumer shell to partition [%s, %d], replica [%d], host and port: [%s, %d], from offset [%d]"
-                 .format(topic, partitionId, replicaId, fetchTargetBroker.host, fetchTargetBroker.port, startingOffset))
+    val replicaString = if(replicaId > 0) "leader" else "replica"
+    info("Starting simple consumer shell to partition [%s, %d], %s [%d], host and port: [%s, %d], from offset [%d]"
+                 .format(topic, partitionId, replicaString, replicaId, fetchTargetBroker.host, fetchTargetBroker.port, startingOffset))
     val simpleConsumer = new SimpleConsumer(fetchTargetBroker.host, fetchTargetBroker.port, 10000, 64*1024, clientId)
     val thread = Utils.newThread("kafka-simpleconsumer-shell", new Runnable() {
       def run() {
         var offset = startingOffset
+        var numMessagesConsumed = 0
         try {
-          while(true) {
+          while(numMessagesConsumed < maxMessages) {
             val fetchRequest = fetchRequestBuilder
                     .addFetch(topic, partitionId, offset, fetchSize)
                     .build()
@@ -189,7 +207,7 @@ object SimpleConsumerShell extends Logging {
               return
             }
             debug("multi fetched " + messageSet.sizeInBytes + " bytes from offset " + offset)
-            for(messageAndOffset <- messageSet) {
+            for(messageAndOffset <- messageSet if(numMessagesConsumed < maxMessages)) {
               try {
                 offset = messageAndOffset.nextOffset
                 if(printOffsets)
@@ -197,6 +215,7 @@ object SimpleConsumerShell extends Logging {
                 val message = messageAndOffset.message
                 val key = if(message.hasKey) Utils.readBytes(message.key) else null
                 formatter.writeTo(key, if(message.isNull) null else Utils.readBytes(message.payload), System.out)
+                numMessagesConsumed += 1
               } catch {
                 case e =>
                   if (skipMessageOnError)
@@ -216,6 +235,8 @@ object SimpleConsumerShell extends Logging {
         } catch {
           case e: Throwable =>
             error("Error consuming topic, partition, replica (%s, %d, %d) with offset [%d]".format(topic, partitionId, replicaId, offset), e)
+        }finally {
+          info("Consumed " + numMessagesConsumed + " messages")
         }
       }
     }, false)

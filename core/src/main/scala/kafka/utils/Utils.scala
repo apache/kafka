@@ -24,6 +24,7 @@ import java.nio.channels._
 import java.lang.management._
 import javax.management._
 import scala.collection._
+import mutable.ListBuffer
 import scala.collection.mutable
 import java.util.Properties
 import kafka.common.KafkaException
@@ -444,27 +445,42 @@ object Utils extends Logging {
   def nullOrEmpty(s: String): Boolean = s == null || s.equals("")
 
   /**
-   * Format a Map[String, String] as JSON object.
+   * Merge JSON fields of the format "key" : value/object/array.
    */
-  def mapToJson(jsonDataMap: Map[String, String], valueInQuotes: Boolean): String = {
+  def mergeJsonFields(objects: Seq[String]): String = {
     val builder = new StringBuilder
     builder.append("{ ")
-    var numElements = 0
-    for ( (key, value) <- jsonDataMap.toList.sorted) {
-      if (numElements > 0)
-        builder.append(", ")
+    builder.append(objects.sorted.map(_.trim).mkString(", "))
+    builder.append(" }")
+    builder.toString
+  }
+
+ /**
+   * Format a Map[String, String] as JSON object.
+   */
+  def mapToJsonFields(jsonDataMap: Map[String, String], valueInQuotes: Boolean): Seq[String] = {
+    val jsonFields: mutable.ListBuffer[String] = ListBuffer()
+    val builder = new StringBuilder
+    for ((key, value) <- jsonDataMap.toList.sorted) {
       builder.append("\"" + key + "\":")
       if (valueInQuotes)
         builder.append("\"" + value + "\"")
       else
         builder.append(value)
-      numElements += 1
+      jsonFields += builder.toString
+      builder.clear()
     }
-    builder.append(" }")
-    builder.toString
+    jsonFields
   }
 
   /**
+   * Format a Map[String, String] as JSON object.
+   */
+  def mapToJson(jsonDataMap: Map[String, String], valueInQuotes: Boolean): String = {
+    mergeJsonFields(mapToJsonFields(jsonDataMap, valueInQuotes))
+  }
+
+   /**
    * Format a Seq[String] as JSON array.
    */
   def seqToJson(jsonData: Seq[String], valueInQuotes: Boolean): String = {
@@ -483,43 +499,9 @@ object Utils extends Logging {
    */
 
   def mapWithSeqValuesToJson(jsonDataMap: Map[String, Seq[Int]]): String = {
-    val builder = new StringBuilder
-    builder.append("{ ")
-    var numElements = 0
-    for ((key, value) <- jsonDataMap.toList.sortBy(_._1)) {
-      if (numElements > 0)
-        builder.append(", ")
-      builder.append("\"" + key + "\": ")
-      builder.append(Utils.seqToJson(value.map(_.toString), valueInQuotes = false))
-      numElements += 1
-    }
-    builder.append(" }")
-    builder.toString
+    mergeJsonFields(mapToJsonFields(jsonDataMap.map(e => (e._1 -> seqToJson(e._2.map(_.toString), valueInQuotes = false))),
+                                    valueInQuotes = false))
   }
-
-
-  /**
-   * Merge arbitrary JSON objects.
-   */
-  def mergeJsonObjects(objects: Seq[String]): String = {
-    val builder = new StringBuilder
-    builder.append("{ ")
-    var obs = List[String]()
-    objects.foreach(ob => obs = obs ::: getJsonContents(ob).split(',').toList)
-    obs = obs.sorted.map(_.trim)
-    builder.append(obs.mkString(", "))
-    builder.append(" }")
-    builder.toString
-  }
-
-  /**
-   * Get the contents of a JSON object or array.
-   */
-  def getJsonContents(str: String): String = {
-    str.trim().substring(1, str.length - 1)
-  }
-
-
 
   /**
    * Create a circular (looping) iterator over a collection.

@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.common.{TopicAndPartition, StateChangeFailedException}
 import kafka.utils.{ZkUtils, Logging}
 import org.I0Itec.zkclient.IZkChildListener
+import org.apache.log4j.Logger
 
 /**
  * This class represents the state machine for replicas. It defines the states that a replica can be in, and
@@ -37,12 +38,14 @@ import org.I0Itec.zkclient.IZkChildListener
  * 4. NonExistentReplica: If a replica is deleted, it is moved to this state. Valid previous state is OfflineReplica
  */
 class ReplicaStateMachine(controller: KafkaController) extends Logging {
-  this.logIdent = "[Replica state machine on Controller " + controller.config.brokerId + "]: "
   private val controllerContext = controller.controllerContext
+  private val controllerId = controller.config.brokerId
   private val zkClient = controllerContext.zkClient
   var replicaState: mutable.Map[(String, Int, Int), ReplicaState] = mutable.Map.empty
-  val brokerRequestBatch = new ControllerBrokerRequestBatch(controller.sendRequest)
+  val brokerRequestBatch = new ControllerBrokerRequestBatch(controller.sendRequest, controller.config.brokerId)
   private val isShuttingDown = new AtomicBoolean(false)
+  this.logIdent = "[Replica state machine on controller " + controller.config.brokerId + "]: "
+  private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
 
   /**
    * Invoked on successful controller election. First registers a broker change listener since that triggers all
@@ -117,17 +120,18 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
             case None => // new leader request will be sent to this replica when one gets elected
           }
           replicaState.put((topic, partition, replicaId), NewReplica)
-          info("Replica %d for partition %s state changed to NewReplica".format(replicaId, topicAndPartition))
+          stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to NewReplica"
+                                    .format(controllerId, controller.epoch, replicaId, topicAndPartition))
         case NonExistentReplica =>
           assertValidPreviousStates(topic, partition, replicaId, List(OfflineReplica), targetState)
           // send stop replica command
           brokerRequestBatch.addStopReplicaRequestForBrokers(List(replicaId), topic, partition, deletePartition = true)
           // remove this replica from the assigned replicas list for its partition
           val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
-          controllerContext.partitionReplicaAssignment.put(topicAndPartition,
-            currentAssignedReplicas.filterNot(_ == replicaId))
-          info("Replica %d for partition %s state changed to NonExistentReplica".format(replicaId, topicAndPartition))
+          controllerContext.partitionReplicaAssignment.put(topicAndPartition, currentAssignedReplicas.filterNot(_ == replicaId))
           replicaState.remove((topic, partition, replicaId))
+          stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to NonExistentReplica"
+                                    .format(controllerId, controller.epoch, replicaId, topicAndPartition))
         case OnlineReplica =>
           assertValidPreviousStates(topic, partition, replicaId, List(NewReplica, OnlineReplica, OfflineReplica), targetState)
           replicaState((topic, partition, replicaId)) match {
@@ -135,7 +139,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               // add this replica to the assigned replicas list for its partition
               val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
               controllerContext.partitionReplicaAssignment.put(topicAndPartition, currentAssignedReplicas :+ replicaId)
-              info("Replica %d for partition %s state changed to OnlineReplica".format(replicaId, topicAndPartition))
+              stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OnlineReplica"
+                                        .format(controllerId, controller.epoch, replicaId, topicAndPartition))
             case _ =>
               // check if the leader for this partition is alive or even exists
                 controllerContext.allLeaders.get(topicAndPartition) match {
@@ -146,7 +151,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                                                                           topic, partition, leaderIsrAndControllerEpoch,
                                                                           replicaAssignment.size)
                       replicaState.put((topic, partition, replicaId), OnlineReplica)
-                      info("Replica %d for partition %s state changed to OnlineReplica".format(replicaId, topicAndPartition))
+                      stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OnlineReplica"
+                                                .format(controllerId, controller.epoch, replicaId, topicAndPartition))
                     case false => // ignore partitions whose leader is not alive
                   }
                 case None => // ignore partitions who don't have a leader yet
@@ -167,8 +173,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                         topic, partition, updatedLeaderIsrAndControllerEpoch,
                         replicaAssignment.size)
                       replicaState.put((topic, partition, replicaId), OfflineReplica)
-                      info("Replica %d for partition %s state changed to OfflineReplica".format(replicaId, topicAndPartition))
-                      info("Removed offline replica %d from ISR for partition %s".format(replicaId, topicAndPartition))
+                      stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OfflineReplica"
+                                                .format(controllerId, controller.epoch, replicaId, topicAndPartition))
                       false
                     case None =>
                       true
@@ -184,15 +190,16 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
       }
     }
     catch {
-      case t: Throwable => error("Error while changing state of replica %d for partition ".format(replicaId) +
-        "[%s, %d] to %s".format(topic, partition, targetState), t)
+      case t: Throwable =>
+        stateChangeLogger.error("Controller %d epoch %d initiated state change of replica %d for partition [%s,%d] to %s failed"
+                                  .format(controllerId, controller.epoch, replicaId, topic, partition, targetState), t)
     }
   }
 
   private def assertValidPreviousStates(topic: String, partition: Int, replicaId: Int, fromStates: Seq[ReplicaState],
                                         targetState: ReplicaState) {
     assert(fromStates.contains(replicaState((topic, partition, replicaId))),
-      "Replica %s for partition [%s, %d] should be in the %s states before moving to %s state"
+      "Replica %s for partition [%s,%d] should be in the %s states before moving to %s state"
         .format(replicaId, topic, partition, fromStates.mkString(","), targetState) +
         ". Instead it is in %s state".format(replicaState((topic, partition, replicaId))))
   }

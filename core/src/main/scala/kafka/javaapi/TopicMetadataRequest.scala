@@ -21,9 +21,11 @@ import java.nio.ByteBuffer
 import scala.collection.JavaConversions
 
 class TopicMetadataRequest(val versionId: Short,
-                           val correlationId: Int,
+                           override val correlationId: Int,
                            val clientId: String,
-                           val topics: java.util.List[String]) extends RequestOrResponse(Some(kafka.api.RequestKeys.MetadataKey)) {
+                           val topics: java.util.List[String])
+    extends RequestOrResponse(Some(kafka.api.RequestKeys.MetadataKey), correlationId) {
+
   val underlying: kafka.api.TopicMetadataRequest =
     new kafka.api.TopicMetadataRequest(versionId, correlationId, clientId, JavaConversions.asBuffer(topics))
 
@@ -36,4 +38,5 @@ class TopicMetadataRequest(val versionId: Short,
   def writeTo(buffer: ByteBuffer) = underlying.writeTo(buffer)
 
   def sizeInBytes: Int = underlying.sizeInBytes()
+
 }

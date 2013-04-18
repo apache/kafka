@@ -74,6 +74,7 @@ trait KafkaControllerMBean {
 
 object KafkaController {
   val MBeanName = "kafka.controller:type=KafkaController,name=ControllerOps"
+  val stateChangeLogger = "state.change.logger"
   val InitialControllerEpoch = 1
   val InitialControllerEpochZkVersion = 1
 }
@@ -89,7 +90,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   private val reassignedPartitionLeaderSelector = new ReassignedPartitionLeaderSelector(controllerContext)
   private val preferredReplicaPartitionLeaderSelector = new PreferredReplicaPartitionLeaderSelector(controllerContext)
   private val controlledShutdownPartitionLeaderSelector = new ControlledShutdownLeaderSelector(controllerContext)
-  private val brokerRequestBatch = new ControllerBrokerRequestBatch(sendRequest)
+  private val brokerRequestBatch = new ControllerBrokerRequestBatch(sendRequest, config.brokerId)
   registerControllerChangedListener()
 
   newGauge(
@@ -491,7 +492,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   }
 
   private def startChannelManager() {
-    controllerContext.controllerChannelManager = new ControllerChannelManager(controllerContext.liveBrokers, config)
+    controllerContext.controllerChannelManager = new ControllerChannelManager(controllerContext, config)
     controllerContext.controllerChannelManager.startup()
   }
 

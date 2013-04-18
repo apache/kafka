@@ -54,9 +54,9 @@ object OffsetCommitRequest extends Logging {
 case class OffsetCommitRequest(groupId: String,
                                requestInfo: Map[TopicAndPartition, OffsetMetadataAndError],
                                versionId: Short = OffsetCommitRequest.CurrentVersion,
-                               correlationId: Int = 0,
+                               override val correlationId: Int = 0,
                                clientId: String = OffsetCommitRequest.DefaultClientId)
-    extends RequestOrResponse(Some(RequestKeys.OffsetCommitKey)) {
+    extends RequestOrResponse(Some(RequestKeys.OffsetCommitKey), correlationId) {
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
   

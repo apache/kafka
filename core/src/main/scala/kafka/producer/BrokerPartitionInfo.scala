@@ -80,12 +80,12 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
       if(tmd.errorCode == ErrorMapping.NoError){
         topicPartitionInfo.put(tmd.topic, tmd)
       } else
-        warn("Error while fetching metadata for topic [%s]: [%s]".format(tmd.topic, tmd), ErrorMapping.exceptionFor(tmd.errorCode))
+        warn("Error while fetching metadata [%s] for topic [%s]: %s ".format(tmd, tmd.topic, ErrorMapping.exceptionFor(tmd.errorCode).getClass))
       tmd.partitionsMetadata.foreach(pmd =>{
-        if (pmd.errorCode != ErrorMapping.NoError){
-          warn("Error while fetching metadata for topic partition [%s,%d]: [%s]".format(tmd.topic, pmd.partitionId, pmd),
-               ErrorMapping.exceptionFor(pmd.errorCode))
-        }
+        if (pmd.errorCode != ErrorMapping.NoError && pmd.errorCode == ErrorMapping.LeaderNotAvailableCode) {
+          warn("Error while fetching metadata %s for topic partition [%s,%d]: [%s]".format(pmd, tmd.topic, pmd.partitionId,
+            ErrorMapping.exceptionFor(pmd.errorCode).getClass))
+        } // any other error code (e.g. ReplicaNotAvailable) can be ignored since the producer does not need to access the replica and isr metadata
       })
     })
     producerPool.updateProducer(topicsMetadata)

@@ -22,58 +22,9 @@ import kafka.network._
 import kafka.utils._
 import kafka.utils.ZkUtils._
 import collection.immutable
-import kafka.common.{TopicAndPartition, KafkaException}
+import kafka.common.{ErrorMapping, TopicAndPartition, KafkaException}
 import org.I0Itec.zkclient.ZkClient
 import kafka.cluster.Broker
-
-
-object SimpleConsumer extends Logging {
-  def earliestOrLatestOffset(broker: Broker, 
-                             topic: String, 
-                             partitionId: Int, 
-                             earliestOrLatest: Long,
-                             clientId: String, 
-                             isFromOrdinaryConsumer: Boolean): Long = {
-    var simpleConsumer: SimpleConsumer = null
-    var producedOffset: Long = -1L
-    try {
-      simpleConsumer = new SimpleConsumer(broker.host, broker.port, ConsumerConfig.SocketTimeout,
-                                          ConsumerConfig.SocketBufferSize, clientId)
-      val topicAndPartition = TopicAndPartition(topic, partitionId)
-      val request = if(isFromOrdinaryConsumer)
-        new OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)))
-      else
-        new OffsetRequest(immutable.Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)),
-                          0, Request.DebuggingConsumerId)
-      producedOffset = simpleConsumer.getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition).offsets.head
-    } catch {
-      case e =>
-        error("error in earliestOrLatestOffset() ", e)
-    }
-    finally {
-      if (simpleConsumer != null)
-        simpleConsumer.close()
-    }
-    producedOffset
-  }
-
-  def earliestOrLatestOffset(zkClient: ZkClient, 
-                             topic: String, 
-                             brokerId: Int, 
-                             partitionId: Int,
-                             earliestOrLatest: Long, 
-                             clientId: String, 
-                             isFromOrdinaryConsumer: Boolean = true): Long = {
-    val cluster = getCluster(zkClient)
-    val broker = cluster.getBroker(brokerId) match {
-      case Some(b) => b
-      case None => throw new KafkaException("Broker " + brokerId + " is unavailable. Cannot issue " +
-                                                    "getOffsetsBefore request")
-    }
-    earliestOrLatestOffset(broker, topic, partitionId, earliestOrLatest, clientId, isFromOrdinaryConsumer)
-  }
-}
-
 
 /**
  * A consumer of kafka messages
@@ -193,6 +144,25 @@ class SimpleConsumer(val host: String,
     if(!blockingChannel.isConnected) {
       connect()
     }
+  }
+
+  /**
+   * Get the earliest or latest offset of a given topic, partition.
+   * @param topicAndPartition Topic and partition of which the offset is needed.
+   * @param earliestOrLatest A value to indicate earliest or latest offset.
+   * @param consumerId Id of the consumer which could be a consumer client, SimpleConsumerShell or a follower broker.
+   * @return Requested offset.
+   */
+  def earliestOrLatestOffset(topicAndPartition: TopicAndPartition, earliestOrLatest: Long, consumerId: Int): Long = {
+    val request = OffsetRequest(requestInfo = Map(topicAndPartition -> PartitionOffsetRequestInfo(earliestOrLatest, 1)),
+                                clientId = clientId,
+                                replicaId = consumerId)
+    val partitionErrorAndOffset = getOffsetsBefore(request).partitionErrorAndOffsets(topicAndPartition)
+    val offset = partitionErrorAndOffset.error match {
+      case ErrorMapping.NoError => partitionErrorAndOffset.offsets.head
+      case _ => throw ErrorMapping.exceptionFor(partitionErrorAndOffset.error)
+    }
+    offset
   }
 }
 

@@ -43,7 +43,7 @@ object JmxTool extends Logging {
     val attributesOpt =
       parser.accepts("attributes", "The whitelist of attributes to query. This is a comma-separated list. If no " +
         "attributes are specified all objects will be queried.")
-        .withOptionalArg()
+        .withRequiredArg
         .describedAs("name")
         .ofType(classOf[String])
     val reportingIntervalOpt = parser.accepts("reporting-interval", "Interval in MS with which to poll jmx stats.")
@@ -54,7 +54,7 @@ object JmxTool extends Logging {
     val helpOpt = parser.accepts("help", "Print usage information.")
     val dateFormatOpt = parser.accepts("date-format", "The date format to use for formatting the time field. " +
       "See java.text.SimpleDateFormat for options.")
-      .withOptionalArg()
+      .withRequiredArg
       .describedAs("format")
       .ofType(classOf[String])
     val jmxServiceUrlOpt =

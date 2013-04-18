@@ -28,6 +28,7 @@ import kafka.utils.{Logging, Utils, ZkUtils, Json}
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import scala.collection._
+import mutable.ListBuffer
 import scala.collection.mutable
 import kafka.common._
 import scala.Some
@@ -208,13 +209,14 @@ object AdminUtils extends Logging {
         var replicaInfo: Seq[Broker] = Nil
         var isrInfo: Seq[Broker] = Nil
         try {
-          try {
-            leaderInfo = leader match {
-              case Some(l) => Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l)).head)
-              case None => throw new LeaderNotAvailableException("No leader exists for partition " + partition)
-            }
-          } catch {
-            case e => throw new LeaderNotAvailableException("Leader not available for topic %s partition %d".format(topic, partition), e)
+          leaderInfo = leader match {
+            case Some(l) =>
+              try {
+                Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l)).head)
+              } catch {
+                case e => throw new LeaderNotAvailableException("Leader not available for topic %s partition %d".format(topic, partition), e)
+              }
+            case None => throw new LeaderNotAvailableException("No leader exists for partition " + partition)
           }
           try {
             replicaInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, replicas.map(id => id.toInt))
@@ -222,12 +224,18 @@ object AdminUtils extends Logging {
           } catch {
             case e => throw new ReplicaNotAvailableException(e)
           }
+          if(replicaInfo.size < replicas.size)
+            throw new ReplicaNotAvailableException("Replica information not available for following brokers: " +
+              replicas.filterNot(replicaInfo.map(_.id).contains(_)).mkString(","))
+          if(isrInfo.size < inSyncReplicas.size)
+            throw new ReplicaNotAvailableException("In Sync Replica information not available for following brokers: " +
+              inSyncReplicas.filterNot(isrInfo.map(_.id).contains(_)).mkString(","))
           new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
         } catch {
           case e =>
             error("Error while fetching metadata for partition [%s,%d]".format(topic, partition), e)
             new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo,
-                                  ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+              ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
         }
       }
       new TopicMetadata(topic, partitionMetadata)
@@ -240,19 +248,23 @@ object AdminUtils extends Logging {
   private def getBrokerInfoFromCache(zkClient: ZkClient,
                                      cachedBrokerInfo: scala.collection.mutable.Map[Int, Broker],
                                      brokerIds: Seq[Int]): Seq[Broker] = {
-    brokerIds.map { id =>
+    var failedBrokerIds: ListBuffer[Int] = new ListBuffer()
+    val brokerMetadata = brokerIds.map { id =>
       val optionalBrokerInfo = cachedBrokerInfo.get(id)
       optionalBrokerInfo match {
-        case Some(brokerInfo) => brokerInfo // return broker info from the cache
+        case Some(brokerInfo) => Some(brokerInfo) // return broker info from the cache
         case None => // fetch it from zookeeper
           ZkUtils.getBrokerInfo(zkClient, id) match {
             case Some(brokerInfo) =>
               cachedBrokerInfo += (id -> brokerInfo)
-              brokerInfo
-            case None => throw new BrokerNotAvailableException("Failed to fetch broker info for broker " + id)
+              Some(brokerInfo)
+            case None =>
+              failedBrokerIds += id
+              None
           }
       }
     }
+    brokerMetadata.filter(_.isDefined).map(_.get)
   }
 
   private def replicaIndex(firstReplicaIndex: Int, secondReplicaShift: Int, replicaIndex: Int, nBrokers: Int): Int = {

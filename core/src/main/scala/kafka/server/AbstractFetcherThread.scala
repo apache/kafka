@@ -114,7 +114,8 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
           case(topicAndPartition, partitionData) =>
             val (topic, partitionId) = topicAndPartition.asTuple
             val currentOffset = partitionMap.get(topicAndPartition)
-            if (currentOffset.isDefined) {
+            // we append to the log if the current offset is defined and it is the same as the offset requested during fetch
+            if (currentOffset.isDefined && fetchRequest.requestInfo(topicAndPartition).offset == currentOffset.get) {
               partitionData.error match {
                 case ErrorMapping.NoError =>
                   val messages = partitionData.messages.asInstanceOf[ByteBufferMessageSet]
