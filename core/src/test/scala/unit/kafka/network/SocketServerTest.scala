@@ -38,6 +38,8 @@ class SocketServerTest extends JUnitSuite {
                                               port = kafka.utils.TestUtils.choosePort,
                                               numProcessorThreads = 1,
                                               maxQueuedRequests = 50,
+                                              sendBufferSize = 300000,
+                                              recvBufferSize = 300000,
                                               maxRequestSize = 50)
   server.startup()
 
