@@ -507,7 +507,7 @@ object Utils extends Logging {
     val builder = new StringBuilder
     builder.append("[ ")
     if (valueInQuotes)
-      builder.append(jsonData.map("\"" + _ + "\"")).mkString(", ")
+      builder.append(jsonData.map("\"" + _ + "\"").mkString(", "))
     else
       builder.append(jsonData.mkString(", "))
     builder.append(" ]")

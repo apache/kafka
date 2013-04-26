@@ -38,7 +38,7 @@ object TestEndToEndLatency {
     consumerProps.put("group.id", topic)
     consumerProps.put("auto.commit", "true")
     consumerProps.put("auto.offset.reset", "largest")
-    consumerProps.put("zk.connect", zkConnect)
+    consumerProps.put("zookeeper.connect", zkConnect)
     consumerProps.put("socket.timeout.ms", 1201000.toString)
     
     val config = new ConsumerConfig(consumerProps)
@@ -47,7 +47,7 @@ object TestEndToEndLatency {
     val iter = stream.iterator
 
     val producerProps = new Properties()
-    producerProps.put("broker.list", brokerList)
+    producerProps.put("metadata.broker.list", brokerList)
     producerProps.put("producer.type", "sync")
     val producer = new Producer[Any, Any](new ProducerConfig(producerProps))
     

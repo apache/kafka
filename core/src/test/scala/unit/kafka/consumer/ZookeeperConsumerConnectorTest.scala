@@ -330,7 +330,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
                                     compression: CompressionCodec = NoCompressionCodec): List[String] = {
     val header = "test-%d-%d".format(config.brokerId, partition)
     val props = new Properties()
-    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
+    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
     props.put("compression.codec", compression.codec.toString)
     props.put("key.serializer.class", classOf[IntEncoder].getName.toString)
@@ -350,7 +350,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
                    numParts: Int): List[String]= {
     var messages: List[String] = Nil
     val props = new Properties()
-    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
+    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
     props.put("key.serializer.class", classOf[IntEncoder].getName.toString)
     props.put("serializer.class", classOf[StringEncoder].getName)

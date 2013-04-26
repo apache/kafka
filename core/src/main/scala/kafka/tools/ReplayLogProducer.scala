@@ -43,7 +43,7 @@ object ReplayLogProducer extends Logging {
     // consumer properties
     val consumerProps = new Properties
     consumerProps.put("group.id", GroupId)
-    consumerProps.put("zk.connect", config.zkConnect)
+    consumerProps.put("zookeeper.connect", config.zkConnect)
     consumerProps.put("consumer.timeout.ms", "10000")
     consumerProps.put("auto.offset.reset", OffsetRequest.SmallestTimeString)
     consumerProps.put("fetch.message.max.bytes", (1024*1024).toString)
@@ -139,7 +139,7 @@ object ReplayLogProducer extends Logging {
   class ZKConsumerThread(config: Config, stream: KafkaStream[Array[Byte], Array[Byte]]) extends Thread with Logging {
     val shutdownLatch = new CountDownLatch(1)
     val props = new Properties()
-    props.put("broker.list", config.brokerList)
+    props.put("metadata.broker.list", config.brokerList)
     props.put("reconnect.interval", Integer.MAX_VALUE.toString)
     props.put("send.buffer.bytes", (64*1024).toString)
     props.put("compression.codec", config.compressionCodec.codec.toString)

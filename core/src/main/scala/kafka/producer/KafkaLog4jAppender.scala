@@ -64,9 +64,9 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
     // check for config parameter validity
     val props = new Properties()
     if(brokerList != null)
-      props.put("broker.list", brokerList)
+      props.put("metadata.broker.list", brokerList)
     if(props.isEmpty)
-      throw new MissingConfigException("The broker.list property should be specified")
+      throw new MissingConfigException("The metadata.broker.list property should be specified")
     if(topic == null)
       throw new MissingConfigException("topic must be specified by the Kafka log4j appender")
     if(serializerClass == null) {

@@ -25,7 +25,7 @@ object VerifyConsumerRebalance extends Logging {
   def main(args: Array[String]) {
     val parser = new OptionParser()
 
-    val zkConnectOpt = parser.accepts("zk.connect", "ZooKeeper connect string.").
+    val zkConnectOpt = parser.accepts("zookeeper.connect", "ZooKeeper connect string.").
       withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String]);
     val groupOpt = parser.accepts("group", "Consumer group.").
       withRequiredArg().ofType(classOf[String])

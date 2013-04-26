@@ -63,7 +63,7 @@ class ProducerConfig private (val props: VerifiableProperties)
    * format is host1:port1,host2:port2, and the list can be a subset of brokers or
    * a VIP pointing to a subset of brokers.
    */
-  val brokerList = props.getString("broker.list")
+  val brokerList = props.getString("metadata.broker.list")
 
   /** the partitioner class for partitioning events amongst sub-topics */
   val partitionerClass = props.getString("partitioner.class", "kafka.producer.DefaultPartitioner")

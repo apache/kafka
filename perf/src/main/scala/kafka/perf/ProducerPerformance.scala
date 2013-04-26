@@ -174,7 +174,7 @@ object ProducerPerformance extends Logging {
                        val allDone: CountDownLatch,
                        val rand: Random) extends Runnable {
     val props = new Properties()
-    props.put("broker.list", config.brokerList)
+    props.put("metadata.broker.list", config.brokerList)
     props.put("compression.codec", config.compressionCodec.codec.toString)
     props.put("reconnect.interval", Integer.MAX_VALUE.toString)
     props.put("send.buffer.bytes", (64*1024).toString)

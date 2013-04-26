@@ -87,7 +87,7 @@ compression codec, one would add the "kafka.output.compression.codec" parameter
 compression). 
 
 For easier debugging, the above values as well as the Kafka broker information
-(kafka.broker.list), the topic (kafka.output.topic), and the schema
+(kafka.metadata.broker.list), the topic (kafka.output.topic), and the schema
 (kafka.output.schema) are injected into the job's configuration. By default,
 the Hadoop producer uses Kafka's sync producer as asynchronous operation
 doesn't make sense in the batch Hadoop case.

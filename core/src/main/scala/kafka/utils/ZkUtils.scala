@@ -772,14 +772,14 @@ class ZKGroupTopicDirs(group: String, topic: String) extends ZKGroupDirs(group) 
 
 class ZKConfig(props: VerifiableProperties) {
   /** ZK host string */
-  val zkConnect = props.getString("zk.connect", null)
+  val zkConnect = props.getString("zookeeper.connect", null)
 
   /** zookeeper session timeout */
-  val zkSessionTimeoutMs = props.getInt("zk.session.timeout.ms", 6000)
+  val zkSessionTimeoutMs = props.getInt("zookeeper.session.timeout.ms", 6000)
 
   /** the max time that the client waits to establish a connection to zookeeper */
-  val zkConnectionTimeoutMs = props.getInt("zk.connection.timeout.ms",zkSessionTimeoutMs)
+  val zkConnectionTimeoutMs = props.getInt("zookeeper.connection.timeout.ms",zkSessionTimeoutMs)
 
   /** how far a ZK follower can be behind a ZK leader */
-  val zkSyncTimeMs = props.getInt("zk.sync.time.ms", 2000)
+  val zkSyncTimeMs = props.getInt("zookeeper.sync.time.ms", 2000)
 }

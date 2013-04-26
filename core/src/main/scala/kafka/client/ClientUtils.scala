@@ -16,7 +16,7 @@ object ClientUtils extends Logging{
   /**
    * Used by the producer to send a metadata request since it has access to the ProducerConfig
    * @param topics The topics for which the metadata needs to be fetched
-   * @param brokers The brokers in the cluster as configured on the producer through broker.list
+   * @param brokers The brokers in the cluster as configured on the producer through metadata.broker.list
    * @param producerConfig The producer's config
    * @return topic metadata response
    */
@@ -60,7 +60,7 @@ object ClientUtils extends Logging{
    */
   def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], clientId: String, timeoutMs: Int): TopicMetadataResponse = {
     val props = new Properties()
-    props.put("broker.list", brokers.map(_.getConnectionString()).mkString(","))
+    props.put("metadata.broker.list", brokers.map(_.getConnectionString()).mkString(","))
     props.put("client.id", clientId)
     props.put("request.timeout.ms", timeoutMs.toString)
     val producerConfig = new ProducerConfig(props)

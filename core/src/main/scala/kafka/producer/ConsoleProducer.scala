@@ -126,7 +126,7 @@ object ConsoleProducer {
     cmdLineProps.put("topic", topic)
 
     val props = new Properties()
-    props.put("broker.list", brokerList)
+    props.put("metadata.broker.list", brokerList)
     val codec = if(compress) DefaultCompressionCodec.codec else NoCompressionCodec.codec
     props.put("compression.codec", codec.toString)
     props.put("producer.type", if(sync) "sync" else "async")

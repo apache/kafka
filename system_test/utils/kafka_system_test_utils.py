@@ -313,8 +313,8 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
     logger.info("testcase config (dest)   pathname : " + cfgDestPathname, extra=d)
 
     # loop through all zookeepers (if more than 1) to retrieve host and clientPort
-    # to construct a zk.connect str for broker in the form of:
-    # zk.connect=<host1>:<port1>,<host2>:<port2>,...
+    # to construct a zookeeper.connect str for broker in the form of:
+    # zookeeper.connect=<host1>:<port1>,<host2>:<port2>,...
     testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]        = ""
     testcaseEnv.userDefinedEnvVarDict["targetZkConnectStr"]        = ""
     testcaseEnv.userDefinedEnvVarDict["sourceZkEntityIdList"]      = []
@@ -409,20 +409,27 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
 
                 # copy the associated .properties template, update values, write to testcase_<xxx>/config
 
-                if ( clusterCfg["role"] == "broker" ):
-                    if clusterCfg["cluster_name"] == "source":
-                        tcCfg["zk.connect"] = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
-                    elif clusterCfg["cluster_name"] == "target":
-                        tcCfg["zk.connect"] = testcaseEnv.userDefinedEnvVarDict["targetZkConnectStr"]
-                    else:
-                        logger.error("Unknown cluster name: " + clusterName, extra=d)
-                        sys.exit(1)
-
-                    zeroSevenClient = "false"
+                if (clusterCfg["role"] == "broker"):
+                    brokerVersion = "0.8"
                     try:
-                        zeroSevenClient = tcCfg["07_client"]
+                        brokerVersion = tcCfg["version"]
                     except:
                         pass
+
+                    if (brokerVersion == "0.7"):
+                        if clusterCfg["cluster_name"] == "source":
+                            tcCfg["zk.connect"] = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
+                        else:
+                            logger.error("Unknown cluster name for 0.7: " + clusterName, extra=d)
+                            sys.exit(1)
+                    else:
+                        if clusterCfg["cluster_name"] == "source":
+                            tcCfg["zookeeper.connect"] = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
+                        elif clusterCfg["cluster_name"] == "target":
+                            tcCfg["zookeeper.connect"] = testcaseEnv.userDefinedEnvVarDict["targetZkConnectStr"]
+                        else:
+                            logger.error("Unknown cluster name: " + clusterName, extra=d)
+                            sys.exit(1)
 
                     addedCSVConfig = {}
                     addedCSVConfig["kafka.csv.metrics.dir"] = get_testcase_config_log_dir_pathname(testcaseEnv, "broker", clusterCfg["entity_id"], "metrics") 
@@ -430,7 +437,7 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
                     addedCSVConfig["kafka.metrics.reporters"] = "kafka.metrics.KafkaCSVMetricsReporter" 
                     addedCSVConfig["kafka.csv.metrics.reporter.enabled"] = "true"
 
-                    if zeroSevenClient == "true":
+                    if brokerVersion == "0.7":
                         addedCSVConfig["brokerid"] = tcCfg["brokerid"]
 
                     copy_file_with_dict_values(cfgTemplatePathname + "/server.properties",
@@ -450,12 +457,12 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
                         sys.exit(1)
 
                 elif ( clusterCfg["role"] == "mirror_maker"):
-                    tcCfg["broker.list"] = testcaseEnv.userDefinedEnvVarDict["targetBrokerList"]
+                    tcCfg["metadata.broker.list"] = testcaseEnv.userDefinedEnvVarDict["targetBrokerList"]
                     copy_file_with_dict_values(cfgTemplatePathname + "/mirror_producer.properties",
                         cfgDestPathname + "/" + tcCfg["mirror_producer_config_filename"], tcCfg, None)
 
-                    # update zk.connect with the zk entities specified in cluster_config.json
-                    tcCfg["zk.connect"] = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
+                    # update zookeeper.connect with the zk entities specified in cluster_config.json
+                    tcCfg["zookeeper.connect"] = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
                     copy_file_with_dict_values(cfgTemplatePathname + "/mirror_consumer.properties",
                         cfgDestPathname + "/" + tcCfg["mirror_consumer_config_filename"], tcCfg, None)
                 
@@ -818,7 +825,7 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
         if len(formatterOption) > 0:
             formatterOption = " --formatter " + formatterOption + " "
 
-        # get zk.connect
+        # get zookeeper connect string
         zkConnectStr = ""
         if clusterName == "source":
             zkConnectStr = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]

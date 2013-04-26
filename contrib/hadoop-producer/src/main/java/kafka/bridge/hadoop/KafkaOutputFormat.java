@@ -124,8 +124,8 @@ public class KafkaOutputFormat<K, V> extends OutputFormat<K, V>
       // URL: kafka://<kafka host>/<topic>
       // e.g. kafka://kafka-server:9000,kafka-server2:9000/foobar
       String brokerList = uri.getAuthority();
-      props.setProperty("broker.list", brokerList);
-      job.set(KAFKA_CONFIG_PREFIX + ".broker.list", brokerList);
+      props.setProperty("metadata.broker.list", brokerList);
+      job.set(KAFKA_CONFIG_PREFIX + ".metadata.broker.list", brokerList);
 
       if (uri.getPath() == null || uri.getPath().length() <= 1)
         throw new KafkaException("no topic specified in kafka uri");
