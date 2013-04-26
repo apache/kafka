@@ -96,7 +96,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
       response = simpleConsumer.fetch(fetchRequest)
     } catch {
       case t =>
-        debug("error in fetch %s".format(fetchRequest), t)
+        warn("Error in fetch %s".format(fetchRequest), t)
         if (isRunning.get) {
           partitionMapLock synchronized {
             partitionsWithError ++= partitionMap.keys
