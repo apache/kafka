@@ -221,7 +221,7 @@ class Partition(val topic: String,
           if (!inSyncReplicas.contains(replica) && replica.logEndOffset >= leaderHW) {
             // expand ISR
             val newInSyncReplicas = inSyncReplicas + replica
-            info("Expanding ISR for topic %s partition %d from %s to %s"
+            info("Expanding ISR for partition [%s,%d] from %s to %s"
                  .format(topic, partitionId, inSyncReplicas.map(_.brokerId).mkString(","), newInSyncReplicas.map(_.brokerId).mkString(",")))
             // update ISR in ZK and cache
             updateIsr(newInSyncReplicas)
@@ -270,10 +270,10 @@ class Partition(val topic: String,
     val oldHighWatermark = leaderReplica.highWatermark
     if(newHighWatermark > oldHighWatermark) {
       leaderReplica.highWatermark = newHighWatermark
-      debug("Highwatermark for topic %s partition %d updated to %d".format(topic, partitionId, newHighWatermark))
+      debug("Highwatermark for partition [%s,%d] updated to %d".format(topic, partitionId, newHighWatermark))
     }
     else
-      debug("Old hw for topic %s partition %d is %d. New hw is %d. All leo's are %s"
+      debug("Old hw for partition [%s,%d] is %d. New hw is %d. All leo's are %s"
         .format(topic, partitionId, oldHighWatermark, newHighWatermark, allLogEndOffsets.mkString(",")))
   }
 
@@ -285,7 +285,7 @@ class Partition(val topic: String,
           if(outOfSyncReplicas.size > 0) {
             val newInSyncReplicas = inSyncReplicas -- outOfSyncReplicas
             assert(newInSyncReplicas.size > 0)
-            info("Shrinking ISR for topic %s partition %d from %s to %s".format(topic, partitionId,
+            info("Shrinking ISR for partition [%s,%d] from %s to %s".format(topic, partitionId,
               inSyncReplicas.map(_.brokerId).mkString(","), newInSyncReplicas.map(_.brokerId).mkString(",")))
             // update ISR in zk and in cache
             updateIsr(newInSyncReplicas)
@@ -310,13 +310,16 @@ class Partition(val topic: String,
     val candidateReplicas = inSyncReplicas - leaderReplica
     // Case 1 above
     val possiblyStuckReplicas = candidateReplicas.filter(r => r.logEndOffset < leaderLogEndOffset)
-    debug("Possibly stuck replicas for topic %s partition %d are %s".format(topic, partitionId,
-      possiblyStuckReplicas.map(_.brokerId).mkString(",")))
+    if(possiblyStuckReplicas.size > 0)
+      debug("Possibly stuck replicas for partition [%s,%d] are %s".format(topic, partitionId,
+        possiblyStuckReplicas.map(_.brokerId).mkString(",")))
     val stuckReplicas = possiblyStuckReplicas.filter(r => r.logEndOffsetUpdateTimeMs < (time.milliseconds - keepInSyncTimeMs))
-    debug("Stuck replicas for topic %s partition %d are %s".format(topic, partitionId, stuckReplicas.map(_.brokerId).mkString(",")))
+    if(stuckReplicas.size > 0)
+      debug("Stuck replicas for partition [%s,%d] are %s".format(topic, partitionId, stuckReplicas.map(_.brokerId).mkString(",")))
     // Case 2 above
     val slowReplicas = candidateReplicas.filter(r => r.logEndOffset >= 0 && (leaderLogEndOffset - r.logEndOffset) > keepInSyncMessages)
-    debug("Slow replicas for topic %s partition %d are %s".format(topic, partitionId, slowReplicas.map(_.brokerId).mkString(",")))
+    if(slowReplicas.size > 0)
+      debug("Slow replicas for partition [%s,%d] are %s".format(topic, partitionId, slowReplicas.map(_.brokerId).mkString(",")))
     stuckReplicas ++ slowReplicas
   }
 
@@ -338,7 +341,7 @@ class Partition(val topic: String,
   }
 
   private def updateIsr(newIsr: Set[Replica]) {
-    debug("Updated ISR for topic %s partition %d to %s".format(topic, partitionId, newIsr.mkString(",")))
+    debug("Updated ISR for partition [%s,%d] to %s".format(topic, partitionId, newIsr.mkString(",")))
     val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.map(r => r.brokerId).toList, zkVersion)
     // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
     val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(zkClient,

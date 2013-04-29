@@ -197,7 +197,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
                     config.logIndexIntervalBytes, 
                     time, 
                     config.brokerId)
-      info("Created log for topic %s partition %d in %s.".format(topicAndPartition.topic, topicAndPartition.partition, dataDir.getAbsolutePath))
+      info("Created log for partition [%s,%d] in %s.".format(topicAndPartition.topic, topicAndPartition.partition, dataDir.getAbsolutePath))
       logs.put(topicAndPartition, log)
       log
     }

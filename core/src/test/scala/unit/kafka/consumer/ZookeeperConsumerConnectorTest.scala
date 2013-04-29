@@ -338,7 +338,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val producer: Producer[Int, String] = new Producer[Int, String](new ProducerConfig(props))
     val ms = 0.until(numMessages).map(x => header + config.brokerId + "-" + partition + "-" + x)
     producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)):_*)
-    debug("Sent %d messages to broker %d for topic %s and partition %d".format(ms.size, config.brokerId, topic, partition))
+    debug("Sent %d messages to broker %d for partition [%s,%d]".format(ms.size, config.brokerId, topic, partition))
     producer.close()
     ms.toList
   }
@@ -359,7 +359,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
       val ms = 0.until(messagesPerNode).map(x => header + config.brokerId + "-" + partition + "-" + x)
       producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)):_*)
       messages ++= ms
-      debug("Sent %d messages to broker %d for topic %s and partition %d".format(ms.size, config.brokerId, topic, partition))
+      debug("Sent %d messages to broker %d for partition [%s,%d]".format(ms.size, config.brokerId, topic, partition))
     }
     producer.close()
     messages

@@ -54,7 +54,7 @@ class ReplicaFetcherThread(name:String,
             .format(replica.brokerId, replica.logEndOffset, messageSet.sizeInBytes))
       val followerHighWatermark = replica.logEndOffset.min(partitionData.hw)
       replica.highWatermark = followerHighWatermark
-      trace("Follower %d set replica highwatermark for topic %s partition %d to %d"
+      trace("Follower %d set replica highwatermark for partition [%s,%d] to %d"
             .format(replica.brokerId, topic, partitionId, followerHighWatermark))
     } catch {
       case e: KafkaStorageException =>

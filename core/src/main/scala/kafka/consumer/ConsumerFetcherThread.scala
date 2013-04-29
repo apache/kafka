@@ -45,7 +45,7 @@ class ConsumerFetcherThread(name: String,
   def processPartitionData(topicAndPartition: TopicAndPartition, fetchOffset: Long, partitionData: FetchResponsePartitionData) {
     val pti = partitionMap(topicAndPartition)
     if (pti.getFetchOffset != fetchOffset)
-      throw new RuntimeException("Offset doesn't match for topic %s partition: %d pti offset: %d fetch offset: %d"
+      throw new RuntimeException("Offset doesn't match for partition [%s,%d] pti offset: %d fetch offset: %d"
                                 .format(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset, fetchOffset))
     pti.enqueue(partitionData.messages.asInstanceOf[ByteBufferMessageSet])
   }

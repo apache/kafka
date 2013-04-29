@@ -144,15 +144,15 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
                   try {
                     val newOffset = handleOffsetOutOfRange(topicAndPartition)
                     partitionMap.put(topicAndPartition, newOffset)
-                    warn("current offset %d for topic %s partition %d out of range; reset offset to %d"
+                    warn("current offset %d for partition [%s,%d] out of range; reset offset to %d"
                       .format(currentOffset.get, topic, partitionId, newOffset))
                   } catch {
                     case e =>
-                      warn("error getting offset for %s %d to broker %d".format(topic, partitionId, sourceBroker.id), e)
+                      warn("error getting offset for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id), e)
                       partitionsWithError += topicAndPartition
                   }
                 case _ =>
-                  warn("error for %s %d to broker %d".format(topic, partitionId, sourceBroker.id),
+                  warn("error for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id),
                     ErrorMapping.exceptionFor(partitionData.error))
                   partitionsWithError += topicAndPartition
               }

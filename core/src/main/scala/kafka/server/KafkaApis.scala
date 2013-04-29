@@ -252,7 +252,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       val response = new FetchResponse(fetchRequest.correlationId, dataRead)
       requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(response)))
     } else {
-      debug("Putting fetch request into purgatory")
+      debug("Putting fetch request with correlation id %d from client %s into purgatory".format(fetchRequest.correlationId,
+        fetchRequest.clientId))
       // create a list of (topic, partition) pairs to use as keys for this delayed request
       val delayedFetchKeys = fetchRequest.requestInfo.keys.toSeq.map(new RequestKey(_))
       val delayedFetch = new DelayedFetch(delayedFetchKeys, request, fetchRequest, fetchRequest.maxWait, bytesReadable)
@@ -285,7 +286,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             if (!isFetchFromFollower) {
               new FetchResponsePartitionData(ErrorMapping.NoError, highWatermark, messages)
             } else {
-              debug("Leader %d for topic %s partition %d received fetch request from follower %d"
+              debug("Leader %d for partition [%s,%d] received fetch request from follower %d"
                             .format(brokerId, topic, partition, fetchRequest.replicaId))
               new FetchResponsePartitionData(ErrorMapping.NoError, highWatermark, messages)
             }
@@ -302,7 +303,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             case t =>
               BrokerTopicStats.getBrokerTopicStats(topic).failedFetchRequestRate.mark()
               BrokerTopicStats.getBrokerAllTopicsStats.failedFetchRequestRate.mark()
-              error("Error when processing fetch request for topic %s partition %d offset %d from %s with correlation id %d"
+              error("Error when processing fetch request for partition [%s,%d] offset %d from %s with correlation id %d"
                     .format(topic, partition, offset, if (isFetchFromFollower) "follower" else "consumer", fetchRequest.correlationId),
                     t)
               new FetchResponsePartitionData(ErrorMapping.codeFor(t.getClass.asInstanceOf[Class[Throwable]]), -1L, MessageSet.Empty)
@@ -334,7 +335,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       case Some(log) =>
         log.read(offset, maxSize, maxOffsetOpt)
       case None =>
-        error("Leader for topic %s partition %d on broker %d does not have a local log".format(topic, partition, brokerId))
+        error("Leader for partition [%s,%d] on broker %d does not have a local log".format(topic, partition, brokerId))
         MessageSet.Empty
     }
     (messages, localReplica.highWatermark)

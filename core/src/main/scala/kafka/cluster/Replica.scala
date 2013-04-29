@@ -40,10 +40,10 @@ class Replica(val brokerId: Int,
     if (!isLocal) {
       logEndOffsetValue.set(newLogEndOffset)
       logEndOffsetUpdateTimeMsValue.set(time.milliseconds)
-      trace("Setting log end offset for replica %d for topic %s partition %d to %d"
+      trace("Setting log end offset for replica %d for partition [%s,%d] to %d"
             .format(brokerId, topic, partitionId, logEndOffsetValue.get()))
     } else
-      throw new KafkaException("Shouldn't set logEndOffset for replica %d topic %s partition %d since it's local"
+      throw new KafkaException("Shouldn't set logEndOffset for replica %d partition [%s,%d] since it's local"
           .format(brokerId, topic, partitionId))
 
   }
@@ -66,11 +66,11 @@ class Replica(val brokerId: Int,
 
   def highWatermark_=(newHighWatermark: Long) {
     if (isLocal) {
-      trace("Setting hw for replica %d topic %s partition %d on broker %d to %d"
+      trace("Setting hw for replica %d partition [%s,%d] on broker %d to %d"
               .format(brokerId, topic, partitionId, brokerId, newHighWatermark))
       highWatermarkValue.set(newHighWatermark)
     } else
-      throw new KafkaException("Unable to set highwatermark for replica %d topic %s partition %d since it's not local"
+      throw new KafkaException("Unable to set highwatermark for replica %d partition [%s,%d] since it's not local"
               .format(brokerId, topic, partitionId))
   }
 
@@ -78,7 +78,7 @@ class Replica(val brokerId: Int,
     if (isLocal)
       highWatermarkValue.get()
     else
-      throw new KafkaException("Unable to get highwatermark for replica %d topic %s partition %d since it's not local"
+      throw new KafkaException("Unable to get highwatermark for replica %d partition [%s,%d] since it's not local"
               .format(brokerId, topic, partitionId))
   }
 

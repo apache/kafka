@@ -99,7 +99,7 @@ object VerifyConsumerRebalance extends Logging {
       partitions.foreach { partition =>
       // check if there is a node for [partition]
         if(!partitionsWithOwners.exists(p => p.equals(partition))) {
-          error("No owner for topic %s partition %s".format(topic, partition))
+          error("No owner for partition [%s,%d]".format(topic, partition))
           rebalanceSucceeded = false
         }
         // try reading the partition owner path for see if a valid consumer id exists there
@@ -109,7 +109,7 @@ object VerifyConsumerRebalance extends Logging {
           case None => null
         }
         if(partitionOwner == null) {
-          error("No owner for topic %s partition %s".format(topic, partition))
+          error("No owner for partition [%s,%d]".format(topic, partition))
           rebalanceSucceeded = false
         }
         else {
@@ -117,12 +117,12 @@ object VerifyConsumerRebalance extends Logging {
           consumerIdsForTopic match {
             case Some(consumerIds) =>
               if(!consumerIds.contains(partitionOwner)) {
-                error("Owner %s for topic %s partition %s is not a valid member of consumer " +
-                  "group %s".format(partitionOwner, topic, partition, group))
+                error(("Owner %s for partition [%s,%d] is not a valid member of consumer " +
+                  "group %s").format(partitionOwner, topic, partition, group))
                 rebalanceSucceeded = false
               }
               else
-                info("Owner of topic %s partition %s is %s".format(topic, partition, partitionOwner))
+                info("Owner of partition [%s,%d] is %s".format(topic, partition, partitionOwner))
             case None => {
               error("No consumer ids registered for topic " + topic)
               rebalanceSucceeded = false

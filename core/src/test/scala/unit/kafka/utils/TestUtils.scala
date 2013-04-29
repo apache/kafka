@@ -408,7 +408,7 @@ object TestUtils extends Logging {
           ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
             ZkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch))
         } catch {
-          case oe => error("Error while electing leader for topic %s partition %d".format(topic, partition), oe)
+          case oe => error("Error while electing leader for partition [%s,%d]".format(topic, partition), oe)
         }
       }
     }
@@ -419,9 +419,9 @@ object TestUtils extends Logging {
     val leaderExistsOrChanged = leaderLock.newCondition()
 
     if(oldLeaderOpt == None)
-      info("Waiting for leader to be elected for topic %s partition %d".format(topic, partition))
+      info("Waiting for leader to be elected for partition [%s,%d]".format(topic, partition))
     else
-      info("Waiting for leader for topic %s partition %d to be changed from old leader %d".format(topic, partition, oldLeaderOpt.get))
+      info("Waiting for leader for partition [%s,%d] to be changed from old leader %d".format(topic, partition, oldLeaderOpt.get))
 
     leaderLock.lock()
     try {
@@ -432,10 +432,10 @@ object TestUtils extends Logging {
       leader match {
         case Some(l) =>
           if(oldLeaderOpt == None)
-            info("Leader %d is elected for topic %s partition %d".format(l, topic, partition))
+            info("Leader %d is elected for partition [%s,%d]".format(l, topic, partition))
           else
-            info("Leader for topic %s partition %d is changed from %d to %d".format(topic, partition, oldLeaderOpt.get, l))
-        case None => error("Timing out after %d ms since leader is not elected for topic %s partition %d"
+            info("Leader for partition [%s,%d] is changed from %d to %d".format(topic, partition, oldLeaderOpt.get, l))
+        case None => error("Timing out after %d ms since leader is not elected for partition [%s,%d]"
                                    .format(timeoutMs, topic, partition))
       }
       leader

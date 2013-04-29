@@ -57,10 +57,10 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
     partitionMetadata.map { m =>
       m.leader match {
         case Some(leader) =>
-          debug("Topic %s partition %d has leader %d".format(topic, m.partitionId, leader.id))
+          debug("Partition [%s,%d] has leader %d".format(topic, m.partitionId, leader.id))
           new PartitionAndLeader(topic, m.partitionId, Some(leader.id))
         case None =>
-          debug("Topic %s partition %d does not have a leader yet".format(topic, m.partitionId))
+          debug("Partition [%s,%d] does not have a leader yet".format(topic, m.partitionId))
           new PartitionAndLeader(topic, m.partitionId, None)
       }
     }.sortWith((s, t) => s.partitionId < t.partitionId)

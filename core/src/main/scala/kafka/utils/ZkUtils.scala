@@ -101,7 +101,7 @@ object ZkUtils extends Logging {
         val isr = leaderIsrAndEpochInfo.get("isr").get.asInstanceOf[List[Int]]
         val controllerEpoch = leaderIsrAndEpochInfo.get("controller_epoch").get.asInstanceOf[Int]
         val zkPathVersion = stat.getVersion
-        debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for topic %s and partition %d".format(leader, epoch,
+        debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for partition [%s,%d]".format(leader, epoch,
           isr.toString(), zkPathVersion, topic, partition))
         Some(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, zkPathVersion), controllerEpoch))
       case None => None
@@ -131,10 +131,10 @@ object ZkUtils extends Logging {
     leaderAndIsrOpt match {
       case Some(leaderAndIsr) =>
         Json.parseFull(leaderAndIsr) match {
-          case None => throw new NoEpochForPartitionException("No epoch, leaderAndISR data for topic %s partition %d is invalid".format(topic, partition))
+          case None => throw new NoEpochForPartitionException("No epoch, leaderAndISR data for partition [%s,%d] is invalid".format(topic, partition))
           case Some(m) => m.asInstanceOf[Map[String, Any]].get("leader_epoch").get.asInstanceOf[Int]
         }
-      case None => throw new NoEpochForPartitionException("No epoch, ISR path for topic %s partition %d is empty"
+      case None => throw new NoEpochForPartitionException("No epoch, ISR path for partition [%s,%d] is empty"
         .format(topic, partition))
     }
   }
@@ -177,7 +177,7 @@ object ZkUtils extends Logging {
 
   def isPartitionOnBroker(zkClient: ZkClient, topic: String, partition: Int, brokerId: Int): Boolean = {
     val replicas = getReplicasForPartition(zkClient, topic, partition)
-    debug("The list of replicas for topic %s, partition %d is %s".format(topic, partition, replicas))
+    debug("The list of replicas for partition [%s,%d] is %s".format(topic, partition, replicas))
     replicas.contains(brokerId.toString)
   }
 
