@@ -103,6 +103,15 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
     }
   )
 
+  for(i <- 0 until numProcessors) {
+    newGauge(
+      "Processor-" + i + "-ResponseQueueSize",
+      new Gauge[Int] {
+        def value = responseQueues(i).size()
+      }
+    )
+  }
+
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request */
   def sendRequest(request: RequestChannel.Request) {
     requestQueue.put(request)
