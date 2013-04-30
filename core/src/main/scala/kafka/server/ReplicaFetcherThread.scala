@@ -47,11 +47,11 @@ class ReplicaFetcherThread(name:String,
 
       if (fetchOffset != replica.logEndOffset)
         throw new RuntimeException("Offset mismatch: fetched offset = %d, log end offset = %d.".format(fetchOffset, replica.logEndOffset))
-      trace("Follower %d has replica log end offset %d. Received %d messages and leader hw %d"
-            .format(replica.brokerId, replica.logEndOffset, messageSet.sizeInBytes, partitionData.hw))
+      trace("Follower %d has replica log end offset %d for partition %s. Received %d messages and leader hw %d"
+            .format(replica.brokerId, replica.logEndOffset, topicAndPartition, messageSet.sizeInBytes, partitionData.hw))
       replica.log.get.append(messageSet, assignOffsets = false)
-      trace("Follower %d has replica log end offset %d after appending %d bytes of messages"
-            .format(replica.brokerId, replica.logEndOffset, messageSet.sizeInBytes))
+      trace("Follower %d has replica log end offset %d after appending %d bytes of messages for partition %s"
+            .format(replica.brokerId, replica.logEndOffset, messageSet.sizeInBytes, topicAndPartition))
       val followerHighWatermark = replica.logEndOffset.min(partitionData.hw)
       replica.highWatermark = followerHighWatermark
       trace("Follower %d set replica highwatermark for partition [%s,%d] to %d"
