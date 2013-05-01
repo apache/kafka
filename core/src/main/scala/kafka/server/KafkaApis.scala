@@ -46,7 +46,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     new FetchRequestPurgatory(requestChannel, replicaManager.config.fetchPurgatoryPurgeIntervalRequests)
   private val delayedRequestMetrics = new DelayedRequestMetrics
 
-  private val requestLogger = Logger.getLogger("kafka.request.logger")
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
 
   /**
@@ -54,8 +53,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handle(request: RequestChannel.Request) {
     try{
-      if(requestLogger.isTraceEnabled)
-        requestLogger.trace("Handling request: " + request.requestObj + " from client: " + request.remoteAddress)
+      trace("Handling request: " + request.requestObj + " from client: " + request.remoteAddress)
       request.requestId match {
         case RequestKeys.ProduceKey => handleProducerRequest(request)
         case RequestKeys.FetchKey => handleFetchRequest(request)

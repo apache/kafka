@@ -26,6 +26,7 @@ import kafka.common.TopicAndPartition
 import kafka.utils.{Logging, SystemTime}
 import kafka.message.ByteBufferMessageSet
 import java.net._
+import org.apache.log4j.Logger
 
 
 object RequestChannel extends Logging {
@@ -47,6 +48,7 @@ object RequestChannel extends Logging {
     val requestId = buffer.getShort()
     val requestObj: RequestOrResponse = RequestKeys.deserializerForKey(requestId)(buffer)
     buffer = null
+    private val requestLogger = Logger.getLogger("kafka.request.logger")
     trace("Received request : %s".format(requestObj))
 
     def updateRequestMetrics() {
@@ -76,8 +78,9 @@ object RequestChannel extends Logging {
              m.responseSendTimeHist.update(responseSendTime)
              m.totalTimeHist.update(totalTime)
       }
-      trace("Completed request : %s, totalTime:%d, queueTime:%d, localTime:%d, remoteTime:%d, sendTime:%d"
-        .format(requestObj, totalTime, queueTime, apiLocalTime, apiRemoteTime, responseSendTime))
+      if(requestLogger.isTraceEnabled)
+        requestLogger.trace("Completed request:%s from client %s;totalTime:%d,queueTime:%d,localTime:%d,remoteTime:%d,sendTime:%d"
+          .format(requestObj, remoteAddress, totalTime, queueTime, apiLocalTime, apiRemoteTime, responseSendTime))
     }
   }
   
