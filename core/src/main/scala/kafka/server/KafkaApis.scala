@@ -435,37 +435,29 @@ class KafkaApis(val requestChannel: RequestChannel,
             val partitionMetadata = sortedPartitions.map { case(topicAndPartition, partitionState) =>
               val replicas = leaderCache(topicAndPartition).allReplicas
               var replicaInfo: Seq[Broker] = replicas.map(aliveBrokers.getOrElse(_, null)).filter(_ != null).toSeq
-              val partitionStateOpt = leaderCache.get(topicAndPartition)
               var leaderInfo: Option[Broker] = None
               var isrInfo: Seq[Broker] = Nil
-              partitionStateOpt match {
-                case Some(partitionState) =>
-                  val leaderIsrAndEpoch = partitionState.leaderIsrAndControllerEpoch
-                  val leader = leaderIsrAndEpoch.leaderAndIsr.leader
-                  val isr = leaderIsrAndEpoch.leaderAndIsr.isr
-                  debug("%s".format(topicAndPartition) + ";replicas = " + replicas + ", in sync replicas = " + isr + ", leader = " + leader)
-                  try {
-                    if(aliveBrokers.keySet.contains(leader))
-                      leaderInfo = Some(aliveBrokers(leader))
-                    else throw new LeaderNotAvailableException("Leader not available for partition %s".format(topicAndPartition))
-                    isrInfo = isr.map(aliveBrokers.getOrElse(_, null)).filter(_ != null)
-                    if(replicaInfo.size < replicas.size)
-                      throw new ReplicaNotAvailableException("Replica information not available for following brokers: " +
-                        replicas.filterNot(replicaInfo.map(_.id).contains(_)).mkString(","))
-                    if(isrInfo.size < isr.size)
-                      throw new ReplicaNotAvailableException("In Sync Replica information not available for following brokers: " +
-                        isr.filterNot(isrInfo.map(_.id).contains(_)).mkString(","))
-                    new PartitionMetadata(topicAndPartition.partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
-                  } catch {
-                    case e =>
-                      error("Error while fetching metadata for partition %s".format(topicAndPartition), e)
-                      new PartitionMetadata(topicAndPartition.partition, leaderInfo, replicaInfo, isrInfo,
-                        ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
-                  }
-                case None => // it is possible that for a newly created topic/partition, its replicas are assigned, but a
-                  // leader hasn't been assigned yet
-                  debug("%s".format(topicAndPartition) + ";replicas = " + replicas + ", in sync replicas = None, leader = None")
-                  new PartitionMetadata(topicAndPartition.partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.LeaderNotAvailableCode)
+              val leaderIsrAndEpoch = partitionState.leaderIsrAndControllerEpoch
+              val leader = leaderIsrAndEpoch.leaderAndIsr.leader
+              val isr = leaderIsrAndEpoch.leaderAndIsr.isr
+              debug("%s".format(topicAndPartition) + ";replicas = " + replicas + ", in sync replicas = " + isr + ", leader = " + leader)
+              try {
+                if(aliveBrokers.keySet.contains(leader))
+                  leaderInfo = Some(aliveBrokers(leader))
+                else throw new LeaderNotAvailableException("Leader not available for partition %s".format(topicAndPartition))
+                isrInfo = isr.map(aliveBrokers.getOrElse(_, null)).filter(_ != null)
+                if(replicaInfo.size < replicas.size)
+                  throw new ReplicaNotAvailableException("Replica information not available for following brokers: " +
+                    replicas.filterNot(replicaInfo.map(_.id).contains(_)).mkString(","))
+                if(isrInfo.size < isr.size)
+                  throw new ReplicaNotAvailableException("In Sync Replica information not available for following brokers: " +
+                    isr.filterNot(isrInfo.map(_.id).contains(_)).mkString(","))
+                new PartitionMetadata(topicAndPartition.partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
+              } catch {
+                case e =>
+                  error("Error while fetching metadata for partition %s".format(topicAndPartition), e)
+                  new PartitionMetadata(topicAndPartition.partition, leaderInfo, replicaInfo, isrInfo,
+                    ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
               }
             }
             new TopicMetadata(topic, partitionMetadata)

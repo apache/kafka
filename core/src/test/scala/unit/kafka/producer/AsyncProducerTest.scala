@@ -262,8 +262,8 @@ class AsyncProducerTest extends JUnit3Suite {
       handler.partitionAndCollate(producerDataList)
     }
     catch {
-      // should not throw UnknownTopicOrPartitionException to allow resend
-      case e: UnknownTopicOrPartitionException => fail("Should not throw UnknownTopicOrPartitionException")
+      // should not throw any exception
+      case e => fail("Should not throw any exception")
 
     }
   }
