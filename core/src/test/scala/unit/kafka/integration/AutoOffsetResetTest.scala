@@ -57,7 +57,7 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
   
   def testResetToEarliestWhenOffsetTooLow() =
     assertEquals(NumMessages, resetAndConsume(NumMessages, "smallest", SmallOffset))
-    
+
   def testResetToLatestWhenOffsetTooHigh() =
     assertEquals(0, resetAndConsume(NumMessages, "largest", LargeOffset))
 
@@ -69,11 +69,15 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
    * Returns the count of messages received.
    */
   def resetAndConsume(numMessages: Int, resetTo: String, offset: Long): Int = {
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
+
     val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs), 
         new DefaultEncoder(), new StringEncoder())
 
     for(i <- 0 until numMessages)
       producer.send(new KeyedMessage[String, Array[Byte]](topic, topic, "test".getBytes))
+
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
 
     // update offset in zookeeper for consumer to jump "forward" in time
     val dirs = new ZKGroupTopicDirs(group, topic)
@@ -99,8 +103,10 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
     } catch {
       case e: ConsumerTimeoutException => 
         info("consumer timed out after receiving " + received + " messages.")
+    } finally {
+      producer.close()
+      consumerConnector.shutdown
     }
-    consumerConnector.shutdown
     received
   }
   

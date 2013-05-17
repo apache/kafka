@@ -18,16 +18,12 @@
 package kafka.admin
 
 import java.util.Random
-import kafka.api.{TopicMetadata, PartitionMetadata}
-import kafka.cluster.Broker
 import kafka.utils.{Logging, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import scala.collection._
-import mutable.ListBuffer
 import scala.collection.mutable
 import kafka.common._
-import scala.Some
 
 object AdminUtils extends Logging {
   val rand = new Random
@@ -87,87 +83,6 @@ object AdminUtils extends Logging {
       case e: ZkNodeExistsException => throw new TopicExistsException("topic %s already exists".format(topic))
       case e2 => throw new AdministrationException(e2.toString)
     }
-  }
-
-  def fetchTopicMetadataFromZk(topic: String, zkClient: ZkClient): TopicMetadata =
-    fetchTopicMetadataFromZk(topic, zkClient, new mutable.HashMap[Int, Broker])
-
-  def fetchTopicMetadataFromZk(topics: Set[String], zkClient: ZkClient): Set[TopicMetadata] = {
-    val cachedBrokerInfo = new mutable.HashMap[Int, Broker]()
-    topics.map(topic => fetchTopicMetadataFromZk(topic, zkClient, cachedBrokerInfo))
-  }
-
-  private def fetchTopicMetadataFromZk(topic: String, zkClient: ZkClient, cachedBrokerInfo: mutable.HashMap[Int, Broker]): TopicMetadata = {
-    if(ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic))) {
-      val topicPartitionAssignment = ZkUtils.getPartitionAssignmentForTopics(zkClient, List(topic)).get(topic).get
-      val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
-      val partitionMetadata = sortedPartitions.map { partitionMap =>
-        val partition = partitionMap._1
-        val replicas = partitionMap._2
-        val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, topic, partition)
-        val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
-        debug("replicas = " + replicas + ", in sync replicas = " + inSyncReplicas + ", leader = " + leader)
-
-        var leaderInfo: Option[Broker] = None
-        var replicaInfo: Seq[Broker] = Nil
-        var isrInfo: Seq[Broker] = Nil
-        try {
-          leaderInfo = leader match {
-            case Some(l) =>
-              try {
-                Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l)).head)
-              } catch {
-                case e => throw new LeaderNotAvailableException("Leader not available for partition [%s,%d]".format(topic, partition), e)
-              }
-            case None => throw new LeaderNotAvailableException("No leader exists for partition " + partition)
-          }
-          try {
-            replicaInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, replicas.map(id => id.toInt))
-            isrInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, inSyncReplicas)
-          } catch {
-            case e => throw new ReplicaNotAvailableException(e)
-          }
-          if(replicaInfo.size < replicas.size)
-            throw new ReplicaNotAvailableException("Replica information not available for following brokers: " +
-              replicas.filterNot(replicaInfo.map(_.id).contains(_)).mkString(","))
-          if(isrInfo.size < inSyncReplicas.size)
-            throw new ReplicaNotAvailableException("In Sync Replica information not available for following brokers: " +
-              inSyncReplicas.filterNot(isrInfo.map(_.id).contains(_)).mkString(","))
-          new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
-        } catch {
-          case e =>
-            debug("Error while fetching metadata for partition [%s,%d]".format(topic, partition), e)
-            new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo,
-              ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
-        }
-      }
-      new TopicMetadata(topic, partitionMetadata)
-    } else {
-      // topic doesn't exist, send appropriate error code
-      new TopicMetadata(topic, Seq.empty[PartitionMetadata], ErrorMapping.UnknownTopicOrPartitionCode)
-    }
-  }
-
-  private def getBrokerInfoFromCache(zkClient: ZkClient,
-                                     cachedBrokerInfo: scala.collection.mutable.Map[Int, Broker],
-                                     brokerIds: Seq[Int]): Seq[Broker] = {
-    var failedBrokerIds: ListBuffer[Int] = new ListBuffer()
-    val brokerMetadata = brokerIds.map { id =>
-      val optionalBrokerInfo = cachedBrokerInfo.get(id)
-      optionalBrokerInfo match {
-        case Some(brokerInfo) => Some(brokerInfo) // return broker info from the cache
-        case None => // fetch it from zookeeper
-          ZkUtils.getBrokerInfo(zkClient, id) match {
-            case Some(brokerInfo) =>
-              cachedBrokerInfo += (id -> brokerInfo)
-              Some(brokerInfo)
-            case None =>
-              failedBrokerIds += id
-              None
-          }
-      }
-    }
-    brokerMetadata.filter(_.isDefined).map(_.get)
   }
 
   private def getWrappedIndex(firstReplicaIndex: Int, secondReplicaShift: Int, replicaIndex: Int, nBrokers: Int): Int = {

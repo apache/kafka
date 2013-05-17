@@ -28,6 +28,7 @@ import kafka.utils.ZkUtils._
 import kafka.utils.{ShutdownableThread, SystemTime}
 import kafka.common.TopicAndPartition
 import kafka.client.ClientUtils
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  *  Usage:
@@ -44,6 +45,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   private val lock = new ReentrantLock
   private val cond = lock.newCondition()
   private var leaderFinderThread: ShutdownableThread = null
+  private val correlationId = new AtomicInteger(0)
 
   private class LeaderFinderThread(name: String) extends ShutdownableThread(name) {
     // thread responsible for adding the fetcher to the right broker when leader is available
@@ -61,22 +63,22 @@ class ConsumerFetcherManager(private val consumerIdString: String,
           val topicsMetadata = ClientUtils.fetchTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet,
                                                               brokers,
                                                               config.clientId,
-                                                              config.socketTimeoutMs).topicsMetadata
+                                                              config.socketTimeoutMs,
+                                                              correlationId.getAndIncrement).topicsMetadata
+          if(logger.isDebugEnabled) topicsMetadata.foreach(topicMetadata => debug(topicMetadata.toString()))
           val leaderForPartitionsMap = new HashMap[TopicAndPartition, Broker]
-          topicsMetadata.foreach(
-            tmd => {
-              val topic = tmd.topic
-              tmd.partitionsMetadata.foreach(
-              pmd => {
-                val topicAndPartition = TopicAndPartition(topic, pmd.partitionId)
-                if(pmd.leader.isDefined && noLeaderPartitionSet.contains(topicAndPartition)) {
-                  val leaderBroker = pmd.leader.get
-                  leaderForPartitionsMap.put(topicAndPartition, leaderBroker)
-                }
-              })
-            })
+          topicsMetadata.foreach { tmd =>
+            val topic = tmd.topic
+            tmd.partitionsMetadata.foreach { pmd =>
+              val topicAndPartition = TopicAndPartition(topic, pmd.partitionId)
+              if(pmd.leader.isDefined && noLeaderPartitionSet.contains(topicAndPartition)) {
+                val leaderBroker = pmd.leader.get
+                leaderForPartitionsMap.put(topicAndPartition, leaderBroker)
+              }
+            }
+          }
 
-          leaderForPartitionsMap.foreach{
+          leaderForPartitionsMap.foreach {
             case(topicAndPartition, leaderBroker) =>
               val pti = partitionMap(topicAndPartition)
               try {

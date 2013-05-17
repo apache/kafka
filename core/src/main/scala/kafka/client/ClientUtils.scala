@@ -47,7 +47,7 @@ object ClientUtils extends Logging{
         producer.close()
       }
     }
-    if(!fetchMetaDataSucceeded){
+    if(!fetchMetaDataSucceeded) {
       throw new KafkaException("fetching topic metadata for topics [%s] from broker [%s] failed".format(topics, shuffledBrokers), t)
     } else {
       debug("Successfully fetched metadata for %d topic(s) %s".format(topics.size, topics))
@@ -62,13 +62,14 @@ object ClientUtils extends Logging{
    * @param clientId The client's identifier
    * @return topic metadata response
    */
-  def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], clientId: String, timeoutMs: Int): TopicMetadataResponse = {
+  def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], clientId: String, timeoutMs: Int,
+                         correlationId: Int = 0): TopicMetadataResponse = {
     val props = new Properties()
     props.put("metadata.broker.list", brokers.map(_.getConnectionString()).mkString(","))
     props.put("client.id", clientId)
     props.put("request.timeout.ms", timeoutMs.toString)
     val producerConfig = new ProducerConfig(props)
-    fetchTopicMetadata(topics, brokers, producerConfig, 0)
+    fetchTopicMetadata(topics, brokers, producerConfig, correlationId)
   }
 
   /**

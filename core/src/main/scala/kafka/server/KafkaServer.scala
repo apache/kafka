@@ -38,7 +38,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   var logManager: LogManager = null
   var kafkaZookeeper: KafkaZooKeeper = null
   var replicaManager: ReplicaManager = null
-  private var apis: KafkaApis = null
+  var apis: KafkaApis = null
   var kafkaController: KafkaController = null
   val kafkaScheduler = new KafkaScheduler(4)
   var zkClient: ZkClient = null
@@ -112,6 +112,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     info("shutting down")
     val canShutdown = isShuttingDown.compareAndSet(false, true);
     if (canShutdown) {
+      if(kafkaZookeeper != null)
+        Utils.swallow(kafkaZookeeper.shutdown())
       if(socketServer != null)
         Utils.swallow(socketServer.shutdown())
       if(requestHandlerPool != null)
@@ -119,8 +121,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       Utils.swallow(kafkaScheduler.shutdown())
       if(apis != null)
         Utils.swallow(apis.close())
-      if(kafkaZookeeper != null)
-        Utils.swallow(kafkaZookeeper.shutdown())
       if(replicaManager != null)
         Utils.swallow(replicaManager.shutdown())
       if(logManager != null)

@@ -37,6 +37,7 @@ import kafka.api._
 import collection.mutable.Map
 import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
 import kafka.common.TopicAndPartition
+import junit.framework.Assert
 
 
 /**
@@ -498,6 +499,12 @@ object TestUtils extends Logging {
     request.writeTo(byteBuffer)
     byteBuffer.rewind()
     byteBuffer
+  }
+
+  def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long) = {
+    Assert.assertTrue("Partition [%s,%d] metadata not propagated after timeout".format(topic, partition),
+      TestUtils.waitUntilTrue(() =>
+        servers.foldLeft(true)(_ && _.apis.leaderCache.keySet.contains(TopicAndPartition(topic, partition))), timeout))
   }
   
 }

@@ -52,7 +52,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   def handle(events: Seq[KeyedMessage[K,V]]) {
     lock synchronized {
       val serializedData = serialize(events)
-      serializedData.foreach{
+      serializedData.foreach {
         keyed =>
           val dataSize = keyed.message.payloadSize
           producerTopicStats.getProducerTopicStats(keyed.topic).byteRate.mark(dataSize)
@@ -61,6 +61,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       var outstandingProduceRequests = serializedData
       var remainingRetries = config.messageSendMaxRetries + 1
       val correlationIdStart = correlationId.get()
+      debug("Handling %d events".format(events.size))
       while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {
         topicMetadataToRefresh ++= outstandingProduceRequests.map(_.topic)
         if (topicMetadataRefreshInterval >= 0 &&
@@ -70,7 +71,8 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           lastTopicMetadataRefreshTime = SystemTime.milliseconds
         }
         outstandingProduceRequests = dispatchSerializedData(outstandingProduceRequests)
-        if (outstandingProduceRequests.size > 0)  {
+        if (outstandingProduceRequests.size > 0) {
+          info("Back off for %d ms before retrying send. Remaining retries = %d".format(config.retryBackoffMs, remainingRetries-1))
           // back off and update the topic metadata cache before attempting another send operation
           Thread.sleep(config.retryBackoffMs)
           // get topics of the outstanding produce requests and refresh metadata for those
@@ -177,7 +179,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     }catch {    // Swallow recoverable exceptions and return None so that they can be retried.
       case ute: UnknownTopicException => warn("Failed to collate messages by topic,partition due to", ute); None
       case lnae: LeaderNotAvailableException => warn("Failed to collate messages by topic,partition due to", lnae); None
-      case oe => error("Failed to collate messages by topic, partition due to", oe); throw oe
+      case oe => error("Failed to collate messages by topic, partition due to", oe); None
     }
   }
 

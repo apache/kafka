@@ -20,7 +20,7 @@ import kafka.cluster.{Partition, Replica}
 import kafka.log.Log
 import kafka.message.{ByteBufferMessageSet, Message}
 import kafka.network.{BoundedByteBufferSend, RequestChannel}
-import kafka.utils.{Time, TestUtils, MockTime}
+import kafka.utils.{ZkUtils, Time, TestUtils, MockTime}
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
 import org.scalatest.junit.JUnit3Suite
@@ -57,7 +57,9 @@ class SimpleFetchTest extends JUnit3Suite {
     val fetchSize = 100
     val messages = new Message("test-message".getBytes())
 
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
+    // create nice mock since we don't particularly care about zkclient calls
+    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
+    EasyMock.expect(zkClient.exists(ZkUtils.ControllerEpochPath)).andReturn(false)
     EasyMock.replay(zkClient)
 
     val log = EasyMock.createMock(classOf[kafka.log.Log])
@@ -151,7 +153,8 @@ class SimpleFetchTest extends JUnit3Suite {
     val followerReplicaId = configs(1).brokerId
     val followerLEO = 15
 
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
+    EasyMock.expect(zkClient.exists(ZkUtils.ControllerEpochPath)).andReturn(false)
     EasyMock.replay(zkClient)
 
     val log = EasyMock.createMock(classOf[kafka.log.Log])

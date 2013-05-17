@@ -33,14 +33,15 @@ class KafkaRequestHandler(id: Int, brokerId: Int, val requestChannel: RequestCha
       try {
         val req = requestChannel.receiveRequest()
         if(req eq RequestChannel.AllDone) {
-          trace("receives shut down command, shut down".format(brokerId, id))
+          debug("Kafka request handler %d on broker %d received shut down command".format(
+            id, brokerId))
           return
         }
         req.dequeueTimeMs = SystemTime.milliseconds
-        debug("handles request " + req)
+        trace("Kafka request handler %d on broker %d handling request %s".format(id, brokerId, req))
         apis.handle(req)
       } catch {
-        case e: Throwable => error("exception when handling request", e)
+        case e: Throwable => error("Exception when handling request")
       }
     }
   }
@@ -55,12 +56,12 @@ class KafkaRequestHandlerPool(val brokerId: Int,
   this.logIdent = "[Kafka Request Handler on Broker " + brokerId + "], "
   val threads = new Array[Thread](numThreads)
   val runnables = new Array[KafkaRequestHandler](numThreads)
-  for(i <- 0 until numThreads) { 
+  for(i <- 0 until numThreads) {
     runnables(i) = new KafkaRequestHandler(i, brokerId, requestChannel, apis)
     threads(i) = Utils.daemonThread("kafka-request-handler-" + i, runnables(i))
     threads(i).start()
   }
-  
+
   def shutdown() {
     info("shutting down")
     for(handler <- runnables)

@@ -50,6 +50,8 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // create topic
     CreateTopicCommand.createTopic(zkClient, topic, 1, 1, "0")
+    TestUtils.waitUntilMetadataIsPropagated(Seq(server), topic, 0, 1000)
+
     // send some messages
     producer.send(sent1.map(m => new KeyedMessage[Int, String](topic, 0, m)):_*)
 
@@ -65,10 +67,11 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     server = new KafkaServer(config)
     server.startup()
 
+    // wait for the broker to receive the update metadata request after startup
+    TestUtils.waitUntilMetadataIsPropagated(Seq(server), topic, 0, 1000)
+
     producer = new Producer[Int, String](new ProducerConfig(producerConfig))
     val consumer = new SimpleConsumer(host, port, 1000000, 64*1024, "")
-
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
 
     var fetchedMessage: ByteBufferMessageSet = null
     while(fetchedMessage == null || fetchedMessage.validBytes == 0) {

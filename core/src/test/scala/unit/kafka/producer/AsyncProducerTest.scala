@@ -260,10 +260,11 @@ class AsyncProducerTest extends JUnit3Suite {
                                                          topicPartitionInfos = topicPartitionInfos)
     try {
       handler.partitionAndCollate(producerDataList)
-      fail("Should fail with UnknownTopicOrPartitionException")
     }
     catch {
-      case e: UnknownTopicOrPartitionException => // expected, do nothing
+      // should not throw UnknownTopicOrPartitionException to allow resend
+      case e: UnknownTopicOrPartitionException => fail("Should not throw UnknownTopicOrPartitionException")
+
     }
   }
 
@@ -291,10 +292,10 @@ class AsyncProducerTest extends JUnit3Suite {
                                                          topicPartitionInfos = topicPartitionInfos)
     try {
       handler.handle(producerDataList)
-      fail("Should fail with NoBrokersForPartitionException")
+      fail("Should fail with FailedToSendMessageException")
     }
     catch {
-      case e: NoBrokersForPartitionException => // expected, do nothing
+      case e: FailedToSendMessageException => // we retry on any exception now
     }
   }
 
@@ -418,6 +419,8 @@ class AsyncProducerTest extends JUnit3Suite {
     val response2 = ProducerResponse(0,
       Map((TopicAndPartition("topic1", 0), ProducerResponseStatus(ErrorMapping.NoError, 0L))))
     val mockSyncProducer = EasyMock.createMock(classOf[SyncProducer])
+    // don't care about config mock
+    EasyMock.expect(mockSyncProducer.config).andReturn(EasyMock.anyObject()).anyTimes()
     EasyMock.expect(mockSyncProducer.send(request1)).andThrow(new RuntimeException) // simulate SocketTimeoutException
     EasyMock.expect(mockSyncProducer.send(request2)).andReturn(response1)
     EasyMock.expect(mockSyncProducer.send(request3)).andReturn(response2)

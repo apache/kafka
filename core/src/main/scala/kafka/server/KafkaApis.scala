@@ -17,11 +17,10 @@
 
 package kafka.server
 
-import kafka.admin.{CreateTopicCommand, AdminUtils}
+import kafka.admin.CreateTopicCommand
 import kafka.api._
 import kafka.message._
 import kafka.network._
-import org.apache.log4j.Logger
 import scala.collection._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic._
@@ -30,6 +29,7 @@ import org.I0Itec.zkclient.ZkClient
 import kafka.common._
 import kafka.utils.{ZkUtils, Pool, SystemTime, Logging}
 import kafka.network.RequestChannel.Response
+import kafka.cluster.Broker
 
 
 /**
@@ -45,7 +45,13 @@ class KafkaApis(val requestChannel: RequestChannel,
   private val fetchRequestPurgatory =
     new FetchRequestPurgatory(requestChannel, replicaManager.config.fetchPurgatoryPurgeIntervalRequests)
   private val delayedRequestMetrics = new DelayedRequestMetrics
-
+  /* following 3 data structures are updated by the update metadata request
+  * and is queried by the topic metadata request. */
+  var leaderCache: mutable.Map[TopicAndPartition, PartitionStateInfo] =
+    new mutable.HashMap[TopicAndPartition, PartitionStateInfo]()
+//  private var allBrokers: mutable.Map[Int, Broker] = new mutable.HashMap[Int, Broker]()
+  private var aliveBrokers: mutable.Map[Int, Broker] = new mutable.HashMap[Int, Broker]()
+  private val partitionMetadataLock = new Object
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
 
   /**
@@ -61,6 +67,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.MetadataKey => handleTopicMetadataRequest(request)
         case RequestKeys.LeaderAndIsrKey => handleLeaderAndIsrRequest(request)
         case RequestKeys.StopReplicaKey => handleStopReplicaRequest(request)
+        case RequestKeys.UpdateMetadataKey => handleUpdateMetadataRequest(request)
         case requestId => throw new KafkaException("No mapping found for handler id " + requestId)
       }
     } catch {
@@ -84,13 +91,35 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-
   def handleStopReplicaRequest(request: RequestChannel.Request) {
     val stopReplicaRequest = request.requestObj.asInstanceOf[StopReplicaRequest]
     val (response, error) = replicaManager.stopReplicas(stopReplicaRequest)
     val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.correlationId, response.toMap, error)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(stopReplicaResponse)))
     replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads()
+  }
+
+  def handleUpdateMetadataRequest(request: RequestChannel.Request) {
+    val updateMetadataRequest = request.requestObj.asInstanceOf[UpdateMetadataRequest]
+    if(updateMetadataRequest.controllerEpoch < replicaManager.controllerEpoch) {
+      val stateControllerEpochErrorMessage = ("Broker %d received update metadata request with correlation id %d from an " +
+        "old controller %d with epoch %d. Latest known controller epoch is %d").format(brokerId,
+        updateMetadataRequest.correlationId, updateMetadataRequest.controllerId, updateMetadataRequest.controllerEpoch,
+        replicaManager.controllerEpoch)
+      replicaManager.stateChangeLogger.warn(stateControllerEpochErrorMessage)
+      throw new ControllerMovedException(stateControllerEpochErrorMessage)
+    }
+    partitionMetadataLock synchronized {
+      replicaManager.controllerEpoch = updateMetadataRequest.controllerEpoch
+      // cache the list of alive brokers in the cluster
+      updateMetadataRequest.aliveBrokers.foreach(b => aliveBrokers.put(b.id, b))
+      updateMetadataRequest.partitionStateInfos.foreach { partitionState =>
+        leaderCache.put(partitionState._1, partitionState._2)
+        debug("Caching leader info %s for partition %s".format(partitionState._2, partitionState._1))
+      }
+    }
+    val updateMetadataResponse = new UpdateMetadataResponse(updateMetadataRequest.correlationId)
+    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(updateMetadataResponse)))
   }
 
   /**
@@ -390,46 +419,87 @@ class KafkaApis(val requestChannel: RequestChannel,
     val metadataRequest = request.requestObj.asInstanceOf[TopicMetadataRequest]
     val topicsMetadata = new mutable.ArrayBuffer[TopicMetadata]()
     val config = replicaManager.config
-    val uniqueTopics = {
+    var uniqueTopics = Set.empty[String]
+    uniqueTopics = {
       if(metadataRequest.topics.size > 0)
         metadataRequest.topics.toSet
       else
         ZkUtils.getAllTopics(zkClient).toSet
     }
-    val topicMetadataList = AdminUtils.fetchTopicMetadataFromZk(uniqueTopics, zkClient)
-    topicMetadataList.foreach(
-      topicAndMetadata => {
-        topicAndMetadata.errorCode match {
-          case ErrorMapping.NoError => topicsMetadata += topicAndMetadata
-          case ErrorMapping.UnknownTopicOrPartitionCode =>
-            try {
-              /* check if auto creation of topics is turned on */
-              if (config.autoCreateTopicsEnable) {
-                try {
-                  CreateTopicCommand.createTopic(zkClient, topicAndMetadata.topic, config.numPartitions, config.defaultReplicationFactor)
-                  info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
-                               .format(topicAndMetadata.topic, config.numPartitions, config.defaultReplicationFactor))
-                } catch {
-                  case e: TopicExistsException => // let it go, possibly another broker created this topic
-                }
-                val newTopicMetadata = AdminUtils.fetchTopicMetadataFromZk(topicAndMetadata.topic, zkClient)
-                topicsMetadata += newTopicMetadata
-                newTopicMetadata.errorCode match {
-                  case ErrorMapping.NoError =>
-                  case _ => throw new KafkaException("Topic metadata for automatically created topic %s does not exist".format(topicAndMetadata.topic))
-                }
+    val topicMetadataList =
+      partitionMetadataLock synchronized {
+        uniqueTopics.map { topic =>
+          if(leaderCache.keySet.map(_.topic).contains(topic)) {
+            val partitionStateInfo = leaderCache.filter(p => p._1.topic.equals(topic))
+            val sortedPartitions = partitionStateInfo.toList.sortWith((m1,m2) => m1._1.partition < m2._1.partition)
+            val partitionMetadata = sortedPartitions.map { case(topicAndPartition, partitionState) =>
+              val replicas = leaderCache(topicAndPartition).allReplicas
+              var replicaInfo: Seq[Broker] = replicas.map(aliveBrokers.getOrElse(_, null)).filter(_ != null).toSeq
+              val partitionStateOpt = leaderCache.get(topicAndPartition)
+              var leaderInfo: Option[Broker] = None
+              var isrInfo: Seq[Broker] = Nil
+              partitionStateOpt match {
+                case Some(partitionState) =>
+                  val leaderIsrAndEpoch = partitionState.leaderIsrAndControllerEpoch
+                  val leader = leaderIsrAndEpoch.leaderAndIsr.leader
+                  val isr = leaderIsrAndEpoch.leaderAndIsr.isr
+                  debug("%s".format(topicAndPartition) + ";replicas = " + replicas + ", in sync replicas = " + isr + ", leader = " + leader)
+                  try {
+                    if(aliveBrokers.keySet.contains(leader))
+                      leaderInfo = Some(aliveBrokers(leader))
+                    else throw new LeaderNotAvailableException("Leader not available for partition %s".format(topicAndPartition))
+                    isrInfo = isr.map(aliveBrokers.getOrElse(_, null)).filter(_ != null)
+                    if(replicaInfo.size < replicas.size)
+                      throw new ReplicaNotAvailableException("Replica information not available for following brokers: " +
+                        replicas.filterNot(replicaInfo.map(_.id).contains(_)).mkString(","))
+                    if(isrInfo.size < isr.size)
+                      throw new ReplicaNotAvailableException("In Sync Replica information not available for following brokers: " +
+                        isr.filterNot(isrInfo.map(_.id).contains(_)).mkString(","))
+                    new PartitionMetadata(topicAndPartition.partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
+                  } catch {
+                    case e =>
+                      error("Error while fetching metadata for partition %s".format(topicAndPartition), e)
+                      new PartitionMetadata(topicAndPartition.partition, leaderInfo, replicaInfo, isrInfo,
+                        ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+                  }
+                case None => // it is possible that for a newly created topic/partition, its replicas are assigned, but a
+                  // leader hasn't been assigned yet
+                  debug("%s".format(topicAndPartition) + ";replicas = " + replicas + ", in sync replicas = None, leader = None")
+                  new PartitionMetadata(topicAndPartition.partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.LeaderNotAvailableCode)
               }
-            } catch {
-              case e => error("Error while retrieving topic metadata", e)
             }
-          case _ => 
-            error("Error while fetching topic metadata for topic " + topicAndMetadata.topic,
-                  ErrorMapping.exceptionFor(topicAndMetadata.errorCode).getCause)
-            topicsMetadata += topicAndMetadata
+            new TopicMetadata(topic, partitionMetadata)
+          } else {
+            // topic doesn't exist, send appropriate error code
+            new TopicMetadata(topic, Seq.empty[PartitionMetadata], ErrorMapping.UnknownTopicOrPartitionCode)
+          }
         }
-      })
-    trace("Sending topic metadata for correlation id %d to client %s".format(metadataRequest.correlationId, metadataRequest.clientId))
-    topicsMetadata.foreach(metadata => trace("Sending topic metadata " + metadata.toString))
+      }
+
+    // handle auto create topics
+    topicMetadataList.foreach { topicMetadata =>
+      topicMetadata.errorCode match {
+        case ErrorMapping.NoError => topicsMetadata += topicMetadata
+        case ErrorMapping.UnknownTopicOrPartitionCode =>
+          if (config.autoCreateTopicsEnable) {
+            try {
+              CreateTopicCommand.createTopic(zkClient, topicMetadata.topic, config.numPartitions, config.defaultReplicationFactor)
+              info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
+                .format(topicMetadata.topic, config.numPartitions, config.defaultReplicationFactor))
+            } catch {
+              case e: TopicExistsException => // let it go, possibly another broker created this topic
+            }
+            topicsMetadata += new TopicMetadata(topicMetadata.topic, topicMetadata.partitionsMetadata, ErrorMapping.LeaderNotAvailableCode)
+          } else {
+            topicsMetadata += topicMetadata
+          }
+        case _ =>
+          debug("Error while fetching topic metadata for topic %s due to %s ".format(topicMetadata.topic,
+            ErrorMapping.exceptionFor(topicMetadata.errorCode).getClass.getName))
+          topicsMetadata += topicMetadata
+      }
+    }
+    trace("Sending topic metadata %s for correlation id %d to client %s".format(topicsMetadata.mkString(","), metadataRequest.correlationId, metadataRequest.clientId))
     val response = new TopicMetadataResponse(topicsMetadata.toSeq, metadataRequest.correlationId)
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
   }

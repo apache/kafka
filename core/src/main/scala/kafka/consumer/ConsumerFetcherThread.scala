@@ -20,9 +20,8 @@ package kafka.consumer
 import kafka.cluster.Broker
 import kafka.server.AbstractFetcherThread
 import kafka.message.ByteBufferMessageSet
-import kafka.api.{PartitionOffsetRequestInfo, Request, OffsetRequest, FetchResponsePartitionData}
+import kafka.api.{Request, OffsetRequest, FetchResponsePartitionData}
 import kafka.common.TopicAndPartition
-import kafka.common.ErrorMapping
 
 
 class ConsumerFetcherThread(name: String,

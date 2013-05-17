@@ -23,6 +23,7 @@ import kafka.utils._
 import kafka.common.{InvalidConfigException, Config}
 
 object ConsumerConfig extends Config {
+  val RefreshMetadataBackoffMs = 200
   val SocketTimeout = 30 * 1000
   val SocketBufferSize = 64*1024
   val FetchSize = 1024 * 1024
@@ -115,7 +116,7 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   val rebalanceBackoffMs = props.getInt("rebalance.backoff.ms", zkSyncTimeMs)
 
   /** backoff time to refresh the leader of a partition after it loses the current leader */
-  val refreshLeaderBackoffMs = props.getInt("refresh.leader.backoff.ms", 200)
+  val refreshLeaderBackoffMs = props.getInt("refresh.leader.backoff.ms", RefreshMetadataBackoffMs)
 
   /* what to do if an offset is out of range.
      smallest : automatically reset the offset to the smallest offset

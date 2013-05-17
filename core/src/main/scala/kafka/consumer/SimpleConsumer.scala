@@ -20,11 +20,7 @@ package kafka.consumer
 import kafka.api._
 import kafka.network._
 import kafka.utils._
-import kafka.utils.ZkUtils._
-import collection.immutable
-import kafka.common.{ErrorMapping, TopicAndPartition, KafkaException}
-import org.I0Itec.zkclient.ZkClient
-import kafka.cluster.Broker
+import kafka.common.{ErrorMapping, TopicAndPartition}
 
 /**
  * A consumer of kafka messages

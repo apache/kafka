@@ -61,20 +61,19 @@ class SocketServer(val brokerId: Int,
     this.acceptor = new Acceptor(host, port, processors, sendBufferSize, recvBufferSize)
     Utils.newThread("kafka-acceptor", acceptor, false).start()
     acceptor.awaitStartup
-    info("started")
+    info("Started")
   }
 
   /**
    * Shutdown the socket server
    */
   def shutdown() = {
-    info("shutting down")
+    info("Shutting down")
     if(acceptor != null)
       acceptor.shutdown()
     for(processor <- processors)
       processor.shutdown()
-    requestChannel.shutdown
-    info("shut down completely")
+    info("Shutdown completed")
   }
 }
 

@@ -63,7 +63,7 @@ case class LeaderAndIsrResponse(override val correlationId: Int,
     buffer.putInt(correlationId)
     buffer.putShort(errorCode)
     buffer.putInt(responseMap.size)
-    for ((key:(String, Int), value) <- responseMap){
+    for ((key:(String, Int), value) <- responseMap) {
       writeShortString(buffer, key._1)
       buffer.putInt(key._2)
       buffer.putShort(value)

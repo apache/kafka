@@ -19,8 +19,8 @@ package kafka.server
 
 import kafka.cluster.Broker
 import kafka.message.ByteBufferMessageSet
-import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest, FetchResponsePartitionData}
-import kafka.common.{KafkaStorageException, TopicAndPartition, ErrorMapping}
+import kafka.api.{OffsetRequest, FetchResponsePartitionData}
+import kafka.common.{KafkaStorageException, TopicAndPartition}
 
 class ReplicaFetcherThread(name:String,
                            sourceBroker: Broker,

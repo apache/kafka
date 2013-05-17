@@ -52,7 +52,7 @@ class ReplicaManager(val config: KafkaConfig,
   val highWatermarkCheckpoints = config.logDirs.map(dir => (dir, new HighwaterMarkCheckpoint(dir))).toMap
   private var hwThreadInitialized = false
   this.logIdent = "[Replica Manager on Broker " + localBrokerId + "]: "
-  private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
+  val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
 
   newGauge(
     "LeaderCount",
