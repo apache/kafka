@@ -101,12 +101,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleUpdateMetadataRequest(request: RequestChannel.Request) {
     val updateMetadataRequest = request.requestObj.asInstanceOf[UpdateMetadataRequest]
+    val stateChangeLogger = replicaManager.stateChangeLogger
     if(updateMetadataRequest.controllerEpoch < replicaManager.controllerEpoch) {
       val stateControllerEpochErrorMessage = ("Broker %d received update metadata request with correlation id %d from an " +
         "old controller %d with epoch %d. Latest known controller epoch is %d").format(brokerId,
         updateMetadataRequest.correlationId, updateMetadataRequest.controllerId, updateMetadataRequest.controllerEpoch,
         replicaManager.controllerEpoch)
-      replicaManager.stateChangeLogger.warn(stateControllerEpochErrorMessage)
+      stateChangeLogger.warn(stateControllerEpochErrorMessage)
       throw new ControllerMovedException(stateControllerEpochErrorMessage)
     }
     partitionMetadataLock synchronized {
@@ -115,7 +116,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       updateMetadataRequest.aliveBrokers.foreach(b => aliveBrokers.put(b.id, b))
       updateMetadataRequest.partitionStateInfos.foreach { partitionState =>
         leaderCache.put(partitionState._1, partitionState._2)
-        debug("Caching leader info %s for partition %s".format(partitionState._2, partitionState._1))
+        if(stateChangeLogger.isTraceEnabled)
+          stateChangeLogger.trace(("Broker %d cached leader info %s for partition %s in response to UpdateMetadata request " +
+            "sent by controller %d epoch %d with correlation id %d").format(brokerId, partitionState._2, partitionState._1,
+            updateMetadataRequest.controllerId, updateMetadataRequest.controllerEpoch, updateMetadataRequest.correlationId))
       }
     }
     val updateMetadataResponse = new UpdateMetadataResponse(updateMetadataRequest.correlationId)
