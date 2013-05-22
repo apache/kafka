@@ -28,7 +28,6 @@ import collection.mutable.ListBuffer
 import kafka.tools.KafkaMigrationTool.{ProducerThread, ProducerDataChannel}
 import kafka.javaapi
 
-
 object MirrorMaker extends Logging {
 
   def main(args: Array[String]) {
@@ -114,23 +113,33 @@ object MirrorMaker extends Logging {
     else
       new Blacklist(options.valueOf(blacklistOpt))
 
-    val streams =
-      connectors.map(_.createMessageStreamsByFilter(filterSpec, numStreams.intValue(), new DefaultDecoder(), new DefaultDecoder()))
+    var streams: Seq[KafkaStream[Array[Byte], Array[Byte]]] = Nil
+    try {
+      streams = connectors.map(_.createMessageStreamsByFilter(filterSpec, numStreams.intValue(), new DefaultDecoder(), new DefaultDecoder())).flatten
+    } catch {
+      case t =>
+        fatal("Unable to create stream - shutting down mirror maker.")
+        connectors.foreach(_.shutdown)
+    }
 
     val producerDataChannel = new ProducerDataChannel[KeyedMessage[Array[Byte], Array[Byte]]](bufferSize);
 
     val consumerThreads =
-      streams.flatten.zipWithIndex.map(streamAndIndex => new MirrorMakerThread(streamAndIndex._1, producerDataChannel, streamAndIndex._2))
+      streams.zipWithIndex.map(streamAndIndex => new MirrorMakerThread(streamAndIndex._1, producerDataChannel, streamAndIndex._2))
 
     val producerThreads = new ListBuffer[ProducerThread]()
 
+    def cleanShutdown() {
+      connectors.foreach(_.shutdown)
+      consumerThreads.foreach(_.awaitShutdown)
+      producerThreads.foreach(_.shutdown)
+      producerThreads.foreach(_.awaitShutdown)
+      info("Kafka mirror maker shutdown successfully")
+    }
+
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run() {
-        connectors.foreach(_.shutdown)
-        consumerThreads.foreach(_.awaitShutdown)
-        producerThreads.foreach(_.shutdown)
-        producerThreads.foreach(_.awaitShutdown)
-        logger.info("Kafka migration tool shutdown successfully");
+        cleanShutdown()
       }
     })
 
@@ -145,6 +154,10 @@ object MirrorMaker extends Logging {
 
     consumerThreads.foreach(_.start)
     producerThreads.foreach(_.start)
+
+    // in case the consumer threads hit a timeout/other exception
+    consumerThreads.foreach(_.awaitShutdown)
+    cleanShutdown()
   }
 
   class MirrorMakerThread(stream: KafkaStream[Array[Byte], Array[Byte]],
@@ -158,6 +171,7 @@ object MirrorMaker extends Logging {
     this.setName(threadName)
 
     override def run() {
+      info("Starting mirror maker thread " + threadName)
       try {
         for (msgAndMetadata <- stream) {
           val pd = new KeyedMessage[Array[Byte], Array[Byte]](msgAndMetadata.topic, msgAndMetadata.message)

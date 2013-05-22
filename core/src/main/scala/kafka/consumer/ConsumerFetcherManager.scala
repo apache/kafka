@@ -85,13 +85,32 @@ class ConsumerFetcherManager(private val consumerIdString: String,
                   addFetcher(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset(), leaderBroker)
                   noLeaderPartitionSet -= topicAndPartition
               } catch {
-                case t => warn("Failed to add fetcher for %s to broker %s".format(topicAndPartition, leaderBroker), t)
+                case t => {
+                  /*
+                   * If we are shutting down (e.g., due to a rebalance) propagate this exception upward to avoid
+                   * processing subsequent partitions without leader so the leader-finder-thread can exit.
+                   * It is unfortunate that we depend on the following behavior and we should redesign this: as part of
+                   * processing partitions, we catch the InterruptedException (thrown from addPartition's call to
+                   * lockInterruptibly) when adding partitions, thereby clearing the interrupted flag. If we process
+                   * more partitions, then the lockInterruptibly in addPartition will not throw an InterruptedException
+                   * and we can run into the deadlock described in KAFKA-914.
+                   */
+                  if (!isRunning.get())
+                    throw t
+                  else
+                    warn("Failed to add fetcher for %s to broker %s".format(topicAndPartition, leaderBroker), t)
+                }
               }
           }
 
           shutdownIdleFetcherThreads()
         } catch {
-          case t => warn("Failed to find leader for %s".format(noLeaderPartitionSet), t)
+          case t => {
+            if (!isRunning.get())
+              throw t /* See above for why we need to propagate this exception. */
+            else
+              warn("Failed to find leader for %s".format(noLeaderPartitionSet), t)
+          }
         }
       } finally {
         lock.unlock()
@@ -122,6 +141,11 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   }
 
   def stopConnections() {
+    /*
+     * Stop the leader finder thread first before stopping fetchers. Otherwise, if there are more partitions without
+     * leader, then the leader finder thread will process these partitions (before shutting down) and add fetchers for
+     * these partitions.
+     */
     info("Stopping leader finder thread")
     if (leaderFinderThread != null) {
       leaderFinderThread.shutdown()
