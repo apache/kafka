@@ -122,6 +122,7 @@ class RequestSendThread(val controllerId: Int,
 
     try{
       lock synchronized {
+        channel.connect() // establish a socket connection if needed
         channel.send(request)
         receive = channel.receive()
         var response: RequestOrResponse = null
@@ -142,8 +143,9 @@ class RequestSendThread(val controllerId: Int,
       }
     } catch {
       case e =>
-        // log it and let it go. Let controller shut it down.
-        debug("Exception occurs", e)
+        warn("Controller %d fails to send a request to broker %d".format(controllerId, toBrokerId), e)
+        // If there is any socket error (eg, socket timeout), the channel is no longer usable and needs to be recreated.
+        channel.disconnect()
     }
   }
 }
