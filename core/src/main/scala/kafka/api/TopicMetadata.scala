@@ -64,12 +64,12 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
         partitionsMetadata.foreach { partitionMetadata =>
           partitionMetadata.errorCode match {
             case ErrorMapping.NoError =>
-              topicMetadataInfo.append("\nMetadata for partition [%s,%d] is %d".format(topic,
+              topicMetadataInfo.append("\nMetadata for partition [%s,%d] is %s".format(topic,
                 partitionMetadata.partitionId, partitionMetadata.toString()))
             case ErrorMapping.ReplicaNotAvailableCode =>
               // this error message means some replica other than the leader is not available. The consumer
               // doesn't care about non leader replicas, so ignore this
-              topicMetadataInfo.append("\nMetadata for partition [%s,%d] is %d".format(topic,
+              topicMetadataInfo.append("\nMetadata for partition [%s,%d] is %s".format(topic,
                 partitionMetadata.partitionId, partitionMetadata.toString()))
             case _ =>
               topicMetadataInfo.append("\nMetadata for partition [%s,%d] is not available due to %s".format(topic,
