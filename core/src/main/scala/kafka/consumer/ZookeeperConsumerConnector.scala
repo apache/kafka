@@ -496,6 +496,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           * by the consumer, there will be no more messages returned by this iterator until the rebalancing finishes
           * successfully and the fetchers restart to fetch more data chunks
           **/
+        if (config.autoCommitEnable)
           commitOffsets
         case None =>
       }
