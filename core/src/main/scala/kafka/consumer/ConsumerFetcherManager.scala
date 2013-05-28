@@ -167,7 +167,6 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     lock.lock()
     try {
       if (partitionMap != null) {
-        partitionList.foreach(tp => removeFetcher(tp.topic, tp.partition))
         noLeaderPartitionSet ++= partitionList
         cond.signalAll()
       }

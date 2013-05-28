@@ -66,6 +66,7 @@ class ConsumerFetcherThread(name: String,
 
   // any logic for partitions whose leader has changed
   def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition]) {
+    partitions.foreach(tap => removePartition(tap.topic, tap.partition))
     consumerFetcherManager.addPartitionsWithError(partitions)
   }
 }
