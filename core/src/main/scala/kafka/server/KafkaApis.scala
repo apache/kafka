@@ -239,16 +239,18 @@ class KafkaApis(val requestChannel: RequestChannel,
           Runtime.getRuntime.halt(1)
           null
         case utpe: UnknownTopicOrPartitionException =>
-          warn("Produce request: " + utpe.getMessage)
+          warn("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
+               producerRequest.correlationId, producerRequest.clientId, topicAndPartition, utpe.getMessage))
           new ProduceResult(topicAndPartition, utpe)
         case nle: NotLeaderForPartitionException =>
-          warn("Produce request: " + nle.getMessage)
+          warn("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
+               producerRequest.correlationId, producerRequest.clientId, topicAndPartition, nle.getMessage))
           new ProduceResult(topicAndPartition, nle)
         case e =>
           BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).failedProduceRequestRate.mark()
           BrokerTopicStats.getBrokerAllTopicsStats.failedProduceRequestRate.mark()
-          error("Error processing ProducerRequest with correlation id %d from client %s on %s:%d"
-            .format(producerRequest.correlationId, producerRequest.clientId, topicAndPartition.topic, topicAndPartition.partition), e)
+          error("Error processing ProducerRequest with correlation id %d from client %s on partition %s"
+            .format(producerRequest.correlationId, producerRequest.clientId, topicAndPartition), e)
           new ProduceResult(topicAndPartition, e)
        }
     }
@@ -326,10 +328,12 @@ class KafkaApis(val requestChannel: RequestChannel,
             // since failed fetch requests metric is supposed to indicate failure of a broker in handling a fetch request
             // for a partition it is the leader for
             case utpe: UnknownTopicOrPartitionException =>
-              warn("Fetch request: " + utpe.getMessage)
+              warn("Fetch request with correlation id %d from client %s on partition [%s,%d] failed due to %s".format(
+                   fetchRequest.correlationId, fetchRequest.clientId, topic, partition, utpe.getMessage))
               new FetchResponsePartitionData(ErrorMapping.codeFor(utpe.getClass.asInstanceOf[Class[Throwable]]), -1L, MessageSet.Empty)
             case nle: NotLeaderForPartitionException =>
-              warn("Fetch request: " + nle.getMessage)
+              warn("Fetch request with correlation id %d from client %s on partition [%s,%d] failed due to %s".format(
+                fetchRequest.correlationId, fetchRequest.clientId, topic, partition, nle.getMessage))
               new FetchResponsePartitionData(ErrorMapping.codeFor(nle.getClass.asInstanceOf[Class[Throwable]]), -1L, MessageSet.Empty)
             case t =>
               BrokerTopicStats.getBrokerTopicStats(topic).failedFetchRequestRate.mark()
@@ -402,10 +406,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         // NOTE: UnknownTopicOrPartitionException and NotLeaderForPartitionException are special cased since these error messages
         // are typically transient and there is no value in logging the entire stack trace for the same
         case utpe: UnknownTopicOrPartitionException =>
-          warn(utpe.getMessage)
+          warn("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
+               offsetRequest.correlationId, offsetRequest.clientId, topicAndPartition, utpe.getMessage))
           (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(utpe.getClass.asInstanceOf[Class[Throwable]]), Nil) )
         case nle: NotLeaderForPartitionException =>
-          warn(nle.getMessage)
+          warn("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
+               offsetRequest.correlationId, offsetRequest.clientId, topicAndPartition,nle.getMessage))
           (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(nle.getClass.asInstanceOf[Class[Throwable]]), Nil) )
         case e =>
           warn("Error while responding to offset request", e)

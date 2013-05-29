@@ -333,8 +333,8 @@ object ZkUtils extends Logging {
       (true, stat.getVersion)
     } catch {
       case e: Exception =>
-        error("Conditional update of path %s with data %s and expected version %d failed".format(path, data,
-          expectVersion), e)
+        error("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
+          expectVersion, e.getMessage))
         (false, -1)
     }
   }
@@ -352,8 +352,8 @@ object ZkUtils extends Logging {
     } catch {
       case nne: ZkNoNodeException => throw nne
       case e: Exception =>
-        error("Conditional update of path %s with data %s and expected version %d failed".format(path, data,
-          expectVersion), e)
+        error("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
+          expectVersion, e.getMessage))
         (false, -1)
     }
   }
