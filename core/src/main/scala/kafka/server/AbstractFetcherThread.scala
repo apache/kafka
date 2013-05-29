@@ -152,9 +152,11 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
                       partitionsWithError += topicAndPartition
                   }
                 case _ =>
-                  warn("error for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id),
-                    ErrorMapping.exceptionFor(partitionData.error))
-                  partitionsWithError += topicAndPartition
+                  if (isRunning.get) {
+                    warn("error for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id),
+                      ErrorMapping.exceptionFor(partitionData.error))
+                    partitionsWithError += topicAndPartition
+                  }
               }
             }
         }
