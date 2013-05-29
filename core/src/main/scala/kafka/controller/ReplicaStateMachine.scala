@@ -59,7 +59,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     initializeReplicaState()
     hasStarted.set(true)
     // move all Online replicas to Online
-    handleStateChanges(ZkUtils.getAllReplicasOnBroker(zkClient, controllerContext.allTopics.toSeq,
+    handleStateChanges(getAllReplicasOnBroker(controllerContext.allTopics.toSeq,
       controllerContext.liveBrokerIds.toSeq), OnlineReplica)
     info("Started replica state machine with initial state -> " + replicaState.toString())
   }
@@ -227,6 +227,16 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
         }
       }
     }
+  }
+
+  private def getAllReplicasOnBroker(topics: Seq[String], brokerIds: Seq[Int]): Set[PartitionAndReplica] = {
+    brokerIds.map { brokerId =>
+      val partitionsAssignedToThisBroker =
+        controllerContext.partitionReplicaAssignment.filter(p => topics.contains(p._1.topic) && p._2.contains(brokerId))
+      if(partitionsAssignedToThisBroker.size == 0)
+        info("No state transitions triggered since no partitions are assigned to brokers %s".format(brokerIds.mkString(",")))
+      partitionsAssignedToThisBroker.map(p => new PartitionAndReplica(p._1.topic, p._1.partition, brokerId))
+    }.flatten.toSet
   }
 
   def getPartitionsAssignedToBroker(topics: Seq[String], brokerId: Int):Seq[TopicAndPartition] = {
