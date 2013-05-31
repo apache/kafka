@@ -50,7 +50,7 @@ class ProducerSendThread[K,V](val threadName: String,
   }
 
   def shutdown = {
-    info("Beging shutting down ProducerSendThread")
+    info("Begin shutting down ProducerSendThread")
     queue.put(shutdownCommand)
     shutdownLatch.await
     info("Shutdown ProducerSendThread complete")
