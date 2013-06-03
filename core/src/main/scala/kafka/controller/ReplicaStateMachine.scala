@@ -45,7 +45,6 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   val brokerRequestBatch = new ControllerBrokerRequestBatch(controller.controllerContext, controller.sendRequest,
     controllerId, controller.clientId)
   private val hasStarted = new AtomicBoolean(false)
-  private val hasShutdown = new AtomicBoolean(false)
   this.logIdent = "[Replica state machine on controller " + controller.config.brokerId + "]: "
   private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
 
@@ -73,7 +72,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    * Invoked on controller shutdown.
    */
   def shutdown() {
-    hasShutdown.compareAndSet(false, true)
+    hasStarted.set(false)
     replicaState.clear()
   }
 
@@ -252,7 +251,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
       ControllerStats.leaderElectionTimer.time {
         info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.mkString(",")))
         controllerContext.controllerLock synchronized {
-          if (!hasShutdown.get) {
+          if (hasStarted.get) {
             try {
               val curBrokerIds = currentBrokerList.map(_.toInt).toSet
               val newBrokerIds = curBrokerIds -- controllerContext.liveOrShuttingDownBrokerIds

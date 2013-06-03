@@ -46,7 +46,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   val brokerRequestBatch = new ControllerBrokerRequestBatch(controller.controllerContext, controller.sendRequest,
     controllerId, controller.clientId)
   private val hasStarted = new AtomicBoolean(false)
-  private val hasShutdown = new AtomicBoolean(false)
   private val noOpPartitionLeaderSelector = new NoOpLeaderSelector(controllerContext)
   this.logIdent = "[Partition state machine on Controller " + controllerId + "]: "
   private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
@@ -74,7 +73,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
    * Invoked on controller shutdown.
    */
   def shutdown() {
-    hasShutdown.compareAndSet(false, true)
+    hasStarted.set(false)
     partitionState.clear()
   }
 
@@ -358,7 +357,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     @throws(classOf[Exception])
     def handleChildChange(parentPath : String, children : java.util.List[String]) {
       controllerContext.controllerLock synchronized {
-        if (!hasShutdown.get) {
+        if (hasStarted.get) {
           try {
             debug("Topic change listener fired for path %s with children %s".format(parentPath, children.mkString(",")))
             val currentChildren = JavaConversions.asBuffer(children).toSet
