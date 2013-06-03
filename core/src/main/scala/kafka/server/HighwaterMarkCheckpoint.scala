@@ -36,7 +36,7 @@ object HighwaterMarkCheckpoint {
 
 class HighwaterMarkCheckpoint(val path: String) extends Logging {
   /* create the highwatermark file handle for all partitions */
-  val name = path + "/" + HighwaterMarkCheckpoint.highWatermarkFileName
+  val name = path + File.separator + HighwaterMarkCheckpoint.highWatermarkFileName
   private val hwFile = new File(name)
   private val hwFileLock = new ReentrantLock()
   // recover from previous tmp file, if required
@@ -64,8 +64,12 @@ class HighwaterMarkCheckpoint(val path: String) extends Logging {
       hwFileWriter.close()
       // swap new high watermark file with previous one
       if(!tempHwFile.renameTo(hwFile)) {
-        fatal("Attempt to swap the new high watermark file with the old one failed")
-        System.exit(1)
+        // renameTo() fails on Windows if the destination file exists.
+        hwFile.delete()
+        if(!tempHwFile.renameTo(hwFile)) {
+          fatal("Attempt to swap the new high watermark file with the old one failed")
+          System.exit(1)
+        }
       }
     }finally {
       hwFileLock.unlock()
