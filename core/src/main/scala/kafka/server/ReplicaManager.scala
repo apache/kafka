@@ -40,7 +40,8 @@ class ReplicaManager(val config: KafkaConfig,
                      time: Time, 
                      val zkClient: ZkClient, 
                      kafkaScheduler: KafkaScheduler,
-                     val logManager: LogManager) extends Logging with KafkaMetricsGroup {
+                     val logManager: LogManager,
+                     val isShuttingDown: AtomicBoolean ) extends Logging with KafkaMetricsGroup {
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   private val localBrokerId = config.brokerId

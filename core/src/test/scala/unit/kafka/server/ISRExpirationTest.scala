@@ -24,6 +24,7 @@ import org.easymock.EasyMock
 import kafka.log.Log
 import org.junit.Assert._
 import kafka.utils._
+import java.util.concurrent.atomic.AtomicBoolean
 
 class IsrExpirationTest extends JUnit3Suite {
 
@@ -80,7 +81,7 @@ class IsrExpirationTest extends JUnit3Suite {
   private def getPartitionWithAllReplicasInIsr(topic: String, partitionId: Int, time: Time, config: KafkaConfig,
                                                localLog: Log): Partition = {
     val leaderId=config.brokerId
-    val replicaManager = new ReplicaManager(config, time, null, null, null)
+    val replicaManager = new ReplicaManager(config, time, null, null, null, new AtomicBoolean(false))
     val partition = replicaManager.getOrCreatePartition(topic, partitionId, 1)
     val leaderReplica = new Replica(leaderId, partition, time, 0, Some(localLog))
 

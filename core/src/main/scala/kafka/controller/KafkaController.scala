@@ -70,7 +70,7 @@ class ControllerContext(val zkClient: ZkClient,
 }
 
 trait KafkaControllerMBean {
-  def shutdownBroker(id: Int): Int
+  def shutdownBroker(id: Int): Set[TopicAndPartition]
 }
 
 object KafkaController {
@@ -118,17 +118,18 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   def clientId = "id_%d-host_%s-port_%d".format(config.brokerId, config.hostName, config.port)
 
   /**
-   * JMX operation to initiate clean shutdown of a broker. On clean shutdown,
-   * the controller first determines the partitions that the shutting down
-   * broker leads, and moves leadership of those partitions to another broker
-   * that is in that partition's ISR. When all partitions have been moved, the
-   * broker process can be stopped normally (i.e., by sending it a SIGTERM or
-   * SIGINT) and no data loss should be observed.
+   * On clean shutdown, the controller first determines the partitions that the
+   * shutting down broker leads, and moves leadership of those partitions to another broker
+   * that is in that partition's ISR.
    *
    * @param id Id of the broker to shutdown.
    * @return The number of partitions that the broker still leads.
    */
-  def shutdownBroker(id: Int) = {
+  def shutdownBroker(id: Int) : Set[TopicAndPartition] = {
+
+    if (!isActive()) {
+      throw new ControllerMovedException("Controller moved to another broker. Aborting controlled shutdown")
+    }
 
     controllerContext.brokerShutdownLock synchronized {
       info("Shutting down broker " + id)
@@ -151,6 +152,32 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
         }
       }
 
+      allPartitionsAndReplicationFactorOnBroker.foreach {
+        case(topicAndPartition, replicationFactor) =>
+        // Move leadership serially to relinquish lock.
+        controllerContext.controllerLock synchronized {
+          controllerContext.partitionLeadershipInfo.get(topicAndPartition).foreach { currLeaderIsrAndControllerEpoch =>
+            if (currLeaderIsrAndControllerEpoch.leaderAndIsr.leader == id) {
+              // If the broker leads the topic partition, transition the leader and update isr. Updates zk and
+              // notifies all affected brokers
+              partitionStateMachine.handleStateChanges(Set(topicAndPartition), OnlinePartition,
+                controlledShutdownPartitionLeaderSelector)
+            }
+            else {
+              // Stop the replica first. The state change below initiates ZK changes which should take some time
+              // before which the stop replica request should be completed (in most cases)
+              brokerRequestBatch.newBatch()
+              brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topicAndPartition.topic, topicAndPartition.partition, deletePartition = false)
+              brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement, controllerContext.liveBrokers)
+
+              // If the broker is a follower, updates the isr in ZK and notifies the current leader
+              replicaStateMachine.handleStateChanges(Set(PartitionAndReplica(topicAndPartition.topic,
+                topicAndPartition.partition, id)), OfflineReplica)
+            }
+          }
+        }
+      }
+
       def replicatedPartitionsBrokerLeads() = controllerContext.controllerLock.synchronized {
         trace("All leaders = " + controllerContext.partitionLeadershipInfo.mkString(","))
         controllerContext.partitionLeadershipInfo.filter {
@@ -158,61 +185,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
             leaderIsrAndControllerEpoch.leaderAndIsr.leader == id && controllerContext.partitionReplicaAssignment(topicAndPartition).size > 1
         }.map(_._1)
       }
-
-      val partitionsToMove = replicatedPartitionsBrokerLeads().toSet
-
-      debug("Partitions to move leadership from broker %d: %s".format(id, partitionsToMove.mkString(",")))
-
-      partitionsToMove.foreach { topicAndPartition =>
-        val (topic, partition) = topicAndPartition.asTuple
-        // move leadership serially to relinquish lock.
-        controllerContext.controllerLock synchronized {
-          controllerContext.partitionLeadershipInfo.get(topicAndPartition).foreach { currLeaderIsrAndControllerEpoch =>
-            if (currLeaderIsrAndControllerEpoch.leaderAndIsr.leader == id) {
-              partitionStateMachine.handleStateChanges(Set(topicAndPartition), OnlinePartition,
-                controlledShutdownPartitionLeaderSelector)
-              val newLeaderIsrAndControllerEpoch = controllerContext.partitionLeadershipInfo(topicAndPartition)
-
-              // mark replica offline only if leadership was moved successfully
-              if (newLeaderIsrAndControllerEpoch.leaderAndIsr.leader != currLeaderIsrAndControllerEpoch.leaderAndIsr.leader)
-                replicaStateMachine.handleStateChanges(Set(PartitionAndReplica(topic, partition, id)), OfflineReplica)
-            } else
-              debug("Partition %s moved from leader %d to new leader %d during shutdown."
-                .format(topicAndPartition, id, currLeaderIsrAndControllerEpoch.leaderAndIsr.leader))
-          }
-        }
-      }
-
-      val partitionsRemaining = replicatedPartitionsBrokerLeads().toSet
-
-      /*
-      * Force the shutting down broker out of the ISR of partitions that it
-      * follows, and shutdown the corresponding replica fetcher threads.
-      * This is really an optimization, so no need to register any callback
-      * to wait until completion.
-      */
-      if (partitionsRemaining.size == 0) {
-        brokerRequestBatch.newBatch()
-        allPartitionsAndReplicationFactorOnBroker foreach {
-          case(topicAndPartition, replicationFactor) =>
-            val (topic, partition) = topicAndPartition.asTuple
-            if (controllerContext.partitionLeadershipInfo(topicAndPartition).leaderAndIsr.leader != id) {
-              brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topic, partition, deletePartition = false)
-              removeReplicaFromIsr(topic, partition, id) match {
-                case Some(updatedLeaderIsrAndControllerEpoch) =>
-                  brokerRequestBatch.addLeaderAndIsrRequestForBrokers(
-                    Seq(updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader), topic, partition,
-                    updatedLeaderIsrAndControllerEpoch, controllerContext.partitionReplicaAssignment(topicAndPartition))
-                case None =>
-                // ignore
-              }
-            }
-        }
-        brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement, controllerContext.liveBrokers)
-      }
-
-      debug("Remaining partitions to move from broker %d: %s".format(id, partitionsRemaining.mkString(",")))
-      partitionsRemaining.size
+      replicatedPartitionsBrokerLeads().toSet
     }
   }
 
@@ -487,6 +460,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     controllerContext.allTopics = ZkUtils.getAllTopics(zkClient).toSet
     controllerContext.partitionReplicaAssignment = ZkUtils.getReplicaAssignmentForTopics(zkClient, controllerContext.allTopics.toSeq)
     controllerContext.partitionLeadershipInfo = new mutable.HashMap[TopicAndPartition, LeaderIsrAndControllerEpoch]
+    controllerContext.shuttingDownBrokerIds = mutable.Set.empty[Int]
     // update the leader and isr cache for all existing partitions from Zookeeper
     updateLeaderAndIsrCache()
     // start the channel manager

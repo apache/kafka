@@ -17,13 +17,15 @@
 
 package kafka.server
 
-import kafka.network.SocketServer
+import kafka.network.{Receive, BlockingChannel, SocketServer}
 import kafka.log.LogManager
 import kafka.utils._
 import java.util.concurrent._
-import atomic.AtomicBoolean
-import org.I0Itec.zkclient.ZkClient
+import atomic.{AtomicInteger, AtomicBoolean}
 import kafka.controller.{ControllerStats, KafkaController}
+import kafka.cluster.Broker
+import kafka.api.{ControlledShutdownResponse, ControlledShutdownRequest}
+import kafka.common.ErrorMapping
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
@@ -33,6 +35,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   this.logIdent = "[Kafka Server " + config.brokerId + "], "
   private var isShuttingDown = new AtomicBoolean(false)
   private var shutdownLatch = new CountDownLatch(1)
+  private var startupComplete = new AtomicBoolean(false);
+  val correlationId: AtomicInteger = new AtomicInteger(0)
   var socketServer: SocketServer = null
   var requestHandlerPool: KafkaRequestHandlerPool = null
   var logManager: LogManager = null
@@ -41,14 +45,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   var apis: KafkaApis = null
   var kafkaController: KafkaController = null
   val kafkaScheduler = new KafkaScheduler(4)
-  var zkClient: ZkClient = null
+
 
   /**
    * Start up API for bringing up a single instance of the Kafka server.
    * Instantiates the LogManager, the SocketServer and the request handlers - KafkaRequestHandlers
    */
   def startup() {
-    info("starting")
+    info("Starting")
     isShuttingDown = new AtomicBoolean(false)
     shutdownLatch = new CountDownLatch(1)
 
@@ -79,10 +83,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
     info("Connecting to ZK: " + config.zkConnect)
 
-    replicaManager = new ReplicaManager(config, time, kafkaZookeeper.getZookeeperClient, kafkaScheduler, logManager)
+    replicaManager = new ReplicaManager(config, time, kafkaZookeeper.getZookeeperClient, kafkaScheduler, logManager, isShuttingDown)
 
     kafkaController = new KafkaController(config, kafkaZookeeper.getZookeeperClient)
-    apis = new KafkaApis(socketServer.requestChannel, replicaManager, kafkaZookeeper.getZookeeperClient, config.brokerId)
+    apis = new KafkaApis(socketServer.requestChannel, replicaManager, kafkaZookeeper.getZookeeperClient, config.brokerId, kafkaController)
     requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
     Mx4jLoader.maybeLoad
 
@@ -92,7 +96,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     kafkaController.startup()
     // register metrics beans
     registerStats()
-    info("started")
+    startupComplete.set(true);
+    info("Started")
   }
 
   /**
@@ -105,13 +110,99 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   }
 
   /**
+   *  Performs controlled shutdown
+   */
+  private def controlledShutdown() {
+    if (startupComplete.get() && config.controlledShutdownEnable) {
+      // We request the controller to do a controlled shutdown. On failure, we backoff for a configured period
+      // of time and try again for a configured number of retries. If all the attempt fails, we simply force
+      // the shutdown.
+      var remainingRetries = config.controlledShutdownMaxRetries
+      info("Starting controlled shutdown")
+      var channel : BlockingChannel = null;
+      var prevController : Broker = null
+      var shutdownSuceeded : Boolean =false
+      try {
+        while (!shutdownSuceeded && remainingRetries > 0) {
+          remainingRetries = remainingRetries - 1
+
+          // 1. Find the controller and establish a connection to it.
+
+          // Get the current controller info. This is to ensure we use the most recent info to issue the
+          // controlled shutdown request
+          val controllerId = ZkUtils.getController(kafkaZookeeper.getZookeeperClient)
+          ZkUtils.getBrokerInfo(kafkaZookeeper.getZookeeperClient, controllerId) match {
+            case Some(broker) =>
+              if (channel == null || prevController == null || !prevController.equals(broker)) {
+                // if this is the first attempt or if the controller has changed, create a channel to the most recent
+                // controller
+                if (channel != null) {
+                  channel.disconnect()
+                }
+                channel = new BlockingChannel(broker.host, broker.port,
+                  BlockingChannel.UseDefaultBufferSize,
+                  BlockingChannel.UseDefaultBufferSize,
+                  config.controllerSocketTimeoutMs)
+                channel.connect()
+                prevController = broker
+              }
+            case None=>
+              //ignore and try again
+          }
+
+          // 2. issue a controlled shutdown to the controller
+          if (channel != null) {
+            var response: Receive = null
+            try {
+              // send the controlled shutdown request
+              val request = new ControlledShutdownRequest(correlationId.getAndIncrement, config.brokerId)
+              channel.send(request)
+              response = channel.receive()
+              val shutdownResponse = ControlledShutdownResponse.readFrom(response.buffer)
+              if (shutdownResponse.errorCode == ErrorMapping.NoError && shutdownResponse.partitionsRemaining != null &&
+                  shutdownResponse.partitionsRemaining.size == 0) {
+                shutdownSuceeded = true
+                info ("Controlled shutdown succeeded")
+              }
+              else {
+                info("Remaining partitions to move: %s".format(shutdownResponse.partitionsRemaining.mkString(",")))
+                info("Error code from controller: %d".format(shutdownResponse.errorCode))
+              }
+            }
+            catch {
+              case ioe: java.io.IOException =>
+                channel.disconnect()
+                channel = null
+                // ignore and try again
+            }
+          }
+          if (!shutdownSuceeded) {
+            Thread.sleep(config.controlledShutdownRetryBackoffMs)
+            warn("Retrying controlled shutdown after the previous attempt failed...")
+          }
+        }
+      }
+      finally {
+        if (channel != null) {
+          channel.disconnect()
+          channel = null
+        }
+      }
+      if (!shutdownSuceeded) {
+        warn("Proceeding to do an unclean shutdown as all the controlled shutdown attempts failed")
+      }
+    }
+  }
+
+  /**
    * Shutdown API for shutting down a single instance of the Kafka server.
    * Shuts down the LogManager, the SocketServer and the log cleaner scheduler thread
    */
   def shutdown() {
-    info("shutting down")
+    info("Shutting down")
     val canShutdown = isShuttingDown.compareAndSet(false, true);
     if (canShutdown) {
+      Utils.swallow(controlledShutdown())
       if(kafkaZookeeper != null)
         Utils.swallow(kafkaZookeeper.shutdown())
       if(socketServer != null)
@@ -130,7 +221,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         Utils.swallow(kafkaController.shutdown())
 
       shutdownLatch.countDown()
-      info("shut down completed")
+      startupComplete.set(false);
+      info("Shut down completed")
     }
   }
 

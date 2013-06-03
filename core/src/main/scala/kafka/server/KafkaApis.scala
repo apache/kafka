@@ -30,6 +30,7 @@ import kafka.common._
 import kafka.utils.{ZkUtils, Pool, SystemTime, Logging}
 import kafka.network.RequestChannel.Response
 import kafka.cluster.Broker
+import kafka.controller.KafkaController
 
 
 /**
@@ -38,7 +39,8 @@ import kafka.cluster.Broker
 class KafkaApis(val requestChannel: RequestChannel,
                 val replicaManager: ReplicaManager,
                 val zkClient: ZkClient,
-                brokerId: Int) extends Logging {
+                brokerId: Int,
+                val controller: KafkaController) extends Logging {
 
   private val producerRequestPurgatory =
     new ProducerRequestPurgatory(replicaManager.config.producerPurgatoryPurgeIntervalRequests)
@@ -68,6 +70,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.LeaderAndIsrKey => handleLeaderAndIsrRequest(request)
         case RequestKeys.StopReplicaKey => handleStopReplicaRequest(request)
         case RequestKeys.UpdateMetadataKey => handleUpdateMetadataRequest(request)
+        case RequestKeys.ControlledShutdownKey => handleControlledShutdownRequest(request)
         case requestId => throw new KafkaException("No mapping found for handler id " + requestId)
       }
     } catch {
@@ -124,6 +127,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
     val updateMetadataResponse = new UpdateMetadataResponse(updateMetadataRequest.correlationId)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(updateMetadataResponse)))
+  }
+
+  def handleControlledShutdownRequest(request: RequestChannel.Request) {
+    val controlledShutdownRequest = request.requestObj.asInstanceOf[ControlledShutdownRequest]
+    val partitionsRemaining = controller.shutdownBroker(controlledShutdownRequest.brokerId)
+    val controlledShutdownResponse = new ControlledShutdownResponse(controlledShutdownRequest.correlationId,
+      ErrorMapping.NoError, partitionsRemaining)
+    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(controlledShutdownResponse)))
   }
 
   /**
