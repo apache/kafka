@@ -765,7 +765,7 @@ class ZKGroupTopicDirs(group: String, topic: String) extends ZKGroupDirs(group) 
 
 class ZKConfig(props: VerifiableProperties) {
   /** ZK host string */
-  val zkConnect = props.getString("zookeeper.connect", null)
+  val zkConnect = props.getString("zookeeper.connect")
 
   /** zookeeper session timeout */
   val zkSessionTimeoutMs = props.getInt("zookeeper.session.timeout.ms", 6000)
