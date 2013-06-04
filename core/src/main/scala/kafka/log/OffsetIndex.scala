@@ -23,6 +23,7 @@ import java.nio._
 import java.nio.channels._
 import java.util.concurrent.atomic._
 import kafka.utils._
+import kafka.common.InvalidOffsetException
 
 /**
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
@@ -178,13 +179,18 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
   def append(offset: Long, position: Int) {
     this synchronized {
       require(!isFull, "Attempt to append to a full index (size = " + size + ").")
-      require(size.get == 0 || offset > lastOffset, "Attempt to append an offset (%d) to position %d no larger than the last offset appended (%d).".format(offset, entries, lastOffset))
-      debug("Adding index entry %d => %d to %s.".format(offset, position, file.getName))
-      this.mmap.putInt((offset - baseOffset).toInt)
-      this.mmap.putInt(position)
-      this.size.incrementAndGet()
-      this.lastOffset = offset
-      require(entries * 8 == mmap.position, entries + " entries but file position in index is " + mmap.position + ".")
+      if (size.get == 0 || offset > lastOffset) {
+        debug("Adding index entry %d => %d to %s.".format(offset, position, file.getName))
+        this.mmap.putInt((offset - baseOffset).toInt)
+        this.mmap.putInt(position)
+        this.size.incrementAndGet()
+        this.lastOffset = offset
+        require(entries * 8 == mmap.position, entries + " entries but file position in index is " + mmap.position + ".")
+      }
+      else {
+        throw new InvalidOffsetException("Attempt to append an offset (%d) to position %d no larger than the last offset appended (%d) to %s."
+          .format(offset, entries, lastOffset, file.getName))
+      }
     }
   }
   

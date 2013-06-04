@@ -143,6 +143,7 @@ private[kafka] class Log(val dir: File,
     // open all the segments read-only
     val logSegments = new ArrayList[LogSegment]
     val ls = dir.listFiles()
+
     if(ls != null) {
       for(file <- ls if file.isFile) {
         val filename = file.getName()
@@ -189,8 +190,19 @@ private[kafka] class Log(val dir: File,
       logSegments.get(logSegments.size() - 1).index.resize(maxIndexSize)
 
       // run recovery on the last segment if necessary
-      if(needsRecovery)
-        recoverSegment(logSegments.get(logSegments.size - 1))
+      if(needsRecovery) {
+        var activeSegment = logSegments.get(logSegments.size - 1)
+        try {
+          recoverSegment(activeSegment)
+        } catch {
+          case e: InvalidOffsetException =>
+            val startOffset = activeSegment.start
+            warn("Found invalid offset during recovery of the active segment for topic partition " + dir.getName +". Deleting the segment and " +
+                 "creating an empty one with starting offset " + startOffset)
+            // truncate the active segment to its starting offset
+            activeSegment.truncateTo(startOffset)
+        }
+      }
     }
 
     val segmentList = logSegments.toArray(new Array[LogSegment](logSegments.size))
