@@ -106,7 +106,6 @@ class Producer[K,V](val config: ProducerConfig,
       if(!added) {
         producerTopicStats.getProducerTopicStats(message.topic).droppedMessageRate.mark()
         producerTopicStats.getProducerAllTopicsStats.droppedMessageRate.mark()
-        error("Event queue is full of unsent messages, could not send event: " + message.toString)
         throw new QueueFullException("Event queue is full of unsent messages, could not send event: " + message.toString)
       }else {
         trace("Added to send queue an event: " + message.toString)
