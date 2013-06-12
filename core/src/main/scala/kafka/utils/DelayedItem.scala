@@ -37,7 +37,7 @@ class DelayedItem[T](val item: T, delay: Long, unit: TimeUnit) extends Delayed w
    */
   def getDelay(unit: TimeUnit): Long = {
     val elapsedMs = (SystemTime.milliseconds - createdMs)
-    unit.convert(max(delayMs - elapsedMs, 0), unit)
+    unit.convert(max(delayMs - elapsedMs, 0), TimeUnit.MILLISECONDS)
   }
     
   def compareTo(d: Delayed): Int = {
