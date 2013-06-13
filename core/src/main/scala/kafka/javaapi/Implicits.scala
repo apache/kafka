@@ -37,7 +37,7 @@ private[javaapi] object Implicits extends Logging {
   implicit def optionToJavaRef[T](opt: Option[T]): T = {
     opt match {
       case Some(obj) => obj
-      case None => null
+      case None => null.asInstanceOf[T]
     }
   }
 }
