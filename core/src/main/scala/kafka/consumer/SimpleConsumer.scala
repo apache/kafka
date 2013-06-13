@@ -37,6 +37,7 @@ class SimpleConsumer(val host: String,
   private val blockingChannel = new BlockingChannel(host, port, bufferSize, BlockingChannel.UseDefaultBufferSize, soTimeout)
   val brokerInfo = "host_%s-port_%s".format(host, port)
   private val fetchRequestAndResponseStats = FetchRequestAndResponseStatsRegistry.getFetchRequestAndResponseStats(clientId)
+  private var isClosed = false
 
   private def connect(): BlockingChannel = {
     close
@@ -58,7 +59,8 @@ class SimpleConsumer(val host: String,
 
   def close() {
     lock synchronized {
-        disconnect()
+      disconnect()
+      isClosed = true
     }
   }
   
@@ -123,7 +125,7 @@ class SimpleConsumer(val host: String,
   def getOffsetsBefore(request: OffsetRequest) = OffsetResponse.readFrom(sendRequest(request).buffer)
 
   private def getOrMakeConnection() {
-    if(!blockingChannel.isConnected) {
+    if(!isClosed && !blockingChannel.isConnected) {
       connect()
     }
   }

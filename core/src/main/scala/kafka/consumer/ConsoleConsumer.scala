@@ -110,7 +110,7 @@ object ConsoleConsumer extends Logging {
             .withRequiredArg
             .describedAs("ms")
             .ofType(classOf[java.lang.Integer])
-            .defaultsTo(10*1000)
+            .defaultsTo(ConsumerConfig.AutoCommitInterval)
     val maxMessagesOpt = parser.accepts("max-messages", "The maximum number of messages to consume before exiting. If not set, consumption is continual.")
             .withRequiredArg
             .describedAs("num_messages")

@@ -51,6 +51,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   private class LeaderFinderThread(name: String) extends ShutdownableThread(name) {
     // thread responsible for adding the fetcher to the right broker when leader is available
     override def doWork() {
+      val leaderForPartitionsMap = new HashMap[TopicAndPartition, Broker]
       lock.lock()
       try {
         if (noLeaderPartitionSet.isEmpty) {
@@ -58,64 +59,43 @@ class ConsumerFetcherManager(private val consumerIdString: String,
           cond.await()
         }
 
-        try {
-          trace("Partitions without leader %s".format(noLeaderPartitionSet))
-          val brokers = getAllBrokersInCluster(zkClient)
-          val topicsMetadata = ClientUtils.fetchTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet,
-                                                              brokers,
-                                                              config.clientId,
-                                                              config.socketTimeoutMs,
-                                                              correlationId.getAndIncrement).topicsMetadata
-          if(logger.isDebugEnabled) topicsMetadata.foreach(topicMetadata => debug(topicMetadata.toString()))
-          val leaderForPartitionsMap = new HashMap[TopicAndPartition, Broker]
-          topicsMetadata.foreach { tmd =>
-            val topic = tmd.topic
-            tmd.partitionsMetadata.foreach { pmd =>
-              val topicAndPartition = TopicAndPartition(topic, pmd.partitionId)
-              if(pmd.leader.isDefined && noLeaderPartitionSet.contains(topicAndPartition)) {
-                val leaderBroker = pmd.leader.get
-                leaderForPartitionsMap.put(topicAndPartition, leaderBroker)
-              }
+        trace("Partitions without leader %s".format(noLeaderPartitionSet))
+        val brokers = getAllBrokersInCluster(zkClient)
+        val topicsMetadata = ClientUtils.fetchTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet,
+                                                            brokers,
+                                                            config.clientId,
+                                                            config.socketTimeoutMs,
+                                                            correlationId.getAndIncrement).topicsMetadata
+        if(logger.isDebugEnabled) topicsMetadata.foreach(topicMetadata => debug(topicMetadata.toString()))
+        topicsMetadata.foreach { tmd =>
+          val topic = tmd.topic
+          tmd.partitionsMetadata.foreach { pmd =>
+            val topicAndPartition = TopicAndPartition(topic, pmd.partitionId)
+            if(pmd.leader.isDefined && noLeaderPartitionSet.contains(topicAndPartition)) {
+              val leaderBroker = pmd.leader.get
+              leaderForPartitionsMap.put(topicAndPartition, leaderBroker)
+              noLeaderPartitionSet -= topicAndPartition
             }
           }
-
-          leaderForPartitionsMap.foreach {
-            case(topicAndPartition, leaderBroker) =>
-              val pti = partitionMap(topicAndPartition)
-              try {
-                  addFetcher(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset(), leaderBroker)
-                  noLeaderPartitionSet -= topicAndPartition
-              } catch {
-                case t => {
-                  /*
-                   * If we are shutting down (e.g., due to a rebalance) propagate this exception upward to avoid
-                   * processing subsequent partitions without leader so the leader-finder-thread can exit.
-                   * It is unfortunate that we depend on the following behavior and we should redesign this: as part of
-                   * processing partitions, we catch the InterruptedException (thrown from addPartition's call to
-                   * lockInterruptibly) when adding partitions, thereby clearing the interrupted flag. If we process
-                   * more partitions, then the lockInterruptibly in addPartition will not throw an InterruptedException
-                   * and we can run into the deadlock described in KAFKA-914.
-                   */
-                  if (!isRunning.get())
-                    throw t
-                  else
-                    warn("Failed to add fetcher for %s to broker %s".format(topicAndPartition, leaderBroker), t)
-                }
-              }
-          }
-
-          shutdownIdleFetcherThreads()
-        } catch {
-          case t => {
+        }
+      } catch {
+        case t => {
             if (!isRunning.get())
-              throw t /* See above for why we need to propagate this exception. */
+              throw t /* If this thread is stopped, propagate this exception to kill the thread. */
             else
               warn("Failed to find leader for %s".format(noLeaderPartitionSet), t)
           }
-        }
       } finally {
         lock.unlock()
       }
+
+      leaderForPartitionsMap.foreach {
+        case(topicAndPartition, leaderBroker) =>
+          val pti = partitionMap(topicAndPartition)
+          addFetcher(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset(), leaderBroker)
+      }
+
+      shutdownIdleFetcherThreads()
       Thread.sleep(config.refreshLeaderBackoffMs)
     }
   }
