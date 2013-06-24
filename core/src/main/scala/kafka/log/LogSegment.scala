@@ -147,6 +147,7 @@ class LogSegment(val messageSet: FileMessageSet,
     messageSet.truncateTo(mapping.position)
     if (messageSet.sizeInBytes == 0)
       firstAppendTime = None
+    bytesSinceLastIndexEntry = 0
   }
   
   /**
