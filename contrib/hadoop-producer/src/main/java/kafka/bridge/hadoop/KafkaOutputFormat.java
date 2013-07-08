@@ -49,9 +49,9 @@ public class KafkaOutputFormat<K, V> extends OutputFormat<K, V>
     Map<String, String> cMap = new HashMap<String, String>();
 
     // default Hadoop producer configs
-    cMap.put("producer.type",       "sync");
-    cMap.put("send.buffer.bytes",   Integer.toString(64*1024));
-    cMap.put("compression.codec",   Integer.toString(1));
+    cMap.put("producer.type", "sync");
+    cMap.put("compression.codec", Integer.toString(1));
+    cMap.put("request.required.acks", Integer.toString(1));
 
     kafkaConfigMap = Collections.unmodifiableMap(cMap);
   }
