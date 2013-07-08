@@ -204,7 +204,7 @@ class LogManager(val logDirs: Array[File],
                     scheduler,
                     time)
       logs.put(topicAndPartition, log)
-      info("Created log for topic %s partition %d in %s with properties {%s}."
+      info("Created log for partition [%s,%d] in %s with properties {%s}."
            .format(topicAndPartition.topic, 
                    topicAndPartition.partition, 
                    dataDir.getAbsolutePath,

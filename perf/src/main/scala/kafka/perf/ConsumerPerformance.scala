@@ -128,7 +128,7 @@ object ConsumerPerformance {
     props.put("socket.receive.buffer.bytes", options.valueOf(socketBufferSizeOpt).toString)
     props.put("fetch.message.max.bytes", options.valueOf(fetchSizeOpt).toString)
     props.put("auto.offset.reset", if(options.has(resetBeginningOffsetOpt)) "largest" else "smallest")
-    props.put("zk.connect", options.valueOf(zkConnectOpt))
+    props.put("zookeeper.connect", options.valueOf(zkConnectOpt))
     props.put("consumer.timeout.ms", "5000")
     val consumerConfig = new ConsumerConfig(props)
     val numThreads = options.valueOf(numThreadsOpt).intValue

@@ -36,7 +36,7 @@ class ProducerSendThread[K,V](val threadName: String,
 
   newGauge(clientId + "-ProducerQueueSize",
           new Gauge[Int] {
-            def getValue = queue.size
+            def value = queue.size
           })
 
   override def run {

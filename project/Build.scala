@@ -17,18 +17,23 @@
 
 import sbt._
 import Keys._
-import java.io.File
+import Process._
 
 import scala.xml.{Node, Elem}
 import scala.xml.transform.{RewriteRule, RuleTransformer}
 
 object KafkaBuild extends Build {
+  val buildNumber = SettingKey[String]("build-number", "Build number defaults to $BUILD_NUMBER environment variable")
+  val releaseName = SettingKey[String]("release-name", "the full name of this release")
   val commonSettings = Seq(
-    version := "0.8-SNAPSHOT",
     organization := "org.apache",
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     crossScalaVersions := Seq("2.8.0","2.8.2", "2.9.1", "2.9.2"),
     scalaVersion := "2.8.0",
+    version := "0.8.0-SNAPSHOT",
+    buildNumber := System.getProperty("build.number", ""),
+    version <<= (buildNumber, version)  { (build, version)  => if (build == "") version else version + "+" + build},
+    releaseName <<= (name, version, scalaVersion) {(name, version, scalaVersion) => name + "_" + scalaVersion + "-" + version},
     javacOptions ++= Seq("-Xlint:unchecked", "-source", "1.5"),
     parallelExecution in Test := false, // Prevent tests from overrunning each other
     libraryDependencies ++= Seq(
@@ -78,66 +83,47 @@ object KafkaBuild extends Build {
        </dependencies>
   )
 
-  val coreSettings = Seq(
-    pomPostProcess := { (pom: Node) => MetricsDepAdder(ZkClientDepAdder(pom)) }
-  )
 
   val runRat = TaskKey[Unit]("run-rat-task", "Runs Apache rat on Kafka")
   val runRatTask = runRat := {
     "bin/run-rat.sh" !
   }
 
-  lazy val kafka    = Project(id = "Kafka", base = file(".")).aggregate(core, examples, contrib, perf).settings((commonSettings ++ runRatTask): _*)
-  lazy val core     = Project(id = "core", base = file("core")).settings(commonSettings: _*).settings(coreSettings: _*)
+  val release = TaskKey[Unit]("release", "Creates a deployable release directory file with dependencies, config, and scripts.")
+  val releaseTask = release <<= ( packageBin in (core, Compile), dependencyClasspath in (core, Runtime), exportedProducts in Compile,
+    target, releaseName in core ) map { (packageBin, deps, products, target, releaseName) =>
+      val jarFiles = deps.files.filter(f => !products.files.contains(f) && f.getName.endsWith(".jar"))
+      val destination = target / "RELEASE" / releaseName
+      IO.copyFile(packageBin, destination / packageBin.getName)
+      IO.copy(jarFiles.map { f => (f, destination / "libs" / f.getName) })
+      IO.copyDirectory(file("config"), destination / "config")
+      IO.copyDirectory(file("bin"), destination / "bin")
+      for {file <- (destination / "bin").listFiles} { file.setExecutable(true, true) }
+  }
+
+  val releaseZip = TaskKey[Unit]("release-zip", "Creates a deployable zip file with dependencies, config, and scripts.")
+  val releaseZipTask = releaseZip <<= (release, target, releaseName in core) map { (release, target, releaseName) => 
+    val zipPath = target / "RELEASE" / "%s.zip".format(releaseName)
+    IO.delete(zipPath)
+    IO.zip((target/"RELEASE" ** releaseName ***) x relativeTo(target/"RELEASE"), zipPath)
+  }
+
+  val releaseTar = TaskKey[Unit]("release-tar", "Creates a deployable tar.gz file with dependencies, config, and scripts.")
+  val releaseTarTask = releaseTar <<= ( release, target, releaseName in core) map { (release, target, releaseName) =>
+    Process(Seq("tar", "czf", "%s.tar.gz".format(releaseName), releaseName), target / "RELEASE").! match {
+        case 0 => ()
+        case n => sys.error("Failed to run native tar application!")
+      }
+  }
+
+  lazy val kafka    = Project(id = "Kafka", base = file(".")).aggregate(core, examples, contrib, perf).settings((commonSettings ++
+    runRatTask ++ releaseTask ++ releaseZipTask ++ releaseTarTask): _*)
+  lazy val core     = Project(id = "core", base = file("core")).settings(commonSettings: _*)
   lazy val examples = Project(id = "java-examples", base = file("examples")).settings(commonSettings :_*) dependsOn (core)
   lazy val perf     = Project(id = "perf", base = file("perf")).settings((Seq(name := "kafka-perf") ++ commonSettings):_*) dependsOn (core)
 
   lazy val contrib        = Project(id = "contrib", base = file("contrib")).aggregate(hadoopProducer, hadoopConsumer).settings(commonSettings :_*)
   lazy val hadoopProducer = Project(id = "hadoop-producer", base = file("contrib/hadoop-producer")).settings(hadoopSettings ++ commonSettings: _*) dependsOn (core)
   lazy val hadoopConsumer = Project(id = "hadoop-consumer", base = file("contrib/hadoop-consumer")).settings(hadoopSettings ++ commonSettings: _*) dependsOn (core)
-
-
-  // POM Tweaking for core:
-  def zkClientDep =
-    <dependency>
-      <groupId>zkclient</groupId>
-      <artifactId>zkclient</artifactId>
-      <version>20120522</version>
-      <scope>compile</scope>
-    </dependency>
-
-  def metricsDeps =
-    <dependencies>
-      <dependency>
-        <groupId>com.yammer.metrics</groupId>
-        <artifactId>metrics-core</artifactId>
-        <version>3.0.0-c0c8be71</version>
-        <scope>compile</scope>
-      </dependency>
-      <dependency>
-        <groupId>com.yammer.metrics</groupId>
-        <artifactId>metrics-annotations</artifactId>
-        <version>3.0.0-c0c8be71</version>
-        <scope>compile</scope>
-      </dependency>
-    </dependencies>
-
-  object ZkClientDepAdder extends RuleTransformer(new RewriteRule() {
-    override def transform(node: Node): Seq[Node] = node match {
-      case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
-        Elem(prefix, "dependencies", attribs, scope, deps ++ zkClientDep:_*)
-      }
-      case other => other
-    }
-  })
-
-  object MetricsDepAdder extends RuleTransformer(new RewriteRule() {
-    override def transform(node: Node): Seq[Node] = node match {
-      case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
-        Elem(prefix, "dependencies", attribs, scope, deps ++ metricsDeps:_*)
-      }
-      case other => other
-    }
-  })
 
 }

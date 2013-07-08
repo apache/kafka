@@ -330,7 +330,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
                                     compression: CompressionCodec = NoCompressionCodec): List[String] = {
     val header = "test-%d-%d".format(config.brokerId, partition)
     val props = new Properties()
-    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
+    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
     props.put("compression.codec", compression.codec.toString)
     props.put("key.serializer.class", classOf[IntEncoder].getName.toString)
@@ -338,7 +338,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val producer: Producer[Int, String] = new Producer[Int, String](new ProducerConfig(props))
     val ms = 0.until(numMessages).map(x => header + config.brokerId + "-" + partition + "-" + x)
     producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)):_*)
-    debug("Sent %d messages to broker %d for topic %s and partition %d".format(ms.size, config.brokerId, topic, partition))
+    debug("Sent %d messages to broker %d for partition [%s,%d]".format(ms.size, config.brokerId, topic, partition))
     producer.close()
     ms.toList
   }
@@ -350,7 +350,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
                    numParts: Int): List[String]= {
     var messages: List[String] = Nil
     val props = new Properties()
-    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
+    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
     props.put("key.serializer.class", classOf[IntEncoder].getName.toString)
     props.put("serializer.class", classOf[StringEncoder].getName)
@@ -359,7 +359,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
       val ms = 0.until(messagesPerNode).map(x => header + config.brokerId + "-" + partition + "-" + x)
       producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)):_*)
       messages ++= ms
-      debug("Sent %d messages to broker %d for topic %s and partition %d".format(ms.size, config.brokerId, topic, partition))
+      debug("Sent %d messages to broker %d for partition [%s,%d]".format(ms.size, config.brokerId, topic, partition))
     }
     producer.close()
     messages

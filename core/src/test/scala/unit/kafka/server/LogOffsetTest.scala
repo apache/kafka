@@ -207,7 +207,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     props.put("log.retention.hours", "10")
     props.put("log.retention.check.interval.ms", (5*1000*60).toString)
     props.put("log.segment.bytes", logSize.toString)
-    props.put("zk.connect", zkConnect.toString)
+    props.put("zookeeper.connect", zkConnect.toString)
     props
   }
 

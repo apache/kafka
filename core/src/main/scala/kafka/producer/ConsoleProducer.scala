@@ -126,7 +126,7 @@ object ConsoleProducer {
     cmdLineProps.put("topic", topic)
 
     val props = new Properties()
-    props.put("broker.list", brokerList)
+    props.put("metadata.broker.list", brokerList)
     val codec = if(compress) DefaultCompressionCodec.codec else NoCompressionCodec.codec
     props.put("compression.codec", codec.toString)
     props.put("producer.type", if(sync) "sync" else "async")
@@ -196,7 +196,7 @@ object ConsoleProducer {
       topic = props.getProperty("topic")
       if(props.containsKey("parse.key"))
         parseKey = props.getProperty("parse.key").trim.toLowerCase.equals("true")
-      if(props.containsKey("key.seperator"))
+      if(props.containsKey("key.separator"))
         keySeparator = props.getProperty("key.separator")
       if(props.containsKey("ignore.error"))
         ignoreError = props.getProperty("ignore.error").trim.toLowerCase.equals("true")

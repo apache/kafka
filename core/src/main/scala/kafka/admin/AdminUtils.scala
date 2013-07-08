@@ -214,7 +214,7 @@ object AdminUtils extends Logging {
               try {
                 Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l)).head)
               } catch {
-                case e => throw new LeaderNotAvailableException("Leader not available for topic %s partition %d".format(topic, partition), e)
+                case e => throw new LeaderNotAvailableException("Leader not available for partition [%s,%d]".format(topic, partition), e)
               }
             case None => throw new LeaderNotAvailableException("No leader exists for partition " + partition)
           }
@@ -233,7 +233,7 @@ object AdminUtils extends Logging {
           new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
         } catch {
           case e =>
-            error("Error while fetching metadata for partition [%s,%d]".format(topic, partition), e)
+            debug("Error while fetching metadata for partition [%s,%d]".format(topic, partition), e)
             new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo,
               ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
         }

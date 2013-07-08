@@ -37,6 +37,8 @@ class SocketServer(val brokerId: Int,
                    val port: Int,
                    val numProcessorThreads: Int,
                    val maxQueuedRequests: Int,
+                   val sendBufferSize: Int,
+                   val recvBufferSize: Int,
                    val maxRequestSize: Int = Int.MaxValue) extends Logging {
   this.logIdent = "[Socket Server on Broker " + brokerId + "], "
   private val time = SystemTime
@@ -56,7 +58,7 @@ class SocketServer(val brokerId: Int,
     requestChannel.addResponseListener((id:Int) => processors(id).wakeup())
    
     // start accepting connections
-    this.acceptor = new Acceptor(host, port, processors)
+    this.acceptor = new Acceptor(host, port, processors, sendBufferSize, recvBufferSize)
     Utils.newThread("kafka-acceptor", acceptor, false).start()
     acceptor.awaitStartup
     info("started")
@@ -128,7 +130,8 @@ private[kafka] abstract class AbstractServerThread extends Runnable with Logging
 /**
  * Thread that accepts and configures new connections. There is only need for one of these
  */
-private[kafka] class Acceptor(val host: String, val port: Int, private val processors: Array[Processor]) extends AbstractServerThread {
+private[kafka] class Acceptor(val host: String, val port: Int, private val processors: Array[Processor],
+                              val sendBufferSize: Int, val recvBufferSize: Int) extends AbstractServerThread {
   val serverChannel = openServerSocket(host, port)
 
   /**
@@ -192,10 +195,19 @@ private[kafka] class Acceptor(val host: String, val port: Int, private val proce
    * Accept a new connection
    */
   def accept(key: SelectionKey, processor: Processor) {
-    val socketChannel = key.channel().asInstanceOf[ServerSocketChannel].accept()
-    debug("Accepted connection from " + socketChannel.socket.getInetAddress() + " on " + socketChannel.socket.getLocalSocketAddress)
+    val serverSocketChannel = key.channel().asInstanceOf[ServerSocketChannel]
+    serverSocketChannel.socket().setReceiveBufferSize(recvBufferSize)
+
+    val socketChannel = serverSocketChannel.accept()
     socketChannel.configureBlocking(false)
     socketChannel.socket().setTcpNoDelay(true)
+    socketChannel.socket().setSendBufferSize(sendBufferSize)
+
+    debug("Accepted connection from %s on %s. sendBufferSize [actual|requested]: [%d|%d] recvBufferSize [actual|requested]: [%d|%d]"
+          .format(socketChannel.socket.getInetAddress, socketChannel.socket.getLocalSocketAddress,
+                  socketChannel.socket.getSendBufferSize, sendBufferSize,
+                  socketChannel.socket.getReceiveBufferSize, recvBufferSize))
+
     processor.accept(socketChannel)
   }
 

@@ -74,13 +74,13 @@ class Log(val dir: File,
   /* Calculate the offset of the next message */
   private val nextOffset: AtomicLong = new AtomicLong(activeSegment.nextOffset())
 
-  debug("Completed load of log %s with log end offset %d".format(name, logEndOffset))
+  info("Completed load of log %s with log end offset %d".format(name, logEndOffset))
 
   newGauge(name + "-" + "NumLogSegments",
-           new Gauge[Int] { def getValue = numberOfSegments })
+           new Gauge[Int] { def value = numberOfSegments })
 
   newGauge(name + "-" + "LogEndOffset",
-           new Gauge[Long] { def getValue = logEndOffset })
+           new Gauge[Long] { def value = logEndOffset })
 
   /** The name of this log */
   def name  = dir.getName()

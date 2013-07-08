@@ -62,52 +62,6 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
       </dependency>
     </dependencies>
 
-    def zkClientDep =
-      <dependency>
-        <groupId>com.101tec</groupId>
-        <artifactId>zkclient</artifactId>
-        <version>0.2</version>
-        <scope>compile</scope>
-      </dependency>
-
-    def metricsDepsCore =
-      <dependency>
-        <groupId>com.yammer.metrics</groupId>
-        <artifactId>metrics-core</artifactId>
-        <version>3.0.0-SNAPSHOT</version>
-        <scope>compile</scope>
-      </dependency>
-
-    def metricsDepsAnnotations =
-      <dependency>
-        <groupId>com.yammer.metrics</groupId>
-        <artifactId>metrics-annotation</artifactId>
-        <version>3.0.0-SNAPSHOT</version>
-        <scope>compile</scope>
-      </dependency>
-
-    object ZkClientDepAdder extends RuleTransformer(new RewriteRule() {
-      override def transform(node: Node): Seq[Node] = node match {
-        case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
-          Elem(prefix, "dependencies", attribs, scope, deps ++ zkClientDep:_*)
-        }
-        case other => other
-      }
-    })
-
-    object MetricsDepAdder extends RuleTransformer(new RewriteRule() {
-      override def transform(node: Node): Seq[Node] = node match {
-        case Elem(prefix, "dependencies", attribs, scope, deps @ _*) => {
-          Elem(prefix, "dependencies", attribs, scope, deps ++ metricsDepsCore ++ metricsDepsAnnotations:_*)
-        }
-        case other => other
-      }
-    })
-
-    override def pomPostProcess(pom: Node): Node = {
-      MetricsDepAdder(ZkClientDepAdder(pom))
-    }
-
     override def organization = "org.apache"
     override def filterScalaJars = false
 

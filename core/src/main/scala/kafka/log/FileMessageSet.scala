@@ -53,7 +53,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
 
   /* if this is not a slice, update the file pointer to the end of the file */
   if (!isSlice) {
-    info("Creating or reloading log segment %s".format(file.getAbsolutePath))
+    debug("Creating or reloading log segment %s".format(file.getAbsolutePath))
     /* set the file position to the last byte in the file */
     channel.position(channel.size)
   }

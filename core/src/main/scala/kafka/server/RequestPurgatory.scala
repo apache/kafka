@@ -72,14 +72,14 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
   newGauge(
     "PurgatorySize",
     new Gauge[Int] {
-      def getValue = watchersForKey.values.map(_.numRequests).sum + expiredRequestReaper.numRequests
+      def value = watchersForKey.values.map(_.numRequests).sum + expiredRequestReaper.numRequests
     }
   )
 
   newGauge(
     "NumDelayedRequests",
     new Gauge[Int] {
-      def getValue = expiredRequestReaper.unsatisfied.get()
+      def value = expiredRequestReaper.unsatisfied.get()
     }
   )
 

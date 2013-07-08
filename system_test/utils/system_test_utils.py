@@ -21,6 +21,7 @@
 # ===================================
 
 import copy
+import difflib
 import inspect
 import json
 import logging
@@ -554,5 +555,80 @@ def setup_remote_hosts_with_testsuite_level_cluster_config(systemTestEnv, testMo
         sys.exit(1)
     print
 
+# =================================================
+# lists_diff_count
+# - find the no. of different items in both lists
+# - both lists need not be sorted
+# - input lists won't be changed
+# =================================================
+def lists_diff_count(a, b):
+    c = list(b)
+    d = []
+    for item in a:
+        try:
+            c.remove(item)
+        except:
+            d.append(item)
 
+    if len(d) > 0:
+        print "#### Mismatch MessageID"
+        print d
+
+    return len(c) + len(d)
+
+# =================================================
+# subtract_list
+# - subtract items in listToSubtract from mainList
+#   and return the resulting list
+# - both lists need not be sorted
+# - input lists won't be changed
+# =================================================
+def subtract_list(mainList, listToSubtract):
+    remainingList = list(mainList)
+    for item in listToSubtract:
+        try:
+            remainingList.remove(item)
+        except:
+            pass
+    return remainingList
+
+# =================================================
+# diff_lists
+# - find the diff of 2 lists and return the 
+#   total no. of mismatch from both lists
+# - diff of both lists includes:
+#   - no. of items mismatch
+#   - ordering of the items
+#
+# sample lists:
+# a = ['8','4','3','2','1']
+# b = ['8','3','4','2','1']
+#
+# difflib will return the following:
+#   8
+# + 3
+#   4
+# - 3
+#   2
+#   1
+#
+# diff_lists(a,b) returns 2 and prints the following:
+# #### only in seq 2 :  + 3
+# #### only in seq 1 :  - 3
+# =================================================
+def diff_lists(a, b):
+    mismatchCount = 0
+    d = difflib.Differ()
+    diff = d.compare(a,b)
+
+    for item in diff:
+        result = item[0:1].strip()
+        if len(result) > 0:
+            mismatchCount += 1
+            if '-' in result:
+                logger.debug("#### only in seq 1 : " + item, extra=d)
+            elif '+' in result:
+                logger.debug("#### only in seq 2 : " + item, extra=d)
+
+    return mismatchCount
 

@@ -288,7 +288,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     val preferredReplicaElectionZkData = ZkUtils.readData(zkClient,
         ZkUtils.PreferredReplicaLeaderElectionPath)._1
     val partitionsUndergoingPreferredReplicaElection =
-      PreferredReplicaLeaderElectionCommand.parsePreferredReplicaJsonData(preferredReplicaElectionZkData)
+      PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(preferredReplicaElectionZkData)
     assertEquals("Preferred replica election ser-de failed", partitionsForPreferredReplicaElection,
       partitionsUndergoingPreferredReplicaElection)
   }
@@ -336,6 +336,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       var topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
       var leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
       assertTrue(leaderAfterShutdown != leaderBeforeShutdown)
+      assertEquals(2, controller.controllerContext.partitionLeadershipInfo(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
 
       leaderBeforeShutdown = leaderAfterShutdown
       controllerId = ZkUtils.getController(zkClient)
@@ -345,7 +346,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
       leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
       assertTrue(leaderAfterShutdown != leaderBeforeShutdown)
-      assertEquals(1, controller.controllerContext.allLeaders(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
+      assertEquals(1, controller.controllerContext.partitionLeadershipInfo(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
 
       leaderBeforeShutdown = leaderAfterShutdown
       controllerId = ZkUtils.getController(zkClient)
@@ -355,7 +356,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
       leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
       assertTrue(leaderAfterShutdown == leaderBeforeShutdown)
-      assertEquals(1, controller.controllerContext.allLeaders(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
+      assertEquals(1, controller.controllerContext.partitionLeadershipInfo(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
     } finally {
       servers.foreach(_.shutdown())
     }

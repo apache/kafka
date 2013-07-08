@@ -129,7 +129,7 @@ object TestUtils extends Logging {
     props.put("host.name", "localhost")
     props.put("port", port.toString)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
-    props.put("zk.connect", TestZKUtils.zookeeperConnect)
+    props.put("zookeeper.connect", TestZKUtils.zookeeperConnect)
     props.put("replica.socket.timeout.ms", "1500")
     props
   }
@@ -140,12 +140,12 @@ object TestUtils extends Logging {
   def createConsumerProperties(zkConnect: String, groupId: String, consumerId: String,
                                consumerTimeout: Long = -1): Properties = {
     val props = new Properties
-    props.put("zk.connect", zkConnect)
+    props.put("zookeeper.connect", zkConnect)
     props.put("group.id", groupId)
     props.put("consumer.id", consumerId)
     props.put("consumer.timeout.ms", consumerTimeout.toString)
-    props.put("zk.session.timeout.ms", "400")
-    props.put("zk.sync.time.ms", "200")
+    props.put("zookeeper.session.timeout.ms", "400")
+    props.put("zookeeper.sync.time.ms", "200")
     props.put("auto.commit.interval.ms", "1000")
     props.put("rebalance.max.retries", "4")
 
@@ -293,7 +293,7 @@ object TestUtils extends Logging {
                            encoder: Encoder[V] = new DefaultEncoder(), 
                            keyEncoder: Encoder[K] = new DefaultEncoder()): Producer[K, V] = {
     val props = new Properties()
-    props.put("broker.list", brokerList)
+    props.put("metadata.broker.list", brokerList)
     props.put("send.buffer.bytes", "65536")
     props.put("connect.timeout.ms", "100000")
     props.put("reconnect.interval", "10000")
@@ -304,7 +304,7 @@ object TestUtils extends Logging {
 
   def getProducerConfig(brokerList: String, partitioner: String = "kafka.producer.DefaultPartitioner"): Properties = {
     val props = new Properties()
-    props.put("broker.list", brokerList)
+    props.put("metadata.broker.list", brokerList)
     props.put("partitioner.class", partitioner)
     props.put("message.send.max.retries", "3")
     props.put("retry.backoff.ms", "1000")
@@ -409,7 +409,7 @@ object TestUtils extends Logging {
           ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
             ZkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch))
         } catch {
-          case oe => error("Error while electing leader for topic %s partition %d".format(topic, partition), oe)
+          case oe => error("Error while electing leader for partition [%s,%d]".format(topic, partition), oe)
         }
       }
     }
@@ -420,9 +420,9 @@ object TestUtils extends Logging {
     val leaderExistsOrChanged = leaderLock.newCondition()
 
     if(oldLeaderOpt == None)
-      info("Waiting for leader to be elected for topic %s partition %d".format(topic, partition))
+      info("Waiting for leader to be elected for partition [%s,%d]".format(topic, partition))
     else
-      info("Waiting for leader for topic %s partition %d to be changed from old leader %d".format(topic, partition, oldLeaderOpt.get))
+      info("Waiting for leader for partition [%s,%d] to be changed from old leader %d".format(topic, partition, oldLeaderOpt.get))
 
     leaderLock.lock()
     try {
@@ -433,10 +433,10 @@ object TestUtils extends Logging {
       leader match {
         case Some(l) =>
           if(oldLeaderOpt == None)
-            info("Leader %d is elected for topic %s partition %d".format(l, topic, partition))
+            info("Leader %d is elected for partition [%s,%d]".format(l, topic, partition))
           else
-            info("Leader for topic %s partition %d is changed from %d to %d".format(topic, partition, oldLeaderOpt.get, l))
-        case None => error("Timing out after %d ms since leader is not elected for topic %s partition %d"
+            info("Leader for partition [%s,%d] is changed from %d to %d".format(topic, partition, oldLeaderOpt.get, l))
+        case None => error("Timing out after %d ms since leader is not elected for partition [%s,%d]"
                                    .format(timeoutMs, topic, partition))
       }
       leader

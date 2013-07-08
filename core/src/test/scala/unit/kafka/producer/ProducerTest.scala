@@ -91,7 +91,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
 
     val props1 = new util.Properties()
-    props1.put("broker.list", "localhost:80,localhost:81")
+    props1.put("metadata.broker.list", "localhost:80,localhost:81")
     props1.put("serializer.class", "kafka.serializer.StringEncoder")
     val producerConfig1 = new ProducerConfig(props1)
     val producer1 = new Producer[String, String](producerConfig1)
@@ -106,7 +106,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     }
 
     val props2 = new util.Properties()
-    props2.put("broker.list", "localhost:80," + TestUtils.getBrokerListStrFromConfigs(Seq( config1)))
+    props2.put("metadata.broker.list", "localhost:80," + TestUtils.getBrokerListStrFromConfigs(Seq( config1)))
     props2.put("serializer.class", "kafka.serializer.StringEncoder")
     val producerConfig2= new ProducerConfig(props2)
     val producer2 = new Producer[String, String](producerConfig2)
@@ -119,7 +119,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     }
 
     val props3 = new util.Properties()
-    props3.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    props3.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
     props3.put("serializer.class", "kafka.serializer.StringEncoder")
     val producerConfig3 = new ProducerConfig(props3)
     val producer3 = new Producer[String, String](producerConfig3)
@@ -137,7 +137,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     val props1 = new util.Properties()
     props1.put("serializer.class", "kafka.serializer.StringEncoder")
     props1.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props1.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    props1.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
     props1.put("request.required.acks", "2")
     props1.put("request.timeout.ms", "1000")
 
@@ -198,7 +198,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     props.put("partitioner.class", "kafka.utils.StaticPartitioner")
     props.put("request.timeout.ms", "2000")
     props.put("request.required.acks", "1")
-    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
 
     // create topic
     AdminUtils.createTopicWithAssignment(zkClient, "new-topic", Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)))
@@ -250,7 +250,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("partitioner.class", "kafka.utils.StaticPartitioner")
     props.put("request.timeout.ms", String.valueOf(timeoutMs))
-    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
     props.put("request.required.acks", "1")
 
     val config = new ProducerConfig(props)
@@ -302,7 +302,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
     props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props.put("broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
     
     val config = new ProducerConfig(props)
     val producer = new Producer[String, String](config)

@@ -79,11 +79,17 @@ case class PartitionStateInfo(val leaderIsrAndControllerEpoch: LeaderIsrAndContr
       4 /* replication factor */
     size
   }
+  
+  override def toString(): String = {
+    val partitionStateInfo = new StringBuilder
+    partitionStateInfo.append("(LeaderAndIsrInfo:" + leaderIsrAndControllerEpoch.toString)
+    partitionStateInfo.append(",ReplicationFactor:" + replicationFactor + ")")
+    partitionStateInfo.toString()
+  }
 }
 
 object LeaderAndIsrRequest {
   val CurrentVersion = 0.shortValue
-  val DefaultClientId = ""
   val IsInit: Boolean = true
   val NotInit: Boolean = false
   val DefaultAckTimeout: Int = 1000
@@ -122,13 +128,13 @@ case class LeaderAndIsrRequest (versionId: Short,
                                 controllerId: Int,
                                 controllerEpoch: Int,
                                 partitionStateInfos: Map[(String, Int), PartitionStateInfo],
-                                leaders: Set[Broker])
+                                aliveLeaders: Set[Broker])
     extends RequestOrResponse(Some(RequestKeys.LeaderAndIsrKey), correlationId) {
 
-  def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo], liveBrokers: Set[Broker], controllerId: Int,
-           controllerEpoch: Int, correlationId: Int) = {
-    this(LeaderAndIsrRequest.CurrentVersion, correlationId, LeaderAndIsrRequest.DefaultClientId, LeaderAndIsrRequest.DefaultAckTimeout,
-      controllerId, controllerEpoch, partitionStateInfos, liveBrokers)
+  def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo], aliveLeaders: Set[Broker], controllerId: Int,
+           controllerEpoch: Int, correlationId: Int, clientId: String) = {
+    this(LeaderAndIsrRequest.CurrentVersion, correlationId, clientId, LeaderAndIsrRequest.DefaultAckTimeout,
+         controllerId, controllerEpoch, partitionStateInfos, aliveLeaders)
   }
 
   def writeTo(buffer: ByteBuffer) {
@@ -144,8 +150,8 @@ case class LeaderAndIsrRequest (versionId: Short,
       buffer.putInt(key._2)
       value.writeTo(buffer)
     }
-    buffer.putInt(leaders.size)
-    leaders.foreach(_.writeTo(buffer))
+    buffer.putInt(aliveLeaders.size)
+    aliveLeaders.foreach(_.writeTo(buffer))
   }
 
   def sizeInBytes(): Int = {
@@ -160,22 +166,22 @@ case class LeaderAndIsrRequest (versionId: Short,
     for((key, value) <- partitionStateInfos)
       size += (2 + key._1.length) /* topic */ + 4 /* partition */ + value.sizeInBytes /* partition state info */
     size += 4 /* number of leader brokers */
-    for(broker <- leaders)
+    for(broker <- aliveLeaders)
       size += broker.sizeInBytes /* broker info */
     size
   }
 
   override def toString(): String = {
     val leaderAndIsrRequest = new StringBuilder
-    leaderAndIsrRequest.append("Name: " + this.getClass.getSimpleName)
-    leaderAndIsrRequest.append("; Version: " + versionId)
-    leaderAndIsrRequest.append("; Controller: " + controllerId)
-    leaderAndIsrRequest.append("; ControllerEpoch: " + controllerEpoch)
-    leaderAndIsrRequest.append("; CorrelationId: " + correlationId)
-    leaderAndIsrRequest.append("; ClientId: " + clientId)
-    leaderAndIsrRequest.append("; AckTimeoutMs: " + ackTimeoutMs + " ms")
-    leaderAndIsrRequest.append("; PartitionStateInfo: " + partitionStateInfos.mkString(","))
-    leaderAndIsrRequest.append("; Leaders: " + leaders.mkString(","))
+    leaderAndIsrRequest.append("Name:" + this.getClass.getSimpleName)
+    leaderAndIsrRequest.append(";Version:" + versionId)
+    leaderAndIsrRequest.append(";Controller:" + controllerId)
+    leaderAndIsrRequest.append(";ControllerEpoch:" + controllerEpoch)
+    leaderAndIsrRequest.append(";CorrelationId:" + correlationId)
+    leaderAndIsrRequest.append(";ClientId:" + clientId)
+    leaderAndIsrRequest.append(";AckTimeoutMs:" + ackTimeoutMs + " ms")
+    leaderAndIsrRequest.append(";PartitionState:" + partitionStateInfos.mkString(","))
+    leaderAndIsrRequest.append(";Leaders:" + aliveLeaders.mkString(","))
     leaderAndIsrRequest.toString()
   }
 

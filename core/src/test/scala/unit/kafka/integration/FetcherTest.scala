@@ -58,12 +58,12 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
     AdminUtils.createTopicWithAssignment(zkClient, topic, Map(0 -> Seq(configs.head.brokerId)))
     waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
     fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkClient)
-    fetcher.stopAllConnections()
+    fetcher.stopConnections()
     fetcher.startConnections(topicInfos, cluster)
   }
 
   override def tearDown() {
-    fetcher.shutdown()
+    fetcher.stopConnections()
     super.tearDown
   }
 

@@ -104,19 +104,37 @@ object TopicCommand {
   }
   
   def describeTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
-    CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.topicOpt)
-    val topics = opts.options.valuesOf(opts.topicOpt)
-    val metadata = AdminUtils.fetchTopicMetadataFromZk(topics.toSet, zkClient)
-    for(md <- metadata) {
-      println(md.topic)
-      val config = AdminUtils.fetchTopicConfig(zkClient, md.topic)
-      println("\tconfigs: " + config.map(kv => kv._1 + " = " + kv._2).mkString(", "))
-      println("\tpartitions: " + md.partitionsMetadata.size)
-      for(pd <- md.partitionsMetadata) {
-        println("\t\tpartition " + pd.partitionId)
-        println("\t\tleader: " + (if(pd.leader.isDefined) formatBroker(pd.leader.get) else "none"))
-        println("\t\treplicas: " + pd.replicas.map(formatBroker).mkString(", "))
-        println("\t\tisr: " + pd.isr.map(formatBroker).mkString(", "))
+    var topics: Seq[String] = opts.options.valuesOf(opts.topicOpt).toSeq.sorted
+    if (topics.size <= 0)
+      topics = ZkUtils.getChildrenParentMayNotExist(zkClient, ZkUtils.BrokerTopicsPath).sorted
+    val reportUnderReplicatedPartitions = if (opts.options.has(opts.reportUnderReplicatedPartitionsOpt)) true else false
+    val reportUnavailablePartitions = if (opts.options.has(opts.reportUnavailablePartitionsOpt)) true else false
+    val liveBrokers = ZkUtils.getAllBrokersInCluster(zkClient).map(_.id).toSet
+    for (topic <- topics) {
+      ZkUtils.getPartitionAssignmentForTopics(zkClient, List(topic)).get(topic) match {
+        case Some(topicPartitionAssignment) =>
+          val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
+          if (!reportUnavailablePartitions && !reportUnderReplicatedPartitions) {
+            println(topic)
+            val config = AdminUtils.fetchTopicConfig(zkClient, topic)
+            println("\tconfigs: " + config.map(kv => kv._1 + " = " + kv._2).mkString(", "))
+            println("\tpartitions: " + sortedPartitions.size)
+          }
+          for ((partitionId, assignedReplicas) <- sortedPartitions) {
+            val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, topic, partitionId)
+            val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partitionId)
+            if ((!reportUnderReplicatedPartitions && !reportUnavailablePartitions) ||
+                (reportUnderReplicatedPartitions && inSyncReplicas.size < assignedReplicas.size) ||
+                (reportUnavailablePartitions && (!leader.isDefined || !liveBrokers.contains(leader.get)))) {
+              print("\t\ttopic: " + topic)
+              print("\tpartition: " + partitionId)
+              print("\tleader: " + (if(leader.isDefined) leader.get else "none"))
+              print("\treplicas: " + assignedReplicas.mkString(","))
+              println("\tisr: " + inSyncReplicas.mkString(","))
+            }
+          }
+        case None =>
+          println("topic " + topic + " doesn't exist!")
       }
     }
   }
@@ -177,7 +195,11 @@ object TopicCommand {
                            .describedAs("broker_id_for_part1_replica1 : broker_id_for_part1_replica2 , " +
                                         "broker_id_for_part2_replica1 : broker_id_for_part2_replica2 , ...")
                            .ofType(classOf[String])
-    
+    val reportUnderReplicatedPartitionsOpt = parser.accepts("under-replicated-partitions",
+                                                            "if set when describing topics, only show under replicated partitions")
+    val reportUnavailablePartitionsOpt = parser.accepts("unavailable-partitions",
+                                                            "if set when describing topics, only show partitions whose leader is not available")
+
 
     val options = parser.parse(args : _*)
   }

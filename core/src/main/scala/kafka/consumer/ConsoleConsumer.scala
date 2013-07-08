@@ -158,7 +158,7 @@ object ConsoleConsumer extends Logging {
     props.put("auto.commit.enable", "true")
     props.put("auto.commit.interval.ms", options.valueOf(autoCommitIntervalOpt).toString)
     props.put("auto.offset.reset", if(options.has(resetBeginningOpt)) "smallest" else "largest")
-    props.put("zk.connect", options.valueOf(zkConnectOpt))
+    props.put("zookeeper.connect", options.valueOf(zkConnectOpt))
     props.put("consumer.timeout.ms", options.valueOf(consumerTimeoutMsOpt).toString)
     val config = new ConsumerConfig(props)
     val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false

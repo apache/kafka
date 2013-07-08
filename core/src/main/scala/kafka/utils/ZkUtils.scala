@@ -74,7 +74,7 @@ object ZkUtils extends Logging {
     ZkUtils.getChildren(zkClient, BrokerIdsPath).map(_.toInt).sorted
 
   def getAllBrokersInCluster(zkClient: ZkClient): Seq[Broker] = {
-    val brokerIds = ZkUtils.getChildren(zkClient, ZkUtils.BrokerIdsPath).sorted
+    val brokerIds = ZkUtils.getChildrenParentMayNotExist(zkClient, ZkUtils.BrokerIdsPath).sorted
     brokerIds.map(_.toInt).map(getBrokerInfo(zkClient, _)).filter(_.isDefined).map(_.get)
   }
 
@@ -108,7 +108,7 @@ object ZkUtils extends Logging {
         val isr = leaderIsrAndEpochInfo.get("isr").get.asInstanceOf[List[Int]]
         val controllerEpoch = leaderIsrAndEpochInfo.get("controller_epoch").get.asInstanceOf[Int]
         val zkPathVersion = stat.getVersion
-        debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for topic %s and partition %d".format(leader, epoch,
+        debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for partition [%s,%d]".format(leader, epoch,
           isr.toString(), zkPathVersion, topic, partition))
         Some(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, zkPathVersion), controllerEpoch))
       case None => None
@@ -138,10 +138,10 @@ object ZkUtils extends Logging {
     leaderAndIsrOpt match {
       case Some(leaderAndIsr) =>
         Json.parseFull(leaderAndIsr) match {
-          case None => throw new NoEpochForPartitionException("No epoch, leaderAndISR data for topic %s partition %d is invalid".format(topic, partition))
+          case None => throw new NoEpochForPartitionException("No epoch, leaderAndISR data for partition [%s,%d] is invalid".format(topic, partition))
           case Some(m) => m.asInstanceOf[Map[String, Any]].get("leader_epoch").get.asInstanceOf[Int]
         }
-      case None => throw new NoEpochForPartitionException("No epoch, ISR path for topic %s partition %d is empty"
+      case None => throw new NoEpochForPartitionException("No epoch, ISR path for partition [%s,%d] is empty"
         .format(topic, partition))
     }
   }
@@ -184,7 +184,7 @@ object ZkUtils extends Logging {
 
   def isPartitionOnBroker(zkClient: ZkClient, topic: String, partition: Int, brokerId: Int): Boolean = {
     val replicas = getReplicasForPartition(zkClient, topic, partition)
-    debug("The list of replicas for topic %s, partition %d is %s".format(topic, partition, replicas))
+    debug("The list of replicas for partition [%s,%d] is %s".format(topic, partition, replicas))
     replicas.contains(brokerId.toString)
   }
     
@@ -333,12 +333,12 @@ object ZkUtils extends Logging {
   def conditionalUpdatePersistentPath(client: ZkClient, path: String, data: String, expectVersion: Int): (Boolean, Int) = {
     try {
       val stat = client.writeData(path, data, expectVersion)
-      info("Conditional update of zkPath %s with value %s and expected version %d succeeded, returning the new version: %d"
+      debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
         .format(path, data, expectVersion, stat.getVersion))
       (true, stat.getVersion)
     } catch {
       case e: Exception =>
-        error("Conditional update of zkPath %s with data %s and expected version %d failed".format(path, data,
+        error("Conditional update of path %s with data %s and expected version %d failed".format(path, data,
           expectVersion), e)
         (false, -1)
     }
@@ -351,13 +351,13 @@ object ZkUtils extends Logging {
   def conditionalUpdatePersistentPathIfExists(client: ZkClient, path: String, data: String, expectVersion: Int): (Boolean, Int) = {
     try {
       val stat = client.writeData(path, data, expectVersion)
-      info("Conditional update of zkPath %s with value %s and expected version %d succeeded, returning the new version: %d"
+      debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
         .format(path, data, expectVersion, stat.getVersion))
       (true, stat.getVersion)
     } catch {
       case nne: ZkNoNodeException => throw nne
       case e: Exception =>
-        error("Conditional update of zkPath %s with data %s and expected version %d failed".format(path, data,
+        error("Conditional update of path %s with data %s and expected version %d failed".format(path, data,
           expectVersion), e)
         (false, -1)
     }
@@ -638,22 +638,7 @@ object ZkUtils extends Logging {
     // read the partitions and their new replica list
     val jsonPartitionListOpt = readDataMaybeNull(zkClient, PreferredReplicaLeaderElectionPath)._1
     jsonPartitionListOpt match {
-      case Some(jsonPartitionList) => parsePreferredReplicaElectionData(jsonPartitionList)
-      case None => Set.empty[TopicAndPartition]
-    }
-  }
-
-  def parsePreferredReplicaElectionData(jsonData: String):Set[TopicAndPartition] = {
-    Json.parseFull(jsonData) match {
-      case Some(m) =>
-        val topicAndPartitions = m.asInstanceOf[Array[Map[String, String]]]
-        val partitions = topicAndPartitions.map { p =>
-          val topicPartitionMap = p
-          val topic = topicPartitionMap.get("topic").get
-          val partition = topicPartitionMap.get("partition").get.toInt
-          TopicAndPartition(topic, partition)
-        }
-        Set.empty[TopicAndPartition] ++ partitions
+      case Some(jsonPartitionList) => PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(jsonPartitionList)
       case None => Set.empty[TopicAndPartition]
     }
   }
@@ -792,14 +777,14 @@ class ZKGroupTopicDirs(group: String, topic: String) extends ZKGroupDirs(group) 
 
 class ZKConfig(props: VerifiableProperties) {
   /** ZK host string */
-  val zkConnect = props.getString("zk.connect", null)
+  val zkConnect = props.getString("zookeeper.connect", null)
 
   /** zookeeper session timeout */
-  val zkSessionTimeoutMs = props.getInt("zk.session.timeout.ms", 6000)
+  val zkSessionTimeoutMs = props.getInt("zookeeper.session.timeout.ms", 6000)
 
   /** the max time that the client waits to establish a connection to zookeeper */
-  val zkConnectionTimeoutMs = props.getInt("zk.connection.timeout.ms",zkSessionTimeoutMs)
+  val zkConnectionTimeoutMs = props.getInt("zookeeper.connection.timeout.ms",zkSessionTimeoutMs)
 
   /** how far a ZK follower can be behind a ZK leader */
-  val zkSyncTimeMs = props.getInt("zk.sync.time.ms", 2000)
+  val zkSyncTimeMs = props.getInt("zookeeper.sync.time.ms", 2000)
 }

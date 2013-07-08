@@ -165,7 +165,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         if (config.autoCommitEnable)
           scheduler.shutdown()
         fetcher match {
-          case Some(f) => f.shutdown
+          case Some(f) => f.stopConnections
           case None =>
         }
         sendShutdownToAllQueues()
@@ -486,7 +486,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val allPartitionInfos = topicRegistry.values.map(p => p.values).flatten
       fetcher match {
         case Some(f) =>
-          f.stopAllConnections
+          f.stopConnections
           clearFetcherQueues(allPartitionInfos, cluster, queuesToBeCleared, messageStreams)
           info("Committing all offsets after clearing the fetcher queues")
           /**
@@ -653,7 +653,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       newGauge(
         config.clientId + "-" + config.groupId + "-" + topicThreadId._1 + "-" + topicThreadId._2 + "-FetchQueueSize",
         new Gauge[Int] {
-          def getValue = q.size
+          def value = q.size
         }
       )
     })

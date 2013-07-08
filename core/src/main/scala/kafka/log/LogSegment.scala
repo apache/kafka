@@ -147,7 +147,15 @@ class LogSegment(val log: FileMessageSet,
         val entry = iter.next
         entry.message.ensureValid()
         if(validBytes - lastIndexEntry > indexIntervalBytes) {
-          index.append(entry.offset, validBytes)
+          // we need to decompress the message, if required, to get the offset of the first uncompressed message
+          val startOffset =
+            entry.message.compressionCodec match {
+              case NoCompressionCodec =>
+                entry.offset
+              case _ =>
+                ByteBufferMessageSet.decompress(entry.message).head.offset
+          }
+          index.append(startOffset, validBytes)
           lastIndexEntry = validBytes
         }
         validBytes += MessageSet.entrySize(entry.message)

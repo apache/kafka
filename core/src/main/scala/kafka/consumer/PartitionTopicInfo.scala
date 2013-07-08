@@ -50,12 +50,12 @@ class PartitionTopicInfo(val topic: String,
   }
 
   /**
-   * Enqueue a message set for processing
+   * Enqueue a message set for processing.
    */
   def enqueue(messages: ByteBufferMessageSet) {
-    val size = messages.sizeInBytes
+    val size = messages.validBytes
     if(size > 0) {
-      val next = nextOffset(messages)
+      val next = messages.shallowIterator.toSeq.last.nextOffset
       trace("Updating fetch offset = " + fetchedOffset.get + " to " + next)
       chunkQueue.put(new FetchedDataChunk(messages, this, fetchedOffset.get))
       fetchedOffset.set(next)
@@ -65,17 +65,6 @@ class PartitionTopicInfo(val topic: String,
     }
   }
   
-  /**
-   * Get the next fetch offset after this message set
-   */
-  private def nextOffset(messages: ByteBufferMessageSet): Long = {
-    var nextOffset = PartitionTopicInfo.InvalidOffset
-    val iter = messages.shallowIterator
-    while(iter.hasNext)
-      nextOffset = iter.next.nextOffset
-    nextOffset
-  }
-
   override def toString(): String = topic + ":" + partitionId.toString + ": fetched offset = " + fetchedOffset.get +
     ": consumed offset = " + consumedOffset.get
 }

@@ -59,7 +59,7 @@ class ReplicaManager(val config: KafkaConfig,
   newGauge(
     "LeaderCount",
     new Gauge[Int] {
-      def getValue = {
+      def value = {
         leaderPartitionsLock synchronized {
           leaderPartitions.size
         }
@@ -69,13 +69,13 @@ class ReplicaManager(val config: KafkaConfig,
   newGauge(
     "PartitionCount",
     new Gauge[Int] {
-      def getValue = allPartitions.size
+      def value = allPartitions.size
     }
   )
   newGauge(
     "UnderReplicatedPartitions",
     new Gauge[Int] {
-      def getValue = {
+      def value = {
         leaderPartitionsLock synchronized {
           leaderPartitions.count(_.isUnderReplicated)
         }
@@ -122,18 +122,18 @@ class ReplicaManager(val config: KafkaConfig,
         leaderPartitionsLock synchronized {
           leaderPartitions -= replica.partition
         }
-        allPartitions.remove((topic, partitionId))
-        info("After removing partition [%s,%d], the rest of allReplicas is: [%s]".format(topic, partitionId, allPartitions))
+        if(deletePartition)
+          allPartitions.remove((topic, partitionId))
       case None => //do nothing if replica no longer exists
     }
-    stateChangeLogger.trace("Broker %d finished handling stop replica [%s,%d]".format(localBrokerId, topic, partitionId))
+    stateChangeLogger.trace("Broker %d finished handling stop replica for partition [%s,%d]".format(localBrokerId, topic, partitionId))
     errorCode
   }
 
   def stopReplicas(stopReplicaRequest: StopReplicaRequest): (mutable.Map[(String, Int), Short], Short) = {
     val responseMap = new collection.mutable.HashMap[(String, Int), Short]
     if(stopReplicaRequest.controllerEpoch < controllerEpoch) {
-      stateChangeLogger.error("Broker %d received stop replica request from an old controller epoch %d."
+      stateChangeLogger.warn("Broker %d received stop replica request from an old controller epoch %d."
         .format(localBrokerId, stopReplicaRequest.controllerEpoch) +
             " Latest known controller epoch is %d " + controllerEpoch)
       (responseMap, ErrorMapping.StaleControllerEpochCode)
@@ -170,19 +170,19 @@ class ReplicaManager(val config: KafkaConfig,
     if(replicaOpt.isDefined)
       return replicaOpt.get
     else
-      throw new ReplicaNotAvailableException("Replica %d is not available for partiton [%s,%d] yet".format(config.brokerId, topic, partition))
+      throw new ReplicaNotAvailableException("Replica %d is not available for partition [%s,%d]".format(config.brokerId, topic, partition))
   }
 
   def getLeaderReplicaIfLocal(topic: String, partitionId: Int): Replica =  {
     val partitionOpt = getPartition(topic, partitionId)
     partitionOpt match {
       case None =>
-        throw new UnknownTopicOrPartitionException("Topic %s partition %d doesn't exist on %d".format(topic, partitionId, config.brokerId))
+        throw new UnknownTopicOrPartitionException("Partition [%s,%d] doesn't exist on %d".format(topic, partitionId, config.brokerId))
       case Some(partition) =>
         partition.leaderReplicaIfLocal match {
           case Some(leaderReplica) => leaderReplica
           case None =>
-            throw new NotLeaderForPartitionException("Leader not local for topic %s partition %d on broker %d"
+            throw new NotLeaderForPartitionException("Leader not local for partition [%s,%d] on broker %d"
                                                      .format(topic, partitionId, config.brokerId))
         }
     }
@@ -198,14 +198,14 @@ class ReplicaManager(val config: KafkaConfig,
 
   def becomeLeaderOrFollower(leaderAndISRRequest: LeaderAndIsrRequest): (collection.Map[(String, Int), Short], Short) = {
     leaderAndISRRequest.partitionStateInfos.foreach(p =>
-      stateChangeLogger.trace("Broker %d handling LeaderAndIsr request correlationId %d received from controller %d epoch %d for partition [%s,%d]"
+      stateChangeLogger.trace("Broker %d handling LeaderAndIsr request correlation id %d received from controller %d epoch %d for partition [%s,%d]"
                                 .format(localBrokerId, leaderAndISRRequest.correlationId, leaderAndISRRequest.controllerId,
                                         leaderAndISRRequest.controllerEpoch, p._1._1, p._1._2)))
     info("Handling LeaderAndIsr request %s".format(leaderAndISRRequest))
 
     val responseMap = new collection.mutable.HashMap[(String, Int), Short]
     if(leaderAndISRRequest.controllerEpoch < controllerEpoch) {
-      stateChangeLogger.error("Broker %d received LeaderAndIsr request correlationId %d with an old controllerEpoch %d, latest known controllerEpoch is %d"
+      stateChangeLogger.warn("Broker %d received LeaderAndIsr request correlation id %d with an old controller epoch %d. Latest known controller epoch is %d"
                                 .format(localBrokerId, leaderAndISRRequest.controllerEpoch, leaderAndISRRequest.correlationId, controllerEpoch))
       (responseMap, ErrorMapping.StaleControllerEpochCode)
     }else {
@@ -221,7 +221,7 @@ class ReplicaManager(val config: KafkaConfig,
           if(requestedLeaderId == config.brokerId)
             makeLeader(controllerId, controllerEpoch, topic, partitionId, partitionStateInfo, leaderAndISRRequest.correlationId)
           else
-            makeFollower(controllerId, controllerEpoch, topic, partitionId, partitionStateInfo, leaderAndISRRequest.leaders,
+            makeFollower(controllerId, controllerEpoch, topic, partitionId, partitionStateInfo, leaderAndISRRequest.aliveLeaders,
                          leaderAndISRRequest.correlationId)
         } catch {
           case e =>
@@ -232,10 +232,9 @@ class ReplicaManager(val config: KafkaConfig,
             errorCode = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
         }
         responseMap.put(topicAndPartition, errorCode)
-        leaderAndISRRequest.partitionStateInfos.foreach(p =>
-          stateChangeLogger.trace("Broker %d handled LeaderAndIsr request correlationId %d received from controller %d epoch %d for partition [%s,%d]"
-                                    .format(localBrokerId, leaderAndISRRequest.correlationId, leaderAndISRRequest.controllerId,
-                                            leaderAndISRRequest.controllerEpoch, p._1._1, p._1._2)))
+        stateChangeLogger.trace("Broker %d handled LeaderAndIsr request correlationId %d received from controller %d epoch %d for partition [%s,%d]"
+          .format(localBrokerId, leaderAndISRRequest.correlationId, leaderAndISRRequest.controllerId, leaderAndISRRequest.controllerEpoch,
+          topicAndPartition._1, topicAndPartition._2))
       }
       info("Handled leader and isr request %s".format(leaderAndISRRequest))
       // we initialize highwatermark thread after the first leaderisrrequest. This ensures that all the partitions
@@ -266,15 +265,14 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def makeFollower(controllerId: Int, epoch: Int, topic: String, partitionId: Int,
-                           partitionStateInfo: PartitionStateInfo, liveBrokers: Set[Broker], correlationId: Int) {
+                           partitionStateInfo: PartitionStateInfo, aliveLeaders: Set[Broker], correlationId: Int) {
     val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
-    val leaderBrokerId: Int = leaderIsrAndControllerEpoch.leaderAndIsr.leader
     stateChangeLogger.trace(("Broker %d received LeaderAndIsr request correlationId %d from controller %d epoch %d " +
                              "starting the become-follower transition for partition [%s,%d]")
                                .format(localBrokerId, correlationId, controllerId, epoch, topic, partitionId))
 
     val partition = getOrCreatePartition(topic, partitionId, partitionStateInfo.replicationFactor)
-    if (partition.makeFollower(controllerId, topic, partitionId, leaderIsrAndControllerEpoch, liveBrokers, correlationId)) {
+    if (partition.makeFollower(controllerId, topic, partitionId, leaderIsrAndControllerEpoch, aliveLeaders, correlationId)) {
       // remove this replica's partition from the ISR expiration queue
       leaderPartitionsLock synchronized {
         leaderPartitions -= partition

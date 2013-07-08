@@ -313,8 +313,8 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
     logger.info("testcase config (dest)   pathname : " + cfgDestPathname, extra=d)
 
     # loop through all zookeepers (if more than 1) to retrieve host and clientPort
-    # to construct a zk.connect str for broker in the form of:
-    # zk.connect=<host1>:<port1>,<host2>:<port2>,...
+    # to construct a zookeeper.connect str for broker in the form of:
+    # zookeeper.connect=<host1>:<port1>,<host2>:<port2>,...
     testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]        = ""
     testcaseEnv.userDefinedEnvVarDict["targetZkConnectStr"]        = ""
     testcaseEnv.userDefinedEnvVarDict["sourceZkEntityIdList"]      = []
@@ -409,20 +409,27 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
 
                 # copy the associated .properties template, update values, write to testcase_<xxx>/config
 
-                if ( clusterCfg["role"] == "broker" ):
-                    if clusterCfg["cluster_name"] == "source":
-                        tcCfg["zk.connect"] = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
-                    elif clusterCfg["cluster_name"] == "target":
-                        tcCfg["zk.connect"] = testcaseEnv.userDefinedEnvVarDict["targetZkConnectStr"]
-                    else:
-                        logger.error("Unknown cluster name: " + clusterName, extra=d)
-                        sys.exit(1)
-
-                    zeroSevenClient = "false"
+                if (clusterCfg["role"] == "broker"):
+                    brokerVersion = "0.8"
                     try:
-                        zeroSevenClient = tcCfg["07_client"]
+                        brokerVersion = tcCfg["version"]
                     except:
                         pass
+
+                    if (brokerVersion == "0.7"):
+                        if clusterCfg["cluster_name"] == "source":
+                            tcCfg["zk.connect"] = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
+                        else:
+                            logger.error("Unknown cluster name for 0.7: " + clusterName, extra=d)
+                            sys.exit(1)
+                    else:
+                        if clusterCfg["cluster_name"] == "source":
+                            tcCfg["zookeeper.connect"] = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
+                        elif clusterCfg["cluster_name"] == "target":
+                            tcCfg["zookeeper.connect"] = testcaseEnv.userDefinedEnvVarDict["targetZkConnectStr"]
+                        else:
+                            logger.error("Unknown cluster name: " + clusterName, extra=d)
+                            sys.exit(1)
 
                     addedCSVConfig = {}
                     addedCSVConfig["kafka.csv.metrics.dir"] = get_testcase_config_log_dir_pathname(testcaseEnv, "broker", clusterCfg["entity_id"], "metrics") 
@@ -430,7 +437,7 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
                     addedCSVConfig["kafka.metrics.reporters"] = "kafka.metrics.KafkaCSVMetricsReporter" 
                     addedCSVConfig["kafka.csv.metrics.reporter.enabled"] = "true"
 
-                    if zeroSevenClient == "true":
+                    if brokerVersion == "0.7":
                         addedCSVConfig["brokerid"] = tcCfg["brokerid"]
 
                     copy_file_with_dict_values(cfgTemplatePathname + "/server.properties",
@@ -450,12 +457,12 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
                         sys.exit(1)
 
                 elif ( clusterCfg["role"] == "mirror_maker"):
-                    tcCfg["broker.list"] = testcaseEnv.userDefinedEnvVarDict["targetBrokerList"]
+                    tcCfg["metadata.broker.list"] = testcaseEnv.userDefinedEnvVarDict["targetBrokerList"]
                     copy_file_with_dict_values(cfgTemplatePathname + "/mirror_producer.properties",
                         cfgDestPathname + "/" + tcCfg["mirror_producer_config_filename"], tcCfg, None)
 
-                    # update zk.connect with the zk entities specified in cluster_config.json
-                    tcCfg["zk.connect"] = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
+                    # update zookeeper.connect with the zk entities specified in cluster_config.json
+                    tcCfg["zookeeper.connect"] = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
                     copy_file_with_dict_values(cfgTemplatePathname + "/mirror_consumer.properties",
                         cfgDestPathname + "/" + tcCfg["mirror_consumer_config_filename"], tcCfg, None)
                 
@@ -818,7 +825,7 @@ def start_console_consumer(systemTestEnv, testcaseEnv):
         if len(formatterOption) > 0:
             formatterOption = " --formatter " + formatterOption + " "
 
-        # get zk.connect
+        # get zookeeper connect string
         zkConnectStr = ""
         if clusterName == "source":
             zkConnectStr = testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"]
@@ -1189,17 +1196,21 @@ def get_message_checksum(logPathName):
     return messageChecksumList
 
 
-def validate_data_matched(systemTestEnv, testcaseEnv):
+def validate_data_matched(systemTestEnv, testcaseEnv, replicationUtils):
+    logger.debug("#### Inside validate_data_matched", extra=d)
+
     validationStatusDict        = testcaseEnv.validationStatusDict
     clusterEntityConfigDictList = systemTestEnv.clusterEntityConfigDictList
 
     prodPerfCfgList = system_test_utils.get_dict_from_list_of_dicts(clusterEntityConfigDictList, "role", "producer_performance")
     consumerCfgList = system_test_utils.get_dict_from_list_of_dicts(clusterEntityConfigDictList, "role", "console_consumer")
 
+    consumerDuplicateCount = 0
+
     for prodPerfCfg in prodPerfCfgList:
         producerEntityId = prodPerfCfg["entity_id"]
-        #topic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "topic")
-        topic = testcaseEnv.producerTopicsString
+        topic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "topic")
+        logger.debug("working on topic : " + topic, extra=d)
         acks  = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "request-num-acks")
 
         consumerEntityIdList = system_test_utils.get_data_from_list_of_dicts( \
@@ -1207,13 +1218,14 @@ def validate_data_matched(systemTestEnv, testcaseEnv):
 
         matchingConsumerEntityId = None
         for consumerEntityId in consumerEntityIdList:
-            #consumerTopic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", consumerEntityId, "topic")
-            consumerTopic = testcaseEnv.consumerTopicsString
+            consumerTopic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", consumerEntityId, "topic")
             if consumerTopic in topic:
                 matchingConsumerEntityId = consumerEntityId
+                logger.debug("matching consumer entity id found", extra=d)
                 break
 
         if matchingConsumerEntityId is None:
+            logger.debug("matching consumer entity id NOT found", extra=d)
             break
 
         msgIdMissingInConsumerLogPathName = get_testcase_config_log_dir_pathname( \
@@ -1229,10 +1241,11 @@ def validate_data_matched(systemTestEnv, testcaseEnv):
         producerMsgIdSet   = set(producerMsgIdList)
         consumerMsgIdSet   = set(consumerMsgIdList)
 
-        missingMsgIdInConsumer = producerMsgIdSet - consumerMsgIdSet
+        consumerDuplicateCount = len(consumerMsgIdList) - len(consumerMsgIdSet)
+        missingUniqConsumerMsgId = system_test_utils.subtract_list(producerMsgIdSet, consumerMsgIdSet)
 
         outfile = open(msgIdMissingInConsumerLogPathName, "w")
-        for id in missingMsgIdInConsumer:
+        for id in missingUniqConsumerMsgId:
             outfile.write(id + "\n")
         outfile.close()
 
@@ -1241,20 +1254,28 @@ def validate_data_matched(systemTestEnv, testcaseEnv):
         validationStatusDict["Unique messages from producer on [" + topic + "]"] = str(len(producerMsgIdSet))
         validationStatusDict["Unique messages from consumer on [" + topic + "]"] = str(len(consumerMsgIdSet))
 
-        if ( len(missingMsgIdInConsumer) == 0 and len(producerMsgIdSet) > 0 ):
+        missingPercentage = len(missingUniqConsumerMsgId) * 100.00 / len(producerMsgIdSet)
+        logger.info("Data loss threshold % : " + str(replicationUtils.ackOneDataLossThresholdPercent), extra=d)
+        logger.warn("Data loss % on topic : " + topic + " : " + str(missingPercentage), extra=d)
+
+        if ( len(missingUniqConsumerMsgId) == 0 and len(producerMsgIdSet) > 0 ):
             validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "PASSED"
         elif (acks == "1"):
-            missingPercentage = len(missingMsgIdInConsumer) * 100 / len(producerMsgIdSet)
-            print "#### missing Percent : ", missingPercentage
-            if missingPercentage <= 1:
+            if missingPercentage <= replicationUtils.ackOneDataLossThresholdPercent:
                 validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "PASSED"
-                logger.warn("Test case passes with less than 1% data loss : [" + str(len(missingMsgIdInConsumer)) + "] missing messages", extra=d)
+                logger.warn("Test case (Acks = 1) passes with less than " + str(replicationUtils.ackOneDataLossThresholdPercent) \
+                    + "% data loss : [" + str(len(missingUniqConsumerMsgId)) + "] missing messages", extra=d)
+            else:
+                validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "FAILED"
+                logger.error("Test case (Acks = 1) failed with more than " + str(replicationUtils.ackOneDataLossThresholdPercent) \
+                    + "% data loss : [" + str(len(missingUniqConsumerMsgId)) + "] missing messages", extra=d)
         else:
             validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "FAILED"
             logger.info("See " + msgIdMissingInConsumerLogPathName + " for missing MessageID", extra=d)
 
 
 def validate_leader_election_successful(testcaseEnv, leaderDict, validationStatusDict):
+    logger.debug("#### Inside validate_leader_election_successful", extra=d)
 
     if ( len(leaderDict) > 0 ):
         try:
@@ -1545,6 +1566,8 @@ def start_migration_tool(systemTestEnv, testcaseEnv, onlyThisEntityId=None):
 
 
 def validate_07_08_migrated_data_matched(systemTestEnv, testcaseEnv):
+    logger.debug("#### Inside validate_07_08_migrated_data_matched", extra=d)
+
     validationStatusDict        = testcaseEnv.validationStatusDict
     clusterEntityConfigDictList = systemTestEnv.clusterEntityConfigDictList
 
@@ -1614,6 +1637,7 @@ def validate_07_08_migrated_data_matched(systemTestEnv, testcaseEnv):
             logger.info("See " + msgChecksumMissingInConsumerLogPathName + " for missing MessageID", extra=d)
 
 def validate_broker_log_segment_checksum(systemTestEnv, testcaseEnv, clusterName="source"):
+    logger.debug("#### Inside validate_broker_log_segment_checksum", extra=d)
 
     anonLogger.info("================================================")
     anonLogger.info("validating merged broker log segment checksums")
@@ -1823,77 +1847,6 @@ def start_simple_consumer(systemTestEnv, testcaseEnv, minStartingOffsetDict=None
                 partitionId += 1
             replicaIndex += 1
 
-def validate_simple_consumer_data_matched(systemTestEnv, testcaseEnv):
-    validationStatusDict        = testcaseEnv.validationStatusDict
-    clusterEntityConfigDictList = systemTestEnv.clusterEntityConfigDictList
-
-    prodPerfCfgList = system_test_utils.get_dict_from_list_of_dicts(clusterEntityConfigDictList, "role", "producer_performance")
-    consumerCfgList = system_test_utils.get_dict_from_list_of_dicts(clusterEntityConfigDictList, "role", "console_consumer")
-
-    mismatchCount = 0
-
-    for prodPerfCfg in prodPerfCfgList:
-        producerEntityId = prodPerfCfg["entity_id"]
-        topic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "topic")
-        acks  = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", producerEntityId, "request-num-acks")
-        logger.debug("request-num-acks [" + acks + "]", extra=d)
-
-        consumerEntityIdList = system_test_utils.get_data_from_list_of_dicts( \
-                           clusterEntityConfigDictList, "role", "console_consumer", "entity_id")
-
-        matchingConsumerEntityId = None
-        for consumerEntityId in consumerEntityIdList:
-            consumerTopic = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", consumerEntityId, "topic")
-            if consumerTopic in topic:
-                matchingConsumerEntityId = consumerEntityId
-                break
-
-        if matchingConsumerEntityId is None:
-            break
-
-        producerLogPath     = get_testcase_config_log_dir_pathname(testcaseEnv, "producer_performance", producerEntityId, "default")
-        producerLogPathName = producerLogPath + "/producer_performance.log"
-        producerMsgIdList   = get_message_id(producerLogPathName)
-        producerMsgIdSet    = set(producerMsgIdList)
-        logger.info("no. of unique messages on topic [" + topic + "] sent from publisher  : " + str(len(producerMsgIdSet)), extra=d)
-        validationStatusDict["Unique messages from producer on [" + topic + "]"] = str(len(producerMsgIdSet))
-
-        consumerLogPath     = get_testcase_config_log_dir_pathname(testcaseEnv, "console_consumer", matchingConsumerEntityId, "default")
-        for logFile in sorted(os.listdir(consumerLogPath)):
-            # only process log file: *.log
-            if logFile.endswith(".log"):
-                consumerLogPathName = consumerLogPath + "/" + logFile
-                consumerMsgIdList   = get_message_id(consumerLogPathName)
-                consumerMsgIdSet   = set(consumerMsgIdList)
-                missingMsgIdInConsumer = producerMsgIdSet - consumerMsgIdSet
-                msgIdMissingInConsumerLogPathName = get_testcase_config_log_dir_pathname( 
-                    testcaseEnv, "console_consumer", matchingConsumerEntityId, "default") + \
-                    "/" + logFile + "_msg_id_missing_in_consumer.log"
-
-                outfile = open(msgIdMissingInConsumerLogPathName, "w")
-                for id in missingMsgIdInConsumer:
-                    outfile.write(id + "\n")
-                outfile.close()
-
-                logger.info("no. of unique messages on topic [" + topic + "] at " + logFile + " : " + str(len(consumerMsgIdSet)), extra=d)
-                validationStatusDict["Unique messages from consumer on [" + topic + "] at " + logFile] = str(len(consumerMsgIdSet))
-
-                if acks == "-1" and len(missingMsgIdInConsumer) > 0:
-                    mismatchCount += 1
-                elif acks == "1" and len(missingMsgIdInConsumer) > 0:
-                    missingPercentage = len(missingMsgIdInConsumer) * 100 / len(producerMsgIdSet)
-                    logger.debug("missing percentage [" + str(missingPercentage) + "]", extra=d)
-                    if missingPercentage <= 1:
-                        logger.warn("Test case (acks == 1) passes with < 1% data loss : [" + \
-                            str(len(missingMsgIdInConsumer)) + "] missing messages", extra=d)
-                    else:
-                        mismatchCount += 1
-
-        if mismatchCount == 0:
-            validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "PASSED"
-        else:
-            validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "FAILED"
-
 def get_controller_attributes(systemTestEnv, testcaseEnv):
 
     logger.info("Querying Zookeeper for Controller info ...", extra=d)
@@ -1917,7 +1870,7 @@ def get_controller_attributes(systemTestEnv, testcaseEnv):
                   "\"JAVA_HOME=" + javaHome,
                   kafkaRunClassBin + " org.apache.zookeeper.ZooKeeperMain",
                   "-server " + testcaseEnv.userDefinedEnvVarDict["sourceZkConnectStr"],
-                  "'get /controller' 2> /dev/null | tail -1\""]
+                  "get /controller 2> /dev/null | tail -1\""]
 
     cmdStr = " ".join(cmdStrList)
     logger.debug("executing command [" + cmdStr + "]", extra=d)
@@ -2007,6 +1960,8 @@ def getMinCommonStartingOffset(systemTestEnv, testcaseEnv, clusterName="source")
     return minCommonStartOffsetDict
 
 def validate_simple_consumer_data_matched_across_replicas(systemTestEnv, testcaseEnv):
+    logger.debug("#### Inside validate_simple_consumer_data_matched_across_replicas", extra=d)
+
     validationStatusDict        = testcaseEnv.validationStatusDict
     clusterEntityConfigDictList = systemTestEnv.clusterEntityConfigDictList
     consumerEntityIdList        = system_test_utils.get_data_from_list_of_dicts(
@@ -2014,101 +1969,100 @@ def validate_simple_consumer_data_matched_across_replicas(systemTestEnv, testcas
     replicaFactor               = testcaseEnv.testcaseArgumentsDict["replica_factor"]
     numPartition                = testcaseEnv.testcaseArgumentsDict["num_partition"]
 
-    # Unique messages from producer on [test_1]  :  1500
-    # Unique messages from consumer on [test_1]  :  1500
-
-    # Unique messages from consumer on [test_1] at simple_consumer_test_1-0_r1.log  :  750
-    # Unique messages from consumer on [test_1] at simple_consumer_test_1-0_r2.log  :  750
-    # Unique messages from consumer on [test_1] at simple_consumer_test_1-0_r3.log  :  0
-
-    # Unique messages from consumer on [test_1] at simple_consumer_test_1-1_r1.log  :  0
-    # Unique messages from consumer on [test_1] at simple_consumer_test_1-1_r2.log  :  750
-    # Unique messages from consumer on [test_1] at simple_consumer_test_1-1_r3.log  :  750
-
-    # ==================================================
-
-    # Unique messages from producer on [test_2]  :  1000
-    # Unique messages from consumer on [test_2]  :  1000
-
-    # Unique messages from consumer on [test_2] at simple_consumer_test_2-0_r1.log  :  500
-    # Unique messages from consumer on [test_2] at simple_consumer_test_2-0_r2.log  :  0
-    # Unique messages from consumer on [test_2] at simple_consumer_test_2-0_r3.log  :  500
-
-    # Unique messages from consumer on [test_2] at simple_consumer_test_2-1_r1.log  :  500
-    # Unique messages from consumer on [test_2] at simple_consumer_test_2-1_r2.log  :  500
-    # Unique messages from consumer on [test_2] at simple_consumer_test_2-1_r3.log  :  0
-
-    mismatchCounter = 0
     for consumerEntityId in consumerEntityIdList:
 
-        topic           = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", consumerEntityId, "topic")
-        consumerLogPath = get_testcase_config_log_dir_pathname(testcaseEnv, "console_consumer", consumerEntityId, "default")
+        # get topic string from multi consumer "entity"
+        topicStr  = system_test_utils.get_data_by_lookup_keyval(testcaseEnv.testcaseConfigsList, "entity_id", consumerEntityId, "topic")
 
-        replicaIdxMsgCountDictList = []
-        # replicaIdxMsgCountDictList is being used as follows:
-        #
-        # the above replica message count will be organized as follows:
-        # index of the list would map to the partitionId
-        # each element in the list maps to the replicaIdx-MessageCount
-        # to validate that :
-        # 1. there should be "no. of broker" of non-zero message count and they are equal
-        # 2. there should be "no. of broker - replication factor" of zero count
-        # [{"1": "750", "2": "750", "3": "0"  },
-        #  {"1": "0"  , "2": "750", "3": "750"}]
+        # the topic string could be multi topics separated by ','
+        topicList = topicStr.split(',')
 
-        j = 0
-        while j < int(numPartition):
-            newDict = {}
-            replicaIdxMsgCountDictList.append(newDict)
-            j += 1
+        for topic in topicList:
+            logger.debug("working on topic : " + topic, extra=d)
+            consumerLogPath = get_testcase_config_log_dir_pathname(testcaseEnv, "console_consumer", consumerEntityId, "default")
 
-        for logFile in sorted(os.listdir(consumerLogPath)):
+            # keep track of total msg count across replicas for each topic-partition
+            # (should be greater than 0 for passing)
+            totalMsgCounter = 0
 
-            if logFile.startswith("simple_consumer_") and logFile.endswith(".log"):
-                matchObj    = re.match("simple_consumer_"+topic+"-(\d*)_r(\d*)\.log" , logFile)
-                partitionId = int(matchObj.group(1))
-                replicaIdx  = int(matchObj.group(2))
+            # keep track of the mismatch msg count for each topic-partition
+            # (should be equal to 0 for passing)
+            mismatchCounter = 0
 
-                consumerLogPathName   = consumerLogPath + "/" + logFile
-                consumerMsgIdList     = get_message_id(consumerLogPathName)
-                consumerMsgIdSet      = set(consumerMsgIdList)
+            replicaIdxMsgIdList = []
+            # replicaIdxMsgIdList :
+            # - This is a list of dictionaries of topic-partition (key)
+            #   mapping to list of MessageID in that topic-partition (val)
+            # - The list index is mapped to (replicaId - 1)
+            # [
+            #  // list index = 0 => replicaId = idx(0) + 1 = 1
+            #  {
+            #      "topic1-0" : [ "0000000001", "0000000002", "0000000003"],
+            #      "topic1-1" : [ "0000000004", "0000000005", "0000000006"]
+            #  },
+            #  // list index = 1 => replicaId = idx(1) + 1 = 2
+            #  {
+            #      "topic1-0" : [ "0000000001", "0000000002", "0000000003"],
+            #      "topic1-1" : [ "0000000004", "0000000005", "0000000006"]
+            #  }
+            # ]
 
-                replicaIdxMsgCountDictList[partitionId][replicaIdx] = len(consumerMsgIdSet)
+            # initialize replicaIdxMsgIdList
+            j = 0
+            while j < int(replicaFactor):
+                newDict = {}
+                replicaIdxMsgIdList.append(newDict)
+                j += 1
 
-                logger.info("no. of unique messages on topic [" + topic + "] at " + logFile + " : " + str(len(consumerMsgIdSet)), extra=d)
-                validationStatusDict["Unique messages from consumer on [" + topic + "] at " + logFile] = str(len(consumerMsgIdSet))
+            # retrieve MessageID from all simple consumer log4j files
+            for logFile in sorted(os.listdir(consumerLogPath)):
 
-        pprint.pprint(replicaIdxMsgCountDictList)
+                if logFile.startswith("simple_consumer_"+topic) and logFile.endswith(".log"):
+                    logger.debug("working on file : " + logFile, extra=d)
+                    matchObj    = re.match("simple_consumer_"+topic+"-(\d*)_r(\d*)\.log" , logFile)
+                    partitionId = int(matchObj.group(1))
+                    replicaIdx  = int(matchObj.group(2))
 
-        partitionId = 0
-        while partitionId < int(numPartition):
-            zeroMsgCounter    = 0
-            nonZeroMsgCounter = 0
-            nonZeroMsgValue   = -1
+                    consumerLogPathName   = consumerLogPath + "/" + logFile
+                    consumerMsgIdList     = get_message_id(consumerLogPathName)
 
-            for replicaIdx in sorted(replicaIdxMsgCountDictList[partitionId].iterkeys()):
-                if replicaIdxMsgCountDictList[partitionId][int(replicaIdx)] == 0:
-                    zeroMsgCounter += 1
-                else:
-                    if nonZeroMsgValue == -1:
-                        nonZeroMsgValue = replicaIdxMsgCountDictList[partitionId][int(replicaIdx)]
-                    else:
-                        if nonZeroMsgValue != replicaIdxMsgCountDictList[partitionId][int(replicaIdx)]:
-                            mismatchCounter += 1
-                    nonZeroMsgCounter += 1
-            partitionId += 1
+                    topicPartition = topic + "-" + str(partitionId)
+                    replicaIdxMsgIdList[replicaIdx - 1][topicPartition] = consumerMsgIdList
 
-            logger.info("topic " + topic + " : no. of brokers with zero msg count     : " + str(zeroMsgCounter), extra=d)
-            logger.info("topic " + topic + " : no. of brokers with non-zero msg count : " + str(nonZeroMsgCounter), extra=d)
-            logger.info("topic " + topic + " : non-zero brokers msg count             : " + str(nonZeroMsgValue), extra=d)
+                    logger.info("no. of messages on topic [" + topic + "] at " + logFile + " : " + str(len(consumerMsgIdList)), extra=d)
+                    validationStatusDict["No. of messages from consumer on [" + topic + "] at " + logFile] = str(len(consumerMsgIdList))
 
-        if mismatchCounter == 0 and nonZeroMsgCounter > 0:
-            validationStatusDict["Validate for data matched on topic [" + topic + "] across replicas"] = "PASSED"
-        else:
-            validationStatusDict["Validate for data matched on topic [" + topic + "] across replicas"] = "FAILED"
+            # print replicaIdxMsgIdList
+
+            # take the first dictionary of replicaIdxMsgIdList and compare with the rest
+            firstMsgIdDict = replicaIdxMsgIdList[0]
+
+            # loop through all 'topic-partition' such as topic1-0, topic1-1, ...
+            for topicPartition in sorted(firstMsgIdDict.iterkeys()):
+
+                # compare all replicas' MessageID in corresponding topic-partition
+                for i in range(len(replicaIdxMsgIdList)):
+                    # skip the first dictionary
+                    if i == 0:
+                        totalMsgCounter += len(firstMsgIdDict[topicPartition])
+                        continue
+
+                    totalMsgCounter += len(replicaIdxMsgIdList[i][topicPartition])
+
+                    # get the count of mismatch MessageID between first MessageID list and the other lists
+                    diffCount = system_test_utils.diff_lists(firstMsgIdDict[topicPartition], replicaIdxMsgIdList[i][topicPartition])
+                    mismatchCounter += diffCount
+                    logger.info("Mismatch count of topic-partition [" + topicPartition + "] in replica id [" + str(i+1) + "] : " + str(diffCount), extra=d)
+
+            if mismatchCounter == 0 and totalMsgCounter > 0:
+                validationStatusDict["Validate for data matched on topic [" + topic + "] across replicas"] = "PASSED"
+            else:
+                validationStatusDict["Validate for data matched on topic [" + topic + "] across replicas"] = "FAILED"
 
 
-def validate_data_matched_in_multi_topics_from_single_consumer_producer(systemTestEnv, testcaseEnv):
+def validate_data_matched_in_multi_topics_from_single_consumer_producer(systemTestEnv, testcaseEnv, replicationUtils):
+    logger.debug("#### Inside validate_data_matched_in_multi_topics_from_single_consumer_producer", extra=d)
+
     validationStatusDict        = testcaseEnv.validationStatusDict
     clusterEntityConfigDictList = systemTestEnv.clusterEntityConfigDictList
 
@@ -2140,6 +2094,7 @@ def validate_data_matched_in_multi_topics_from_single_consumer_producer(systemTe
 
         topicList = topicStr.split(',')
         for topic in topicList:
+            consumerDuplicateCount = 0
             msgIdMissingInConsumerLogPathName = get_testcase_config_log_dir_pathname( 
                                                 testcaseEnv, "console_consumer", matchingConsumerEntityId, "default") \
                                                 + "/msg_id_missing_in_consumer_" + topic + ".log"
@@ -2148,10 +2103,11 @@ def validate_data_matched_in_multi_topics_from_single_consumer_producer(systemTe
             producerMsgIdSet   = set(producerMsgIdList)
             consumerMsgIdSet   = set(consumerMsgIdList)
 
-            missingMsgIdInConsumer = producerMsgIdSet - consumerMsgIdSet
+            consumerDuplicateCount = len(consumerMsgIdList) -len(consumerMsgIdSet)
+            missingUniqConsumerMsgId = system_test_utils.subtract_list(producerMsgIdSet, consumerMsgIdSet)
 
             outfile = open(msgIdMissingInConsumerLogPathName, "w")
-            for id in missingMsgIdInConsumer:
+            for id in missingUniqConsumerMsgId:
                 outfile.write(id + "\n")
             outfile.close()
 
@@ -2160,17 +2116,98 @@ def validate_data_matched_in_multi_topics_from_single_consumer_producer(systemTe
             validationStatusDict["Unique messages from producer on [" + topic + "]"] = str(len(producerMsgIdSet))
             validationStatusDict["Unique messages from consumer on [" + topic + "]"] = str(len(consumerMsgIdSet))
 
-            if ( len(missingMsgIdInConsumer) == 0 and len(producerMsgIdSet) > 0 ):
+            missingPercentage = len(missingUniqConsumerMsgId) * 100.00 / len(producerMsgIdSet)
+            logger.info("Data loss threshold % : " + str(replicationUtils.ackOneDataLossThresholdPercent), extra=d)
+            logger.warn("Data loss % on topic : " + topic + " : " + str(missingPercentage), extra=d)
+
+            if ( len(missingUniqConsumerMsgId) == 0 and len(producerMsgIdSet) > 0 ):
                 validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "PASSED"
             elif (acks == "1"):
-                missingPercentage = len(missingMsgIdInConsumer) * 100 / len(producerMsgIdSet)
-                print "#### missing Percent : ", missingPercentage
-                if missingPercentage <= 1:
+                if missingPercentage <= replicationUtils.ackOneDataLossThresholdPercent:
                     validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "PASSED"
-                    logger.warn("Test case passes with less than 1% data loss : [" + str(len(missingMsgIdInConsumer)) + "] missing messages", extra=d)
+                    logger.warn("Test case (Acks = 1) passes with less than " + str(replicationUtils.ackOneDataLossThresholdPercent) \
+                        + "% data loss : [" + str(len(missingUniqConsumerMsgId)) + "] missing messages", extra=d)
+                else:
+                    validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "FAILED"
+                    logger.error("Test case (Acks = 1) failed with more than " + str(replicationUtils.ackOneDataLossThresholdPercent) \
+                        + "% data loss : [" + str(len(missingUniqConsumerMsgId)) + "] missing messages", extra=d)
             else:
                 validationStatusDict["Validate for data matched on topic [" + topic + "]"] = "FAILED"
                 logger.info("See " + msgIdMissingInConsumerLogPathName + " for missing MessageID", extra=d)
 
 
+def validate_index_log(systemTestEnv, testcaseEnv, clusterName="source"):
+    logger.debug("#### Inside validate_index_log", extra=d)
+
+    failureCount         = 0
+    brokerLogCksumDict   = {}
+    testCaseBaseDir      = testcaseEnv.testCaseBaseDir
+    tcConfigsList        = testcaseEnv.testcaseConfigsList
+    validationStatusDict = testcaseEnv.validationStatusDict
+    clusterConfigList    = systemTestEnv.clusterEntityConfigDictList
+    allBrokerConfigList  = system_test_utils.get_dict_from_list_of_dicts(clusterConfigList, "role", "broker")
+    brokerEntityIdList   = system_test_utils.get_data_from_list_of_dicts(allBrokerConfigList, "cluster_name", clusterName, "entity_id")
+
+    # loop through all brokers
+    for brokerEntityId in brokerEntityIdList:
+        logCksumDict   = {}
+        # remoteLogSegmentPathName : /tmp/kafka_server_4_logs
+        # => remoteLogSegmentDir   : kafka_server_4_logs
+        remoteLogSegmentPathName = system_test_utils.get_data_by_lookup_keyval(tcConfigsList, "entity_id", brokerEntityId, "log.dir")
+        remoteLogSegmentDir      = os.path.basename(remoteLogSegmentPathName)
+        logPathName              = get_testcase_config_log_dir_pathname(testcaseEnv, "broker", brokerEntityId, "default")
+        localLogSegmentPath      = logPathName + "/" + remoteLogSegmentDir
+        kafkaHome                = system_test_utils.get_data_by_lookup_keyval(clusterConfigList, "entity_id", brokerEntityId, "kafka_home")
+        hostname                 = system_test_utils.get_data_by_lookup_keyval(clusterConfigList, "entity_id", brokerEntityId, "hostname")
+        kafkaRunClassBin         = kafkaHome + "/bin/kafka-run-class.sh"
+
+        # localLogSegmentPath :
+        # .../system_test/mirror_maker_testsuite/testcase_5002/logs/broker-4/kafka_server_4_logs
+        #   |- test_1-0
+        #        |- 00000000000000000000.index
+        #        |- 00000000000000000000.log
+        #        |- 00000000000000000020.index
+        #        |- 00000000000000000020.log
+        #        |- . . .
+        #   |- test_1-1
+        #        |- 00000000000000000000.index
+        #        |- 00000000000000000000.log
+        #        |- 00000000000000000020.index
+        #        |- 00000000000000000020.log
+        #        |- . . .
+
+        # loop through all topicPartition directories such as : test_1-0, test_1-1, ...
+        for topicPartition in os.listdir(localLogSegmentPath):
+            # found a topic-partition directory
+            if os.path.isdir(localLogSegmentPath + "/" + topicPartition):
+
+                # log segment files are located in : localLogSegmentPath + "/" + topicPartition
+                # sort the log segment files under each topic-partition and verify index
+                for logFile in sorted(os.listdir(localLogSegmentPath + "/" + topicPartition)):
+                    # only process index file: *.index
+                    if logFile.endswith(".index"):
+                        offsetLogSegmentPathName = localLogSegmentPath + "/" + topicPartition + "/" + logFile
+                        cmdStrList = ["ssh " + hostname,
+                                      kafkaRunClassBin + " kafka.tools.DumpLogSegments",
+                                      " --file " + offsetLogSegmentPathName,
+                                      "--verify-index-only 2>&1"]
+                        cmdStr     = " ".join(cmdStrList)
+
+                        showMismatchedIndexOffset = False
+
+                        logger.debug("executing command [" + cmdStr + "]", extra=d)
+                        subproc = system_test_utils.sys_call_return_subproc(cmdStr)
+                        for line in subproc.stdout.readlines():
+                            line = line.rstrip('\n')
+                            if showMismatchedIndexOffset:
+                                logger.debug("#### [" + line + "]", extra=d)
+                            elif "Mismatches in :" in line:
+                                logger.debug("#### error found [" + line + "]", extra=d)
+                                failureCount += 1
+                                showMismatchedIndexOffset = True
+
+    if failureCount == 0:
+        validationStatusDict["Validate index log in cluster [" + clusterName + "]"] = "PASSED"
+    else:
+        validationStatusDict["Validate index log in cluster [" + clusterName + "]"] = "FAILED"
 

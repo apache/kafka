@@ -42,8 +42,9 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   private val controllerId = controller.config.brokerId
   private val zkClient = controllerContext.zkClient
   var replicaState: mutable.Map[(String, Int, Int), ReplicaState] = mutable.Map.empty
-  val brokerRequestBatch = new ControllerBrokerRequestBatch(controller.sendRequest, controller.config.brokerId)
-  private val isShuttingDown = new AtomicBoolean(false)
+  val brokerRequestBatch = new ControllerBrokerRequestBatch(controller.sendRequest, controllerId, controller.clientId)
+  private val hasStarted = new AtomicBoolean(false)
+  private val hasShutdown = new AtomicBoolean(false)
   this.logIdent = "[Replica state machine on controller " + controller.config.brokerId + "]: "
   private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
 
@@ -53,9 +54,9 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    * Then triggers the OnlineReplica state change for all replicas.
    */
   def startup() {
-    isShuttingDown.set(false)
     // initialize replica state
     initializeReplicaState()
+    hasStarted.set(true)
     // move all Online replicas to Online
     handleStateChanges(ZkUtils.getAllReplicasOnBroker(zkClient, controllerContext.allTopics.toSeq,
       controllerContext.liveBrokerIds.toSeq), OnlineReplica)
@@ -71,7 +72,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    * Invoked on controller shutdown.
    */
   def shutdown() {
-    isShuttingDown.compareAndSet(false, true)
+    hasShutdown.compareAndSet(false, true)
     replicaState.clear()
   }
 
@@ -102,6 +103,10 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    */
   def handleStateChange(topic: String, partition: Int, replicaId: Int, targetState: ReplicaState) {
     val topicAndPartition = TopicAndPartition(topic, partition)
+    if (!hasStarted.get)
+      throw new StateChangeFailedException(("Controller %d epoch %d initiated state change of replica %d for partition %s " +
+                                            "to %s failed because replica state machine has not started")
+                                              .format(controllerId, controller.epoch, replicaId, topicAndPartition, targetState))
     try {
       replicaState.getOrElseUpdate((topic, partition, replicaId), NonExistentReplica)
       val replicaAssignment = controllerContext.partitionReplicaAssignment(topicAndPartition)
@@ -138,32 +143,30 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
             case NewReplica =>
               // add this replica to the assigned replicas list for its partition
               val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
-              controllerContext.partitionReplicaAssignment.put(topicAndPartition, currentAssignedReplicas :+ replicaId)
+              if(!currentAssignedReplicas.contains(replicaId))
+                controllerContext.partitionReplicaAssignment.put(topicAndPartition, currentAssignedReplicas :+ replicaId)
               stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OnlineReplica"
                                         .format(controllerId, controller.epoch, replicaId, topicAndPartition))
             case _ =>
-              // check if the leader for this partition is alive or even exists
-                controllerContext.allLeaders.get(topicAndPartition) match {
+              // check if the leader for this partition ever existed
+              controllerContext.partitionLeadershipInfo.get(topicAndPartition) match {
                 case Some(leaderIsrAndControllerEpoch) =>
-                  controllerContext.liveBrokerIds.contains(leaderIsrAndControllerEpoch.leaderAndIsr.leader) match {
-                    case true => // leader is alive
-                      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId),
-                                                                          topic, partition, leaderIsrAndControllerEpoch,
-                                                                          replicaAssignment.size)
-                      replicaState.put((topic, partition, replicaId), OnlineReplica)
-                      stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OnlineReplica"
-                                                .format(controllerId, controller.epoch, replicaId, topicAndPartition))
-                    case false => // ignore partitions whose leader is not alive
-                  }
-                case None => // ignore partitions who don't have a leader yet
+                  brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId), topic, partition, leaderIsrAndControllerEpoch,
+                    replicaAssignment.size)
+                  replicaState.put((topic, partition, replicaId), OnlineReplica)
+                  stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OnlineReplica"
+                    .format(controllerId, controller.epoch, replicaId, topicAndPartition))
+                case None => // that means the partition was never in OnlinePartition state, this means the broker never
+                  // started a log for that partition and does not have a high watermark value for this partition
               }
+
           }
           replicaState.put((topic, partition, replicaId), OnlineReplica)
         case OfflineReplica =>
           assertValidPreviousStates(topic, partition, replicaId, List(NewReplica, OnlineReplica), targetState)
           // As an optimization, the controller removes dead replicas from the ISR
           val leaderAndIsrIsEmpty: Boolean =
-            controllerContext.allLeaders.get(topicAndPartition) match {
+            controllerContext.partitionLeadershipInfo.get(topicAndPartition) match {
               case Some(currLeaderIsrAndControllerEpoch) =>
                 if (currLeaderIsrAndControllerEpoch.leaderAndIsr.isr.contains(replicaId))
                   controller.removeReplicaFromIsr(topic, partition, replicaId) match {
@@ -237,8 +240,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     def handleChildChange(parentPath : String, currentBrokerList : java.util.List[String]) {
       ControllerStats.leaderElectionTimer.time {
         info("Broker change listener fired for path %s with children %s".format(parentPath, currentBrokerList.mkString(",")))
-        if(!isShuttingDown.get()) {
-          controllerContext.controllerLock synchronized {
+        controllerContext.controllerLock synchronized {
+          if (!hasShutdown.get) {
             try {
               val curBrokerIds = currentBrokerList.map(_.toInt).toSet
               val newBrokerIds = curBrokerIds -- controllerContext.liveOrShuttingDownBrokerIds
