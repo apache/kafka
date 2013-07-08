@@ -282,10 +282,10 @@ class DefaultMessageFormatter extends MessageFormatter {
   
   def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
     if(printKey) {
-      output.write(key)
+      output.write(if (key == null) "null".getBytes() else key)
       output.write(keySeparator)
     }
-    output.write(value)
+    output.write(if (value == null) "null".getBytes() else value)
     output.write(lineSeparator)
   }
 }
