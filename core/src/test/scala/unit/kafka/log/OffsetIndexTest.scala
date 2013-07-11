@@ -25,6 +25,7 @@ import org.scalatest.junit.JUnitSuite
 import scala.collection._
 import scala.util.Random
 import kafka.utils.TestUtils
+import kafka.common.InvalidOffsetException
 
 class OffsetIndexTest extends JUnitSuite {
   
@@ -89,7 +90,7 @@ class OffsetIndexTest extends JUnitSuite {
     assertWriteFails("Append should fail on a full index", idx, idx.maxEntries + 1, classOf[IllegalArgumentException])
   }
   
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[InvalidOffsetException])
   def appendOutOfOrder() {
     idx.append(51, 0)
     idx.append(50, 1)

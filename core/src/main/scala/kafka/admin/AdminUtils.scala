@@ -21,17 +21,14 @@ import java.util.Random
 import java.util.Properties
 import kafka.api.{TopicMetadata, PartitionMetadata}
 import kafka.cluster.Broker
-import kafka.utils.{Logging, ZkUtils}
 import kafka.log.LogConfig
-import kafka.server.TopicConfigManager
-import kafka.utils.{Logging, Utils, ZkUtils, Json}
+import kafka.utils.{Logging, ZkUtils, Json}
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import scala.collection._
 import mutable.ListBuffer
 import scala.collection.mutable
 import kafka.common._
-import scala.Some
 
 object AdminUtils extends Logging {
   val rand = new Random

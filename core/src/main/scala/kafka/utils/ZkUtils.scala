@@ -305,24 +305,21 @@ object ZkUtils extends Logging {
    * create parrent directory if necessary. Never throw NodeExistException.
    * Return the updated path zkVersion
    */
-  def updatePersistentPath(client: ZkClient, path: String, data: String): Int = {
-    var stat: Stat = null
+  def updatePersistentPath(client: ZkClient, path: String, data: String) = {
     try {
-      stat = client.writeData(path, data)
-      return stat.getVersion
+      client.writeData(path, data)
     } catch {
       case e: ZkNoNodeException => {
         createParentPath(client, path)
         try {
           client.createPersistent(path, data)
-          // When the new path is created, its zkVersion always starts from 0
-          return 0
         } catch {
           case e: ZkNodeExistsException =>
-            stat = client.writeData(path, data)
-            return  stat.getVersion
+            client.writeData(path, data)
+          case e2 => throw e2
         }
       }
+      case e2 => throw e2
     }
   }
 
@@ -332,14 +329,14 @@ object ZkUtils extends Logging {
    */
   def conditionalUpdatePersistentPath(client: ZkClient, path: String, data: String, expectVersion: Int): (Boolean, Int) = {
     try {
-      val stat = client.writeData(path, data, expectVersion)
+      val stat = client.writeDataReturnStat(path, data, expectVersion)
       debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
         .format(path, data, expectVersion, stat.getVersion))
       (true, stat.getVersion)
     } catch {
       case e: Exception =>
-        error("Conditional update of path %s with data %s and expected version %d failed".format(path, data,
-          expectVersion), e)
+        error("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
+          expectVersion, e.getMessage))
         (false, -1)
     }
   }
@@ -350,15 +347,15 @@ object ZkUtils extends Logging {
    */
   def conditionalUpdatePersistentPathIfExists(client: ZkClient, path: String, data: String, expectVersion: Int): (Boolean, Int) = {
     try {
-      val stat = client.writeData(path, data, expectVersion)
+      val stat = client.writeDataReturnStat(path, data, expectVersion)
       debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
         .format(path, data, expectVersion, stat.getVersion))
       (true, stat.getVersion)
     } catch {
       case nne: ZkNoNodeException => throw nne
       case e: Exception =>
-        error("Conditional update of path %s with data %s and expected version %d failed".format(path, data,
-          expectVersion), e)
+        error("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
+          expectVersion, e.getMessage))
         (false, -1)
     }
   }
@@ -466,15 +463,13 @@ object ZkUtils extends Logging {
     cluster
   }
 
-  def getPartitionLeaderAndIsrForTopics(zkClient: ZkClient, topics: Seq[String]): mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
+  def getPartitionLeaderAndIsrForTopics(zkClient: ZkClient, topicAndPartitions: Set[TopicAndPartition])
+  : mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
     val ret = new mutable.HashMap[TopicAndPartition, LeaderIsrAndControllerEpoch]
-    val partitionsForTopics = getPartitionsForTopics(zkClient, topics)
-    for((topic, partitions) <- partitionsForTopics) {
-      for(partition <- partitions) {
-        ZkUtils.getLeaderIsrAndEpochForPartition(zkClient, topic, partition.toInt) match {
-          case Some(leaderIsrAndControllerEpoch) => ret.put(TopicAndPartition(topic, partition.toInt), leaderIsrAndControllerEpoch)
-          case None =>
-        }
+    for(topicAndPartition <- topicAndPartitions) {
+      ZkUtils.getLeaderIsrAndEpochForPartition(zkClient, topicAndPartition.topic, topicAndPartition.partition) match {
+        case Some(leaderIsrAndControllerEpoch) => ret.put(topicAndPartition, leaderIsrAndControllerEpoch)
+        case None =>
       }
     }
     ret
@@ -777,7 +772,7 @@ class ZKGroupTopicDirs(group: String, topic: String) extends ZKGroupDirs(group) 
 
 class ZKConfig(props: VerifiableProperties) {
   /** ZK host string */
-  val zkConnect = props.getString("zookeeper.connect", null)
+  val zkConnect = props.getString("zookeeper.connect")
 
   /** zookeeper session timeout */
   val zkSessionTimeoutMs = props.getInt("zookeeper.session.timeout.ms", 6000)

@@ -21,12 +21,12 @@ import kafka.api.FetchRequestBuilder
 import kafka.message.ByteBufferMessageSet
 import kafka.server.{KafkaRequestHandler, KafkaConfig}
 import org.apache.log4j.{Level, Logger}
-import org.junit.Assert._
 import org.scalatest.junit.JUnit3Suite
 import scala.collection._
-import kafka.producer.KeyedMessage
 import kafka.utils._
 import kafka.common.{ErrorMapping, KafkaException, OffsetOutOfRangeException}
+import kafka.producer.KeyedMessage
+import org.junit.Assert.assertEquals
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -63,6 +63,8 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
 
     producer.send(producerData:_*)
 
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
+
     var fetchedMessage: ByteBufferMessageSet = null
     while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
       val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
@@ -90,6 +92,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
         val producedData = List("a_" + topic, "b_" + topic)
         messages += topic -> producedData
         producer.send(producedData.map(m => new KeyedMessage[String, String](topic, topic, m)):_*)
+        TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
         builder.addFetch(topic, offset, 0, 10000)
       }
 
@@ -132,6 +135,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       builder.addFetch(topic, 0, 0, 10000)
     }
     producer.send(produceList: _*)
+    topics.foreach(topic => TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000))
 
     // wait a bit for produced message to be available
     val request = builder.build()
@@ -155,6 +159,7 @@ class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness 
       builder.addFetch(topic, 0, 0, 10000)
     }
     producer.send(produceList: _*)
+    topics.foreach(topic => TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000))
 
     producer.send(produceList: _*)
     // wait a bit for produced message to be available

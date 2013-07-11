@@ -163,8 +163,17 @@ class Log(val dir: File,
 
       // run recovery on the active segment if necessary
       if(needsRecovery) {
-        info("Recovering active segment of %s.".format(name))
-        active.recover(config.maxMessageSize)
+        try {
+          info("Recovering active segment of %s.".format(name))
+          active.recover(config.maxMessageSize)
+        } catch {
+          case e: InvalidOffsetException =>
+            val startOffset = active.baseOffset
+            warn("Found invalid offset during recovery of the active segment for topic partition " + dir.getName +". Deleting the segment and " +
+                 "creating an empty one with starting offset " + startOffset)
+            // truncate the active segment to its starting offset
+            active.truncateTo(startOffset)
+        }
       }
     }
 

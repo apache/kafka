@@ -26,11 +26,26 @@ object KafkaBuild extends Build {
   val buildNumber = SettingKey[String]("build-number", "Build number defaults to $BUILD_NUMBER environment variable")
   val releaseName = SettingKey[String]("release-name", "the full name of this release")
   val commonSettings = Seq(
-    organization := "org.apache",
+    organization := "org.apache.kafka",
+    pomExtra :=
+<parent>
+  <groupId>org.apache</groupId>
+  <artifactId>apache</artifactId>
+  <version>10</version>
+</parent>    
+<licenses>
+  <license>
+    <name>Apache 2</name>
+    <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+    <distribution>repo</distribution>
+  </license>
+</licenses>,
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
     crossScalaVersions := Seq("2.8.0","2.8.2", "2.9.1", "2.9.2"),
     scalaVersion := "2.8.0",
-    version := "0.8.0-SNAPSHOT",
+    version := "0.8.0-beta1",
+    publishTo := Some("Apache Maven Repo" at "https://repository.apache.org/service/local/staging/deploy/maven2"),
+    credentials += Credentials(Path.userHome / ".m2" / ".credentials"),
     buildNumber := System.getProperty("build.number", ""),
     version <<= (buildNumber, version)  { (build, version)  => if (build == "") version else version + "+" + build},
     releaseName <<= (name, version, scalaVersion) {(name, version, scalaVersion) => name + "_" + scalaVersion + "-" + version},

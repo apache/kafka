@@ -25,6 +25,7 @@ import kafka.server.KafkaConfig
 import collection.mutable
 import kafka.api._
 import org.apache.log4j.Logger
+import kafka.common.TopicAndPartition
 
 class ControllerChannelManager (private val controllerContext: ControllerContext, config: KafkaConfig) extends Logging {
   private val brokerStateInfo = new HashMap[Int, ControllerBrokerStateInfo]
@@ -75,6 +76,7 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
 
   private def addNewBroker(broker: Broker) {
     val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)](config.controllerMessageQueueSize)
+    debug("Controller %d trying to connect to broker %d".format(config.brokerId,broker.id))
     val channel = new BlockingChannel(broker.host, broker.port,
       BlockingChannel.UseDefaultBufferSize,
       BlockingChannel.UseDefaultBufferSize,
@@ -120,6 +122,7 @@ class RequestSendThread(val controllerId: Int,
 
     try{
       lock synchronized {
+        channel.connect() // establish a socket connection if needed
         channel.send(request)
         receive = channel.receive()
         var response: RequestOrResponse = null
@@ -128,6 +131,8 @@ class RequestSendThread(val controllerId: Int,
             response = LeaderAndIsrResponse.readFrom(receive.buffer)
           case RequestKeys.StopReplicaKey =>
             response = StopReplicaResponse.readFrom(receive.buffer)
+          case RequestKeys.UpdateMetadataKey =>
+            response = UpdateMetadataResponse.readFrom(receive.buffer)
         }
         stateChangeLogger.trace("Controller %d epoch %d received response correlationId %d for a request sent to broker %d"
                                   .format(controllerId, controllerContext.epoch, response.correlationId, toBrokerId))
@@ -138,36 +143,51 @@ class RequestSendThread(val controllerId: Int,
       }
     } catch {
       case e =>
-        // log it and let it go. Let controller shut it down.
-        debug("Exception occurs", e)
+        warn("Controller %d fails to send a request to broker %d".format(controllerId, toBrokerId), e)
+        // If there is any socket error (eg, socket timeout), the channel is no longer usable and needs to be recreated.
+        channel.disconnect()
     }
   }
 }
 
-class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (RequestOrResponse) => Unit) => Unit,
+class ControllerBrokerRequestBatch(controllerContext: ControllerContext, sendRequest: (Int, RequestOrResponse, (RequestOrResponse) => Unit) => Unit,
                                    controllerId: Int, clientId: String)
   extends  Logging {
   val leaderAndIsrRequestMap = new mutable.HashMap[Int, mutable.HashMap[(String, Int), PartitionStateInfo]]
   val stopReplicaRequestMap = new mutable.HashMap[Int, Seq[(String, Int)]]
   val stopAndDeleteReplicaRequestMap = new mutable.HashMap[Int, Seq[(String, Int)]]
+  val updateMetadataRequestMap = new mutable.HashMap[Int, mutable.HashMap[TopicAndPartition, PartitionStateInfo]]
   private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
 
   def newBatch() {
     // raise error if the previous batch is not empty
-    if(leaderAndIsrRequestMap.size > 0 || stopReplicaRequestMap.size > 0)
+    if(leaderAndIsrRequestMap.size > 0)
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating " +
-        "a new one. Some state changes %s might be lost ".format(leaderAndIsrRequestMap.toString()))
+        "a new one. Some LeaderAndIsr state changes %s might be lost ".format(leaderAndIsrRequestMap.toString()))
+    if(stopReplicaRequestMap.size > 0)
+      throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating a " +
+        "new one. Some StopReplica state changes %s might be lost ".format(stopReplicaRequestMap.toString()))
+    if(updateMetadataRequestMap.size > 0)
+      throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating a " +
+        "new one. Some UpdateMetadata state changes %s might be lost ".format(updateMetadataRequestMap.toString()))
+    if(stopAndDeleteReplicaRequestMap.size > 0)
+      throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating a " +
+        "new one. Some StopReplica with delete state changes %s might be lost ".format(stopAndDeleteReplicaRequestMap.toString()))
     leaderAndIsrRequestMap.clear()
     stopReplicaRequestMap.clear()
+    updateMetadataRequestMap.clear()
     stopAndDeleteReplicaRequestMap.clear()
   }
 
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int,
-                                       leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch, replicationFactor: Int) {
+                                       leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
+                                       replicas: Seq[Int]) {
     brokerIds.foreach { brokerId =>
       leaderAndIsrRequestMap.getOrElseUpdate(brokerId, new mutable.HashMap[(String, Int), PartitionStateInfo])
-      leaderAndIsrRequestMap(brokerId).put((topic, partition), PartitionStateInfo(leaderIsrAndControllerEpoch, replicationFactor))
+      leaderAndIsrRequestMap(brokerId).put((topic, partition),
+        PartitionStateInfo(leaderIsrAndControllerEpoch, replicas.toSet))
     }
+    addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(TopicAndPartition(topic, partition)))
   }
 
   def addStopReplicaRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int, deletePartition: Boolean) {
@@ -181,6 +201,30 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
       else {
         val v = stopReplicaRequestMap(brokerId)
         stopReplicaRequestMap(brokerId) = v :+ (topic, partition)
+      }
+    }
+  }
+
+  def addUpdateMetadataRequestForBrokers(brokerIds: Seq[Int],
+                                         partitions:scala.collection.Set[TopicAndPartition] = Set.empty[TopicAndPartition]) {
+    val partitionList =
+    if(partitions.isEmpty) {
+      controllerContext.partitionLeadershipInfo.keySet
+    } else {
+      partitions
+    }
+    partitionList.foreach { partition =>
+      val leaderIsrAndControllerEpochOpt = controllerContext.partitionLeadershipInfo.get(partition)
+      leaderIsrAndControllerEpochOpt match {
+        case Some(leaderIsrAndControllerEpoch) =>
+          val replicas = controllerContext.partitionReplicaAssignment(partition).toSet
+          val partitionStateInfo = PartitionStateInfo(leaderIsrAndControllerEpoch, replicas)
+          brokerIds.foreach { brokerId =>
+            updateMetadataRequestMap.getOrElseUpdate(brokerId, new mutable.HashMap[TopicAndPartition, PartitionStateInfo])
+            updateMetadataRequestMap(brokerId).put(partition, partitionStateInfo)
+          }
+        case None =>
+          info("Leader not assigned yet for partition %s. Skip sending udpate metadata request".format(partition))
       }
     }
   }
@@ -202,6 +246,16 @@ class ControllerBrokerRequestBatch(sendRequest: (Int, RequestOrResponse, (Reques
       sendRequest(broker, leaderAndIsrRequest, null)
     }
     leaderAndIsrRequestMap.clear()
+    updateMetadataRequestMap.foreach { m =>
+      val broker = m._1
+      val partitionStateInfos = m._2.toMap
+      val updateMetadataRequest = new UpdateMetadataRequest(controllerId, controllerEpoch, correlationId, clientId,
+                                                            partitionStateInfos, controllerContext.liveOrShuttingDownBrokers)
+      partitionStateInfos.foreach(p => stateChangeLogger.trace(("Controller %d epoch %d sending UpdateMetadata request with " +
+        "correlationId %d to broker %d for partition %s").format(controllerId, controllerEpoch, correlationId, broker, p._1)))
+      sendRequest(broker, updateMetadataRequest, null)
+    }
+    updateMetadataRequestMap.clear()
     Seq((stopReplicaRequestMap, false), (stopAndDeleteReplicaRequestMap, true)) foreach {
       case(m, deletePartitions) => {
         m foreach {

@@ -58,5 +58,5 @@ trait SyncProducerConfigShared {
 object SyncProducerConfig {
   val DefaultClientId = ""
   val DefaultRequiredAcks : Short = 0
-  val DefaultAckTimeoutMs = 1500
+  val DefaultAckTimeoutMs = 10000
 }

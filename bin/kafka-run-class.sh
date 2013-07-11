@@ -65,3 +65,19 @@ else
 fi
 
 $JAVA $KAFKA_OPTS $KAFKA_JMX_OPTS -cp $CLASSPATH "$@"
+
+exitval=$?
+
+if [ $exitval -eq "1" ] ; then 
+	$JAVA $KAFKA_OPTS $KAFKA_JMX_OPTS -cp $CLASSPATH "$@" >& exception.txt
+	exception=`cat exception.txt`
+	noBuildMessage='Please build the project using sbt. Documentation is available at http://kafka.apache.org/'
+	pattern="(Could not find or load main class)|(java\.lang\.NoClassDefFoundError)"
+	match=`echo $exception | grep -E "$pattern"`
+	if [[ -n "$match" ]]; then 
+		echo $noBuildMessage
+	fi
+	rm exception.txt
+fi
+
+

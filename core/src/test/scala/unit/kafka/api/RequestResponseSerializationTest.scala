@@ -87,8 +87,8 @@ object SerializationTestUtils{
   def createTestLeaderAndIsrRequest() : LeaderAndIsrRequest = {
     val leaderAndIsr1 = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader1, 1, isr1, 1), 1)
     val leaderAndIsr2 = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader2, 1, isr2, 2), 1)
-    val map = Map(((topic1, 0), PartitionStateInfo(leaderAndIsr1, 3)),
-                  ((topic2, 0), PartitionStateInfo(leaderAndIsr2, 3)))
+    val map = Map(((topic1, 0), PartitionStateInfo(leaderAndIsr1, isr1.toSet)),
+                  ((topic2, 0), PartitionStateInfo(leaderAndIsr2, isr2.toSet)))
     new LeaderAndIsrRequest(map.toMap, collection.immutable.Set[Broker](), 0, 1, 0, "")
   }
 

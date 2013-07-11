@@ -50,23 +50,29 @@ object PartitionStateInfo {
     val controllerEpoch = buffer.getInt
     val leader = buffer.getInt
     val leaderEpoch = buffer.getInt
-    val isrString = readShortString(buffer)
-    val isr = Utils.parseCsvList(isrString).map(_.toInt).toList
+    val isrSize = buffer.getInt
+    val isr = for(i <- 0 until isrSize) yield buffer.getInt
     val zkVersion = buffer.getInt
     val replicationFactor = buffer.getInt
-    PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, leaderEpoch, isr, zkVersion), controllerEpoch),
-      replicationFactor)
+    val replicas = for(i <- 0 until replicationFactor) yield buffer.getInt
+    PartitionStateInfo(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, leaderEpoch, isr.toList, zkVersion), controllerEpoch),
+                       replicas.toSet)
   }
 }
 
-case class PartitionStateInfo(val leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch, val replicationFactor: Int) {
+case class PartitionStateInfo(val leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
+                              val allReplicas: Set[Int]) {
+  def replicationFactor = allReplicas.size
+
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(leaderIsrAndControllerEpoch.controllerEpoch)
     buffer.putInt(leaderIsrAndControllerEpoch.leaderAndIsr.leader)
     buffer.putInt(leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch)
-    writeShortString(buffer, leaderIsrAndControllerEpoch.leaderAndIsr.isr.mkString(","))
+    buffer.putInt(leaderIsrAndControllerEpoch.leaderAndIsr.isr.size)
+    leaderIsrAndControllerEpoch.leaderAndIsr.isr.foreach(buffer.putInt(_))
     buffer.putInt(leaderIsrAndControllerEpoch.leaderAndIsr.zkVersion)
     buffer.putInt(replicationFactor)
+    allReplicas.foreach(buffer.putInt(_))
   }
 
   def sizeInBytes(): Int = {
@@ -74,9 +80,11 @@ case class PartitionStateInfo(val leaderIsrAndControllerEpoch: LeaderIsrAndContr
       4 /* epoch of the controller that elected the leader */ +
       4 /* leader broker id */ +
       4 /* leader epoch */ +
-      (2 + leaderIsrAndControllerEpoch.leaderAndIsr.isr.mkString(",").length) +
+      4 /* number of replicas in isr */ +
+      4 * leaderIsrAndControllerEpoch.leaderAndIsr.isr.size /* replicas in isr */ +
       4 /* zk version */ +
-      4 /* replication factor */
+      4 /* replication factor */ +
+      allReplicas.size * 4
     size
   }
   
@@ -84,6 +92,7 @@ case class PartitionStateInfo(val leaderIsrAndControllerEpoch: LeaderIsrAndContr
     val partitionStateInfo = new StringBuilder
     partitionStateInfo.append("(LeaderAndIsrInfo:" + leaderIsrAndControllerEpoch.toString)
     partitionStateInfo.append(",ReplicationFactor:" + replicationFactor + ")")
+    partitionStateInfo.append(",AllReplicas:" + allReplicas.mkString(",") + ")")
     partitionStateInfo.toString()
   }
 }
@@ -98,7 +107,6 @@ object LeaderAndIsrRequest {
     val versionId = buffer.getShort
     val correlationId = buffer.getInt
     val clientId = readShortString(buffer)
-    val ackTimeoutMs = buffer.getInt
     val controllerId = buffer.getInt
     val controllerEpoch = buffer.getInt
     val partitionStateInfosCount = buffer.getInt
@@ -117,14 +125,13 @@ object LeaderAndIsrRequest {
     for (i <- 0 until leadersCount)
       leaders += Broker.readFrom(buffer)
 
-    new LeaderAndIsrRequest(versionId, correlationId, clientId, ackTimeoutMs, controllerId, controllerEpoch, partitionStateInfos.toMap, leaders)
+    new LeaderAndIsrRequest(versionId, correlationId, clientId, controllerId, controllerEpoch, partitionStateInfos.toMap, leaders)
   }
 }
 
 case class LeaderAndIsrRequest (versionId: Short,
                                 override val correlationId: Int,
                                 clientId: String,
-                                ackTimeoutMs: Int,
                                 controllerId: Int,
                                 controllerEpoch: Int,
                                 partitionStateInfos: Map[(String, Int), PartitionStateInfo],
@@ -133,7 +140,7 @@ case class LeaderAndIsrRequest (versionId: Short,
 
   def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo], aliveLeaders: Set[Broker], controllerId: Int,
            controllerEpoch: Int, correlationId: Int, clientId: String) = {
-    this(LeaderAndIsrRequest.CurrentVersion, correlationId, clientId, LeaderAndIsrRequest.DefaultAckTimeout,
+    this(LeaderAndIsrRequest.CurrentVersion, correlationId, clientId,
          controllerId, controllerEpoch, partitionStateInfos, aliveLeaders)
   }
 
@@ -141,7 +148,6 @@ case class LeaderAndIsrRequest (versionId: Short,
     buffer.putShort(versionId)
     buffer.putInt(correlationId)
     writeShortString(buffer, clientId)
-    buffer.putInt(ackTimeoutMs)
     buffer.putInt(controllerId)
     buffer.putInt(controllerEpoch)
     buffer.putInt(partitionStateInfos.size)
@@ -159,7 +165,6 @@ case class LeaderAndIsrRequest (versionId: Short,
       2 /* version id */ +
       4 /* correlation id */ + 
       (2 + clientId.length) /* client id */ +
-      4 /* ack timeout */ +
       4 /* controller id */ +
       4 /* controller epoch */ +
       4 /* number of partitions */
@@ -179,7 +184,6 @@ case class LeaderAndIsrRequest (versionId: Short,
     leaderAndIsrRequest.append(";ControllerEpoch:" + controllerEpoch)
     leaderAndIsrRequest.append(";CorrelationId:" + correlationId)
     leaderAndIsrRequest.append(";ClientId:" + clientId)
-    leaderAndIsrRequest.append(";AckTimeoutMs:" + ackTimeoutMs + " ms")
     leaderAndIsrRequest.append(";PartitionState:" + partitionStateInfos.mkString(","))
     leaderAndIsrRequest.append(";Leaders:" + aliveLeaders.mkString(","))
     leaderAndIsrRequest.toString()

@@ -74,8 +74,9 @@ object Message {
  * 3. 1 byte "attributes" identifier to allow annotations on the message independent of the version (e.g. compression enabled, type of codec used)
  * 4. 4 byte key length, containing length K
  * 5. K byte key
- * 6. (N - K - 10) byte payload
- * 
+ * 6. 4 byte payload length, containing length V
+ * 7. V byte payload
+ *
  * Default constructor wraps an existing ByteBuffer with the Message object with no change to the contents.
  */
 class Message(val buffer: ByteBuffer) {

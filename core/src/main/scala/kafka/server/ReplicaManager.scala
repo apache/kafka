@@ -42,7 +42,8 @@ class ReplicaManager(val config: KafkaConfig,
                      time: Time, 
                      val zkClient: ZkClient, 
                      scheduler: Scheduler,
-                     val logManager: LogManager) extends Logging with KafkaMetricsGroup {
+                     val logManager: LogManager,
+                     val isShuttingDown: AtomicBoolean ) extends Logging with KafkaMetricsGroup {
   /* epoch of the controller that last changed the leader */
   @volatile var controllerEpoch: Int = KafkaController.InitialControllerEpoch - 1
   private val localBrokerId = config.brokerId
@@ -54,7 +55,7 @@ class ReplicaManager(val config: KafkaConfig,
   val highWatermarkCheckpoints = config.logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, ReplicaManager.HighWatermarkFilename)))).toMap
   private var hwThreadInitialized = false
   this.logIdent = "[Replica Manager on Broker " + localBrokerId + "]: "
-  private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
+  val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
 
   newGauge(
     "LeaderCount",
@@ -283,9 +284,11 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def maybeShrinkIsr(): Unit = {
     trace("Evaluating ISR list of partitions to see which replicas can be removed from the ISR")
+    var curLeaderPartitions: List[Partition] = null
     leaderPartitionsLock synchronized {
-      leaderPartitions.foreach(partition => partition.maybeShrinkIsr(config.replicaLagTimeMaxMs, config.replicaLagMaxMessages))
+      curLeaderPartitions = leaderPartitions.toList
     }
+    curLeaderPartitions.foreach(partition => partition.maybeShrinkIsr(config.replicaLagTimeMaxMs, config.replicaLagMaxMessages))
   }
 
   def recordFollowerPosition(topic: String, partitionId: Int, replicaId: Int, offset: Long) = {

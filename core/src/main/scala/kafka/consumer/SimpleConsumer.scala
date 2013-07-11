@@ -20,11 +20,7 @@ package kafka.consumer
 import kafka.api._
 import kafka.network._
 import kafka.utils._
-import kafka.utils.ZkUtils._
-import collection.immutable
-import kafka.common.{ErrorMapping, TopicAndPartition, KafkaException}
-import org.I0Itec.zkclient.ZkClient
-import kafka.cluster.Broker
+import kafka.common.{ErrorMapping, TopicAndPartition}
 
 /**
  * A consumer of kafka messages
@@ -41,6 +37,7 @@ class SimpleConsumer(val host: String,
   private val blockingChannel = new BlockingChannel(host, port, bufferSize, BlockingChannel.UseDefaultBufferSize, soTimeout)
   val brokerInfo = "host_%s-port_%s".format(host, port)
   private val fetchRequestAndResponseStats = FetchRequestAndResponseStatsRegistry.getFetchRequestAndResponseStats(clientId)
+  private var isClosed = false
 
   private def connect(): BlockingChannel = {
     close
@@ -62,7 +59,8 @@ class SimpleConsumer(val host: String,
 
   def close() {
     lock synchronized {
-        disconnect()
+      disconnect()
+      isClosed = true
     }
   }
   
@@ -141,7 +139,7 @@ class SimpleConsumer(val host: String,
   def fetchOffsets(request: OffsetFetchRequest) = OffsetFetchResponse.readFrom(sendRequest(request).buffer)
 
   private def getOrMakeConnection() {
-    if(!blockingChannel.isConnected) {
+    if(!isClosed && !blockingChannel.isConnected) {
       connect()
     }
   }

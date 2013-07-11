@@ -25,7 +25,7 @@ import javax.management.remote.{JMXServiceURL, JMXConnectorFactory}
 import javax.management.ObjectName
 import kafka.controller.KafkaController
 import scala.Some
-import kafka.common.BrokerNotAvailableException
+import kafka.common.{TopicAndPartition, BrokerNotAvailableException}
 
 
 object ShutdownBroker extends Logging {
@@ -58,8 +58,8 @@ object ShutdownBroker extends Logging {
           val leaderPartitionsRemaining = mbsc.invoke(new ObjectName(KafkaController.MBeanName),
                                                       "shutdownBroker",
                                                       Array(params.brokerId),
-                                                      Array(classOf[Int].getName)).asInstanceOf[Int]
-          val shutdownComplete = (leaderPartitionsRemaining == 0)
+                                                      Array(classOf[Int].getName)).asInstanceOf[Set[TopicAndPartition]]
+          val shutdownComplete = (leaderPartitionsRemaining.size == 0)
           info("Shutdown status: " +
             (if (shutdownComplete) "complete" else "incomplete (broker still leads %d partitions)".format(leaderPartitionsRemaining)))
           shutdownComplete

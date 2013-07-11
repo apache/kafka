@@ -96,8 +96,8 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
       response = simpleConsumer.fetch(fetchRequest)
     } catch {
       case t =>
-        warn("Error in fetch %s".format(fetchRequest), t)
         if (isRunning.get) {
+          warn("Error in fetch %s".format(fetchRequest), t)
           partitionMapLock synchronized {
             partitionsWithError ++= partitionMap.keys
           }
@@ -152,9 +152,11 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
                       partitionsWithError += topicAndPartition
                   }
                 case _ =>
-                  warn("error for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id),
-                    ErrorMapping.exceptionFor(partitionData.error))
-                  partitionsWithError += topicAndPartition
+                  if (isRunning.get) {
+                    warn("error for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id),
+                      ErrorMapping.exceptionFor(partitionData.error))
+                    partitionsWithError += topicAndPartition
+                  }
               }
             }
         }
@@ -219,7 +221,7 @@ class FetcherLagMetrics(metricId: ClientIdBrokerTopicPartition) extends KafkaMet
 
 class FetcherLagStats(metricId: ClientIdAndBroker) {
   private val valueFactory = (k: ClientIdBrokerTopicPartition) => new FetcherLagMetrics(k)
-  private val stats = new Pool[ClientIdBrokerTopicPartition, FetcherLagMetrics](Some(valueFactory))
+  val stats = new Pool[ClientIdBrokerTopicPartition, FetcherLagMetrics](Some(valueFactory))
 
   def getFetcherLagStats(topic: String, partitionId: Int): FetcherLagMetrics = {
     stats.getAndMaybePut(new ClientIdBrokerTopicPartition(metricId.clientId, metricId.brokerInfo, topic, partitionId))

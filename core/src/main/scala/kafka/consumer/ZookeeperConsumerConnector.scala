@@ -306,6 +306,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   class ZKRebalancerListener(val group: String, val consumerIdString: String,
                              val kafkaMessageAndMetadataStreams: mutable.Map[String,List[KafkaStream[_,_]]])
     extends IZkChildListener {
+    private val correlationId = new AtomicInteger(0)
     private var isWatcherTriggered = false
     private val lock = new ReentrantLock
     private val cond = lock.newCondition()
@@ -406,9 +407,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val topicsMetadata = ClientUtils.fetchTopicMetadata(myTopicThreadIdsMap.keySet,
                                                           brokers,
                                                           config.clientId,
-                                                          config.socketTimeoutMs).topicsMetadata
+                                                          config.socketTimeoutMs,
+                                                          correlationId.getAndIncrement).topicsMetadata
       val partitionsPerTopicMap = new mutable.HashMap[String, Seq[Int]]
-      topicsMetadata.foreach(m =>{
+      topicsMetadata.foreach(m => {
         val topic = m.topic
         val partitions = m.partitionsMetadata.map(m1 => m1.partitionId)
         partitionsPerTopicMap.put(topic, partitions)
@@ -497,6 +499,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           * by the consumer, there will be no more messages returned by this iterator until the rebalancing finishes
           * successfully and the fetchers restart to fetch more data chunks
           **/
+        if (config.autoCommitEnable)
           commitOffsets
         case None =>
       }

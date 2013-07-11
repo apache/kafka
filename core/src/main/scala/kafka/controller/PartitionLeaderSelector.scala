@@ -63,13 +63,14 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext) exten
               case false =>
                 ControllerStats.uncleanLeaderElectionRate.mark()
                 val newLeader = liveAssignedReplicasToThisPartition.head
-                warn("No broker in ISR is alive for %s. Elect leader from broker %s. There's potential data loss."
-                     .format(topicAndPartition, newLeader))
+                warn("No broker in ISR is alive for %s. Elect leader %d from live brokers %s. There's potential data loss."
+                     .format(topicAndPartition, newLeader, liveAssignedReplicasToThisPartition.mkString(",")))
                 new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, List(newLeader), currentLeaderIsrZkPathVersion + 1)
             }
           case false =>
             val newLeader = liveBrokersInIsr.head
-            debug("Some broker in ISR is alive for %s. Select %d from ISR to be the leader.".format(topicAndPartition, newLeader))
+            debug("Some broker in ISR is alive for %s. Select %d from ISR %s to be the leader."
+                  .format(topicAndPartition, newLeader, liveBrokersInIsr.mkString(",")))
             new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, liveBrokersInIsr.toList, currentLeaderIsrZkPathVersion + 1)
         }
         info("Selected new leader and ISR %s for offline partition %s".format(newLeaderAndIsr.toString(), topicAndPartition))

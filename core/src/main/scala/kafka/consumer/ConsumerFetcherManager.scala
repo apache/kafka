@@ -28,6 +28,7 @@ import kafka.utils.ZkUtils._
 import kafka.utils.{ShutdownableThread, SystemTime}
 import kafka.common.TopicAndPartition
 import kafka.client.ClientUtils
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  *  Usage:
@@ -37,17 +38,20 @@ import kafka.client.ClientUtils
 class ConsumerFetcherManager(private val consumerIdString: String,
                              private val config: ConsumerConfig,
                              private val zkClient : ZkClient)
-        extends AbstractFetcherManager("ConsumerFetcherManager-%d".format(SystemTime.milliseconds), 1) {
+        extends AbstractFetcherManager("ConsumerFetcherManager-%d".format(SystemTime.milliseconds),
+                                       config.groupId, 1) {
   private var partitionMap: immutable.Map[TopicAndPartition, PartitionTopicInfo] = null
   private var cluster: Cluster = null
   private val noLeaderPartitionSet = new mutable.HashSet[TopicAndPartition]
   private val lock = new ReentrantLock
   private val cond = lock.newCondition()
   private var leaderFinderThread: ShutdownableThread = null
+  private val correlationId = new AtomicInteger(0)
 
   private class LeaderFinderThread(name: String) extends ShutdownableThread(name) {
     // thread responsible for adding the fetcher to the right broker when leader is available
     override def doWork() {
+      val leaderForPartitionsMap = new HashMap[TopicAndPartition, Broker]
       lock.lock()
       try {
         if (noLeaderPartitionSet.isEmpty) {
@@ -55,45 +59,43 @@ class ConsumerFetcherManager(private val consumerIdString: String,
           cond.await()
         }
 
-        try {
-          trace("Partitions without leader %s".format(noLeaderPartitionSet))
-          val brokers = getAllBrokersInCluster(zkClient)
-          val topicsMetadata = ClientUtils.fetchTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet,
-                                                              brokers,
-                                                              config.clientId,
-                                                              config.socketTimeoutMs).topicsMetadata
-          val leaderForPartitionsMap = new HashMap[TopicAndPartition, Broker]
-          topicsMetadata.foreach(
-            tmd => {
-              val topic = tmd.topic
-              tmd.partitionsMetadata.foreach(
-              pmd => {
-                val topicAndPartition = TopicAndPartition(topic, pmd.partitionId)
-                if(pmd.leader.isDefined && noLeaderPartitionSet.contains(topicAndPartition)) {
-                  val leaderBroker = pmd.leader.get
-                  leaderForPartitionsMap.put(topicAndPartition, leaderBroker)
-                }
-              })
-            })
-
-          leaderForPartitionsMap.foreach{
-            case(topicAndPartition, leaderBroker) =>
-              val pti = partitionMap(topicAndPartition)
-              try {
-                  addFetcher(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset(), leaderBroker)
-                  noLeaderPartitionSet -= topicAndPartition
-              } catch {
-                case t => warn("Failed to add fetcher for %s to broker %s".format(topicAndPartition, leaderBroker), t)
-              }
+        trace("Partitions without leader %s".format(noLeaderPartitionSet))
+        val brokers = getAllBrokersInCluster(zkClient)
+        val topicsMetadata = ClientUtils.fetchTopicMetadata(noLeaderPartitionSet.map(m => m.topic).toSet,
+                                                            brokers,
+                                                            config.clientId,
+                                                            config.socketTimeoutMs,
+                                                            correlationId.getAndIncrement).topicsMetadata
+        if(logger.isDebugEnabled) topicsMetadata.foreach(topicMetadata => debug(topicMetadata.toString()))
+        topicsMetadata.foreach { tmd =>
+          val topic = tmd.topic
+          tmd.partitionsMetadata.foreach { pmd =>
+            val topicAndPartition = TopicAndPartition(topic, pmd.partitionId)
+            if(pmd.leader.isDefined && noLeaderPartitionSet.contains(topicAndPartition)) {
+              val leaderBroker = pmd.leader.get
+              leaderForPartitionsMap.put(topicAndPartition, leaderBroker)
+              noLeaderPartitionSet -= topicAndPartition
+            }
           }
-
-          shutdownIdleFetcherThreads()
-        } catch {
-          case t => warn("Failed to find leader for %s".format(noLeaderPartitionSet), t)
         }
+      } catch {
+        case t => {
+            if (!isRunning.get())
+              throw t /* If this thread is stopped, propagate this exception to kill the thread. */
+            else
+              warn("Failed to find leader for %s".format(noLeaderPartitionSet), t)
+          }
       } finally {
         lock.unlock()
       }
+
+      leaderForPartitionsMap.foreach {
+        case(topicAndPartition, leaderBroker) =>
+          val pti = partitionMap(topicAndPartition)
+          addFetcher(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset(), leaderBroker)
+      }
+
+      shutdownIdleFetcherThreads()
       Thread.sleep(config.refreshLeaderBackoffMs)
     }
   }
@@ -120,6 +122,11 @@ class ConsumerFetcherManager(private val consumerIdString: String,
   }
 
   def stopConnections() {
+    /*
+     * Stop the leader finder thread first before stopping fetchers. Otherwise, if there are more partitions without
+     * leader, then the leader finder thread will process these partitions (before shutting down) and add fetchers for
+     * these partitions.
+     */
     info("Stopping leader finder thread")
     if (leaderFinderThread != null) {
       leaderFinderThread.shutdown()
@@ -141,7 +148,6 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     lock.lock()
     try {
       if (partitionMap != null) {
-        partitionList.foreach(tp => removeFetcher(tp.topic, tp.partition))
         noLeaderPartitionSet ++= partitionList
         cond.signalAll()
       }

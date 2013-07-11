@@ -17,44 +17,43 @@
 
 package kafka.api
 
-import kafka.common.ErrorMapping
 import java.nio.ByteBuffer
-import kafka.api.ApiUtils._
 import collection.mutable.HashMap
-import collection.Map
+import collection.immutable.Map
+import kafka.common.{TopicAndPartition, ErrorMapping}
+import kafka.api.ApiUtils._
 
 
-object LeaderAndIsrResponse {
-  def readFrom(buffer: ByteBuffer): LeaderAndIsrResponse = {
+object ControlledShutdownResponse {
+  def readFrom(buffer: ByteBuffer): ControlledShutdownResponse = {
     val correlationId = buffer.getInt
     val errorCode = buffer.getShort
     val numEntries = buffer.getInt
-    val responseMap = new HashMap[(String, Int), Short]()
+
+    var partitionsRemaining = Set[TopicAndPartition]()
     for (i<- 0 until numEntries){
       val topic = readShortString(buffer)
       val partition = buffer.getInt
-      val partitionErrorCode = buffer.getShort
-      responseMap.put((topic, partition), partitionErrorCode)
+      partitionsRemaining += new TopicAndPartition(topic, partition)
     }
-    new LeaderAndIsrResponse(correlationId, responseMap, errorCode)
+    new ControlledShutdownResponse(correlationId, errorCode, partitionsRemaining)
   }
 }
 
 
-case class LeaderAndIsrResponse(override val correlationId: Int,
-                                responseMap: Map[(String, Int), Short],
-                                errorCode: Short = ErrorMapping.NoError)
-    extends RequestOrResponse(correlationId = correlationId) {
+case class ControlledShutdownResponse(override val correlationId: Int,
+                                      val errorCode: Short = ErrorMapping.NoError,
+                                      val partitionsRemaining: Set[TopicAndPartition])
+  extends RequestOrResponse(correlationId = correlationId) {
   def sizeInBytes(): Int ={
     var size =
-      4 /* correlation id */ + 
-      2 /* error code */ +
-      4 /* number of responses */
-    for ((key, value) <- responseMap) {
+      4 /* correlation id */ +
+        2 /* error code */ +
+        4 /* number of responses */
+    for (topicAndPartition <- partitionsRemaining) {
       size +=
-        2 + key._1.length /* topic */ +
-        4 /* partition */ +
-        2 /* error code for this partition */
+        2 + topicAndPartition.topic.length /* topic */ +
+        4 /* partition */
     }
     size
   }
@@ -62,11 +61,10 @@ case class LeaderAndIsrResponse(override val correlationId: Int,
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(correlationId)
     buffer.putShort(errorCode)
-    buffer.putInt(responseMap.size)
-    for ((key:(String, Int), value) <- responseMap) {
-      writeShortString(buffer, key._1)
-      buffer.putInt(key._2)
-      buffer.putShort(value)
+    buffer.putInt(partitionsRemaining.size)
+    for (topicAndPartition:TopicAndPartition <- partitionsRemaining){
+      writeShortString(buffer, topicAndPartition.topic)
+      buffer.putInt(topicAndPartition.partition)
     }
   }
 }

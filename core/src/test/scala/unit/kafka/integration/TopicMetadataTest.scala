@@ -22,26 +22,27 @@ import kafka.zk.ZooKeeperTestHarness
 import kafka.admin.AdminUtils
 import java.nio.ByteBuffer
 import junit.framework.Assert._
-import org.easymock.EasyMock
-import kafka.network._
 import kafka.cluster.Broker
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
-import kafka.server.{ReplicaManager, KafkaApis, KafkaConfig}
+import kafka.server.{KafkaServer, KafkaConfig}
+import kafka.api.TopicMetadataRequest
 import kafka.common.ErrorMapping
-import kafka.api.{RequestKeys, TopicMetadata, TopicMetadataResponse, TopicMetadataRequest}
+import kafka.client.ClientUtils
 
 class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
   val configs = props.map(p => new KafkaConfig(p))
-  var brokers: Seq[Broker] = null
+  private var server1: KafkaServer = null
+  val brokers = configs.map(c => new Broker(c.brokerId,c.hostName,c.port))
 
   override def setUp() {
     super.setUp()
-    brokers = TestUtils.createBrokersInZk(zkClient, configs.map(config => config.brokerId))
+    server1 = TestUtils.createServer(configs.head)
   }
 
   override def tearDown() {
+    server1.shutdown()
     super.tearDown()
   }
 
@@ -65,16 +66,15 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     // create topic
     val topic = "test"
     AdminUtils.createTopic(zkClient, topic, 1, 1)
-    // set up leader for topic partition 0
-    val leaderForPartitionMap = Map(
-      0 -> configs.head.brokerId
-    )
-    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
-    val topicMetadataRequest = new TopicMetadataRequest(List(topic), 0)
-    val topicMetadata = mockLogManagerAndTestTopic(topicMetadataRequest)
-    assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
-    assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
-    val partitionMetadata = topicMetadata.head.partitionsMetadata
+    TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic, 0, 1000)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
+    var topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic),brokers,"TopicMetadataTest-testBasicTopicMetadata",
+      2000,0).topicsMetadata
+    assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
+    assertEquals(ErrorMapping.NoError, topicsMetadata.head.partitionsMetadata.head.errorCode)
+    assertEquals("Expecting metadata only for 1 topic", 1, topicsMetadata.size)
+    assertEquals("Expecting metadata for the test topic", "test", topicsMetadata.head.topic)
+    var partitionMetadata = topicsMetadata.head.partitionsMetadata
     assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
     assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
     assertEquals(1, partitionMetadata.head.replicas.size)
@@ -82,60 +82,55 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   def testGetAllTopicMetadata {
     // create topic
-    val topic = "test"
-    AdminUtils.createTopic(zkClient, topic, 1, 1)
-    // set up leader for topic partition 0
-    val leaderForPartitionMap = Map(
-      0 -> configs.head.brokerId
-    )
-    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
-    val topicMetadataRequest = new TopicMetadataRequest(List(), 0)
-    val topicMetadata = mockLogManagerAndTestTopic(topicMetadataRequest)
-    assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
-    assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
-    val partitionMetadata = topicMetadata.head.partitionsMetadata
-    assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
-    assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
-    assertEquals(1, partitionMetadata.head.replicas.size)
+    val topic1 = "testGetAllTopicMetadata1"
+    val topic2 = "testGetAllTopicMetadata2"
+    AdminUtils.createTopic(zkClient, topic1, 1, 1)
+    AdminUtils.createTopic(zkClient, topic2, 1, 1)
+
+    // wait for leader to be elected for both topics
+    TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic1, 0, 1000)
+    TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic2, 0, 1000)
+
+    // issue metadata request with empty list of topics
+    var topicsMetadata = ClientUtils.fetchTopicMetadata(Set.empty, brokers, "TopicMetadataTest-testGetAllTopicMetadata",
+      2000, 0).topicsMetadata
+    assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
+    assertEquals(2, topicsMetadata.size)
+    assertEquals(ErrorMapping.NoError, topicsMetadata.head.partitionsMetadata.head.errorCode)
+    assertEquals(ErrorMapping.NoError, topicsMetadata.last.partitionsMetadata.head.errorCode)
+    val partitionMetadataTopic1 = topicsMetadata.head.partitionsMetadata
+    val partitionMetadataTopic2 = topicsMetadata.last.partitionsMetadata
+    assertEquals("Expecting metadata for 1 partition", 1, partitionMetadataTopic1.size)
+    assertEquals("Expecting partition id to be 0", 0, partitionMetadataTopic1.head.partitionId)
+    assertEquals(1, partitionMetadataTopic1.head.replicas.size)
+    assertEquals("Expecting metadata for 1 partition", 1, partitionMetadataTopic2.size)
+    assertEquals("Expecting partition id to be 0", 0, partitionMetadataTopic2.head.partitionId)
+    assertEquals(1, partitionMetadataTopic2.head.replicas.size)
   }
 
   def testAutoCreateTopic {
     // auto create topic
-    val topic = "test"
+    val topic = "testAutoCreateTopic"
+    var topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic),brokers,"TopicMetadataTest-testAutoCreateTopic",
+      2000,0).topicsMetadata
+    assertEquals(ErrorMapping.LeaderNotAvailableCode, topicsMetadata.head.errorCode)
+    assertEquals("Expecting metadata only for 1 topic", 1, topicsMetadata.size)
+    assertEquals("Expecting metadata for the test topic", topic, topicsMetadata.head.topic)
+    assertEquals(0, topicsMetadata.head.partitionsMetadata.size)
 
-    val topicMetadataRequest = new TopicMetadataRequest(List(topic), 0)
-    val topicMetadata = mockLogManagerAndTestTopic(topicMetadataRequest)
-    assertEquals("Expecting metadata only for 1 topic", 1, topicMetadata.size)
-    assertEquals("Expecting metadata for the test topic", "test", topicMetadata.head.topic)
-    val partitionMetadata = topicMetadata.head.partitionsMetadata
+    // wait for leader to be elected
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
+    TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic, 0, 1000)
+
+    // retry the metadata for the auto created topic
+    topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic),brokers,"TopicMetadataTest-testBasicTopicMetadata",
+      2000,0).topicsMetadata
+    assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
+    assertEquals(ErrorMapping.NoError, topicsMetadata.head.partitionsMetadata.head.errorCode)
+    var partitionMetadata = topicsMetadata.head.partitionsMetadata
     assertEquals("Expecting metadata for 1 partition", 1, partitionMetadata.size)
     assertEquals("Expecting partition id to be 0", 0, partitionMetadata.head.partitionId)
-    assertEquals(0, partitionMetadata.head.replicas.size)
-    assertEquals(None, partitionMetadata.head.leader)
-    assertEquals(ErrorMapping.LeaderNotAvailableCode, partitionMetadata.head.errorCode)
-  }
-
-  private def mockLogManagerAndTestTopic(request: TopicMetadataRequest): Seq[TopicMetadata] = {
-    // topic metadata request only requires 1 call from the replica manager
-    val replicaManager = EasyMock.createMock(classOf[ReplicaManager])
-    EasyMock.expect(replicaManager.config).andReturn(configs.head).anyTimes()
-    EasyMock.replay(replicaManager)
-
-
-    val serializedMetadataRequest = TestUtils.createRequestByteBuffer(request)
-
-    // create the kafka request handler
-    val requestChannel = new RequestChannel(2, 5)
-    val apis = new KafkaApis(requestChannel, replicaManager, zkClient, 1, configs.head)
-
-    // call the API (to be tested) to get metadata
-    apis.handleTopicMetadataRequest(new RequestChannel.Request
-      (processor=0, requestKey=RequestKeys.MetadataKey, buffer=serializedMetadataRequest, startTimeMs=1))
-    val metadataResponse = requestChannel.receiveResponse(0).responseSend.asInstanceOf[BoundedByteBufferSend].buffer
-    
-    // check assertions
-    val topicMetadata = TopicMetadataResponse.readFrom(metadataResponse).topicsMetadata
-
-    topicMetadata
+    assertEquals(1, partitionMetadata.head.replicas.size)
+    assertTrue(partitionMetadata.head.leader.isDefined)
   }
 }

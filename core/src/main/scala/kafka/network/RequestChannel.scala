@@ -49,7 +49,7 @@ object RequestChannel extends Logging {
     val requestObj: RequestOrResponse = RequestKeys.deserializerForKey(requestId)(buffer)
     buffer = null
     private val requestLogger = Logger.getLogger("kafka.request.logger")
-    trace("Received request : %s".format(requestObj))
+    trace("Processor %d received request : %s".format(processor, requestObj))
 
     def updateRequestMetrics() {
       val endTimeMs = SystemTime.milliseconds

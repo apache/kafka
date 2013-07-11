@@ -15,11 +15,30 @@
  * limitations under the License.
  */
 
-package kafka.common
+package kafka.api
 
-/**
- * Thrown when a request is made for a topic, that hasn't been created in a Kafka cluster
- */
-class UnknownTopicException(message: String) extends RuntimeException(message) {
-  def this() = this(null)
+import kafka.common.{TopicAndPartition, ErrorMapping}
+import java.nio.ByteBuffer
+import kafka.api.ApiUtils._
+import collection.mutable.HashMap
+import collection.Map
+
+
+object UpdateMetadataResponse {
+  def readFrom(buffer: ByteBuffer): UpdateMetadataResponse = {
+    val correlationId = buffer.getInt
+    val errorCode = buffer.getShort
+    new UpdateMetadataResponse(correlationId, errorCode)
+  }
+}
+
+case class UpdateMetadataResponse(override val correlationId: Int,
+                                  errorCode: Short = ErrorMapping.NoError)
+  extends RequestOrResponse(correlationId = correlationId) {
+  def sizeInBytes(): Int = 4 /* correlation id */ + 2 /* error code */
+
+  def writeTo(buffer: ByteBuffer) {
+    buffer.putInt(correlationId)
+    buffer.putShort(errorCode)
+  }
 }

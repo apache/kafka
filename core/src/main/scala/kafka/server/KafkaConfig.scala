@@ -207,9 +207,20 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the purge interval (in number of requests) of the producer request purgatory */
   val producerPurgatoryPurgeIntervalRequests = props.getInt("producer.purgatory.purge.interval.requests", 10000)
 
+  /*********** Controlled shutdown configuration ***********/
+
+  /** Controlled shutdown can fail for multiple reasons. This determines the number of retries when such failure happens */
+  val controlledShutdownMaxRetries = props.getInt("controlled.shutdown.max.retries", 3)
+
+  /** Before each retry, the system needs time to recover from the state that caused the previous failure (Controller
+    * fail over, replica lag etc). This config determines the amount of time to wait before retrying. */
+  val controlledShutdownRetryBackoffMs = props.getInt("controlled.shutdown.retry.backoff.ms", 5000)
+
+  /* enable controlled shutdown of the server */
+  val controlledShutdownEnable = props.getBoolean("controlled.shutdown.enable", false)
+
   /*********** Misc configuration ***********/
   
   /* the maximum size for a metadata entry associated with an offset commit */
   val offsetMetadataMaxSize = props.getInt("offset.metadata.max.bytes", 1024)
-
- }
+}

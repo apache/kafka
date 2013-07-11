@@ -201,8 +201,15 @@ class Partition(val topic: String,
           leaderEpoch = leaderAndIsr.leaderEpoch
           zkVersion = leaderAndIsr.zkVersion
           leaderReplicaIdOpt = Some(newLeaderBrokerId)
-          // start fetcher thread to current leader
-          replicaFetcherManager.addFetcher(topic, partitionId, localReplica.logEndOffset, leaderBroker)
+          if (!replicaManager.isShuttingDown.get()) {
+            // start fetcher thread to current leader if we are not shutting down
+            replicaFetcherManager.addFetcher(topic, partitionId, localReplica.logEndOffset, leaderBroker)
+          }
+          else {
+            stateChangeLogger.trace("Broker %d ignored the become-follower state change with correlation id %d from " +
+              " controller %d epoch %d since it is shutting down"
+                .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch))
+          }
         case None => // leader went down
           stateChangeLogger.trace("Broker %d aborted the become-follower state change with correlation id %d from " +
             " controller %d epoch %d since leader %d for partition [%s,%d] is unavailable during the state change operation"

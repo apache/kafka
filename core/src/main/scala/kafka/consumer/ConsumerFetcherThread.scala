@@ -20,9 +20,8 @@ package kafka.consumer
 import kafka.cluster.Broker
 import kafka.server.AbstractFetcherThread
 import kafka.message.ByteBufferMessageSet
-import kafka.api.{PartitionOffsetRequestInfo, Request, OffsetRequest, FetchResponsePartitionData}
+import kafka.api.{Request, OffsetRequest, FetchResponsePartitionData}
 import kafka.common.TopicAndPartition
-import kafka.common.ErrorMapping
 
 
 class ConsumerFetcherThread(name: String,
@@ -67,6 +66,7 @@ class ConsumerFetcherThread(name: String,
 
   // any logic for partitions whose leader has changed
   def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition]) {
+    partitions.foreach(tap => removePartition(tap.topic, tap.partition))
     consumerFetcherManager.addPartitionsWithError(partitions)
   }
 }

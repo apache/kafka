@@ -121,8 +121,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     AdminUtils.createTopicWithAssignment(zkClient, topic, expectedReplicaAssignment)
     // create leaders for all partitions
     TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
-    val actualReplicaAssignment = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient).partitionsMetadata.map(p => p.replicas)
-    val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id).toList).toList
+    val actualReplicaList = leaderForPartitionMap.keys.toArray.map(p => (p -> ZkUtils.getReplicasForPartition(zkClient, topic, p))).toMap
     assertEquals(expectedReplicaAssignment.size, actualReplicaList.size)
     for(i <- 0 until actualReplicaList.size)
       assertEquals(expectedReplicaAssignment.get(i).get, actualReplicaList(i))
@@ -130,37 +129,6 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     intercept[TopicExistsException] {
       // shouldn't be able to create a topic that already exists
       AdminUtils.createTopicWithAssignment(zkClient, topic, expectedReplicaAssignment)
-    }
-  }
-
-  @Test
-  def testGetTopicMetadata() {
-    val expectedReplicaAssignment = Map(
-      0 -> List(0, 1, 2),
-      1 -> List(1, 2, 3))
-    val leaderForPartitionMap = Map(
-      0 -> 0,
-      1 -> 1)
-    val topic = "auto-topic"
-    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3))
-    AdminUtils.createTopicWithAssignment(zkClient, topic, expectedReplicaAssignment)
-    // create leaders for all partitions
-    TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
-
-    val newTopicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
-    newTopicMetadata.errorCode match {
-      case ErrorMapping.UnknownTopicOrPartitionCode =>
-        fail("Topic " + topic + " should've been automatically created")
-      case _ =>
-        assertEquals(topic, newTopicMetadata.topic)
-        assertNotNull("partition metadata list cannot be null", newTopicMetadata.partitionsMetadata)
-        assertEquals("partition metadata list length should be 2", 2, newTopicMetadata.partitionsMetadata.size)
-        val actualReplicaAssignment = newTopicMetadata.partitionsMetadata.map(p => p.replicas)
-        val actualReplicaList = actualReplicaAssignment.map(r => r.map(b => b.id).toList).toList
-        assertEquals(expectedReplicaAssignment.size, actualReplicaList.size)
-        for(i <- 0 until actualReplicaList.size) {
-          assertEquals(expectedReplicaAssignment(i), actualReplicaList(i))
-        }
     }
   }
 
@@ -234,7 +202,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient).mapValues(_.newReplicas);
       CheckReassignmentStatus.checkIfPartitionReassignmentSucceeded(zkClient, topicAndPartition, newReplicas,
         Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted;
-    }, 1000)
+    }, 2000)
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
     assertEquals("Partition should have been reassigned to 2, 3", newReplicas, assignedReplicas)
     // leader should be 2
@@ -316,48 +284,45 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
 
   @Test
   def testShutdownBroker() {
-    info("inside testShutdownBroker")
     val expectedReplicaAssignment = Map(1  -> List(0, 1, 2))
     val topic = "test"
     val partition = 1
     // create brokers
     val serverConfigs = TestUtils.createBrokerConfigs(3).map(new KafkaConfig(_))
+    val servers = serverConfigs.reverse.map(s => TestUtils.createServer(s))
     // create the topic
     AdminUtils.createTopicWithAssignment(zkClient, topic, expectedReplicaAssignment)
-    val servers = serverConfigs.reverse.map(s => TestUtils.createServer(s))
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic, partition, 1000)
 
-    // broker 2 should be the leader since it was started first
-    var leaderBeforeShutdown = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, 1000, None).get
-    var controllerId = ZkUtils.getController(zkClient)
-    var controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
+    val controllerId = ZkUtils.getController(zkClient)
+    val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
     var partitionsRemaining = controller.shutdownBroker(2)
+    var activeServers = servers.filter(s => s.config.brokerId != 2)
     try {
-      assertEquals(0, partitionsRemaining)
-      var topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
-      var leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
-      assertTrue(leaderAfterShutdown != leaderBeforeShutdown)
-      assertEquals(2, controller.controllerContext.partitionLeadershipInfo(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
+      // wait for the update metadata request to trickle to the brokers
+      assertTrue("Topic test not created after timeout", TestUtils.waitUntilTrue(() =>
+        activeServers.foldLeft(true)(_ && _.apis.leaderCache(TopicAndPartition(topic, partition)).leaderIsrAndControllerEpoch.leaderAndIsr.isr.size != 3), 1000))
+      assertEquals(0, partitionsRemaining.size)
+      var partitionStateInfo = activeServers.head.apis.leaderCache(TopicAndPartition(topic, partition))
+      var leaderAfterShutdown = partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+      assertEquals(0, leaderAfterShutdown)
+      assertEquals(2, partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.isr.size)
+      assertEquals(List(0,1), partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.isr)
 
-      leaderBeforeShutdown = leaderAfterShutdown
-      controllerId = ZkUtils.getController(zkClient)
-      controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
       partitionsRemaining = controller.shutdownBroker(1)
-      assertEquals(0, partitionsRemaining)
-      topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
-      leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
-      assertTrue(leaderAfterShutdown != leaderBeforeShutdown)
-      assertEquals(1, controller.controllerContext.partitionLeadershipInfo(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
+      assertEquals(0, partitionsRemaining.size)
+      activeServers = servers.filter(s => s.config.brokerId == 0)
+      partitionStateInfo = activeServers.head.apis.leaderCache(TopicAndPartition(topic, partition))
+      leaderAfterShutdown = partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+      assertEquals(0, leaderAfterShutdown)
 
-      leaderBeforeShutdown = leaderAfterShutdown
-      controllerId = ZkUtils.getController(zkClient)
-      controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
+      assertTrue(servers.foldLeft(true)(_ && _.apis.leaderCache(TopicAndPartition(topic, partition)).leaderIsrAndControllerEpoch.leaderAndIsr.leader == 0))
       partitionsRemaining = controller.shutdownBroker(0)
-      assertEquals(1, partitionsRemaining)
-      topicMetadata = AdminUtils.fetchTopicMetadataFromZk(topic, zkClient)
-      leaderAfterShutdown = topicMetadata.partitionsMetadata.head.leader.get.id
-      assertTrue(leaderAfterShutdown == leaderBeforeShutdown)
-      assertEquals(1, controller.controllerContext.partitionLeadershipInfo(TopicAndPartition("test", 1)).leaderAndIsr.isr.size)
-    } finally {
+      assertEquals(1, partitionsRemaining.size)
+      // leader doesn't change since all the replicas are shut down
+      assertTrue(servers.foldLeft(true)(_ && _.apis.leaderCache(TopicAndPartition(topic, partition)).leaderIsrAndControllerEpoch.leaderAndIsr.leader == 0))
+    }
+    finally {
       servers.foreach(_.shutdown())
     }
   }

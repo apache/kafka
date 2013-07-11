@@ -84,6 +84,11 @@ object ConsoleConsumer extends Logging {
             .describedAs("ms")
             .ofType(classOf[java.lang.Integer])
             .defaultsTo(ConsumerConfig.SocketTimeout)
+    val refreshMetadataBackoffMsOpt = parser.accepts("refresh-leader-backoff-ms", "Backoff time before refreshing metadata")
+            .withRequiredArg
+            .describedAs("ms")
+            .ofType(classOf[java.lang.Integer])
+            .defaultsTo(ConsumerConfig.RefreshMetadataBackoffMs)
     val consumerTimeoutMsOpt = parser.accepts("consumer-timeout-ms", "consumer throws timeout exception after waiting this much " +
             "of time without incoming messages")
             .withRequiredArg
@@ -105,7 +110,7 @@ object ConsoleConsumer extends Logging {
             .withRequiredArg
             .describedAs("ms")
             .ofType(classOf[java.lang.Integer])
-            .defaultsTo(10*1000)
+            .defaultsTo(ConsumerConfig.AutoCommitInterval)
     val maxMessagesOpt = parser.accepts("max-messages", "The maximum number of messages to consume before exiting. If not set, consumption is continual.")
             .withRequiredArg
             .describedAs("num_messages")
@@ -160,6 +165,8 @@ object ConsoleConsumer extends Logging {
     props.put("auto.offset.reset", if(options.has(resetBeginningOpt)) "smallest" else "largest")
     props.put("zookeeper.connect", options.valueOf(zkConnectOpt))
     props.put("consumer.timeout.ms", options.valueOf(consumerTimeoutMsOpt).toString)
+    props.put("refresh.leader.backoff.ms", options.valueOf(refreshMetadataBackoffMsOpt).toString)
+
     val config = new ConsumerConfig(props)
     val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
 

@@ -20,7 +20,7 @@ import kafka.cluster.{Partition, Replica}
 import kafka.log.Log
 import kafka.message.{ByteBufferMessageSet, Message}
 import kafka.network.{BoundedByteBufferSend, RequestChannel}
-import kafka.utils.{Time, TestUtils, MockTime}
+import kafka.utils.{ZkUtils, Time, TestUtils, MockTime}
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
 import org.scalatest.junit.JUnit3Suite
@@ -57,7 +57,9 @@ class SimpleFetchTest extends JUnit3Suite {
     val fetchSize = 100
     val messages = new Message("test-message".getBytes())
 
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
+    // create nice mock since we don't particularly care about zkclient calls
+    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
+    EasyMock.expect(zkClient.exists(ZkUtils.ControllerEpochPath)).andReturn(false)
     EasyMock.replay(zkClient)
 
     val log = EasyMock.createMock(classOf[kafka.log.Log])
@@ -85,10 +87,12 @@ class SimpleFetchTest extends JUnit3Suite {
     EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(topic, partitionId)).andReturn(partition.leaderReplicaIfLocal().get).anyTimes()
     EasyMock.replay(replicaManager)
 
+    val controller = EasyMock.createMock(classOf[kafka.controller.KafkaController])
+
     // start a request channel with 2 processors and a queue size of 5 (this is more or less arbitrary)
     // don't provide replica or leader callbacks since they will not be tested here
     val requestChannel = new RequestChannel(2, 5)
-    val apis = new KafkaApis(requestChannel, replicaManager, zkClient, configs.head.brokerId, configs.head)
+    val apis = new KafkaApis(requestChannel, replicaManager, zkClient, configs.head.brokerId, configs.head, controller)
 
     // This request (from a follower) wants to read up to 2*HW but should only get back up to HW bytes into the log
     val goodFetch = new FetchRequestBuilder()
@@ -124,7 +128,8 @@ class SimpleFetchTest extends JUnit3Suite {
     val followerReplicaId = configs(1).brokerId
     val followerLEO = 15
 
-    val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val zkClient = EasyMock.createNiceMock(classOf[ZkClient])
+    EasyMock.expect(zkClient.exists(ZkUtils.ControllerEpochPath)).andReturn(false)
     EasyMock.replay(zkClient)
 
     val log = EasyMock.createMock(classOf[kafka.log.Log])
@@ -153,8 +158,10 @@ class SimpleFetchTest extends JUnit3Suite {
     EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(topic, partitionId)).andReturn(partition.leaderReplicaIfLocal().get).anyTimes()
     EasyMock.replay(replicaManager)
 
+    val controller = EasyMock.createMock(classOf[kafka.controller.KafkaController])
+
     val requestChannel = new RequestChannel(2, 5)
-    val apis = new KafkaApis(requestChannel, replicaManager, zkClient, configs.head.brokerId, configs.head)
+    val apis = new KafkaApis(requestChannel, replicaManager, zkClient, configs.head.brokerId, configs.head, controller)
 
     /**
      * This fetch, coming from a replica, requests all data at offset "15".  Because the request is coming

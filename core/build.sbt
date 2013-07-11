@@ -12,7 +12,7 @@ libraryDependencies <+= scalaVersion("org.scala-lang" % "scala-compiler" % _ )
 
 libraryDependencies ++= Seq(
   "org.apache.zookeeper"  % "zookeeper"   % "3.3.4",
-  "com.101tec"            % "zkclient"     % "0.2",
+  "com.101tec"            % "zkclient"     % "0.3",
   "org.xerial.snappy"     % "snappy-java" % "1.0.4.1",
   "com.yammer.metrics"    % "metrics-core" % "2.2.0",
   "com.yammer.metrics"    % "metrics-annotation" % "2.2.0",

@@ -54,6 +54,13 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
           }
       }
     val partitionMetadata = metadata.partitionsMetadata
+    if(partitionMetadata.size == 0) {
+      if(metadata.errorCode != ErrorMapping.NoError) {
+        throw new KafkaException(ErrorMapping.exceptionFor(metadata.errorCode))
+      } else {
+        throw new KafkaException("Topic metadata %s has empty partition metadata and no error code".format(metadata))
+      }
+    }
     partitionMetadata.map { m =>
       m.leader match {
         case Some(leader) =>
@@ -77,7 +84,7 @@ class BrokerPartitionInfo(producerConfig: ProducerConfig,
     // throw partition specific exception
     topicsMetadata.foreach(tmd =>{
       trace("Metadata for topic %s is %s".format(tmd.topic, tmd))
-      if(tmd.errorCode == ErrorMapping.NoError){
+      if(tmd.errorCode == ErrorMapping.NoError) {
         topicPartitionInfo.put(tmd.topic, tmd)
       } else
         warn("Error while fetching metadata [%s] for topic [%s]: %s ".format(tmd, tmd.topic, ErrorMapping.exceptionFor(tmd.errorCode).getClass))

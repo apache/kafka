@@ -74,7 +74,6 @@ object ConsumerOffsetChecker extends Logging {
             val lag = logSize - offset
             println("%-15s %-30s %-3s %-15s %-15s %-15s %s".format(group, topic, pid, offset, logSize, lag,
               owner match {case Some(ownerStr) => ownerStr case None => "none"}))
-            consumer.close()
           case None => // ignore
         }
       case None =>
@@ -157,6 +156,11 @@ object ConsumerOffsetChecker extends Logging {
       if (options.has("broker-info"))
         printBrokerInfo();
 
+      for ((_, consumerOpt) <- consumerMap)
+        consumerOpt match {
+          case Some(consumer) => consumer.close()
+          case None => // ignore
+        }
     }
     finally {
       for (consumerOpt <- consumerMap.values) {
