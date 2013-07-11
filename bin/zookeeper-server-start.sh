@@ -19,5 +19,8 @@ then
 	echo "USAGE: $0 zookeeper.properties"
 	exit 1
 fi
+base_dir=$(dirname $0)
+export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/log4j.properties"
+export KAFKA_HEAP_OPTS="-Xmx512M -Xms512M"
+$base_dir/kafka-run-class.sh daemon zookeeper org.apache.zookeeper.server.quorum.QuorumPeerMain $@
 
-$(dirname $0)/kafka-run-class.sh org.apache.zookeeper.server.quorum.QuorumPeerMain $@
