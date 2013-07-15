@@ -103,7 +103,11 @@ class ProducerSendThread[K,V](val threadName: String,
       if(size > 0)
         handler.handle(events)
     }catch {
-      case e => error("Error in handling batch of " + size + " events", e)
+      case e => 
+        for (message <- events) {
+          queue.offer(message)
+        }
+        error("Re-queued batch of " + size + " events. Queue depth " + queue.size)
     }
   }
 
