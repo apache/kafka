@@ -37,7 +37,7 @@ object StressTestLog {
                       config = LogConfig(segmentSize = 64*1024*1024,
                                          maxMessageSize = Int.MaxValue,
                                          maxIndexSize = 1024*1024),
-                      needsRecovery = false,
+                      recoveryPoint = 0L,
                       scheduler = time.scheduler,
                       time = time)
     val writer = new WriterThread(log)

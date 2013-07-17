@@ -52,11 +52,9 @@ class FileMessageSet private[kafka](@volatile var file: File,
       new AtomicInteger(math.min(channel.size().toInt, end) - start)
 
   /* if this is not a slice, update the file pointer to the end of the file */
-  if (!isSlice) {
-    debug("Creating or reloading log segment %s".format(file.getAbsolutePath))
+  if (!isSlice)
     /* set the file position to the last byte in the file */
     channel.position(channel.size)
-  }
 
   /**
    * Create a file message set with no slicing.

@@ -24,6 +24,7 @@ import org.scalatest.junit.JUnit3Suite
 import kafka.server.KafkaConfig
 import kafka.common._
 import kafka.utils._
+import kafka.server.OffsetCheckpoint
 
 class LogManagerTest extends JUnit3Suite {
 
@@ -40,7 +41,15 @@ class LogManagerTest extends JUnit3Suite {
   override def setUp() {
     super.setUp()
     logDir = TestUtils.tempDir()
-    logManager = new LogManager(Array(logDir), Map(), logConfig, cleanerConfig, 1000L, 1000L, time.scheduler, time)
+    logManager = new LogManager(logDirs = Array(logDir), 
+                                topicConfigs = Map(), 
+                                defaultConfig = logConfig, 
+                                cleanerConfig = cleanerConfig, 
+                                flushCheckMs = 1000L, 
+                                flushCheckpointMs = 100000L, 
+                                retentionCheckMs = 1000L, 
+                                scheduler = time.scheduler, 
+                                time = time)
     logManager.startup
     logDir = logManager.logDirs(0)
   }
@@ -116,7 +125,7 @@ class LogManagerTest extends JUnit3Suite {
     logManager.shutdown()
 
     val config = logConfig.copy(segmentSize = 10 * (setSize - 1), retentionSize = 5L * 10L * setSize + 10L)
-    logManager = new LogManager(Array(logDir), Map(), config, cleanerConfig, 1000L, 1000L, time.scheduler, time)
+    logManager = new LogManager(Array(logDir), Map(), config, cleanerConfig, 1000L, 100000L, 1000L, time.scheduler, time)
     logManager.startup
 
     // create a log
@@ -156,7 +165,7 @@ class LogManagerTest extends JUnit3Suite {
   def testTimeBasedFlush() {
     logManager.shutdown()
     val config = logConfig.copy(flushMs = 1000)
-    logManager = new LogManager(Array(logDir), Map(), config, cleanerConfig, 1000L, 1000L, time.scheduler, time)
+    logManager = new LogManager(Array(logDir), Map(), config, cleanerConfig, 1000L, 10000L, 1000L, time.scheduler, time)
     logManager.startup
     val log = logManager.createLog(TopicAndPartition(name, 0), config)
     val lastFlush = log.lastFlushTime
@@ -178,7 +187,7 @@ class LogManagerTest extends JUnit3Suite {
                      TestUtils.tempDir(), 
                      TestUtils.tempDir())
     logManager.shutdown()
-    logManager = new LogManager(dirs, Map(), logConfig, cleanerConfig, 1000L, 1000L, time.scheduler, time)
+    logManager = new LogManager(dirs, Map(), logConfig, cleanerConfig, 1000L, 10000L, 1000L, time.scheduler, time)
     
     // verify that logs are always assigned to the least loaded partition
     for(partition <- 0 until 20) {
@@ -194,10 +203,30 @@ class LogManagerTest extends JUnit3Suite {
    */
   def testTwoLogManagersUsingSameDirFails() {
     try {
-      new LogManager(Array(logDir), Map(), logConfig, cleanerConfig, 1000L, 1000L, time.scheduler, time)
+      new LogManager(Array(logDir), Map(), logConfig, cleanerConfig, 1000L, 10000L, 1000L, time.scheduler, time)
       fail("Should not be able to create a second log manager instance with the same data directory")
     } catch {
       case e: KafkaException => // this is good 
     }
+  }
+  
+  /**
+   * Test that recovery points are correctly written out to disk
+   */
+  def testCheckpointRecoveryPoints() {
+    val topicA = TopicAndPartition("test-a", 1)
+    val topicB = TopicAndPartition("test-b", 1)
+    val logA = this.logManager.createLog(topicA, logConfig)
+    val logB = this.logManager.createLog(topicB, logConfig)
+    for(i <- 0 until 50) 
+      logA.append(TestUtils.singleMessageSet("test".getBytes()))
+    for(i <- 0 until 100)
+      logB.append(TestUtils.singleMessageSet("test".getBytes()))
+    logA.flush()
+    logB.flush()
+    logManager.checkpointRecoveryPointOffsets()
+    val checkpoints = new OffsetCheckpoint(new File(logDir, logManager.RecoveryPointCheckpointFile)).read()
+    assertEquals("Recovery point should equal checkpoint", checkpoints(topicA), logA.recoveryPoint)
+    assertEquals("Recovery point should equal checkpoint", checkpoints(topicB), logB.recoveryPoint)
   }
 }

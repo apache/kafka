@@ -23,6 +23,7 @@ import kafka.utils._
 import scala.collection._
 import kafka.common.{TopicAndPartition, KafkaException}
 import kafka.server.KafkaConfig
+import kafka.server.OffsetCheckpoint
 
 
 /**
@@ -41,11 +42,12 @@ class LogManager(val logDirs: Array[File],
                  val defaultConfig: LogConfig,
                  val cleanerConfig: CleanerConfig,
                  val flushCheckMs: Long,
+                 val flushCheckpointMs: Long,
                  val retentionCheckMs: Long,
                  scheduler: Scheduler,
                  private val time: Time) extends Logging {
 
-  val CleanShutdownFile = ".kafka_cleanshutdown"
+  val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
   val LockFile = ".lock"
   val InitialTaskDelayMs = 30*1000
   private val logCreationLock = new Object
@@ -53,6 +55,7 @@ class LogManager(val logDirs: Array[File],
   
   createAndValidateLogDirs(logDirs)
   private var dirLocks = lockLogDirs(logDirs)
+  private val recoveryPointCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, RecoveryPointCheckpointFile)))).toMap
   loadLogs(logDirs)
   
   private val cleaner: LogCleaner = 
@@ -102,10 +105,7 @@ class LogManager(val logDirs: Array[File],
    */
   private def loadLogs(dirs: Seq[File]) {
     for(dir <- dirs) {
-      /* check if this set of logs was shut down cleanly */
-      val cleanShutDownFile = new File(dir, CleanShutdownFile)
-      val needsRecovery = !cleanShutDownFile.exists
-      cleanShutDownFile.delete
+      val recoveryPoints = this.recoveryPointCheckpoints(dir).read
       /* load the logs */
       val subDirs = dir.listFiles()
       if(subDirs != null) {
@@ -116,7 +116,7 @@ class LogManager(val logDirs: Array[File],
             val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
             val log = new Log(dir, 
                               config,
-                              needsRecovery,
+                              recoveryPoints.getOrElse(topicPartition, 0L),
                               scheduler,
                               time)
             val previous = this.logs.put(topicPartition, log)
@@ -146,6 +146,11 @@ class LogManager(val logDirs: Array[File],
                          delay = InitialTaskDelayMs, 
                          period = flushCheckMs, 
                          TimeUnit.MILLISECONDS)
+      scheduler.schedule("kafka-recovery-point-checkpoint",
+                         checkpointRecoveryPointOffsets,
+                         delay = InitialTaskDelayMs,
+                         period = flushCheckpointMs,
+                         TimeUnit.MILLISECONDS)
     }
     if(cleanerConfig.enableCleaner)
       cleaner.startup()
@@ -160,15 +165,30 @@ class LogManager(val logDirs: Array[File],
       // stop the cleaner first
       if(cleaner != null)
         Utils.swallow(cleaner.shutdown())
+      // flush the logs to ensure latest possible recovery point
+      allLogs.foreach(_.flush())
       // close the logs
       allLogs.foreach(_.close())
-      // mark that the shutdown was clean by creating the clean shutdown marker file
-      logDirs.foreach(dir => Utils.swallow(new File(dir, CleanShutdownFile).createNewFile()))
+      // update the last flush point
+      checkpointRecoveryPointOffsets()
     } finally {
       // regardless of whether the close succeeded, we need to unlock the data directories
       dirLocks.foreach(_.destroy())
     }
     debug("Shutdown complete.")
+  }
+  
+  /**
+   * Write out the current recovery point for all logs to a text file in the log directory 
+   * to avoid recovering the whole log on startup.
+   */
+  def checkpointRecoveryPointOffsets() {
+    val recoveryPointsByDir = this.logsByTopicPartition.groupBy(_._2.dir.getParent.toString)
+    for(dir <- logDirs) {
+        val recoveryPoints = recoveryPointsByDir.get(dir.toString)
+        if(recoveryPoints.isDefined)
+          this.recoveryPointCheckpoints(dir).write(recoveryPoints.get.mapValues(_.recoveryPoint))
+    }
   }
   
   /**
@@ -200,7 +220,7 @@ class LogManager(val logDirs: Array[File],
       dir.mkdirs()
       log = new Log(dir, 
                     config,
-                    needsRecovery = false,
+                    recoveryPoint = 0L,
                     scheduler,
                     time)
       logs.put(topicAndPartition, log)

@@ -195,7 +195,7 @@ class CleanerTest extends JUnitSuite {
   }
   
   def makeLog(dir: File = dir, config: LogConfig = logConfig) =
-    new Log(dir = dir, config = config, needsRecovery = false, scheduler = time.scheduler, time = time)
+    new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
   
   def makeCleaner(capacity: Int) = 
     new Cleaner(id = 0, 

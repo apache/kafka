@@ -37,6 +37,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
                                                          defaultConfig = LogConfig(),
                                                          cleanerConfig = CleanerConfig(),
                                                          flushCheckMs = 30000,
+                                                         flushCheckpointMs = 10000L,
                                                          retentionCheckMs = 30000,
                                                          scheduler = new KafkaScheduler(1),
                                                          time = new MockTime))

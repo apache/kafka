@@ -201,7 +201,7 @@ class LogSegmentTest extends JUnit3Suite {
     for(i <- 0 until 100)
       seg.append(i, messages(i, i.toString))
     val indexFile = seg.index.file
-    writeNonsense(indexFile, 5, indexFile.length.toInt)
+    TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(64*1024)
     for(i <- 0 until 100)
       assertEquals(i, seg.read(i, Some(i+1), 1024).head.offset)
@@ -221,20 +221,11 @@ class LogSegmentTest extends JUnit3Suite {
       val offsetToBeginCorruption = rand.nextInt(messagesAppended)
       // start corrupting somewhere in the middle of the chosen record all the way to the end
       val position = seg.log.searchFor(offsetToBeginCorruption, 0).position + rand.nextInt(15)
-      writeNonsense(seg.log.file, position, seg.log.file.length.toInt - position)
+      TestUtils.writeNonsenseToFile(seg.log.file, position, seg.log.file.length.toInt - position)
       seg.recover(64*1024)
       assertEquals("Should have truncated off bad messages.", (0 until offsetToBeginCorruption).toList, seg.log.map(_.offset).toList)
       seg.delete()
     }
-  }
-  
-  def writeNonsense(fileName: File, position: Long, size: Int) {
-    val file = new RandomAccessFile(fileName, "rw")
-    file.seek(position)
-    val rand = new Random
-    for(i <- 0 until size)
-      file.writeByte(rand.nextInt(255))
-    file.close()
   }
   
 }

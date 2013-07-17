@@ -55,11 +55,12 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     // send some messages
     producer.send(sent1.map(m => new KeyedMessage[Int, String](topic, 0, m)):_*)
 
-    // do a clean shutdown and check that the clean shudown file is written out
+    // do a clean shutdown and check that offset checkpoint file exists
     server.shutdown()
     for(logDir <- config.logDirs) {
-      val cleanShutDownFile = new File(logDir, server.logManager.CleanShutdownFile)
-      assertTrue(cleanShutDownFile.exists)
+      val OffsetCheckpointFile = new File(logDir, server.logManager.RecoveryPointCheckpointFile)
+      assertTrue(OffsetCheckpointFile.exists)
+      assertTrue(OffsetCheckpointFile.length() > 0)
     }
     producer.close()
     

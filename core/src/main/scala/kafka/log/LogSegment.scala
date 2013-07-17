@@ -147,14 +147,17 @@ class LogSegment(val log: FileMessageSet,
   }
   
   /**
-   * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes from the end of the log.
+   * Run recovery on the given segment. This will rebuild the index from the log file and lop off any invalid bytes from the end of the log and index.
    * 
    * @param maxMessageSize A bound the memory allocation in the case of a corrupt message size--we will assume any message larger than this
    * is corrupt.
+   * 
+   * @return The number of bytes truncated from the log
    */
   @nonthreadsafe
-  def recover(maxMessageSize: Int) {
+  def recover(maxMessageSize: Int): Int = {
     index.truncate()
+    index.resize(index.maxIndexSize)
     var validBytes = 0
     var lastIndexEntry = 0
     val iter = log.iterator(maxMessageSize)
@@ -181,9 +184,9 @@ class LogSegment(val log: FileMessageSet,
         logger.warn("Found invalid messages in log segment %s at byte offset %d: %s.".format(log.file.getAbsolutePath, validBytes, e.getMessage))
     }
     val truncated = log.sizeInBytes - validBytes
-    if(truncated > 0)
-      warn("Truncated " + truncated + " invalid bytes from the log segment %s.".format(log.file.getAbsolutePath))
     log.truncateTo(validBytes)
+    index.trimToValidSize()
+    truncated
   }
 
   override def toString() = "LogSegment(baseOffset=" + baseOffset + ", size=" + size + ")"

@@ -277,6 +277,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                    defaultConfig = defaultLogConfig,
                    cleanerConfig = cleanerConfig,
                    flushCheckMs = config.logFlushSchedulerIntervalMs,
+                   flushCheckpointMs = config.logFlushOffsetCheckpointIntervalMs,
                    retentionCheckMs = config.logCleanupIntervalMs,
                    scheduler = kafkaScheduler,
                    time = time)

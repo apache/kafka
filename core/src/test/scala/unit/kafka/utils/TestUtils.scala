@@ -515,6 +515,15 @@ object TestUtils extends Logging {
         servers.foldLeft(true)(_ && _.apis.leaderCache.keySet.contains(TopicAndPartition(topic, partition))), timeout))
   }
   
+  def writeNonsenseToFile(fileName: File, position: Long, size: Int) {
+    val file = new RandomAccessFile(fileName, "rw")
+    file.seek(position)
+    val rand = new Random
+    for(i <- 0 until size)
+      file.writeByte(rand.nextInt(255))
+    file.close()
+  }
+  
 }
 
 object TestZKUtils {

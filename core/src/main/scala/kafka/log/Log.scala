@@ -38,19 +38,16 @@ import com.yammer.metrics.core.Gauge
  * for a given segment.
  * 
  * @param dir The directory in which log segments are created.
- * @param maxSegmentSize The maximum segment size in bytes.
- * @param maxMessageSize The maximum message size in bytes (including headers) that will be allowed in this log.
- * @param flushInterval The number of messages that can be appended to this log before we force a flush of the log.
- * @param rollIntervalMs The time after which we will force the rolling of a new log segment
- * @param needsRecovery Should we run recovery on this log when opening it? This should be done if the log wasn't cleanly shut down.
- * @param maxIndexSize The maximum size of an offset index in this log. The index of the active log segment will be pre-allocated to this size.
- * @param indexIntervalBytes The (approximate) number of bytes between entries in the offset index for this log.
+ * @param config The log configuration settings
+ * @param recoveryPoint The offset at which to begin recovery--i.e. the first offset which has not been flushed to disk
+ * @param scheduler The thread pool scheduler used for background actions
+ * @param time The time instance used for checking the clock 
  * 
  */
 @threadsafe
 class Log(val dir: File,
           @volatile var config: LogConfig,
-          val needsRecovery: Boolean,
+          @volatile var recoveryPoint: Long = 0L,
           val scheduler: Scheduler,
           time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
 
@@ -59,14 +56,12 @@ class Log(val dir: File,
   /* A lock that guards all modifications to the log */
   private val lock = new Object
 
-  /* The current number of unflushed messages appended to the write */
-  private val unflushed = new AtomicInteger(0)
-
   /* last time it was flushed */
   private val lastflushedTime = new AtomicLong(time.milliseconds)
 
   /* the actual segments of the log */
-  private val segments: ConcurrentNavigableMap[Long,LogSegment] = loadSegments()
+  private val segments: ConcurrentNavigableMap[Long,LogSegment] = new ConcurrentSkipListMap[Long, LogSegment]
+  loadSegments()
   
   /* The number of times the log has been truncated */
   private val truncates = new AtomicInteger(0)
@@ -86,10 +81,7 @@ class Log(val dir: File,
   def name  = dir.getName()
 
   /* Load the log segments from the log files on disk */
-  private def loadSegments(): ConcurrentNavigableMap[Long, LogSegment] = {
-    // open all the segments read-only
-    val logSegments = new ConcurrentSkipListMap[Long, LogSegment]
-
+  private def loadSegments() {
     // create the log directory if it doesn't exist
     dir.mkdirs()
     
@@ -145,46 +137,57 @@ class Log(val dir: File,
           error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
           segment.recover(config.maxMessageSize)
         }
-        logSegments.put(start, segment)
+        segments.put(start, segment)
       }
     }
 
     if(logSegments.size == 0) {
       // no existing segments, create a new mutable segment beginning at offset 0
-      logSegments.put(0,
-                      new LogSegment(dir = dir, 
+      segments.put(0, new LogSegment(dir = dir, 
                                      startOffset = 0,
                                      indexIntervalBytes = config.indexInterval, 
                                      maxIndexSize = config.maxIndexSize))
     } else {
+      recoverLog()
       // reset the index size of the currently active log segment to allow more entries
-      val active = logSegments.lastEntry.getValue
-      active.index.resize(config.maxIndexSize)
-
-      // run recovery on the active segment if necessary
-      if(needsRecovery) {
-        try {
-          info("Recovering active segment of %s.".format(name))
-          active.recover(config.maxMessageSize)
-        } catch {
-          case e: InvalidOffsetException =>
-            val startOffset = active.baseOffset
-            warn("Found invalid offset during recovery of the active segment for topic partition " + dir.getName +". Deleting the segment and " +
-                 "creating an empty one with starting offset " + startOffset)
-            // truncate the active segment to its starting offset
-            active.truncateTo(startOffset)
-        }
-      }
+      activeSegment.index.resize(config.maxIndexSize)
     }
 
-    // Check for the index file of every segment, if it's empty or its last offset is greater than its base offset.
-    for (s <- asIterable(logSegments.values)) {
+    // sanity check the index file of every segment, if it's empty or its last offset is greater than its base offset.
+    for (s <- logSegments) {
       require(s.index.entries == 0 || s.index.lastOffset > s.index.baseOffset,
               "Corrupt index found, index file (%s) has non-zero size but the last offset is %d and the base offset is %d"
               .format(s.index.file.getAbsolutePath, s.index.lastOffset, s.index.baseOffset))
     }
-
-    logSegments
+  }
+  
+  private def recoverLog() {
+    val lastOffset = try {activeSegment.nextOffset} catch {case _ => -1L}
+    if(lastOffset <= this.recoveryPoint) {
+      info("Log '%s' is fully intact, skipping recovery".format(name))
+      this.recoveryPoint = lastOffset
+      return
+    }
+    val unflushed = logSegments(segments.floorKey(this.recoveryPoint), Long.MaxValue).iterator
+    while(unflushed.hasNext) {
+      val curr = unflushed.next
+      info("Recovering unflushed segment %d in log %s.".format(curr.baseOffset, name))
+      val truncatedBytes = 
+        try {
+          curr.recover(config.maxMessageSize)
+        } catch {
+          case e: InvalidOffsetException => 
+            val startOffset = curr.baseOffset
+            warn("Found invalid offset during recovery for log " + dir.getName +". Deleting the corrupt segment and " +
+                 "creating an empty one with starting offset " + startOffset)
+            curr.truncateTo(startOffset)
+        }
+      if(truncatedBytes > 0) {
+        // we had an invalid message, delete all remaining log
+        warn("Corruption found in segment %d of log %s, truncating to offset %d.".format(curr.baseOffset, name, curr.nextOffset))
+        unflushed.foreach(deleteSegment)
+      }
+    }
   }
 
   /**
@@ -272,7 +275,8 @@ class Log(val dir: File,
         trace("Appended message set to log %s with first offset: %d, next offset: %d, and messages: %s"
                 .format(this.name, appendInfo.firstOffset, nextOffset.get(), validMessages))
 
-        maybeFlush(appendInfo.shallowCount)
+        if(unflushedMessages >= config.flushInterval)
+          flush()
 
         appendInfo
       }
@@ -285,7 +289,6 @@ class Log(val dir: File,
    * @param firstOffset The first offset in the message set
    * @param lastOffset The last offset in the message set
    * @param codec The codec used in the message set
-   * @param count The number of messages
    * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
    */
   case class LogAppendInfo(var firstOffset: Long, var lastOffset: Long, codec: CompressionCodec, shallowCount: Int, offsetsMonotonic: Boolean)
@@ -452,11 +455,8 @@ class Log(val dir: File,
    * @return The newly rolled segment
    */
   def roll(): LogSegment = {
+    val start = time.nanoseconds
     lock synchronized {
-      // flush the log to ensure that only the active segment needs to be recovered
-      if(!segments.isEmpty())
-        flush()
-  
       val newOffset = logEndOffset
       val logFile = logFilename(dir, newOffset)
       val indexFile = indexFilename(dir, newOffset)
@@ -465,7 +465,6 @@ class Log(val dir: File,
         file.delete()
       }
     
-      info("Rolling log '" + name + "' to " + logFile.getName + " and " + indexFile.getName)
       segments.lastEntry() match {
         case null => 
         case entry => entry.getValue.index.trimToValidSize()
@@ -477,33 +476,43 @@ class Log(val dir: File,
       val prev = addSegment(segment)
       if(prev != null)
         throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exists.".format(name, newOffset))
+      
+      // schedule an asynchronous flush of the old segment
+      scheduler.schedule("flush-log", () => flush(newOffset), delay = 0L)
+      
+      info("Rolled new log segment for '" + name + "' in %.0f ms.".format((System.nanoTime - start) / (1000.0*1000.0)))
+      
       segment
     }
   }
+  
+  /**
+   * The number of messages appended to the log since the last flush
+   */
+  def unflushedMessages() = this.logEndOffset - this.recoveryPoint
+  
+  /**
+   * Flush all log segments
+   */
+  def flush(): Unit = flush(this.logEndOffset)
 
   /**
-   * Flush the log if necessary
-   * @param numberOfMessages The number of messages that are being appended
+   * Flush log segments for all offsets up to offset-1
+   * @param offset The offset to flush up to (non-inclusive); the new recovery point
    */
-  private def maybeFlush(numberOfMessages : Int) {
-    if(unflushed.addAndGet(numberOfMessages) >= config.flushInterval)
-      flush()
-  }
-
-  /**
-   * Flush this log file and associated index to the physical disk
-   */
-  def flush() : Unit = {
-    if (unflushed.get == 0)
+  def flush(offset: Long) : Unit = {
+    if (offset <= this.recoveryPoint)
       return
-
-    debug("Flushing log '" + name + "' last flushed: " + lastFlushTime + " current time: " +
-          time.milliseconds + " unflushed = " + unflushed.get)
+    debug("Flushing log '" + name + " up to offset " + offset + ", last flushed: " + lastFlushTime + " current time: " +
+          time.milliseconds + " unflushed = " + unflushedMessages)
+    for(segment <- logSegments(this.recoveryPoint, offset))
+      segment.flush()
     lock synchronized {
-      activeSegment.flush()
-      unflushed.set(0)
-      lastflushedTime.set(time.milliseconds)
-     }
+      if(offset > this.recoveryPoint) {
+        this.recoveryPoint = offset
+        lastflushedTime.set(time.milliseconds)
+      }
+    }
   }
 
   /**
@@ -534,6 +543,7 @@ class Log(val dir: File,
         deletable.foreach(deleteSegment(_))
         activeSegment.truncateTo(targetOffset)
         this.nextOffset.set(targetOffset)
+        this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
       }
       truncates.getAndIncrement
     }
@@ -553,6 +563,7 @@ class Log(val dir: File,
                                 indexIntervalBytes = config.indexInterval, 
                                 maxIndexSize = config.maxIndexSize))
       this.nextOffset.set(newOffset)
+      this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
       truncates.getAndIncrement
     }
   }

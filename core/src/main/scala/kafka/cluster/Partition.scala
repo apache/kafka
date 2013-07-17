@@ -197,6 +197,7 @@ class Partition(val topic: String,
           // stop fetcher thread to previous leader
           replicaFetcherManager.removeFetcher(topic, partitionId)
           localReplica.log.get.truncateTo(localReplica.highWatermark)
+          logManager.checkpointRecoveryPointOffsets()
           inSyncReplicas = Set.empty[Replica]
           leaderEpoch = leaderAndIsr.leaderEpoch
           zkVersion = leaderAndIsr.zkVersion
