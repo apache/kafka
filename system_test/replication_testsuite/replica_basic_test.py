@@ -324,8 +324,8 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                             pass
 
 
-                    self.anonLogger.info("sleeping for 15s")
-                    time.sleep(15)
+                    self.anonLogger.info("sleeping for 60s")
+                    time.sleep(60)
                     i += 1
                 # while loop
 

@@ -73,6 +73,7 @@
       "message-size": "500",
       "message": "500",
       "request-num-acks": "1",
+      "producer-retry-backoff-ms": "300",
       "sync":"false",
       "log_filename": "producer_performance_4.log",
       "config_filename": "producer_performance_4.properties"
@@ -85,6 +86,7 @@
       "message-size": "500",
       "message": "500",
       "request-num-acks": "1",
+      "producer-retry-backoff-ms": "300",
       "sync":"false",
       "log_filename": "producer_performance_5.log",
       "config_filename": "producer_performance_5.properties"
