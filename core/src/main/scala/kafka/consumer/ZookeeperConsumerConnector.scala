@@ -85,6 +85,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private var fetcher: Option[ConsumerFetcherManager] = None
   private var zkClient: ZkClient = null
   private var topicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]]
+  private var checkpointedOffsets = new Pool[TopicAndPartition, Long]
   private val topicThreadIdAndQueues = new Pool[(String,String), BlockingQueue[FetchedDataChunk]]
   private val scheduler = new KafkaScheduler(1)
   private val messageStreamCreated = new AtomicBoolean(false)
@@ -249,15 +250,17 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
       for (info <- infos.values) {
         val newOffset = info.getConsumeOffset
-        try {
-          updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + info.partitionId,
-            newOffset.toString)
-        } catch {
-          case t: Throwable =>
-          // log it and let it go
-            warn("exception during commitOffsets",  t)
+        if (newOffset != checkpointedOffsets.get(TopicAndPartition(topic, info.partitionId))) {
+          try {
+            updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + info.partitionId, newOffset.toString)
+            checkpointedOffsets.put(TopicAndPartition(topic, info.partitionId), newOffset)
+          } catch {
+            case t: Throwable =>
+              // log it and let it go
+              warn("exception during commitOffsets",  t)
+          }
+          debug("Committed offset " + newOffset + " for topic " + info)
         }
-        debug("Committed offset " + newOffset + " for topic " + info)
       }
     }
   }
@@ -607,6 +610,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                                  config.clientId)
       partTopicInfoMap.put(partition, partTopicInfo)
       debug(partTopicInfo + " selected new offset " + offset)
+      checkpointedOffsets.put(TopicAndPartition(topic, partition), offset)
     }
   }
 
