@@ -100,7 +100,6 @@
       "group.id": "mytestgroup",
       "consumer-timeout-ms": "10000",
       "log_filename": "console_consumer_8.log",
-      "formatter": "kafka.consumer.ChecksumMessageFormatter",
       "config_filename": "console_consumer_8.properties"
     },
     {

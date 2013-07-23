@@ -1047,6 +1047,7 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
                        "JMX_PORT=" + jmxPort,
                        kafkaRunClassBin + " kafka.perf.ProducerPerformance",
                        "--brokerinfo " + brokerInfoStr,
+                       "--initial-message-id " + str(initMsgId),
                        "--messages " + noMsgPerBatch,
                        "--topic " + topic,
                        "--threads " + threads,
