@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.api.LeaderAndIsr
 import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
 import kafka.utils.{Logging, ZkUtils}
-import org.I0Itec.zkclient.IZkChildListener
+import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.apache.log4j.Logger
 
@@ -334,7 +334,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   }
 
   def registerPartitionChangeListener(topic: String) = {
-    zkClient.subscribeChildChanges(ZkUtils.getTopicPath(topic), new PartitionChangeListener(topic))
+    zkClient.subscribeDataChanges(ZkUtils.getTopicPath(topic), new AddPartitionsListener(topic))
   }
 
   private def getLeaderIsrAndEpochOrThrowException(topic: String, partition: Int): LeaderIsrAndControllerEpoch = {
@@ -383,14 +383,30 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     }
   }
 
-  class PartitionChangeListener(topic: String) extends IZkChildListener with Logging {
-    this.logIdent = "[Controller " + controller.config.brokerId + "]: "
+
+  class AddPartitionsListener(topic: String) extends IZkDataListener with Logging {
+
+    this.logIdent = "[AddPartitionsListener on " + controller.config.brokerId + "]: "
 
     @throws(classOf[Exception])
-    def handleChildChange(parentPath : String, children : java.util.List[String]) {
+    def handleDataChange(dataPath : String, data: Object) {
       controllerContext.controllerLock synchronized {
-        // TODO: To be completed as part of KAFKA-41
+        try {
+          info("Add Partition triggered " + data.toString + " for path " + dataPath)
+          val partitionReplicaAssignment = ZkUtils.getReplicaAssignmentForTopics(zkClient, List(topic))
+          val partitionsRemainingToBeAdded = partitionReplicaAssignment.filter(p =>
+            !controllerContext.partitionReplicaAssignment.contains(p._1))
+          info("New partitions to be added [%s]".format(partitionsRemainingToBeAdded))
+          controller.onNewPartitionCreation(partitionsRemainingToBeAdded.keySet.toSet)
+        } catch {
+          case e => error("Error while handling add partitions for data path " + dataPath, e )
+        }
       }
+    }
+
+    @throws(classOf[Exception])
+    def handleDataDeleted(parentPath : String) {
+      // this is not implemented for partition change
     }
   }
 }

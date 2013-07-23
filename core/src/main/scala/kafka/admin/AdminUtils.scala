@@ -48,7 +48,7 @@ object AdminUtils extends Logging {
    * p7        p8        p9        p5        p6       (3nd replica)
    */
   def assignReplicasToBrokers(brokerList: Seq[Int], nPartitions: Int, replicationFactor: Int,
-                              fixedStartIndex: Int = -1)  // for testing only
+                              fixedStartIndex: Int = -1, startPartitionId: Int = -1)
   : Map[Int, Seq[Int]] = {
     if (nPartitions <= 0)
       throw new AdministrationException("number of partitions must be larger than 0")
@@ -59,25 +59,34 @@ object AdminUtils extends Logging {
         " larger than available brokers: " + brokerList.size)
     val ret = new mutable.HashMap[Int, List[Int]]()
     val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
+    var currentPartitionId = if (startPartitionId >= 0) startPartitionId else 0
 
-    var secondReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
+    var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
     for (i <- 0 until nPartitions) {
-      if (i > 0 && (i % brokerList.size == 0))
-        secondReplicaShift += 1
-      val firstReplicaIndex = (i + startIndex) % brokerList.size
+      if (currentPartitionId > 0 && (currentPartitionId % brokerList.size == 0))
+        nextReplicaShift += 1
+      val firstReplicaIndex = (currentPartitionId + startIndex) % brokerList.size
       var replicaList = List(brokerList(firstReplicaIndex))
       for (j <- 0 until replicationFactor - 1)
-        replicaList ::= brokerList(getWrappedIndex(firstReplicaIndex, secondReplicaShift, j, brokerList.size))
-      ret.put(i, replicaList.reverse)
+        replicaList ::= brokerList(getWrappedIndex(firstReplicaIndex, nextReplicaShift, j, brokerList.size))
+      ret.put(currentPartitionId, replicaList.reverse)
+      currentPartitionId = currentPartitionId + 1
     }
     ret.toMap
   }
 
-  def createTopicPartitionAssignmentPathInZK(topic: String, replicaAssignment: Map[Int, Seq[Int]], zkClient: ZkClient) {
+  def createOrUpdateTopicPartitionAssignmentPathInZK(topic: String, replicaAssignment: Map[Int, Seq[Int]], zkClient: ZkClient, update: Boolean = false) {
     try {
       val zkPath = ZkUtils.getTopicPath(topic)
       val jsonPartitionData = ZkUtils.replicaAssignmentZkdata(replicaAssignment.map(e => (e._1.toString -> e._2)))
-      ZkUtils.createPersistentPath(zkClient, zkPath, jsonPartitionData)
+
+      if (!update) {
+        info("Topic creation " + jsonPartitionData.toString)
+        ZkUtils.createPersistentPath(zkClient, zkPath, jsonPartitionData)
+      } else {
+        info("Topic update " + jsonPartitionData.toString)
+        ZkUtils.updatePersistentPath(zkClient, zkPath, jsonPartitionData)
+      }
       debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionData))
     } catch {
       case e: ZkNodeExistsException => throw new TopicExistsException("topic %s already exists".format(topic))

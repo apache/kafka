@@ -93,7 +93,7 @@ object CreateTopicCommand extends Logging {
     else
       getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet)
     debug("Replica assignment list for %s is %s".format(topic, partitionReplicaAssignment))
-    AdminUtils.createTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment, zkClient)
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment, zkClient)
   }
 
   def getManualReplicaAssignment(replicaAssignmentList: String, availableBrokerList: Set[Int]): Map[Int, List[Int]] = {

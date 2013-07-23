@@ -215,6 +215,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
       initializeControllerContext()
       replicaStateMachine.startup()
       partitionStateMachine.startup()
+      // register the partition change listeners for all existing topics on failover
+      controllerContext.allTopics.foreach(topic => partitionStateMachine.registerPartitionChangeListener(topic))
       Utils.registerMBean(this, KafkaController.MBeanName)
       info("Broker %d is ready to serve as the new controller with epoch %d".format(config.brokerId, epoch))
       initializeAndMaybeTriggerPartitionReassignment()
