@@ -31,6 +31,10 @@ import kafka.javaapi
 
 object MirrorMaker extends Logging {
 
+  private var connectors: Seq[ZookeeperConsumerConnector] = null
+  private var consumerThreads: Seq[MirrorMakerThread] = null
+  private var producerThreads: ListBuffer[ProducerThread] = null
+
   def main(args: Array[String]) {
     
     info ("Starting mirror maker")
@@ -112,7 +116,7 @@ object MirrorMaker extends Logging {
       new Producer[Array[Byte], Array[Byte]](config)
     })
 
-    val connectors = options.valuesOf(consumerConfigOpt).toList
+    connectors = options.valuesOf(consumerConfigOpt).toList
             .map(cfg => new ConsumerConfig(Utils.loadProps(cfg.toString)))
             .map(new ZookeeperConsumerConnector(_))
 
@@ -132,18 +136,9 @@ object MirrorMaker extends Logging {
 
     val producerDataChannel = new ProducerDataChannel[KeyedMessage[Array[Byte], Array[Byte]]](bufferSize);
 
-    val consumerThreads =
-      streams.zipWithIndex.map(streamAndIndex => new MirrorMakerThread(streamAndIndex._1, producerDataChannel, producers, streamAndIndex._2))
+    consumerThreads = streams.zipWithIndex.map(streamAndIndex => new MirrorMakerThread(streamAndIndex._1, producerDataChannel, producers, streamAndIndex._2))
 
-    val producerThreads = new ListBuffer[ProducerThread]()
-
-    def cleanShutdown() {
-      connectors.foreach(_.shutdown)
-      consumerThreads.foreach(_.awaitShutdown)
-      producerThreads.foreach(_.shutdown)
-      producerThreads.foreach(_.awaitShutdown)
-      info("Kafka mirror maker shutdown successfully")
-    }
+    producerThreads = new ListBuffer[ProducerThread]()
 
     Runtime.getRuntime.addShutdownHook(new Thread() {
       override def run() {
@@ -166,6 +161,16 @@ object MirrorMaker extends Logging {
     // in case the consumer threads hit a timeout/other exception
     consumerThreads.foreach(_.awaitShutdown)
     cleanShutdown()
+  }
+
+  def cleanShutdown() {
+    if (connectors != null) connectors.foreach(_.shutdown)
+    if (consumerThreads != null) consumerThreads.foreach(_.awaitShutdown)
+    if (producerThreads != null) {
+      producerThreads.foreach(_.shutdown)
+      producerThreads.foreach(_.awaitShutdown)
+    }
+    info("Kafka mirror maker shutdown successfully")
   }
 
   class MirrorMakerThread(stream: KafkaStream[Array[Byte], Array[Byte]],
