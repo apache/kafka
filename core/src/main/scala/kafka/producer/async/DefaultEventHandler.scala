@@ -45,12 +45,14 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   private val topicMetadataRefreshInterval = config.topicMetadataRefreshIntervalMs
   private var lastTopicMetadataRefreshTime = 0L
   private val topicMetadataToRefresh = Set.empty[String]
+  private val sendPartitionPerTopicCache = HashMap.empty[String, Int]
 
   private val producerStats = ProducerStatsRegistry.getProducerStats(config.clientId)
   private val producerTopicStats = ProducerTopicStatsRegistry.getProducerTopicStats(config.clientId)
 
   def handle(events: Seq[KeyedMessage[K,V]]) {
     lock synchronized {
+      sendPartitionPerTopicCache.clear()
       val serializedData = serialize(events)
       serializedData.foreach {
         keyed =>
@@ -206,18 +208,29 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       throw new UnknownTopicOrPartitionException("Topic " + topic + " doesn't exist")
     val partition =
       if(key == null) {
-        // If the key is null, we don't really need a partitioner so we just send to the next
-        // available partition
-        val availablePartitions = topicPartitionList.filter(_.leaderBrokerIdOpt.isDefined)
-        if (availablePartitions.isEmpty)
-          throw new LeaderNotAvailableException("No leader for any partition in topic " + topic)
-        val index = Utils.abs(partitionCounter.getAndIncrement()) % availablePartitions.size
-        availablePartitions(index).partitionId
+        // If the key is null, we don't really need a partitioner
+        // So we look up in the send partition cache for the topic to decide the target partition
+        val id = sendPartitionPerTopicCache.get(topic)
+        id match {
+          case Some(partitionId) =>
+            // directly return the partitionId without checking availability of the leader,
+            // since we want to postpone the failure until the send operation anyways
+            partitionId
+          case None =>
+            val availablePartitions = topicPartitionList.filter(_.leaderBrokerIdOpt.isDefined)
+            if (availablePartitions.isEmpty)
+              throw new LeaderNotAvailableException("No leader for any partition in topic " + topic)
+            val index = Utils.abs(partitionCounter.getAndIncrement()) % availablePartitions.size
+            val partitionId = availablePartitions(index).partitionId
+            sendPartitionPerTopicCache.put(topic, partitionId)
+            partitionId
+        }
       } else
         partitioner.partition(key, numPartitions)
     if(partition < 0 || partition >= numPartitions)
       throw new UnknownTopicOrPartitionException("Invalid partition id: " + partition + " for topic " + topic +
         "; Valid values are in the inclusive range of [0, " + (numPartitions-1) + "]")
+    trace("Assigning message of topic %s and key %s to a selected partition %d".format(topic, if (key == null) "[none]" else key.toString, partition))
     partition
   }
 
