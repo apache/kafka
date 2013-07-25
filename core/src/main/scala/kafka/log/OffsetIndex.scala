@@ -259,9 +259,10 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
       flush()
       val raf = new RandomAccessFile(file, "rws")
       val roundedNewSize = roundToExactMultiple(newSize, 8)
+      val position = this.mmap.position
       try {
+        (this.mmap.asInstanceOf[sun.nio.ch.DirectBuffer]).cleaner().clean()
         raf.setLength(roundedNewSize)
-        val position = this.mmap.position
         this.mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
         this.mmap.position(position)
       } finally {
