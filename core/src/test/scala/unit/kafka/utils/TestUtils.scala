@@ -525,18 +525,18 @@ class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {
   override def toBytes(n: Int) = n.toString.getBytes
 }
 
-class StaticPartitioner(props: VerifiableProperties = null) extends Partitioner[String] {
-  def partition(data: String, numPartitions: Int): Int = {
-    (data.length % numPartitions)
+class StaticPartitioner(props: VerifiableProperties = null) extends Partitioner{
+  def partition(data: Any, numPartitions: Int): Int = {
+    (data.asInstanceOf[String].length % numPartitions)
   }
 }
 
-class HashPartitioner(props: VerifiableProperties = null) extends Partitioner[String] {
-  def partition(data: String, numPartitions: Int): Int = {
+class HashPartitioner(props: VerifiableProperties = null) extends Partitioner {
+  def partition(data: Any, numPartitions: Int): Int = {
     (data.hashCode % numPartitions)
   }
 }
 
-class FixedValuePartitioner(props: VerifiableProperties = null) extends Partitioner[Int] {
-  def partition(data: Int, numPartitions: Int): Int = data
+class FixedValuePartitioner(props: VerifiableProperties = null) extends Partitioner {
+  def partition(data: Any, numPartitions: Int): Int = data.asInstanceOf[Int]
 }

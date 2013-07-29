@@ -60,7 +60,7 @@ object ConsoleProducer {
                                .withRequiredArg
                                .describedAs("queue enqueuetimeout ms")
                                .ofType(classOf[java.lang.Long])
-                               .defaultsTo(0)
+                               .defaultsTo(Int.MaxValue)
     val requestRequiredAcksOpt = parser.accepts("request-required-acks", "The required acks of the producer requests")
                                .withRequiredArg
                                .describedAs("request required acks")

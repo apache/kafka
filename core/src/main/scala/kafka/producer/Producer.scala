@@ -56,7 +56,7 @@ class Producer[K,V](val config: ProducerConfig,
   def this(config: ProducerConfig) =
     this(config,
          new DefaultEventHandler[K,V](config,
-                                      Utils.createObject[Partitioner[K]](config.partitionerClass, config.props),
+                                      Utils.createObject[Partitioner](config.partitionerClass, config.props),
                                       Utils.createObject[Encoder[V]](config.serializerClass, config.props),
                                       Utils.createObject[Encoder[K]](config.keySerializerClass, config.props),
                                       new ProducerPool(config)))

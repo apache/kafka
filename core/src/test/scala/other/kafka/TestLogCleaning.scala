@@ -260,9 +260,9 @@ object TestLogCleaning {
       val delete = i % 100 < percentDeletes
       val msg = 
         if(delete)
-          KeyedMessage[String, String](topic = topic, key = key.toString, message = null)
+          new KeyedMessage[String, String](topic = topic, key = key.toString, message = null)
         else
-          KeyedMessage[String, String](topic = topic, key = key.toString, message = i.toString)
+          new KeyedMessage[String, String](topic = topic, key = key.toString, message = i.toString)
       producer.send(msg)
       producedWriter.write(TestRecord(topic, key, i, delete).toString)
       producedWriter.newLine()

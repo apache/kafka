@@ -28,7 +28,7 @@ import java.util.concurrent.atomic._
 import kafka.api.{TopicMetadata, ProducerRequest}
 
 class DefaultEventHandler[K,V](config: ProducerConfig,
-                               private val partitioner: Partitioner[K],
+                               private val partitioner: Partitioner,
                                private val encoder: Encoder[V],
                                private val keyEncoder: Encoder[K],
                                private val producerPool: ProducerPool,
@@ -126,9 +126,9 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     events.map{e =>
       try {
         if(e.hasKey)
-          serializedMessages += KeyedMessage[K,Message](topic = e.topic, key = e.key, message = new Message(key = keyEncoder.toBytes(e.key), bytes = encoder.toBytes(e.message)))
+          serializedMessages += new KeyedMessage[K,Message](topic = e.topic, key = e.key, partKey = e.partKey, message = new Message(key = keyEncoder.toBytes(e.key), bytes = encoder.toBytes(e.message)))
         else
-          serializedMessages += KeyedMessage[K,Message](topic = e.topic, key = null.asInstanceOf[K], message = new Message(bytes = encoder.toBytes(e.message)))
+          serializedMessages += new KeyedMessage[K,Message](topic = e.topic, key = e.key, partKey = e.partKey, message = new Message(bytes = encoder.toBytes(e.message)))
       } catch {
         case t =>
           producerStats.serializationErrorRate.mark()
@@ -149,7 +149,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
     try {
       for (message <- messages) {
         val topicPartitionsList = getPartitionListForTopic(message)
-        val partitionIndex = getPartition(message.topic, message.key, topicPartitionsList)
+        val partitionIndex = getPartition(message.topic, message.partitionKey, topicPartitionsList)
         val brokerPartition = topicPartitionsList(partitionIndex)
 
         // postpone the failure until the send operation, so that requests for other brokers are handled correctly
@@ -196,11 +196,12 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   /**
    * Retrieves the partition id and throws an UnknownTopicOrPartitionException if
    * the value of partition is not between 0 and numPartitions-1
+   * @param topic The topic
    * @param key the partition key
    * @param topicPartitionList the list of available partitions
    * @return the partition id
    */
-  private def getPartition(topic: String, key: K, topicPartitionList: Seq[PartitionAndLeader]): Int = {
+  private def getPartition(topic: String, key: Any, topicPartitionList: Seq[PartitionAndLeader]): Int = {
     val numPartitions = topicPartitionList.size
     if(numPartitions <= 0)
       throw new UnknownTopicOrPartitionException("Topic " + topic + " doesn't exist")

@@ -158,11 +158,12 @@ class AsyncProducerTest extends JUnit3Suite {
   @Test
   def testPartitionAndCollateEvents() {
     val producerDataList = new ArrayBuffer[KeyedMessage[Int,Message]]
-    producerDataList.append(new KeyedMessage[Int,Message]("topic1", 0, new Message("msg1".getBytes)))
-    producerDataList.append(new KeyedMessage[Int,Message]("topic2", 1, new Message("msg2".getBytes)))
-    producerDataList.append(new KeyedMessage[Int,Message]("topic1", 2, new Message("msg3".getBytes)))
-    producerDataList.append(new KeyedMessage[Int,Message]("topic1", 3, new Message("msg4".getBytes)))
-    producerDataList.append(new KeyedMessage[Int,Message]("topic2", 4, new Message("msg5".getBytes)))
+    // use bogus key and partition key override for some messages
+    producerDataList.append(new KeyedMessage[Int,Message]("topic1", key = 0, message = new Message("msg1".getBytes)))
+    producerDataList.append(new KeyedMessage[Int,Message]("topic2", key = -99, partKey = 1, message = new Message("msg2".getBytes)))
+    producerDataList.append(new KeyedMessage[Int,Message]("topic1", key = 2, message = new Message("msg3".getBytes)))
+    producerDataList.append(new KeyedMessage[Int,Message]("topic1", key = -101, partKey = 3, message = new Message("msg4".getBytes)))
+    producerDataList.append(new KeyedMessage[Int,Message]("topic2", key = 4, message = new Message("msg5".getBytes)))
 
     val props = new Properties()
     props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
@@ -179,8 +180,8 @@ class AsyncProducerTest extends JUnit3Suite {
     topicPartitionInfos.put("topic1", topic1Metadata)
     topicPartitionInfos.put("topic2", topic2Metadata)
 
-    val intPartitioner = new Partitioner[Int] {
-      def partition(key: Int, numPartitions: Int): Int = key % numPartitions
+    val intPartitioner = new Partitioner {
+      def partition(key: Any, numPartitions: Int): Int = key.asInstanceOf[Int] % numPartitions
     }
     val config = new ProducerConfig(props)
 
@@ -195,9 +196,9 @@ class AsyncProducerTest extends JUnit3Suite {
     val topic1Broker1Data =
       ArrayBuffer[KeyedMessage[Int,Message]](new KeyedMessage[Int,Message]("topic1", 0, new Message("msg1".getBytes)),
                                              new KeyedMessage[Int,Message]("topic1", 2, new Message("msg3".getBytes)))
-    val topic1Broker2Data = ArrayBuffer[KeyedMessage[Int,Message]](new KeyedMessage[Int,Message]("topic1", 3, new Message("msg4".getBytes)))
+    val topic1Broker2Data = ArrayBuffer[KeyedMessage[Int,Message]](new KeyedMessage[Int,Message]("topic1", -101, 3, new Message("msg4".getBytes)))
     val topic2Broker1Data = ArrayBuffer[KeyedMessage[Int,Message]](new KeyedMessage[Int,Message]("topic2", 4, new Message("msg5".getBytes)))
-    val topic2Broker2Data = ArrayBuffer[KeyedMessage[Int,Message]](new KeyedMessage[Int,Message]("topic2", 1, new Message("msg2".getBytes)))
+    val topic2Broker2Data = ArrayBuffer[KeyedMessage[Int,Message]](new KeyedMessage[Int,Message]("topic2", -99, 1, new Message("msg2".getBytes)))
     val expectedResult = Some(Map(
         0 -> Map(
               TopicAndPartition("topic1", 0) -> topic1Broker1Data,
@@ -225,7 +226,7 @@ class AsyncProducerTest extends JUnit3Suite {
     val producerPool = new ProducerPool(config)
 
     val handler = new DefaultEventHandler[String,String](config,
-                                                         partitioner = null.asInstanceOf[Partitioner[String]],
+                                                         partitioner = null.asInstanceOf[Partitioner],
                                                          encoder = new StringEncoder,
                                                          keyEncoder = new StringEncoder,
                                                          producerPool = producerPool,
@@ -285,7 +286,7 @@ class AsyncProducerTest extends JUnit3Suite {
     val producerDataList = new ArrayBuffer[KeyedMessage[String,String]]
     producerDataList.append(new KeyedMessage[String,String]("topic1", "msg1"))
     val handler = new DefaultEventHandler[String,String](config,
-                                                         partitioner = null.asInstanceOf[Partitioner[String]],
+                                                         partitioner = null.asInstanceOf[Partitioner],
                                                          encoder = new StringEncoder,
                                                          keyEncoder = new StringEncoder,
                                                          producerPool = producerPool,
@@ -332,7 +333,7 @@ class AsyncProducerTest extends JUnit3Suite {
 
     val producerPool = new ProducerPool(config)
     val handler = new DefaultEventHandler[String,String](config,
-                                                         partitioner = null.asInstanceOf[Partitioner[String]],
+                                                         partitioner = null.asInstanceOf[Partitioner],
                                                          encoder = null.asInstanceOf[Encoder[String]],
                                                          keyEncoder = null.asInstanceOf[Encoder[String]],
                                                          producerPool = producerPool,
@@ -373,7 +374,7 @@ class AsyncProducerTest extends JUnit3Suite {
     val msgs = TestUtils.getMsgStrings(10)
 
     val handler = new DefaultEventHandler[String,String](config,
-                                                         partitioner = null.asInstanceOf[Partitioner[String]],
+                                                         partitioner = null.asInstanceOf[Partitioner],
                                                          encoder = new StringEncoder,
                                                          keyEncoder = new StringEncoder,
                                                          producerPool = producerPool,
@@ -506,6 +507,6 @@ class AsyncProducerTest extends JUnit3Suite {
   }
 }
 
-class NegativePartitioner(props: VerifiableProperties = null) extends Partitioner[String] {
-  def partition(data: String, numPartitions: Int): Int = -1
+class NegativePartitioner(props: VerifiableProperties = null) extends Partitioner {
+  def partition(data: Any, numPartitions: Int): Int = -1
 }

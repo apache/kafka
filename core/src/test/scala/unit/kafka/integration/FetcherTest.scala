@@ -88,7 +88,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
                                                                              new StringEncoder())
       val ms = 0.until(messagesPerNode).map(x => (conf.brokerId * 5 + x).toString.getBytes).toArray
       messages += conf.brokerId -> ms
-      producer.send(ms.map(m => KeyedMessage[String, Array[Byte]](topic, topic, m)):_*)
+      producer.send(ms.map(m => new KeyedMessage[String, Array[Byte]](topic, topic, m)):_*)
       producer.close()
       count += ms.size
     }
