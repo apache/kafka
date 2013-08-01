@@ -40,8 +40,11 @@ public class KafkaOutputFormat<K, V> extends OutputFormat<K, V>
   private Logger log = Logger.getLogger(KafkaOutputFormat.class);
 
   public static final String KAFKA_URL = "kafka.output.url";
-  /** Bytes to buffer before the OutputFormat does a send (i.e., the amortization window) */
-  public static final int KAFKA_QUEUE_SIZE = 10*1024*1024;
+  /** Bytes to buffer before the OutputFormat does a send (i.e., the amortization window):
+   *  We set the default to a million bytes so that the server will not reject the batch of messages
+   *  with a MessageSizeTooLargeException. The actual size will be smaller after compression.
+   */
+  public static final int KAFKA_QUEUE_SIZE = 1000000;
 
   public static final String KAFKA_CONFIG_PREFIX = "kafka.output";
   private static final Map<String, String> kafkaConfigMap;
