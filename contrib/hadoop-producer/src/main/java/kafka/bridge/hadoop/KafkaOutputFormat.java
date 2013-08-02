@@ -44,7 +44,7 @@ public class KafkaOutputFormat<K, V> extends OutputFormat<K, V>
    *  We set the default to a million bytes so that the server will not reject the batch of messages
    *  with a MessageSizeTooLargeException. The actual size will be smaller after compression.
    */
-  public static final int KAFKA_QUEUE_SIZE = 1000000;
+  public static final int KAFKA_QUEUE_BYTES = 1000000;
 
   public static final String KAFKA_CONFIG_PREFIX = "kafka.output";
   private static final Map<String, String> kafkaConfigMap;
@@ -119,8 +119,7 @@ public class KafkaOutputFormat<K, V> extends OutputFormat<K, V>
     }
 
     // KafkaOutputFormat specific parameters
-    final int queueSize = job.getInt(KAFKA_CONFIG_PREFIX + ".queue.size", KAFKA_QUEUE_SIZE);
-    job.setInt(KAFKA_CONFIG_PREFIX + ".queue.size", queueSize);
+    final int queueBytes = job.getInt(KAFKA_CONFIG_PREFIX + ".queue.bytes", KAFKA_QUEUE_BYTES);
 
     if (uri.getScheme().equals("kafka")) {
       // using the direct broker list
@@ -140,6 +139,6 @@ public class KafkaOutputFormat<K, V> extends OutputFormat<K, V>
       throw new KafkaException("missing scheme from kafka uri (must be kafka://)");
 
     Producer<Object, byte[]> producer = new Producer<Object, byte[]>(new ProducerConfig(props));
-    return new KafkaRecordWriter<K, V>(producer, topic, queueSize);
+    return new KafkaRecordWriter<K, V>(producer, topic, queueBytes);
   }
 }

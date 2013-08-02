@@ -77,8 +77,8 @@ turned off by the OutputFormat.
 What can I tune?
 ----------------
 
-* kafka.output.queue.size: Bytes to queue in memory before pushing to the Kafka
-  producer (i.e., the batch size). Default is 10*1024*1024 (10MB).
+* kafka.output.queue.bytes: Bytes to queue in memory before pushing to the Kafka
+  producer (i.e., the batch size). Default is 1,000,000 (1 million) bytes.
 
 Any of Kafka's producer parameters can be changed by prefixing them with
 "kafka.output" in one's job configuration. For example, to change the
