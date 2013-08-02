@@ -32,14 +32,14 @@ public class KafkaRecordWriter<K,V> extends RecordWriter<K,V>
   protected String topic;
 
   protected List<KeyedMessage<Object, byte[]>> msgList = new LinkedList<KeyedMessage<Object, byte[]>>();
-  protected int totalSize = 0;
-  protected int queueSize;
+  protected int totalBytes = 0;
+  protected int queueBytes;
 
-  public KafkaRecordWriter(Producer<Object, byte[]> producer, String topic, int queueSize)
+  public KafkaRecordWriter(Producer<Object, byte[]> producer, String topic, int queueBytes)
   {
     this.producer = producer;
     this.topic = topic;
-    this.queueSize = queueSize;
+    this.queueBytes = queueBytes;
   }
 
   protected void sendMsgList() throws IOException
@@ -52,7 +52,7 @@ public class KafkaRecordWriter<K,V> extends RecordWriter<K,V>
         throw new IOException(e);           // all Kafka exceptions become IOExceptions
       }
       msgList.clear();
-      totalSize = 0;
+      totalBytes = 0;
     }
   }
 
@@ -69,12 +69,14 @@ public class KafkaRecordWriter<K,V> extends RecordWriter<K,V>
     else
       throw new IllegalArgumentException("KafkaRecordWriter expects byte array value to publish");
 
-    msgList.add(new KeyedMessage<Object, byte[]>(this.topic, key, valBytes));
-    totalSize += valBytes.length;
-
     // MultiProducerRequest only supports sending up to Short.MAX_VALUE messages in one batch
-    if (totalSize > queueSize || msgList.size() >= Short.MAX_VALUE)
+    // If the new message is going to make the message list tip over 1 million bytes, send the
+    // message list now.
+    if ((totalBytes + valBytes.length) > queueBytes || msgList.size() >= Short.MAX_VALUE)
       sendMsgList();
+
+    msgList.add(new KeyedMessage<Object, byte[]>(this.topic, key, valBytes));
+    totalBytes += valBytes.length;
   }
 
   @Override

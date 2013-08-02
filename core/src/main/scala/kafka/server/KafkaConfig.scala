@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.util.Properties
-import kafka.message.Message
+import kafka.message.{MessageSet, Message}
 import kafka.consumer.ConsumerConfig
 import kafka.utils.{VerifiableProperties, ZKConfig, Utils}
 
@@ -38,7 +38,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val brokerId: Int = props.getIntInRange("broker.id", (0, Int.MaxValue))
 
   /* the maximum size of message that the server can receive */
-  val messageMaxBytes = props.getIntInRange("message.max.bytes", 1000000, (0, Int.MaxValue))
+  val messageMaxBytes = props.getIntInRange("message.max.bytes", 1000000 + MessageSet.LogOverhead, (0, Int.MaxValue))
   
   /* the number of network threads that the server uses for handling network requests */
   val numNetworkThreads = props.getIntInRange("num.network.threads", 3, (1, Int.MaxValue))
