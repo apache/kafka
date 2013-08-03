@@ -249,11 +249,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   
   private def createLogManager(zkClient: ZkClient): LogManager = {
     val defaultLogConfig = LogConfig(segmentSize = config.logSegmentBytes, 
-                                     segmentMs = 60 * 60 * 1000 * config.logRollHours,
+                                     segmentMs = 60L * 60L * 1000L * config.logRollHours,
                                      flushInterval = config.logFlushIntervalMessages,
                                      flushMs = config.logFlushIntervalMs.toLong,
                                      retentionSize = config.logRetentionBytes,
-                                     retentionMs = 60 * 60 * 1000 * config.logRetentionHours,
+                                     retentionMs = 60L * 60L * 1000L * config.logRetentionHours,
                                      maxMessageSize = config.messageMaxBytes,
                                      maxIndexSize = config.logIndexSizeMaxBytes,
                                      indexInterval = config.logIndexIntervalBytes,
