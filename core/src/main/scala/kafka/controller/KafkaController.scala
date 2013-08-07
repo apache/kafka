@@ -168,7 +168,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
               // before which the stop replica request should be completed (in most cases)
               brokerRequestBatch.newBatch()
               brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topicAndPartition.topic, topicAndPartition.partition, deletePartition = false)
-              brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement, controllerContext.liveBrokers)
+              brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement)
 
               // If the broker is a follower, updates the isr in ZK and notifies the current leader
               replicaStateMachine.handleStateChanges(Set(PartitionAndReplica(topicAndPartition.topic,
@@ -656,7 +656,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   private def sendUpdateMetadataRequest(brokers: Seq[Int], partitions: Set[TopicAndPartition] = Set.empty[TopicAndPartition]) {
     brokerRequestBatch.newBatch()
     brokerRequestBatch.addUpdateMetadataRequestForBrokers(brokers, partitions)
-    brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement, controllerContext.liveBrokers)
+    brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement)
   }
 
   /**

@@ -167,7 +167,7 @@ class Partition(val topic: String,
    *  4. start a fetcher to the new leader
    */
   def makeFollower(controllerId: Int, topic: String, partitionId: Int, leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
-                   aliveLeaders: Set[Broker], correlationId: Int): Boolean = {
+                   leaders: Set[Broker], correlationId: Int): Boolean = {
     leaderIsrUpdateLock synchronized {
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
       if (leaderEpoch >= leaderAndIsr.leaderEpoch) {
@@ -186,7 +186,8 @@ class Partition(val topic: String,
       // on the leader
       val localReplica = getOrCreateReplica()
       val newLeaderBrokerId: Int = leaderAndIsr.leader
-      aliveLeaders.find(_.id == newLeaderBrokerId) match {
+      // TODO: Delete leaders from LeaderAndIsrRequest in 0.8.1
+      leaders.find(_.id == newLeaderBrokerId) match {
         case Some(leaderBroker) =>
           // stop fetcher thread to previous leader
           replicaFetcherManager.removeFetcher(topic, partitionId)
@@ -200,15 +201,15 @@ class Partition(val topic: String,
             replicaFetcherManager.addFetcher(topic, partitionId, localReplica.logEndOffset, leaderBroker)
           }
           else {
-            stateChangeLogger.trace("Broker %d ignored the become-follower state change with correlation id %d from " +
-              " controller %d epoch %d since it is shutting down"
-                .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch))
+            stateChangeLogger.trace(("Broker %d ignored the become-follower state change with correlation id %d from " +
+                                     "controller %d epoch %d since it is shutting down")
+                                      .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch))
           }
-        case None => // leader went down
-          stateChangeLogger.trace("Broker %d aborted the become-follower state change with correlation id %d from " +
-            " controller %d epoch %d since leader %d for partition [%s,%d] is unavailable during the state change operation"
-                                     .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch,
-                                              newLeaderBrokerId, topic, partitionId))
+        case None => // we should not come here
+          stateChangeLogger.error(("Broker %d aborted the become-follower state change with correlation id %d from " +
+                                   "controller %d epoch %d for partition [%s,%d] new leader %d")
+                                    .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch,
+                                            topic, partitionId, newLeaderBrokerId))
       }
       true
     }

@@ -135,13 +135,13 @@ case class LeaderAndIsrRequest (versionId: Short,
                                 controllerId: Int,
                                 controllerEpoch: Int,
                                 partitionStateInfos: Map[(String, Int), PartitionStateInfo],
-                                aliveLeaders: Set[Broker])
+                                leaders: Set[Broker])
     extends RequestOrResponse(Some(RequestKeys.LeaderAndIsrKey), correlationId) {
 
-  def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo], aliveLeaders: Set[Broker], controllerId: Int,
+  def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo], leaders: Set[Broker], controllerId: Int,
            controllerEpoch: Int, correlationId: Int, clientId: String) = {
     this(LeaderAndIsrRequest.CurrentVersion, correlationId, clientId,
-         controllerId, controllerEpoch, partitionStateInfos, aliveLeaders)
+         controllerId, controllerEpoch, partitionStateInfos, leaders)
   }
 
   def writeTo(buffer: ByteBuffer) {
@@ -156,8 +156,8 @@ case class LeaderAndIsrRequest (versionId: Short,
       buffer.putInt(key._2)
       value.writeTo(buffer)
     }
-    buffer.putInt(aliveLeaders.size)
-    aliveLeaders.foreach(_.writeTo(buffer))
+    buffer.putInt(leaders.size)
+    leaders.foreach(_.writeTo(buffer))
   }
 
   def sizeInBytes(): Int = {
@@ -171,7 +171,7 @@ case class LeaderAndIsrRequest (versionId: Short,
     for((key, value) <- partitionStateInfos)
       size += (2 + key._1.length) /* topic */ + 4 /* partition */ + value.sizeInBytes /* partition state info */
     size += 4 /* number of leader brokers */
-    for(broker <- aliveLeaders)
+    for(broker <- leaders)
       size += broker.sizeInBytes /* broker info */
     size
   }
@@ -185,7 +185,7 @@ case class LeaderAndIsrRequest (versionId: Short,
     leaderAndIsrRequest.append(";CorrelationId:" + correlationId)
     leaderAndIsrRequest.append(";ClientId:" + clientId)
     leaderAndIsrRequest.append(";PartitionState:" + partitionStateInfos.mkString(","))
-    leaderAndIsrRequest.append(";Leaders:" + aliveLeaders.mkString(","))
+    leaderAndIsrRequest.append(";Leaders:" + leaders.mkString(","))
     leaderAndIsrRequest.toString()
   }
 
