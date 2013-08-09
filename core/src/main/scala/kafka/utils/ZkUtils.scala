@@ -54,7 +54,25 @@ object ZkUtils extends Logging {
 
   def getController(zkClient: ZkClient): Int= {
     readDataMaybeNull(zkClient, ControllerPath)._1 match {
-      case Some(controller) => controller.toInt
+      case Some(controller) =>
+        try {
+          Json.parseFull(controller) match {
+            case Some(m) =>
+              val controllerInfo = m.asInstanceOf[Map[String, Any]]
+              controllerInfo.get("brokerid").get.asInstanceOf[Int]
+            case None => throw new KafkaException("Failed to parse the controller info json [%s] from zookeeper.".format(controller))
+          }
+        } catch {
+          case t =>
+            // It may be due to an incompatible controller register version
+            info("Failed to parse the controller info as json. " +
+              "Probably this controller is still using the old format [%s] of storing the broker id in the zookeeper path".format(controller))
+            try {
+              controller.toInt
+            } catch {
+              case t => throw new KafkaException("Failed to parse the controller info [%s] from zookeeper. This is neither the new or the old format.", t)
+            }
+        }
       case None => throw new KafkaException("Controller doesn't exist")
     }
   }
@@ -204,7 +222,7 @@ object ZkUtils extends Logging {
             case Some(brokerZKString) => {
               val broker = Broker.createBroker(id, brokerZKString)
               if (broker.host == host && broker.port == port) {
-                info("I wrote this conflicted ephemeral node [%s] a while back in a different session, ".format(brokerZKString)
+                info("I wrote this conflicted ephemeral node a while back in a different session, "
                   + "hence I will backoff for this node to be deleted by Zookeeper after session timeout and retry")
                 Thread.sleep(timeout)
               } else {
