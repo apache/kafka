@@ -54,7 +54,25 @@ object ZkUtils extends Logging {
 
   def getController(zkClient: ZkClient): Int= {
     readDataMaybeNull(zkClient, ControllerPath)._1 match {
-      case Some(controller) => controller.toInt
+      case Some(controller) =>
+        try {
+          Json.parseFull(controller) match {
+            case Some(m) =>
+              val controllerInfo = m.asInstanceOf[Map[String, Any]]
+              controllerInfo.get("brokerid").get.asInstanceOf[Int]
+            case None => throw new KafkaException("Failed to parse the controller info json [%s] from zookeeper.".format(controller))
+          }
+        } catch {
+          case t =>
+            // It may be due to an incompatible controller register version
+            info("Failed to parse the controller info as json. " +
+              "Probably this controller is still using the old format [%s] of storing the broker id in the zookeeper path".format(controller))
+            try {
+              controller.toInt
+            } catch {
+              case t => throw new KafkaException("Failed to parse the leader info [%s] from zookeeper. This is neither the new or the old format.", t)
+            }
+        }
       case None => throw new KafkaException("Controller doesn't exist")
     }
   }
