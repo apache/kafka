@@ -248,6 +248,11 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
     }
   }
 
+  def tryUnmap(m: MappedByteBuffer) {
+     if(m.isInstanceOf[sun.nio.ch.DirectBuffer])
+        (m.asInstanceOf[sun.nio.ch.DirectBuffer]).cleaner().clean()
+  }
+
   /**
    * Reset the size of the memory map and the underneath file. This is used in two kinds of cases: (1) in
    * trimToValidSize() which is called at closing the segment or new segment being rolled; (2) at
@@ -261,7 +266,7 @@ class OffsetIndex(val file: File, val baseOffset: Long, val maxIndexSize: Int = 
       val roundedNewSize = roundToExactMultiple(newSize, 8)
       val position = this.mmap.position
       try {
-        (this.mmap.asInstanceOf[sun.nio.ch.DirectBuffer]).cleaner().clean()
+        tryUnmap(this.mmap) 
         raf.setLength(roundedNewSize)
         this.mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
         this.mmap.position(position)
