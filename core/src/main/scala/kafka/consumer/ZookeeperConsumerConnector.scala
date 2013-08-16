@@ -399,8 +399,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           for (i <- 0 until config.rebalanceMaxRetries) {
             info("begin rebalancing consumer " + consumerIdString + " try #" + i)
             var done = false
-            val cluster = getCluster(zkClient)
+            var cluster: Cluster = null
             try {
+              cluster = getCluster(zkClient)
               done = rebalance(cluster)
             } catch {
               case e =>
