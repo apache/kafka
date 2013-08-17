@@ -31,6 +31,7 @@ import kafka.admin._
 import kafka.common.{KafkaException, NoEpochForPartitionException}
 import kafka.controller.ReassignedPartitionsContext
 import kafka.controller.PartitionAndReplica
+import kafka.controller.KafkaController
 import scala.Some
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
@@ -54,25 +55,7 @@ object ZkUtils extends Logging {
 
   def getController(zkClient: ZkClient): Int= {
     readDataMaybeNull(zkClient, ControllerPath)._1 match {
-      case Some(controller) =>
-        try {
-          Json.parseFull(controller) match {
-            case Some(m) =>
-              val controllerInfo = m.asInstanceOf[Map[String, Any]]
-              controllerInfo.get("brokerid").get.asInstanceOf[Int]
-            case None => throw new KafkaException("Failed to parse the controller info json [%s] from zookeeper.".format(controller))
-          }
-        } catch {
-          case t =>
-            // It may be due to an incompatible controller register version
-            info("Failed to parse the controller info as json. " +
-              "Probably this controller is still using the old format [%s] of storing the broker id in the zookeeper path".format(controller))
-            try {
-              controller.toInt
-            } catch {
-              case t => throw new KafkaException("Failed to parse the leader info [%s] from zookeeper. This is neither the new or the old format.", t)
-            }
-        }
+      case Some(controller) => KafkaController.parseControllerId(controller)
       case None => throw new KafkaException("Controller doesn't exist")
     }
   }
@@ -206,36 +189,21 @@ object ZkUtils extends Logging {
       Utils.mergeJsonFields(Utils.mapToJsonFields(Map("host" -> host), valueInQuotes = true) ++
                              Utils.mapToJsonFields(Map("version" -> 1.toString, "jmx_port" -> jmxPort.toString, "port" -> port.toString, "timestamp" -> timestamp),
                                                    valueInQuotes = false))
+    val expectedBroker = new Broker(id, host, port)
 
-    while (true) {
-      try {
-        createEphemeralPathExpectConflict(zkClient, brokerIdPath, brokerInfo)
+    try {
+      createEphemeralPathExpectConflictHandleZKBug(zkClient, brokerIdPath, brokerInfo, expectedBroker,
+        (brokerString: String, broker: Any) => Broker.createBroker(broker.asInstanceOf[Broker].id, brokerString).equals(broker.asInstanceOf[Broker]),
+        timeout)
 
-        info("Registered broker %d at path %s with address %s:%d.".format(id, brokerIdPath, host, port))
-        return
-      } catch {
-        case e: ZkNodeExistsException => {
-          // An ephemeral node may still exist even after its corresponding session has expired
-          // due to a Zookeeper bug, in this case we need to retry writing until the previous node is deleted
-          // and hence the write succeeds without ZkNodeExistsException
-          ZkUtils.readDataMaybeNull(zkClient, ZkUtils.BrokerIdsPath + "/" + id)._1 match {
-            case Some(brokerZKString) => {
-              val broker = Broker.createBroker(id, brokerZKString)
-              if (broker.host == host && broker.port == port) {
-                info("I wrote this conflicted ephemeral node [%s] a while back in a different session, ".format(brokerZKString)
-                  + "hence I will backoff for this node to be deleted by Zookeeper after session timeout and retry")
-                Thread.sleep(timeout)
-              } else {
-                // otherwise, throw the runtime exception
-                throw new RuntimeException("Another broker [%s:%s] other than the current broker [%s:%s] is already registered on the path %s."
-                  .format(broker.host, broker.port, host, port, brokerIdPath))
-              }
-            }
-            case None => // the node disappeared; retry creating the ephemeral node immediately
-          }
-        }
-      }
+    } catch {
+      case e: ZkNodeExistsException =>
+        throw new RuntimeException("A broker is already registered on the path " + brokerIdPath
+          + ". This probably " + "indicates that you either have configured a brokerid that is already in use, or "
+          + "else you have shutdown this broker and restarted it faster than the zookeeper "
+          + "timeout so it appears to be re-registering.")
     }
+    info("Registered broker %d at path %s with address %s:%d.".format(id, brokerIdPath, host, port))
   }
 
   def getConsumerPartitionOwnerPath(group: String, topic: String, partition: Int): String = {
@@ -314,6 +282,47 @@ object ZkUtils extends Logging {
         }
       }
       case e2 => throw e2
+    }
+  }
+
+  /**
+   * Create an ephemeral node with the given path and data.
+   * Throw NodeExistsException if node already exists.
+   * Handles the following ZK session timeout bug:
+   *
+   * https://issues.apache.org/jira/browse/ZOOKEEPER-1740
+   *
+   * Upon receiving a NodeExistsException, read the data from the conflicted path and
+   * trigger the checker function comparing the read data and the expected data,
+   * If the checker function returns true then the above bug might be encountered, back off and retry;
+   * otherwise re-throw the exception
+   */
+  def createEphemeralPathExpectConflictHandleZKBug(zkClient: ZkClient, path: String, data: String, expectedCallerData: Any, checker: (String, Any) => Boolean, backoffTime: Int): Unit = {
+    while (true) {
+      try {
+        createEphemeralPathExpectConflict(zkClient, path, data)
+        return
+      } catch {
+        case e: ZkNodeExistsException => {
+          // An ephemeral node may still exist even after its corresponding session has expired
+          // due to a Zookeeper bug, in this case we need to retry writing until the previous node is deleted
+          // and hence the write succeeds without ZkNodeExistsException
+          ZkUtils.readDataMaybeNull(zkClient, path)._1 match {
+            case Some(writtenData) => {
+              if (checker(writtenData, expectedCallerData)) {
+                info("I wrote this conflicted ephemeral node [%s] at %s a while back in a different session, ".format(data, path)
+                  + "hence I will backoff for this node to be deleted by Zookeeper and retry")
+
+                Thread.sleep(backoffTime)
+              } else {
+                throw e
+              }
+            }
+            case None => // the node disappeared; retry creating the ephemeral node immediately
+          }
+        }
+        case e2 => throw e2
+      }
     }
   }
 

@@ -58,8 +58,6 @@ private[kafka] case class Broker(val id: Int, val host: String, val port: Int) {
   
   override def toString(): String = new String("id:" + id + ",host:" + host + ",port:" + port)
 
-  def getZkString(): String = host + ":" + port
-
   def getConnectionString(): String = host + ":" + port
 
   def writeTo(buffer: ByteBuffer) {

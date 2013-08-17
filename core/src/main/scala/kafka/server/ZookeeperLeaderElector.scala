@@ -17,10 +17,11 @@
 package kafka.server
 
 import kafka.utils.ZkUtils._
-import kafka.utils.{Json, Utils, SystemTime, Logging}
+import kafka.utils.{Utils, SystemTime, Logging}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.IZkDataListener
 import kafka.controller.ControllerContext
+import kafka.controller.KafkaController
 import kafka.common.KafkaException
 
 /**
@@ -52,57 +53,29 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext, electionPath:
       Utils.mergeJsonFields(Utils.mapToJsonFields(Map("version" -> 1.toString, "brokerid" -> brokerId.toString), valueInQuotes = false)
         ++ Utils.mapToJsonFields(Map("timestamp" -> timestamp), valueInQuotes = true))
 
-    var electNotDone = true
-    do {
-      electNotDone = false
-      try {
-        createEphemeralPathExpectConflict(controllerContext.zkClient, electionPath, electString)
-
-        info(brokerId + " successfully elected as leader")
-        leaderId = brokerId
-        onBecomingLeader()
+    try {
+      createEphemeralPathExpectConflictHandleZKBug(controllerContext.zkClient, electionPath, electString, leaderId,
+        (controllerString : String, leaderId : Any) => KafkaController.parseControllerId(controllerString) == leaderId.asInstanceOf[Int],
+        controllerContext.zkSessionTimeout)
+      info(brokerId + " successfully elected as leader")
+      leaderId = brokerId
+      onBecomingLeader()
       } catch {
         case e: ZkNodeExistsException =>
-          readDataMaybeNull(controllerContext.zkClient, electionPath)._1 match {
-          // If someone else has written the path, then read the broker id
-            case Some(controllerString) =>
-              try {
-                Json.parseFull(controllerString) match {
-                  case Some(m) =>
-                    val controllerInfo = m.asInstanceOf[Map[String, Any]]
-                    leaderId = controllerInfo.get("brokerid").get.asInstanceOf[Int]
-                    if (leaderId != brokerId) {
-                      info("Broker %d was elected as leader instead of broker %d".format(leaderId, brokerId))
-                    } else {
-                      info("I wrote this conflicted ephemeral node a while back in a different session, "
-                        + "hence I will retry")
-                      electNotDone = true
-                      Thread.sleep(controllerContext.zkSessionTimeout)
-                    }
-                  case None =>
-                    warn("Error while reading leader info %s on broker %d, may be it is an old version".format(controllerString, brokerId))
-                    throw new KafkaException("Failed to parse the leader info [%s] from zookeeper. May be it is an old version")
-                }
-              } catch {
-                case t =>
-                  // It may be due to an incompatible controller register version
-                  info("Failed to parse the controller info as json. " +
-                    "Probably this controller is still using the old format [%s] of storing the broker id in the zookeeper path".format(controllerString))
-                  try {
-                    leaderId = controllerString.toInt
-                    info("Broker %d was elected as leader instead of broker %d".format(leaderId, brokerId))
-                  } catch {
-                    case t => throw new KafkaException("Failed to parse the leader info [%s] from zookeeper. This is neither the new or the old format.", t)
-                  }
-              }
-            case None =>
-              // The node disappears, retry immediately
+          // If someone else has written the path, then
+          leaderId = readDataMaybeNull(controllerContext.zkClient, electionPath)._1 match {
+            case Some(controller) => KafkaController.parseControllerId(controller)
+            case None => {
+              warn("A leader has been elected but just resigned, this will result in another round of election")
+              -1
+            }
           }
+          if (leaderId != -1)
+            debug("Broker %d was elected as leader instead of broker %d".format(leaderId, brokerId))
         case e2 =>
           error("Error while electing or becoming leader on broker %d".format(brokerId), e2)
-          resign()
-      }
-    } while (electNotDone)
+          leaderId = -1
+    }
 
     amILeader
   }
@@ -114,6 +87,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext, electionPath:
   def amILeader : Boolean = leaderId == brokerId
 
   def resign() = {
+    leaderId = -1
     deletePath(controllerContext.zkClient, electionPath)
   }
 
@@ -129,25 +103,8 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext, electionPath:
     @throws(classOf[Exception])
     def handleDataChange(dataPath: String, data: Object) {
       controllerContext.controllerLock synchronized {
-        try {
-          Json.parseFull(data.toString) match {
-            case Some(m) =>
-              val controllerInfo = m.asInstanceOf[Map[String, Any]]
-              leaderId = controllerInfo.get("brokerid").get.asInstanceOf[Int]
-              info("New leader is %d".format(leaderId))
-            case None =>
-              error("Error while reading the leader info %s".format(data.toString))
-          }
-        } catch {
-          case t =>
-            // It may be due to an incompatible controller register version
-            try {
-              leaderId = data.toString.toInt
-              info("New leader is %d".format(leaderId))
-            } catch {
-              case t => throw new KafkaException("Failed to parse the leader info from zookeeper: " + data, t)
-            }
-        }
+        leaderId = KafkaController.parseControllerId(data.toString)
+        info("New leader is %d".format(leaderId))
       }
     }
 
