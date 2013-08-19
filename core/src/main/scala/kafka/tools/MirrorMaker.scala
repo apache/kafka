@@ -181,6 +181,7 @@ object MirrorMaker extends Logging {
 
     private val shutdownLatch = new CountDownLatch(1)
     private val threadName = "mirrormaker-" + threadId
+    this.logIdent = "[%s] ".format(threadName)
 
     this.setName(threadName)
 
@@ -204,10 +205,10 @@ object MirrorMaker extends Logging {
         }
       } catch {
         case e =>
-          fatal("%s stream unexpectedly exited.", e)
+          fatal("Stream unexpectedly exited.", e)
       } finally {
         shutdownLatch.countDown()
-        info("Stopped thread %s.".format(threadName))
+        info("Stopped thread.")
       }
     }
 
