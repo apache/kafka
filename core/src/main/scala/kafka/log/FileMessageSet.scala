@@ -67,6 +67,11 @@ class FileMessageSet private[kafka](@volatile var file: File,
    */
   def this(file: File) = 
     this(file, Utils.openChannel(file, mutable = true))
+
+  /**
+   * Create a file message set with mutable option
+   */
+  def this(file: File, mutable: Boolean) = this(file, Utils.openChannel(file, mutable))
   
   /**
    * Create a slice view of the file message set that begins and ends at the given byte offsets

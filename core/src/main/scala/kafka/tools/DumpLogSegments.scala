@@ -94,7 +94,7 @@ object DumpLogSegments {
     val startOffset = file.getName().split("\\.")(0).toLong
     val logFileName = file.getAbsolutePath.split("\\.")(0) + Log.LogFileSuffix
     val logFile = new File(logFileName)
-    val messageSet = new FileMessageSet(logFile)
+    val messageSet = new FileMessageSet(logFile, false)
     val index = new OffsetIndex(file = file, baseOffset = startOffset)
     for(i <- 0 until index.entries) {
       val entry = index.entry(i)
@@ -120,7 +120,7 @@ object DumpLogSegments {
                       isDeepIteration: Boolean) {
     val startOffset = file.getName().split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
-    val messageSet = new FileMessageSet(file)
+    val messageSet = new FileMessageSet(file, false)
     var validBytes = 0L
     var lastOffset = -1l
     for(shallowMessageAndOffset <- messageSet) { // this only does shallow iteration
