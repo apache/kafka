@@ -40,8 +40,6 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   val correlationId = new AtomicInteger(0)
   val brokerPartitionInfo = new BrokerPartitionInfo(config, producerPool, topicPartitionInfos)
 
-  private val lock = new Object()
-
   private val topicMetadataRefreshInterval = config.topicMetadataRefreshIntervalMs
   private var lastTopicMetadataRefreshTime = 0L
   private val topicMetadataToRefresh = Set.empty[String]
@@ -51,46 +49,45 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
   private val producerTopicStats = ProducerTopicStatsRegistry.getProducerTopicStats(config.clientId)
 
   def handle(events: Seq[KeyedMessage[K,V]]) {
-    lock synchronized {
-      sendPartitionPerTopicCache.clear()
-      val serializedData = serialize(events)
-      serializedData.foreach {
-        keyed =>
-          val dataSize = keyed.message.payloadSize
-          producerTopicStats.getProducerTopicStats(keyed.topic).byteRate.mark(dataSize)
-          producerTopicStats.getProducerAllTopicsStats.byteRate.mark(dataSize)
+    val serializedData = serialize(events)
+    serializedData.foreach {
+      keyed =>
+        val dataSize = keyed.message.payloadSize
+        producerTopicStats.getProducerTopicStats(keyed.topic).byteRate.mark(dataSize)
+        producerTopicStats.getProducerAllTopicsStats.byteRate.mark(dataSize)
+    }
+    var outstandingProduceRequests = serializedData
+    var remainingRetries = config.messageSendMaxRetries + 1
+    val correlationIdStart = correlationId.get()
+    debug("Handling %d events".format(events.size))
+    while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {
+      topicMetadataToRefresh ++= outstandingProduceRequests.map(_.topic)
+      if (topicMetadataRefreshInterval >= 0 &&
+          SystemTime.milliseconds - lastTopicMetadataRefreshTime > topicMetadataRefreshInterval) {
+        Utils.swallowError(brokerPartitionInfo.updateInfo(topicMetadataToRefresh.toSet, correlationId.getAndIncrement))
+        sendPartitionPerTopicCache.clear()
+        topicMetadataToRefresh.clear
+        lastTopicMetadataRefreshTime = SystemTime.milliseconds
       }
-      var outstandingProduceRequests = serializedData
-      var remainingRetries = config.messageSendMaxRetries + 1
-      val correlationIdStart = correlationId.get()
-      debug("Handling %d events".format(events.size))
-      while (remainingRetries > 0 && outstandingProduceRequests.size > 0) {
-        topicMetadataToRefresh ++= outstandingProduceRequests.map(_.topic)
-        if (topicMetadataRefreshInterval >= 0 &&
-            SystemTime.milliseconds - lastTopicMetadataRefreshTime > topicMetadataRefreshInterval) {
-          Utils.swallowError(brokerPartitionInfo.updateInfo(topicMetadataToRefresh.toSet, correlationId.getAndIncrement))
-          topicMetadataToRefresh.clear
-          lastTopicMetadataRefreshTime = SystemTime.milliseconds
-        }
-        outstandingProduceRequests = dispatchSerializedData(outstandingProduceRequests)
-        if (outstandingProduceRequests.size > 0) {
-          info("Back off for %d ms before retrying send. Remaining retries = %d".format(config.retryBackoffMs, remainingRetries-1))
-          // back off and update the topic metadata cache before attempting another send operation
-          Thread.sleep(config.retryBackoffMs)
-          // get topics of the outstanding produce requests and refresh metadata for those
-          Utils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.topic).toSet, correlationId.getAndIncrement))
-          remainingRetries -= 1
-          producerStats.resendRate.mark()
-        }
+      outstandingProduceRequests = dispatchSerializedData(outstandingProduceRequests)
+      if (outstandingProduceRequests.size > 0) {
+        info("Back off for %d ms before retrying send. Remaining retries = %d".format(config.retryBackoffMs, remainingRetries-1))
+        // back off and update the topic metadata cache before attempting another send operation
+        Thread.sleep(config.retryBackoffMs)
+        // get topics of the outstanding produce requests and refresh metadata for those
+        Utils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.topic).toSet, correlationId.getAndIncrement))
+        sendPartitionPerTopicCache.clear()
+        remainingRetries -= 1
+        producerStats.resendRate.mark()
       }
-      if(outstandingProduceRequests.size > 0) {
-        producerStats.failedSendRate.mark()
-        val correlationIdEnd = correlationId.get()
-        error("Failed to send requests for topics %s with correlation ids in [%d,%d]"
-          .format(outstandingProduceRequests.map(_.topic).toSet.mkString(","),
-          correlationIdStart, correlationIdEnd-1))
-        throw new FailedToSendMessageException("Failed to send messages after " + config.messageSendMaxRetries + " tries.", null)
-      }
+    }
+    if(outstandingProduceRequests.size > 0) {
+      producerStats.failedSendRate.mark()
+      val correlationIdEnd = correlationId.get()
+      error("Failed to send requests for topics %s with correlation ids in [%d,%d]"
+        .format(outstandingProduceRequests.map(_.topic).toSet.mkString(","),
+        correlationIdStart, correlationIdEnd-1))
+      throw new FailedToSendMessageException("Failed to send messages after " + config.messageSendMaxRetries + " tries.", null)
     }
   }
 
