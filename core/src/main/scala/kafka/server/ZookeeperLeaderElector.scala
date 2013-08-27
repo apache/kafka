@@ -42,19 +42,19 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext, electionPath:
 
   def startup {
     controllerContext.controllerLock synchronized {
+      controllerContext.zkClient.subscribeDataChanges(electionPath, leaderChangeListener)
       elect
     }
   }
 
   def elect: Boolean = {
-    controllerContext.zkClient.subscribeDataChanges(electionPath, leaderChangeListener)
     val timestamp = SystemTime.milliseconds.toString
     val electString =
       Utils.mergeJsonFields(Utils.mapToJsonFields(Map("version" -> 1.toString, "brokerid" -> brokerId.toString), valueInQuotes = false)
         ++ Utils.mapToJsonFields(Map("timestamp" -> timestamp), valueInQuotes = true))
 
     try {
-      createEphemeralPathExpectConflictHandleZKBug(controllerContext.zkClient, electionPath, electString, leaderId,
+      createEphemeralPathExpectConflictHandleZKBug(controllerContext.zkClient, electionPath, electString, brokerId,
         (controllerString : String, leaderId : Any) => KafkaController.parseControllerId(controllerString) == leaderId.asInstanceOf[Int],
         controllerContext.zkSessionTimeout)
       info(brokerId + " successfully elected as leader")
