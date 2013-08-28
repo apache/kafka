@@ -182,7 +182,12 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                     case None =>
                       true
                   }
-                else false
+                else {
+                  replicaState.put((topic, partition, replicaId), OfflineReplica)
+                  stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OfflineReplica"
+                    .format(controllerId, controller.epoch, replicaId, topicAndPartition))
+                  false
+                }
               case None =>
                 true
             }
