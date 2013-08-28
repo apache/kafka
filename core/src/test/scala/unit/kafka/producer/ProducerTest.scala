@@ -17,6 +17,7 @@
 
 package kafka.producer
 
+import org.scalatest.TestFailedException
 import org.scalatest.junit.JUnit3Suite
 import kafka.consumer.SimpleConsumer
 import kafka.message.Message
@@ -236,7 +237,8 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
       producer.send(new KeyedMessage[String, String](topic, "test", "test1"))
       fail("Should fail since no leader exists for the partition.")
     } catch {
-      case e => // success
+      case e : TestFailedException => throw e // catch and re-throw the failure message
+      case e2 => // otherwise success
     }
 
     // restart server 1

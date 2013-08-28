@@ -84,12 +84,20 @@ object RequestChannel extends Logging {
     }
   }
   
-  case class Response(processor: Int, request: Request, responseSend: Send) {
+  case class Response(processor: Int, request: Request, responseSend: Send, responseAction: ResponseAction) {
     request.responseCompleteTimeMs = SystemTime.milliseconds
+
+    def this(processor: Int, request: Request, responseSend: Send) =
+      this(processor, request, responseSend, if (responseSend == null) NoOpAction else SendAction)
 
     def this(request: Request, send: Send) =
       this(request.processor, request, send)
   }
+
+  trait ResponseAction
+  case object SendAction extends ResponseAction
+  case object NoOpAction extends ResponseAction
+  case object CloseConnectionAction extends ResponseAction
 }
 
 class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMetricsGroup {
@@ -125,6 +133,20 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
     responseQueues(response.processor).put(response)
     for(onResponse <- responseListeners)
       onResponse(response.processor)
+  }
+
+  /** No operation to take for the request, need to read more over the network */
+  def noOperation(processor: Int, request: RequestChannel.Request) {
+    responseQueues(processor).put(new RequestChannel.Response(processor, request, null, RequestChannel.NoOpAction))
+    for(onResponse <- responseListeners)
+      onResponse(processor)
+  }
+
+  /** Close the connection for the request */
+  def closeConnection(processor: Int, request: RequestChannel.Request) {
+    responseQueues(processor).put(new RequestChannel.Response(processor, request, null, RequestChannel.CloseConnectionAction))
+    for(onResponse <- responseListeners)
+      onResponse(processor)
   }
 
   /** Get the next request or block until there is one */

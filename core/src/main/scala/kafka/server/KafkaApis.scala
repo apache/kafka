@@ -51,8 +51,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   * and is queried by the topic metadata request. */
   var leaderCache: mutable.Map[TopicAndPartition, PartitionStateInfo] =
     new mutable.HashMap[TopicAndPartition, PartitionStateInfo]()
-//  private var allBrokers: mutable.Map[Int, Broker] = new mutable.HashMap[Int, Broker]()
-  private var aliveBrokers: mutable.Map[Int, Broker] = new mutable.HashMap[Int, Broker]()
+  private val aliveBrokers: mutable.Map[Int, Broker] = new mutable.HashMap[Int, Broker]()
   private val partitionMetadataLock = new Object
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
 
@@ -170,9 +169,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       !produceRequest.data.keySet.exists(
         m => replicaManager.getReplicationFactorForPartition(m.topic, m.partition) != 1)
     if(produceRequest.requiredAcks == 0) {
-      // send a fake producer response if producer request.required.acks = 0. This mimics the behavior of a 0.7 producer
-      // and is tuned for very high throughput
-      requestChannel.sendResponse(new RequestChannel.Response(request.processor, request, null))
+      // no operation needed if producer request.required.acks = 0; however, if there is any exception in handling the request, since
+      // no response is expected by the producer the handler will send a close connection response to the socket server
+      // to close the socket so that the producer client will know that some exception has happened and will refresh its metadata
+      if (numPartitionsInError != 0) {
+        info(("Send the close connection response due to error handling produce request " +
+          "[clientId = %s, correlationId = %s, topicAndPartition = %s] with Ack=0")
+          .format(produceRequest.clientId, produceRequest.correlationId, produceRequest.topicPartitionMessageSizeMap.keySet.mkString(",")))
+        requestChannel.closeConnection(request.processor, request)
+      } else {
+        requestChannel.noOperation(request.processor, request)
+      }
     } else if (produceRequest.requiredAcks == 1 ||
         produceRequest.numPartitions <= 0 ||
         allPartitionHaveReplicationFactorOne ||
