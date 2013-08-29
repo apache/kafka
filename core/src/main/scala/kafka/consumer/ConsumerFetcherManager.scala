@@ -24,6 +24,7 @@ import scala.collection.immutable
 import collection.mutable.HashMap
 import scala.collection.mutable
 import java.util.concurrent.locks.ReentrantLock
+import kafka.utils.Utils.inLock
 import kafka.utils.ZkUtils._
 import kafka.utils.{ShutdownableThread, SystemTime}
 import kafka.common.TopicAndPartition
@@ -123,14 +124,11 @@ class ConsumerFetcherManager(private val consumerIdString: String,
     leaderFinderThread = new LeaderFinderThread(consumerIdString + "-leader-finder-thread")
     leaderFinderThread.start()
 
-    lock.lock()
-    try {
+    inLock(lock) {
       partitionMap = topicInfos.map(tpi => (TopicAndPartition(tpi.topic, tpi.partitionId), tpi)).toMap
       this.cluster = cluster
       noLeaderPartitionSet ++= topicInfos.map(tpi => TopicAndPartition(tpi.topic, tpi.partitionId))
       cond.signalAll()
-    } finally {
-      lock.unlock()
     }
   }
 
@@ -158,14 +156,11 @@ class ConsumerFetcherManager(private val consumerIdString: String,
 
   def addPartitionsWithError(partitionList: Iterable[TopicAndPartition]) {
     debug("adding partitions with error %s".format(partitionList))
-    lock.lock()
-    try {
+    inLock(lock) {
       if (partitionMap != null) {
         noLeaderPartitionSet ++= partitionList
         cond.signalAll()
       }
-    } finally {
-      lock.unlock()
     }
   }
 }

@@ -30,6 +30,7 @@ import org.apache.zookeeper.Watcher.Event.KeeperState
 import java.util.UUID
 import kafka.serializer._
 import kafka.utils.ZkUtils._
+import kafka.utils.Utils.inLock
 import kafka.common._
 import com.yammer.metrics.core.Gauge
 import kafka.metrics._
@@ -363,12 +364,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     @throws(classOf[Exception])
     def handleChildChange(parentPath : String, curChilds : java.util.List[String]) {
-      lock.lock()
-      try {
+      inLock(lock) {
         isWatcherTriggered = true
         cond.signalAll()
-      } finally {
-        lock.unlock()
       }
     }
 

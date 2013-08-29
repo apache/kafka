@@ -21,6 +21,7 @@ import java.io._
 import java.nio._
 import charset.Charset
 import java.nio.channels._
+import java.util.concurrent.locks.Lock
 import java.lang.management._
 import java.util.zip.CRC32
 import javax.management._
@@ -554,4 +555,16 @@ object Utils extends Logging {
    * This is different from java.lang.Math.abs or scala.math.abs in that they return Int.MinValue (!).
    */
   def abs(n: Int) = n & 0x7fffffff
+  
+  /**
+   * Execute the given function inside the lock
+   */
+  def inLock[T](lock: Lock)(fun: => T): T = {
+    lock.lock()
+    try {
+      return fun
+    } finally {
+      lock.unlock()
+    }
+  }
 }

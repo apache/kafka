@@ -37,6 +37,7 @@ import kafka.api._
 import collection.mutable.Map
 import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
 import kafka.common.TopicAndPartition
+import kafka.utils.Utils.inLock
 import junit.framework.Assert
 
 
@@ -425,8 +426,7 @@ object TestUtils extends Logging {
     else
       info("Waiting for leader for partition [%s,%d] to be changed from old leader %d".format(topic, partition, oldLeaderOpt.get))
 
-    leaderLock.lock()
-    try {
+    inLock(leaderLock) {
       zkClient.subscribeDataChanges(ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), new LeaderExistsOrChangedListener(topic, partition, leaderLock, leaderExistsOrChanged, oldLeaderOpt, zkClient))
       leaderExistsOrChanged.await(timeoutMs, TimeUnit.MILLISECONDS)
       // check if leader is elected
@@ -441,8 +441,6 @@ object TestUtils extends Logging {
                                    .format(timeoutMs, topic, partition))
       }
       leader
-    } finally {
-      leaderLock.unlock()
     }
   }
   
