@@ -204,7 +204,7 @@ object ConsoleConsumer extends Logging {
           formatter.writeTo(messageAndTopic.key, messageAndTopic.message, System.out)
           numMessages += 1
         } catch {
-          case e =>
+          case e: Throwable =>
             if (skipMessageOnError)
               error("Error processing message, skipping this message: ", e)
             else
@@ -220,7 +220,7 @@ object ConsoleConsumer extends Logging {
         }
       }
     } catch {
-      case e => error("Error processing message, stopping consumer: ", e)
+      case e: Throwable => error("Error processing message, stopping consumer: ", e)
     }
     System.err.println("Consumed %d messages".format(numMessages))
     System.out.flush()
@@ -247,7 +247,7 @@ object ConsoleConsumer extends Logging {
       zk.deleteRecursive(dir)
       zk.close()
     } catch {
-      case _ => // swallow
+      case _: Throwable => // swallow
     }
   }
 }

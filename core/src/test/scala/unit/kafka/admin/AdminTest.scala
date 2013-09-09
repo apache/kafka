@@ -38,7 +38,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     }
     catch {
       case e: AdministrationException => // this is good
-      case e2 => throw e2
+      case e2: Throwable => throw e2
     }
 
     // test wrong replication factor
@@ -48,7 +48,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     }
     catch {
       case e: AdministrationException => // this is good
-      case e2 => throw e2
+      case e2: Throwable => throw e2
     }
 
     // correct assignment
@@ -84,7 +84,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     }
     catch {
       case e: AdministrationException => // this is good
-      case e2 => throw e2
+      case e2: Throwable => throw e2
     }
 
     // non-exist brokers
@@ -95,7 +95,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     }
     catch {
       case e: AdministrationException => // this is good
-      case e2 => throw e2
+      case e2: Throwable => throw e2
     }
 
     // inconsistent replication factor
@@ -106,7 +106,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     }
     catch {
       case e: AdministrationException => // this is good
-      case e2 => throw e2
+      case e2: Throwable => throw e2
     }
 
     // good assignment
@@ -170,7 +170,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       fail("shouldn't be able to create a topic already exists")
     } catch {
       case e: TopicExistsException => // this is good
-      case e2 => throw e2
+      case e2: Throwable => throw e2
     }
   }
 

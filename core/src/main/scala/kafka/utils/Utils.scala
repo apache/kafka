@@ -67,7 +67,7 @@ object Utils extends Logging {
           fun()
         }
         catch {
-          case t =>
+          case t: Throwable =>
             // log any error and the stack trace
             error("error in loggedRunnable", t)
         }

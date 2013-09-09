@@ -75,7 +75,7 @@ class ZookeeperTopicEventWatcher(val config:ConsumerConfig,
           }
         }
         catch {
-          case e =>
+          case e: Throwable =>
             error("error in handling child changes", e)
         }
       }

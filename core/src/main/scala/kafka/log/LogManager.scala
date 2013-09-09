@@ -318,7 +318,7 @@ private[kafka] class LogManager(val config: KafkaConfig,
         if(timeSinceLastFlush >= logFlushInterval)
           log.flush
       } catch {
-        case e =>
+        case e: Throwable =>
           error("Error flushing topic " + log.topicName, e)
           e match {
             case _: IOException =>

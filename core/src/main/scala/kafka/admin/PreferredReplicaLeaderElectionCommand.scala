@@ -60,7 +60,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       preferredReplicaElectionCommand.moveLeaderToPreferredReplica()
       println("Successfully started preferred replica election for partitions %s".format(partitionsForPreferredReplicaElection))
     } catch {
-      case e =>
+      case e: Throwable =>
         println("Failed to start preferred replica election")
         println(Utils.stackTrace(e))
     } finally {
@@ -104,7 +104,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
         val partitionsUndergoingPreferredReplicaElection = parsePreferredReplicaElectionData(ZkUtils.readData(zkClient, zkPath)._1)
         throw new AdministrationException("Preferred replica leader election currently in progress for " +
           "%s. Aborting operation".format(partitionsUndergoingPreferredReplicaElection))
-      case e2 => throw new AdministrationException(e2.toString)
+      case e2: Throwable => throw new AdministrationException(e2.toString)
     }
   }
 }
@@ -116,7 +116,7 @@ class PreferredReplicaLeaderElectionCommand(zkClient: ZkClient, partitions: scal
       val validPartitions = partitions.filter(p => validatePartition(zkClient, p.topic, p.partition))
       PreferredReplicaLeaderElectionCommand.writePreferredReplicaElectionData(zkClient, validPartitions)
     } catch {
-      case e => throw new AdminCommandFailedException("Admin command failed", e)
+      case e: Throwable => throw new AdminCommandFailedException("Admin command failed", e)
     }
   }
 

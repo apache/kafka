@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,27 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package kafka.utils
 
-import kafka.common._
-import util.parsing.json.JSON
+package kafka.utils
+
+import scala.annotation.StaticAnnotation
+
+/* Some helpful annotations */
 
 /**
- *  A wrapper that synchronizes JSON in scala, which is not threadsafe.
+ * Indicates that the annotated class is meant to be threadsafe. For an abstract class it is an part of the interface that an implementation 
+ * must respect
  */
-object Json extends Logging {
-  val myConversionFunc = {input : String => input.toInt}
-  JSON.globalNumberParser = myConversionFunc
-  val lock = new Object
+class threadsafe extends StaticAnnotation
 
-  def parseFull(input: String): Option[Any] = {
-    lock synchronized {
-      try {
-        JSON.parseFull(input)
-      } catch {
-        case t: Throwable =>
-          throw new KafkaException("Can't parse json string: %s".format(input), t)
-      }
-    }
-  }
-}
+/**
+ * Indicates that the annotated class is not threadsafe
+ */
+class nonthreadsafe extends StaticAnnotation
+
+/**
+ * Indicates that the annotated class is immutable
+ */
+class immutable extends StaticAnnotation

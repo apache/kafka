@@ -42,7 +42,7 @@ private[kafka] object Broker {
           throw new BrokerNotAvailableException("Broker id %d does not exist".format(id))
       }
     } catch {
-      case t => throw new KafkaException("Failed to parse the broker info from zookeeper: " + brokerInfoString, t)
+      case t: Throwable => throw new KafkaException("Failed to parse the broker info from zookeeper: " + brokerInfoString, t)
     }
   }
 

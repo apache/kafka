@@ -19,7 +19,7 @@ package kafka.javaapi
 
 import kafka.common.TopicAndPartition
 import kafka.api.{Request, PartitionOffsetRequestInfo}
-import collection.JavaConversions
+import scala.collection.mutable
 import java.nio.ByteBuffer
 
 
@@ -28,7 +28,8 @@ class OffsetRequest(requestInfo: java.util.Map[TopicAndPartition, PartitionOffse
                     clientId: String) {
 
   val underlying = {
-    val scalaMap = JavaConversions.asMap(requestInfo).toMap
+    import collection.JavaConversions._
+    val scalaMap = (requestInfo: mutable.Map[TopicAndPartition, PartitionOffsetRequestInfo]).toMap
     kafka.api.OffsetRequest(
       requestInfo = scalaMap,
       versionId = versionId,

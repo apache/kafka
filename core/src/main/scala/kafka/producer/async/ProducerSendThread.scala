@@ -43,7 +43,7 @@ class ProducerSendThread[K,V](val threadName: String,
     try {
       processEvents
     }catch {
-      case e => error("Error in sending events: ", e)
+      case e: Throwable => error("Error in sending events: ", e)
     }finally {
       shutdownLatch.countDown
     }
@@ -103,7 +103,7 @@ class ProducerSendThread[K,V](val threadName: String,
       if(size > 0)
         handler.handle(events)
     }catch {
-      case e => error("Error in handling batch of " + size + " events", e)
+      case e: Throwable => error("Error in handling batch of " + size + " events", e)
     }
   }
 

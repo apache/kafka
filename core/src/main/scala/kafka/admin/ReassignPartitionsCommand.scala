@@ -119,7 +119,7 @@ object ReassignPartitionsCommand extends Logging {
           "The replica assignment is \n" + partitionsToBeReassigned.toString())
       }
     } catch {
-      case e =>
+      case e: Throwable =>
         println("Partitions reassignment failed due to " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {
@@ -142,7 +142,7 @@ class ReassignPartitionsCommand(zkClient: ZkClient, partitions: collection.Map[T
         val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient)
         throw new AdminCommandFailedException("Partition reassignment currently in " +
         "progress for %s. Aborting operation".format(partitionsBeingReassigned))
-      case e => error("Admin command failed", e); false
+      case e: Throwable => error("Admin command failed", e); false
     }
   }
 

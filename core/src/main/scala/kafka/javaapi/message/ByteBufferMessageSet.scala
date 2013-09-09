@@ -20,12 +20,14 @@ import java.util.concurrent.atomic.AtomicLong
 import scala.reflect.BeanProperty
 import java.nio.ByteBuffer
 import kafka.message._
+import kafka.javaapi.Implicits.javaListToScalaBuffer
 
 class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends MessageSet {
   private val underlying: kafka.message.ByteBufferMessageSet = new kafka.message.ByteBufferMessageSet(buffer)
   
   def this(compressionCodec: CompressionCodec, messages: java.util.List[Message]) {
-    this(new kafka.message.ByteBufferMessageSet(compressionCodec, new AtomicLong(0), scala.collection.JavaConversions.asBuffer(messages): _*).buffer)
+    // due to SI-4141 which affects Scala 2.8.1, implicits are not visible in constructors and must be used explicitly
+    this(new kafka.message.ByteBufferMessageSet(compressionCodec, new AtomicLong(0), javaListToScalaBuffer(messages).toSeq : _*).buffer)
   }
 
   def this(messages: java.util.List[Message]) {

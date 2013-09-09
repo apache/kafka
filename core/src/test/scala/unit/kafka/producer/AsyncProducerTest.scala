@@ -263,7 +263,7 @@ class AsyncProducerTest extends JUnit3Suite {
     }
     catch {
       // should not throw any exception
-      case e => fail("Should not throw any exception")
+      case e: Throwable => fail("Should not throw any exception")
 
     }
   }
@@ -450,7 +450,8 @@ class AsyncProducerTest extends JUnit3Suite {
     val topic = "topic1"
     val msgs = TestUtils.getMsgStrings(5)
     val scalaProducerData = msgs.map(m => new KeyedMessage[String, String](topic, m))
-    val javaProducerData = scala.collection.JavaConversions.asList(scalaProducerData)
+    import scala.collection.JavaConversions._
+    val javaProducerData: java.util.List[KeyedMessage[String, String]] = scalaProducerData
 
     val mockScalaProducer = EasyMock.createMock(classOf[kafka.producer.Producer[String, String]])
     mockScalaProducer.send(scalaProducerData.head)

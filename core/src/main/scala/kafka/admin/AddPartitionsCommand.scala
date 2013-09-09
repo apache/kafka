@@ -68,7 +68,7 @@ object AddPartitionsCommand extends Logging {
       addPartitions(zkClient, topic, nPartitions, replicaAssignmentStr)
       println("adding partitions succeeded!")
     } catch {
-      case e =>
+      case e: Throwable =>
         println("adding partitions failed because of " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {

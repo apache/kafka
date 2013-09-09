@@ -89,7 +89,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
       replicas.foreach(r => handleStateChange(r.topic, r.partition, r.replica, targetState))
       brokerRequestBatch.sendRequestsToBrokers(controller.epoch, controllerContext.correlationId.getAndIncrement)
     }catch {
-      case e => error("Error while moving some replicas to %s state".format(targetState), e)
+      case e: Throwable => error("Error while moving some replicas to %s state".format(targetState), e)
     }
   }
 
@@ -273,7 +273,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               if(deadBrokerIds.size > 0)
                 controller.onBrokerFailure(deadBrokerIds.toSeq)
             } catch {
-              case e => error("Error while handling broker changes", e)
+              case e: Throwable => error("Error while handling broker changes", e)
             }
           }
         }

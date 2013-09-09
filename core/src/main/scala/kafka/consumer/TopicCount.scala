@@ -67,7 +67,7 @@ private[kafka] object TopicCount extends Logging {
         case None => throw new KafkaException("error constructing TopicCount : " + topicCountString)
       }
     } catch {
-      case e =>
+      case e: Throwable =>
         error("error parsing consumer json string " + topicCountString, e)
         throw e
     }

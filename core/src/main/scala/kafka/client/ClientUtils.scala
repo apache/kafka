@@ -54,7 +54,7 @@ object ClientUtils extends Logging{
         fetchMetaDataSucceeded = true
       }
       catch {
-        case e =>
+        case e: Throwable =>
           warn("Fetching topic metadata with correlation id %d for topics [%s] from broker [%s] failed"
             .format(correlationId, topics, shuffledBrokers(i).toString), e)
           t = e

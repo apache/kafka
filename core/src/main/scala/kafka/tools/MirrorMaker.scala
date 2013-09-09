@@ -129,7 +129,7 @@ object MirrorMaker extends Logging {
     try {
       streams = connectors.map(_.createMessageStreamsByFilter(filterSpec, numStreams.intValue(), new DefaultDecoder(), new DefaultDecoder())).flatten
     } catch {
-      case t =>
+      case t: Throwable =>
         fatal("Unable to create stream - shutting down mirror maker.")
         connectors.foreach(_.shutdown)
     }
@@ -204,7 +204,7 @@ object MirrorMaker extends Logging {
           }
         }
       } catch {
-        case e =>
+        case e: Throwable =>
           fatal("Stream unexpectedly exited.", e)
       } finally {
         shutdownLatch.countDown()

@@ -223,7 +223,7 @@ class ReplicaManager(val config: KafkaConfig,
             makeFollower(controllerId, controllerEpoch, topic, partitionId, partitionStateInfo, leaderAndISRRequest.leaders,
                          leaderAndISRRequest.correlationId)
         } catch {
-          case e =>
+          case e: Throwable =>
             val errorMsg = ("Error on broker %d while processing LeaderAndIsr request correlationId %d received from controller %d " +
                             "epoch %d for partition %s").format(localBrokerId, leaderAndISRRequest.correlationId, leaderAndISRRequest.controllerId,
                                                                 leaderAndISRRequest.controllerEpoch, topicAndPartition)

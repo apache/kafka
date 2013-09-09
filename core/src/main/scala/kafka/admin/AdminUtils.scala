@@ -90,7 +90,7 @@ object AdminUtils extends Logging {
       debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionData))
     } catch {
       case e: ZkNodeExistsException => throw new TopicExistsException("topic %s already exists".format(topic))
-      case e2 => throw new AdministrationException(e2.toString)
+      case e2: Throwable => throw new AdministrationException(e2.toString)
     }
   }
 

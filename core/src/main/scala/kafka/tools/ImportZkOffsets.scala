@@ -102,7 +102,7 @@ object ImportZkOffsets extends Logging {
       try {
         ZkUtils.updatePersistentPath(zkClient, partition, offset.toString)
       } catch {
-        case e => e.printStackTrace()
+        case e: Throwable => e.printStackTrace()
       }
     }
   }

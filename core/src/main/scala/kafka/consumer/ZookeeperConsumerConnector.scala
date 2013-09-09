@@ -175,7 +175,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             zkClient = null
           }
         } catch {
-          case e =>
+          case e: Throwable =>
             fatal("error during consumer connector shutdown", e)
         }
         info("ZKConsumerConnector shut down completed")
@@ -332,7 +332,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             if (doRebalance)
               syncedRebalance
           } catch {
-            case t => error("error during syncedRebalance", t)
+            case t: Throwable => error("error during syncedRebalance", t)
           }
         }
         info("stopping watcher executor thread for consumer " + consumerIdString)
@@ -384,7 +384,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
               cluster = getCluster(zkClient)
               done = rebalance(cluster)
             } catch {
-              case e =>
+              case e: Throwable =>
                 /** occasionally, we may hit a ZK exception because the ZK state is changing while we are iterating.
                  * For example, a ZK node can disappear between the time we get all children and the time we try to get
                  * the value of a child. Just let this go since another rebalance will be triggered.
@@ -461,7 +461,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             " for topic " + topic + " with consumers: " + curConsumers)
 
           for (consumerThreadId <- consumerThreadIdSet) {
-            val myConsumerPosition = curConsumers.findIndexOf(_ == consumerThreadId)
+            val myConsumerPosition = curConsumers.indexOf(consumerThreadId)
             assert(myConsumerPosition >= 0)
             val startPart = nPartsPerConsumer*myConsumerPosition + myConsumerPosition.min(nConsumersWithExtraPart)
             val nParts = nPartsPerConsumer + (if (myConsumerPosition + 1 > nConsumersWithExtraPart) 0 else 1)
@@ -581,7 +581,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             // The node hasn't been deleted by the original owner. So wait a bit and retry.
             info("waiting for the partition ownership to be deleted: " + partition)
             false
-          case e2 => throw e2
+          case e2: Throwable => throw e2
         }
       }
       val hasPartitionOwnershipFailed = partitionOwnershipSuccessful.foldLeft(0)((sum, decision) => sum + (if(decision) 0 else 1))

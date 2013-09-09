@@ -74,7 +74,7 @@ object CreateTopicCommand extends Logging {
       createTopic(zkClient, topic, nPartitions, replicationFactor, replicaAssignmentStr)
       println("creation succeeded!")
     } catch {
-      case e =>
+      case e: Throwable =>
         println("creation failed because of " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {

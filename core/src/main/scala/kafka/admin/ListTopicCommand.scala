@@ -72,7 +72,7 @@ object ListTopicCommand {
         showTopic(t, zkClient, reportUnderReplicatedPartitions, reportUnavailablePartitions, liveBrokers)
     }
     catch {
-      case e =>
+      case e: Throwable =>
         println("list topic failed because of " + e.getMessage)
         println(Utils.stackTrace(e))
     }

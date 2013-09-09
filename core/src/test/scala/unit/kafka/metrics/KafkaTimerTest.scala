@@ -30,14 +30,15 @@ class KafkaTimerTest extends JUnit3Suite {
     val clock = new ManualClock
     val testRegistry = new MetricsRegistry(clock)
     val metric = testRegistry.newTimer(this.getClass, "TestTimer")
+    val Epsilon = java.lang.Double.longBitsToDouble(0x3ca0000000000000L)
 
     val timer = new KafkaTimer(metric)
     timer.time {
       clock.addMillis(1000)
     }
     assertEquals(1, metric.count())
-    assertTrue((metric.max() - 1000).abs <= Double.Epsilon)
-    assertTrue((metric.min() - 1000).abs <= Double.Epsilon)
+    assertTrue((metric.max() - 1000).abs <= Epsilon)
+    assertTrue((metric.min() - 1000).abs <= Epsilon)
   }
 
   private class ManualClock extends Clock {

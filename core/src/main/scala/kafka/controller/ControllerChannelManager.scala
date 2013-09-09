@@ -93,7 +93,7 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
       brokerStateInfo(brokerId).requestSendThread.shutdown()
       brokerStateInfo.remove(brokerId)
     }catch {
-      case e => error("Error while removing broker by the controller", e)
+      case e: Throwable => error("Error while removing broker by the controller", e)
     }
   }
 
@@ -142,7 +142,7 @@ class RequestSendThread(val controllerId: Int,
         }
       }
     } catch {
-      case e =>
+      case e: Throwable =>
         warn("Controller %d fails to send a request to broker %d".format(controllerId, toBrokerId), e)
         // If there is any socket error (eg, socket timeout), the channel is no longer usable and needs to be recreated.
         channel.disconnect()
