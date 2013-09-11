@@ -52,7 +52,7 @@ object KafkaBuild extends Build {
     javacOptions ++= Seq("-Xlint:unchecked", "-source", "1.5"),
     parallelExecution in Test := false, // Prevent tests from overrunning each other
     libraryDependencies ++= Seq(
-      "log4j"                 % "log4j"        % "1.2.15",
+      "log4j"                 % "log4j"        % "1.2.15" exclude("javax.jms", "jms"),
       "net.sf.jopt-simple"    % "jopt-simple"  % "3.2",
       "org.slf4j"             % "slf4j-simple" % "1.6.4"
     ),

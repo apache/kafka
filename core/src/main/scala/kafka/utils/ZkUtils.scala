@@ -31,6 +31,7 @@ import kafka.admin._
 import kafka.common.{KafkaException, NoEpochForPartitionException}
 import kafka.controller.ReassignedPartitionsContext
 import kafka.controller.PartitionAndReplica
+import kafka.controller.KafkaController
 import scala.Some
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
@@ -59,7 +60,7 @@ object ZkUtils extends Logging {
   
   def getController(zkClient: ZkClient): Int= {
     readDataMaybeNull(zkClient, ControllerPath)._1 match {
-      case Some(controller) => controller.toInt
+      case Some(controller) => KafkaController.parseControllerId(controller)
       case None => throw new KafkaException("Controller doesn't exist")
     }
   }
@@ -187,18 +188,27 @@ object ZkUtils extends Logging {
     debug("The list of replicas for partition [%s,%d] is %s".format(topic, partition, replicas))
     replicas.contains(brokerId.toString)
   }
-    
-  def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, port: Int, jmxPort: Int) {
+
+  def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, port: Int, timeout: Int, jmxPort: Int) {
     val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
+    val timestamp = "\"" + SystemTime.milliseconds.toString + "\""
     val brokerInfo =
       Utils.mergeJsonFields(Utils.mapToJsonFields(Map("host" -> host), valueInQuotes = true) ++
-                             Utils.mapToJsonFields(Map("version" -> 1.toString, "jmx_port" -> jmxPort.toString, "port" -> port.toString),
+                             Utils.mapToJsonFields(Map("version" -> 1.toString, "jmx_port" -> jmxPort.toString, "port" -> port.toString, "timestamp" -> timestamp),
                                                    valueInQuotes = false))
+    val expectedBroker = new Broker(id, host, port)
+
     try {
-      createEphemeralPathExpectConflict(zkClient, brokerIdPath, brokerInfo)
+      createEphemeralPathExpectConflictHandleZKBug(zkClient, brokerIdPath, brokerInfo, expectedBroker,
+        (brokerString: String, broker: Any) => Broker.createBroker(broker.asInstanceOf[Broker].id, brokerString).equals(broker.asInstanceOf[Broker]),
+        timeout)
+
     } catch {
       case e: ZkNodeExistsException =>
-        throw new RuntimeException("A broker is already registered on the path " + brokerIdPath + ". This probably " + "indicates that you either have configured a brokerid that is already in use, or " + "else you have shutdown this broker and restarted it faster than the zookeeper " + "timeout so it appears to be re-registering.")
+        throw new RuntimeException("A broker is already registered on the path " + brokerIdPath
+          + ". This probably " + "indicates that you either have configured a brokerid that is already in use, or "
+          + "else you have shutdown this broker and restarted it faster than the zookeeper "
+          + "timeout so it appears to be re-registering.")
     }
     info("Registered broker %d at path %s with address %s:%d.".format(id, brokerIdPath, host, port))
   }
@@ -279,6 +289,47 @@ object ZkUtils extends Logging {
         }
       }
       case e2 => throw e2
+    }
+  }
+
+  /**
+   * Create an ephemeral node with the given path and data.
+   * Throw NodeExistsException if node already exists.
+   * Handles the following ZK session timeout bug:
+   *
+   * https://issues.apache.org/jira/browse/ZOOKEEPER-1740
+   *
+   * Upon receiving a NodeExistsException, read the data from the conflicted path and
+   * trigger the checker function comparing the read data and the expected data,
+   * If the checker function returns true then the above bug might be encountered, back off and retry;
+   * otherwise re-throw the exception
+   */
+  def createEphemeralPathExpectConflictHandleZKBug(zkClient: ZkClient, path: String, data: String, expectedCallerData: Any, checker: (String, Any) => Boolean, backoffTime: Int): Unit = {
+    while (true) {
+      try {
+        createEphemeralPathExpectConflict(zkClient, path, data)
+        return
+      } catch {
+        case e: ZkNodeExistsException => {
+          // An ephemeral node may still exist even after its corresponding session has expired
+          // due to a Zookeeper bug, in this case we need to retry writing until the previous node is deleted
+          // and hence the write succeeds without ZkNodeExistsException
+          ZkUtils.readDataMaybeNull(zkClient, path)._1 match {
+            case Some(writtenData) => {
+              if (checker(writtenData, expectedCallerData)) {
+                info("I wrote this conflicted ephemeral node [%s] at %s a while back in a different session, ".format(data, path)
+                  + "hence I will backoff for this node to be deleted by Zookeeper and retry")
+
+                Thread.sleep(backoffTime)
+              } else {
+                throw e
+              }
+            }
+            case None => // the node disappeared; retry creating the ephemeral node immediately
+          }
+        }
+        case e2 => throw e2
+      }
     }
   }
 
@@ -583,6 +634,24 @@ object ZkUtils extends Logging {
       case None =>
     }
     reassignedPartitions
+  }
+
+  def parseTopicsData(jsonData: String): Seq[String] = {
+    var topics = List.empty[String]
+    Json.parseFull(jsonData) match {
+      case Some(m) =>
+        m.asInstanceOf[Map[String, Any]].get("topics") match {
+          case Some(partitionsSeq) =>
+            val mapPartitionSeq = partitionsSeq.asInstanceOf[Seq[Map[String, Any]]]
+            mapPartitionSeq.foreach(p => {
+              val topic = p.get("topic").get.asInstanceOf[String]
+              topics ++= List(topic)
+            })
+          case None =>
+        }
+      case None =>
+    }
+    topics
   }
 
   def getPartitionReassignmentZkData(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {

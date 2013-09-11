@@ -222,7 +222,7 @@ class ReplicaManager(val config: KafkaConfig,
           if(requestedLeaderId == config.brokerId)
             makeLeader(controllerId, controllerEpoch, topic, partitionId, partitionStateInfo, leaderAndISRRequest.correlationId)
           else
-            makeFollower(controllerId, controllerEpoch, topic, partitionId, partitionStateInfo, leaderAndISRRequest.aliveLeaders,
+            makeFollower(controllerId, controllerEpoch, topic, partitionId, partitionStateInfo, leaderAndISRRequest.leaders,
                          leaderAndISRRequest.correlationId)
         } catch {
           case e =>
@@ -266,14 +266,14 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def makeFollower(controllerId: Int, epoch: Int, topic: String, partitionId: Int,
-                           partitionStateInfo: PartitionStateInfo, aliveLeaders: Set[Broker], correlationId: Int) {
+                           partitionStateInfo: PartitionStateInfo, leaders: Set[Broker], correlationId: Int) {
     val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
     stateChangeLogger.trace(("Broker %d received LeaderAndIsr request correlationId %d from controller %d epoch %d " +
                              "starting the become-follower transition for partition [%s,%d]")
                                .format(localBrokerId, correlationId, controllerId, epoch, topic, partitionId))
 
     val partition = getOrCreatePartition(topic, partitionId, partitionStateInfo.replicationFactor)
-    if (partition.makeFollower(controllerId, topic, partitionId, leaderIsrAndControllerEpoch, aliveLeaders, correlationId)) {
+    if (partition.makeFollower(controllerId, topic, partitionId, leaderIsrAndControllerEpoch, leaders, correlationId)) {
       // remove this replica's partition from the ISR expiration queue
       leaderPartitionsLock synchronized {
         leaderPartitions -= partition

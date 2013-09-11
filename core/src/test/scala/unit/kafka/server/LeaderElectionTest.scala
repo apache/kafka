@@ -61,7 +61,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     val partitionId = 0
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    AdminUtils.createTopicWithAssignment(zkClient, topic, Map(0 -> Seq(0, 1)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0 -> Seq(0, 1)))
 
     // wait until leader is elected
     val leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500)
@@ -108,7 +108,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     val partitionId = 0
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    AdminUtils.createTopicWithAssignment(zkClient, topic, Map(0 -> Seq(0, 1)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0 -> Seq(0, 1)))
 
     // wait until leader is elected
     val leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500)
@@ -124,7 +124,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     val controllerId = 2
     val controllerConfig = new KafkaConfig(TestUtils.createBrokerConfig(controllerId, TestUtils.choosePort()))
     val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", s.config.port))
-    val controllerContext = new ControllerContext(zkClient)
+    val controllerContext = new ControllerContext(zkClient, 6000)
     controllerContext.liveBrokers = brokers.toSet
     val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig)
     controllerChannelManager.startup()

@@ -17,6 +17,7 @@
 
 package kafka.producer
 
+import org.scalatest.TestFailedException
 import org.scalatest.junit.JUnit3Suite
 import kafka.consumer.SimpleConsumer
 import kafka.message.Message
@@ -206,7 +207,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     val topic = "new-topic"
     // create topic
-    AdminUtils.createTopicWithAssignment(zkClient, topic, Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)))
     // waiting for 1 partition is enough
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
@@ -233,7 +234,8 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
       producer.send(new KeyedMessage[String, String](topic, "test", "test1"))
       fail("Should fail since no leader exists for the partition.")
     } catch {
-      case e => // success
+      case e : TestFailedException => throw e // catch and re-throw the failure message
+      case e2 => // otherwise success
     }
 
     // restart server 1
@@ -268,7 +270,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     val topic = "new-topic"
     // create topics in ZK
-    AdminUtils.createTopicWithAssignment(zkClient, topic, Map(0->Seq(0,1)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0,1)))
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
 

@@ -22,10 +22,18 @@ fi
 
 base_dir=$(dirname $0)/..
 
-SCALA_VERSION=2.8.0
+# create logs directory
+LOG_DIR=$base_dir/logs
+if [ ! -d $LOG_DIR ]; then
+	mkdir $LOG_DIR
+fi
+
+if [ -z "$SCALA_VERSION" ]; then
+	SCALA_VERSION=2.8.0
+fi
 
 # assume all dependencies have been packaged into one jar with sbt-assembly's task "assembly-package-dependency"
-for file in $base_dir/core/target/scala-2.8.0/*.jar;
+for file in $base_dir/core/target/scala-${SCALA_VERSION}/*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
@@ -46,30 +54,59 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
+# JMX settings
 if [ -z "$KAFKA_JMX_OPTS" ]; then
   KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
 fi
 
-if [ -z "$KAFKA_OPTS" ]; then
-  KAFKA_OPTS="-Xmx512M -server  -Dlog4j.configuration=file:$base_dir/config/log4j.properties"
-fi
-
+# JMX port to use
 if [  $JMX_PORT ]; then
   KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Dcom.sun.management.jmxremote.port=$JMX_PORT "
 fi
 
+# Log4j settings
+if [ -z "$KAFKA_LOG4J_OPTS" ]; then
+  KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/config/tools-log4j.properties"
+fi
+
+# Generic jvm settings you want to add
+if [ -z "$KAFKA_OPTS" ]; then
+  KAFKA_OPTS=""
+fi
+
+# Which java to use
 if [ -z "$JAVA_HOME" ]; then
   JAVA="java"
 else
   JAVA="$JAVA_HOME/bin/java"
 fi
 
-$JAVA $KAFKA_OPTS $KAFKA_JMX_OPTS -cp $CLASSPATH "$@"
+# Memory options
+if [ -z "$KAFKA_HEAP_OPTS" ]; then
+  KAFKA_HEAP_OPTS="-Xmx256M"
+fi
+
+# JVM performance options
+if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
+  KAFKA_JVM_PERFORMANCE_OPTS="-server -XX:+UseCompressedOops -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC"
+fi
+
+# GC options
+GC_FILE_SUFFIX='-gc.log'
+GC_LOG_FILE_NAME=''
+if [ "$1" = "daemon" ] && [ -z "$KAFKA_GC_LOG_OPTS"] ; then
+  shift
+  GC_LOG_FILE_NAME=$1$GC_FILE_SUFFIX
+  shift
+  KAFKA_GC_LOG_OPTS="-Xloggc:$LOG_DIR/$GC_LOG_FILE_NAME -verbose:gc -XX:+PrintGCDetails -XX:+PrintGCDateStamps -XX:+PrintGCTimeStamps "
+fi
+
+$JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS "$@"
 
 exitval=$?
 
 if [ $exitval -eq "1" ] ; then 
-	$JAVA $KAFKA_OPTS $KAFKA_JMX_OPTS -cp $CLASSPATH "$@" >& exception.txt
+	$JAVA $KAFKA_HEAP_OPTS $KAFKA_JVM_PERFORMANCE_OPTS $KAFKA_GC_LOG_OPTS $KAFKA_JMX_OPTS $KAFKA_LOG4J_OPTS -cp $CLASSPATH $KAFKA_OPTS "$@" >& exception.txt
 	exception=`cat exception.txt`
 	noBuildMessage='Please build the project using sbt. Documentation is available at http://kafka.apache.org/'
 	pattern="(Could not find or load main class)|(java\.lang\.NoClassDefFoundError)"

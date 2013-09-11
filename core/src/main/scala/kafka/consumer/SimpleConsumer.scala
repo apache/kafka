@@ -73,7 +73,7 @@ class SimpleConsumer(val host: String,
         response = blockingChannel.receive()
       } catch {
         case e : java.io.IOException =>
-          info("Reconnect due to socket error: ", e)
+          info("Reconnect due to socket error: %s".format(e.getMessage))
           // retry once
           try {
             reconnect()

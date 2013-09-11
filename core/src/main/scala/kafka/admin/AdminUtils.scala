@@ -52,30 +52,33 @@ object AdminUtils extends Logging {
    * p3        p4        p0        p1        p2       (3nd replica)
    * p7        p8        p9        p5        p6       (3nd replica)
    */
-  def assignReplicasToBrokers(brokers: Seq[Int], 
-                              partitions: Int, 
+  def assignReplicasToBrokers(brokerList: Seq[Int],
+                              nPartitions: Int,
                               replicationFactor: Int,
-                              fixedStartIndex: Int = -1)  // for testing only
+                              fixedStartIndex: Int = -1,
+                              startPartitionId: Int = -1)
   : Map[Int, Seq[Int]] = {
-    if (partitions <= 0)
+    if (nPartitions <= 0)
       throw new AdminOperationException("number of partitions must be larger than 0")
     if (replicationFactor <= 0)
       throw new AdminOperationException("replication factor must be larger than 0")
-    if (replicationFactor > brokers.size)
+    if (replicationFactor > brokerList.size)
       throw new AdminOperationException("replication factor: " + replicationFactor +
-        " larger than available brokers: " + brokers.size)
+        " larger than available brokers: " + brokerList.size)
     val ret = new mutable.HashMap[Int, List[Int]]()
-    val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokers.size)
+    val startIndex = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
+    var currentPartitionId = if (startPartitionId >= 0) startPartitionId else 0
 
-    var secondReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokers.size)
-    for (i <- 0 until partitions) {
-      if (i > 0 && (i % brokers.size == 0))
-        secondReplicaShift += 1
-      val firstReplicaIndex = (i + startIndex) % brokers.size
-      var replicaList = List(brokers(firstReplicaIndex))
+    var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
+    for (i <- 0 until nPartitions) {
+      if (currentPartitionId > 0 && (currentPartitionId % brokerList.size == 0))
+        nextReplicaShift += 1
+      val firstReplicaIndex = (currentPartitionId + startIndex) % brokerList.size
+      var replicaList = List(brokerList(firstReplicaIndex))
       for (j <- 0 until replicationFactor - 1)
-        replicaList ::= brokers(replicaIndex(firstReplicaIndex, secondReplicaShift, j, brokers.size))
-      ret.put(i, replicaList.reverse)
+        replicaList ::= brokerList(replicaIndex(firstReplicaIndex, nextReplicaShift, j, brokerList.size))
+      ret.put(currentPartitionId, replicaList.reverse)
+      currentPartitionId = currentPartitionId + 1
     }
     ret.toMap
   }
@@ -95,20 +98,21 @@ object AdminUtils extends Logging {
                   topicConfig: Properties = new Properties) {
     val brokerList = ZkUtils.getSortedBrokerList(zkClient)
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, partitions, replicationFactor)
-    AdminUtils.createTopicWithAssignment(zkClient, topic, replicaAssignment, topicConfig)
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, replicaAssignment, topicConfig)
   }
                   
-  def createTopicWithAssignment(zkClient: ZkClient, 
-                                topic: String, 
-                                partitionReplicaAssignment: Map[Int, Seq[Int]], 
-                                config: Properties = new Properties) {
+  def createOrUpdateTopicPartitionAssignmentPathInZK(zkClient: ZkClient,
+                                                     topic: String,
+                                                     partitionReplicaAssignment: Map[Int, Seq[Int]],
+                                                     config: Properties = new Properties,
+                                                     update: Boolean = false) {
     // validate arguments
     Topic.validate(topic)
     LogConfig.validate(config)
     require(partitionReplicaAssignment.values.map(_.size).toSet.size == 1, "All partitions should have the same number of replicas.")
 
     val topicPath = ZkUtils.getTopicPath(topic)
-    if(zkClient.exists(topicPath))
+    if(!update && zkClient.exists(topicPath))
       throw new TopicExistsException("Topic \"%s\" already exists.".format(topic))
     partitionReplicaAssignment.values.foreach(reps => require(reps.size == reps.toSet.size, "Duplicate replica assignment found: "  + partitionReplicaAssignment))
     
@@ -116,14 +120,21 @@ object AdminUtils extends Logging {
     writeTopicConfig(zkClient, topic, config)
     
     // create the partition assignment
-    writeTopicPartitionAssignment(zkClient, topic, partitionReplicaAssignment)
+    writeTopicPartitionAssignment(zkClient, topic, partitionReplicaAssignment, update)
   }
   
-  private def writeTopicPartitionAssignment(zkClient: ZkClient, topic: String, replicaAssignment: Map[Int, Seq[Int]]) {
+  private def writeTopicPartitionAssignment(zkClient: ZkClient, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
     try {
       val zkPath = ZkUtils.getTopicPath(topic)
       val jsonPartitionData = ZkUtils.replicaAssignmentZkdata(replicaAssignment.map(e => (e._1.toString -> e._2)))
-      ZkUtils.createPersistentPath(zkClient, zkPath, jsonPartitionData)
+
+      if (!update) {
+        info("Topic creation " + jsonPartitionData.toString)
+        ZkUtils.createPersistentPath(zkClient, zkPath, jsonPartitionData)
+      } else {
+        info("Topic update " + jsonPartitionData.toString)
+        ZkUtils.updatePersistentPath(zkClient, zkPath, jsonPartitionData)
+      }
       debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionData))
     } catch {
       case e: ZkNodeExistsException => throw new TopicExistsException("topic %s already exists".format(topic))

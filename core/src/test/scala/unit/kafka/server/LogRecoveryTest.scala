@@ -71,7 +71,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    AdminUtils.createTopicWithAssignment(zkClient, topic, Map(0->Seq(0,1)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0,1)))
 
     // wait until leader is elected
     var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500)
@@ -104,7 +104,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    AdminUtils.createTopicWithAssignment(zkClient, topic, Map(0->Seq(0,1)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0,1)))
 
     // wait until leader is elected
     var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500)
@@ -168,7 +168,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    AdminUtils.createTopicWithAssignment(zkClient, topic, Map(0->Seq(0,1)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0,1)))
 
     // wait until leader is elected
     var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500)
@@ -201,7 +201,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    AdminUtils.createTopicWithAssignment(zkClient, topic, Map(0->Seq(server1.config.brokerId, server2.config.brokerId)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(server1.config.brokerId, server2.config.brokerId)))
 
     // wait until leader is elected
     var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500)

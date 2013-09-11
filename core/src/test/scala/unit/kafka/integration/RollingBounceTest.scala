@@ -79,10 +79,10 @@ class RollingBounceTest extends JUnit3Suite with ZooKeeperTestHarness {
     val topic4 = "new-topic4"
 
     // create topics with 1 partition, 2 replicas, one on each broker
-    AdminUtils.createTopicWithAssignment(zkClient, topic1, Map(0->Seq(0,1)))
-    AdminUtils.createTopicWithAssignment(zkClient, topic2, Map(0->Seq(1,2)))
-    AdminUtils.createTopicWithAssignment(zkClient, topic3, Map(0->Seq(2,3)))
-    AdminUtils.createTopicWithAssignment(zkClient, topic4, Map(0->Seq(0,3)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic1, Map(0->Seq(0,1)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic2, Map(0->Seq(1,2)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic3, Map(0->Seq(2,3)))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic4, Map(0->Seq(0,3)))
 
     // wait until leader is elected
     var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, partitionId, 500)

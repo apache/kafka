@@ -41,7 +41,7 @@ class KafkaRequestHandler(id: Int, brokerId: Int, val requestChannel: RequestCha
         trace("Kafka request handler %d on broker %d handling request %s".format(id, brokerId, req))
         apis.handle(req)
       } catch {
-        case e: Throwable => error("Exception when handling request")
+        case e: Throwable => error("Exception when handling request", e)
       }
     }
   }

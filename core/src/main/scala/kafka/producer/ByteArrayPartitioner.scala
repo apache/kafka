@@ -13,17 +13,15 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
-*/
+ */
 
 package kafka.producer
 
 
 import kafka.utils._
 
-class DefaultPartitioner(props: VerifiableProperties = null) extends Partitioner {
-  private val random = new java.util.Random
-  
+private class ByteArrayPartitioner(props: VerifiableProperties = null) extends Partitioner {
   def partition(key: Any, numPartitions: Int): Int = {
-    Utils.abs(key.hashCode) % numPartitions
+    Utils.abs(java.util.Arrays.hashCode(key.asInstanceOf[Array[Byte]])) % numPartitions
   }
 }

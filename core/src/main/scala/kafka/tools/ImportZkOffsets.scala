@@ -96,9 +96,6 @@ object ImportZkOffsets extends Logging {
   }
   
   private def updateZkOffsets(zkClient: ZkClient, partitionOffsets: Map[String,String]): Unit = {
-    val cluster = ZkUtils.getCluster(zkClient)
-    var partitions: List[String] = Nil
-
     for ((partition, offset) <- partitionOffsets) {
       debug("updating [" + partition + "] with offset [" + offset + "]")
       

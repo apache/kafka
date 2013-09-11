@@ -87,7 +87,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     try {
       brokerRequestBatch.newBatch()
       replicas.foreach(r => handleStateChange(r.topic, r.partition, r.replica, targetState))
-      brokerRequestBatch.sendRequestsToBrokers(controller.epoch, controllerContext.correlationId.getAndIncrement, controllerContext.liveBrokers)
+      brokerRequestBatch.sendRequestsToBrokers(controller.epoch, controllerContext.correlationId.getAndIncrement)
     }catch {
       case e => error("Error while moving some replicas to %s state".format(targetState), e)
     }
@@ -182,7 +182,12 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                     case None =>
                       true
                   }
-                else false
+                else {
+                  replicaState.put((topic, partition, replicaId), OfflineReplica)
+                  stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OfflineReplica"
+                    .format(controllerId, controller.epoch, replicaId, topicAndPartition))
+                  false
+                }
               case None =>
                 true
             }

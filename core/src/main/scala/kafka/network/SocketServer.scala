@@ -274,18 +274,26 @@ private[kafka] class Processor(val id: Int,
     while(curr != null) {
       val key = curr.request.requestKey.asInstanceOf[SelectionKey]
       try {
-        if(curr.responseSend == null) {
-          // a null response send object indicates that there is no response to send to the client.
-          // In this case, we just want to turn the interest ops to READ to be able to read more pipelined requests
-          // that are sitting in the server's socket buffer
-          trace("Socket server received empty response to send, registering for read: " + curr)
-          key.interestOps(SelectionKey.OP_READ)
-          key.attach(null)
-          curr.request.updateRequestMetrics
-        } else {
-          trace("Socket server received response to send, registering for write: " + curr)
-          key.interestOps(SelectionKey.OP_WRITE)
-          key.attach(curr)
+        curr.responseAction match {
+          case RequestChannel.NoOpAction => {
+            // There is no response to send to the client, we need to read more pipelined requests
+            // that are sitting in the server's socket buffer
+            curr.request.updateRequestMetrics
+            trace("Socket server received empty response to send, registering for read: " + curr)
+            key.interestOps(SelectionKey.OP_READ)
+            key.attach(null)
+          }
+          case RequestChannel.SendAction => {
+            trace("Socket server received response to send, registering for write: " + curr)
+            key.interestOps(SelectionKey.OP_WRITE)
+            key.attach(curr)
+          }
+          case RequestChannel.CloseConnectionAction => {
+            curr.request.updateRequestMetrics
+            trace("Closing socket connection actively according to the response code.")
+            close(key)
+          }
+          case responseCode => throw new KafkaException("No mapping found for response code " + responseCode)
         }
       } catch {
         case e: CancelledKeyException => {

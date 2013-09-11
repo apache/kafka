@@ -231,7 +231,7 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                     # ==============================================
                     if brokerType == "leader" or brokerType == "follower":
                         self.log_message("looking up leader")
-                        leaderDict = kafka_system_test_utils.get_leader_elected_log_line(self.systemTestEnv, self.testcaseEnv, self.leaderAttributesDict)
+                        leaderDict = kafka_system_test_utils.get_leader_attributes(self.systemTestEnv, self.testcaseEnv)
 
                         # ==========================
                         # leaderDict looks like this:
@@ -285,10 +285,10 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                             kafka_system_test_utils.validate_leader_election_successful(self.testcaseEnv, leaderDict, self.testcaseEnv.validationStatusDict)
                 
                             # trigger leader re-election by stopping leader to get re-election latency
-                            reelectionLatency = kafka_system_test_utils.get_reelection_latency(self.systemTestEnv, self.testcaseEnv, leaderDict, self.leaderAttributesDict)
-                            latencyKeyName = "Leader Election Latency - iter " + str(i) + " brokerid " + leaderDict["brokerid"]
-                            self.testcaseEnv.validationStatusDict[latencyKeyName] = str("{0:.2f}".format(reelectionLatency * 1000)) + " ms"
-                            self.testcaseEnv.userDefinedEnvVarDict["leaderElectionLatencyList"].append("{0:.2f}".format(reelectionLatency * 1000))
+                            #reelectionLatency = kafka_system_test_utils.get_reelection_latency(self.systemTestEnv, self.testcaseEnv, leaderDict, self.leaderAttributesDict)
+                            #latencyKeyName = "Leader Election Latency - iter " + str(i) + " brokerid " + leaderDict["brokerid"]
+                            #self.testcaseEnv.validationStatusDict[latencyKeyName] = str("{0:.2f}".format(reelectionLatency * 1000)) + " ms"
+                            #self.testcaseEnv.userDefinedEnvVarDict["leaderElectionLatencyList"].append("{0:.2f}".format(reelectionLatency * 1000))
 
                         elif brokerType == "follower":
                             # stopping Follower
@@ -324,25 +324,25 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                             pass
 
 
-                    self.anonLogger.info("sleeping for 15s")
-                    time.sleep(15)
+                    self.anonLogger.info("sleeping for 60s")
+                    time.sleep(60)
                     i += 1
                 # while loop
 
                 # update Leader Election Latency MIN/MAX to testcaseEnv.validationStatusDict
-                self.testcaseEnv.validationStatusDict["Leader Election Latency MIN"] = None
-                try:
-                    self.testcaseEnv.validationStatusDict["Leader Election Latency MIN"] = \
-                        min(self.testcaseEnv.userDefinedEnvVarDict["leaderElectionLatencyList"])
-                except:
-                    pass
-
-                self.testcaseEnv.validationStatusDict["Leader Election Latency MAX"] = None
-                try:
-                    self.testcaseEnv.validationStatusDict["Leader Election Latency MAX"] = \
-                        max(self.testcaseEnv.userDefinedEnvVarDict["leaderElectionLatencyList"])
-                except:
-                    pass
+                #self.testcaseEnv.validationStatusDict["Leader Election Latency MIN"] = None
+                #try:
+                #    self.testcaseEnv.validationStatusDict["Leader Election Latency MIN"] = \
+                #        min(self.testcaseEnv.userDefinedEnvVarDict["leaderElectionLatencyList"])
+                #except:
+                #    pass
+                #
+                #self.testcaseEnv.validationStatusDict["Leader Election Latency MAX"] = None
+                #try:
+                #    self.testcaseEnv.validationStatusDict["Leader Election Latency MAX"] = \
+                #        max(self.testcaseEnv.userDefinedEnvVarDict["leaderElectionLatencyList"])
+                #except:
+                #    pass
 
                 # =============================================
                 # tell producer to stop

@@ -39,7 +39,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
                              private val config: ConsumerConfig,
                              private val zkClient : ZkClient)
         extends AbstractFetcherManager("ConsumerFetcherManager-%d".format(SystemTime.milliseconds),
-                                       config.groupId, 1) {
+                                       config.clientId, 1) {
   private var partitionMap: immutable.Map[TopicAndPartition, PartitionTopicInfo] = null
   private var cluster: Cluster = null
   private val noLeaderPartitionSet = new mutable.HashSet[TopicAndPartition]
@@ -92,7 +92,20 @@ class ConsumerFetcherManager(private val consumerIdString: String,
       leaderForPartitionsMap.foreach {
         case(topicAndPartition, leaderBroker) =>
           val pti = partitionMap(topicAndPartition)
-          addFetcher(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset(), leaderBroker)
+          try {
+            addFetcher(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset(), leaderBroker)
+          } catch {
+            case t => {
+                if (!isRunning.get())
+                  throw t /* If this thread is stopped, propagate this exception to kill the thread. */
+                else {
+                  warn("Failed to add leader for partition %s; will retry".format(topicAndPartition), t)
+                  lock.lock()
+                  noLeaderPartitionSet += topicAndPartition
+                  lock.unlock()
+                }
+              }
+          }
       }
 
       shutdownIdleFetcherThreads()

@@ -114,6 +114,33 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   }
 
   @Test
+  def testMessageSizeTooLargeWithAckZero() {
+    val server = servers.head
+
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
+    props.put("request.required.acks", "0")
+
+    val producer = new SyncProducer(new SyncProducerConfig(props))
+    AdminUtils.createTopic(zkClient, "test", 1, 1)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0, 500)
+
+    // This message will be dropped silently since message size too large.
+    producer.send(TestUtils.produceRequest("test", 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(new Array[Byte](configs(0).messageMaxBytes + 1))), acks = 0))
+
+    // Send another message whose size is large enough to exceed the buffer size so
+    // the socket buffer will be flushed immediately;
+    // this send should fail since the socket has been closed
+    try {
+      producer.send(TestUtils.produceRequest("test", 0,
+        new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(new Array[Byte](configs(0).messageMaxBytes + 1))), acks = 0))
+    } catch {
+      case e : java.io.IOException => // success
+      case e2 => throw e2
+    }
+  }
+
+  @Test
   def testProduceCorrectlyReceivesResponse() {
     val server = servers.head
     val props = TestUtils.getSyncProducerConfig(server.socketServer.port)

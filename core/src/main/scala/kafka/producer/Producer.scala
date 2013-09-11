@@ -33,16 +33,17 @@ class Producer[K,V](val config: ProducerConfig,
   private val hasShutdown = new AtomicBoolean(false)
   private val queue = new LinkedBlockingQueue[KeyedMessage[K,V]](config.queueBufferingMaxMessages)
 
-  private val random = new Random
   private var sync: Boolean = true
   private var producerSendThread: ProducerSendThread[K,V] = null
+  private val lock = new Object()
+
   config.producerType match {
     case "sync" =>
     case "async" =>
       sync = false
       producerSendThread = new ProducerSendThread[K,V]("ProducerSendThread-" + config.clientId,
                                                        queue,
-                                                       eventHandler, 
+                                                       eventHandler,
                                                        config.queueBufferingMaxMs,
                                                        config.batchNumMessages,
                                                        config.clientId)
@@ -67,12 +68,14 @@ class Producer[K,V](val config: ProducerConfig,
    * @param messages the producer data object that encapsulates the topic, key and message data
    */
   def send(messages: KeyedMessage[K,V]*) {
-    if (hasShutdown.get)
-      throw new ProducerClosedException
-    recordStats(messages)
-    sync match {
-      case true => eventHandler.handle(messages)
-      case false => asyncSend(messages)
+    lock synchronized {
+      if (hasShutdown.get)
+        throw new ProducerClosedException
+      recordStats(messages)
+      sync match {
+        case true => eventHandler.handle(messages)
+        case false => asyncSend(messages)
+      }
     }
   }
 
@@ -119,12 +122,14 @@ class Producer[K,V](val config: ProducerConfig,
    * the zookeeper client connection if one exists
    */
   def close() = {
-    val canShutdown = hasShutdown.compareAndSet(false, true)
-    if(canShutdown) {
-      info("Shutting down producer")
-      if (producerSendThread != null)
-        producerSendThread.shutdown
-      eventHandler.close
+    lock synchronized {
+      val canShutdown = hasShutdown.compareAndSet(false, true)
+      if(canShutdown) {
+        info("Shutting down producer")
+        if (producerSendThread != null)
+          producerSendThread.shutdown
+        eventHandler.close
+      }
     }
   }
 }
