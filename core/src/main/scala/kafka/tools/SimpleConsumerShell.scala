@@ -217,7 +217,7 @@ object SimpleConsumerShell extends Logging {
                 formatter.writeTo(key, if(message.isNull) null else Utils.readBytes(message.payload), System.out)
                 numMessagesConsumed += 1
               } catch {
-                case e =>
+                case e: Throwable =>
                   if (skipMessageOnError)
                     error("Error processing message, skipping this message: ", e)
                   else

@@ -19,6 +19,7 @@ package kafka.utils
 
 import java.util.ArrayList
 import java.util.concurrent._
+import collection.mutable
 import collection.JavaConversions
 import kafka.common.KafkaException
 import java.lang.Object
@@ -71,10 +72,15 @@ class Pool[K,V](valueFactory: Option[(K) => V] = None) extends Iterable[(K, V)] 
   
   def remove(key: K): V = pool.remove(key)
   
-  def keys = JavaConversions.asSet(pool.keySet())
+  def keys: mutable.Set[K] = {
+    import JavaConversions._
+    pool.keySet()
+  }
   
-  def values: Iterable[V] = 
-    JavaConversions.asIterable(new ArrayList[V](pool.values()))
+  def values: Iterable[V] = {
+    import JavaConversions._
+    new ArrayList[V](pool.values())
+  }
   
   def clear() { pool.clear() }
   

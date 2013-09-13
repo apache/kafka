@@ -95,7 +95,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
       trace("issuing to broker %d of fetch request %s".format(sourceBroker.id, fetchRequest))
       response = simpleConsumer.fetch(fetchRequest)
     } catch {
-      case t =>
+      case t: Throwable =>
         if (isRunning.get) {
           warn("Error in fetch %s".format(fetchRequest), t)
           partitionMapLock synchronized {
@@ -136,7 +136,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
                       // 2. If the message is corrupt due to a transient state in the log (truncation, partial writes can cause this), we simply continue and
                       //    should get fixed in the subsequent fetches
                       logger.warn("Found invalid messages during fetch for partition [" + topic + "," + partitionId + "] offset " + currentOffset.get + " error " + ime.getMessage)
-                    case e =>
+                    case e: Throwable =>
                       throw new KafkaException("error processing data for partition [%s,%d] offset %d"
                                                .format(topic, partitionId, currentOffset.get), e)
                   }
@@ -147,7 +147,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
                     warn("Current offset %d for partition [%s,%d] out of range; reset offset to %d"
                       .format(currentOffset.get, topic, partitionId, newOffset))
                   } catch {
-                    case e =>
+                    case e: Throwable =>
                       warn("Error getting offset for partition [%s,%d] to broker %d".format(topic, partitionId, sourceBroker.id), e)
                       partitionsWithError += topicAndPartition
                   }

@@ -23,7 +23,8 @@ import collection.JavaConversions
 class OffsetCommitResponse(private val underlying: kafka.api.OffsetCommitResponse) {
 
   def errors: java.util.Map[TopicAndPartition, Short] = {
-    JavaConversions.asMap(underlying.requestInfo) 
+    import JavaConversions._
+    underlying.requestInfo
   }
 
 }

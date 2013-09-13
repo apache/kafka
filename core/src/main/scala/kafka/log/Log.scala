@@ -21,7 +21,7 @@ import java.io.{IOException, File}
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
 import java.util.concurrent.atomic._
 import kafka.utils._
-import scala.collection.JavaConversions.asIterable;
+import scala.collection.JavaConversions
 import java.text.NumberFormat
 import kafka.message._
 import kafka.common._
@@ -162,7 +162,7 @@ class Log(val dir: File,
   }
   
   private def recoverLog() {
-    val lastOffset = try {activeSegment.nextOffset} catch {case _ => -1L}
+    val lastOffset = try {activeSegment.nextOffset} catch {case _: Throwable => -1L}
     if(lastOffset <= this.recoveryPoint) {
       info("Log '%s' is fully intact, skipping recovery".format(name))
       this.recoveryPoint = lastOffset
@@ -581,13 +581,19 @@ class Log(val dir: File,
   /**
    * All the log segments in this log ordered from oldest to newest
    */
-  def logSegments: Iterable[LogSegment] = asIterable(segments.values)
+  def logSegments: Iterable[LogSegment] = {
+    import JavaConversions._
+    segments.values
+  }
   
   /**
    * Get all segments beginning with the segment that includes "from" and ending with the segment
    * that includes up to "to-1" or the end of the log (if to > logEndOffset)
    */
-  def logSegments(from: Long, to: Long) = asIterable(segments.subMap(from, true, to, false).values)
+  def logSegments(from: Long, to: Long): Iterable[LogSegment] = {
+    import JavaConversions._
+    segments.subMap(from, true, to, false).values
+  }
   
   override def toString() = "Log(" + dir + ")"
   

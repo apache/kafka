@@ -201,7 +201,7 @@ class LogTest extends JUnitSuite {
       log.read(1025, 1000)
       fail("Expected exception on invalid read.")
     } catch {
-      case e: OffsetOutOfRangeException => "This is good."
+      case e: OffsetOutOfRangeException => // This is good.
     }
   }
 

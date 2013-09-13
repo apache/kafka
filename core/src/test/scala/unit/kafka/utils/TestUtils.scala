@@ -411,7 +411,7 @@ object TestUtils extends Logging {
           ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
             ZkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch))
         } catch {
-          case oe => error("Error while electing leader for partition [%s,%d]".format(topic, partition), oe)
+          case oe: Throwable => error("Error while electing leader for partition [%s,%d]".format(topic, partition), oe)
         }
       }
     }

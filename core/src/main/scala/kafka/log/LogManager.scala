@@ -228,7 +228,7 @@ class LogManager(val logDirs: Array[File],
            .format(topicAndPartition.topic, 
                    topicAndPartition.partition, 
                    dataDir.getAbsolutePath,
-                   JavaConversions.asMap(config.toProps).mkString(", ")))
+                   {import JavaConversions._; config.toProps.mkString(", ")}))
       log
     }
   }
@@ -320,7 +320,7 @@ class LogManager(val logDirs: Array[File],
         if(timeSinceLastFlush >= log.config.flushMs)
           log.flush
       } catch {
-        case e =>
+        case e: Throwable =>
           error("Error flushing topic " + topicAndPartition.topic, e)
           e match {
             case _: IOException =>

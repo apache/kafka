@@ -27,7 +27,10 @@ class OffsetCommitRequest(groupId: String,
                           correlationId: Int,
                           clientId: String) {
   val underlying = {
-    val scalaMap = JavaConversions.asMap(requestInfo).toMap
+    val scalaMap: Map[TopicAndPartition, OffsetMetadataAndError] = {
+      import JavaConversions._
+      requestInfo.toMap
+    }
     kafka.api.OffsetCommitRequest(
       groupId = groupId,
       requestInfo = scalaMap,

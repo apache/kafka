@@ -34,7 +34,7 @@ class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
       server.startup()
     }
     catch {
-      case e =>
+      case e: Throwable =>
         fatal("Fatal error during KafkaServerStable startup. Prepare to shutdown", e)
         shutdown()
         System.exit(1)
@@ -46,7 +46,7 @@ class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
       server.shutdown()
     }
     catch {
-      case e =>
+      case e: Throwable =>
         fatal("Fatal error during KafkaServerStable shutdown. Prepare to halt", e)
         System.exit(1)
     }

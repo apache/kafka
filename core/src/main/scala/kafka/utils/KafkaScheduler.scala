@@ -99,7 +99,7 @@ class KafkaScheduler(val threads: Int,
           trace("Begining execution of scheduled task '%s'.".format(name))
           fun()
         } catch {
-          case t => error("Uncaught exception in scheduled task '" + name +"'", t)
+          case t: Throwable => error("Uncaught exception in scheduled task '" + name +"'", t)
         } finally {
           trace("Completed execution of scheduled task '%s'.".format(name))
         }

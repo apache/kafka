@@ -41,7 +41,8 @@ object KafkaBuild extends Build {
   </license>
 </licenses>,
     scalacOptions ++= Seq("-deprecation", "-unchecked", "-g:none"),
-    crossScalaVersions := Seq("2.8.0","2.8.2", "2.9.1", "2.9.2"),
+    crossScalaVersions := Seq("2.8.0","2.8.2", "2.9.1", "2.9.2", "2.10.1"),
+    excludeFilter in unmanagedSources <<= scalaVersion(v => if (v.startsWith("2.8")) "*_2.9+.scala" else "*_2.8.scala"),
     scalaVersion := "2.8.0",
     version := "0.8.0-beta1",
     publishTo := Some("Apache Maven Repo" at "https://repository.apache.org/service/local/staging/deploy/maven2"),

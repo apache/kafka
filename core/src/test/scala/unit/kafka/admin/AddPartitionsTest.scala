@@ -104,7 +104,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
       fail("Topic should not exist")
     } catch {
       case e: AdminOperationException => //this is good
-      case e2 => throw e2
+      case e2: Throwable => throw e2
     }
   }
 
@@ -114,7 +114,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
       fail("Add partitions should fail")
     } catch {
       case e: AdminOperationException => //this is good
-      case e2 => throw e2
+      case e2: Throwable => throw e2
     }
   }
 

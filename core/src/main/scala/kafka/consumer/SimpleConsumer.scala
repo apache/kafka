@@ -84,7 +84,7 @@ class SimpleConsumer(val host: String,
               disconnect()
               throw ioe
           }
-        case e => throw e
+        case e: Throwable => throw e
       }
       response
     }

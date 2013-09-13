@@ -82,7 +82,7 @@ private[kafka] class BoundedByteBufferReceive(val maxSize: Int) extends Receive 
       case e: OutOfMemoryError =>
         error("OOME with size " + size, e)
         throw e
-      case e2 =>
+      case e2: Throwable =>
         throw e2
     }
     buffer

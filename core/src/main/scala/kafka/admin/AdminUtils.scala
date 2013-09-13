@@ -138,7 +138,7 @@ object AdminUtils extends Logging {
       debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionData))
     } catch {
       case e: ZkNodeExistsException => throw new TopicExistsException("topic %s already exists".format(topic))
-      case e2 => throw new AdminOperationException(e2.toString)
+      case e2: Throwable => throw new AdminOperationException(e2.toString)
     }
   }
   
@@ -162,7 +162,11 @@ object AdminUtils extends Logging {
    */
   private def writeTopicConfig(zkClient: ZkClient, topic: String, config: Properties) {
     if(config.size > 0) {
-      val map = Map("version" -> 1, "config" -> JavaConversions.asMap(config))
+      val configMap: mutable.Map[String, String] = {
+        import JavaConversions._
+        config
+      }
+      val map = Map("version" -> 1, "config" -> configMap)
       ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicConfigPath(topic), Json.encode(map))
     }
   }
@@ -222,7 +226,7 @@ object AdminUtils extends Logging {
               try {
                 Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l)).head)
               } catch {
-                case e => throw new LeaderNotAvailableException("Leader not available for partition [%s,%d]".format(topic, partition), e)
+                case e: Throwable => throw new LeaderNotAvailableException("Leader not available for partition [%s,%d]".format(topic, partition), e)
               }
             case None => throw new LeaderNotAvailableException("No leader exists for partition " + partition)
           }
@@ -230,7 +234,7 @@ object AdminUtils extends Logging {
             replicaInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, replicas.map(id => id.toInt))
             isrInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, inSyncReplicas)
           } catch {
-            case e => throw new ReplicaNotAvailableException(e)
+            case e: Throwable => throw new ReplicaNotAvailableException(e)
           }
           if(replicaInfo.size < replicas.size)
             throw new ReplicaNotAvailableException("Replica information not available for following brokers: " +
@@ -240,7 +244,7 @@ object AdminUtils extends Logging {
               inSyncReplicas.filterNot(isrInfo.map(_.id).contains(_)).mkString(","))
           new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
         } catch {
-          case e =>
+          case e: Throwable =>
             debug("Error while fetching metadata for partition [%s,%d]".format(topic, partition), e)
             new PartitionMetadata(partition, leaderInfo, replicaInfo, isrInfo,
               ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))

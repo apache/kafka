@@ -83,7 +83,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
         fail("should get an exception")
       } catch {
         case e: ConsumerTimeoutException => // this is ok
-        case e => throw e
+        case e: Throwable => throw e
       }
     }
 
@@ -406,10 +406,12 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   }
 
   def getZKChildrenValues(path : String) : Seq[Tuple2[String,String]] = {
-    import scala.collection.JavaConversions
     val children = zkClient.getChildren(path)
     Collections.sort(children)
-    val childrenAsSeq : Seq[java.lang.String] = JavaConversions.asBuffer(children)
+    val childrenAsSeq : Seq[java.lang.String] = {
+      import JavaConversions._
+      children.toSeq
+    }
     childrenAsSeq.map(partition =>
       (partition, zkClient.readData(path + "/" + partition).asInstanceOf[String]))
   }

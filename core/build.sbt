@@ -23,6 +23,7 @@ libraryDependencies ++= Seq(
 libraryDependencies <<= (scalaVersion, libraryDependencies) { (sv, deps) =>
   deps :+ (sv match {
     case "2.8.0" => "org.scalatest" %  "scalatest" % "1.2" % "test"
+    case v if v.startsWith("2.10") =>  "org.scalatest" %% "scalatest" % "1.9.1" % "test"
     case _       => "org.scalatest" %% "scalatest" % "1.8" % "test"
   })
 }

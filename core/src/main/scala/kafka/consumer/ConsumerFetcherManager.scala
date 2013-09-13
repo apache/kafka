@@ -79,7 +79,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
           }
         }
       } catch {
-        case t => {
+        case t: Throwable => {
             if (!isRunning.get())
               throw t /* If this thread is stopped, propagate this exception to kill the thread. */
             else
@@ -95,7 +95,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
           try {
             addFetcher(topicAndPartition.topic, topicAndPartition.partition, pti.getFetchOffset(), leaderBroker)
           } catch {
-            case t => {
+            case t: Throwable => {
                 if (!isRunning.get())
                   throw t /* If this thread is stopped, propagate this exception to kill the thread. */
                 else {

@@ -72,7 +72,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext, electionPath:
           }
           if (leaderId != -1)
             debug("Broker %d was elected as leader instead of broker %d".format(leaderId, brokerId))
-        case e2 =>
+        case e2: Throwable =>
           error("Error while electing or becoming leader on broker %d".format(brokerId), e2)
           leaderId = -1
     }

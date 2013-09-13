@@ -195,7 +195,10 @@ class VerifiableProperties(val props: Properties) extends Logging {
 
   def verify() {
     info("Verifying properties")
-    val propNames = JavaConversions.asBuffer(Collections.list(props.propertyNames)).map(_.toString).sorted
+    val propNames = {
+      import JavaConversions._
+      Collections.list(props.propertyNames).map(_.toString).sorted
+    }
     for(key <- propNames) {
       if (!referenceSet.contains(key))
         warn("Property %s is not valid".format(key))

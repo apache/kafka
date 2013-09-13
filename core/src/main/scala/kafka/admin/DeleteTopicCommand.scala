@@ -54,7 +54,7 @@ object DeleteTopicCommand {
       println("deletion succeeded!")
     }
     catch {
-      case e =>
+      case e: Throwable =>
         println("delection failed because of " + e.getMessage)
         println(Utils.stackTrace(e))
     }

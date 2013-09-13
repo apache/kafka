@@ -17,7 +17,8 @@
 package kafka.controller
 
 import collection._
-import collection.JavaConversions._
+import collection.JavaConversions
+import collection.mutable.Buffer
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.api.LeaderAndIsr
 import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
@@ -91,7 +92,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       }
       brokerRequestBatch.sendRequestsToBrokers(controller.epoch, controllerContext.correlationId.getAndIncrement)
     } catch {
-      case e => error("Error while moving some partitions to the online state", e)
+      case e: Throwable => error("Error while moving some partitions to the online state", e)
       // TODO: It is not enough to bail out and log an error, it is important to trigger leader election for those partitions
     }
   }
@@ -111,7 +112,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       }
       brokerRequestBatch.sendRequestsToBrokers(controller.epoch, controllerContext.correlationId.getAndIncrement)
     }catch {
-      case e => error("Error while moving some partitions to %s state".format(targetState), e)
+      case e: Throwable => error("Error while moving some partitions to %s state".format(targetState), e)
       // TODO: It is not enough to bail out and log an error, it is important to trigger state changes for those partitions
     }
   }
@@ -321,7 +322,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
     } catch {
       case lenne: LeaderElectionNotNeededException => // swallow
       case nroe: NoReplicaOnlineException => throw nroe
-      case sce =>
+      case sce: Throwable =>
         val failMsg = "encountered error while electing leader for partition %s due to: %s.".format(topicAndPartition, sce.getMessage)
         stateChangeLogger.error("Controller %d epoch %d ".format(controllerId, controller.epoch) + failMsg)
         throw new StateChangeFailedException(failMsg, sce)
@@ -359,8 +360,11 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       controllerContext.controllerLock synchronized {
         if (hasStarted.get) {
           try {
-            debug("Topic change listener fired for path %s with children %s".format(parentPath, children.mkString(",")))
-            val currentChildren = JavaConversions.asBuffer(children).toSet
+            val currentChildren = {
+              import JavaConversions._
+              debug("Topic change listener fired for path %s with children %s".format(parentPath, children.mkString(",")))
+              (children: Buffer[String]).toSet
+            }
             val newTopics = currentChildren -- controllerContext.allTopics
             val deletedTopics = controllerContext.allTopics -- currentChildren
             //        val deletedPartitionReplicaAssignment = replicaAssignment.filter(p => deletedTopics.contains(p._1._1))
@@ -375,7 +379,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             if(newTopics.size > 0)
               controller.onNewTopicCreation(newTopics, addedPartitionReplicaAssignment.keySet.toSet)
           } catch {
-            case e => error("Error while handling new topic", e )
+            case e: Throwable => error("Error while handling new topic", e )
           }
           // TODO: kafka-330  Handle deleted topics
         }
@@ -399,7 +403,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           info("New partitions to be added [%s]".format(partitionsRemainingToBeAdded))
           controller.onNewPartitionCreation(partitionsRemainingToBeAdded.keySet.toSet)
         } catch {
-          case e => error("Error while handling add partitions for data path " + dataPath, e )
+          case e: Throwable => error("Error while handling add partitions for data path " + dataPath, e )
         }
       }
     }

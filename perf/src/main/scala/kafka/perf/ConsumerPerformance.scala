@@ -175,7 +175,7 @@ object ConsumerPerformance {
         case _: InterruptedException =>
         case _: ClosedByInterruptException =>
         case _: ConsumerTimeoutException =>
-        case e => throw e
+        case e: Throwable => throw e
       }
       totalMessagesRead.addAndGet(messagesRead)
       totalBytesRead.addAndGet(bytesRead)
