@@ -135,12 +135,17 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
   }
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val producerResponseStatus = data.map {
-      case (topicAndPartition, data) =>
-        (topicAndPartition, ProducerResponseStatus(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1l))
+    if(request.requestObj.asInstanceOf[ProducerRequest].requiredAcks == 0) {
+        requestChannel.closeConnection(request.processor, request)
     }
-    val errorResponse = ProducerResponse(correlationId, producerResponseStatus)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+    else {
+      val producerResponseStatus = data.map {
+        case (topicAndPartition, data) =>
+          (topicAndPartition, ProducerResponseStatus(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), -1l))
+      }
+      val errorResponse = ProducerResponse(correlationId, producerResponseStatus)
+      requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+    }
   }
 
   def emptyData(){
