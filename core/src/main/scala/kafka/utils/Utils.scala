@@ -223,18 +223,18 @@ object Utils extends Logging {
    * @param file The root file at which to begin deleting
    */
   def rm(file: File) {
-	if(file == null) {
-	  return
-	} else if(file.isDirectory) {
-	  val files = file.listFiles()
-	  if(files != null) {
-	    for(f <- files)
-	      rm(f)
+	  if(file == null) {
+	    return
+	  } else if(file.isDirectory) {
+	    val files = file.listFiles()
+	    if(files != null) {
+	      for(f <- files)
+	        rm(f)
+	    }
+	    file.delete()
+	  } else {
+	    file.delete()
 	  }
-	  file.delete()
-	} else {
-	  file.delete()
-	}
   }
   
   /**
