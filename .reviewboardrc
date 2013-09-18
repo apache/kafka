@@ -1,0 +1,3 @@
+REPOSITORY = 'git://git.apache.org/kafka.git'
+TARGET_GROUPS = 'kafka'
+GUESS_FIELDS = True	
