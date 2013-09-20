@@ -422,7 +422,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       }
       else {
         val partitionsAssignmentPerTopicMap = getPartitionAssignmentForTopics(zkClient, myTopicThreadIdsMap.keySet.toSeq)
-        val partitionsPerTopicMap = partitionsAssignmentPerTopicMap.map(p => (p._1, p._2.keySet.toSeq))
+        val partitionsPerTopicMap = partitionsAssignmentPerTopicMap.map(p => (p._1, p._2.keySet.toSeq.sorted))
 
         /**
          * fetchers must be stopped to avoid data duplication, since if the current
