@@ -129,7 +129,10 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     new Gauge[Int] {
       def value(): Int = {
         controllerContext.controllerLock synchronized {
-          controllerContext.partitionLeadershipInfo.count(p => !controllerContext.liveBrokerIds.contains(p._2.leaderAndIsr.leader))
+          if (!isActive())
+            0
+          else
+            controllerContext.partitionLeadershipInfo.count(p => !controllerContext.liveBrokerIds.contains(p._2.leaderAndIsr.leader))
         }
       }
     }
