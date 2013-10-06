@@ -1010,6 +1010,7 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
             cmdList = ["ssh " + host,
                        "'JAVA_HOME=" + javaHome,
                        "JMX_PORT=" + jmxPort,
+                       "KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%s/config/test-log4j.properties" % kafkaHome,
                        kafkaRunClassBin + " kafka.perf.ProducerPerformance",
                        "--broker-list " + brokerListStr,
                        "--initial-message-id " + str(initMsgId),
