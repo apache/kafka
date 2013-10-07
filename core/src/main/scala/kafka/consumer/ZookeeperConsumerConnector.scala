@@ -25,13 +25,12 @@ import kafka.cluster._
 import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import java.net.InetAddress
-import org.I0Itec.zkclient.{IZkStateListener, IZkChildListener, ZkClient}
+import org.I0Itec.zkclient.{IZkDataListener, IZkStateListener, IZkChildListener, ZkClient}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import java.util.UUID
 import kafka.serializer._
 import kafka.utils.ZkUtils._
 import kafka.common._
-import kafka.client.ClientUtils
 import com.yammer.metrics.core.Gauge
 import kafka.metrics._
 import scala.Some
@@ -91,6 +90,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private val messageStreamCreated = new AtomicBoolean(false)
 
   private var sessionExpirationListener: ZKSessionExpireListener = null
+  private var topicPartitionChangeListenner: ZKTopicPartitionChangeListener = null
   private var loadBalancerListener: ZKRebalancerListener = null
 
   private var wildcardTopicWatcher: ZookeeperTopicEventWatcher = null
@@ -272,8 +272,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     }
   }
 
-
-
   class ZKSessionExpireListener(val dirs: ZKGroupDirs,
                                  val consumerIdString: String,
                                  val topicCount: TopicCount,
@@ -308,6 +306,29 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       // The child change watchers will be set inside rebalance when we read the children list.
     }
 
+  }
+
+  class ZKTopicPartitionChangeListener(val loadBalancerListener: ZKRebalancerListener)
+    extends IZkDataListener {
+
+    def handleDataChange(dataPath : String, data: Object) {
+      try {
+        info("Topic info for path " + dataPath + " changed to " + data.toString + ", triggering rebalance")
+        // explicitly trigger load balancing for this consumer
+        loadBalancerListener.syncedRebalance()
+
+        // There is no need to re-subscribe the watcher since it will be automatically
+        // re-registered upon firing of this event by zkClient
+      } catch {
+        case e: Throwable => error("Error while handling topic partition change for data path " + dataPath, e )
+      }
+    }
+
+    @throws(classOf[Exception])
+    def handleDataDeleted(dataPath : String) {
+      // TODO: This need to be implemented when we support delete topic
+      warn("Topic for path " + dataPath + " gets deleted, which should not happen at this time")
+    }
   }
 
   class ZKRebalancerListener(val group: String, val consumerIdString: String,
@@ -425,17 +446,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         true
       }
       else {
-        val topicsMetadata = ClientUtils.fetchTopicMetadata(myTopicThreadIdsMap.keySet,
-                                                            brokers,
-                                                            config.clientId,
-                                                            config.socketTimeoutMs,
-                                                            correlationId.getAndIncrement).topicsMetadata
-        val partitionsPerTopicMap = new mutable.HashMap[String, Seq[Int]]
-        topicsMetadata.foreach(m => {
-          val topic = m.topic
-          val partitions = m.partitionsMetadata.map(m1 => m1.partitionId)
-          partitionsPerTopicMap.put(topic, partitions)
-        })
+        val partitionsAssignmentPerTopicMap = getPartitionAssignmentForTopics(zkClient, myTopicThreadIdsMap.keySet.toSeq)
+        val partitionsPerTopicMap = partitionsAssignmentPerTopicMap.map(p => (p._1, p._2.keySet.toSeq.sorted))
 
         /**
          * fetchers must be stopped to avoid data duplication, since if the current
@@ -639,10 +651,14 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         config.groupId, consumerIdString, topicStreamsMap.asInstanceOf[scala.collection.mutable.Map[String, List[KafkaStream[_,_]]]])
     }
 
-    // register listener for session expired event
+    // create listener for session expired event if not exist yet
     if (sessionExpirationListener == null)
       sessionExpirationListener = new ZKSessionExpireListener(
         dirs, consumerIdString, topicCount, loadBalancerListener)
+
+    // create listener for topic partition change event if not exist yet
+    if (topicPartitionChangeListenner == null)
+      topicPartitionChangeListenner = new ZKTopicPartitionChangeListener(loadBalancerListener)
 
     val topicStreamsMap = loadBalancerListener.kafkaMessageAndMetadataStreams
 
@@ -699,8 +715,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     topicStreamsMap.foreach { topicAndStreams =>
       // register on broker partition path changes
-      val partitionPath = BrokerTopicsPath + "/" + topicAndStreams._1
-      zkClient.subscribeChildChanges(partitionPath, loadBalancerListener)
+      val topicPath = BrokerTopicsPath + "/" + topicAndStreams._1
+      zkClient.subscribeDataChanges(topicPath, topicPartitionChangeListenner)
     }
 
     // explicitly trigger load balancing for this consumer

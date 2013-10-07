@@ -50,7 +50,8 @@ object KafkaBuild extends Build {
     buildNumber := System.getProperty("build.number", ""),
     version <<= (buildNumber, version)  { (build, version)  => if (build == "") version else version + "+" + build},
     releaseName <<= (name, version, scalaVersion) {(name, version, scalaVersion) => name + "_" + scalaVersion + "-" + version},
-    javacOptions ++= Seq("-Xlint:unchecked", "-source", "1.5"),
+    javacOptions in compile ++= Seq("-Xlint:unchecked", "-source", "1.5"),
+    javacOptions in doc ++= Seq("-source", "1.5"),
     parallelExecution in Test := false, // Prevent tests from overrunning each other
     libraryDependencies ++= Seq(
       "log4j"                 % "log4j"        % "1.2.15" exclude("javax.jms", "jms"),
@@ -73,7 +74,7 @@ object KafkaBuild extends Build {
   )
 
   val hadoopSettings = Seq(
-    javacOptions ++= Seq("-Xlint:deprecation"),
+    javacOptions in compile ++= Seq("-Xlint:deprecation"),
     libraryDependencies ++= Seq(
       "org.apache.avro"      % "avro"               % "1.4.0",
       "org.apache.pig"       % "pig"                % "0.8.0",

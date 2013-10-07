@@ -196,7 +196,7 @@ public class KafkaETLContext {
         if (_messageIt != null && _messageIt.hasNext()) {
             MessageAndOffset messageAndOffset = _messageIt.next();
             
-            ByteBuffer buf = messageAndOffset.message().payload();
+            ByteBuffer buf = messageAndOffset.message().buffer();
             int origSize = buf.remaining();
             byte[] bytes = new byte[origSize];
           buf.get(bytes, buf.position(), origSize);

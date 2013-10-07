@@ -16,8 +16,6 @@
  */
 package kafka.etl.impl;
 
-import java.io.IOException;
-import java.nio.ByteBuffer;
 import kafka.etl.KafkaETLKey;
 import kafka.etl.KafkaETLUtils;
 import kafka.message.Message;
@@ -28,6 +26,9 @@ import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.Mapper;
 import org.apache.hadoop.mapred.OutputCollector;
 import org.apache.hadoop.mapred.Reporter;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * Simple implementation of KafkaETLMapper. It assumes that 
@@ -61,7 +62,7 @@ Mapper<KafkaETLKey, BytesWritable, LongWritable, Text> {
         byte[] bytes = KafkaETLUtils.getBytes(val);
         
         //check the checksum of message
-        Message message = new Message(bytes);
+        Message message = new Message(ByteBuffer.wrap(bytes));
         long checksum = key.getChecksum();
         if (checksum != message.checksum()) 
             throw new IOException ("Invalid message checksum " 
