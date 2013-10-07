@@ -58,6 +58,12 @@ object ReassignPartitionsCommand extends Logging {
       .describedAs("execute")
       .ofType(classOf[String])
 
+    val statusCheckJsonFileOpt = parser.accepts("status-check-json-file", "REQUIRED: The JSON file with the list of partitions and the " +
+      "new replicas they should be reassigned to, which can be obtained from the output of a dry run.")
+      .withRequiredArg
+      .describedAs("partition reassignment json file path")
+      .ofType(classOf[String])
+
     val options = parser.parse(args : _*)
 
     for(arg <- List(zkConnectOpt)) {
@@ -80,7 +86,24 @@ object ReassignPartitionsCommand extends Logging {
 
       var partitionsToBeReassigned : Map[TopicAndPartition, Seq[Int]] = new mutable.HashMap[TopicAndPartition, List[Int]]()
 
-      if(options.has(topicsToMoveJsonFileOpt)) {
+      if(options.has(statusCheckJsonFileOpt)) {
+        val jsonFile = options.valueOf(statusCheckJsonFileOpt)
+        val jsonString = Utils.readFileAsString(jsonFile)
+        val partitionsToBeReassigned = ZkUtils.parsePartitionReassignmentData(jsonString)
+
+        println("Status of partition reassignment:")
+        val reassignedPartitionsStatus = checkIfReassignmentSucceeded(zkClient, partitionsToBeReassigned)
+        reassignedPartitionsStatus.foreach { partition =>
+          partition._2 match {
+            case ReassignmentCompleted =>
+              println("Reassignment of partition %s completed successfully".format(partition._1))
+            case ReassignmentFailed =>
+              println("Reassignment of partition %s failed".format(partition._1))
+            case ReassignmentInProgress =>
+              println("Reassignment of partition %s is still in progress".format(partition._1))
+          }
+        }
+      } else if(options.has(topicsToMoveJsonFileOpt)) {
         val topicsToMoveJsonFile = options.valueOf(topicsToMoveJsonFileOpt)
         val brokerList = options.valueOf(brokerListOpt)
         val topicsToMoveJsonString = Utils.readFileAsString(topicsToMoveJsonFile)
@@ -107,16 +130,19 @@ object ReassignPartitionsCommand extends Logging {
         System.exit(1)
       }
 
-      if (options.has(executeOpt)) {
-        val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, partitionsToBeReassigned)
+      if (options.has(topicsToMoveJsonFileOpt) || options.has(manualAssignmentJsonFileOpt)) {
+        if (options.has(executeOpt)) {
+          val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, partitionsToBeReassigned)
 
-        if(reassignPartitionsCommand.reassignPartitions())
-          println("Successfully started reassignment of partitions %s".format(partitionsToBeReassigned))
-        else
-          println("Failed to reassign partitions %s".format(partitionsToBeReassigned))
-      } else {
-        System.out.println("This is a dry run (Use --execute to do the actual reassignment. " +
-          "The replica assignment is \n" + partitionsToBeReassigned.toString())
+          if(reassignPartitionsCommand.reassignPartitions())
+            println("Successfully started reassignment of partitions %s".format(partitionsToBeReassigned))
+          else
+            println("Failed to reassign partitions %s".format(partitionsToBeReassigned))
+        } else {
+          System.out.println("This is a dry run (Use --execute to do the actual reassignment. " +
+            "The following is the replica assignment. Save it for the status check option.\n" +
+            ZkUtils.getPartitionReassignmentZkData(partitionsToBeReassigned))
+        }
       }
     } catch {
       case e: Throwable =>
@@ -125,6 +151,32 @@ object ReassignPartitionsCommand extends Logging {
     } finally {
       if (zkClient != null)
         zkClient.close()
+    }
+  }
+
+  private def checkIfReassignmentSucceeded(zkClient: ZkClient, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]])
+  :Map[TopicAndPartition, ReassignmentStatus] = {
+    val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient).mapValues(_.newReplicas)
+    partitionsToBeReassigned.map { topicAndPartition =>
+      (topicAndPartition._1, checkIfPartitionReassignmentSucceeded(zkClient, topicAndPartition._1,
+        topicAndPartition._2, partitionsToBeReassigned, partitionsBeingReassigned))
+    }
+  }
+
+  private def checkIfPartitionReassignmentSucceeded(zkClient: ZkClient, topicAndPartition: TopicAndPartition,
+                                            reassignedReplicas: Seq[Int],
+                                            partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]],
+                                            partitionsBeingReassigned: Map[TopicAndPartition, Seq[Int]]): ReassignmentStatus = {
+    val newReplicas = partitionsToBeReassigned(topicAndPartition)
+    partitionsBeingReassigned.get(topicAndPartition) match {
+      case Some(partition) => ReassignmentInProgress
+      case None =>
+        // check if the current replica assignment matches the expected one after reassignment
+        val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topicAndPartition.topic, topicAndPartition.partition)
+        if(assignedReplicas == newReplicas)
+          ReassignmentCompleted
+        else
+          ReassignmentFailed
     }
   }
 }
