@@ -71,7 +71,12 @@ class Partition(val topic: String,
 
   def isUnderReplicated(): Boolean = {
     leaderIsrUpdateLock synchronized {
-      inSyncReplicas.size < replicationFactor
+      leaderReplicaIfLocal() match {
+        case Some(_) =>
+          inSyncReplicas.size < replicationFactor
+        case None =>
+          false
+      }
     }
   }
 

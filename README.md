@@ -1,23 +1,30 @@
 # Apache Kafka #
 
-See our [web site](http://kafka.apache.org) details on the project.
+See our [web site](http://kafka.apache.org) for details on the project.
 
-## Building It ##
+## Building it ##
+1. ./sbt update
+2. ./sbt package
+3. ./sbt assembly-package-dependency
 
-To build for all supported versions of Scala: 
-1. ./sbt +package
+To build for a particular version of Scala (either 2.8.0, 2.8.2, 2.9.1, 2.9.2 or 2.10.1), change step 2 above to: 
+2. ./sbt "++2.8.0 package"
 
-To build for a particular version of Scala (either 2.8.0, 2.8.2, 2.9.1 or 2.9.2): 
+To build for all supported versions of Scala, change step 2 above to: 
+2. ./sbt +package
 
-1. ./sbt "++2.8.0 package" *or* ./sbt "++2.8.2 package" *or* ./sbt "++2.9.1 package" *or* ./sbt "++2.9.2 package"
+## Running it ##
+Follow instuctions in http://kafka.apache.org/documentation.html#quickstart
 
-## Running It ##
+## Running unit tests ##
+  ./sbt test
 
-To run follow the instructions here:
-1. http://kafka.apache.org/08/quickstart.html
+## Building a binary release zip or gzipped tar ball ##
+  ./sbt release-zip
+  ./sbt release-tar 
+The release file can be found inside ./target/RELEASE/.
 
 ## Other Build Tips ##
-
 Here are some useful sbt commands, to be executed at the sbt command prompt (./sbt). Prefixing with "++<version> " runs the
 command for a specific Scala version, prefixing with "+" will perform the action for all versions of Scala, and no prefix
 runs the command for the default (2.8.0) version of Scala. -
@@ -27,6 +34,7 @@ clean : Deletes all generated files (the target directory).
 compile : Compile all the sub projects, but not create the jars
 test : Run all unit tests in all sub projects
 release-zip : Create all the jars, run unit tests and create a deployable release zip
+release-tar : Create all the jars, run unit tests and create a deployable release gzipped tar tall
 package: Creates jars for src, test, docs etc
 projects : List all the sub projects 
 project sub_project_name : Switch to a particular sub-project. For example, to switch to the core kafka code, use "project core-kafka"

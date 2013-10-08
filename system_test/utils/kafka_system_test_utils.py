@@ -1878,10 +1878,16 @@ def get_controller_attributes(systemTestEnv, testcaseEnv):
     logger.debug("executing command [" + cmdStr + "]", extra=d)
     subproc = system_test_utils.sys_call_return_subproc(cmdStr)
     for line in subproc.stdout.readlines():
-        brokerid = line.rstrip('\n')
-        controllerDict["brokerid"]  = brokerid
-        controllerDict["entity_id"] = system_test_utils.get_data_by_lookup_keyval(
-                                          tcConfigsList, "broker.id", brokerid, "entity_id")
+        if "brokerid" in line:
+            json_str  = line.rstrip('\n')
+            json_data = json.loads(json_str)
+            brokerid  = str(json_data["brokerid"])
+            controllerDict["brokerid"]  = brokerid
+            controllerDict["entity_id"] = system_test_utils.get_data_by_lookup_keyval(
+                                              tcConfigsList, "broker.id", brokerid, "entity_id")
+        else:
+            pass
+
     return controllerDict
 
 def getMinCommonStartingOffset(systemTestEnv, testcaseEnv, clusterName="source"):
