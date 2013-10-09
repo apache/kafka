@@ -301,7 +301,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   /**
    * Forcefully free the buffer's mmap. We do this only on windows.
    */
-  def forceUnmap(m: MappedByteBuffer) {
+  private def forceUnmap(m: MappedByteBuffer) {
     try {
       if(m.isInstanceOf[sun.nio.ch.DirectBuffer])
         (m.asInstanceOf[sun.nio.ch.DirectBuffer]).cleaner().clean()
