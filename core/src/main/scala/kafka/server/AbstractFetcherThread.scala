@@ -29,6 +29,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.consumer.{PartitionTopicInfo, SimpleConsumer}
 import kafka.api.{FetchRequest, FetchResponse, FetchResponsePartitionData, FetchRequestBuilder}
 import kafka.common.{KafkaException, ClientIdAndBroker, TopicAndPartition, ErrorMapping}
+import kafka.utils.Utils.inLock
 
 
 /**
@@ -70,8 +71,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   }
 
   override def doWork() {
-    partitionMapLock.lock()
-    try {
+    inLock(partitionMapLock) {
       if (partitionMap.isEmpty)
         partitionMapCond.await(200L, TimeUnit.MILLISECONDS)
       partitionMap.foreach {
@@ -79,8 +79,6 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
           fetchRequestBuilder.addFetch(topicAndPartition.topic, topicAndPartition.partition,
                            offset, fetchSize)
       }
-    } finally {
-      partitionMapLock.unlock()
     }
 
     val fetchRequest = fetchRequestBuilder.build()
@@ -107,8 +105,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
 
     if (response != null) {
       // process fetched data
-      partitionMapLock.lock()
-      try {
+      inLock(partitionMapLock) {
         response.data.foreach {
           case(topicAndPartition, partitionData) =>
             val (topic, partitionId) = topicAndPartition.asTuple
@@ -160,8 +157,6 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
               }
             }
         }
-      } finally {
-        partitionMapLock.unlock()
       }
     }
 

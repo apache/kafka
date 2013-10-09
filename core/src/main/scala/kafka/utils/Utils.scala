@@ -21,6 +21,7 @@ import java.io._
 import java.nio._
 import charset.Charset
 import java.nio.channels._
+import java.util.concurrent.locks.Lock
 import java.lang.management._
 import javax.management._
 import scala.collection._
@@ -585,6 +586,18 @@ object Utils extends Logging {
     ((bytes(offset + 1) & 0xFF) << 16) |
     ((bytes(offset + 2) & 0xFF) << 8) |
     (bytes(offset + 3) & 0xFF)
+  }
+  
+  /**
+   * Execute the given function inside the lock
+   */
+  def inLock[T](lock: Lock)(fun: => T): T = {
+    lock.lock()
+    try {
+       return fun
+    } finally {
+      lock.unlock()
+    }
   }
   
 }

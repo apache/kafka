@@ -18,12 +18,14 @@
 package kafka.utils
 
 import java.util.Arrays
+import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.io._
 import org.apache.log4j.Logger
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
 import kafka.common.KafkaException
+import kafka.utils.Utils.inLock
 import org.junit.Test
 
 
@@ -93,5 +95,17 @@ class UtilsTest extends JUnitSuite {
     assertTrue(emptyListFromNullString!=null)
     assertTrue(emptyStringList.equals(emptyListFromNullString))
     assertTrue(emptyStringList.equals(emptyList))
+  }
+  
+  @Test
+  def testInLock() {
+    val lock = new ReentrantLock()
+    val result = inLock(lock) {
+      assertTrue("Should be in lock", lock.isHeldByCurrentThread)
+      1 + 1
+    }
+    assertEquals(2, result)
+    assertFalse("Should be unlocked", lock.isLocked)
+    
   }
 }
