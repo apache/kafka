@@ -100,7 +100,7 @@ object AdminUtils extends Logging {
 
     // create the new partition replication list
     val brokerList = ZkUtils.getSortedBrokerList(zkClient)
-    val newPartitionReplicaList = if (replicaAssignmentStr == "")
+    val newPartitionReplicaList = if (replicaAssignmentStr == null || replicaAssignmentStr == "")
       AdminUtils.assignReplicasToBrokers(brokerList, partitionsToAdd, existingReplicaList.size, existingReplicaList.head, existingPartitionsReplicaList.size)
     else
       getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet, existingPartitionsReplicaList.size)
