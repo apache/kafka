@@ -85,7 +85,8 @@ object TopicCommand {
       println("Updated config for topic \"%s\".".format(topic))
     }
     if(opts.options.has(opts.partitionsOpt)) {
-      println("partitions can only be added when topic has no key")
+      println("WARNING: If partitions are increased for a topic that has a key, the partition " +
+        "logic or ordering of the messages will be affected")
       val nPartitions = opts.options.valueOf(opts.partitionsOpt).intValue
       val replicaAssignmentStr = opts.options.valueOf(opts.replicaAssignmentOpt)
       AdminUtils.addPartitions(zkClient, topic, nPartitions, replicaAssignmentStr)
@@ -188,7 +189,7 @@ object TopicCommand {
                           .describedAs("name=value")
                           .ofType(classOf[String])
     val partitionsOpt = parser.accepts("partitions", "The number of partitions for the topic being created or " +
-      "altered (Partitions can only be added for a topic which has no key. Partitions cannot be decreased")
+      "altered (WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected")
                            .withRequiredArg
                            .describedAs("# of partitions")
                            .ofType(classOf[java.lang.Integer])
