@@ -100,7 +100,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   def testTopicDoesNotExist {
     try {
-      AddPartitionsCommand.addPartitions(zkClient, "Blah", 1)
+      AdminUtils.addPartitions(zkClient, "Blah", 1)
       fail("Topic should not exist")
     } catch {
       case e: AdminOperationException => //this is good
@@ -110,7 +110,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   def testWrongReplicaCount {
     try {
-      AddPartitionsCommand.addPartitions(zkClient, topic1, 2, "0:1:2")
+      AdminUtils.addPartitions(zkClient, topic1, 2, "0:1,0:1:2")
       fail("Add partitions should fail")
     } catch {
       case e: AdminOperationException => //this is good
@@ -119,7 +119,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   def testIncrementPartitions {
-    AddPartitionsCommand.addPartitions(zkClient, topic1, 2)
+    AdminUtils.addPartitions(zkClient, topic1, 3)
     // wait until leader is elected
     var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 1, 500)
     var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 2, 500)
@@ -144,7 +144,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   def testManualAssignmentOfReplicas {
-    AddPartitionsCommand.addPartitions(zkClient, topic2, 2, "0:1,2:3")
+    AdminUtils.addPartitions(zkClient, topic2, 3, "1:2,0:1,2:3")
     // wait until leader is elected
     var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 1, 500)
     var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 2, 500)
@@ -170,7 +170,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   def testReplicaPlacement {
-    AddPartitionsCommand.addPartitions(zkClient, topic3, 6)
+    AdminUtils.addPartitions(zkClient, topic3, 7)
     // wait until leader is elected
     var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, 1, 500)
     var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, 2, 500)

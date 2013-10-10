@@ -78,16 +78,22 @@ object TopicCommand {
   
   def alterTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
     CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.topicOpt)
-    val topics = opts.options.valuesOf(opts.topicOpt)
-    val configs = parseTopicConfigs(opts)
-    if(opts.options.has(opts.partitionsOpt))
-      Utils.croak("Changing the number of partitions is not supported.")
-    if(opts.options.has(opts.replicationFactorOpt))
-      Utils.croak("Changing the replication factor is not supported.")
-    for(topic <- topics) {
+    val topic = opts.options.valueOf(opts.topicOpt)
+    if(opts.options.has(opts.configOpt)) {
+      val configs = parseTopicConfigs(opts)
       AdminUtils.changeTopicConfig(zkClient, topic, configs)
       println("Updated config for topic \"%s\".".format(topic))
     }
+    if(opts.options.has(opts.partitionsOpt)) {
+      println("WARNING: If partitions are increased for a topic that has a key, the partition " +
+        "logic or ordering of the messages will be affected")
+      val nPartitions = opts.options.valueOf(opts.partitionsOpt).intValue
+      val replicaAssignmentStr = opts.options.valueOf(opts.replicaAssignmentOpt)
+      AdminUtils.addPartitions(zkClient, topic, nPartitions, replicaAssignmentStr)
+      println("adding partitions succeeded!")
+    }
+    if(opts.options.has(opts.replicationFactorOpt))
+      Utils.croak("Changing the replication factor is not supported.")
   }
   
   def deleteTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
@@ -182,7 +188,8 @@ object TopicCommand {
                           .withRequiredArg
                           .describedAs("name=value")
                           .ofType(classOf[String])
-    val partitionsOpt = parser.accepts("partitions", "The number of partitions for the topic being created.")
+    val partitionsOpt = parser.accepts("partitions", "The number of partitions for the topic being created or " +
+      "altered (WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected")
                            .withRequiredArg
                            .describedAs("# of partitions")
                            .ofType(classOf[java.lang.Integer])
