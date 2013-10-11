@@ -15,4 +15,4 @@
 # limitations under the License.
 
 export KAFKA_HEAP_OPTS="-Xmx512M"
-$(dirname $0)/kafka-run-class.sh kafka.consumer.ConsoleConsumer $@
+exec $(dirname $0)/kafka-run-class.sh kafka.consumer.ConsoleConsumer $@
