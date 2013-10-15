@@ -54,7 +54,7 @@ class ConsumerFetcherManager(private val consumerIdString: String,
       val leaderForPartitionsMap = new HashMap[TopicAndPartition, Broker]
       lock.lock()
       try {
-        if (noLeaderPartitionSet.isEmpty) {
+        while (noLeaderPartitionSet.isEmpty) {
           trace("No partition for leader election.")
           cond.await()
         }
