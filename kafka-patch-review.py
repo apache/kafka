@@ -90,7 +90,7 @@ def main():
 
   comment="Created reviewboard " 
   if not opt.reviewboard:
-    print 'Created a new reviewboard ',rb_url
+    print 'Created a new reviewboard ',rb_url,' against branch: ',opt.branch
   else:
     print 'Updated reviewboard',opt.reviewboard
     comment="Updated reviewboard "
