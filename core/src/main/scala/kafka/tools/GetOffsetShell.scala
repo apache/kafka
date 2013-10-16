@@ -20,10 +20,10 @@ package kafka.tools
 
 import kafka.consumer._
 import joptsimple._
-import java.net.URI
 import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest}
 import kafka.common.TopicAndPartition
 import kafka.client.ClientUtils
+import kafka.utils.CommandLineUtils
 
 
 object GetOffsetShell {
@@ -60,13 +60,7 @@ object GetOffsetShell {
 
     val options = parser.parse(args : _*)
 
-    for(arg <- List(brokerListOpt, topicOpt, timeOpt)) {
-      if(!options.has(arg)) {
-        System.err.println("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt, timeOpt)
 
     val clientId = "GetOffsetShell"
     val metadataTargetBrokers = ClientUtils.parseBrokerList(options.valueOf(brokerListOpt))
@@ -86,7 +80,7 @@ object GetOffsetShell {
       if(partitionList == "") {
         topicsMetadata.head.partitionsMetadata.map(_.partitionId)
       } else {
-        partitionList.mkString(",").map(_.toInt)
+        partitionList.split(",").map(_.toInt).toSeq
       }
     partitions.foreach { partitionId =>
       val partitionMetadataOpt = topicsMetadata.head.partitionsMetadata.find(_.partitionId == partitionId)
