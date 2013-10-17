@@ -520,7 +520,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if(metadataRequest.topics.size > 0)
         metadataRequest.topics.toSet
       else
-        ZkUtils.getAllTopics(zkClient).toSet
+        leaderCache.keySet.map(_.topic)
     }
     val topicMetadataList =
       partitionMetadataLock synchronized {
