@@ -48,12 +48,12 @@ class LogSegment(val log: FileMessageSet,
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0
   
-  def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int) = 
+  def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, time: Time) = 
     this(new FileMessageSet(file = Log.logFilename(dir, startOffset)), 
          new OffsetIndex(file = Log.indexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
          startOffset,
          indexIntervalBytes,
-         SystemTime)
+         time)
     
   /* Return the size in bytes of this log segment */
   def size: Long = log.sizeInBytes()

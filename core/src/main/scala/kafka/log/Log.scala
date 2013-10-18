@@ -132,7 +132,8 @@ class Log(val dir: File,
         val segment = new LogSegment(dir = dir, 
                                      startOffset = start,
                                      indexIntervalBytes = config.indexInterval, 
-                                     maxIndexSize = config.maxIndexSize)
+                                     maxIndexSize = config.maxIndexSize,
+                                     time = time)
         if(!hasIndex) {
           error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
           segment.recover(config.maxMessageSize)
@@ -146,7 +147,8 @@ class Log(val dir: File,
       segments.put(0, new LogSegment(dir = dir, 
                                      startOffset = 0,
                                      indexIntervalBytes = config.indexInterval, 
-                                     maxIndexSize = config.maxIndexSize))
+                                     maxIndexSize = config.maxIndexSize,
+                                     time = time))
     } else {
       recoverLog()
       // reset the index size of the currently active log segment to allow more entries
@@ -472,7 +474,8 @@ class Log(val dir: File,
       val segment = new LogSegment(dir, 
                                    startOffset = newOffset,
                                    indexIntervalBytes = config.indexInterval, 
-                                   maxIndexSize = config.maxIndexSize)
+                                   maxIndexSize = config.maxIndexSize,
+                                   time = time)
       val prev = addSegment(segment)
       if(prev != null)
         throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exists.".format(name, newOffset))
@@ -561,7 +564,8 @@ class Log(val dir: File,
       addSegment(new LogSegment(dir, 
                                 newOffset,
                                 indexIntervalBytes = config.indexInterval, 
-                                maxIndexSize = config.maxIndexSize))
+                                maxIndexSize = config.maxIndexSize,
+                                time = time))
       this.nextOffset.set(newOffset)
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
       truncates.getAndIncrement
@@ -592,7 +596,13 @@ class Log(val dir: File,
    */
   def logSegments(from: Long, to: Long): Iterable[LogSegment] = {
     import JavaConversions._
-    segments.subMap(from, true, to, false).values
+    lock synchronized {
+      val floor: java.lang.Long = segments.floorKey(from)
+      if(floor eq null)
+        asIterable(segments.headMap(to).values)
+      else
+        asIterable(segments.subMap(floor, true, to, false).values)
+    }
   }
   
   override def toString() = "Log(" + dir + ")"

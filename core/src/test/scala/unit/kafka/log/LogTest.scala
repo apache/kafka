@@ -32,7 +32,7 @@ import kafka.server.KafkaConfig
 class LogTest extends JUnitSuite {
   
   var logDir: File = null
-  val time = new MockTime
+  val time = new MockTime(0)
   var config: KafkaConfig = null
   val logConfig = LogConfig()
 
@@ -62,7 +62,6 @@ class LogTest extends JUnitSuite {
   @Test
   def testTimeBasedLogRoll() {
     val set = TestUtils.singleMessageSet("test".getBytes())
-    val time: MockTime = new MockTime()
 
     // create a log
     val log = new Log(logDir, 
@@ -70,16 +69,15 @@ class LogTest extends JUnitSuite {
                       recoveryPoint = 0L, 
                       scheduler = time.scheduler, 
                       time = time)
+    assertEquals("Log begins with a single empty segment.", 1, log.numberOfSegments)
     time.sleep(log.config.segmentMs + 1)
-
-    // segment age is less than its limit
     log.append(set)
-    assertEquals("There should be exactly one segment.", 1, log.numberOfSegments)
+    assertEquals("Log doesn't roll if doing so creates an empty segment.", 1, log.numberOfSegments)
 
     log.append(set)
-    assertEquals("There should still be exactly one segment.", 1, log.numberOfSegments)
+    assertEquals("Log rolls on this append since time has expired.", 2, log.numberOfSegments)
 
-    for(numSegments <- 2 until 4) {
+    for(numSegments <- 3 until 5) {
       time.sleep(log.config.segmentMs + 1)
       log.append(set)
       assertEquals("Changing time beyond rollMs and appending should create a new segment.", numSegments, log.numberOfSegments)
