@@ -36,7 +36,12 @@ def main():
     ts = time.time()
     st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d_%H:%M:%S')
     patch_file=tempfile.gettempdir() + "/" + opt.jira + '_' + st + '.patch'
-  
+
+  git_configure_reviewboard="git config reviewboard.url https://reviews.apache.org"
+  print "Configuring reviewboard url to https://reviews.apache.org"
+  p=os.popen(git_configure_reviewboard)
+  p.close()
+
   git_remote_update="git remote update"
   print "Updating your remote branches to pull the latest changes"
   p=os.popen(git_remote_update)
