@@ -601,7 +601,7 @@ class Log(val dir: File,
       if(floor eq null)
         asIterable(segments.headMap(to).values)
       else
-        asIterable(segments.subMap(floor, true, to, false).values)
+        asIterable(segments.subMap(floor.longValue, true, to, false).values)
     }
   }
   
