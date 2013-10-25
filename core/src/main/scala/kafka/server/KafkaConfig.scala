@@ -31,6 +31,17 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
     this(new VerifiableProperties(originalProps))
     props.verify()
   }
+  
+  private def getLogRetentionTimeMillis(): Long = {
+    var millisInMinute = 60L * 1000L
+    val millisInHour = 60L * millisInMinute
+    if(props.containsKey("log.retention.minutes")){
+       millisInMinute * props.getIntInRange("log.retention.minutes", (1, Int.MaxValue))
+    } else {
+       millisInHour * props.getIntInRange("log.retention.hours", 24*7, (1, Int.MaxValue))
+    }
+    
+  }
 
   /*********** General Configuration ***********/
   
@@ -92,7 +103,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val logRollHoursPerTopicMap = props.getMap("log.roll.hours.per.topic", _.toInt > 0).mapValues(_.toInt)
 
   /* the number of hours to keep a log file before deleting it */
-  val logRetentionHours = props.getIntInRange("log.retention.hours", 24*7, (1, Int.MaxValue))
+  val logRetentionTimeMillis = getLogRetentionTimeMillis
 
   /* the number of hours to keep a log file before deleting it for some specific topic*/
   val logRetentionHoursPerTopicMap = props.getMap("log.retention.hours.per.topic", _.toInt > 0).mapValues(_.toInt)
