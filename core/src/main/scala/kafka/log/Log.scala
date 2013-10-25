@@ -60,7 +60,7 @@ class Log(val dir: File,
   private val lastflushedTime = new AtomicLong(time.milliseconds)
 
   /* the actual segments of the log */
-  private val segments: ConcurrentNavigableMap[Long,LogSegment] = new ConcurrentSkipListMap[Long, LogSegment]
+  private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
   loadSegments()
   
   /* The number of times the log has been truncated */
@@ -170,7 +170,7 @@ class Log(val dir: File,
       this.recoveryPoint = lastOffset
       return
     }
-    val unflushed = logSegments(segments.floorKey(this.recoveryPoint), Long.MaxValue).iterator
+    val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
     while(unflushed.hasNext) {
       val curr = unflushed.next
       info("Recovering unflushed segment %d in log %s.".format(curr.baseOffset, name))
@@ -597,11 +597,11 @@ class Log(val dir: File,
   def logSegments(from: Long, to: Long): Iterable[LogSegment] = {
     import JavaConversions._
     lock synchronized {
-      val floor: java.lang.Long = segments.floorKey(from)
+      val floor = segments.floorKey(from)
       if(floor eq null)
-        asIterable(segments.headMap(to).values)
+        segments.headMap(to).values
       else
-        asIterable(segments.subMap(floor.longValue, true, to, false).values)
+        segments.subMap(floor, true, to, false).values
     }
   }
   
