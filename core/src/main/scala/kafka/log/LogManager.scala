@@ -177,6 +177,22 @@ class LogManager(val logDirs: Array[File],
     }
     debug("Shutdown complete.")
   }
+
+  /**
+   * Truncate the partition logs to the specified offsets and checkpoint the recovery point to this offset
+   *
+   * @param partitionAndOffsets Partition logs that need to be truncated
+   */
+  def truncateTo(partitionAndOffsets: Map[TopicAndPartition, Long]) {
+    for ((topicAndPartition, truncateOffset) <- partitionAndOffsets) {
+      val log = logs.get(topicAndPartition)
+      // If the log does not exist, skip it
+      if (log != null) {
+        log.truncateTo(truncateOffset)
+      }
+    }
+    checkpointRecoveryPointOffsets()
+  }
   
   /**
    * Write out the current recovery point for all logs to a text file in the log directory 

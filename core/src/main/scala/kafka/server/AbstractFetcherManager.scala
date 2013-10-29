@@ -18,14 +18,17 @@
 package kafka.server
 
 import scala.collection.mutable
+import scala.collection.Set
+import scala.collection.Map
 import kafka.utils.Logging
 import kafka.cluster.Broker
 import kafka.metrics.KafkaMetricsGroup
+import kafka.common.TopicAndPartition
 import com.yammer.metrics.core.Gauge
 
 abstract class AbstractFetcherManager(protected val name: String, metricPrefix: String, numFetchers: Int = 1)
   extends Logging with KafkaMetricsGroup {
-    // map of (source brokerid, fetcher Id per source broker) => fetcher
+  // map of (source broker_id, fetcher_id per source broker) => fetcher
   private val fetcherThreadMap = new mutable.HashMap[BrokerAndFetcherId, AbstractFetcherThread]
   private val mapLock = new Object
   this.logIdent = "[" + name + "] "
@@ -60,36 +63,43 @@ abstract class AbstractFetcherManager(protected val name: String, metricPrefix: 
   )
 
   private def getFetcherId(topic: String, partitionId: Int) : Int = {
-    (topic.hashCode() + 31 * partitionId) % numFetchers
+    (31 * topic.hashCode() + partitionId) % numFetchers
   }
 
   // to be defined in subclass to create a specific fetcher
   def createFetcherThread(fetcherId: Int, sourceBroker: Broker): AbstractFetcherThread
 
-  def addFetcher(topic: String, partitionId: Int, initialOffset: Long, sourceBroker: Broker) {
+  def addFetcherForPartitions(partitionAndOffsets: Map[TopicAndPartition, BrokerAndInitialOffset]) {
     mapLock synchronized {
-      var fetcherThread: AbstractFetcherThread = null
-      val key = new BrokerAndFetcherId(sourceBroker, getFetcherId(topic, partitionId))
-      fetcherThreadMap.get(key) match {
-        case Some(f) => fetcherThread = f
-        case None =>
-          fetcherThread = createFetcherThread(key.fetcherId, sourceBroker)
-          fetcherThreadMap.put(key, fetcherThread)
-          fetcherThread.start
+      val partitionsPerFetcher = partitionAndOffsets.groupBy{ case(topicAndPartition, brokerAndInitialOffset) =>
+        BrokerAndFetcherId(brokerAndInitialOffset.broker, getFetcherId(topicAndPartition.topic, topicAndPartition.partition))}
+      for ((brokerAndFetcherId, partitionAndOffsets) <- partitionsPerFetcher) {
+        var fetcherThread: AbstractFetcherThread = null
+        fetcherThreadMap.get(brokerAndFetcherId) match {
+          case Some(f) => fetcherThread = f
+          case None =>
+            fetcherThread = createFetcherThread(brokerAndFetcherId.fetcherId, brokerAndFetcherId.broker)
+            fetcherThreadMap.put(brokerAndFetcherId, fetcherThread)
+            fetcherThread.start
+        }
+
+        fetcherThreadMap(brokerAndFetcherId).addPartitions(partitionAndOffsets.map { case (topicAndPartition, brokerAndInitOffset) =>
+          topicAndPartition -> brokerAndInitOffset.initOffset
+        })
       }
-      fetcherThread.addPartition(topic, partitionId, initialOffset)
-      info("Adding fetcher for partition [%s,%d], initOffset %d to broker %d with fetcherId %d"
-          .format(topic, partitionId, initialOffset, sourceBroker.id, key.fetcherId))
     }
+
+    info("Added fetcher for partitions %s".format(partitionAndOffsets.map{ case (topicAndPartition, brokerAndInitialOffset) =>
+      "[" + topicAndPartition + ", initOffset " + brokerAndInitialOffset.initOffset + " to broker " + brokerAndInitialOffset.broker + "] "}))
   }
 
-  def removeFetcher(topic: String, partitionId: Int) {
-    info("Removing fetcher for partition [%s,%d]".format(topic, partitionId))
+  def removeFetcherForPartitions(partitions: Set[TopicAndPartition]) {
     mapLock synchronized {
       for ((key, fetcher) <- fetcherThreadMap) {
-        fetcher.removePartition(topic, partitionId)
+        fetcher.removePartitions(partitions)
       }
     }
+    info("Removed fetcher for partitions %s".format(partitions.mkString(",")))
   }
 
   def shutdownIdleFetcherThreads() {
@@ -116,3 +126,5 @@ abstract class AbstractFetcherManager(protected val name: String, metricPrefix: 
 }
 
 case class BrokerAndFetcherId(broker: Broker, fetcherId: Int)
+
+case class BrokerAndInitialOffset(broker: Broker, initOffset: Long)
