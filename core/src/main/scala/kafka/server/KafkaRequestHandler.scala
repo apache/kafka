@@ -37,7 +37,7 @@ class KafkaRequestHandler(id: Int, brokerId: Int, val requestChannel: RequestCha
             id, brokerId))
           return
         }
-        req.dequeueTimeMs = SystemTime.milliseconds
+        req.requestDequeueTimeMs = SystemTime.milliseconds
         trace("Kafka request handler %d on broker %d handling request %s".format(id, brokerId, req))
         apis.handle(req)
       } catch {
