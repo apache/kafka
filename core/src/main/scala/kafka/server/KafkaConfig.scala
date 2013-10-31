@@ -69,8 +69,19 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val port: Int = props.getInt("port", 6667)
 
   /* hostname of broker. If this is set, it will only bind to this address. If this is not set,
-   * it will bind to all interfaces, and publish one to ZK */
+   * it will bind to all interfaces */
   val hostName: String = props.getString("host.name", null)
+  
+  /* hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may
+   * need to be different from the interface to which the broker binds. If this is not set,
+   * it will use the value for "host.name" if configured. Otherwise
+   * it will use the value returned from java.net.InetAddress.getCanonicalHostName(). */
+  val advertisedHostName: String = props.getString("advertised.host.name", hostName)
+    
+  /* the port to publish to ZooKeeper for clients to use. In IaaS environments, this may
+   * need to be different from the port to which the broker binds. If this is not set,
+   * it will publish the same port that the broker binds to. */
+  val advertisedPort: Int = props.getInt("advertised.port", port)
 
   /* the SO_SNDBUFF buffer of the socket sever sockets */
   val socketSendBufferBytes: Int = props.getInt("socket.send.buffer.bytes", 100*1024)

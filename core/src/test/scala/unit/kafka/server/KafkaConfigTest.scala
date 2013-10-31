@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -64,4 +64,34 @@ class KafkaConfigTest extends JUnit3Suite {
 
   }
 
+  @Test
+  def testAdvertiseDefaults() {
+    val port = 9999
+    val hostName = "fake-host"
+    
+    val props = TestUtils.createBrokerConfig(0, port)
+    props.put("host.name", hostName)
+    
+    val serverConfig = new KafkaConfig(props)
+    
+    assertEquals(serverConfig.advertisedHostName, hostName)
+    assertEquals(serverConfig.advertisedPort, port)
+  }
+
+  @Test
+  def testAdvertiseConfigured() {
+    val port = 9999
+    val advertisedHostName = "routable-host"
+    val advertisedPort = 1234
+    
+    val props = TestUtils.createBrokerConfig(0, port)
+    props.put("advertised.host.name", advertisedHostName)
+    props.put("advertised.port", advertisedPort.toString)
+    
+    val serverConfig = new KafkaConfig(props)
+    
+    assertEquals(serverConfig.advertisedHostName, advertisedHostName)
+    assertEquals(serverConfig.advertisedPort, advertisedPort)
+  }
+  
 }
