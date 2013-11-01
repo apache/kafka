@@ -95,12 +95,12 @@ def main():
 
   comment="Created reviewboard " 
   if not opt.reviewboard:
-    print 'Created a new reviewboard ',rb_url,' against branch ',opt.branch
+    print 'Created a new reviewboard ',rb_url,
   else:
-    print 'Updated reviewboard',opt.reviewboard
+    print 'Updated reviewboard'
     comment="Updated reviewboard "
 
-  comment = comment + rb_url 
+  comment = comment + rb_url + ' against branch ' + opt.branch 
   jira.add_comment(opt.jira, comment)
 
 if __name__ == '__main__':
