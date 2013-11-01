@@ -628,7 +628,7 @@ class LogTest extends JUnitSuite {
     val cleanShutdownFile = new File(parentLogDir, Log.CleanShutdownFile)
     cleanShutdownFile.createNewFile()
     assertTrue(".kafka_cleanshutdown must exist", cleanShutdownFile.exists())
-    var recoveryPoint = 50L
+    var recoveryPoint = 0L
     // create a log and write some messages to it
     var log = new Log(logDir,
       config,

@@ -165,8 +165,7 @@ class Log(val dir: File,
   
   private def recoverLog() {
     val lastOffset = try {activeSegment.nextOffset} catch {case _: Throwable => -1L}
-    val cleanShutdownFile = new File(dir.getParentFile, CleanShutdownFile)
-    val needsRecovery = !cleanShutdownFile.exists()
+    val needsRecovery = !(new File(dir.getParentFile, CleanShutdownFile)).exists()
     if(!needsRecovery) {
       this.recoveryPoint = lastOffset
       return
