@@ -617,5 +617,33 @@ class LogTest extends JUnitSuite {
       assertEquals(recoveryPoint, log.logEndOffset)
     }
   }
-  
+
+  @Test
+  def testCleanShutdownFile() {
+    // append some messages to create some segments
+    val config = logConfig.copy(indexInterval = 1, maxMessageSize = 64*1024, segmentSize = 1000)
+    val set = TestUtils.singleMessageSet("test".getBytes())
+    val parentLogDir = logDir.getParentFile
+    assertTrue("Data directory %s must exist", parentLogDir.isDirectory)
+    val cleanShutdownFile = new File(parentLogDir, Log.CleanShutdownFile)
+    cleanShutdownFile.createNewFile()
+    assertTrue(".kafka_cleanshutdown must exist", cleanShutdownFile.exists())
+    var recoveryPoint = 50L
+    // create a log and write some messages to it
+    var log = new Log(logDir,
+      config,
+      recoveryPoint = 0L,
+      time.scheduler,
+      time)
+    for(i <- 0 until 100)
+      log.append(set)
+    log.close()
+
+    // check if recovery was attempted. Even if the recovery point is 0L, recovery should not be attempted as the
+    // clean shutdown file exists.
+    recoveryPoint = log.logEndOffset
+    log = new Log(logDir, config, 0L, time.scheduler, time)
+    assertEquals(recoveryPoint, log.logEndOffset)
+    cleanShutdownFile.delete()
+  }
 }

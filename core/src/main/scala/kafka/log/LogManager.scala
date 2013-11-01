@@ -109,8 +109,11 @@ class LogManager(val logDirs: Array[File],
       /* load the logs */
       val subDirs = dir.listFiles()
       if(subDirs != null) {
+        val cleanShutDownFile = new File(dir, Log.CleanShutdownFile)
+        if(cleanShutDownFile.exists())
+          info("Found clean shutdown file. Skipping recovery for all logs in data directory '%s'".format(dir.getAbsolutePath))
         for(dir <- subDirs) {
-          if(dir.isDirectory){
+          if(dir.isDirectory) {
             info("Loading log '" + dir.getName + "'")
             val topicPartition = parseTopicPartitionName(dir.getName)
             val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
@@ -124,6 +127,7 @@ class LogManager(val logDirs: Array[File],
               throw new IllegalArgumentException("Duplicate log directories found: %s, %s!".format(log.dir.getAbsolutePath, previous.dir.getAbsolutePath))
           }
         }
+        cleanShutDownFile.delete()
       }
     }
   }
