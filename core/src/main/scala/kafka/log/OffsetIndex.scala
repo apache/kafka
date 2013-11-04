@@ -211,7 +211,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
         require(entries * 8 == mmap.position, entries + " entries but file position in index is " + mmap.position + ".")
       } else {
         throw new InvalidOffsetException("Attempt to append an offset (%d) to position %d no larger than the last offset appended (%d) to %s."
-          .format(offset, entries, lastOffset, file.getName))
+          .format(offset, entries, lastOffset, file.getAbsolutePath))
       }
     }
   }
