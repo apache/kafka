@@ -60,7 +60,7 @@ class Log(val dir: File,
   private val lastflushedTime = new AtomicLong(time.milliseconds)
 
   /* the actual segments of the log */
-  private val segments: ConcurrentNavigableMap[Long,LogSegment] = new ConcurrentSkipListMap[Long, LogSegment]
+  private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
   loadSegments()
   
   /* The number of times the log has been truncated */
@@ -132,7 +132,8 @@ class Log(val dir: File,
         val segment = new LogSegment(dir = dir, 
                                      startOffset = start,
                                      indexIntervalBytes = config.indexInterval, 
-                                     maxIndexSize = config.maxIndexSize)
+                                     maxIndexSize = config.maxIndexSize,
+                                     time = time)
         if(!hasIndex) {
           error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
           segment.recover(config.maxMessageSize)
@@ -146,7 +147,8 @@ class Log(val dir: File,
       segments.put(0, new LogSegment(dir = dir, 
                                      startOffset = 0,
                                      indexIntervalBytes = config.indexInterval, 
-                                     maxIndexSize = config.maxIndexSize))
+                                     maxIndexSize = config.maxIndexSize,
+                                     time = time))
     } else {
       recoverLog()
       // reset the index size of the currently active log segment to allow more entries
@@ -163,12 +165,17 @@ class Log(val dir: File,
   
   private def recoverLog() {
     val lastOffset = try {activeSegment.nextOffset} catch {case _: Throwable => -1L}
+    val needsRecovery = !(new File(dir.getParentFile, CleanShutdownFile)).exists()
+    if(!needsRecovery) {
+      this.recoveryPoint = lastOffset
+      return
+    }
     if(lastOffset <= this.recoveryPoint) {
       info("Log '%s' is fully intact, skipping recovery".format(name))
       this.recoveryPoint = lastOffset
       return
     }
-    val unflushed = logSegments(segments.floorKey(this.recoveryPoint), Long.MaxValue).iterator
+    val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
     while(unflushed.hasNext) {
       val curr = unflushed.next
       info("Recovering unflushed segment %d in log %s.".format(curr.baseOffset, name))
@@ -472,7 +479,8 @@ class Log(val dir: File,
       val segment = new LogSegment(dir, 
                                    startOffset = newOffset,
                                    indexIntervalBytes = config.indexInterval, 
-                                   maxIndexSize = config.maxIndexSize)
+                                   maxIndexSize = config.maxIndexSize,
+                                   time = time)
       val prev = addSegment(segment)
       if(prev != null)
         throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exists.".format(name, newOffset))
@@ -561,7 +569,8 @@ class Log(val dir: File,
       addSegment(new LogSegment(dir, 
                                 newOffset,
                                 indexIntervalBytes = config.indexInterval, 
-                                maxIndexSize = config.maxIndexSize))
+                                maxIndexSize = config.maxIndexSize,
+                                time = time))
       this.nextOffset.set(newOffset)
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
       truncates.getAndIncrement
@@ -592,7 +601,13 @@ class Log(val dir: File,
    */
   def logSegments(from: Long, to: Long): Iterable[LogSegment] = {
     import JavaConversions._
-    segments.subMap(from, true, to, false).values
+    lock synchronized {
+      val floor = segments.floorKey(from)
+      if(floor eq null)
+        segments.headMap(to).values
+      else
+        segments.subMap(floor, true, to, false).values
+    }
   }
   
   override def toString() = "Log(" + dir + ")"
@@ -686,6 +701,11 @@ object Log {
     
   /** A temporary file used when swapping files into the log */
   val SwapFileSuffix = ".swap"
+
+  /** Clean shutdown file that indicates the broker was cleanly shutdown in 0.8. This is required to maintain backwards compatibility
+    * with 0.8 and avoid unnecessary log recovery when upgrading from 0.8 to 0.8.1 */
+  /** TODO: Get rid of CleanShutdownFile in 0.8.2 */
+  val CleanShutdownFile = ".kafka_cleanshutdown"
 
   /**
    * Make log segment file name from offset bytes. All this does is pad out the offset number with zeros

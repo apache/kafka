@@ -22,4 +22,4 @@ fi
 base_dir=$(dirname $0)
 export KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:$base_dir/../config/log4j.properties"
 export KAFKA_HEAP_OPTS="-Xmx1G -Xms1G"
-$base_dir/kafka-run-class.sh daemon kafkaServer kafka.Kafka $@
+exec $base_dir/kafka-run-class.sh daemon kafkaServer kafka.Kafka $@

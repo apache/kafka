@@ -31,6 +31,17 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
     this(new VerifiableProperties(originalProps))
     props.verify()
   }
+  
+  private def getLogRetentionTimeMillis(): Long = {
+    var millisInMinute = 60L * 1000L
+    val millisInHour = 60L * millisInMinute
+    if(props.containsKey("log.retention.minutes")){
+       millisInMinute * props.getIntInRange("log.retention.minutes", (1, Int.MaxValue))
+    } else {
+       millisInHour * props.getIntInRange("log.retention.hours", 24*7, (1, Int.MaxValue))
+    }
+    
+  }
 
   /*********** General Configuration ***********/
   
@@ -58,8 +69,19 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val port: Int = props.getInt("port", 6667)
 
   /* hostname of broker. If this is set, it will only bind to this address. If this is not set,
-   * it will bind to all interfaces, and publish one to ZK */
+   * it will bind to all interfaces */
   val hostName: String = props.getString("host.name", null)
+  
+  /* hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may
+   * need to be different from the interface to which the broker binds. If this is not set,
+   * it will use the value for "host.name" if configured. Otherwise
+   * it will use the value returned from java.net.InetAddress.getCanonicalHostName(). */
+  val advertisedHostName: String = props.getString("advertised.host.name", hostName)
+    
+  /* the port to publish to ZooKeeper for clients to use. In IaaS environments, this may
+   * need to be different from the port to which the broker binds. If this is not set,
+   * it will publish the same port that the broker binds to. */
+  val advertisedPort: Int = props.getInt("advertised.port", port)
 
   /* the SO_SNDBUFF buffer of the socket sever sockets */
   val socketSendBufferBytes: Int = props.getInt("socket.send.buffer.bytes", 100*1024)
@@ -92,7 +114,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val logRollHoursPerTopicMap = props.getMap("log.roll.hours.per.topic", _.toInt > 0).mapValues(_.toInt)
 
   /* the number of hours to keep a log file before deleting it */
-  val logRetentionHours = props.getIntInRange("log.retention.hours", 24*7, (1, Int.MaxValue))
+  val logRetentionTimeMillis = getLogRetentionTimeMillis
 
   /* the number of hours to keep a log file before deleting it for some specific topic*/
   val logRetentionHoursPerTopicMap = props.getMap("log.retention.hours.per.topic", _.toInt > 0).mapValues(_.toInt)

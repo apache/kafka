@@ -19,16 +19,19 @@ package kafka.server
 
 import kafka.cluster.Broker
 import collection.mutable
+import scala.collection.Set
+import scala.collection.Map
 import kafka.message.{InvalidMessageException, ByteBufferMessageSet, MessageAndOffset}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
-import java.util.concurrent.atomic.AtomicLong
 import kafka.utils.{Pool, ShutdownableThread}
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.ReentrantLock
 import kafka.consumer.{PartitionTopicInfo, SimpleConsumer}
 import kafka.api.{FetchRequest, FetchResponse, FetchResponsePartitionData, FetchRequestBuilder}
 import kafka.common.{KafkaException, ClientIdAndBroker, TopicAndPartition, ErrorMapping}
+import kafka.utils.Utils.inLock
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.atomic.AtomicLong
 
 
 /**
@@ -70,8 +73,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   }
 
   override def doWork() {
-    partitionMapLock.lock()
-    try {
+    inLock(partitionMapLock) {
       if (partitionMap.isEmpty)
         partitionMapCond.await(200L, TimeUnit.MILLISECONDS)
       partitionMap.foreach {
@@ -79,8 +81,6 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
           fetchRequestBuilder.addFetch(topicAndPartition.topic, topicAndPartition.partition,
                            offset, fetchSize)
       }
-    } finally {
-      partitionMapLock.unlock()
     }
 
     val fetchRequest = fetchRequestBuilder.build()
@@ -107,8 +107,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
 
     if (response != null) {
       // process fetched data
-      partitionMapLock.lock()
-      try {
+      inLock(partitionMapLock) {
         response.data.foreach {
           case(topicAndPartition, partitionData) =>
             val (topic, partitionId) = topicAndPartition.asTuple
@@ -160,8 +159,6 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
               }
             }
         }
-      } finally {
-        partitionMapLock.unlock()
       }
     }
 
@@ -171,23 +168,26 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
     }
   }
 
-  def addPartition(topic: String, partitionId: Int, initialOffset: Long) {
+  def addPartitions(partitionAndOffsets: Map[TopicAndPartition, Long]) {
     partitionMapLock.lockInterruptibly()
     try {
-      val topicPartition = TopicAndPartition(topic, partitionId)
-      partitionMap.put(
-          topicPartition,
-          if (PartitionTopicInfo.isOffsetInvalid(initialOffset)) handleOffsetOutOfRange(topicPartition) else initialOffset)
+      for ((topicAndPartition, offset) <- partitionAndOffsets) {
+        // If the partitionMap already has the topic/partition, then do not update the map with the old offset
+        if (!partitionMap.contains(topicAndPartition))
+          partitionMap.put(
+            topicAndPartition,
+            if (PartitionTopicInfo.isOffsetInvalid(offset)) handleOffsetOutOfRange(topicAndPartition) else offset)
+      }
       partitionMapCond.signalAll()
     } finally {
       partitionMapLock.unlock()
     }
   }
 
-  def removePartition(topic: String, partitionId: Int) {
+  def removePartitions(topicAndPartitions: Set[TopicAndPartition]) {
     partitionMapLock.lockInterruptibly()
     try {
-      partitionMap.remove(TopicAndPartition(topic, partitionId))
+      topicAndPartitions.foreach(tp => partitionMap.remove(tp))
     } finally {
       partitionMapLock.unlock()
     }
@@ -204,7 +204,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
 }
 
 class FetcherLagMetrics(metricId: ClientIdBrokerTopicPartition) extends KafkaMetricsGroup {
-  private[this] var lagVal = new AtomicLong(-1L)
+  private[this] val lagVal = new AtomicLong(-1L)
   newGauge(
     metricId + "-ConsumerLag",
     new Gauge[Long] {

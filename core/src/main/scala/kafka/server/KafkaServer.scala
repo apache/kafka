@@ -99,7 +99,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     topicConfigManager.startup()
     
     /* tell everyone we are alive */
-    kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, config.hostName, config.port, config.zkSessionTimeoutMs, zkClient)
+    kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, config.advertisedHostName, config.advertisedPort, config.zkSessionTimeoutMs, zkClient)
     kafkaHealthcheck.startup()
 
     
@@ -253,7 +253,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                      flushInterval = config.logFlushIntervalMessages,
                                      flushMs = config.logFlushIntervalMs.toLong,
                                      retentionSize = config.logRetentionBytes,
-                                     retentionMs = 60L * 60L * 1000L * config.logRetentionHours,
+                                     retentionMs = config.logRetentionTimeMillis,
                                      maxMessageSize = config.messageMaxBytes,
                                      maxIndexSize = config.logIndexSizeMaxBytes,
                                      indexInterval = config.logIndexIntervalBytes,

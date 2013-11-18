@@ -35,6 +35,7 @@ import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.Some
 import kafka.common.TopicAndPartition
+import org.apache.log4j.Logger
 
 class ControllerContext(val zkClient: ZkClient,
                         val zkSessionTimeout: Int,
@@ -105,6 +106,7 @@ object KafkaController extends Logging {
 class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logging with KafkaMetricsGroup with KafkaControllerMBean {
   this.logIdent = "[Controller " + config.brokerId + "]: "
   private var isRunning = true
+  private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
   val controllerContext = new ControllerContext(zkClient, config.zkSessionTimeoutMs)
   private val partitionStateMachine = new PartitionStateMachine(this)
   private val replicaStateMachine = new ReplicaStateMachine(this)
@@ -359,17 +361,19 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
    * Reassigning replicas for a partition goes through a few stages -
    * RAR = Reassigned replicas
    * AR = Original list of replicas for partition
-   * 1. Start new replicas RAR - AR.
-   * 2. Wait until new replicas are in sync with the leader
-   * 3. If the leader is not in RAR, elect a new leader from RAR
-   * 4. Stop old replicas AR - RAR
-   * 5. Write new AR
-   * 6. Remove partition from the /admin/reassign_partitions path
+   * 1. Write new AR = AR + RAR
+   * 2. Start new replicas RAR - AR.
+   * 3. Wait until new replicas are in sync with the leader
+   * 4. If the leader is not in RAR, elect a new leader from RAR
+   * 5. Stop old replicas AR - RAR
+   * 6. Write new AR = RAR
+   * 7. Remove partition from the /admin/reassign_partitions path
    */
   def onPartitionReassignment(topicAndPartition: TopicAndPartition, reassignedPartitionContext: ReassignedPartitionsContext) {
     val reassignedReplicas = reassignedPartitionContext.newReplicas
     areReplicasInIsr(topicAndPartition.topic, topicAndPartition.partition, reassignedReplicas) match {
       case true =>
+        val oldReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition).toSet -- reassignedReplicas.toSet
         // mark the new replicas as online
         reassignedReplicas.foreach { replica =>
           replicaStateMachine.handleStateChanges(Set(new PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition,
@@ -378,9 +382,9 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
         // check if current leader is in the new replicas list. If not, controller needs to trigger leader election
         moveReassignedPartitionLeaderIfRequired(topicAndPartition, reassignedPartitionContext)
         // stop older replicas
-        stopOldReplicasOfReassignedPartition(topicAndPartition, reassignedPartitionContext)
+        stopOldReplicasOfReassignedPartition(topicAndPartition, reassignedPartitionContext, oldReplicas)
         // write the new list of replicas for this partition in zookeeper
-        updateAssignedReplicasForPartition(topicAndPartition, reassignedPartitionContext)
+        updateAssignedReplicasForPartition(topicAndPartition, reassignedReplicas)
         // update the /admin/reassign_partitions path to remove this partition
         removePartitionFromReassignedPartitions(topicAndPartition)
         info("Removed partition %s from the list of reassigned partitions in zookeeper".format(topicAndPartition))
@@ -390,8 +394,15 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
       case false =>
         info("New replicas %s for partition %s being ".format(reassignedReplicas.mkString(","), topicAndPartition) +
           "reassigned not yet caught up with the leader")
+        val newReplicasNotInOldReplicaList = reassignedReplicas.toSet -- controllerContext.partitionReplicaAssignment(topicAndPartition).toSet
+        val newAndOldReplicas = (reassignedPartitionContext.newReplicas ++ controllerContext.partitionReplicaAssignment(topicAndPartition)).toSet
+        // write the expanded list of replicas to zookeeper
+        updateAssignedReplicasForPartition(topicAndPartition, newAndOldReplicas.toSeq)
+        // update the leader epoch in zookeeper to use on the next LeaderAndIsrRequest
+        updateLeaderEpochAndSendRequest(topicAndPartition, controllerContext.partitionReplicaAssignment(topicAndPartition),
+          newAndOldReplicas.toSeq)
         // start new replicas
-        startNewReplicasForReassignedPartition(topicAndPartition, reassignedPartitionContext)
+        startNewReplicasForReassignedPartition(topicAndPartition, reassignedPartitionContext, newReplicasNotInOldReplicaList)
         info("Waiting for new replicas %s for partition %s being ".format(reassignedReplicas.mkString(","), topicAndPartition) +
           "reassigned to catch up with the leader")
     }
@@ -602,6 +613,10 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
                                                       reassignedPartitionContext: ReassignedPartitionsContext) {
     val reassignedReplicas = reassignedPartitionContext.newReplicas
     val currentLeader = controllerContext.partitionLeadershipInfo(topicAndPartition).leaderAndIsr.leader
+    // change the assigned replica list to just the reassigned replicas in the cache so it gets sent out on the LeaderAndIsr
+    // request to the current or new leader. This will prevent it from adding the old replicas to the ISR
+    val oldAndNewReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
+    controllerContext.partitionReplicaAssignment.put(topicAndPartition, reassignedReplicas)
     if(!reassignedPartitionContext.newReplicas.contains(currentLeader)) {
       info("Leader %s for partition %s being reassigned, ".format(currentLeader, topicAndPartition) +
         "is not in the new list of replicas %s. Re-electing leader".format(reassignedReplicas.mkString(",")))
@@ -613,6 +628,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
         case true =>
           info("Leader %s for partition %s being reassigned, ".format(currentLeader, topicAndPartition) +
             "is already in the new list of replicas %s and is alive".format(reassignedReplicas.mkString(",")))
+          // shrink replication factor and update the leader epoch in zookeeper to use on the next LeaderAndIsrRequest
+          updateLeaderEpochAndSendRequest(topicAndPartition, oldAndNewReplicas, reassignedReplicas)
         case false =>
           info("Leader %s for partition %s being reassigned, ".format(currentLeader, topicAndPartition) +
             "is already in the new list of replicas %s but is dead".format(reassignedReplicas.mkString(",")))
@@ -622,12 +639,10 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   }
 
   private def stopOldReplicasOfReassignedPartition(topicAndPartition: TopicAndPartition,
-                                                   reassignedPartitionContext: ReassignedPartitionsContext) {
-    val reassignedReplicas = reassignedPartitionContext.newReplicas
+                                                   reassignedPartitionContext: ReassignedPartitionsContext,
+                                                   oldReplicas: Set[Int]) {
     val topic = topicAndPartition.topic
     val partition = topicAndPartition.partition
-    // send stop replica state change request to the old replicas
-    val oldReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition).toSet -- reassignedReplicas.toSet
     // first move the replica to offline state (the controller removes it from the ISR)
     oldReplicas.foreach { replica =>
       replicaStateMachine.handleStateChanges(Set(new PartitionAndReplica(topic, partition, replica)), OfflineReplica)
@@ -639,28 +654,41 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   }
 
   private def updateAssignedReplicasForPartition(topicAndPartition: TopicAndPartition,
-                                                 reassignedPartitionContext: ReassignedPartitionsContext) {
-    val reassignedReplicas = reassignedPartitionContext.newReplicas
+                                                 replicas: Seq[Int]) {
     val partitionsAndReplicasForThisTopic = controllerContext.partitionReplicaAssignment.filter(_._1.topic.equals(topicAndPartition.topic))
-    partitionsAndReplicasForThisTopic.put(topicAndPartition, reassignedReplicas)
+    partitionsAndReplicasForThisTopic.put(topicAndPartition, replicas)
     updateAssignedReplicasForPartition(topicAndPartition, partitionsAndReplicasForThisTopic)
-    info("Updated assigned replicas for partition %s being reassigned to %s ".format(topicAndPartition, reassignedReplicas.mkString(",")))
+    info("Updated assigned replicas for partition %s being reassigned to %s ".format(topicAndPartition, replicas.mkString(",")))
     // update the assigned replica list after a successful zookeeper write
-    controllerContext.partitionReplicaAssignment.put(topicAndPartition, reassignedReplicas)
-    // stop watching the ISR changes for this partition
-    zkClient.unsubscribeDataChanges(ZkUtils.getTopicPartitionLeaderAndIsrPath(topicAndPartition.topic, topicAndPartition.partition),
-      controllerContext.partitionsBeingReassigned(topicAndPartition).isrChangeListener)
+    controllerContext.partitionReplicaAssignment.put(topicAndPartition, replicas)
   }
 
   private def startNewReplicasForReassignedPartition(topicAndPartition: TopicAndPartition,
-                                                     reassignedPartitionContext: ReassignedPartitionsContext) {
+                                                     reassignedPartitionContext: ReassignedPartitionsContext,
+                                                     newReplicas: Set[Int]) {
     // send the start replica request to the brokers in the reassigned replicas list that are not in the assigned
     // replicas list
-    val assignedReplicaSet = Set.empty[Int] ++ controllerContext.partitionReplicaAssignment(topicAndPartition)
-    val reassignedReplicaSet = Set.empty[Int] ++ reassignedPartitionContext.newReplicas
-    val newReplicas: Seq[Int] = (reassignedReplicaSet -- assignedReplicaSet).toSeq
     newReplicas.foreach { replica =>
       replicaStateMachine.handleStateChanges(Set(new PartitionAndReplica(topicAndPartition.topic, topicAndPartition.partition, replica)), NewReplica)
+    }
+  }
+
+  private def updateLeaderEpochAndSendRequest(topicAndPartition: TopicAndPartition, replicasToReceiveRequest: Seq[Int], newAssignedReplicas: Seq[Int]) {
+    brokerRequestBatch.newBatch()
+    updateLeaderEpoch(topicAndPartition.topic, topicAndPartition.partition) match {
+      case Some(updatedLeaderIsrAndControllerEpoch) =>
+        // send the shrunk assigned replica list to all the replicas, including the leader, so that it no longer
+        // allows old replicas to enter ISR
+        brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasToReceiveRequest, topicAndPartition.topic,
+          topicAndPartition.partition, updatedLeaderIsrAndControllerEpoch, newAssignedReplicas)
+        brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch, controllerContext.correlationId.getAndIncrement)
+        stateChangeLogger.trace(("Controller %d epoch %d sent LeaderAndIsr request %s with new assigned replica list %s " +
+          "to leader %d for partition being reassigned %s").format(config.brokerId, controllerContext.epoch, updatedLeaderIsrAndControllerEpoch,
+          newAssignedReplicas.mkString(","), updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader, topicAndPartition))
+      case None => // fail the reassignment
+        stateChangeLogger.error(("Controller %d epoch %d failed to send LeaderAndIsr request with new assigned replica list %s " +
+          "to leader for partition being reassigned %s").format(config.brokerId, controllerContext.epoch,
+          newAssignedReplicas.mkString(","), topicAndPartition))
     }
   }
 
@@ -677,6 +705,9 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   }
 
   def removePartitionFromReassignedPartitions(topicAndPartition: TopicAndPartition) {
+    // stop watching the ISR changes for this partition
+    zkClient.unsubscribeDataChanges(ZkUtils.getTopicPartitionLeaderAndIsrPath(topicAndPartition.topic, topicAndPartition.partition),
+      controllerContext.partitionsBeingReassigned(topicAndPartition).isrChangeListener)
     // read the current list of reassigned partitions from zookeeper
     val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient)
     // remove this partition from that list
@@ -787,6 +818,52 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
           }
         case None =>
           warn("Cannot remove replica %d from ISR of %s - leaderAndIsr is empty.".format(replicaId, topicAndPartition))
+          true
+      }
+    }
+    finalLeaderIsrAndControllerEpoch
+  }
+
+  /**
+   * Does not change leader or isr, but just increments the leader epoch
+   * @param topic topic
+   * @param partition partition
+   * @return the new leaderAndIsr with an incremented leader epoch, or None if leaderAndIsr is empty.
+   */
+  private def updateLeaderEpoch(topic: String, partition: Int): Option[LeaderIsrAndControllerEpoch] = {
+    val topicAndPartition = TopicAndPartition(topic, partition)
+    debug("Updating leader epoch for partition %s.".format(topicAndPartition))
+    var finalLeaderIsrAndControllerEpoch: Option[LeaderIsrAndControllerEpoch] = None
+    var zkWriteCompleteOrUnnecessary = false
+    while (!zkWriteCompleteOrUnnecessary) {
+      // refresh leader and isr from zookeeper again
+      val leaderIsrAndEpochOpt = ZkUtils.getLeaderIsrAndEpochForPartition(zkClient, topic, partition)
+      zkWriteCompleteOrUnnecessary = leaderIsrAndEpochOpt match {
+        case Some(leaderIsrAndEpoch) =>
+          val leaderAndIsr = leaderIsrAndEpoch.leaderAndIsr
+          val controllerEpoch = leaderIsrAndEpoch.controllerEpoch
+          if(controllerEpoch > epoch)
+            throw new StateChangeFailedException("Leader and isr path written by another controller. This probably" +
+              "means the current controller with epoch %d went through a soft failure and another ".format(epoch) +
+              "controller was elected with epoch %d. Aborting state change by this controller".format(controllerEpoch))
+          // increment the leader epoch even if there are no leader or isr changes to allow the leader to cache the expanded
+          // assigned replica list
+          val newLeaderAndIsr = new LeaderAndIsr(leaderAndIsr.leader, leaderAndIsr.leaderEpoch + 1,
+                                                 leaderAndIsr.isr, leaderAndIsr.zkVersion + 1)
+          // update the new leadership decision in zookeeper or retry
+          val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(
+            zkClient,
+            ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
+            ZkUtils.leaderAndIsrZkData(newLeaderAndIsr, epoch),
+            leaderAndIsr.zkVersion)
+          newLeaderAndIsr.zkVersion = newVersion
+          finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(newLeaderAndIsr, epoch))
+          if (updateSucceeded)
+            info("Updated leader epoch for partition %s to %d".format(topicAndPartition, newLeaderAndIsr.leaderEpoch))
+          updateSucceeded
+        case None =>
+          throw new IllegalStateException(("Cannot update leader epoch for partition %s as leaderAndIsr path is empty. " +
+            "This could mean we somehow tried to reassign a partition that doesn't exist").format(topicAndPartition))
           true
       }
     }

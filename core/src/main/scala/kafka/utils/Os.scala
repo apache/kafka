@@ -1,7 +1,3 @@
-package kafka.common
-
-import kafka.cluster.{Replica, Partition}
-
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -9,7 +5,7 @@ import kafka.cluster.{Replica, Partition}
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
+ * 
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -19,19 +15,9 @@ import kafka.cluster.{Replica, Partition}
  * limitations under the License.
  */
 
-/**
- * Convenience case class since (topic, partition) pairs are ubiquitous.
- */
-case class TopicAndPartition(topic: String, partition: Int) {
+package kafka.utils
 
-  def this(tuple: (String, Int)) = this(tuple._1, tuple._2)
-
-  def this(partition: Partition) = this(partition.topic, partition.partitionId)
-
-  def this(replica: Replica) = this(replica.topic, replica.partitionId)
-
-  def asTuple = (topic, partition)
-
-  override def toString = "[%s,%d]".format(topic, partition)
+object Os {
+  val name = System.getProperty("os.name").toLowerCase
+  val isWindows = name.startsWith("windows")
 }
-

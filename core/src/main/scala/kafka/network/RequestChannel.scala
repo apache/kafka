@@ -42,9 +42,10 @@ object RequestChannel extends Logging {
   }
 
   case class Request(processor: Int, requestKey: Any, private var buffer: ByteBuffer, startTimeMs: Long, remoteAddress: SocketAddress = new InetSocketAddress(0)) {
-    @volatile var dequeueTimeMs = -1L
+    @volatile var requestDequeueTimeMs = -1L
     @volatile var apiLocalCompleteTimeMs = -1L
     @volatile var responseCompleteTimeMs = -1L
+    @volatile var responseDequeueTimeMs = -1L
     val requestId = buffer.getShort()
     val requestObj: RequestOrResponse = RequestKeys.deserializerForKey(requestId)(buffer)
     buffer = null
@@ -57,10 +58,11 @@ object RequestChannel extends Logging {
       // processing time is really small. In this case, use responseCompleteTimeMs as apiLocalCompleteTimeMs.
       if (apiLocalCompleteTimeMs < 0)
         apiLocalCompleteTimeMs = responseCompleteTimeMs
-      val queueTime = (dequeueTimeMs - startTimeMs).max(0L)
-      val apiLocalTime = (apiLocalCompleteTimeMs - dequeueTimeMs).max(0L)
+      val requestQueueTime = (requestDequeueTimeMs - startTimeMs).max(0L)
+      val apiLocalTime = (apiLocalCompleteTimeMs - requestDequeueTimeMs).max(0L)
       val apiRemoteTime = (responseCompleteTimeMs - apiLocalCompleteTimeMs).max(0L)
-      val responseSendTime = (endTimeMs - responseCompleteTimeMs).max(0L)
+      val responseQueueTime = (responseDequeueTimeMs - responseCompleteTimeMs).max(0L)
+      val responseSendTime = (endTimeMs - responseDequeueTimeMs).max(0L)
       val totalTime = endTimeMs - startTimeMs
       var metricsList = List(RequestMetrics.metricsMap(RequestKeys.nameForKey(requestId)))
       if (requestId == RequestKeys.FetchKey) {
@@ -72,15 +74,16 @@ object RequestChannel extends Logging {
       }
       metricsList.foreach{
         m => m.requestRate.mark()
-             m.queueTimeHist.update(queueTime)
+             m.requestQueueTimeHist.update(requestQueueTime)
              m.localTimeHist.update(apiLocalTime)
              m.remoteTimeHist.update(apiRemoteTime)
+             m.responseQueueTimeHist.update(responseQueueTime)
              m.responseSendTimeHist.update(responseSendTime)
              m.totalTimeHist.update(totalTime)
       }
       if(requestLogger.isTraceEnabled)
-        requestLogger.trace("Completed request:%s from client %s;totalTime:%d,queueTime:%d,localTime:%d,remoteTime:%d,sendTime:%d"
-          .format(requestObj, remoteAddress, totalTime, queueTime, apiLocalTime, apiRemoteTime, responseSendTime))
+        requestLogger.trace("Completed request:%s from client %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
+          .format(requestObj, remoteAddress, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
     }
   }
   
@@ -154,8 +157,12 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
     requestQueue.take()
 
   /** Get a response for the given processor if there is one */
-  def receiveResponse(processor: Int): RequestChannel.Response =
-    responseQueues(processor).poll()
+  def receiveResponse(processor: Int): RequestChannel.Response = {
+    val response = responseQueues(processor).poll()
+    if (response != null)
+      response.request.responseDequeueTimeMs = SystemTime.milliseconds
+    response
+  }
 
   def addResponseListener(onResponse: Int => Unit) { 
     responseListeners ::= onResponse
@@ -177,11 +184,13 @@ object RequestMetrics {
 class RequestMetrics(name: String) extends KafkaMetricsGroup {
   val requestRate = newMeter(name + "-RequestsPerSec",  "requests", TimeUnit.SECONDS)
   // time a request spent in a request queue
-  val queueTimeHist = newHistogram(name + "-QueueTimeMs")
+  val requestQueueTimeHist = newHistogram(name + "-RequestQueueTimeMs")
   // time a request takes to be processed at the local broker
   val localTimeHist = newHistogram(name + "-LocalTimeMs")
   // time a request takes to wait on remote brokers (only relevant to fetch and produce requests)
   val remoteTimeHist = newHistogram(name + "-RemoteTimeMs")
+  // time a response spent in a response queue
+  val responseQueueTimeHist = newHistogram(name + "-ResponseQueueTimeMs")
   // time to send the response to the requester
   val responseSendTimeHist = newHistogram(name + "-ResponseSendTimeMs")
   val totalTimeHist = newHistogram(name + "-TotalTimeMs")

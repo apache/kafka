@@ -32,7 +32,7 @@ import kafka.server.KafkaConfig
 class LogTest extends JUnitSuite {
   
   var logDir: File = null
-  val time = new MockTime
+  val time = new MockTime(0)
   var config: KafkaConfig = null
   val logConfig = LogConfig()
 
@@ -62,7 +62,6 @@ class LogTest extends JUnitSuite {
   @Test
   def testTimeBasedLogRoll() {
     val set = TestUtils.singleMessageSet("test".getBytes())
-    val time: MockTime = new MockTime()
 
     // create a log
     val log = new Log(logDir, 
@@ -70,16 +69,15 @@ class LogTest extends JUnitSuite {
                       recoveryPoint = 0L, 
                       scheduler = time.scheduler, 
                       time = time)
+    assertEquals("Log begins with a single empty segment.", 1, log.numberOfSegments)
     time.sleep(log.config.segmentMs + 1)
-
-    // segment age is less than its limit
     log.append(set)
-    assertEquals("There should be exactly one segment.", 1, log.numberOfSegments)
+    assertEquals("Log doesn't roll if doing so creates an empty segment.", 1, log.numberOfSegments)
 
     log.append(set)
-    assertEquals("There should still be exactly one segment.", 1, log.numberOfSegments)
+    assertEquals("Log rolls on this append since time has expired.", 2, log.numberOfSegments)
 
-    for(numSegments <- 2 until 4) {
+    for(numSegments <- 3 until 5) {
       time.sleep(log.config.segmentMs + 1)
       log.append(set)
       assertEquals("Changing time beyond rollMs and appending should create a new segment.", numSegments, log.numberOfSegments)
@@ -619,5 +617,33 @@ class LogTest extends JUnitSuite {
       assertEquals(recoveryPoint, log.logEndOffset)
     }
   }
-  
+
+  @Test
+  def testCleanShutdownFile() {
+    // append some messages to create some segments
+    val config = logConfig.copy(indexInterval = 1, maxMessageSize = 64*1024, segmentSize = 1000)
+    val set = TestUtils.singleMessageSet("test".getBytes())
+    val parentLogDir = logDir.getParentFile
+    assertTrue("Data directory %s must exist", parentLogDir.isDirectory)
+    val cleanShutdownFile = new File(parentLogDir, Log.CleanShutdownFile)
+    cleanShutdownFile.createNewFile()
+    assertTrue(".kafka_cleanshutdown must exist", cleanShutdownFile.exists())
+    var recoveryPoint = 0L
+    // create a log and write some messages to it
+    var log = new Log(logDir,
+      config,
+      recoveryPoint = 0L,
+      time.scheduler,
+      time)
+    for(i <- 0 until 100)
+      log.append(set)
+    log.close()
+
+    // check if recovery was attempted. Even if the recovery point is 0L, recovery should not be attempted as the
+    // clean shutdown file exists.
+    recoveryPoint = log.logEndOffset
+    log = new Log(logDir, config, 0L, time.scheduler, time)
+    assertEquals(recoveryPoint, log.logEndOffset)
+    cleanShutdownFile.delete()
+  }
 }

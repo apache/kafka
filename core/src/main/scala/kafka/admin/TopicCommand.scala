@@ -23,8 +23,8 @@ import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
 import scala.collection._
 import scala.collection.JavaConversions._
-import kafka.common.Topic
 import kafka.cluster.Broker
+import kafka.log.LogConfig
 
 object TopicCommand {
 
@@ -61,7 +61,7 @@ object TopicCommand {
   def createTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
     CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.topicOpt)
     val topics = opts.options.valuesOf(opts.topicOpt)
-    val configs = parseTopicConfigs(opts)
+    val configs = parseTopicConfigsToBeAdded(opts)
     for (topic <- topics) {
       if (opts.options.has(opts.replicaAssignmentOpt)) {
         val assignment = parseReplicaAssignment(opts.options.valueOf(opts.replicaAssignmentOpt))
@@ -79,8 +79,18 @@ object TopicCommand {
   def alterTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
     CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.topicOpt)
     val topic = opts.options.valueOf(opts.topicOpt)
+<<<<<<< HEAD
     if(opts.options.has(opts.configOpt)) {
       val configs = parseTopicConfigs(opts)
+=======
+    if(opts.options.has(opts.configOpt) || opts.options.has(opts.deleteConfigOpt)) {
+      val configsToBeAdded = parseTopicConfigsToBeAdded(opts)
+      val configsToBeDeleted = parseTopicConfigsToBeDeleted(opts)
+      // compile the final set of configs
+      val configs = AdminUtils.fetchTopicConfig(zkClient, topic)
+      configs.putAll(configsToBeAdded)
+      configsToBeDeleted.foreach(config => configs.remove(config))
+>>>>>>> eedbea6526986783257ad0e025c451a8ee3d9095
       AdminUtils.changeTopicConfig(zkClient, topic, configs)
       println("Updated config for topic \"%s\".".format(topic))
     }
@@ -147,14 +157,28 @@ object TopicCommand {
   
   def formatBroker(broker: Broker) = broker.id + " (" + broker.host + ":" + broker.port + ")"
   
-  def parseTopicConfigs(opts: TopicCommandOptions): Properties = {
-    val configs = opts.options.valuesOf(opts.configOpt).map(_.split("\\s*=\\s*"))
-    require(configs.forall(_.length == 2), "Invalid topic config: all configs must be in the format \"key=val\".")
+  def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
+    val configsToBeAdded = opts.options.valuesOf(opts.configOpt).map(_.split("""\s*=\s*"""))
+    require(configsToBeAdded.forall(config => config.length == 2),
+      "Invalid topic config: all configs to be added must be in the format \"key=val\".")
     val props = new Properties
-    configs.foreach(pair => props.setProperty(pair(0), pair(1)))
+    configsToBeAdded.foreach(pair => props.setProperty(pair(0).trim, pair(1).trim))
+    LogConfig.validate(props)
     props
   }
-  
+
+  def parseTopicConfigsToBeDeleted(opts: TopicCommandOptions): Seq[String] = {
+    val configsToBeDeleted = opts.options.valuesOf(opts.deleteConfigOpt).map(_.split("""\s*=\s*"""))
+    if(opts.options.has(opts.createOpt))
+      require(configsToBeDeleted.size == 0, "Invalid topic config: all configs on create topic must be in the format \"key=val\".")
+    require(configsToBeDeleted.forall(config => config.length == 1),
+      "Invalid topic config: all configs to be deleted must be in the format \"key\".")
+    val propsToBeDeleted = new Properties
+    configsToBeDeleted.foreach(pair => propsToBeDeleted.setProperty(pair(0).trim, ""))
+    LogConfig.validateNames(propsToBeDeleted)
+    configsToBeDeleted.map(pair => pair(0))
+  }
+
   def parseReplicaAssignment(replicaAssignmentList: String): Map[Int, List[Int]] = {
     val partitionList = replicaAssignmentList.split(",")
     val ret = new mutable.HashMap[Int, List[Int]]()
@@ -184,10 +208,17 @@ object TopicCommand {
                          .withRequiredArg
                          .describedAs("topic")
                          .ofType(classOf[String])
-    val configOpt = parser.accepts("config", "A topic configuration for the topic being created or altered.")
+    val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered.")
                           .withRequiredArg
                           .describedAs("name=value")
                           .ofType(classOf[String])
+<<<<<<< HEAD
+=======
+    val deleteConfigOpt = parser.accepts("deleteConfig", "A topic configuration override to be removed for an existing topic")
+                          .withRequiredArg
+                          .describedAs("name")
+                          .ofType(classOf[String])
+>>>>>>> eedbea6526986783257ad0e025c451a8ee3d9095
     val partitionsOpt = parser.accepts("partitions", "The number of partitions for the topic being created or " +
       "altered (WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected")
                            .withRequiredArg

@@ -35,6 +35,7 @@ import kafka.controller.KafkaController
 import scala.Some
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
+import kafka.utils.Utils.inLock
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -781,8 +782,7 @@ class LeaderExistsOrChangedListener(topic: String,
   def handleDataChange(dataPath: String, data: Object) {
     val t = dataPath.split("/").takeRight(3).head
     val p = dataPath.split("/").takeRight(2).head.toInt
-    leaderLock.lock()
-    try {
+    inLock(leaderLock) {
       if(t == topic && p == partition){
         if(oldLeaderOpt == None){
           trace("In leader existence listener on partition [%s, %d], leader has been created".format(topic, partition))
@@ -797,18 +797,12 @@ class LeaderExistsOrChangedListener(topic: String,
         }
       }
     }
-    finally {
-      leaderLock.unlock()
-    }
   }
 
   @throws(classOf[Exception])
   def handleDataDeleted(dataPath: String) {
-    leaderLock.lock()
-    try {
+    inLock(leaderLock) {
       leaderExistsOrChanged.signal()
-    }finally {
-      leaderLock.unlock()
     }
   }
 }

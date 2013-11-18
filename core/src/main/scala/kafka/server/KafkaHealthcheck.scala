@@ -27,14 +27,14 @@ import java.net.InetAddress
 /**
  * This class registers the broker in zookeeper to allow 
  * other brokers and consumers to detect failures. It uses an ephemeral znode with the path:
- *   /brokers/[0...N] --> host:port
+ *   /brokers/[0...N] --> advertisedHost:advertisedPort
  *   
  * Right now our definition of health is fairly naive. If we register in zk we are healthy, otherwise
  * we are dead.
  */
 class KafkaHealthcheck(private val brokerId: Int, 
-                       private val host: String, 
-                       private val port: Int,
+                       private val advertisedHost: String, 
+                       private val advertisedPort: Int,
                        private val zkSessionTimeoutMs: Int,
                        private val zkClient: ZkClient) extends Logging {
 
@@ -49,13 +49,13 @@ class KafkaHealthcheck(private val brokerId: Int,
    * Register this broker as "alive" in zookeeper
    */
   def register() {
-    val hostName = 
-      if(host == null || host.trim.isEmpty) 
+    val advertisedHostName = 
+      if(advertisedHost == null || advertisedHost.trim.isEmpty) 
         InetAddress.getLocalHost.getCanonicalHostName 
       else
-        host
+        advertisedHost
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-    ZkUtils.registerBrokerInZk(zkClient, brokerId, hostName, port, zkSessionTimeoutMs, jmxPort)
+    ZkUtils.registerBrokerInZk(zkClient, brokerId, advertisedHostName, advertisedPort, zkSessionTimeoutMs, jmxPort)
   }
 
   /**

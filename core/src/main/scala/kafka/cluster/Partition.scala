@@ -20,7 +20,7 @@ import scala.collection._
 import kafka.admin.AdminUtils
 import kafka.utils._
 import java.lang.Object
-import kafka.api.LeaderAndIsr
+import kafka.api.{PartitionStateInfo, LeaderAndIsr}
 import kafka.log.LogConfig
 import kafka.server.ReplicaManager
 import com.yammer.metrics.core.Gauge
@@ -28,7 +28,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.controller.{LeaderIsrAndControllerEpoch, KafkaController}
 import org.apache.log4j.Logger
 import kafka.message.ByteBufferMessageSet
-import kafka.common.{TopicAndPartition, NotLeaderForPartitionException, ErrorMapping}
+import kafka.common.{NotAssignedReplicaException, TopicAndPartition, NotLeaderForPartitionException, ErrorMapping}
 
 
 /**
@@ -41,7 +41,6 @@ class Partition(val topic: String,
                 val replicaManager: ReplicaManager) extends Logging with KafkaMetricsGroup {
   private val localBrokerId = replicaManager.config.brokerId
   private val logManager = replicaManager.logManager
-  private val replicaFetcherManager = replicaManager.replicaFetcherManager
   private val zkClient = replicaManager.zkClient
   var leaderReplicaIdOpt: Option[Int] = None
   var inSyncReplicas: Set[Replica] = Set.empty[Replica]
@@ -132,32 +131,34 @@ class Partition(val topic: String,
     assignedReplicaMap.values.toSet
   }
 
+  def removeReplica(replicaId: Int) {
+    assignedReplicaMap.remove(replicaId)
+  }
+
+  def getLeaderEpoch(): Int = {
+    leaderIsrUpdateLock synchronized {
+      return this.leaderEpoch
+    }
+  }
 
   /**
-   *  If the leaderEpoch of the incoming request is higher than locally cached epoch, make the local replica the leader in the following steps.
-   *  1. stop the existing replica fetcher
-   *  2. create replicas in ISR if needed (the ISR expand/shrink logic needs replicas in ISR to be available)
-   *  3. reset LogEndOffset for remote replicas (there could be old LogEndOffset from the time when this broker was the leader last time)
-   *  4. set the new leader and ISR
+   * Make the local replica the leader by resetting LogEndOffset for remote replicas (there could be old LogEndOffset from the time when this broker was the leader last time)
+   *  and setting the new leader and ISR
    */
-  def makeLeader(controllerId: Int, topic: String, partitionId: Int,
-                 leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch, correlationId: Int): Boolean = {
+  def makeLeader(controllerId: Int,
+                 partitionStateInfo: PartitionStateInfo, correlationId: Int): Boolean = {
     leaderIsrUpdateLock synchronized {
+      val allReplicas = partitionStateInfo.allReplicas
+      val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-      if (leaderEpoch >= leaderAndIsr.leaderEpoch){
-        stateChangeLogger.trace(("Broker %d discarded the become-leader request with correlation id %d from " +
-                                 "controller %d epoch %d for partition [%s,%d] since current leader epoch %d is >= the request's leader epoch %d")
-                                   .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch, topic,
-                                           partitionId, leaderEpoch, leaderAndIsr.leaderEpoch))
-        return false
-      }
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
-      // stop replica fetcher thread, if any
-      replicaFetcherManager.removeFetcher(topic, partitionId)
-
+      // add replicas that are new
+      allReplicas.foreach(replica => getOrCreateReplica(replica))
       val newInSyncReplicas = leaderAndIsr.isr.map(r => getOrCreateReplica(r)).toSet
+      // remove assigned replicas that have been removed by the controller
+      (assignedReplicas().map(_.brokerId) -- allReplicas).foreach(removeReplica(_))
       // reset LogEndOffset for remote replicas
       assignedReplicas.foreach(r => if (r.brokerId != localBrokerId) r.logEndOffset = ReplicaManager.UnknownLogEndOffset)
       inSyncReplicas = newInSyncReplicas
@@ -171,52 +172,30 @@ class Partition(val topic: String,
   }
 
   /**
-   *  If the leaderEpoch of the incoming request is higher than locally cached epoch, make the local replica the follower in the following steps.
-   *  1. stop any existing fetcher on this partition from the local replica
-   *  2. make sure local replica exists and truncate the log to high watermark
-   *  3. set the leader and set ISR to empty
-   *  4. start a fetcher to the new leader
+   *  Make the local replica the follower by setting the new leader and ISR to empty
    */
-  def makeFollower(controllerId: Int, topic: String, partitionId: Int, leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
+  def makeFollower(controllerId: Int,
+                   partitionStateInfo: PartitionStateInfo,
                    leaders: Set[Broker], correlationId: Int): Boolean = {
     leaderIsrUpdateLock synchronized {
+      val allReplicas = partitionStateInfo.allReplicas
+      val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
-      if (leaderEpoch >= leaderAndIsr.leaderEpoch) {
-        stateChangeLogger.trace(("Broker %d discarded the become-follower request with correlation id %d from " +
-                                 "controller %d epoch %d for partition [%s,%d] since current leader epoch %d is >= the request's leader epoch %d")
-                                   .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch, topic,
-                                           partitionId, leaderEpoch, leaderAndIsr.leaderEpoch))
-        return false
-      }
+      val newLeaderBrokerId: Int = leaderAndIsr.leader
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
-      // make sure local replica exists. This reads the last check pointed high watermark from disk. On startup, it is
-      // important to ensure that this operation happens for every single partition in a leader and isr request, else
-      // some high watermark values could be overwritten with 0. This leads to replicas fetching from the earliest offset
-      // on the leader
-      val localReplica = getOrCreateReplica()
-      val newLeaderBrokerId: Int = leaderAndIsr.leader
       // TODO: Delete leaders from LeaderAndIsrRequest in 0.8.1
       leaders.find(_.id == newLeaderBrokerId) match {
         case Some(leaderBroker) =>
-          // stop fetcher thread to previous leader
-          replicaFetcherManager.removeFetcher(topic, partitionId)
-          localReplica.log.get.truncateTo(localReplica.highWatermark)
-          logManager.checkpointRecoveryPointOffsets()
+          // add replicas that are new
+          allReplicas.foreach(r => getOrCreateReplica(r))
+          // remove assigned replicas that have been removed by the controller
+          (assignedReplicas().map(_.brokerId) -- allReplicas).foreach(removeReplica(_))
           inSyncReplicas = Set.empty[Replica]
           leaderEpoch = leaderAndIsr.leaderEpoch
           zkVersion = leaderAndIsr.zkVersion
           leaderReplicaIdOpt = Some(newLeaderBrokerId)
-          if (!replicaManager.isShuttingDown.get()) {
-            // start fetcher thread to current leader if we are not shutting down
-            replicaFetcherManager.addFetcher(topic, partitionId, localReplica.logEndOffset, leaderBroker)
-          }
-          else {
-            stateChangeLogger.trace(("Broker %d ignored the become-follower state change with correlation id %d from " +
-                                     "controller %d epoch %d since it is shutting down")
-                                      .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch))
-          }
         case None => // we should not come here
           stateChangeLogger.error(("Broker %d aborted the become-follower state change with correlation id %d from " +
                                    "controller %d epoch %d for partition [%s,%d] new leader %d")
@@ -230,7 +209,13 @@ class Partition(val topic: String,
   def updateLeaderHWAndMaybeExpandIsr(replicaId: Int, offset: Long) {
     leaderIsrUpdateLock synchronized {
       debug("Recording follower %d position %d for partition [%s,%d].".format(replicaId, offset, topic, partitionId))
-      val replica = getOrCreateReplica(replicaId)
+      val replicaOpt = getReplica(replicaId)
+      if(!replicaOpt.isDefined) {
+        throw new NotAssignedReplicaException(("Leader %d failed to record follower %d's position %d for partition [%s,%d] since the replica %d" +
+          " is not recognized to be one of the assigned replicas %s for partition [%s,%d]").format(localBrokerId, replicaId,
+            offset, topic, partitionId, replicaId, assignedReplicas().map(_.brokerId).mkString(","), topic, partitionId))
+      }
+      val replica = replicaOpt.get
       replica.logEndOffset = offset
 
       // check if this replica needs to be added to the ISR
@@ -238,7 +223,11 @@ class Partition(val topic: String,
         case Some(leaderReplica) =>
           val replica = getReplica(replicaId).get
           val leaderHW = leaderReplica.highWatermark
-          if (!inSyncReplicas.contains(replica) && replica.logEndOffset >= leaderHW) {
+          // For a replica to get added back to ISR, it has to satisfy 3 conditions-
+          // 1. It is not already in the ISR
+          // 2. It is part of the assigned replica list. See KAFKA-1097
+          // 3. It's log end offset >= leader's highwatermark
+          if (!inSyncReplicas.contains(replica) && assignedReplicas.map(_.brokerId).contains(replicaId) && replica.logEndOffset >= leaderHW) {
             // expand ISR
             val newInSyncReplicas = inSyncReplicas + replica
             info("Expanding ISR for partition [%s,%d] from %s to %s"

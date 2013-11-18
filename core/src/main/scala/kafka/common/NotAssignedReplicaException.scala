@@ -1,7 +1,3 @@
-package kafka.common
-
-import kafka.cluster.{Replica, Partition}
-
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -19,19 +15,9 @@ import kafka.cluster.{Replica, Partition}
  * limitations under the License.
  */
 
-/**
- * Convenience case class since (topic, partition) pairs are ubiquitous.
- */
-case class TopicAndPartition(topic: String, partition: Int) {
+package kafka.common
 
-  def this(tuple: (String, Int)) = this(tuple._1, tuple._2)
-
-  def this(partition: Partition) = this(partition.topic, partition.partitionId)
-
-  def this(replica: Replica) = this(replica.topic, replica.partitionId)
-
-  def asTuple = (topic, partition)
-
-  override def toString = "[%s,%d]".format(topic, partition)
+class NotAssignedReplicaException(message: String, cause: Throwable) extends RuntimeException(message, cause) {
+  def this(message: String) = this(message, null)
+  def this() = this(null, null)
 }
-

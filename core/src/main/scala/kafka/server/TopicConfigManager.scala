@@ -90,7 +90,6 @@ class TopicConfigManager(private val zkClient: ZkClient,
       val now = time.milliseconds
       val logs = logManager.logsByTopicPartition.toBuffer
       val logsByTopic = logs.groupBy(_._1.topic).mapValues(_.map(_._2))
-      val lastChangeId = notifications.map(changeNumber).max
       for (notification <- notifications) {
         val changeId = changeNumber(notification)
         if (changeId > lastExecutedChange) {

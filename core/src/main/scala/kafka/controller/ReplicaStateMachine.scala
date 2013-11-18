@@ -165,6 +165,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
           replicaState.put((topic, partition, replicaId), OnlineReplica)
         case OfflineReplica =>
           assertValidPreviousStates(topic, partition, replicaId, List(NewReplica, OnlineReplica), targetState)
+          // send stop replica command to the replica so that it stops fetching from the leader
+          brokerRequestBatch.addStopReplicaRequestForBrokers(List(replicaId), topic, partition, deletePartition = false)
           // As an optimization, the controller removes dead replicas from the ISR
           val leaderAndIsrIsEmpty: Boolean =
             controllerContext.partitionLeadershipInfo.get(topicAndPartition) match {

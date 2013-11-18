@@ -104,10 +104,14 @@ object ReassignPartitionsCommand extends Logging {
           }
         }
       } else if(options.has(topicsToMoveJsonFileOpt)) {
+        if(!options.has(brokerListOpt)) {
+          System.err.println("broker-list is required if topics-to-move-json-file is used")
+          parser.printHelpOn(System.err)
+          System.exit(1)
+        }
         val topicsToMoveJsonFile = options.valueOf(topicsToMoveJsonFileOpt)
-        val brokerList = options.valueOf(brokerListOpt)
+        val brokerListToReassign = options.valueOf(brokerListOpt).split(',').map(_.toInt)
         val topicsToMoveJsonString = Utils.readFileAsString(topicsToMoveJsonFile)
-        val brokerListToReassign = brokerList.split(',') map (_.toInt)
         val topicsToReassign = ZkUtils.parseTopicsData(topicsToMoveJsonString)
         val topicPartitionsToReassign = ZkUtils.getReplicaAssignmentForTopics(zkClient, topicsToReassign)
 
@@ -117,7 +121,6 @@ object ReassignPartitionsCommand extends Logging {
             topicInfo._2.head._2.size)
           partitionsToBeReassigned ++= assignedReplicas.map(replicaInfo => (TopicAndPartition(topicInfo._1, replicaInfo._1) -> replicaInfo._2))
         }
-
       } else if (options.has(manualAssignmentJsonFileOpt)) {
         val manualAssignmentJsonFile =  options.valueOf(manualAssignmentJsonFileOpt)
         val manualAssignmentJsonString = Utils.readFileAsString(manualAssignmentJsonFile)
@@ -175,8 +178,11 @@ object ReassignPartitionsCommand extends Logging {
         val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topicAndPartition.topic, topicAndPartition.partition)
         if(assignedReplicas == newReplicas)
           ReassignmentCompleted
-        else
+        else {
+          println(("ERROR: Assigned replicas (%s) don't match the list of replicas for reassignment (%s)" +
+            " for partition %s").format(assignedReplicas.mkString(","), newReplicas.mkString(","), topicAndPartition))
           ReassignmentFailed
+        }
     }
   }
 }

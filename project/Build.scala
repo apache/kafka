@@ -44,7 +44,7 @@ object KafkaBuild extends Build {
     crossScalaVersions := Seq("2.8.0","2.8.2", "2.9.1", "2.9.2", "2.10.1"),
     excludeFilter in unmanagedSources <<= scalaVersion(v => if (v.startsWith("2.8")) "*_2.9+.scala" else "*_2.8.scala"),
     scalaVersion := "2.8.0",
-    version := "0.8.0-beta1",
+    version := "0.8.1",
     publishTo := Some("Apache Maven Repo" at "https://repository.apache.org/service/local/staging/deploy/maven2"),
     credentials += Credentials(Path.userHome / ".m2" / ".credentials"),
     buildNumber := System.getProperty("build.number", ""),
@@ -53,6 +53,7 @@ object KafkaBuild extends Build {
     javacOptions in compile ++= Seq("-Xlint:unchecked", "-source", "1.5"),
     javacOptions in doc ++= Seq("-source", "1.5"),
     parallelExecution in Test := false, // Prevent tests from overrunning each other
+    publishArtifact in Test := true,
     libraryDependencies ++= Seq(
       "log4j"                 % "log4j"        % "1.2.15" exclude("javax.jms", "jms"),
       "net.sf.jopt-simple"    % "jopt-simple"  % "3.2",

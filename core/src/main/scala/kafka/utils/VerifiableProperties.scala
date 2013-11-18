@@ -200,7 +200,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
       Collections.list(props.propertyNames).map(_.toString).sorted
     }
     for(key <- propNames) {
-      if (!referenceSet.contains(key))
+      if (!referenceSet.contains(key) && !key.startsWith("external"))
         warn("Property %s is not valid".format(key))
       else
         info("Property %s is overridden to %s".format(key, props.getProperty(key)))

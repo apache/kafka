@@ -33,7 +33,10 @@ import scala.Predef._
 import collection.Map
 import scala.Some
 import collection.Set
+<<<<<<< HEAD
 import kafka.common.TopicAndPartition
+=======
+>>>>>>> eedbea6526986783257ad0e025c451a8ee3d9095
 
 object AdminUtils extends Logging {
   val rand = new Random
@@ -201,14 +204,21 @@ object AdminUtils extends Logging {
   
   /**
    * Update the config for an existing topic and create a change notification so the change will propagate to other brokers
+   * @param zkClient: The ZkClient handle used to write the new config to zookeeper
+   * @param topic: The topic for which configs are being changed
+   * @param configs: The final set of configs that will be applied to the topic. If any new configs need to be added or
+   *                 existing configs need to be deleted, it should be done prior to invoking this API
+   *
    */
-  def changeTopicConfig(zkClient: ZkClient, topic: String, config: Properties) {
-    LogConfig.validate(config)
+  def changeTopicConfig(zkClient: ZkClient, topic: String, configs: Properties) {
     if(!topicExists(zkClient, topic))
       throw new AdminOperationException("Topic \"%s\" does not exist.".format(topic))
-    
+
+    // remove the topic overrides
+    LogConfig.validate(configs)
+
     // write the new config--may not exist if there were previously no overrides
-    writeTopicConfig(zkClient, topic, config)
+    writeTopicConfig(zkClient, topic, configs)
     
     // create the change notification
     zkClient.createPersistentSequential(ZkUtils.TopicConfigChangesPath + "/" + TopicConfigChangeZnodePrefix, Json.encode(topic))
@@ -218,14 +228,12 @@ object AdminUtils extends Logging {
    * Write out the topic config to zk, if there is any
    */
   private def writeTopicConfig(zkClient: ZkClient, topic: String, config: Properties) {
-    if(config.size > 0) {
-      val configMap: mutable.Map[String, String] = {
-        import JavaConversions._
-        config
-      }
-      val map = Map("version" -> 1, "config" -> configMap)
-      ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicConfigPath(topic), Json.encode(map))
+    val configMap: mutable.Map[String, String] = {
+      import JavaConversions._
+      config
     }
+    val map = Map("version" -> 1, "config" -> configMap)
+    ZkUtils.updatePersistentPath(zkClient, ZkUtils.getTopicConfigPath(topic), Json.encode(map))
   }
   
   /**

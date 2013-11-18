@@ -53,16 +53,16 @@ class OffsetCheckpoint(val file: File) extends Logging {
       
         // flush and overwrite old file
         writer.flush()
-        // swap new offset checkpoint file with previous one
-        if(!temp.renameTo(file)) {
-          // renameTo() fails on Windows if the destination file exists.
-          file.delete()
-          if(!temp.renameTo(file)) {
-            throw new IOException("File rename from %s to %s failed.".format(temp.getAbsolutePath, file.getAbsolutePath))
-          }
-        }
       } finally {
         writer.close()
+      }
+      
+      // swap new offset checkpoint file with previous one
+      if(!temp.renameTo(file)) {
+        // renameTo() fails on Windows if the destination file exists.
+        file.delete()
+        if(!temp.renameTo(file))
+          throw new IOException("File rename from %s to %s failed.".format(temp.getAbsolutePath, file.getAbsolutePath))
       }
     }
   }

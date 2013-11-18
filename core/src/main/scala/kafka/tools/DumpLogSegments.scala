@@ -77,9 +77,9 @@ object DumpLogSegments {
       }
     }
     nonConsecutivePairsForLogFilesMap.foreach {
-      case (fileName, listOfNonSecutivePairs) => {
+      case (fileName, listOfNonConsecutivePairs) => {
         System.err.println("Non-secutive offsets in :" + fileName)
-        listOfNonSecutivePairs.foreach(m => {
+        listOfNonConsecutivePairs.foreach(m => {
           System.err.println("  %d is followed by %d".format(m._1, m._2))
         })
       }
@@ -101,9 +101,9 @@ object DumpLogSegments {
       val partialFileMessageSet: FileMessageSet = messageSet.read(entry.position, maxMessageSize)
       val messageAndOffset = getIterator(partialFileMessageSet.head, isDeepIteration = true).next()
       if(messageAndOffset.offset != entry.offset + index.baseOffset) {
-        var misMatchesSeq = misMatchesForIndexFilesMap.getOrElse(file.getName, List[(Long, Long)]())
+        var misMatchesSeq = misMatchesForIndexFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
         misMatchesSeq ::=(entry.offset + index.baseOffset, messageAndOffset.offset)
-        misMatchesForIndexFilesMap.put(file.getName, misMatchesSeq)
+        misMatchesForIndexFilesMap.put(file.getAbsolutePath, misMatchesSeq)
       }
       // since it is a sparse file, in the event of a crash there may be many zero entries, stop if we see one
       if(entry.offset == 0 && i > 0)
@@ -132,9 +132,9 @@ object DumpLogSegments {
           lastOffset = messageAndOffset.offset
         // If we are iterating uncompressed messages, offsets must be consecutive
         else if (msg.compressionCodec == NoCompressionCodec && messageAndOffset.offset != lastOffset +1) {
-          var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getName, List[(Long, Long)]())
+          var nonConsecutivePairsSeq = nonConsecutivePairsForLogFilesMap.getOrElse(file.getAbsolutePath, List[(Long, Long)]())
           nonConsecutivePairsSeq ::=(lastOffset, messageAndOffset.offset)
-          nonConsecutivePairsForLogFilesMap.put(file.getName, nonConsecutivePairsSeq)
+          nonConsecutivePairsForLogFilesMap.put(file.getAbsolutePath, nonConsecutivePairsSeq)
         }
         lastOffset = messageAndOffset.offset
 
