@@ -518,9 +518,15 @@ object TestUtils extends Logging {
   def writeNonsenseToFile(fileName: File, position: Long, size: Int) {
     val file = new RandomAccessFile(fileName, "rw")
     file.seek(position)
-    val rand = new Random
     for(i <- 0 until size)
-      file.writeByte(rand.nextInt(255))
+      file.writeByte(random.nextInt(255))
+    file.close()
+  }
+  
+  def appendNonsenseToFile(fileName: File, size: Int) {
+    val file = new FileOutputStream(fileName, true)
+    for(i <- 0 until size)
+      file.write(random.nextInt(255))
     file.close()
   }
   
