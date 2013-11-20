@@ -114,7 +114,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     config.brokerId)
   // have a separate scheduler for the controller to be able to start and stop independently of the
   // kafka server
-  private val controllerScheduler = new KafkaScheduler(1)
+  private val autoRebalanceScheduler = new KafkaScheduler(1)
   val offlinePartitionSelector = new OfflinePartitionLeaderSelector(controllerContext)
   private val reassignedPartitionLeaderSelector = new ReassignedPartitionLeaderSelector(controllerContext)
   private val preferredReplicaPartitionLeaderSelector = new PreferredReplicaPartitionLeaderSelector(controllerContext)
@@ -255,8 +255,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
       sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
       if (config.autoLeaderRebalanceEnable) {
         info("starting the partition rebalance scheduler")
-        controllerScheduler.startup()
-        controllerScheduler.schedule("partition-rebalance-thread", checkAndTriggerPartitionRebalance,
+        autoRebalanceScheduler.startup()
+        autoRebalanceScheduler.schedule("partition-rebalance-thread", checkAndTriggerPartitionRebalance,
           5, config.leaderImbalanceCheckIntervalSeconds, TimeUnit.SECONDS)
       }
     }
@@ -502,7 +502,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
       isRunning = false
       partitionStateMachine.shutdown()
       replicaStateMachine.shutdown()
-      controllerScheduler.shutdown()
+      if (config.autoLeaderRebalanceEnable)
+        autoRebalanceScheduler.shutdown()
       if(controllerContext.controllerChannelManager != null) {
         controllerContext.controllerChannelManager.shutdown()
         controllerContext.controllerChannelManager = null
