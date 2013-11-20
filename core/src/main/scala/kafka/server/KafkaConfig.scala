@@ -229,6 +229,18 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the purge interval (in number of requests) of the producer request purgatory */
   val producerPurgatoryPurgeIntervalRequests = props.getInt("producer.purgatory.purge.interval.requests", 10000)
 
+  /* Enables auto leader balancing. A background thread checks and triggers leader
+   * balance if required at regular intervals */
+  val autoLeaderRebalanceEnable = props.getBoolean("auto.leader.rebalance.enable", false)
+
+  /* the ratio of leader imbalance allowed per broker. The controller would trigger a leader balance if it goes above
+   * this value per broker. The value is specified in percentage. */
+  val leaderImbalancePerBrokerPercentage = props.getInt("leader.imbalance.per.broker.percentage", 10)
+
+  /* the frequency with which the partition rebalance check is triggered by the controller */
+  val leaderImbalanceCheckIntervalSeconds = props.getInt("leader.imbalance.check.interval.seconds", 300)
+
+
   /*********** Controlled shutdown configuration ***********/
 
   /** Controlled shutdown can fail for multiple reasons. This determines the number of retries when such failure happens */
