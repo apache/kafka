@@ -79,10 +79,6 @@ object TopicCommand {
   def alterTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
     CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.topicOpt)
     val topic = opts.options.valueOf(opts.topicOpt)
-<<<<<<< HEAD
-    if(opts.options.has(opts.configOpt)) {
-      val configs = parseTopicConfigs(opts)
-=======
     if(opts.options.has(opts.configOpt) || opts.options.has(opts.deleteConfigOpt)) {
       val configsToBeAdded = parseTopicConfigsToBeAdded(opts)
       val configsToBeDeleted = parseTopicConfigsToBeDeleted(opts)
@@ -90,7 +86,6 @@ object TopicCommand {
       val configs = AdminUtils.fetchTopicConfig(zkClient, topic)
       configs.putAll(configsToBeAdded)
       configsToBeDeleted.foreach(config => configs.remove(config))
->>>>>>> eedbea6526986783257ad0e025c451a8ee3d9095
       AdminUtils.changeTopicConfig(zkClient, topic, configs)
       println("Updated config for topic \"%s\".".format(topic))
     }
@@ -212,13 +207,10 @@ object TopicCommand {
                           .withRequiredArg
                           .describedAs("name=value")
                           .ofType(classOf[String])
-<<<<<<< HEAD
-=======
     val deleteConfigOpt = parser.accepts("deleteConfig", "A topic configuration override to be removed for an existing topic")
                           .withRequiredArg
                           .describedAs("name")
                           .ofType(classOf[String])
->>>>>>> eedbea6526986783257ad0e025c451a8ee3d9095
     val partitionsOpt = parser.accepts("partitions", "The number of partitions for the topic being created or " +
       "altered (WARNING: If partitions are increased for a topic that has a key, the partition logic or ordering of the messages will be affected")
                            .withRequiredArg
