@@ -33,10 +33,6 @@ import scala.Predef._
 import collection.Map
 import scala.Some
 import collection.Set
-<<<<<<< HEAD
-import kafka.common.TopicAndPartition
-=======
->>>>>>> eedbea6526986783257ad0e025c451a8ee3d9095
 
 object AdminUtils extends Logging {
   val rand = new Random

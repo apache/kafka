@@ -28,7 +28,7 @@ import kafka.common._
 import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 import kafka.server.{ZookeeperLeaderElector, KafkaConfig}
 import kafka.utils.ZkUtils._
-import kafka.utils._
+import kafka.utils.{Json, Utils, ZkUtils, Logging, KafkaScheduler}
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import org.I0Itec.zkclient.{IZkDataListener, IZkStateListener, ZkClient}
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
@@ -36,11 +36,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.Some
 import kafka.common.TopicAndPartition
 import org.apache.log4j.Logger
-import scala.Some
-import kafka.common.TopicAndPartition
-import kafka.controller.ReassignedPartitionsContext
-import kafka.controller.PartitionAndReplica
-import kafka.controller.LeaderIsrAndControllerEpoch
 
 class ControllerContext(val zkClient: ZkClient,
                         val zkSessionTimeout: Int,
