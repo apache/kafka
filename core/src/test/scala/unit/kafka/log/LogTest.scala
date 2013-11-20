@@ -592,29 +592,29 @@ class LogTest extends JUnitSuite {
     val config = logConfig.copy(indexInterval = 1, maxMessageSize = 64*1024, segmentSize = 1000)
     val set = TestUtils.singleMessageSet("test".getBytes())
     val recoveryPoint = 50L
-    for(iteration <- 0 until 50) {
+    for(iteration <- 0 until 10) {
       // create a log and write some messages to it
-      logDir.mkdirs()
       var log = new Log(logDir,
                         config,
                         recoveryPoint = 0L,
                         time.scheduler,
                         time)
-      val numMessages = 50 + TestUtils.random.nextInt(50)
-      for(i <- 0 until numMessages)
+      for(i <- 0 until 100)
         log.append(set)
-      val messages = log.logSegments.flatMap(_.log.iterator.toList)
+      val seg = log.logSegments(0, recoveryPoint).last
+      val index = seg.index
+      val messages = seg.log
+      val filePosition = messages.searchFor(recoveryPoint, 0).position
+      val indexPosition = index.lookup(recoveryPoint).position
       log.close()
       
-      // corrupt index and log by appending random bytes
-      TestUtils.appendNonsenseToFile(log.activeSegment.index.file, TestUtils.random.nextInt(1024) + 1)
-      TestUtils.appendNonsenseToFile(log.activeSegment.log.file, TestUtils.random.nextInt(1024) + 1)
+      // corrupt file
+      TestUtils.writeNonsenseToFile(index.file, indexPosition, index.file.length.toInt - indexPosition)
+      TestUtils.writeNonsenseToFile(messages.file, filePosition, messages.file.length().toInt - filePosition)
       
       // attempt recovery
       log = new Log(logDir, config, recoveryPoint, time.scheduler, time)
-      assertEquals(numMessages, log.logEndOffset)
-      assertEquals("Messages in the log after recovery should be the same.", messages, log.logSegments.flatMap(_.log.iterator.toList))
-      Utils.rm(logDir)
+      assertEquals(recoveryPoint, log.logEndOffset)
     }
   }
 

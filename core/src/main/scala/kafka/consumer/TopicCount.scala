@@ -25,7 +25,7 @@ import kafka.common.KafkaException
 private[kafka] trait TopicCount {
 
   def getConsumerThreadIdsPerTopic: Map[String, Set[String]]
-  def dbString: String
+  def getTopicCountMap: Map[String, Int]
   def pattern: String
   
   protected def makeConsumerThreadIdsPerTopic(consumerIdString: String,
@@ -111,24 +111,7 @@ private[kafka] class StaticTopicCount(val consumerIdString: String,
     }
   }
 
-  /**
-   *  return json of
-   *  { "topic1" : 4,
-   *    "topic2" : 4 }
-   */
-  def dbString = {
-    val builder = new StringBuilder
-    builder.append("{ ")
-    var i = 0
-    for ( (topic, nConsumers) <- topicCountMap) {
-      if (i > 0)
-        builder.append(",")
-      builder.append("\"" + topic + "\": " + nConsumers)
-      i += 1
-    }
-    builder.append(" }")
-    builder.toString()
-  }
+  def getTopicCountMap = topicCountMap
 
   def pattern = TopicCount.staticPattern
 }
@@ -142,7 +125,7 @@ private[kafka] class WildcardTopicCount(zkClient: ZkClient,
     makeConsumerThreadIdsPerTopic(consumerIdString, Map(wildcardTopics.map((_, numStreams)): _*))
   }
 
-  def dbString = "{ \"%s\" : %d }".format(topicFilter.regex, numStreams)
+  def getTopicCountMap = Map(topicFilter.regex -> numStreams)
 
   def pattern: String = {
     topicFilter match {

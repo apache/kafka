@@ -212,14 +212,15 @@ class LogSegmentTest extends JUnit3Suite {
    */
   @Test
   def testRecoveryWithCorruptMessage() {
+    val rand = new Random(1)
     val messagesAppended = 20
     for(iteration <- 0 until 10) {
       val seg = createSegment(0)
       for(i <- 0 until messagesAppended)
         seg.append(i, messages(i, i.toString))
-      val offsetToBeginCorruption = TestUtils.random.nextInt(messagesAppended)
+      val offsetToBeginCorruption = rand.nextInt(messagesAppended)
       // start corrupting somewhere in the middle of the chosen record all the way to the end
-      val position = seg.log.searchFor(offsetToBeginCorruption, 0).position + TestUtils.random.nextInt(15)
+      val position = seg.log.searchFor(offsetToBeginCorruption, 0).position + rand.nextInt(15)
       TestUtils.writeNonsenseToFile(seg.log.file, position, seg.log.file.length.toInt - position)
       seg.recover(64*1024)
       assertEquals("Should have truncated off bad messages.", (0 until offsetToBeginCorruption).toList, seg.log.map(_.offset).toList)
