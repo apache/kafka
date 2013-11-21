@@ -175,8 +175,6 @@ class LogManager(val logDirs: Array[File],
       allLogs.foreach(_.close())
       // update the last flush point
       checkpointRecoveryPointOffsets()
-      // mark that the shutdown was clean by creating the clean shutdown marker file
-      logDirs.foreach(dir => Utils.swallow(new File(dir, Log.CleanShutdownFile).createNewFile()))
     } finally {
       // regardless of whether the close succeeded, we need to unlock the data directories
       dirLocks.foreach(_.destroy())

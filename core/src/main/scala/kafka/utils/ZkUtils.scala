@@ -32,10 +32,11 @@ import kafka.common.{KafkaException, NoEpochForPartitionException}
 import kafka.controller.ReassignedPartitionsContext
 import kafka.controller.PartitionAndReplica
 import kafka.controller.KafkaController
-import scala.Some
+import scala.{collection, Some}
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
 import kafka.utils.Utils.inLock
+import scala.collection
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -192,11 +193,8 @@ object ZkUtils extends Logging {
 
   def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, port: Int, timeout: Int, jmxPort: Int) {
     val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
-    val timestamp = "\"" + SystemTime.milliseconds.toString + "\""
-    val brokerInfo =
-      Utils.mergeJsonFields(Utils.mapToJsonFields(Map("host" -> host), valueInQuotes = true) ++
-                             Utils.mapToJsonFields(Map("version" -> 1.toString, "jmx_port" -> jmxPort.toString, "port" -> port.toString, "timestamp" -> timestamp),
-                                                   valueInQuotes = false))
+    val timestamp = SystemTime.milliseconds.toString
+    val brokerInfo = Json.encode(Map("version" -> 1, "host" -> host, "port" -> port, "jmx_port" -> jmxPort, "timestamp" -> timestamp))
     val expectedBroker = new Broker(id, host, port)
 
     try {
@@ -219,18 +217,17 @@ object ZkUtils extends Logging {
     topicDirs.consumerOwnerDir + "/" + partition
   }
 
+
   def leaderAndIsrZkData(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int): String = {
-    val isrInfo = Utils.seqToJson(leaderAndIsr.isr.map(_.toString), valueInQuotes = false)
-    Utils.mapToJson(Map("version" -> 1.toString, "leader" -> leaderAndIsr.leader.toString, "leader_epoch" -> leaderAndIsr.leaderEpoch.toString,
-                        "controller_epoch" -> controllerEpoch.toString, "isr" -> isrInfo), valueInQuotes = false)
+    Json.encode(Map("version" -> 1, "leader" -> leaderAndIsr.leader, "leader_epoch" -> leaderAndIsr.leaderEpoch,
+                    "controller_epoch" -> controllerEpoch, "isr" -> leaderAndIsr.isr))
   }
 
   /**
    * Get JSON partition to replica map from zookeeper.
    */
-  def replicaAssignmentZkdata(map: Map[String, Seq[Int]]): String = {
-    val jsonReplicaAssignmentMap = Utils.mapWithSeqValuesToJson(map)
-    Utils.mapToJson(Map("version" -> 1.toString, "partitions" -> jsonReplicaAssignmentMap), valueInQuotes = false)
+  def replicaAssignmentZkData(map: Map[String, Seq[Int]]): String = {
+    Json.encode(Map("version" -> 1, "partitions" -> map))
   }
 
   /**
@@ -656,16 +653,8 @@ object ZkUtils extends Logging {
   }
 
   def getPartitionReassignmentZkData(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
-    var jsonPartitionsData: mutable.ListBuffer[String] = ListBuffer[String]()
-    for (p <- partitionsToBeReassigned) {
-      val jsonReplicasData = Utils.seqToJson(p._2.map(_.toString), valueInQuotes = false)
-      val jsonTopicData = Utils.mapToJsonFields(Map("topic" -> p._1.topic), valueInQuotes = true)
-      val jsonPartitionData = Utils.mapToJsonFields(Map("partition" -> p._1.partition.toString, "replicas" -> jsonReplicasData),
-                                                    valueInQuotes = false)
-      jsonPartitionsData += Utils.mergeJsonFields(jsonTopicData ++ jsonPartitionData)
-    }
-    Utils.mapToJson(Map("version" -> 1.toString, "partitions" -> Utils.seqToJson(jsonPartitionsData.toSeq, valueInQuotes = false)),
-                    valueInQuotes = false)
+    Json.encode(Map("version" -> 1, "partitions" -> partitionsToBeReassigned.map(e => Map("topic" -> e._1.topic, "partition" -> e._1.partition,
+                                                                                          "replicas" -> e._2))))
   }
 
   def updatePartitionReassignmentData(zkClient: ZkClient, partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]) {

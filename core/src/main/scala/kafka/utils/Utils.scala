@@ -446,65 +446,6 @@ object Utils extends Logging {
   def nullOrEmpty(s: String): Boolean = s == null || s.equals("")
 
   /**
-   * Merge JSON fields of the format "key" : value/object/array.
-   */
-  def mergeJsonFields(objects: Seq[String]): String = {
-    val builder = new StringBuilder
-    builder.append("{ ")
-    builder.append(objects.sorted.map(_.trim).mkString(", "))
-    builder.append(" }")
-    builder.toString
-  }
-
- /**
-   * Format a Map[String, String] as JSON object.
-   */
-  def mapToJsonFields(jsonDataMap: Map[String, String], valueInQuotes: Boolean): Seq[String] = {
-    val jsonFields: mutable.ListBuffer[String] = ListBuffer()
-    val builder = new StringBuilder
-    for ((key, value) <- jsonDataMap.toList.sorted) {
-      builder.append("\"" + key + "\":")
-      if (valueInQuotes)
-        builder.append("\"" + value + "\"")
-      else
-        builder.append(value)
-      jsonFields += builder.toString
-      builder.clear()
-    }
-    jsonFields
-  }
-
-  /**
-   * Format a Map[String, String] as JSON object.
-   */
-  def mapToJson(jsonDataMap: Map[String, String], valueInQuotes: Boolean): String = {
-    mergeJsonFields(mapToJsonFields(jsonDataMap, valueInQuotes))
-  }
-
-   /**
-   * Format a Seq[String] as JSON array.
-   */
-  def seqToJson(jsonData: Seq[String], valueInQuotes: Boolean): String = {
-    val builder = new StringBuilder
-    builder.append("[ ")
-    if (valueInQuotes)
-      builder.append(jsonData.map("\"" + _ + "\"").mkString(", "))
-    else
-      builder.append(jsonData.mkString(", "))
-    builder.append(" ]")
-    builder.toString
-  }
-
-  /**
-   * Format a Map[String, Seq[Int]] as JSON
-   */
-
-  def mapWithSeqValuesToJson(jsonDataMap: Map[String, Seq[Int]]): String = {
-    mergeJsonFields(mapToJsonFields(jsonDataMap.map(e => (e._1 -> seqToJson(e._2.map(_.toString), valueInQuotes = false))),
-                                    valueInQuotes = false))
-  }
-
-  /**
    * Create a circular (looping) iterator over a collection.
    * @param coll An iterable over the underlying collection.
    * @return A circular iterator over the collection.

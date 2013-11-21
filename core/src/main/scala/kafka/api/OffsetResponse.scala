@@ -44,7 +44,11 @@ object OffsetResponse {
 }
 
 
-case class PartitionOffsetsResponse(error: Short, offsets: Seq[Long])
+case class PartitionOffsetsResponse(error: Short, offsets: Seq[Long]) {
+  override def toString(): String = {
+    new String("error: " + ErrorMapping.exceptionFor(error).getClass.getName + " offsets: " + offsets.mkString)
+  }
+}
 
 
 case class OffsetResponse(override val correlationId: Int,

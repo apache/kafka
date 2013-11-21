@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.utils.ZkUtils._
-import kafka.utils.{Utils, SystemTime, Logging}
+import kafka.utils.{Json, Utils, SystemTime, Logging}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.IZkDataListener
 import kafka.controller.ControllerContext
@@ -49,9 +49,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext, electionPath:
 
   def elect: Boolean = {
     val timestamp = SystemTime.milliseconds.toString
-    val electString =
-      Utils.mergeJsonFields(Utils.mapToJsonFields(Map("version" -> 1.toString, "brokerid" -> brokerId.toString), valueInQuotes = false)
-        ++ Utils.mapToJsonFields(Map("timestamp" -> timestamp), valueInQuotes = true))
+    val electString = Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp))
 
     try {
       createEphemeralPathExpectConflictHandleZKBug(controllerContext.zkClient, electionPath, electString, brokerId,

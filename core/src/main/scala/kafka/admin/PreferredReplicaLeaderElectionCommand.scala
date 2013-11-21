@@ -89,13 +89,8 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   def writePreferredReplicaElectionData(zkClient: ZkClient,
                                         partitionsUndergoingPreferredReplicaElection: scala.collection.Set[TopicAndPartition]) {
     val zkPath = ZkUtils.PreferredReplicaLeaderElectionPath
-    var partitionsData: mutable.ListBuffer[String] = ListBuffer[String]()
-    for (p <- partitionsUndergoingPreferredReplicaElection) {
-      partitionsData += Utils.mergeJsonFields(Utils.mapToJsonFields(Map("topic" -> p.topic), valueInQuotes = true) ++
-                                               Utils.mapToJsonFields(Map("partition" -> p.partition.toString), valueInQuotes = false))
-    }
-    val jsonPartitionsData = Utils.seqToJson(partitionsData, valueInQuotes = false)
-    val jsonData = Utils.mapToJson(Map("version" -> 1.toString, "partitions" -> jsonPartitionsData), valueInQuotes = false)
+    val partitionsList = partitionsUndergoingPreferredReplicaElection.map(e => Map("topic" -> e.topic, "partition" -> e.partition))
+    val jsonData = Json.encode(Map("version" -> 1, "partitions" -> partitionsList))
     try {
       ZkUtils.createPersistentPath(zkClient, zkPath, jsonData)
       info("Created preferred replica election path with %s".format(jsonData))
