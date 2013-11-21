@@ -71,8 +71,25 @@ trait ConsumerConnector {
    *  Commit the offsets of all broker partitions connected by this connector.
    */
   def commitOffsets
-  
+
   /**
+   *  Commit the given offsets.  Entirely left to the user to make sure they are committing sensible updates.
+   *  Generally they should be taken from MessageAndMetadata.  Note that you are free to only update
+   *  some offsets, and leave others as is
+   */
+  def commitOffsets(offsets: Seq[PartitionTopicOffset]) {
+    commitOffsets(offsets.groupBy{pto => pto.topic})
+  }
+
+  /**
+   *  Commit the given offsets.  Entirely left to the user to make sure they are committing sensible updates.
+   *  Generally they should be taken from MessageAndMetadata.  Note that you are free to only update
+   *  some offsets, and leave others as is
+   */
+  def commitOffsets(offsets: Iterable[(String, Iterable[PartitionTopicOffset])])
+
+
+    /**
    *  Shut down the connector
    */
   def shutdown()
@@ -101,3 +118,5 @@ object Consumer extends Logging {
     consumerConnect
   }
 }
+
+case class PartitionTopicOffset(topic: String, partition: Int, offset: Long)

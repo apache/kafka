@@ -247,25 +247,33 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   }
 
   def commitOffsets() {
+    val offsets = topicRegistry.map{case(k,v) => k -> v.values.map{
+      info => PartitionTopicOffset(k, info.partitionId, info.getConsumeOffset)
+    }}
+    commitOffsets(offsets)
+  }
+
+  def commitOffsets(offsets: Iterable[(String, Iterable[PartitionTopicOffset])]) {
     if (zkClient == null) {
       error("zk client is null. Cannot commit offsets")
       return
     }
-    for ((topic, infos) <- topicRegistry) {
-      val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
-      for (info <- infos.values) {
-        val newOffset = info.getConsumeOffset
-        if (newOffset != checkpointedOffsets.get(TopicAndPartition(topic, info.partitionId))) {
-          try {
-            updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + info.partitionId, newOffset.toString)
-            checkpointedOffsets.put(TopicAndPartition(topic, info.partitionId), newOffset)
-          } catch {
-            case t: Throwable =>
-              // log it and let it go
-              warn("exception during commitOffsets",  t)
-          }
-          debug("Committed offset " + newOffset + " for topic " + info)
+    for {
+      (topic, infos) <- offsets
+      topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
+      info <- infos
+    } {
+      val newOffset = info.offset
+      if (newOffset != checkpointedOffsets.get(TopicAndPartition(topic, info.partition))) {
+        try {
+          updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + info.partition,
+            newOffset.toString)
+        } catch {
+          case t: Throwable =>
+            // log it and let it go
+            warn("exception during commitOffsets",  t)
         }
+        debug("Committed offset " + newOffset + " for topic " + info)
       }
     }
   }
