@@ -42,11 +42,7 @@ object FetchResponsePartitionData {
 }
 
 case class FetchResponsePartitionData(error: Short = ErrorMapping.NoError, hw: Long = -1L, messages: MessageSet) {
-
   val sizeInBytes = FetchResponsePartitionData.headerSize + messages.sizeInBytes
-
-  def this(messages: MessageSet) = this(ErrorMapping.NoError, -1L, messages)
-  
 }
 
 // SENDS

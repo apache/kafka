@@ -35,10 +35,10 @@ object SerializationTestUtils{
   private val isr1 = List(0, 1, 2)
   private val leader2 = 0
   private val isr2 = List(0, 2, 3)
-  private val partitionDataFetchResponse0 = new FetchResponsePartitionData(new ByteBufferMessageSet(new Message("first message".getBytes)))
-  private val partitionDataFetchResponse1 = new FetchResponsePartitionData(new ByteBufferMessageSet(new Message("second message".getBytes)))
-  private val partitionDataFetchResponse2 = new FetchResponsePartitionData(new ByteBufferMessageSet(new Message("third message".getBytes)))
-  private val partitionDataFetchResponse3 = new FetchResponsePartitionData(new ByteBufferMessageSet(new Message("fourth message".getBytes)))
+  private val partitionDataFetchResponse0 = new FetchResponsePartitionData(messages = new ByteBufferMessageSet(new Message("first message".getBytes)))
+  private val partitionDataFetchResponse1 = new FetchResponsePartitionData(messages = new ByteBufferMessageSet(new Message("second message".getBytes)))
+  private val partitionDataFetchResponse2 = new FetchResponsePartitionData(messages = new ByteBufferMessageSet(new Message("third message".getBytes)))
+  private val partitionDataFetchResponse3 = new FetchResponsePartitionData(messages = new ByteBufferMessageSet(new Message("fourth message".getBytes)))
   private val partitionDataFetchResponseMap = Map((0, partitionDataFetchResponse0), (1, partitionDataFetchResponse1), (2, partitionDataFetchResponse2), (3, partitionDataFetchResponse3))
 
   private val topicDataFetchResponse = {
