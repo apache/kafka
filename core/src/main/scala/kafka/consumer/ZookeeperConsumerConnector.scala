@@ -754,19 +754,11 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     registerConsumerInZK(dirs, consumerIdString, wildcardTopicCount)
     reinitializeConsumer(wildcardTopicCount, wildcardQueuesAndStreams)
 
-    if (!topicFilter.requiresTopicEventWatcher) {
-      info("Not creating event watcher for trivial whitelist " + topicFilter)
-    }
-    else {
-      info("Creating topic event watcher for whitelist " + topicFilter)
-      wildcardTopicWatcher = new ZookeeperTopicEventWatcher(config, this)
-
-      /*
-       * Topic events will trigger subsequent synced rebalances. Also, the
-       * consumer will get registered only after an allowed topic becomes
-       * available.
-       */
-    }
+    /*
+     * Topic events will trigger subsequent synced rebalances.
+     */
+    info("Creating topic event watcher for topics " + topicFilter)
+    wildcardTopicWatcher = new ZookeeperTopicEventWatcher(zkClient, this)
 
     def handleTopicEvent(allTopics: Seq[String]) {
       debug("Handling topic event")
