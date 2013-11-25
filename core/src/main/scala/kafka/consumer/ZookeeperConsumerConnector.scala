@@ -34,7 +34,6 @@ import kafka.utils.Utils.inLock
 import kafka.common._
 import com.yammer.metrics.core.Gauge
 import kafka.metrics._
-import scala.Some
 
 
 /**
@@ -250,10 +249,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     val offsets = topicRegistry.map{case(k,v) => k -> v.values.map{
       info => PartitionTopicOffset(k, info.partitionId, info.getConsumeOffset)
     }}
-    commitOffsets(offsets)
+    commitOffsets(offsets, false)
   }
 
-  def commitOffsets(offsets: Iterable[(String, Iterable[PartitionTopicOffset])]) {
+  def commitOffsets(offsets: Iterable[(String, Iterable[PartitionTopicOffset])], preventBackwardsCommit: Boolean = true) {
     if (zkClient == null) {
       error("zk client is null. Cannot commit offsets")
       return
@@ -266,8 +265,30 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       val newOffset = info.offset
       if (newOffset != checkpointedOffsets.get(TopicAndPartition(topic, info.partition))) {
         try {
-          updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + info.partition,
-            newOffset.toString)
+          val path = topicDirs.consumerOffsetDir + "/" + info.partition
+          if (preventBackwardsCommit) {
+            //TODO
+            var needToUpdate = true
+            while (needToUpdate) {
+              val (originalValue, originalStat) = readData(zkClient, path)
+              val originalOffset = try {
+                java.lang.Long.parseLong(originalValue)
+              } catch {
+                case _ => -1
+              }
+              if (originalOffset < newOffset) {
+                conditionalUpdatePersistentPath(zkClient, path, newOffset.toString, originalStat.getVersion)
+              } else {
+                // we can just ignore this update completely (maybe this partition was reassigned somewhere else,
+                // and the other processor of the thread has gotten further)
+                needToUpdate = false
+              }
+
+            }
+          } else {
+            updatePersistentPath(zkClient, path,
+              newOffset.toString)
+          }
         } catch {
           case t: Throwable =>
             // log it and let it go

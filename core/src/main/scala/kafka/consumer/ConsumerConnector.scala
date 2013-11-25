@@ -77,8 +77,8 @@ trait ConsumerConnector {
    *  Generally they should be taken from MessageAndMetadata.  Note that you are free to only update
    *  some offsets, and leave others as is
    */
-  def commitOffsets(offsets: Seq[PartitionTopicOffset]) {
-    commitOffsets(offsets.groupBy{pto => pto.topic})
+  def commitOffsets(offsets: Seq[PartitionTopicOffset], preventBackwardsCommit: Boolean) {
+    commitOffsets(offsets.groupBy{pto => pto.topic}, preventBackwardsCommit)
   }
 
   /**
@@ -86,7 +86,7 @@ trait ConsumerConnector {
    *  Generally they should be taken from MessageAndMetadata.  Note that you are free to only update
    *  some offsets, and leave others as is
    */
-  def commitOffsets(offsets: Iterable[(String, Iterable[PartitionTopicOffset])])
+  def commitOffsets(offsets: Iterable[(String, Iterable[PartitionTopicOffset])], preventBackwardsCommit: Boolean)
 
 
     /**
