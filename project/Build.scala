@@ -71,7 +71,9 @@ object KafkaBuild extends Build {
           <exclude org="log4j" module="log4j"/>
           <exclude org="jline" module="jline"/>
         </dependency>
-      </dependencies>
+      </dependencies>,
+      mappings in packageBin in Compile += file("LICENSE") -> "LICENSE",
+      mappings in packageBin in Compile += file("NOTICE") -> "NOTICE"
   )
 
   val hadoopSettings = Seq(
