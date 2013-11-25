@@ -34,7 +34,6 @@ import kafka.utils.Utils.inLock
 import kafka.common._
 import com.yammer.metrics.core.Gauge
 import kafka.metrics._
-import scala.Some
 
 
 /**
@@ -247,25 +246,55 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   }
 
   def commitOffsets() {
+    val offsets = topicRegistry.map{case(k,v) => k -> v.values.map{
+      info => PartitionTopicOffset(k, info.partitionId, info.getConsumeOffset)
+    }}
+    commitOffsets(offsets, false)
+  }
+
+  def commitOffsets(offsets: Iterable[(String, Iterable[PartitionTopicOffset])], preventBackwardsCommit: Boolean = true) {
     if (zkClient == null) {
       error("zk client is null. Cannot commit offsets")
       return
     }
-    for ((topic, infos) <- topicRegistry) {
-      val topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
-      for (info <- infos.values) {
-        val newOffset = info.getConsumeOffset
-        if (newOffset != checkpointedOffsets.get(TopicAndPartition(topic, info.partitionId))) {
-          try {
-            updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + info.partitionId, newOffset.toString)
-            checkpointedOffsets.put(TopicAndPartition(topic, info.partitionId), newOffset)
-          } catch {
-            case t: Throwable =>
-              // log it and let it go
-              warn("exception during commitOffsets",  t)
+    for {
+      (topic, infos) <- offsets
+      topicDirs = new ZKGroupTopicDirs(config.groupId, topic)
+      info <- infos
+    } {
+      val newOffset = info.offset
+      if (newOffset != checkpointedOffsets.get(TopicAndPartition(topic, info.partition))) {
+        try {
+          val path = topicDirs.consumerOffsetDir + "/" + info.partition
+          if (preventBackwardsCommit) {
+            //TODO
+            var needToUpdate = true
+            while (needToUpdate) {
+              val (originalValue, originalStat) = readData(zkClient, path)
+              val originalOffset = try {
+                java.lang.Long.parseLong(originalValue)
+              } catch {
+                case _ => -1
+              }
+              if (originalOffset < newOffset) {
+                conditionalUpdatePersistentPath(zkClient, path, newOffset.toString, originalStat.getVersion)
+              } else {
+                // we can just ignore this update completely (maybe this partition was reassigned somewhere else,
+                // and the other processor of the thread has gotten further)
+                needToUpdate = false
+              }
+
+            }
+          } else {
+            updatePersistentPath(zkClient, path,
+              newOffset.toString)
           }
-          debug("Committed offset " + newOffset + " for topic " + info)
+        } catch {
+          case t: Throwable =>
+            // log it and let it go
+            warn("exception during commitOffsets",  t)
         }
+        debug("Committed offset " + newOffset + " for topic " + info)
       }
     }
   }
