@@ -155,26 +155,19 @@ class Log(val dir: File,
       activeSegment.index.resize(config.maxIndexSize)
     }
 
-    // sanity check the index file of every segment, if it's empty or its last offset is greater than its base offset.
-    for (s <- logSegments) {
-      require(s.index.entries == 0 || s.index.lastOffset > s.index.baseOffset,
-              "Corrupt index found, index file (%s) has non-zero size but the last offset is %d and the base offset is %d"
-              .format(s.index.file.getAbsolutePath, s.index.lastOffset, s.index.baseOffset))
-    }
+    // sanity check the index file of every segment to ensure we don't proceed with a corrupt segment
+    for (s <- logSegments)
+      s.index.sanityCheck()
   }
   
   private def recoverLog() {
-    val lastOffset = try {activeSegment.nextOffset} catch {case _: Throwable => -1L}
-    val needsRecovery = !(new File(dir.getParentFile, CleanShutdownFile)).exists()
-    if(!needsRecovery) {
-      this.recoveryPoint = lastOffset
+    // if we have the clean shutdown marker, skip recovery
+    if(hasCleanShutdownFile) {
+      this.recoveryPoint = activeSegment.nextOffset
       return
     }
-    if(lastOffset <= this.recoveryPoint) {
-      info("Log '%s' is fully intact, skipping recovery".format(name))
-      this.recoveryPoint = lastOffset
-      return
-    }
+
+    // okay we need to actually recovery this log
     val unflushed = logSegments(this.recoveryPoint, Long.MaxValue).iterator
     while(unflushed.hasNext) {
       val curr = unflushed.next
@@ -196,6 +189,11 @@ class Log(val dir: File,
       }
     }
   }
+  
+  /**
+   * Check if we have the "clean shutdown" file
+   */
+  private def hasCleanShutdownFile() = new File(dir.getParentFile, CleanShutdownFile).exists()
 
   /**
    * The number of segments in the log.

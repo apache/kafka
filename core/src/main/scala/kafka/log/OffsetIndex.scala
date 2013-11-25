@@ -69,12 +69,8 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
           raf.setLength(roundToExactMultiple(maxIndexSize, 8))
         }
           
-        val len = raf.length()  
-        if(len < 0 || len % 8 != 0)
-          throw new IllegalStateException("Index file " + file.getName + " is corrupt, found " + len + 
-                                          " bytes which is not positive or not a multiple of 8.")
-          
         /* memory-map the file */
+        val len = raf.length()
         val idx = raf.getChannel.map(FileChannel.MapMode.READ_WRITE, 0, len)
           
         /* set the position in the index for the next entry */
@@ -99,22 +95,20 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   var maxEntries = mmap.limit / 8
   
   /* the last offset in the index */
-  var lastOffset = readLastOffset()
+  var lastOffset = readLastEntry.offset
   
   debug("Loaded index file %s with maxEntries = %d, maxIndexSize = %d, entries = %d, lastOffset = %d, file position = %d"
     .format(file.getAbsolutePath, maxEntries, maxIndexSize, entries(), lastOffset, mmap.position))
 
   /**
-   * The last offset written to the index
+   * The last entry in the index
    */
-  private def readLastOffset(): Long = {
+  def readLastEntry(): OffsetPosition = {
     inLock(lock) {
-      val offset = 
-        size.get match {
-          case 0 => 0
-          case s => relativeOffset(this.mmap, s-1)
-        }
-      baseOffset + offset
+      size.get match {
+        case 0 => OffsetPosition(baseOffset, 0)
+        case s => OffsetPosition(baseOffset + relativeOffset(this.mmap, s-1), physical(this.mmap, s-1))
+      }
     }
   }
 
@@ -179,7 +173,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   /* return the nth offset relative to the base offset */
   private def relativeOffset(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * 8)
   
-  /* return the nth physical offset */
+  /* return the nth physical position */
   private def physical(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * 8 + 4)
   
   /**
@@ -258,7 +252,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
     inLock(lock) {
       this.size.set(entries)
       mmap.position(this.size.get * 8)
-      this.lastOffset = readLastOffset
+      this.lastOffset = readLastEntry.offset
     }
   }
   
@@ -348,6 +342,20 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
     val success = this.file.renameTo(f)
     this.file = f
     success
+  }
+  
+  /**
+   * Do a basic sanity check on this index to detect obvious problems
+   * @throw IllegalArgumentException if any problems are found
+   */
+  def sanityCheck() {
+    require(entries == 0 || lastOffset > baseOffset,
+            "Corrupt index found, index file (%s) has non-zero size but the last offset is %d and the base offset is %d"
+            .format(file.getAbsolutePath, lastOffset, baseOffset))
+      val len = file.length()
+      require(len % 8 == 0, 
+              "Index file " + file.getName + " is corrupt, found " + len + 
+              " bytes which is not positive or not a multiple of 8.")
   }
   
   /**
