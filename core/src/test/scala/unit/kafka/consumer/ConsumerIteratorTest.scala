@@ -88,4 +88,40 @@ class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
     val unconsumed = messageSet.filter(_.offset >= consumedOffset).map(m => Utils.readString(m.message.payload))
     assertEquals(unconsumed, receivedMessages)
   }
+
+  @Test
+  def testConsumerIteratorDecodingFailure() {
+    val messageStrings = (0 until 10).map(_.toString).toList
+    val messages = messageStrings.map(s => new Message(s.getBytes))
+    val messageSet = new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(0), messages:_*)
+
+    topicInfos(0).enqueue(messageSet)
+    assertEquals(1, queue.size)
+
+    val iter = new ConsumerIterator[String, String](queue,
+      ConsumerConfig.ConsumerTimeoutMs,
+      new FailDecoder(),
+      new FailDecoder(),
+      clientId = "")
+
+    val receivedMessages = (0 until 5).map{ i =>
+      assertTrue(iter.hasNext)
+      val message = iter.next
+      assertEquals(message.offset, i + consumedOffset)
+
+      try {
+        message.message // should fail
+      }
+      catch {
+        case e: UnsupportedOperationException => // this is ok
+        case e2: Throwable => fail("Unexpected exception when iterating the message set. " + e2.getMessage)
+      }
+    }
+  }
+
+  class FailDecoder(props: VerifiableProperties = null) extends Decoder[String] {
+    def fromBytes(bytes: Array[Byte]): String = {
+      throw new UnsupportedOperationException("This decoder does not work at all..")
+    }
+  }
 }
