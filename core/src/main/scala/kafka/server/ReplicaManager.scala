@@ -314,11 +314,11 @@ class ReplicaManager(val config: KafkaConfig,
   /*
    * Make the current broker to become follower for a given set of partitions by:
    *
-   * 1. Stop fetchers for these partitions
-   * 2. Truncate the log and checkpoint offsets for these partitions.
-   * 3. If the broker is not shutting down, add the fetcher to the new leaders
-   * 4. Update the partition metadata in cache
-   * 5. Remove these partitions from the leader partitions set
+   * 1. Remove these partitions from the leader partitions set.
+   * 2. Mark the replicas as followers so that no more data can be added from the producer clients.
+   * 3. Stop fetchers for these partitions so that no more data can be added by the replica fetcher threads.
+   * 4. Truncate the log and checkpoint offsets for these partitions.
+   * 5. If the broker is not shutting down, add the fetcher to the new leaders.
    *
    * The ordering of doing these steps make sure that the replicas in transition will not
    * take any more messages before checkpointing offsets so that all messages before the checkpoint
@@ -326,7 +326,6 @@ class ReplicaManager(val config: KafkaConfig,
    *
    * If an unexpected error is thrown in this function, it will be propagated to KafkaApis where
    * the error message will be set on each partition since we do not know which partition caused it
-   *  TODO: the above may need to be fixed later
    */
   private def makeFollowers(controllerId: Int, epoch: Int, partitionState: Map[Partition, PartitionStateInfo],
                             leaders: Set[Broker], correlationId: Int, responseMap: mutable.Map[(String, Int), Short]) {
@@ -339,6 +338,13 @@ class ReplicaManager(val config: KafkaConfig,
       responseMap.put((partition.topic, partition.partitionId), ErrorMapping.NoError)
 
     try {
+      leaderPartitionsLock synchronized {
+        leaderPartitions --= partitionState.keySet
+      }
+
+      partitionState.foreach{ case (partition, leaderIsrAndControllerEpoch) =>
+        partition.makeFollower(controllerId, leaderIsrAndControllerEpoch, leaders, correlationId)}
+
       replicaFetcherManager.removeFetcherForPartitions(partitionState.keySet.map(new TopicAndPartition(_)))
       stateChangeLogger.trace("Broker %d stopped fetchers for partitions %s as per becoming-follower request from controller %d epoch %d"
         .format(localBrokerId, partitionState.keySet.map(p => TopicAndPartition(p.topic, p.partitionId)).mkString(","), controllerId, correlationId))
@@ -371,13 +377,6 @@ class ReplicaManager(val config: KafkaConfig,
         stateChangeLogger.trace(("Broker %d ignored the become-follower state change with correlation id %d from " +
           "controller %d epoch %d since it is shutting down")
           .format(localBrokerId, correlationId, controllerId, epoch))
-      }
-
-      partitionState.foreach{ case (partition, leaderIsrAndControllerEpoch) =>
-        partition.makeFollower(controllerId, leaderIsrAndControllerEpoch, leaders, correlationId)}
-
-      leaderPartitionsLock synchronized {
-        leaderPartitions --= partitionState.keySet
       }
     } catch {
       case e: Throwable =>
