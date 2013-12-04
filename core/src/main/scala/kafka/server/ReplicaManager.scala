@@ -365,10 +365,10 @@ class ReplicaManager(val config: KafkaConfig,
                 partitionAndOffsets.put(new TopicAndPartition(partition), 
                                         BrokerAndInitialOffset(leaderBroker, partition.getReplica().get.logEndOffset))
               case None =>
-                stateChangeLogger.trace("Broker %d ignored the become-follower state change with correlation id %d " +
-                                        "controller %d epoch %d for topic-partition %s since the designated leader %d " +
-                                        "cannot be found in live or shutting down brokers %s"
-                                          .format(localBrokerId, correlationId, controllerId, epoch, partition, leader, leaders))
+                stateChangeLogger.trace(("Broker %d ignored the become-follower state change with correlation id %d " +
+                                         "controller %d epoch %d for topic-partition %s since the designated leader %d " +
+                                         "cannot be found in live or shutting down brokers %s")
+                                           .format(localBrokerId, correlationId, controllerId, epoch, partition, leader, leaders))
             }
         }
         replicaFetcherManager.addFetcherForPartitions(partitionAndOffsets)
