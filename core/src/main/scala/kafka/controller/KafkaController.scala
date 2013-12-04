@@ -705,16 +705,18 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   }
 
   def removePartitionFromReassignedPartitions(topicAndPartition: TopicAndPartition) {
-    // stop watching the ISR changes for this partition
-    zkClient.unsubscribeDataChanges(ZkUtils.getTopicPartitionLeaderAndIsrPath(topicAndPartition.topic, topicAndPartition.partition),
-      controllerContext.partitionsBeingReassigned(topicAndPartition).isrChangeListener)
+    if(controllerContext.partitionsBeingReassigned.get(topicAndPartition).isDefined) {
+      // stop watching the ISR changes for this partition
+      zkClient.unsubscribeDataChanges(ZkUtils.getTopicPartitionLeaderAndIsrPath(topicAndPartition.topic, topicAndPartition.partition),
+        controllerContext.partitionsBeingReassigned(topicAndPartition).isrChangeListener)
+    }
     // read the current list of reassigned partitions from zookeeper
     val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient)
     // remove this partition from that list
     val updatedPartitionsBeingReassigned = partitionsBeingReassigned - topicAndPartition
     // write the new list to zookeeper
     ZkUtils.updatePartitionReassignmentData(zkClient, updatedPartitionsBeingReassigned.mapValues(_.newReplicas))
-    // update the cache
+    // update the cache. NO-OP if the partition's reassignment was never started
     controllerContext.partitionsBeingReassigned.remove(topicAndPartition)
   }
 
