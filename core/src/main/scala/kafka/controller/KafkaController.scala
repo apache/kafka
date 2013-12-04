@@ -134,7 +134,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
           if (!isActive())
             0
           else
-            controllerContext.partitionLeadershipInfo.count(p => !controllerContext.liveBrokerIds.contains(p._2.leaderAndIsr.leader))
+            controllerContext.partitionLeadershipInfo.count(p => !controllerContext.liveOrShuttingDownBrokerIds.contains(p._2.leaderAndIsr.leader))
         }
       }
     }
