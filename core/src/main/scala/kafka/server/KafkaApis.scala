@@ -519,8 +519,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     uniqueTopics = {
       if(metadataRequest.topics.size > 0)
         metadataRequest.topics.toSet
-      else
-        leaderCache.keySet.map(_.topic)
+      else {
+        partitionMetadataLock synchronized {
+          leaderCache.keySet.map(_.topic)
+        }
+      }
     }
     val topicMetadataList =
       partitionMetadataLock synchronized {
