@@ -2,15 +2,15 @@
 
 Using Vagrant to get up and running.
 
-1) Install Vagrant [http://www.vagrantup.com/](http://www.vagrantup.com/)
-2) Install Virtual Box [https://www.virtualbox.org/](https://www.virtualbox.org/)
+1) Install Vagrant [http://www.vagrantup.com/](http://www.vagrantup.com/)  
+2) Install Virtual Box [https://www.virtualbox.org/](https://www.virtualbox.org/)  
 
 In the main kafka folder
 
-1) ./sbt update
-2) ./sbt package
-3) ./sbt assembly-package-dependency
-4) vagrant up
+1) ./sbt update  
+2) ./sbt package  
+3) ./sbt assembly-package-dependency  
+4) vagrant up  
 
 once this is done 
 * Zookeeper will be running 192.168.50.5
