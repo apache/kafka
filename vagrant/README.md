@@ -3,6 +3,7 @@
 Using Vagrant to get up and running.
 
 1) Install Vagrant [http://www.vagrantup.com/](http://www.vagrantup.com/)
+
 2) Install Virtual Box [https://www.virtualbox.org/](https://www.virtualbox.org/)
 
 In the main kafka folder
@@ -20,7 +21,7 @@ once this is done
 
 When you are all up and running you will be back at a command brompt.  
 
-If you want you can login to the machines using vagrant shh <machineName> but you don't need to.
+If you want you can login to the machines using vagrant ssh <machineName> but you don't need to.
 
 You can access the brokers and zookeeper by their IP
 
