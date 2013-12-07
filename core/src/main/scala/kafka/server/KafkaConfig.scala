@@ -198,8 +198,11 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the number of byes of messages to attempt to fetch */
   val replicaFetchMaxBytes = props.getIntInRange("replica.fetch.max.bytes", ConsumerConfig.FetchSize, (messageMaxBytes, Int.MaxValue))
 
-  /* max wait time for each fetcher request issued by follower replicas*/
+  /* max wait time for each fetcher request issued by follower replicas. This value should always be less than the
+  *  replica.lag.time.max.ms at all times to prevent frequent shrinking of ISR for low throughput topics */
   val replicaFetchWaitMaxMs = props.getInt("replica.fetch.wait.max.ms", 500)
+  require(replicaFetchWaitMaxMs <= replicaLagTimeMaxMs, "replica.fetch.wait.max.ms should always be at least replica.lag.time.max.ms" +
+                                                        " to prevent frequent changes in ISR")
 
   /* minimum bytes expected for each fetch response. If not enough bytes, wait up to replicaMaxWaitTimeMs */
   val replicaFetchMinBytes = props.getInt("replica.fetch.min.bytes", 1)

@@ -171,24 +171,17 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
           val leaderAndIsrIsEmpty: Boolean =
             controllerContext.partitionLeadershipInfo.get(topicAndPartition) match {
               case Some(currLeaderIsrAndControllerEpoch) =>
-                if (currLeaderIsrAndControllerEpoch.leaderAndIsr.isr.contains(replicaId))
-                  controller.removeReplicaFromIsr(topic, partition, replicaId) match {
-                    case Some(updatedLeaderIsrAndControllerEpoch) =>
-                      // send the shrunk ISR state change request only to the leader
-                      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader),
-                        topic, partition, updatedLeaderIsrAndControllerEpoch, replicaAssignment)
-                      replicaState.put((topic, partition, replicaId), OfflineReplica)
-                      stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OfflineReplica"
-                                                .format(controllerId, controller.epoch, replicaId, topicAndPartition))
-                      false
-                    case None =>
-                      true
-                  }
-                else {
-                  replicaState.put((topic, partition, replicaId), OfflineReplica)
-                  stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OfflineReplica"
-                    .format(controllerId, controller.epoch, replicaId, topicAndPartition))
-                  false
+                controller.removeReplicaFromIsr(topic, partition, replicaId) match {
+                  case Some(updatedLeaderIsrAndControllerEpoch) =>
+                    // send the shrunk ISR state change request only to the leader
+                    brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader),
+                      topic, partition, updatedLeaderIsrAndControllerEpoch, replicaAssignment)
+                    replicaState.put((topic, partition, replicaId), OfflineReplica)
+                    stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OfflineReplica"
+                      .format(controllerId, controller.epoch, replicaId, topicAndPartition))
+                    false
+                  case None =>
+                    true
                 }
               case None =>
                 true

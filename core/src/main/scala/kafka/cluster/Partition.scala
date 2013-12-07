@@ -310,19 +310,15 @@ class Partition(val topic: String,
   def getOutOfSyncReplicas(leaderReplica: Replica, keepInSyncTimeMs: Long, keepInSyncMessages: Long): Set[Replica] = {
     /**
      * there are two cases that need to be handled here -
-     * 1. Stuck followers: If the leo of the replica is less than the leo of leader and the leo hasn't been updated
-     *                     for keepInSyncTimeMs ms, the follower is stuck and should be removed from the ISR
+     * 1. Stuck followers: If the leo of the replica hasn't been updated for keepInSyncTimeMs ms,
+     *                     the follower is stuck and should be removed from the ISR
      * 2. Slow followers: If the leo of the slowest follower is behind the leo of the leader by keepInSyncMessages, the
      *                     follower is not catching up and should be removed from the ISR
      **/
     val leaderLogEndOffset = leaderReplica.logEndOffset
     val candidateReplicas = inSyncReplicas - leaderReplica
     // Case 1 above
-    val possiblyStuckReplicas = candidateReplicas.filter(r => r.logEndOffset < leaderLogEndOffset)
-    if(possiblyStuckReplicas.size > 0)
-      debug("Possibly stuck replicas for partition [%s,%d] are %s".format(topic, partitionId,
-        possiblyStuckReplicas.map(_.brokerId).mkString(",")))
-    val stuckReplicas = possiblyStuckReplicas.filter(r => r.logEndOffsetUpdateTimeMs < (time.milliseconds - keepInSyncTimeMs))
+    val stuckReplicas = candidateReplicas.filter(r => (time.milliseconds - r.logEndOffsetUpdateTimeMs) > keepInSyncTimeMs)
     if(stuckReplicas.size > 0)
       debug("Stuck replicas for partition [%s,%d] are %s".format(topic, partitionId, stuckReplicas.map(_.brokerId).mkString(",")))
     // Case 2 above
