@@ -15,7 +15,11 @@
 
 #!/bin/bash
 apt-get -y update
-apt-get install -y openjdk-6-jre
+apt-get install -y software-properties-common python-software-properties
+add-apt-repository -y ppa:webupd8team/java
+apt-get -y update
+/bin/echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
+apt-get -y install oracle-java7-installer oracle-java7-set-default
 
 chmod a+rw /opt
 cd /opt
