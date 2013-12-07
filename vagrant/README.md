@@ -3,7 +3,6 @@
 Using Vagrant to get up and running.
 
 1) Install Vagrant [http://www.vagrantup.com/](http://www.vagrantup.com/)
-
 2) Install Virtual Box [https://www.virtualbox.org/](https://www.virtualbox.org/)
 
 In the main kafka folder
