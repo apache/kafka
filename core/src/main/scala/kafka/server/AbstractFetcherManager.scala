@@ -20,7 +20,7 @@ package kafka.server
 import scala.collection.mutable
 import scala.collection.Set
 import scala.collection.Map
-import kafka.utils.Logging
+import kafka.utils.{Utils, Logging}
 import kafka.cluster.Broker
 import kafka.metrics.KafkaMetricsGroup
 import kafka.common.TopicAndPartition
@@ -63,7 +63,7 @@ abstract class AbstractFetcherManager(protected val name: String, metricPrefix: 
   )
 
   private def getFetcherId(topic: String, partitionId: Int) : Int = {
-    (31 * topic.hashCode() + partitionId) % numFetchers
+    Utils.abs(31 * topic.hashCode() + partitionId) % numFetchers
   }
 
   // to be defined in subclass to create a specific fetcher

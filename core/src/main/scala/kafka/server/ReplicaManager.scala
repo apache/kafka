@@ -77,16 +77,17 @@ class ReplicaManager(val config: KafkaConfig,
   newGauge(
     "UnderReplicatedPartitions",
     new Gauge[Int] {
-      def value = {
-        leaderPartitionsLock synchronized {
-          leaderPartitions.count(_.isUnderReplicated)
-        }
-      }
+      def value = underReplicatedPartitionCount()
     }
   )
   val isrExpandRate = newMeter("IsrExpandsPerSec",  "expands", TimeUnit.SECONDS)
   val isrShrinkRate = newMeter("IsrShrinksPerSec",  "shrinks", TimeUnit.SECONDS)
 
+  def underReplicatedPartitionCount(): Int = {
+    leaderPartitionsLock synchronized {
+      leaderPartitions.count(_.isUnderReplicated)
+    }
+  }
 
   def startHighWaterMarksCheckPointThread() = {
     if(highWatermarkCheckPointThreadStarted.compareAndSet(false, true))
@@ -206,7 +207,7 @@ class ReplicaManager(val config: KafkaConfig,
   def becomeLeaderOrFollower(leaderAndISRRequest: LeaderAndIsrRequest): (collection.Map[(String, Int), Short], Short) = {
     leaderAndISRRequest.partitionStateInfos.foreach { case ((topic, partition), stateInfo) =>
       stateChangeLogger.trace("Broker %d received LeaderAndIsr request %s correlation id %d from controller %d epoch %d for partition [%s,%d]"
-                                .format(localBrokerId, stateInfo.leaderIsrAndControllerEpoch, leaderAndISRRequest.correlationId,
+                                .format(localBrokerId, stateInfo, leaderAndISRRequest.correlationId,
                                         leaderAndISRRequest.controllerId, leaderAndISRRequest.controllerEpoch, topic, partition))
     }
     replicaStateChangeLock synchronized {
@@ -228,10 +229,17 @@ class ReplicaManager(val config: KafkaConfig,
         leaderAndISRRequest.partitionStateInfos.foreach{ case ((topic, partitionId), partitionStateInfo) =>
           val partition = getOrCreatePartition(topic, partitionId, partitionStateInfo.replicationFactor)
           val partitionLeaderEpoch = partition.getLeaderEpoch()
+          // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
+          // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
           if (partitionLeaderEpoch < partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch) {
-            // If the leader epoch is valid record the epoch of the controller that made the leadership decision.
-            // This is useful while updating the isr to maintain the decision maker controller's epoch in the zookeeper path
-            partitionState.put(partition, partitionStateInfo)
+            if(partitionStateInfo.allReplicas.contains(config.brokerId))
+              partitionState.put(partition, partitionStateInfo)
+            else {
+              stateChangeLogger.warn(("Broker %d ignoring LeaderAndIsr request with correlation id %d from " +
+                "controller %d epoch %d as broker is not in assigned replica list %s for partition [%s,%d]")
+                .format(localBrokerId, correlationId, controllerId, leaderAndISRRequest.controllerEpoch,
+                partitionStateInfo.allReplicas.mkString(","), topic, partition.partitionId))
+            }
           } else {
             // Otherwise record the error code in response
             stateChangeLogger.warn(("Broker %d received invalid LeaderAndIsr request with correlation id %d from " +
@@ -303,7 +311,7 @@ class ReplicaManager(val config: KafkaConfig,
       case e: Throwable =>
         partitionState.foreach { state =>
           val errorMsg = ("Error on broker %d while processing LeaderAndIsr request correlationId %d received from controller %d" +
-            "epoch %d for partition %s").format(localBrokerId, correlationId, controllerId, epoch,
+            " epoch %d for partition %s").format(localBrokerId, correlationId, controllerId, epoch,
                                                 TopicAndPartition(state._1.topic, state._1.partitionId))
           stateChangeLogger.error(errorMsg, e)
         }

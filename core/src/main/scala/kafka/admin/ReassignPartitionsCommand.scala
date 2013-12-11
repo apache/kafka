@@ -122,7 +122,7 @@ object ReassignPartitionsCommand extends Logging {
       .format(ZkUtils.getPartitionReassignmentZkData(currentPartitionReplicaAssignment)))
     // start the reassignment
     if(reassignPartitionsCommand.reassignPartitions())
-      println("Successfully started reassignment of partitions %s".format(partitionsToBeReassigned))
+      println("Successfully started reassignment of partitions %s".format(ZkUtils.getPartitionReassignmentZkData(partitionsToBeReassigned)))
     else
       println("Failed to reassign partitions %s".format(partitionsToBeReassigned))
   }

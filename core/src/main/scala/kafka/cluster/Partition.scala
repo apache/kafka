@@ -72,7 +72,7 @@ class Partition(val topic: String,
     leaderIsrUpdateLock synchronized {
       leaderReplicaIfLocal() match {
         case Some(_) =>
-          inSyncReplicas.size < replicationFactor
+          inSyncReplicas.size < assignedReplicas.size
         case None =>
           false
       }

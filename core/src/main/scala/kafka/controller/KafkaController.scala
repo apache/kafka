@@ -361,12 +361,19 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
    * Reassigning replicas for a partition goes through a few stages -
    * RAR = Reassigned replicas
    * AR = Original list of replicas for partition
-   * 1. Write new AR = AR + RAR
+   * 1. Write new AR = AR + RAR. At this time, update the leader epoch in zookeeper and send a LeaderAndIsr request with
+   *    AR = AR + RAR to all replicas in (AR + RAR)
    * 2. Start new replicas RAR - AR.
    * 3. Wait until new replicas are in sync with the leader
-   * 4. If the leader is not in RAR, elect a new leader from RAR
-   * 5. Stop old replicas AR - RAR
-   * 6. Write new AR = RAR
+   * 4. If the leader is not in RAR, elect a new leader from RAR. If new leader needs to be elected from RAR, a LeaderAndIsr
+   *    will be sent. If not, then leader epoch will be incremented in zookeeper and a LeaderAndIsr request will be sent.
+   *    In any case, the LeaderAndIsr request will have AR = RAR. This will prevent the leader from adding any replica in
+   *    RAR - AR back in the ISR
+   * 5. Stop old replicas AR - RAR. As part of this, we make 2 state changes OfflineReplica and NonExistentReplica. As part
+   *    of OfflineReplica state change, we shrink the ISR to remove RAR - AR in zookeeper and sent a LeaderAndIsr ONLY to
+   *    the Leader to notify it of the shrunk ISR. After that, we send a StopReplica (delete = false) to the replicas in
+   *    RAR - AR. Currently, NonExistentReplica state change is a NO-OP
+   * 6. Write new AR = RAR. As part of this, we finally change the AR in zookeeper to RAR.
    * 7. Remove partition from the /admin/reassign_partitions path
    */
   def onPartitionReassignment(topicAndPartition: TopicAndPartition, reassignedPartitionContext: ReassignedPartitionsContext) {
@@ -677,8 +684,6 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     brokerRequestBatch.newBatch()
     updateLeaderEpoch(topicAndPartition.topic, topicAndPartition.partition) match {
       case Some(updatedLeaderIsrAndControllerEpoch) =>
-        // send the shrunk assigned replica list to all the replicas, including the leader, so that it no longer
-        // allows old replicas to enter ISR
         brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasToReceiveRequest, topicAndPartition.topic,
           topicAndPartition.partition, updatedLeaderIsrAndControllerEpoch, newAssignedReplicas)
         brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch, controllerContext.correlationId.getAndIncrement)

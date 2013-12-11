@@ -23,7 +23,7 @@ import java.util.Properties
 import kafka.utils._
 import kafka.log._
 import kafka.zk.ZooKeeperTestHarness
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaServer, KafkaConfig}
 import kafka.utils.{Logging, ZkUtils, TestUtils}
 import kafka.common.{TopicExistsException, ErrorMapping, TopicAndPartition}
 
@@ -153,10 +153,10 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       Map(topicAndPartition -> newReplicas), partitionsBeingReassigned) == ReassignmentCompleted;
     }, 1000)
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
-    val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, topic, partitionToBeReassigned)
     // in sync replicas should not have any replica that is not in the new assigned replicas
     checkForPhantomInSyncReplicas(topic, partitionToBeReassigned, assignedReplicas)
     assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
+    ensureNoUnderReplicatedPartitions(topic, partitionToBeReassigned, assignedReplicas, servers)
     servers.foreach(_.shutdown())
   }
 
@@ -183,6 +183,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
     assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
     checkForPhantomInSyncReplicas(topic, partitionToBeReassigned, assignedReplicas)
+    ensureNoUnderReplicatedPartitions(topic, partitionToBeReassigned, assignedReplicas, servers)
     servers.foreach(_.shutdown())
   }
 
@@ -209,6 +210,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
     assertEquals("Partition should have been reassigned to 2, 3", newReplicas, assignedReplicas)
     checkForPhantomInSyncReplicas(topic, partitionToBeReassigned, assignedReplicas)
+    ensureNoUnderReplicatedPartitions(topic, partitionToBeReassigned, assignedReplicas, servers)
     servers.foreach(_.shutdown())
   }
 
@@ -247,6 +249,8 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
     assertEquals("Partition should have been reassigned to 0, 1", newReplicas, assignedReplicas)
     checkForPhantomInSyncReplicas(topic, partitionToBeReassigned, assignedReplicas)
+    // ensure that there are no under replicated partitions
+    ensureNoUnderReplicatedPartitions(topic, partitionToBeReassigned, assignedReplicas, servers)
     servers.foreach(_.shutdown())
   }
 
@@ -380,6 +384,18 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     val phantomInSyncReplicas = inSyncReplicas.toSet -- assignedReplicas.toSet
     assertTrue("All in sync replicas %s must be in the assigned replica list %s".format(inSyncReplicas, assignedReplicas),
       phantomInSyncReplicas.size == 0)
+  }
+
+  private def ensureNoUnderReplicatedPartitions(topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int],
+                                                servers: Seq[KafkaServer]) {
+    val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, topic, partitionToBeReassigned)
+    assertFalse("Reassigned partition [%s,%d] is underreplicated".format(topic, partitionToBeReassigned),
+                inSyncReplicas.size < assignedReplicas.size)
+    val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partitionToBeReassigned)
+    assertTrue("Reassigned partition [%s,%d] is unavailable".format(topic, partitionToBeReassigned), leader.isDefined)
+    val leaderBroker = servers.filter(s => s.config.brokerId == leader.get).head
+    assertTrue("Reassigned partition [%s,%d] is underreplicated as reported by the leader %d".format(topic, partitionToBeReassigned, leader.get),
+      leaderBroker.replicaManager.underReplicatedPartitionCount() == 0)
   }
 
   private def checkIfReassignPartitionPathExists(): Boolean = {
