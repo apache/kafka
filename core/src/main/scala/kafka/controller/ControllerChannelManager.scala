@@ -90,6 +90,7 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
   private def removeExistingBroker(brokerId: Int) {
     try {
       brokerStateInfo(brokerId).channel.disconnect()
+      brokerStateInfo(brokerId).messageQueue.clear()
       brokerStateInfo(brokerId).requestSendThread.shutdown()
       brokerStateInfo.remove(brokerId)
     }catch {

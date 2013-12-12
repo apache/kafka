@@ -893,6 +893,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
      */
     @throws(classOf[Exception])
     def handleNewSession() {
+      info("ZK expired; shut down all controller components and try to re-elect")
       controllerContext.controllerLock synchronized {
         Utils.unregisterMBean(KafkaController.MBeanName)
         partitionStateMachine.shutdown()

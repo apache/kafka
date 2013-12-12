@@ -401,7 +401,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           val partitionsRemainingToBeAdded = partitionReplicaAssignment.filter(p =>
             !controllerContext.partitionReplicaAssignment.contains(p._1))
           info("New partitions to be added [%s]".format(partitionsRemainingToBeAdded))
-          controller.onNewPartitionCreation(partitionsRemainingToBeAdded.keySet.toSet)
+          if (partitionsRemainingToBeAdded.size > 0)
+            controller.onNewPartitionCreation(partitionsRemainingToBeAdded.keySet.toSet)
         } catch {
           case e: Throwable => error("Error while handling add partitions for data path " + dataPath, e )
         }
