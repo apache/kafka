@@ -87,13 +87,17 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
   }
 
   override def append(event: LoggingEvent)  {
-    val message : String = if( this.layout == null) {
-      event.getRenderedMessage
-    }
-    else this.layout.format(event)
+    val message = subAppend(event)
     LogLog.debug("[" + new Date(event.getTimeStamp).toString + "]" + message)
     val messageData = new KeyedMessage[String, String](topic, message)
     producer.send(messageData);
+  }
+
+  def subAppend(event: LoggingEvent): String = {
+    if(this.layout == null)
+      event.getRenderedMessage
+    else
+      this.layout.format(event)
   }
 
   override def close() {

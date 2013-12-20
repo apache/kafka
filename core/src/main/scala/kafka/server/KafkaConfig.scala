@@ -104,27 +104,15 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the maximum size of a single log file */
   val logSegmentBytes = props.getIntInRange("log.segment.bytes", 1*1024*1024*1024, (Message.MinHeaderSize, Int.MaxValue))
 
-  /* the maximum size of a single log file for some specific topic */
-  val logSegmentBytesPerTopicMap = props.getMap("log.segment.bytes.per.topic", _.toInt > 0).mapValues(_.toInt)
-
   /* the maximum time before a new log segment is rolled out */
   val logRollHours = props.getIntInRange("log.roll.hours", 24*7, (1, Int.MaxValue))
-
-  /* the number of hours before rolling out a new log segment for some specific topic */
-  val logRollHoursPerTopicMap = props.getMap("log.roll.hours.per.topic", _.toInt > 0).mapValues(_.toInt)
 
   /* the number of hours to keep a log file before deleting it */
   val logRetentionTimeMillis = getLogRetentionTimeMillis
 
-  /* the number of hours to keep a log file before deleting it for some specific topic*/
-  val logRetentionHoursPerTopicMap = props.getMap("log.retention.hours.per.topic", _.toInt > 0).mapValues(_.toInt)
-
   /* the maximum size of the log before deleting it */
   val logRetentionBytes = props.getLong("log.retention.bytes", -1)
 
-  /* the maximum size of the log for some specific topic before deleting it */
-  val logRetentionBytesPerTopicMap = props.getMap("log.retention.bytes.per.topic", _.toLong > 0).mapValues(_.toLong)
-  
   /* the frequency in minutes that the log cleaner checks whether any log is eligible for deletion */
   val logCleanupIntervalMs = props.getLongInRange("log.retention.check.interval.ms", 5*60*1000, (1, Long.MaxValue))
   
@@ -210,8 +198,11 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the number of byes of messages to attempt to fetch */
   val replicaFetchMaxBytes = props.getIntInRange("replica.fetch.max.bytes", ConsumerConfig.FetchSize, (messageMaxBytes, Int.MaxValue))
 
-  /* max wait time for each fetcher request issued by follower replicas*/
+  /* max wait time for each fetcher request issued by follower replicas. This value should always be less than the
+  *  replica.lag.time.max.ms at all times to prevent frequent shrinking of ISR for low throughput topics */
   val replicaFetchWaitMaxMs = props.getInt("replica.fetch.wait.max.ms", 500)
+  require(replicaFetchWaitMaxMs <= replicaLagTimeMaxMs, "replica.fetch.wait.max.ms should always be at least replica.lag.time.max.ms" +
+                                                        " to prevent frequent changes in ISR")
 
   /* minimum bytes expected for each fetch response. If not enough bytes, wait up to replicaMaxWaitTimeMs */
   val replicaFetchMinBytes = props.getInt("replica.fetch.min.bytes", 1)

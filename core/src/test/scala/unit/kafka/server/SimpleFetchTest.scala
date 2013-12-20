@@ -34,6 +34,7 @@ class SimpleFetchTest extends JUnit3Suite {
 
   val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
     override val replicaLagTimeMaxMs = 100L
+    override val replicaFetchWaitMaxMs = 100
     override val replicaLagMaxMessages = 10L
   })
   val topic = "foo"

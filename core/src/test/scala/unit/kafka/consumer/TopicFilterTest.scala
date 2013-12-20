@@ -29,16 +29,13 @@ class TopicFilterTest extends JUnitSuite {
   def testWhitelists() {
 
     val topicFilter1 = new Whitelist("white1,white2")
-    assertFalse(topicFilter1.requiresTopicEventWatcher)
     assertTrue(topicFilter1.isTopicAllowed("white2"))
     assertFalse(topicFilter1.isTopicAllowed("black1"))
 
     val topicFilter2 = new Whitelist(".+")
-    assertTrue(topicFilter2.requiresTopicEventWatcher)
     assertTrue(topicFilter2.isTopicAllowed("alltopics"))
     
     val topicFilter3 = new Whitelist("white_listed-topic.+")
-    assertTrue(topicFilter3.requiresTopicEventWatcher)
     assertTrue(topicFilter3.isTopicAllowed("white_listed-topic1"))
     assertFalse(topicFilter3.isTopicAllowed("black1"))
   }
@@ -46,6 +43,5 @@ class TopicFilterTest extends JUnitSuite {
   @Test
   def testBlacklists() {
     val topicFilter1 = new Blacklist("black1")
-    assertTrue(topicFilter1.requiresTopicEventWatcher)
   }
 }

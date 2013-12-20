@@ -90,6 +90,7 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
   private def removeExistingBroker(brokerId: Int) {
     try {
       brokerStateInfo(brokerId).channel.disconnect()
+      brokerStateInfo(brokerId).messageQueue.clear()
       brokerStateInfo(brokerId).requestSendThread.shutdown()
       brokerStateInfo.remove(brokerId)
     }catch {
@@ -238,8 +239,9 @@ class ControllerBrokerRequestBatch(controllerContext: ControllerContext, sendReq
       val leaderAndIsrRequest = new LeaderAndIsrRequest(partitionStateInfos, leaders, controllerId, controllerEpoch, correlationId, clientId)
       for (p <- partitionStateInfos) {
         val typeOfRequest = if (broker == p._2.leaderIsrAndControllerEpoch.leaderAndIsr.leader) "become-leader" else "become-follower"
-        stateChangeLogger.trace(("Controller %d epoch %d sending %s LeaderAndIsr request with correlationId %d to broker %d " +
-                                 "for partition [%s,%d]").format(controllerId, controllerEpoch, typeOfRequest, correlationId, broker,
+        stateChangeLogger.trace(("Controller %d epoch %d sending %s LeaderAndIsr request %s with correlationId %d to broker %d " +
+                                 "for partition [%s,%d]").format(controllerId, controllerEpoch, typeOfRequest,
+                                                                 p._2.leaderIsrAndControllerEpoch, correlationId, broker,
                                                                  p._1._1, p._1._2))
       }
       sendRequest(broker, leaderAndIsrRequest, null)
@@ -250,8 +252,9 @@ class ControllerBrokerRequestBatch(controllerContext: ControllerContext, sendReq
       val partitionStateInfos = m._2.toMap
       val updateMetadataRequest = new UpdateMetadataRequest(controllerId, controllerEpoch, correlationId, clientId,
                                                             partitionStateInfos, controllerContext.liveOrShuttingDownBrokers)
-      partitionStateInfos.foreach(p => stateChangeLogger.trace(("Controller %d epoch %d sending UpdateMetadata request with " +
-        "correlationId %d to broker %d for partition %s").format(controllerId, controllerEpoch, correlationId, broker, p._1)))
+      partitionStateInfos.foreach(p => stateChangeLogger.trace(("Controller %d epoch %d sending UpdateMetadata request %s with " +
+        "correlationId %d to broker %d for partition %s").format(controllerId, controllerEpoch, p._2.leaderIsrAndControllerEpoch,
+                                                                 correlationId, broker, p._1)))
       sendRequest(broker, updateMetadataRequest, null)
     }
     updateMetadataRequestMap.clear()

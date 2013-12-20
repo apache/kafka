@@ -392,10 +392,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       replicaManager.getLeaderReplicaIfLocal(topic, partition)
     trace("Fetching log segment for topic, partition, offset, size = " + (topic, partition, offset, maxSize))
     val maxOffsetOpt = 
-      if (fromReplicaId == Request.OrdinaryConsumerId)
-        Some(localReplica.highWatermark)
-      else
+      if (Request.isReplicaIdFromFollower(fromReplicaId))
         None
+      else
+        Some(localReplica.highWatermark)
     val messages = localReplica.log match {
       case Some(log) =>
         log.read(offset, maxSize, maxOffsetOpt)
@@ -519,8 +519,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     uniqueTopics = {
       if(metadataRequest.topics.size > 0)
         metadataRequest.topics.toSet
-      else
-        leaderCache.keySet.map(_.topic)
+      else {
+        partitionMetadataLock synchronized {
+          leaderCache.keySet.map(_.topic)
+        }
+      }
     }
     val topicMetadataList =
       partitionMetadataLock synchronized {

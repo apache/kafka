@@ -37,6 +37,21 @@ def main():
     st = datetime.datetime.fromtimestamp(ts).strftime('%Y-%m-%d_%H:%M:%S')
     patch_file=tempfile.gettempdir() + "/" + opt.jira + '_' + st + '.patch'
 
+  # first check if rebase is needed
+  git_branch_hash="git rev-parse " + opt.branch
+  p_now=os.popen(git_branch_hash)
+  branch_now=p_now.read()
+  p_now.close()
+
+  git_common_ancestor="git merge-base " + opt.branch + " HEAD"
+  p_then=os.popen(git_common_ancestor)
+  branch_then=p_then.read()
+  p_then.close()
+
+  if branch_now != branch_then:
+    print 'ERROR: Your current working branch is from an older version of ' + opt.branch + '. Please rebase first by using git pull --rebase'
+    sys.exit(1)
+
   git_configure_reviewboard="git config reviewboard.url https://reviews.apache.org"
   print "Configuring reviewboard url to https://reviews.apache.org"
   p=os.popen(git_configure_reviewboard)

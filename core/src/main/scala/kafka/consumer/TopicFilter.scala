@@ -41,14 +41,10 @@ sealed abstract class TopicFilter(rawRegex: String) extends Logging {
 
   override def toString = regex
 
-  def requiresTopicEventWatcher: Boolean
-
   def isTopicAllowed(topic: String): Boolean
 }
 
 case class Whitelist(rawRegex: String) extends TopicFilter(rawRegex) {
-  override def requiresTopicEventWatcher = !regex.matches("""[\p{Alnum}-|]+""")
-
   override def isTopicAllowed(topic: String) = {
     val allowed = topic.matches(regex)
 
@@ -62,8 +58,6 @@ case class Whitelist(rawRegex: String) extends TopicFilter(rawRegex) {
 }
 
 case class Blacklist(rawRegex: String) extends TopicFilter(rawRegex) {
-  override def requiresTopicEventWatcher = true
-
   override def isTopicAllowed(topic: String) = {
     val allowed = !topic.matches(regex)
 

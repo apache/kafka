@@ -86,8 +86,7 @@ public class DataGenerator {
 			Long timestamp = RANDOM.nextLong();
 			if (timestamp < 0) timestamp = -timestamp;
 			byte[] bytes = timestamp.toString().getBytes("UTF8");
-			Message message = new Message(bytes);
-			list.add(new KeyedMessage<Integer, Message>(_topic, null, message));
+            list.add(new KeyedMessage<Integer, byte[]>(_topic, null, bytes));
 		}
 		// send events
 		System.out.println(" send " + list.size() + " " + _topic + " count events to " + _uri);

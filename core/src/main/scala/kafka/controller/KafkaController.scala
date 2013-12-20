@@ -137,7 +137,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
           if (!isActive())
             0
           else
-            controllerContext.partitionLeadershipInfo.count(p => !controllerContext.liveBrokerIds.contains(p._2.leaderAndIsr.leader))
+            controllerContext.partitionLeadershipInfo.count(p => !controllerContext.liveOrShuttingDownBrokerIds.contains(p._2.leaderAndIsr.leader))
         }
       }
     }
@@ -386,12 +386,19 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
    * Reassigning replicas for a partition goes through a few stages -
    * RAR = Reassigned replicas
    * AR = Original list of replicas for partition
-   * 1. Write new AR = AR + RAR
+   * 1. Write new AR = AR + RAR. At this time, update the leader epoch in zookeeper and send a LeaderAndIsr request with
+   *    AR = AR + RAR to all replicas in (AR + RAR)
    * 2. Start new replicas RAR - AR.
    * 3. Wait until new replicas are in sync with the leader
-   * 4. If the leader is not in RAR, elect a new leader from RAR
-   * 5. Stop old replicas AR - RAR
-   * 6. Write new AR = RAR
+   * 4. If the leader is not in RAR, elect a new leader from RAR. If new leader needs to be elected from RAR, a LeaderAndIsr
+   *    will be sent. If not, then leader epoch will be incremented in zookeeper and a LeaderAndIsr request will be sent.
+   *    In any case, the LeaderAndIsr request will have AR = RAR. This will prevent the leader from adding any replica in
+   *    RAR - AR back in the ISR
+   * 5. Stop old replicas AR - RAR. As part of this, we make 2 state changes OfflineReplica and NonExistentReplica. As part
+   *    of OfflineReplica state change, we shrink the ISR to remove RAR - AR in zookeeper and sent a LeaderAndIsr ONLY to
+   *    the Leader to notify it of the shrunk ISR. After that, we send a StopReplica (delete = false) to the replicas in
+   *    RAR - AR. Currently, NonExistentReplica state change is a NO-OP
+   * 6. Write new AR = RAR. As part of this, we finally change the AR in zookeeper to RAR.
    * 7. Remove partition from the /admin/reassign_partitions path
    */
   def onPartitionReassignment(topicAndPartition: TopicAndPartition, reassignedPartitionContext: ReassignedPartitionsContext) {
@@ -704,8 +711,6 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     brokerRequestBatch.newBatch()
     updateLeaderEpoch(topicAndPartition.topic, topicAndPartition.partition) match {
       case Some(updatedLeaderIsrAndControllerEpoch) =>
-        // send the shrunk assigned replica list to all the replicas, including the leader, so that it no longer
-        // allows old replicas to enter ISR
         brokerRequestBatch.addLeaderAndIsrRequestForBrokers(replicasToReceiveRequest, topicAndPartition.topic,
           topicAndPartition.partition, updatedLeaderIsrAndControllerEpoch, newAssignedReplicas)
         brokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch, controllerContext.correlationId.getAndIncrement)
@@ -732,16 +737,18 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   }
 
   def removePartitionFromReassignedPartitions(topicAndPartition: TopicAndPartition) {
-    // stop watching the ISR changes for this partition
-    zkClient.unsubscribeDataChanges(ZkUtils.getTopicPartitionLeaderAndIsrPath(topicAndPartition.topic, topicAndPartition.partition),
-      controllerContext.partitionsBeingReassigned(topicAndPartition).isrChangeListener)
+    if(controllerContext.partitionsBeingReassigned.get(topicAndPartition).isDefined) {
+      // stop watching the ISR changes for this partition
+      zkClient.unsubscribeDataChanges(ZkUtils.getTopicPartitionLeaderAndIsrPath(topicAndPartition.topic, topicAndPartition.partition),
+        controllerContext.partitionsBeingReassigned(topicAndPartition).isrChangeListener)
+    }
     // read the current list of reassigned partitions from zookeeper
     val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient)
     // remove this partition from that list
     val updatedPartitionsBeingReassigned = partitionsBeingReassigned - topicAndPartition
     // write the new list to zookeeper
     ZkUtils.updatePartitionReassignmentData(zkClient, updatedPartitionsBeingReassigned.mapValues(_.newReplicas))
-    // update the cache
+    // update the cache. NO-OP if the partition's reassignment was never started
     controllerContext.partitionsBeingReassigned.remove(topicAndPartition)
   }
 
@@ -837,7 +844,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
               info("New leader and ISR for partition %s is %s".format(topicAndPartition, newLeaderAndIsr.toString()))
             updateSucceeded
           } else {
-            warn("Cannot remove replica %d from ISR of %s. Leader = %d ; ISR = %s"
+            warn("Cannot remove replica %d from ISR of partition %s since it is not in the ISR. Leader = %d ; ISR = %s"
                  .format(replicaId, topicAndPartition, leaderAndIsr.leader, leaderAndIsr.isr))
             finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(leaderAndIsr, epoch))
             controllerContext.partitionLeadershipInfo.put(topicAndPartition, finalLeaderIsrAndControllerEpoch.get)
@@ -913,6 +920,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
      */
     @throws(classOf[Exception])
     def handleNewSession() {
+      info("ZK expired; shut down all controller components and try to re-elect")
       controllerContext.controllerLock synchronized {
         Utils.unregisterMBean(KafkaController.MBeanName)
         partitionStateMachine.shutdown()

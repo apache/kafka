@@ -269,34 +269,40 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
       while (isMessageInAllReplicas) {
         var messageInfoFromFirstReplicaOpt: Option[MessageInfo] = None
         for ( (replicaId, messageIterator) <- messageIteratorMap) {
-          if (messageIterator.hasNext) {
-            val messageAndOffset = messageIterator.next()
+          try {
+            if (messageIterator.hasNext) {
+              val messageAndOffset = messageIterator.next()
 
-            // only verify up to the high watermark
-            if (messageAndOffset.offset >= fetchResponsePerReplica.get(replicaId).hw)
-              isMessageInAllReplicas = false
-            else {
-              messageInfoFromFirstReplicaOpt match {
-                case None =>
-                  messageInfoFromFirstReplicaOpt = Some(
-                    MessageInfo(replicaId, messageAndOffset.offset,messageAndOffset.nextOffset, messageAndOffset.message.checksum))
-                case Some(messageInfoFromFirstReplica) =>
-                  if (messageInfoFromFirstReplica.offset != messageAndOffset.offset) {
-                    println(ReplicaVerificationTool.getCurrentTimeString + ": partition " + topicAndPartition
-                      + ": replica " + messageInfoFromFirstReplica.replicaId + "'s offset "
-                      + messageInfoFromFirstReplica.offset + " doesn't match replica "
-                      + replicaId + "'s offset " + messageAndOffset.offset)
-                    System.exit(1)
-                  }
-                  if (messageInfoFromFirstReplica.checksum != messageAndOffset.message.checksum)
-                    println(ReplicaVerificationTool.getCurrentTimeString + ": partition "
-                      + topicAndPartition + " has unmatched checksum at offset " + messageAndOffset.offset + "; replica "
-                      + messageInfoFromFirstReplica.replicaId + "'s checksum " + messageInfoFromFirstReplica.checksum
-                      + "; replica " + replicaId + "'s checksum " + messageAndOffset.message.checksum)
+              // only verify up to the high watermark
+              if (messageAndOffset.offset >= fetchResponsePerReplica.get(replicaId).hw)
+                isMessageInAllReplicas = false
+              else {
+                messageInfoFromFirstReplicaOpt match {
+                  case None =>
+                    messageInfoFromFirstReplicaOpt = Some(
+                      MessageInfo(replicaId, messageAndOffset.offset,messageAndOffset.nextOffset, messageAndOffset.message.checksum))
+                  case Some(messageInfoFromFirstReplica) =>
+                    if (messageInfoFromFirstReplica.offset != messageAndOffset.offset) {
+                      println(ReplicaVerificationTool.getCurrentTimeString + ": partition " + topicAndPartition
+                        + ": replica " + messageInfoFromFirstReplica.replicaId + "'s offset "
+                        + messageInfoFromFirstReplica.offset + " doesn't match replica "
+                        + replicaId + "'s offset " + messageAndOffset.offset)
+                      System.exit(1)
+                    }
+                    if (messageInfoFromFirstReplica.checksum != messageAndOffset.message.checksum)
+                      println(ReplicaVerificationTool.getCurrentTimeString + ": partition "
+                        + topicAndPartition + " has unmatched checksum at offset " + messageAndOffset.offset + "; replica "
+                        + messageInfoFromFirstReplica.replicaId + "'s checksum " + messageInfoFromFirstReplica.checksum
+                        + "; replica " + replicaId + "'s checksum " + messageAndOffset.message.checksum)
+                }
               }
-            }
-          } else
-            isMessageInAllReplicas = false
+            } else
+              isMessageInAllReplicas = false
+          } catch {
+            case t =>
+              throw new RuntimeException("Error in processing replica %d in partition %s at offset %d."
+              .format(replicaId, topicAndPartition, fetchOffsetMap.get(topicAndPartition)), t)
+          }
         }
         if (isMessageInAllReplicas) {
           val nextOffset = messageInfoFromFirstReplicaOpt.get.nextOffset
