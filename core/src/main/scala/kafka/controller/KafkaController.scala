@@ -110,8 +110,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   val controllerContext = new ControllerContext(zkClient, config.zkSessionTimeoutMs)
   private val partitionStateMachine = new PartitionStateMachine(this)
   private val replicaStateMachine = new ReplicaStateMachine(this)
-  private val controllerElector = new ZookeeperLeaderElector(controllerContext, ZkUtils.ControllerPath, onControllerFailover,
-    config.brokerId)
+  private val controllerElector = new ZookeeperLeaderElector(controllerContext, ZkUtils.ControllerPath,
+                                                             onControllerFailover, onControllerResignation, config.brokerId)
   val offlinePartitionSelector = new OfflinePartitionLeaderSelector(controllerContext)
   private val reassignedPartitionLeaderSelector = new ReassignedPartitionLeaderSelector(controllerContext)
   private val preferredReplicaPartitionLeaderSelector = new PreferredReplicaPartitionLeaderSelector(controllerContext)
@@ -253,6 +253,22 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     }
     else
       info("Controller has been shut down, aborting startup/failover")
+  }
+
+  /**
+   * This callback is invoked by the zookeeper leader elector when the current broker resigns as the controller. This is
+   * required to clean up internal controller data structures
+   */
+  def onControllerResignation() {
+    controllerContext.controllerLock synchronized {
+      Utils.unregisterMBean(KafkaController.MBeanName)
+      partitionStateMachine.shutdown()
+      replicaStateMachine.shutdown()
+      if(controllerContext.controllerChannelManager != null) {
+        controllerContext.controllerChannelManager.shutdown()
+        controllerContext.controllerChannelManager = null
+      }
+    }
   }
 
   /**
@@ -894,16 +910,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     @throws(classOf[Exception])
     def handleNewSession() {
       info("ZK expired; shut down all controller components and try to re-elect")
-      controllerContext.controllerLock synchronized {
-        Utils.unregisterMBean(KafkaController.MBeanName)
-        partitionStateMachine.shutdown()
-        replicaStateMachine.shutdown()
-        if(controllerContext.controllerChannelManager != null) {
-          controllerContext.controllerChannelManager.shutdown()
-          controllerContext.controllerChannelManager = null
-        }
-        controllerElector.elect
-      }
+      onControllerResignation()
+      controllerElector.elect
     }
   }
 }
