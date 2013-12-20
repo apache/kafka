@@ -481,7 +481,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     }
   }
 
-  def onPreferredReplicaElection(partitions: Set[TopicAndPartition], isTriggeredByAutoRebalance: Boolean = true) {
+  def onPreferredReplicaElection(partitions: Set[TopicAndPartition]) {
     info("Starting preferred replica leader election for partitions %s".format(partitions.mkString(",")))
     try {
       controllerContext.partitionsUndergoingPreferredReplicaElection ++= partitions
@@ -489,7 +489,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     } catch {
       case e: Throwable => error("Error completing preferred replica leader election for partitions %s".format(partitions.mkString(",")), e)
     } finally {
-      removePartitionsFromPreferredReplicaElection(partitions, isTriggeredByAutoRebalance)
+      removePartitionsFromPreferredReplicaElection(partitions)
     }
   }
 
@@ -758,8 +758,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     }
   }
 
-  def removePartitionsFromPreferredReplicaElection(partitionsToBeRemoved: Set[TopicAndPartition],
-                                                   isTriggeredByAutoRebalance : Boolean) {
+  def removePartitionsFromPreferredReplicaElection(partitionsToBeRemoved: Set[TopicAndPartition]) {
     for(partition <- partitionsToBeRemoved) {
       // check the status
       val currentLeader = controllerContext.partitionLeadershipInfo(partition).leaderAndIsr.leader
@@ -770,8 +769,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
         warn("Partition %s failed to complete preferred replica leader election. Leader is %d".format(partition, currentLeader))
       }
     }
-    if (isTriggeredByAutoRebalance)
-      ZkUtils.deletePath(zkClient, ZkUtils.PreferredReplicaLeaderElectionPath)
+    ZkUtils.deletePath(zkClient, ZkUtils.PreferredReplicaLeaderElectionPath)
     controllerContext.partitionsUndergoingPreferredReplicaElection --= partitionsToBeRemoved
   }
 
@@ -973,11 +971,13 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
                   ZkUtils.createPersistentPath(zkClient, zkPath, jsonData)
                   info("Created preferred replica election path with %s".format(jsonData))
                 } catch {
-                  case e2: Throwable =>
+                  case e2: ZkNodeExistsException =>
                     val partitionsUndergoingPreferredReplicaElection =
                       PreferredReplicaLeaderElectionCommand.parsePreferredReplicaElectionData(ZkUtils.readData(zkClient, zkPath)._1)
                     error("Preferred replica leader election currently in progress for " +
                           "%s. Aborting operation".format(partitionsUndergoingPreferredReplicaElection));
+                  case e3: Throwable =>
+                    error("Error while trying to auto rebalance topics %s".format(topicsNotInPreferredReplica.keys))
                 }
               }
             }
