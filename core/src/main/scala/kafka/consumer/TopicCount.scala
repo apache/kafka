@@ -19,7 +19,7 @@ package kafka.consumer
 
 import scala.collection._
 import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{Json, ZKGroupDirs, ZkUtils, Logging}
+import kafka.utils.{Json, ZKGroupDirs, ZkUtils, Logging, Utils}
 import kafka.common.KafkaException
 
 private[kafka] trait TopicCount {
@@ -142,7 +142,7 @@ private[kafka] class WildcardTopicCount(zkClient: ZkClient,
     makeConsumerThreadIdsPerTopic(consumerIdString, Map(wildcardTopics.map((_, numStreams)): _*))
   }
 
-  def dbString = "{ \"%s\" : %d }".format(topicFilter.regex, numStreams)
+  def dbString = "{ \"%s\" : %d }".format(Utils.quoteJsonLiteral(topicFilter.regex), numStreams)
 
   def pattern: String = {
     topicFilter match {
