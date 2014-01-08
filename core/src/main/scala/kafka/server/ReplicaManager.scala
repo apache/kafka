@@ -29,7 +29,7 @@ import com.yammer.metrics.core.Gauge
 import java.util.concurrent.TimeUnit
 import kafka.common._
 import kafka.api.{StopReplicaRequest, PartitionStateInfo, LeaderAndIsrRequest}
-import kafka.controller.{LeaderIsrAndControllerEpoch, KafkaController}
+import kafka.controller.KafkaController
 import org.apache.log4j.Logger
 
 
@@ -116,16 +116,16 @@ class ReplicaManager(val config: KafkaConfig,
   def stopReplica(topic: String, partitionId: Int, deletePartition: Boolean): Short  = {
     stateChangeLogger.trace("Broker %d handling stop replica for partition [%s,%d]".format(localBrokerId, topic, partitionId))
     val errorCode = ErrorMapping.NoError
-    getReplica(topic, partitionId) match {
-      case Some(replica) =>
-        /* TODO: handle deleteLog in a better way */
-        //if (deletePartition)
-        //  logManager.deleteLog(topic, partition)
+    getPartition(topic, partitionId) match {
+      case Some(partition) =>
         leaderPartitionsLock synchronized {
-          leaderPartitions -= replica.partition
+          leaderPartitions -= partition
         }
-        if(deletePartition)
-          allPartitions.remove((topic, partitionId))
+        if(deletePartition) {
+          val removedPartition = allPartitions.remove((topic, partitionId))
+          if (removedPartition != null)
+            removedPartition.delete() // this will delete the local log
+        }
       case None => //do nothing if replica no longer exists
     }
     stateChangeLogger.trace("Broker %d finished handling stop replica for partition [%s,%d]".format(localBrokerId, topic, partitionId))

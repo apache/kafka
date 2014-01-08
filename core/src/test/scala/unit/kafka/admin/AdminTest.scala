@@ -23,9 +23,10 @@ import java.util.Properties
 import kafka.utils._
 import kafka.log._
 import kafka.zk.ZooKeeperTestHarness
-import kafka.server.{KafkaServer, KafkaConfig}
 import kafka.utils.{Logging, ZkUtils, TestUtils}
-import kafka.common.{TopicExistsException, ErrorMapping, TopicAndPartition}
+import kafka.common.{TopicExistsException, TopicAndPartition}
+import kafka.server.{KafkaServer, KafkaConfig}
+import java.io.File
 
 
 class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
@@ -132,6 +133,12 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     }
   }
 
+  private def getBrokersWithPartitionDir(servers: Iterable[KafkaServer], topic: String, partitionId: Int): Set[Int] = {
+    servers.filter(server => new File(server.config.logDirs.head, topic + "-" + partitionId).exists)
+           .map(_.config.brokerId)
+           .toSet
+  }
+
   @Test
   def testPartitionReassignmentWithLeaderInNewReplicas() {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
@@ -157,6 +164,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     checkForPhantomInSyncReplicas(topic, partitionToBeReassigned, assignedReplicas)
     assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
     ensureNoUnderReplicatedPartitions(topic, partitionToBeReassigned, assignedReplicas, servers)
+    assertTrue(TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet, 5000))
     servers.foreach(_.shutdown())
   }
 
@@ -184,6 +192,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
     checkForPhantomInSyncReplicas(topic, partitionToBeReassigned, assignedReplicas)
     ensureNoUnderReplicatedPartitions(topic, partitionToBeReassigned, assignedReplicas, servers)
+    assertTrue(TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet, 5000))
     servers.foreach(_.shutdown())
   }
 
@@ -211,6 +220,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     assertEquals("Partition should have been reassigned to 2, 3", newReplicas, assignedReplicas)
     checkForPhantomInSyncReplicas(topic, partitionToBeReassigned, assignedReplicas)
     ensureNoUnderReplicatedPartitions(topic, partitionToBeReassigned, assignedReplicas, servers)
+    assertTrue(TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet, 5000))
     servers.foreach(_.shutdown())
   }
 
@@ -251,6 +261,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     checkForPhantomInSyncReplicas(topic, partitionToBeReassigned, assignedReplicas)
     // ensure that there are no under replicated partitions
     ensureNoUnderReplicatedPartitions(topic, partitionToBeReassigned, assignedReplicas, servers)
+    assertTrue(TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet, 5000))
     servers.foreach(_.shutdown())
   }
 

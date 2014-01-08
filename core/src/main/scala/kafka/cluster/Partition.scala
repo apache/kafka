@@ -25,10 +25,11 @@ import kafka.log.LogConfig
 import kafka.server.ReplicaManager
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
-import kafka.controller.{LeaderIsrAndControllerEpoch, KafkaController}
+import kafka.controller.KafkaController
 import org.apache.log4j.Logger
 import kafka.message.ByteBufferMessageSet
 import kafka.common.{NotAssignedReplicaException, TopicAndPartition, NotLeaderForPartitionException, ErrorMapping}
+import java.io.IOException
 
 
 /**
@@ -133,6 +134,22 @@ class Partition(val topic: String,
 
   def removeReplica(replicaId: Int) {
     assignedReplicaMap.remove(replicaId)
+  }
+
+  def delete() {
+    // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
+    leaderIsrUpdateLock synchronized {
+      assignedReplicaMap.clear()
+      inSyncReplicas = Set.empty[Replica]
+      leaderReplicaIdOpt = None
+      try {
+        logManager.deleteLog(TopicAndPartition(topic, partitionId))
+      } catch {
+        case e: IOException =>
+          fatal("Error deleting the log for partition [%s,%d]".format(topic, partitionId), e)
+          Runtime.getRuntime().halt(1)
+      }
+    }
   }
 
   def getLeaderEpoch(): Int = {

@@ -68,7 +68,6 @@ class ReplicaFetcherThread(name:String,
    */
   def handleOffsetOutOfRange(topicAndPartition: TopicAndPartition): Long = {
     val replica = replicaMgr.getReplica(topicAndPartition.topic, topicAndPartition.partition).get
-    val log = replica.log.get
 
     /**
      * Unclean leader election: A follower goes down, in the meanwhile the leader keeps appending messages. The follower comes back up
@@ -81,8 +80,8 @@ class ReplicaFetcherThread(name:String,
      * There is a potential for a mismatch between the logs of the two replicas here. We don't fix this mismatch as of now.
      */
     val leaderEndOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, OffsetRequest.LatestTime, brokerConfig.brokerId)
-    if (leaderEndOffset < log.logEndOffset) {
-      log.truncateTo(leaderEndOffset)
+    if (leaderEndOffset < replica.logEndOffset) {
+      replicaMgr.logManager.truncateTo(Map(topicAndPartition -> leaderEndOffset))
       warn("Replica %d for partition %s reset its fetch offset to current leader %d's latest offset %d"
         .format(brokerConfig.brokerId, topicAndPartition, sourceBroker.id, leaderEndOffset))
       leaderEndOffset
@@ -94,7 +93,7 @@ class ReplicaFetcherThread(name:String,
        * Roll out a new log at the follower with the start offset equal to the current leader's start offset and continue fetching.
        */
       val leaderStartOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, OffsetRequest.EarliestTime, brokerConfig.brokerId)
-      log.truncateFullyAndStartAt(leaderStartOffset)
+      replicaMgr.logManager.truncateFullyAndStartAt(topicAndPartition, leaderStartOffset)
       warn("Replica %d for partition %s reset its fetch offset to current leader %d's start offset %d"
         .format(brokerConfig.brokerId, topicAndPartition, sourceBroker.id, leaderStartOffset))
       leaderStartOffset

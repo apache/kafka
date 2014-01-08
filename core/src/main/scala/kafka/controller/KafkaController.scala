@@ -413,7 +413,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
    * 5. Stop old replicas AR - RAR. As part of this, we make 2 state changes OfflineReplica and NonExistentReplica. As part
    *    of OfflineReplica state change, we shrink the ISR to remove RAR - AR in zookeeper and sent a LeaderAndIsr ONLY to
    *    the Leader to notify it of the shrunk ISR. After that, we send a StopReplica (delete = false) to the replicas in
-   *    RAR - AR. Currently, NonExistentReplica state change is a NO-OP
+   *    RAR - AR. As part of the NonExistentReplica state change, we delete replicas in RAR - AR.
    * 6. Write new AR = RAR. As part of this, we finally change the AR in zookeeper to RAR.
    * 7. Remove partition from the /admin/reassign_partitions path
    */
