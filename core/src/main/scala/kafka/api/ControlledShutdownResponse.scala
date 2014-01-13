@@ -67,4 +67,7 @@ case class ControlledShutdownResponse(override val correlationId: Int,
       buffer.putInt(topicAndPartition.partition)
     }
   }
+
+  override def describe(details: Boolean):String = { toString }
+
 }

@@ -106,4 +106,20 @@ case class OffsetCommitRequest(groupId: String,
     val errorResponse = OffsetCommitResponse(requestInfo=responseMap, correlationId=correlationId)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
   }
+
+  override def describe(details: Boolean): String = {
+    val offsetCommitRequest = new StringBuilder
+    offsetCommitRequest.append("Name: " + this.getClass.getSimpleName)
+    offsetCommitRequest.append("; Version: " + versionId)
+    offsetCommitRequest.append("; CorrelationId: " + correlationId)
+    offsetCommitRequest.append("; ClientId: " + clientId)
+    offsetCommitRequest.append("; GroupId: " + groupId)
+    if(details)
+      offsetCommitRequest.append("; RequestInfo: " + requestInfo.mkString(","))
+    offsetCommitRequest.toString()
+  }
+
+  override def toString(): String = {
+    describe(true)
+  }
 }

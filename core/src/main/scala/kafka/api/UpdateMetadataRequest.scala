@@ -101,6 +101,15 @@ case class UpdateMetadataRequest (versionId: Short,
   }
 
   override def toString(): String = {
+    describe(true)
+  }
+
+  override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
+    val errorResponse = new UpdateMetadataResponse(correlationId, ErrorMapping.codeFor(e.getCause.asInstanceOf[Class[Throwable]]))
+    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+  }
+
+  override def describe(details: Boolean): String = {
     val updateMetadataRequest = new StringBuilder
     updateMetadataRequest.append("Name:" + this.getClass.getSimpleName)
     updateMetadataRequest.append(";Version:" + versionId)
@@ -108,13 +117,9 @@ case class UpdateMetadataRequest (versionId: Short,
     updateMetadataRequest.append(";ControllerEpoch:" + controllerEpoch)
     updateMetadataRequest.append(";CorrelationId:" + correlationId)
     updateMetadataRequest.append(";ClientId:" + clientId)
-    updateMetadataRequest.append(";PartitionState:" + partitionStateInfos.mkString(","))
     updateMetadataRequest.append(";AliveBrokers:" + aliveBrokers.mkString(","))
+    if(details)
+      updateMetadataRequest.append(";PartitionState:" + partitionStateInfos.mkString(","))
     updateMetadataRequest.toString()
-  }
-
-  override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val errorResponse = new UpdateMetadataResponse(correlationId, ErrorMapping.codeFor(e.getCause.asInstanceOf[Class[Throwable]]))
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
   }
 }

@@ -70,4 +70,6 @@ case class StopReplicaResponse(override val correlationId: Int,
       buffer.putShort(value)
     }
   }
+
+  override def describe(details: Boolean):String = { toString }
 }

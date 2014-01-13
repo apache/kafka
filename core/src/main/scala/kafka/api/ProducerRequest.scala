@@ -123,15 +123,7 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
   def numPartitions = data.size
 
   override def toString(): String = {
-    val producerRequest = new StringBuilder
-    producerRequest.append("Name: " + this.getClass.getSimpleName)
-    producerRequest.append("; Version: " + versionId)
-    producerRequest.append("; CorrelationId: " + correlationId)
-    producerRequest.append("; ClientId: " + clientId)
-    producerRequest.append("; RequiredAcks: " + requiredAcks)
-    producerRequest.append("; AckTimeoutMs: " + ackTimeoutMs + " ms")
-    producerRequest.append("; TopicAndPartition: " + topicPartitionMessageSizeMap.mkString(","))
-    producerRequest.toString()
+    describe(true)
   }
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
@@ -147,6 +139,20 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
       requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
     }
   }
+
+  override def describe(details: Boolean): String = {
+    val producerRequest = new StringBuilder
+    producerRequest.append("Name: " + this.getClass.getSimpleName)
+    producerRequest.append("; Version: " + versionId)
+    producerRequest.append("; CorrelationId: " + correlationId)
+    producerRequest.append("; ClientId: " + clientId)
+    producerRequest.append("; RequiredAcks: " + requiredAcks)
+    producerRequest.append("; AckTimeoutMs: " + ackTimeoutMs + " ms")
+    if(details)
+      producerRequest.append("; TopicAndPartition: " + topicPartitionMessageSizeMap.mkString(","))
+    producerRequest.toString()
+  }
+
 
   def emptyData(){
     data.clear()

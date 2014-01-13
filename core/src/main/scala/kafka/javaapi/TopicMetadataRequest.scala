@@ -19,6 +19,9 @@ package kafka.javaapi
 import kafka.api._
 import java.nio.ByteBuffer
 import scala.collection.mutable
+import kafka.network.{BoundedByteBufferSend, RequestChannel}
+import kafka.common.ErrorMapping
+import kafka.network.RequestChannel.Response
 
 class TopicMetadataRequest(val versionId: Short,
                            override val correlationId: Int,
@@ -41,4 +44,26 @@ class TopicMetadataRequest(val versionId: Short,
 
   def sizeInBytes: Int = underlying.sizeInBytes()
 
+  override def toString(): String = {
+    describe(true)
+  }
+
+  override def describe(details: Boolean): String = {
+    val topicMetadataRequest = new StringBuilder
+    topicMetadataRequest.append("Name: " + this.getClass.getSimpleName)
+    topicMetadataRequest.append("; Version: " + versionId)
+    topicMetadataRequest.append("; CorrelationId: " + correlationId)
+    topicMetadataRequest.append("; ClientId: " + clientId)
+    if(details) {
+      topicMetadataRequest.append("; Topics: ")
+      val topicIterator = topics.iterator()
+      while (topicIterator.hasNext) {
+        val topic = topicIterator.next()
+        topicMetadataRequest.append("%s".format(topic))
+        if(topicIterator.hasNext)
+          topicMetadataRequest.append(",")
+      }
+    }
+    topicMetadataRequest.toString()
+  }
 }

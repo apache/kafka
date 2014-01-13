@@ -141,16 +141,7 @@ case class FetchRequest private[kafka] (versionId: Short = FetchRequest.CurrentV
   def numPartitions = requestInfo.size
 
   override def toString(): String = {
-    val fetchRequest = new StringBuilder
-    fetchRequest.append("Name: " + this.getClass.getSimpleName)
-    fetchRequest.append("; Version: " + versionId)
-    fetchRequest.append("; CorrelationId: " + correlationId)
-    fetchRequest.append("; ClientId: " + clientId)
-    fetchRequest.append("; ReplicaId: " + replicaId)
-    fetchRequest.append("; MaxWait: " + maxWait + " ms")
-    fetchRequest.append("; MinBytes: " + minBytes + " bytes")
-    fetchRequest.append("; RequestInfo: " + requestInfo.mkString(","))
-    fetchRequest.toString()
+    describe(true)
   }
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
@@ -161,8 +152,21 @@ case class FetchRequest private[kafka] (versionId: Short = FetchRequest.CurrentV
     val errorResponse = FetchResponse(correlationId, fetchResponsePartitionData)
     requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(errorResponse)))
   }
-}
 
+  override def describe(details: Boolean): String = {
+    val fetchRequest = new StringBuilder
+    fetchRequest.append("Name: " + this.getClass.getSimpleName)
+    fetchRequest.append("; Version: " + versionId)
+    fetchRequest.append("; CorrelationId: " + correlationId)
+    fetchRequest.append("; ClientId: " + clientId)
+    fetchRequest.append("; ReplicaId: " + replicaId)
+    fetchRequest.append("; MaxWait: " + maxWait + " ms")
+    fetchRequest.append("; MinBytes: " + minBytes + " bytes")
+    if(details)
+      fetchRequest.append("; RequestInfo: " + requestInfo.mkString(","))
+    fetchRequest.toString()
+  }
+}
 
 @nonthreadsafe
 class FetchRequestBuilder() {

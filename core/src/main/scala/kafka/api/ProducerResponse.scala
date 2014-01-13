@@ -87,5 +87,7 @@ case class ProducerResponse(override val correlationId: Int,
       }
     })
   }
+
+  override def describe(details: Boolean):String = { toString }
 }
 
