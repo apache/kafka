@@ -58,8 +58,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     initializeReplicaState()
     hasStarted.set(true)
     // move all Online replicas to Online
-    handleStateChanges(getAllReplicasOnBroker(controllerContext.allTopics.toSeq,
-      controllerContext.liveBrokerIds.toSeq), OnlineReplica)
+    handleStateChanges(controllerContext.allLiveReplicas(), OnlineReplica)
     info("Started replica state machine with initial state -> " + replicaState.toString())
   }
 
@@ -95,7 +94,23 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
 
   /**
    * This API exercises the replica's state machine. It ensures that every state transition happens from a legal
-   * previous state to the target state.
+   * previous state to the target state. Valid state transitions are:
+   * NonExistentReplica --> NewReplica
+   * --send LeaderAndIsr request with current leader and isr to the new replica and UpdateMetadata request for the partition to every live broker
+   *
+   * NewReplica -> OnlineReplica
+   * --add the new replica to the assigned replica list if needed
+   *
+   * OnlineReplica,OfflineReplica -> OnlineReplica
+   * --send LeaderAndIsr request with current leader and isr to the new replica and UpdateMetadata request for the partition to every live broker
+   *
+   * NewReplica,OnlineReplica -> OfflineReplica
+   * --send StopReplicaRequest to the replica (w/o deletion)
+   * --remove this replica from the isr and send LeaderAndIsr request (with new isr) to the leader replica and UpdateMetadata request for the partition to every live broker.
+   *
+   * OfflineReplica -> NonExistentReplica
+   * --send StopReplicaRequest to the replica (with deletion)
+   *
    * @param topic       The topic of the replica for which the state transition is invoked
    * @param partition   The partition of the replica for which the state transition is invoked
    * @param replicaId   The replica for which the state transition is invoked
@@ -226,20 +241,6 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
         }
       }
     }
-  }
-
-  private def getAllReplicasOnBroker(topics: Seq[String], brokerIds: Seq[Int]): Set[PartitionAndReplica] = {
-    brokerIds.map { brokerId =>
-      val partitionsAssignedToThisBroker =
-        controllerContext.partitionReplicaAssignment.filter(p => topics.contains(p._1.topic) && p._2.contains(brokerId))
-      if(partitionsAssignedToThisBroker.size == 0)
-        info("No state transitions triggered since no partitions are assigned to brokers %s".format(brokerIds.mkString(",")))
-      partitionsAssignedToThisBroker.map(p => new PartitionAndReplica(p._1.topic, p._1.partition, brokerId))
-    }.flatten.toSet
-  }
-
-  def getPartitionsAssignedToBroker(topics: Seq[String], brokerId: Int):Seq[TopicAndPartition] = {
-    controllerContext.partitionReplicaAssignment.filter(_._2.contains(brokerId)).keySet.toSeq
   }
 
   /**
