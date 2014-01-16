@@ -1128,7 +1128,7 @@ def create_topic(systemTestEnv, testcaseEnv):
         zkHost          = system_test_utils.get_data_by_lookup_keyval(clusterEntityConfigDictList, "role", "zookeeper", "hostname")
         kafkaHome       = system_test_utils.get_data_by_lookup_keyval(clusterEntityConfigDictList, "entity_id", zkEntityId, "kafka_home")
         javaHome        = system_test_utils.get_data_by_lookup_keyval(clusterEntityConfigDictList, "entity_id", zkEntityId, "java_home")
-        createTopicBin  = kafkaHome + "/bin/kafka-create-topic.sh"
+        createTopicBin  = kafkaHome + "/bin/kafka-topics.sh --create"
 
         logger.debug("zkEntityId     : " + zkEntityId, extra=d)
         logger.debug("createTopicBin : " + createTopicBin, extra=d)
@@ -1155,8 +1155,8 @@ def create_topic(systemTestEnv, testcaseEnv):
                        createTopicBin,
                        " --topic "     + topic,
                        " --zookeeper " + zkConnectStr,
-                       " --replica "   + testcaseEnv.testcaseArgumentsDict["replica_factor"],
-                       " --partition " + testcaseEnv.testcaseArgumentsDict["num_partition"] + " >> ",
+                       " --replication-factor "   + testcaseEnv.testcaseArgumentsDict["replica_factor"],
+                       " --partitions " + testcaseEnv.testcaseArgumentsDict["num_partition"] + " >> ",
                        testcaseBaseDir + "/logs/create_source_cluster_topic.log'"]
     
             cmdStr = " ".join(cmdList)
