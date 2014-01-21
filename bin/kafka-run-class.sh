@@ -20,6 +20,18 @@ then
   exit 1
 fi
 
+
+# running with cygwin bash under unix
+if [[ $(uname -s) = CYGWIN* ]]; then
+	$CYGWIN=1
+fi
+
+if [ -z "$CYGWIN" ]; then
+  PATH_SEPERATOR=":"
+else  
+  PATH_SEPERATOR=";"
+fi
+
 base_dir=$(dirname $0)/..
 
 # create logs directory
@@ -28,6 +40,10 @@ if [ ! -d $LOG_DIR ]; then
 	mkdir $LOG_DIR
 fi
 
+if [ -n "$CYGWIN" ]; then
+  LOG_DIR=`cygpath -m $LOG_DIR`
+fi	
+
 if [ -z "$SCALA_VERSION" ]; then
 	SCALA_VERSION=2.8.0
 fi
@@ -35,23 +51,30 @@ fi
 # assume all dependencies have been packaged into one jar with sbt-assembly's task "assembly-package-dependency"
 for file in $base_dir/core/target/scala-${SCALA_VERSION}/*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  if [[ $(uname -s) = CYGWIN* ]]; then
+    file=`cygpath -m $file`
+  fi	
+  if [ -z "$CLASSPATH" ]; then
+    CLASSPATH=$file
+  else
+    CLASSPATH=$CLASSPATH$PATH_SEPERATOR$file
+  fi
 done
 
 for file in $base_dir/perf/target/scala-${SCALA_VERSION}/kafka*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  CLASSPATH=$CLASSPATH$PATH_SEPERATOR$file
 done
 
 # classpath addition for release
 for file in $base_dir/libs/*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  CLASSPATH=$CLASSPATH$PATH_SEPERATOR$file
 done
 
 for file in $base_dir/kafka*.jar;
 do
-  CLASSPATH=$CLASSPATH:$file
+  CLASSPATH=$CLASSPATH$PATH_SEPERATOR$file
 done
 
 # JMX settings
