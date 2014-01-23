@@ -48,7 +48,7 @@ class KafkaZooKeeper(config: KafkaConfig) extends Logging {
       else
         config.hostName 
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-    ZkUtils.registerBrokerInZk(zkClient, config.brokerId, hostName, config.port, config.zkSessionTimeoutMs, jmxPort)
+    ZkUtils.registerBrokerInZk(zkClient, config.brokerId, hostName, config.port, config.rackId, config.zkSessionTimeoutMs, jmxPort)
   }
 
   /**

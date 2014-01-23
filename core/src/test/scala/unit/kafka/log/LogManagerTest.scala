@@ -39,7 +39,7 @@ class LogManagerTest extends JUnit3Suite {
 
   override def setUp() {
     super.setUp()
-    config = new KafkaConfig(TestUtils.createBrokerConfig(0, -1)) {
+    config = new KafkaConfig(TestUtils.createBrokerConfig(0, -1, 0)) {
                    override val logSegmentBytes = 1024
                    override val logFlushIntervalMessages = 10000
                    override val logRetentionHours = maxLogAgeHours
@@ -111,7 +111,7 @@ class LogManagerTest extends JUnit3Suite {
     val setSize = TestUtils.singleMessageSet("test".getBytes()).sizeInBytes
     val retentionHours = 1
     val retentionMs = 1000 * 60 * 60 * retentionHours
-    val props = TestUtils.createBrokerConfig(0, -1)
+    val props = TestUtils.createBrokerConfig(0, -1, 0)
     logManager.shutdown()
     config = new KafkaConfig(props) {
       override val logSegmentBytes = (10 * (setSize - 1)) // each segment will be 10 messages
@@ -155,7 +155,7 @@ class LogManagerTest extends JUnit3Suite {
 
   @Test
   def testTimeBasedFlush() {
-    val props = TestUtils.createBrokerConfig(0, -1)
+    val props = TestUtils.createBrokerConfig(0, -1, 0)
     logManager.shutdown()
     config = new KafkaConfig(props) {
                    override val logSegmentBytes = 1024 *1024 *1024
@@ -179,7 +179,7 @@ class LogManagerTest extends JUnit3Suite {
   @Test
   def testLeastLoadedAssignment() {
     // create a log manager with multiple data directories
-    val props = TestUtils.createBrokerConfig(0, -1)
+    val props = TestUtils.createBrokerConfig(0, -1, 0)
     val dirs = Seq(TestUtils.tempDir().getAbsolutePath, 
                    TestUtils.tempDir().getAbsolutePath, 
                    TestUtils.tempDir().getAbsolutePath)

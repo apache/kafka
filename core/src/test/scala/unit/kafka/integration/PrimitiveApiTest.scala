@@ -37,7 +37,7 @@ import kafka.utils.{TestUtils, Utils}
 class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with ZooKeeperTestHarness {
 
   val port = TestUtils.choosePort
-  val props = TestUtils.createBrokerConfig(0, port)
+  val props = TestUtils.createBrokerConfig(0, port, 0)
   val config = new KafkaConfig(props)
   val configs = List(config)
   val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])

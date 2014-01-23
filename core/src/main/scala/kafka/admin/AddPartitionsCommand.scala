@@ -46,6 +46,11 @@ object AddPartitionsCommand extends Logging {
       "broker_id_for_part2_replica1 : broker_id_for_part2_replica2, ...")
       .ofType(classOf[String])
       .defaultsTo("")
+    val rackReplicationOpt = parser.accepts("max-rack-replication", "maximum replicas assigned to a single rack")
+      .withRequiredArg
+      .describedAs("max # of replicas per rack")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(-1)
 
     val options = parser.parse(args : _*)
 
@@ -62,10 +67,11 @@ object AddPartitionsCommand extends Logging {
     val zkConnect = options.valueOf(zkConnectOpt)
     val nPartitions = options.valueOf(nPartitionsOpt).intValue
     val replicaAssignmentStr = options.valueOf(replicaAssignmentOpt)
+    val rackReplication = options.valueOf(rackReplicationOpt).intValue
     var zkClient: ZkClient = null
     try {
       zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
-      addPartitions(zkClient, topic, nPartitions, replicaAssignmentStr)
+      addPartitions(zkClient, topic, nPartitions, replicaAssignmentStr, rackReplication)
       println("adding partitions succeeded!")
     } catch {
       case e: Throwable =>
@@ -77,7 +83,7 @@ object AddPartitionsCommand extends Logging {
     }
   }
 
-  def addPartitions(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicaAssignmentStr: String = "") {
+  def addPartitions(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicaAssignmentStr: String = "", rackReplication: Int = -1) {
     val existingPartitionsReplicaList = ZkUtils.getReplicaAssignmentForTopics(zkClient, List(topic))
     if (existingPartitionsReplicaList.size == 0)
       throw new AdministrationException("The topic %s does not exist".format(topic))
@@ -87,7 +93,7 @@ object AddPartitionsCommand extends Logging {
     // create the new partition replication list
     val brokerList = ZkUtils.getSortedBrokerList(zkClient)
     val newPartitionReplicaList = if (replicaAssignmentStr == "")
-      AdminUtils.assignReplicasToBrokers(brokerList, numPartitions, existingReplicaList.size, existingReplicaList.head, existingPartitionsReplicaList.size)
+      AdminUtils.assignReplicasToBrokers(zkClient, brokerList, numPartitions, existingReplicaList.size, existingReplicaList.head, existingPartitionsReplicaList.size, rackReplication)
     else
       getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet, existingPartitionsReplicaList.size)
 

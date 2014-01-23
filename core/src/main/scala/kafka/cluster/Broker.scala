@@ -37,7 +37,8 @@ private[kafka] object Broker {
           val brokerInfo = m.asInstanceOf[Map[String, Any]]
           val host = brokerInfo.get("host").get.asInstanceOf[String]
           val port = brokerInfo.get("port").get.asInstanceOf[Int]
-          new Broker(id, host, port)
+          val rack = brokerInfo.get("rack").get.asInstanceOf[Int]
+          new Broker(id, host, port, rack)
         case None =>
           throw new BrokerNotAvailableException("Broker id %d does not exist".format(id))
       }
@@ -50,32 +51,34 @@ private[kafka] object Broker {
     val id = buffer.getInt
     val host = readShortString(buffer)
     val port = buffer.getInt
-    new Broker(id, host, port)
+    val rack = buffer.getInt
+    new Broker(id, host, port, rack)
   }
 }
 
-private[kafka] case class Broker(val id: Int, val host: String, val port: Int) {
+private[kafka] case class Broker(val id: Int, val host: String, val port: Int, val rack: Int) {
   
-  override def toString(): String = new String("id:" + id + ",host:" + host + ",port:" + port)
+  override def toString(): String = new String("id:" + id + ",host:" + host + ",port:" + port + ",rack:" + rack)
 
-  def getConnectionString(): String = host + ":" + port
+  def getConnectionString(): String = host + ":" + port + ":" + rack
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(id)
     writeShortString(buffer, host)
     buffer.putInt(port)
+    buffer.putInt(rack)
   }
 
-  def sizeInBytes: Int = shortStringLength(host) /* host name */ + 4 /* port */ + 4 /* broker id*/
+  def sizeInBytes: Int = shortStringLength(host) /* host name */ + 4 /* port */ + 4 /* broker id*/ + 4 /* rack id*/
 
   override def equals(obj: Any): Boolean = {
     obj match {
       case null => false
-      case n: Broker => id == n.id && host == n.host && port == n.port
+      case n: Broker => id == n.id && host == n.host && port == n.port && rack == n.rack
       case _ => false
     }
   }
   
-  override def hashCode(): Int = hashcode(id, host, port)
+  override def hashCode(): Int = hashcode(id, host, port, rack)
   
 }

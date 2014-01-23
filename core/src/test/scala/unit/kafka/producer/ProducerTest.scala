@@ -40,6 +40,8 @@ import org.junit.Assert.assertEquals
 class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   private val brokerId1 = 0
   private val brokerId2 = 1
+  private val rackId1 = 0
+  private val rackId2 = 1
   private val ports = TestUtils.choosePorts(2)
   private val (port1, port2) = (ports(0), ports(1))
   private var server1: KafkaServer = null
@@ -49,12 +51,12 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   private val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
   private var servers = List.empty[KafkaServer]
 
-  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1)
+  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1, rackId1)
   private val config1 = new KafkaConfig(props1) {
     override val hostName = "localhost"
     override val numPartitions = 4
   }
-  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2)
+  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2, rackId2)
   private val config2 = new KafkaConfig(props2) {
     override val hostName = "localhost"
     override val numPartitions = 4
@@ -99,7 +101,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
 
     val props1 = new util.Properties()
-    props1.put("metadata.broker.list", "localhost:80,localhost:81")
+    props1.put("metadata.broker.list", "localhost:80:0,localhost:81:1")
     props1.put("serializer.class", "kafka.serializer.StringEncoder")
     val producerConfig1 = new ProducerConfig(props1)
     val producer1 = new Producer[String, String](producerConfig1)
@@ -114,7 +116,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     }
 
     val props2 = new util.Properties()
-    props2.put("metadata.broker.list", "localhost:80," + TestUtils.getBrokerListStrFromConfigs(Seq( config1)))
+    props2.put("metadata.broker.list", "localhost:80:0," + TestUtils.getBrokerListStrFromConfigs(Seq( config1)))
     props2.put("serializer.class", "kafka.serializer.StringEncoder")
     val producerConfig2= new ProducerConfig(props2)
     val producer2 = new Producer[String, String](producerConfig2)

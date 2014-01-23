@@ -64,6 +64,12 @@ object ReassignPartitionsCommand extends Logging {
       .describedAs("partition reassignment json file path")
       .ofType(classOf[String])
 
+    val rackReplicationOpt = parser.accepts("max-rack-replication", "maximum replicas assigned to a single rack")
+      .withRequiredArg
+      .describedAs("max # of replicas per rack")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(-1)
+
     val options = parser.parse(args : _*)
 
     for(arg <- List(zkConnectOpt)) {
@@ -110,11 +116,12 @@ object ReassignPartitionsCommand extends Logging {
         val brokerListToReassign = brokerList.split(',') map (_.toInt)
         val topicsToReassign = ZkUtils.parseTopicsData(topicsToMoveJsonString)
         val topicPartitionsToReassign = ZkUtils.getReplicaAssignmentForTopics(zkClient, topicsToReassign)
+        val rackReplication = options.valueOf(rackReplicationOpt).intValue
 
         val groupedByTopic = topicPartitionsToReassign.groupBy(tp => tp._1.topic)
         groupedByTopic.foreach { topicInfo =>
-          val assignedReplicas = AdminUtils.assignReplicasToBrokers(brokerListToReassign, topicInfo._2.size,
-            topicInfo._2.head._2.size)
+          val assignedReplicas = AdminUtils.assignReplicasToBrokers(zkClient, brokerListToReassign, topicInfo._2.size,
+            topicInfo._2.head._2.size, -1, -1, rackReplication)
           partitionsToBeReassigned ++= assignedReplicas.map(replicaInfo => (TopicAndPartition(topicInfo._1, replicaInfo._1) -> replicaInfo._2))
         }
 

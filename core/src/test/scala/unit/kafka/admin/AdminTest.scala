@@ -24,7 +24,6 @@ import kafka.server.KafkaConfig
 import kafka.utils.{Logging, ZkUtils, TestUtils}
 import kafka.common.{TopicExistsException, ErrorMapping, TopicAndPartition}
 
-
 class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
 
   @Test
@@ -33,7 +32,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
 
     // test 0 replication factor
     try {
-      AdminUtils.assignReplicasToBrokers(brokerList, 10, 0)
+      AdminUtils.assignReplicasToBrokers(zkClient, brokerList, 10, 0)
       fail("shouldn't allow replication factor 0")
     }
     catch {
@@ -43,7 +42,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
 
     // test wrong replication factor
     try {
-      AdminUtils.assignReplicasToBrokers(brokerList, 10, 6)
+      AdminUtils.assignReplicasToBrokers(zkClient, brokerList, 10, 6)
       fail("shouldn't allow replication factor larger than # of brokers")
     }
     catch {
@@ -66,7 +65,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
         9 -> List(4, 1, 2)
       )
 
-      val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerList, 10, 3, 0)
+      val actualAssignment = AdminUtils.assignReplicasToBrokers(zkClient, brokerList, 10, 3, 0)
       val e = (expectedAssignment.toList == actualAssignment.toList)
       assertTrue(expectedAssignment.toList == actualAssignment.toList)
     }
@@ -155,7 +154,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       11 -> 1
     )
     val topic = "test"
-    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
+    TestUtils.createBrokersInZk(zkClient, List((0, 0), (1, 1), (2, 2), (3, 3), (4, 4)))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment, zkClient)
     // create leaders for all partitions

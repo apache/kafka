@@ -113,19 +113,20 @@ object TestUtils extends Logging {
    */
   def createBrokerConfigs(numConfigs: Int): List[Properties] = {
     for((port, node) <- choosePorts(numConfigs).zipWithIndex)
-    yield createBrokerConfig(node, port)
+    yield createBrokerConfig(node, port, node)
   }
 
   def getBrokerListStrFromConfigs(configs: Seq[KafkaConfig]): String = {
-    configs.map(c => c.hostName + ":" + c.port).mkString(",")
+    configs.map(c => c.hostName + ":" + c.port + ":" + c.rackId).mkString(",")
   }
 
   /**
    * Create a test config for the given node id
    */
-  def createBrokerConfig(nodeId: Int, port: Int): Properties = {
+  def createBrokerConfig(nodeId: Int, port: Int, rack: Int): Properties = {
     val props = new Properties
     props.put("broker.id", nodeId.toString)
+    props.put("broker.rack", rack.toString)
     props.put("host.name", "localhost")
     props.put("port", port.toString)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
@@ -344,14 +345,14 @@ object TestUtils extends Logging {
     }
   }
 
-  def createBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
-    val brokers = ids.map(id => new Broker(id, "localhost", 6667))
-    brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, b.id, b.host, b.port, 6000, jmxPort = -1))
+  def createBrokersInZk(zkClient: ZkClient, ids: Seq[(Int, Int)]): Seq[Broker] = {
+    val brokers = ids.map(id => new Broker(id._1, "localhost", 6667, id._2))
+    brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, b.id, b.host, b.port, b.rack, 6000, jmxPort = -1))
     brokers
   }
 
-  def deleteBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
-    val brokers = ids.map(id => new Broker(id, "localhost", 6667))
+  def deleteBrokersInZk(zkClient: ZkClient, ids: Seq[(Int, Int)]): Seq[Broker] = {
+    val brokers = ids.map(id => new Broker(id._1, "localhost", 6667, id._2))
     brokers.foreach(b => ZkUtils.deletePath(zkClient, ZkUtils.BrokerIdsPath + "/" + b))
     brokers
   }

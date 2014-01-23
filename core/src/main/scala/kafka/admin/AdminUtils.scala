@@ -47,8 +47,8 @@ object AdminUtils extends Logging {
    * p3        p4        p0        p1        p2       (3nd replica)
    * p7        p8        p9        p5        p6       (3nd replica)
    */
-  def assignReplicasToBrokers(brokerList: Seq[Int], nPartitions: Int, replicationFactor: Int,
-                              fixedStartIndex: Int = -1, startPartitionId: Int = -1)
+  def assignReplicasToBrokers(zkClient: ZkClient, brokerList: Seq[Int], nPartitions: Int, replicationFactor: Int,
+                              fixedStartIndex: Int = -1, startPartitionId: Int = -1, maxReplicaPerRack: Int = -1)
   : Map[Int, Seq[Int]] = {
     if (nPartitions <= 0)
       throw new AdministrationException("number of partitions must be larger than 0")
@@ -62,15 +62,52 @@ object AdminUtils extends Logging {
     var currentPartitionId = if (startPartitionId >= 0) startPartitionId else 0
 
     var nextReplicaShift = if (fixedStartIndex >= 0) fixedStartIndex else rand.nextInt(brokerList.size)
-    for (i <- 0 until nPartitions) {
-      if (currentPartitionId > 0 && (currentPartitionId % brokerList.size == 0))
-        nextReplicaShift += 1
-      val firstReplicaIndex = (currentPartitionId + startIndex) % brokerList.size
-      var replicaList = List(brokerList(firstReplicaIndex))
-      for (j <- 0 until replicationFactor - 1)
-        replicaList ::= brokerList(getWrappedIndex(firstReplicaIndex, nextReplicaShift, j, brokerList.size))
-      ret.put(currentPartitionId, replicaList.reverse)
-      currentPartitionId = currentPartitionId + 1
+    if (maxReplicaPerRack <= 0) {
+      for (i <- 0 until nPartitions) {
+        if (currentPartitionId > 0 && (currentPartitionId % brokerList.size == 0))
+          nextReplicaShift += 1
+        val firstReplicaIndex = (currentPartitionId + startIndex) % brokerList.size
+        var replicaList = List(brokerList(firstReplicaIndex))
+        for (j <- 0 until replicationFactor - 1)
+          replicaList ::= brokerList(getWrappedIndex(firstReplicaIndex, nextReplicaShift, j, brokerList.size))
+        ret.put(currentPartitionId, replicaList.reverse)
+        currentPartitionId = currentPartitionId + 1
+      }
+    } else {
+      val brokerToRackMap: Map[Int, Int] = brokerList.map(brokerId => (brokerId -> (ZkUtils.getBrokerInfo(zkClient, brokerId) match {
+        case Some(broker) => broker.rack
+        case None => throw new AdministrationException("broker " + brokerId + " must have rack id")
+      }) )).toMap
+      for (i <- 0 until nPartitions) {
+        if (currentPartitionId > 0 && (currentPartitionId % brokerList.size == 0))
+          nextReplicaShift += 1
+        val firstReplicaIndex = (currentPartitionId + startIndex) % brokerList.size
+        var replicaList = List(brokerList(firstReplicaIndex))
+        var rackReplicaCount: mutable.Map[Int, Int] = mutable.Map(brokerToRackMap(brokerList(firstReplicaIndex)) -> 1)
+        var k = 0
+        for (j <- 0 until replicationFactor - 1) {
+          var done = false;
+          while (!done && k < brokerList.size) {
+            val broker = brokerList(getWrappedIndex(firstReplicaIndex, nextReplicaShift, k, brokerList.size))
+            val rack = brokerToRackMap(broker)
+            if (!(rackReplicaCount contains rack)) {
+              replicaList ::= broker
+              rackReplicaCount += (rack -> 1)
+              done = true;
+            } else if (rackReplicaCount(rack) < maxReplicaPerRack) {
+              rackReplicaCount(rack) = rackReplicaCount(rack) + 1
+              replicaList ::= broker
+              done = true;
+            }
+            k = k + 1
+          }
+          if (!done) {
+            throw new AdministrationException("not enough brokers available in unique racks to meet maxReplicaPerRack limit of " + maxReplicaPerRack)
+          }
+        }
+        ret.put(currentPartitionId, replicaList.reverse)
+        currentPartitionId = currentPartitionId + 1
+      }
     }
     ret.toMap
   }

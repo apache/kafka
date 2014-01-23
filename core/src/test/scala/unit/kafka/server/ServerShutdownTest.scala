@@ -32,7 +32,7 @@ import kafka.utils.{TestUtils, Utils}
 
 class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
   val port = TestUtils.choosePort
-  val props = TestUtils.createBrokerConfig(0, port)
+  val props = TestUtils.createBrokerConfig(0, port, 0)
   val config = new KafkaConfig(props)
 
   val host = "localhost"
