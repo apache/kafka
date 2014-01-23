@@ -43,6 +43,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
   val tLogger = Logger.getLogger(getClass())
 
   private val brokerZk = 0
+  private val rackZk = 0
 
   private val ports = TestUtils.choosePorts(2)
   private val portZk = ports(0)
@@ -51,7 +52,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
   override def setUp() {
     super.setUp()
 
-    val propsZk = TestUtils.createBrokerConfig(brokerZk, portZk)
+    val propsZk = TestUtils.createBrokerConfig(brokerZk, portZk, rackZk)
     val logDirZkPath = propsZk.getProperty("log.dir")
     logDirZk = new File(logDirZkPath)
     config = new KafkaConfig(propsZk)

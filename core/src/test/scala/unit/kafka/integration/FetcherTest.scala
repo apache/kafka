@@ -40,7 +40,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
     yield new KafkaConfig(props)
   val messages = new mutable.HashMap[Int, Seq[Array[Byte]]]
   val topic = "topic"
-  val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, "localhost", c.port)))
+  val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, "localhost", c.port, c.rackId)))
   val shutdown = ZookeeperConsumerConnector.shutdownCommand
   val queue = new LinkedBlockingQueue[FetchedDataChunk]
   val topicInfos = configs.map(c => new PartitionTopicInfo(topic,

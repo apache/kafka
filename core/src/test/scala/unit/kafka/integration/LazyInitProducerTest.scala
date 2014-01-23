@@ -34,7 +34,7 @@ import org.junit.Assert.assertEquals
 class LazyInitProducerTest extends JUnit3Suite with ProducerConsumerTestHarness {
 
   val port = TestUtils.choosePort
-  val props = TestUtils.createBrokerConfig(0, port)
+  val props = TestUtils.createBrokerConfig(0, port, 0)
   val config = new KafkaConfig(props)
   val configs = List(config)
   val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])

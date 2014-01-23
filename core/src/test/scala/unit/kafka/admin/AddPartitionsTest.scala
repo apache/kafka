@@ -37,10 +37,15 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
   val port3 = TestUtils.choosePort()
   val port4 = TestUtils.choosePort()
 
-  val configProps1 = TestUtils.createBrokerConfig(brokerId1, port1)
-  val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2)
-  val configProps3 = TestUtils.createBrokerConfig(brokerId3, port3)
-  val configProps4 = TestUtils.createBrokerConfig(brokerId4, port4)
+  val rack1 = 1
+  val rack2 = 2
+  val rack3 = 3
+  val rack4 = 4
+
+  val configProps1 = TestUtils.createBrokerConfig(brokerId1, port1, rack1)
+  val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2, rack2)
+  val configProps3 = TestUtils.createBrokerConfig(brokerId3, port3, rack3)
+  val configProps4 = TestUtils.createBrokerConfig(brokerId4, port4, rack4)
 
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
   var brokers: Seq[Broker] = Seq.empty[Broker]
@@ -61,7 +66,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     val server4 = TestUtils.createServer(new KafkaConfig(configProps4))
 
     servers ++= List(server1, server2, server3, server4)
-    brokers = servers.map(s => new Broker(s.config.brokerId, s.config.hostName, s.config.port))
+    brokers = servers.map(s => new Broker(s.config.brokerId, s.config.hostName, s.config.port, s.config.rackId))
 
     // create topics with 1 partition, 2 replicas, one on each broker
     CreateTopicCommand.createTopic(zkClient, topic1, 1, 2, "0:1")

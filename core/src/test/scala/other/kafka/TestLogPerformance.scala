@@ -30,7 +30,7 @@ object TestLogPerformance {
     val messageSize = args(1).toInt
     val batchSize = args(2).toInt
     val compressionCodec = CompressionCodec.getCompressionCodec(args(3).toInt)
-    val props = TestUtils.createBrokerConfig(0, -1)
+    val props = TestUtils.createBrokerConfig(0, -1, 1)
     val config = new KafkaConfig(props)
     val dir = TestUtils.tempDir()
     val log = new Log(dir, 50*1024*1024, config.messageMaxBytes, 5000000, config.logRollHours*60*60*1000L, needsRecovery = false, time = SystemTime)

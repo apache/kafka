@@ -48,7 +48,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    val config: Properties = createBrokerConfig(1, brokerPort)
+    val config: Properties = createBrokerConfig(1, brokerPort, 1)
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
     time = new MockTime()
@@ -196,9 +196,10 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(Seq(0L), consumerOffsets)
   }
 
-  private def createBrokerConfig(nodeId: Int, port: Int): Properties = {
+  private def createBrokerConfig(nodeId: Int, port: Int, rack: Int): Properties = {
     val props = new Properties
     props.put("broker.id", nodeId.toString)
+    props.put("broker.rack", rack.toString)
     props.put("port", port.toString)
     props.put("log.dir", getLogDir.getAbsolutePath)
     props.put("log.flush.interval.messages", "1")

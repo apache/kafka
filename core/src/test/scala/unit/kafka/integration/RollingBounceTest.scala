@@ -39,14 +39,19 @@ class RollingBounceTest extends JUnit3Suite with ZooKeeperTestHarness {
   val port3 = TestUtils.choosePort()
   val port4 = TestUtils.choosePort()
 
+  val rackId1 = 0
+  val rackId2 = 1
+  val rackId3 = 2
+  val rackId4 = 3
+
   val enableShutdown = true
-  val configProps1 = TestUtils.createBrokerConfig(brokerId1, port1)
+  val configProps1 = TestUtils.createBrokerConfig(brokerId1, port1, rackId1)
   configProps1.put("controlled.shutdown.enable", "true")
-  val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2)
+  val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2, rackId2)
   configProps2.put("controlled.shutdown.enable", "true")
-  val configProps3 = TestUtils.createBrokerConfig(brokerId3, port3)
+  val configProps3 = TestUtils.createBrokerConfig(brokerId3, port3, rackId3)
   configProps3.put("controlled.shutdown.enable", "true")
-  val configProps4 = TestUtils.createBrokerConfig(brokerId4, port4)
+  val configProps4 = TestUtils.createBrokerConfig(brokerId4, port4, rackId4)
   configProps4.put("controlled.shutdown.enable", "true")
   configProps4.put("controlled.shutdown.retry.backoff.ms", "100")
 

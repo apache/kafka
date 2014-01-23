@@ -34,7 +34,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
   val configs = props.map(p => new KafkaConfig(p))
   private var server1: KafkaServer = null
-  val brokers = configs.map(c => new Broker(c.brokerId,c.hostName,c.port))
+  val brokers = configs.map(c => new Broker(c.brokerId,c.hostName,c.port,c.rackId))
 
   override def setUp() {
     super.setUp()
