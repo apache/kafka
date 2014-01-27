@@ -74,5 +74,8 @@ case class OffsetCommitResponse(requestInfo: Map[TopicAndPartition, Short],
         2 /* error */
       )
     })
+
+  override def describe(details: Boolean):String = { toString }
+
 }
 

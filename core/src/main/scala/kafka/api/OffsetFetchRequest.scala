@@ -98,4 +98,20 @@ case class OffsetFetchRequest(groupId: String,
     val errorResponse = OffsetFetchResponse(requestInfo=responseMap, correlationId=correlationId)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
   }
+
+  override def describe(details: Boolean): String = {
+    val offsetFetchRequest = new StringBuilder
+    offsetFetchRequest.append("Name: " + this.getClass.getSimpleName)
+    offsetFetchRequest.append("; Version: " + versionId)
+    offsetFetchRequest.append("; CorrelationId: " + correlationId)
+    offsetFetchRequest.append("; ClientId: " + clientId)
+    offsetFetchRequest.append("; GroupId: " + groupId)
+    if(details)
+      offsetFetchRequest.append("; RequestInfo: " + requestInfo.mkString(","))
+    offsetFetchRequest.toString()
+  }
+
+  override def toString(): String = {
+    describe(true)
+  }
 }

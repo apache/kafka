@@ -119,7 +119,23 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
   /**
    * This API exercises the partition's state machine. It ensures that every state transition happens from a legal
-   * previous state to the target state.
+   * previous state to the target state. Valid state transitions are:
+   * NonExistentPartition -> NewPartition:
+   * --load assigned replicas from ZK to controller cache
+   *
+   * NewPartition -> OnlinePartition
+   * --assign first live replica as the leader and all live replicas as the isr; write leader and isr to ZK for this partition
+   * --send LeaderAndIsr request to every live replica and UpdateMetadata request to every live broker
+   *
+   * OnlinePartition,OfflinePartition -> OnlinePartition
+   * --select new leader and isr for this partition and a set of replicas to receive the LeaderAndIsr request, and write leader and isr to ZK
+   * --for this partition, send LeaderAndIsr request to every receiving replica and UpdateMetadata request to every live broker
+   *
+   * NewPartition,OnlinePartition -> OfflinePartition
+   * --nothing other than marking partition state as Offline
+   *
+   * OfflinePartition -> NonExistentPartition
+   * --nothing other than marking the partition state as NonExistentPartition
    * @param topic       The topic of the partition for which the state transition is invoked
    * @param partition   The partition for which the state transition is invoked
    * @param targetState The end state that the partition should be moved to
@@ -273,8 +289,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   }
 
   /**
-   * Invoked on the OfflinePartition->OnlinePartition state change. It invokes the leader election API to elect a leader
-   * for the input offline partition
+   * Invoked on the OfflinePartition,OnlinePartition->OnlinePartition state change.
+   * It invokes the leader election API to elect a leader for the input offline partition
    * @param topic               The topic of the offline partition
    * @param partition           The offline partition
    * @param leaderSelector      Specific leader selector (e.g., offline/reassigned/etc.)

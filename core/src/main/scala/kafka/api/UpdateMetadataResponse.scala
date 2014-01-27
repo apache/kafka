@@ -41,4 +41,6 @@ case class UpdateMetadataResponse(override val correlationId: Int,
     buffer.putInt(correlationId)
     buffer.putShort(errorCode)
   }
+
+  override def describe(details: Boolean):String = { toString }
 }

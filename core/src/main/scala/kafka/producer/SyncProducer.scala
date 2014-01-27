@@ -120,11 +120,6 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     }
   }
 
-  private def reconnect() {
-    disconnect()
-    connect()
-  }
-
   /**
    * Disconnect from current channel, closing connection.
    * Side effect: channel field is set to null on successful disconnect

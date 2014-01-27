@@ -19,7 +19,7 @@ package kafka.log
 
 import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
-import org.junit.{After, Before, Test}
+import org.junit.{After, Test}
 import java.nio._
 import java.io.File
 import scala.collection._
@@ -62,7 +62,7 @@ class CleanerTest extends JUnitSuite {
     keys.foreach(k => map.put(key(k), Long.MaxValue))
     
     // clean the log
-    cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0, 0L)
+    cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0L)
     val shouldRemain = keysInLog(log).filter(!keys.contains(_))
     assertEquals(shouldRemain, keysInLog(log))
   }
@@ -94,29 +94,31 @@ class CleanerTest extends JUnitSuite {
   /* extract all the keys from a log */
   def keysInLog(log: Log): Iterable[Int] = 
     log.logSegments.flatMap(s => s.log.filter(!_.message.isNull).map(m => Utils.readString(m.message.key).toInt))
-  
-  
+
+  def abortCheckDone(topicAndPartition: TopicAndPartition) {
+    throw new LogCleaningAbortedException()
+  }
+
   /**
-   * Test that a truncation during cleaning throws an OptimisticLockFailureException
+   * Test that abortion during cleaning throws a LogCleaningAbortedException
    */
   @Test
-  def testCleanSegmentsWithTruncation() {
-    val cleaner = makeCleaner(Int.MaxValue)
+  def testCleanSegmentsWithAbort() {
+    val cleaner = makeCleaner(Int.MaxValue, abortCheckDone)
     val log = makeLog(config = logConfig.copy(segmentSize = 1024))
-    
+
     // append messages to the log until we have four segments
-    while(log.numberOfSegments < 2)
+    while(log.numberOfSegments < 4)
       log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
-      
-    log.truncateTo(log.logEndOffset-2)
+
     val keys = keysInLog(log)
     val map = new FakeOffsetMap(Int.MaxValue)
     keys.foreach(k => map.put(key(k), Long.MaxValue))
-    intercept[OptimisticLockFailureException] {
-      cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0, 0L)
+    intercept[LogCleaningAbortedException] {
+      cleaner.cleanSegments(log, log.logSegments.take(3).toSeq, map, 0L)
     }
   }
-  
+
   /**
    * Validate the logic for grouping log segments together for cleaning
    */
@@ -196,15 +198,18 @@ class CleanerTest extends JUnitSuite {
   
   def makeLog(dir: File = dir, config: LogConfig = logConfig) =
     new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
-  
-  def makeCleaner(capacity: Int) = 
+
+  def noOpCheckDone(topicAndPartition: TopicAndPartition) { /* do nothing */  }
+
+  def makeCleaner(capacity: Int, checkDone: (TopicAndPartition) => Unit = noOpCheckDone) =
     new Cleaner(id = 0, 
                 offsetMap = new FakeOffsetMap(capacity), 
                 ioBufferSize = 64*1024, 
                 maxIoBufferSize = 64*1024,
                 dupBufferLoadFactor = 0.75,                
                 throttler = throttler, 
-                time = time)
+                time = time,
+                checkDone = checkDone )
   
   def writeToLog(log: Log, seq: Iterable[(Int, Int)]): Iterable[Long] = {
     for((key, value) <- seq)

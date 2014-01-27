@@ -65,7 +65,7 @@ case class OffsetFetchResponse(requestInfo: Map[TopicAndPartition, OffsetMetadat
     })
   }
 
-  override def sizeInBytes = 
+  override def sizeInBytes =
     4 + /* correlationId */
     4 + /* topic count */
     requestInfoGroupedByTopic.foldLeft(0)((count, topicAndOffsets) => {
@@ -81,5 +81,7 @@ case class OffsetFetchResponse(requestInfo: Map[TopicAndPartition, OffsetMetadat
         2 /* error */
       })
     })
+
+  override def describe(details: Boolean):String = { toString }
 }
 

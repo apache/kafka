@@ -72,13 +72,7 @@ case class TopicMetadataRequest(val versionId: Short,
   }
 
   override def toString(): String = {
-    val topicMetadataRequest = new StringBuilder
-    topicMetadataRequest.append("Name: " + this.getClass.getSimpleName)
-    topicMetadataRequest.append("; Version: " + versionId)
-    topicMetadataRequest.append("; CorrelationId: " + correlationId)
-    topicMetadataRequest.append("; ClientId: " + clientId)
-    topicMetadataRequest.append("; Topics: " + topics.mkString(","))
-    topicMetadataRequest.toString()
+    describe(true)
   }
 
   override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
@@ -87,5 +81,16 @@ case class TopicMetadataRequest(val versionId: Short,
     }
     val errorResponse = TopicMetadataResponse(topicMetadata, correlationId)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+  }
+
+  override def describe(details: Boolean): String = {
+    val topicMetadataRequest = new StringBuilder
+    topicMetadataRequest.append("Name: " + this.getClass.getSimpleName)
+    topicMetadataRequest.append("; Version: " + versionId)
+    topicMetadataRequest.append("; CorrelationId: " + correlationId)
+    topicMetadataRequest.append("; ClientId: " + clientId)
+    if(details)
+      topicMetadataRequest.append("; Topics: " + topics.mkString(","))
+    topicMetadataRequest.toString()
   }
 }

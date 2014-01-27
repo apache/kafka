@@ -108,14 +108,7 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
   def isFromDebuggingClient = replicaId == Request.DebuggingConsumerId
 
   override def toString(): String = {
-    val offsetRequest = new StringBuilder
-    offsetRequest.append("Name: " + this.getClass.getSimpleName)
-    offsetRequest.append("; Version: " + versionId)
-    offsetRequest.append("; CorrelationId: " + correlationId)
-    offsetRequest.append("; ClientId: " + clientId)
-    offsetRequest.append("; RequestInfo: " + requestInfo.mkString(","))
-    offsetRequest.append("; ReplicaId: " + replicaId)
-    offsetRequest.toString()
+    describe(true)
   }
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
@@ -125,5 +118,17 @@ case class OffsetRequest(requestInfo: Map[TopicAndPartition, PartitionOffsetRequ
     }
     val errorResponse = OffsetResponse(correlationId, partitionOffsetResponseMap)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+  }
+
+  override def describe(details: Boolean): String = {
+    val offsetRequest = new StringBuilder
+    offsetRequest.append("Name: " + this.getClass.getSimpleName)
+    offsetRequest.append("; Version: " + versionId)
+    offsetRequest.append("; CorrelationId: " + correlationId)
+    offsetRequest.append("; ClientId: " + clientId)
+    offsetRequest.append("; ReplicaId: " + replicaId)
+    if(details)
+      offsetRequest.append("; RequestInfo: " + requestInfo.mkString(","))
+    offsetRequest.toString()
   }
 }

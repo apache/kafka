@@ -173,16 +173,7 @@ case class LeaderAndIsrRequest (versionId: Short,
   }
 
   override def toString(): String = {
-    val leaderAndIsrRequest = new StringBuilder
-    leaderAndIsrRequest.append("Name:" + this.getClass.getSimpleName)
-    leaderAndIsrRequest.append(";Version:" + versionId)
-    leaderAndIsrRequest.append(";Controller:" + controllerId)
-    leaderAndIsrRequest.append(";ControllerEpoch:" + controllerEpoch)
-    leaderAndIsrRequest.append(";CorrelationId:" + correlationId)
-    leaderAndIsrRequest.append(";ClientId:" + clientId)
-    leaderAndIsrRequest.append(";PartitionState:" + partitionStateInfos.mkString(","))
-    leaderAndIsrRequest.append(";Leaders:" + leaders.mkString(","))
-    leaderAndIsrRequest.toString()
+    describe(true)
   }
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
@@ -191,5 +182,19 @@ case class LeaderAndIsrRequest (versionId: Short,
     }
     val errorResponse = LeaderAndIsrResponse(correlationId, responseMap)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+  }
+
+  override def describe(details: Boolean): String = {
+    val leaderAndIsrRequest = new StringBuilder
+    leaderAndIsrRequest.append("Name:" + this.getClass.getSimpleName)
+    leaderAndIsrRequest.append(";Version:" + versionId)
+    leaderAndIsrRequest.append(";Controller:" + controllerId)
+    leaderAndIsrRequest.append(";ControllerEpoch:" + controllerEpoch)
+    leaderAndIsrRequest.append(";CorrelationId:" + correlationId)
+    leaderAndIsrRequest.append(";ClientId:" + clientId)
+    leaderAndIsrRequest.append(";Leaders:" + leaders.mkString(","))
+    if(details)
+      leaderAndIsrRequest.append(";PartitionState:" + partitionStateInfos.mkString(","))
+    leaderAndIsrRequest.toString()
   }
 }

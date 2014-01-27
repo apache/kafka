@@ -22,9 +22,7 @@ import java.util.concurrent.TimeUnit
 import kafka.utils._
 import scala.collection._
 import kafka.common.{TopicAndPartition, KafkaException}
-import kafka.server.KafkaConfig
 import kafka.server.OffsetCheckpoint
-
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
@@ -50,9 +48,9 @@ class LogManager(val logDirs: Array[File],
   val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
   val LockFile = ".lock"
   val InitialTaskDelayMs = 30*1000
-  private val logCreationLock = new Object
+  private val logCreationOrDeletionLock = new Object
   private val logs = new Pool[TopicAndPartition, Log]()
-  
+
   createAndValidateLogDirs(logDirs)
   private var dirLocks = lockLogDirs(logDirs)
   private val recoveryPointCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, RecoveryPointCheckpointFile)))).toMap
@@ -115,7 +113,7 @@ class LogManager(val logDirs: Array[File],
         for(dir <- subDirs) {
           if(dir.isDirectory) {
             info("Loading log '" + dir.getName + "'")
-            val topicPartition = parseTopicPartitionName(dir.getName)
+            val topicPartition = Log.parseTopicPartitionName(dir.getName)
             val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
             val log = new Log(dir, 
                               config,
@@ -194,12 +192,36 @@ class LogManager(val logDirs: Array[File],
       val log = logs.get(topicAndPartition)
       // If the log does not exist, skip it
       if (log != null) {
+        //May need to abort and pause the cleaning of the log, and resume after truncation is done.
+        val needToStopCleaner: Boolean = (truncateOffset < log.activeSegment.baseOffset)
+        if (needToStopCleaner && cleaner != null)
+          cleaner.abortAndPauseCleaning(topicAndPartition)
         log.truncateTo(truncateOffset)
+        if (needToStopCleaner && cleaner != null)
+          cleaner.resumeCleaning(topicAndPartition)
       }
     }
     checkpointRecoveryPointOffsets()
   }
-  
+
+  /**
+   *  Delete all data in a partition and start the log at the new offset
+   *  @param newOffset The new offset to start the log with
+   */
+  def truncateFullyAndStartAt(topicAndPartition: TopicAndPartition, newOffset: Long) {
+    val log = logs.get(topicAndPartition)
+    // If the log does not exist, skip it
+    if (log != null) {
+        //Abort and pause the cleaning of the log, and resume after truncation is done.
+      if (cleaner != null)
+        cleaner.abortAndPauseCleaning(topicAndPartition)
+      log.truncateFullyAndStartAt(newOffset)
+      if (cleaner != null)
+        cleaner.resumeCleaning(topicAndPartition)
+    }
+    checkpointRecoveryPointOffsets()
+  }
+
   /**
    * Write out the current recovery point for all logs to a text file in the log directory 
    * to avoid recovering the whole log on startup.
@@ -229,7 +251,7 @@ class LogManager(val logDirs: Array[File],
    * If the log already exists, just return a copy of the existing log
    */
   def createLog(topicAndPartition: TopicAndPartition, config: LogConfig): Log = {
-    logCreationLock synchronized {
+    logCreationOrDeletionLock synchronized {
       var log = logs.get(topicAndPartition)
       
       // check if the log has already been created in another thread
@@ -254,7 +276,27 @@ class LogManager(val logDirs: Array[File],
       log
     }
   }
-  
+
+  /**
+   *  Delete a log.
+   */
+  def deleteLog(topicAndPartition: TopicAndPartition) {
+    var removedLog: Log = null
+    logCreationOrDeletionLock synchronized {
+      removedLog = logs.remove(topicAndPartition)
+    }
+    if (removedLog != null) {
+      //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
+      if (cleaner != null)
+        cleaner.abortCleaning(topicAndPartition)
+      removedLog.delete()
+      info("Deleted log for partition [%s,%d] in %s."
+           .format(topicAndPartition.topic,
+                   topicAndPartition.partition,
+                   removedLog.dir.getAbsolutePath))
+    }
+  }
+
   /**
    * Choose the next directory in which to create a log. Currently this is done
    * by calculating the number of partitions in each directory and then choosing the
@@ -280,7 +322,6 @@ class LogManager(val logDirs: Array[File],
    */
   private def cleanupExpiredSegments(log: Log): Int = {
     val startMs = time.milliseconds
-    val topic = parseTopicPartitionName(log.name).topic
     log.deleteOldSegments(startMs - _.lastModified > log.config.retentionMs)
   }
 
@@ -289,7 +330,6 @@ class LogManager(val logDirs: Array[File],
    *  is at least logRetentionSize bytes in size
    */
   private def cleanupSegmentsToMaintainSize(log: Log): Int = {
-    val topic = parseTopicPartitionName(log.dir.getName).topic
     if(log.config.retentionSize < 0 || log.size < log.config.retentionSize)
       return 0
     var diff = log.size - log.config.retentionSize
@@ -334,6 +374,7 @@ class LogManager(val logDirs: Array[File],
    */
   private def flushDirtyLogs() = {
     debug("Checking for dirty logs to flush...")
+
     for ((topicAndPartition, log) <- logs) {
       try {
         val timeSinceLastFlush = time.milliseconds - log.lastFlushTime
@@ -344,22 +385,7 @@ class LogManager(val logDirs: Array[File],
       } catch {
         case e: Throwable =>
           error("Error flushing topic " + topicAndPartition.topic, e)
-          e match {
-            case _: IOException =>
-              fatal("Halting due to unrecoverable I/O error while flushing logs: " + e.getMessage, e)
-              System.exit(1)
-            case _ =>
-          }
       }
     }
   }
-
-  /**
-   * Parse the topic and partition out of the directory name of a log
-   */
-  private def parseTopicPartitionName(name: String): TopicAndPartition = {
-    val index = name.lastIndexOf('-')
-    TopicAndPartition(name.substring(0,index), name.substring(index+1).toInt)
-  }
-
 }

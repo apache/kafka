@@ -30,7 +30,10 @@ import kafka.common.KafkaException
  * leader is dead, this class will handle automatic re-election and if it succeeds, it invokes the leader state change
  * callback
  */
-class ZookeeperLeaderElector(controllerContext: ControllerContext, electionPath: String, onBecomingLeader: () => Unit,
+class ZookeeperLeaderElector(controllerContext: ControllerContext,
+                             electionPath: String,
+                             onBecomingLeader: () => Unit,
+                             onResigningAsLeader: () => Unit,
                              brokerId: Int)
   extends LeaderElector with Logging {
   var leaderId = -1
@@ -58,23 +61,22 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext, electionPath:
       info(brokerId + " successfully elected as leader")
       leaderId = brokerId
       onBecomingLeader()
-      } catch {
-        case e: ZkNodeExistsException =>
-          // If someone else has written the path, then
-          leaderId = readDataMaybeNull(controllerContext.zkClient, electionPath)._1 match {
-            case Some(controller) => KafkaController.parseControllerId(controller)
-            case None => {
-              warn("A leader has been elected but just resigned, this will result in another round of election")
-              -1
-            }
+    } catch {
+      case e: ZkNodeExistsException =>
+        // If someone else has written the path, then
+        leaderId = readDataMaybeNull(controllerContext.zkClient, electionPath)._1 match {
+          case Some(controller) => KafkaController.parseControllerId(controller)
+          case None => {
+            warn("A leader has been elected but just resigned, this will result in another round of election")
+            -1
           }
-          if (leaderId != -1)
-            debug("Broker %d was elected as leader instead of broker %d".format(leaderId, brokerId))
-        case e2: Throwable =>
-          error("Error while electing or becoming leader on broker %d".format(brokerId), e2)
-          leaderId = -1
+        }
+        if (leaderId != -1)
+          debug("Broker %d was elected as leader instead of broker %d".format(leaderId, brokerId))
+      case e2: Throwable =>
+        error("Error while electing or becoming leader on broker %d".format(brokerId), e2)
+        resign()
     }
-
     amILeader
   }
 
@@ -116,6 +118,8 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext, electionPath:
       controllerContext.controllerLock synchronized {
         debug("%s leader change listener fired for path %s to handle data deleted: trying to elect as a leader"
           .format(brokerId, dataPath))
+        if(amILeader)
+          onResigningAsLeader()
         elect
       }
     }

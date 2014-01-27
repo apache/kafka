@@ -63,11 +63,10 @@ class Log(val dir: File,
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
   loadSegments()
   
-  /* The number of times the log has been truncated */
-  private val truncates = new AtomicInteger(0)
-    
   /* Calculate the offset of the next message */
   private val nextOffset: AtomicLong = new AtomicLong(activeSegment.nextOffset())
+
+  val topicAndPartition: TopicAndPartition = Log.parseTopicPartitionName(name)
 
   info("Completed load of log %s with log end offset %d".format(name, logEndOffset))
 
@@ -201,11 +200,6 @@ class Log(val dir: File,
    */
   def numberOfSegments: Int = segments.size
   
-  /**
-   * The number of truncates that have occurred since the log was opened.
-   */
-  def numberOfTruncates: Int = truncates.get
-
   /**
    * Close this log
    */
@@ -524,16 +518,19 @@ class Log(val dir: File,
   /**
    * Completely delete this log directory and all contents from the file system with no delay
    */
-  def delete(): Unit = {
-    logSegments.foreach(_.delete())
-    Utils.rm(dir)
+  private[log] def delete() {
+    lock synchronized {
+      logSegments.foreach(_.delete())
+      segments.clear()
+      Utils.rm(dir)
+    }
   }
 
   /**
    * Truncate this log so that it ends with the greatest offset < targetOffset.
    * @param targetOffset The offset to truncate to, an upper bound on all offsets in the log after truncation is complete.
    */
-  def truncateTo(targetOffset: Long) {
+  private[log] def truncateTo(targetOffset: Long) {
     info("Truncating log %s to offset %d.".format(name, targetOffset))
     if(targetOffset < 0)
       throw new IllegalArgumentException("Cannot truncate to a negative offset (%d).".format(targetOffset))
@@ -551,7 +548,6 @@ class Log(val dir: File,
         this.nextOffset.set(targetOffset)
         this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
       }
-      truncates.getAndIncrement
     }
   }
     
@@ -559,7 +555,7 @@ class Log(val dir: File,
    *  Delete all data in the log and start at the new offset
    *  @param newOffset The new offset to start the log with
    */
-  def truncateFullyAndStartAt(newOffset: Long) {
+  private[log] def truncateFullyAndStartAt(newOffset: Long) {
     debug("Truncate and start log '" + name + "' to " + newOffset)
     lock synchronized {
       val segmentsToDelete = logSegments.toList
@@ -571,7 +567,6 @@ class Log(val dir: File,
                                 time = time))
       this.nextOffset.set(newOffset)
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
-      truncates.getAndIncrement
     }
   }
 
@@ -650,10 +645,8 @@ class Log(val dir: File,
    * @param newSegment The new log segment to add to the log
    * @param oldSegments The old log segments to delete from the log
    */
-  private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment], expectedTruncates: Int) {
+  private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment]) {
     lock synchronized {
-      if(expectedTruncates != numberOfTruncates)
-        throw new OptimisticLockFailureException("The log has been truncated, expected %d but found %d.".format(expectedTruncates, numberOfTruncates))
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
       newSegment.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix)
@@ -735,5 +728,13 @@ object Log {
   def indexFilename(dir: File, offset: Long) = 
     new File(dir, filenamePrefixFromOffset(offset) + IndexFileSuffix)
   
+
+  /**
+   * Parse the topic and partition out of the directory name of a log
+   */
+  def parseTopicPartitionName(name: String): TopicAndPartition = {
+    val index = name.lastIndexOf('-')
+    TopicAndPartition(name.substring(0,index), name.substring(index+1).toInt)
+  }
 }
   

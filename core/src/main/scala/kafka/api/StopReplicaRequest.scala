@@ -98,16 +98,7 @@ case class StopReplicaRequest(versionId: Short,
   }
 
   override def toString(): String = {
-    val stopReplicaRequest = new StringBuilder
-    stopReplicaRequest.append("Name: " + this.getClass.getSimpleName)
-    stopReplicaRequest.append("; Version: " + versionId)
-    stopReplicaRequest.append("; CorrelationId: " + correlationId)
-    stopReplicaRequest.append("; ClientId: " + clientId)
-    stopReplicaRequest.append("; DeletePartitions: " + deletePartitions)
-    stopReplicaRequest.append("; ControllerId: " + controllerId)
-    stopReplicaRequest.append("; ControllerEpoch: " + controllerEpoch)
-    stopReplicaRequest.append("; Partitions: " + partitions.mkString(","))
-    stopReplicaRequest.toString()
+    describe(true)
   }
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
@@ -116,5 +107,19 @@ case class StopReplicaRequest(versionId: Short,
     }.toMap
     val errorResponse = StopReplicaResponse(correlationId, responseMap)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+  }
+
+  override def describe(details: Boolean): String = {
+    val stopReplicaRequest = new StringBuilder
+    stopReplicaRequest.append("Name: " + this.getClass.getSimpleName)
+    stopReplicaRequest.append("; Version: " + versionId)
+    stopReplicaRequest.append("; CorrelationId: " + correlationId)
+    stopReplicaRequest.append("; ClientId: " + clientId)
+    stopReplicaRequest.append("; DeletePartitions: " + deletePartitions)
+    stopReplicaRequest.append("; ControllerId: " + controllerId)
+    stopReplicaRequest.append("; ControllerEpoch: " + controllerEpoch)
+    if(details)
+      stopReplicaRequest.append("; Partitions: " + partitions.mkString(","))
+    stopReplicaRequest.toString()
   }
 }

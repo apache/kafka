@@ -58,16 +58,20 @@ case class ControlledShutdownRequest(val versionId: Short,
   }
 
   override def toString(): String = {
+    describe(true)
+  }
+
+  override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
+    val errorResponse = ControlledShutdownResponse(correlationId, ErrorMapping.codeFor(e.getCause.asInstanceOf[Class[Throwable]]), Set.empty[TopicAndPartition])
+    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+  }
+
+  override def describe(details: Boolean = false): String = {
     val controlledShutdownRequest = new StringBuilder
     controlledShutdownRequest.append("Name: " + this.getClass.getSimpleName)
     controlledShutdownRequest.append("; Version: " + versionId)
     controlledShutdownRequest.append("; CorrelationId: " + correlationId)
     controlledShutdownRequest.append("; BrokerId: " + brokerId)
     controlledShutdownRequest.toString()
-  }
-
-  override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val errorResponse = ControlledShutdownResponse(correlationId, ErrorMapping.codeFor(e.getCause.asInstanceOf[Class[Throwable]]), Set.empty[TopicAndPartition])
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
   }
 }

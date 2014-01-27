@@ -69,4 +69,7 @@ case class LeaderAndIsrResponse(override val correlationId: Int,
       buffer.putShort(value)
     }
   }
+
+  override def describe(details: Boolean):String = { toString }
+
 }

@@ -57,4 +57,6 @@ case class TopicMetadataResponse(topicsMetadata: Seq[TopicMetadata],
     val brokers = (parts.flatMap(_.replicas)) ++ (parts.map(_.leader).collect{case Some(l) => l})
     brokers.map(b => (b.id, b)).toMap
   }
+
+  override def describe(details: Boolean):String = { toString }
 }

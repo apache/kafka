@@ -185,12 +185,6 @@ object ZkUtils extends Logging {
     }
   }
 
-  def isPartitionOnBroker(zkClient: ZkClient, topic: String, partition: Int, brokerId: Int): Boolean = {
-    val replicas = getReplicasForPartition(zkClient, topic, partition)
-    debug("The list of replicas for partition [%s,%d] is %s".format(topic, partition, replicas))
-    replicas.contains(brokerId.toString)
-  }
-
   def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, port: Int, timeout: Int, jmxPort: Int) {
     val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
@@ -500,8 +494,6 @@ object ZkUtils extends Logging {
     client.exists(path)
   }
 
-  def getLastPart(path : String) : String = path.substring(path.lastIndexOf('/') + 1)
-
   def getCluster(zkClient: ZkClient) : Cluster = {
     val cluster = new Cluster
     val nodes = getChildrenParentMayNotExist(zkClient, BrokerIdsPath)
@@ -571,17 +563,6 @@ object ZkUtils extends Logging {
     ret
   }
 
-  def getReplicaAssignmentFromPartitionAssignment(topicPartitionAssignment: mutable.Map[String, collection.Map[Int, Seq[Int]]]):
-  mutable.Map[(String, Int), Seq[Int]] = {
-    val ret = new mutable.HashMap[(String, Int), Seq[Int]]
-    for((topic, partitionAssignment) <- topicPartitionAssignment){
-      for((partition, replicaAssignment) <- partitionAssignment){
-        ret.put((topic, partition), replicaAssignment)
-      }
-    }
-    ret
-  }
-
   def getPartitionsForTopics(zkClient: ZkClient, topics: Seq[String]): mutable.Map[String, Seq[Int]] = {
     getPartitionAssignmentForTopics(zkClient, topics).map { topicAndPartitionMap =>
       val topic = topicAndPartitionMap._1
@@ -589,19 +570,6 @@ object ZkUtils extends Logging {
       debug("partition assignment of /brokers/topics/%s is %s".format(topic, partitionMap))
       (topic -> partitionMap.keys.toSeq.sortWith((s,t) => s < t))
     }
-  }
-
-  def getPartitionsAssignedToBroker(zkClient: ZkClient, topics: Seq[String], brokerId: Int): Seq[(String, Int)] = {
-    val topicsAndPartitions = getPartitionAssignmentForTopics(zkClient, topics)
-    topicsAndPartitions.map { topicAndPartitionMap =>
-      val topic = topicAndPartitionMap._1
-      val partitionMap = topicAndPartitionMap._2
-      val relevantPartitionsMap = partitionMap.filter( m => m._2.contains(brokerId) )
-      val relevantPartitions = relevantPartitionsMap.map(_._1)
-      for(relevantPartition <- relevantPartitions) yield {
-        (topic, relevantPartition)
-      }
-    }.flatten[(String, Int)].toSeq
   }
 
   def getPartitionsBeingReassigned(zkClient: ZkClient): Map[TopicAndPartition, ReassignedPartitionsContext] = {
@@ -677,17 +645,6 @@ object ZkUtils extends Logging {
     }
   }
 
-  def getAllReplicasOnBroker(zkClient: ZkClient, topics: Seq[String], brokerIds: Seq[Int]): Set[PartitionAndReplica] = {
-    Set.empty[PartitionAndReplica] ++ brokerIds.map { brokerId =>
-      // read all the partitions and their assigned replicas into a map organized by
-      // { replica id -> partition 1, partition 2...
-      val partitionsAssignedToThisBroker = getPartitionsAssignedToBroker(zkClient, topics, brokerId)
-      if(partitionsAssignedToThisBroker.size == 0)
-        info("No state transitions triggered since no partitions are assigned to brokers %s".format(brokerIds.mkString(",")))
-      partitionsAssignedToThisBroker.map(p => new PartitionAndReplica(p._1, p._2, brokerId))
-    }.flatten
-  }
-  
   def getPartitionsUndergoingPreferredReplicaElection(zkClient: ZkClient): Set[TopicAndPartition] = {
     // read the partitions and their new replica list
     val jsonPartitionListOpt = readDataMaybeNull(zkClient, PreferredReplicaLeaderElectionPath)._1
