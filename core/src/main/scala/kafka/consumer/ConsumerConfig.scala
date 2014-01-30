@@ -28,6 +28,7 @@ object ConsumerConfig extends Config {
   val SocketBufferSize = 64*1024
   val FetchSize = 1024 * 1024
   val MaxFetchSize = 10*FetchSize
+  val NumConsumerFetchers = 1
   val DefaultFetcherBackoffMs = 1000
   val AutoCommit = true
   val AutoCommitInterval = 60 * 1000
@@ -93,6 +94,9 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   
   /** the number of byes of messages to attempt to fetch */
   val fetchMessageMaxBytes = props.getInt("fetch.message.max.bytes", FetchSize)
+
+  /** the number threads used to fetch data */
+  val numConsumerFetchers = props.getInt("num.consumer.fetchers", NumConsumerFetchers)
   
   /** if true, periodically commit to zookeeper the offset of messages already fetched by the consumer */
   val autoCommitEnable = props.getBoolean("auto.commit.enable", AutoCommit)

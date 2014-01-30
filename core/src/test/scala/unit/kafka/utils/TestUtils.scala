@@ -150,6 +150,7 @@ object TestUtils extends Logging {
     props.put("auto.commit.interval.ms", "1000")
     props.put("rebalance.max.retries", "4")
     props.put("auto.offset.reset", "smallest")
+    props.put("num.consumer.fetchers", "2")
 
     props
   }
