@@ -94,7 +94,7 @@ object ReassignPartitionsCommand extends Logging {
     var partitionsToBeReassigned : Map[TopicAndPartition, Seq[Int]] = new mutable.HashMap[TopicAndPartition, List[Int]]()
     val groupedByTopic = topicPartitionsToReassign.groupBy(tp => tp._1.topic)
     groupedByTopic.foreach { topicInfo =>
-      val assignedReplicas = AdminUtils.assignReplicasToBrokers(brokerListToReassign, topicInfo._2.size,
+      val assignedReplicas = AdminUtils.assignReplicasToBrokers(brokerListToReassign, ZkUtils.getFilteredCluster(zkClient, brokerListToReassign), topicInfo._2.size,
         topicInfo._2.head._2.size)
       partitionsToBeReassigned ++= assignedReplicas.map(replicaInfo => (TopicAndPartition(topicInfo._1, replicaInfo._1) -> replicaInfo._2))
     }

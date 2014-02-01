@@ -52,7 +52,8 @@ class ControllerContext(val zkClient: ZkClient,
                         var partitionsBeingReassigned: mutable.Map[TopicAndPartition, ReassignedPartitionsContext] =
                           new mutable.HashMap,
                         var partitionsUndergoingPreferredReplicaElection: mutable.Set[TopicAndPartition] =
-                          new mutable.HashSet) {
+                          new mutable.HashSet,
+                        var maxRackReplicaAssignment: mutable.Map[String, Int] = mutable.Map.empty) {
 
   private var liveBrokersUnderlying: Set[Broker] = Set.empty
   private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
@@ -463,8 +464,9 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
           "reassigned not yet caught up with the leader")
         val newReplicasNotInOldReplicaList = reassignedReplicas.toSet -- controllerContext.partitionReplicaAssignment(topicAndPartition).toSet
         val newAndOldReplicas = (reassignedPartitionContext.newReplicas ++ controllerContext.partitionReplicaAssignment(topicAndPartition)).toSet
+        val existingMaxReplicaAssignment = controllerContext.maxRackReplicaAssignment(topicAndPartition.topic)
         //1. Update AR in ZK with OAR + RAR.
-        updateAssignedReplicasForPartition(topicAndPartition, newAndOldReplicas.toSeq)
+        updateAssignedReplicasForPartition(topicAndPartition, newAndOldReplicas.toSeq, existingMaxReplicaAssignment)
         //2. Send LeaderAndIsr request to every replica in OAR + RAR (with AR as OAR + RAR).
         updateLeaderEpochAndSendRequest(topicAndPartition, controllerContext.partitionReplicaAssignment(topicAndPartition),
           newAndOldReplicas.toSeq)
@@ -488,7 +490,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
         //9. replicas in OAR - RAR -> NonExistentReplica (force those replicas to be deleted)
         stopOldReplicasOfReassignedPartition(topicAndPartition, reassignedPartitionContext, oldReplicas)
         //10. Update AR in ZK with RAR.
-        updateAssignedReplicasForPartition(topicAndPartition, reassignedReplicas)
+        val existingMaxReplicaAssignment = controllerContext.maxRackReplicaAssignment(topicAndPartition.topic)
+        updateAssignedReplicasForPartition(topicAndPartition, reassignedReplicas, existingMaxReplicaAssignment)
         //11. Update the /admin/reassign_partitions path in ZK to remove this partition.
         removePartitionFromReassignedPartitions(topicAndPartition)
         info("Removed partition %s from the list of reassigned partitions in zookeeper".format(topicAndPartition))
@@ -637,6 +640,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     controllerContext.allTopics = ZkUtils.getAllTopics(zkClient).toSet
     controllerContext.partitionReplicaAssignment = ZkUtils.getReplicaAssignmentForTopics(zkClient, controllerContext.allTopics.toSeq)
     controllerContext.partitionLeadershipInfo = new mutable.HashMap[TopicAndPartition, LeaderIsrAndControllerEpoch]
+    controllerContext.maxRackReplicaAssignment = ZkUtils.getMaxRackReplicationForTopics(zkClient, controllerContext.allTopics.toSeq)
     controllerContext.shuttingDownBrokerIds = mutable.Set.empty[Int]
     // update the leader and isr cache for all existing partitions from Zookeeper
     updateLeaderAndIsrCache()
@@ -746,10 +750,11 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   }
 
   private def updateAssignedReplicasForPartition(topicAndPartition: TopicAndPartition,
-                                                 replicas: Seq[Int]) {
+                                                 replicas: Seq[Int],
+                                                 maxRackReplication: Int) {
     val partitionsAndReplicasForThisTopic = controllerContext.partitionReplicaAssignment.filter(_._1.topic.equals(topicAndPartition.topic))
     partitionsAndReplicasForThisTopic.put(topicAndPartition, replicas)
-    updateAssignedReplicasForPartition(topicAndPartition, partitionsAndReplicasForThisTopic)
+    updateAssignedReplicasForPartition(topicAndPartition, partitionsAndReplicasForThisTopic, maxRackReplication)
     info("Updated assigned replicas for partition %s being reassigned to %s ".format(topicAndPartition, replicas.mkString(",")))
     // update the assigned replica list after a successful zookeeper write
     controllerContext.partitionReplicaAssignment.put(topicAndPartition, replicas)
@@ -811,10 +816,11 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   }
 
   def updateAssignedReplicasForPartition(topicAndPartition: TopicAndPartition,
-                                         newReplicaAssignmentForTopic: Map[TopicAndPartition, Seq[Int]]) {
+                                         newReplicaAssignmentForTopic: Map[TopicAndPartition, Seq[Int]],
+                                         maxRackReplication: Int) {
     try {
       val zkPath = ZkUtils.getTopicPath(topicAndPartition.topic)
-      val jsonPartitionMap = ZkUtils.replicaAssignmentZkData(newReplicaAssignmentForTopic.map(e => (e._1.partition.toString -> e._2)))
+      val jsonPartitionMap = ZkUtils.replicaAssignmentZkData(newReplicaAssignmentForTopic.map(e => (e._1.partition.toString -> e._2)), maxRackReplication)
       ZkUtils.updatePersistentPath(zkClient, zkPath, jsonPartitionMap)
       debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionMap))
     } catch {

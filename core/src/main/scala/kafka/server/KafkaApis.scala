@@ -574,7 +574,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ErrorMapping.UnknownTopicOrPartitionCode =>
           if (config.autoCreateTopicsEnable) {
             try {
-              AdminUtils.createTopic(zkClient, topicMetadata.topic, config.numPartitions, config.defaultReplicationFactor)
+              AdminUtils.createTopic(zkClient, topicMetadata.topic, config.numPartitions, config.defaultReplicationFactor, config.defaultMaxRackReplication)
               info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
                 .format(topicMetadata.topic, config.numPartitions, config.defaultReplicationFactor))
             } catch {

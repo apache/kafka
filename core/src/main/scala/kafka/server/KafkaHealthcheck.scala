@@ -33,6 +33,7 @@ import java.net.InetAddress
  * we are dead.
  */
 class KafkaHealthcheck(private val brokerId: Int, 
+                       private val rackId: Int,
                        private val advertisedHost: String, 
                        private val advertisedPort: Int,
                        private val zkSessionTimeoutMs: Int,
@@ -55,7 +56,7 @@ class KafkaHealthcheck(private val brokerId: Int,
       else
         advertisedHost
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-    ZkUtils.registerBrokerInZk(zkClient, brokerId, advertisedHostName, advertisedPort, zkSessionTimeoutMs, jmxPort)
+    ZkUtils.registerBrokerInZk(zkClient, brokerId, advertisedHostName, advertisedPort, rackId, zkSessionTimeoutMs, jmxPort)
   }
 
   /**
