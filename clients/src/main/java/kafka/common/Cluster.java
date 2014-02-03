@@ -12,13 +12,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import kafka.common.utils.Utils;
 
 /**
- * A representation of the nodes, topics, and partitions in the Kafka cluster
+ * A representation of a subset of the nodes, topics, and partitions in the Kafka cluster.
  */
 public final class Cluster {
 
     private final AtomicInteger counter = new AtomicInteger(0);
     private final List<Node> nodes;
-    private final Map<Integer, Node> nodesById;
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
 
@@ -28,22 +27,28 @@ public final class Cluster {
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
      */
     public Cluster(Collection<Node> nodes, Collection<PartitionInfo> partitions) {
-        this.nodes = new ArrayList<Node>(nodes);
-        this.nodesById = new HashMap<Integer, Node>(this.nodes.size());
-        this.partitionsByTopicPartition = new HashMap<TopicPartition, PartitionInfo>(partitions.size());
-        this.partitionsByTopic = new HashMap<String, List<PartitionInfo>>(partitions.size());
+        // make a randomized, unmodifiable copy of the nodes
+        List<Node> copy = new ArrayList<Node>(nodes);
+        Collections.shuffle(copy);
+        this.nodes = Collections.unmodifiableList(copy);
 
-        Collections.shuffle(this.nodes);
-        for (Node n : this.nodes)
-            this.nodesById.put(n.id(), n);
+        // index the partitions by topic/partition for quick lookup
+        this.partitionsByTopicPartition = new HashMap<TopicPartition, PartitionInfo>(partitions.size());
         for (PartitionInfo p : partitions)
             this.partitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
+
+        // index the partitions by topic and make the lists unmodifiable so we can handle them out in
+        // user-facing apis without risk of the client modifying the contents
+        HashMap<String, List<PartitionInfo>> parts = new HashMap<String, List<PartitionInfo>>();
         for (PartitionInfo p : partitions) {
-            if (!this.partitionsByTopic.containsKey(p.topic()))
-                this.partitionsByTopic.put(p.topic(), new ArrayList<PartitionInfo>());
-            List<PartitionInfo> ps = this.partitionsByTopic.get(p.topic());
+            if (!parts.containsKey(p.topic()))
+                parts.put(p.topic(), new ArrayList<PartitionInfo>());
+            List<PartitionInfo> ps = parts.get(p.topic());
             ps.add(p);
         }
+        this.partitionsByTopic = new HashMap<String, List<PartitionInfo>>(parts.size());
+        for (Map.Entry<String, List<PartitionInfo>> entry : parts.entrySet())
+            this.partitionsByTopic.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
     }
 
     /**
@@ -67,6 +72,13 @@ public final class Cluster {
     }
 
     /**
+     * @return The known set of nodes
+     */
+    public List<Node> nodes() {
+        return this.nodes;
+    }
+
+    /**
      * Get the current leader for the given topic-partition
      * @param topicPartition The topic and partition we want to know the leader for
      * @return The node that is the leader for this topic-partition, or null if there is currently no leader
@@ -76,7 +88,16 @@ public final class Cluster {
         if (info == null)
             return null;
         else
-            return nodesById.get(info.leader());
+            return info.leader();
+    }
+
+    /**
+     * Get the metadata for the specified partition
+     * @param topicPartition The topic and partition to fetch info for
+     * @return The metadata about the given topic and partition
+     */
+    public PartitionInfo partition(TopicPartition topicPartition) {
+        return partitionsByTopicPartition.get(topicPartition);
     }
 
     /**

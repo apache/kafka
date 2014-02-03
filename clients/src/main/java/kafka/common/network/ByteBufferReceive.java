@@ -33,7 +33,9 @@ public class ByteBufferReceive implements Receive {
 
     @Override
     public long readFrom(ScatteringByteChannel channel) throws IOException {
-        return channel.read(buffers);
+        long read = channel.read(buffers);
+        remaining += read;
+        return read;
     }
 
     public ByteBuffer[] reify() {

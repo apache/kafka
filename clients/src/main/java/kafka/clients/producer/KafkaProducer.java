@@ -6,17 +6,22 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
+import kafka.clients.producer.internals.FutureRecordMetadata;
 import kafka.clients.producer.internals.Metadata;
+import kafka.clients.producer.internals.Partitioner;
 import kafka.clients.producer.internals.RecordAccumulator;
 import kafka.clients.producer.internals.Sender;
 import kafka.common.Cluster;
 import kafka.common.KafkaException;
 import kafka.common.Metric;
-import kafka.common.Serializer;
+import kafka.common.PartitionInfo;
 import kafka.common.TopicPartition;
 import kafka.common.config.ConfigException;
-import kafka.common.errors.MessageTooLargeException;
+import kafka.common.errors.RecordTooLargeException;
 import kafka.common.metrics.JmxReporter;
 import kafka.common.metrics.MetricConfig;
 import kafka.common.metrics.Metrics;
@@ -29,24 +34,22 @@ import kafka.common.utils.KafkaThread;
 import kafka.common.utils.SystemTime;
 
 /**
- * A Kafka producer that can be used to send data to the Kafka cluster.
+ * A Kafka client that publishes records to the Kafka cluster.
  * <P>
  * The producer is <i>thread safe</i> and should generally be shared among all threads for best performance.
  * <p>
  * The producer manages a single background thread that does I/O as well as a TCP connection to each of the brokers it
- * needs to communicate with. Failure to close the producer after use will leak these.
+ * needs to communicate with. Failure to close the producer after use will leak these resources.
  */
 public class KafkaProducer implements Producer {
 
+    private final Partitioner partitioner;
     private final int maxRequestSize;
     private final long metadataFetchTimeoutMs;
     private final long totalMemorySize;
-    private final Partitioner partitioner;
     private final Metadata metadata;
     private final RecordAccumulator accumulator;
     private final Sender sender;
-    private final Serializer keySerializer;
-    private final Serializer valueSerializer;
     private final Metrics metrics;
     private final Thread ioThread;
 
@@ -72,9 +75,7 @@ public class KafkaProducer implements Producer {
         this.metrics = new Metrics(new MetricConfig(),
                                    Collections.singletonList((MetricsReporter) new JmxReporter("kafka.producer.")),
                                    new SystemTime());
-        this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
-        this.valueSerializer = config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
-        this.partitioner = config.getConfiguredInstance(ProducerConfig.PARTITIONER_CLASS_CONFIG, Partitioner.class);
+        this.partitioner = new Partitioner();
         this.metadataFetchTimeoutMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
         this.metadata = new Metadata();
         this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
@@ -126,78 +127,84 @@ public class KafkaProducer implements Producer {
      * Asynchronously send a record to a topic. Equivalent to {@link #send(ProducerRecord, Callback) send(record, null)}
      */
     @Override
-    public RecordSend send(ProducerRecord record) {
+    public Future<RecordMetadata> send(ProducerRecord record) {
         return send(record, null);
     }
 
     /**
      * Asynchronously send a record to a topic and invoke the provided callback when the send has been acknowledged.
      * <p>
-     * The send is asynchronous and this method will return immediately once the record has been serialized and stored
-     * in the buffer of messages waiting to be sent. This allows sending many records in parallel without necessitating
-     * blocking to wait for the response after each one.
+     * The send is asynchronous and this method will return immediately once the record has been stored in the buffer of
+     * records waiting to be sent. This allows sending many records in parallel without blocking to wait for the
+     * response after each one.
      * <p>
-     * The {@link RecordSend} returned by this call will hold the future response data including the offset assigned to
-     * the message and the error (if any) when the request has completed (or returned an error), and this object can be
-     * used to block awaiting the response. If you want the equivalent of a simple blocking send you can easily achieve
-     * that using the {@link kafka.clients.producer.RecordSend#await() await()} method on the {@link RecordSend} this
-     * call returns:
+     * The result of the send is a {@link RecordMetadata} specifying the partition the record was sent to and the offset
+     * it was assigned.
+     * <p>
+     * Since the send call is asynchronous it returns a {@link java.util.concurrent.Future Future} for the
+     * {@link RecordMetadata} that will be assigned to this record. Invoking {@link java.util.concurrent.Future#get()
+     * get()} on this future will result in the metadata for the record or throw any exception that occurred while
+     * sending the record.
+     * <p>
+     * If you want to simulate a simple blocking call you can do the following:
      * 
      * <pre>
-     *   ProducerRecord record = new ProducerRecord("the-topic", "key, "value");
-     *   producer.send(myRecord, null).await();
+     *   producer.send(new ProducerRecord("the-topic", "key, "value")).get();
      * </pre>
-     * 
-     * Note that the send method will not throw an exception if the request fails while communicating with the cluster,
-     * rather that exception will be thrown when accessing the {@link RecordSend} that is returned.
      * <p>
      * Those desiring fully non-blocking usage can make use of the {@link Callback} parameter to provide a callback that
-     * will be invoked when the request is complete. Note that the callback will execute in the I/O thread of the
-     * producer and so should be reasonably fast. An example usage of an inline callback would be the following:
+     * will be invoked when the request is complete.
      * 
      * <pre>
      *   ProducerRecord record = new ProducerRecord("the-topic", "key, "value");
      *   producer.send(myRecord,
      *                 new Callback() {
-     *                     public void onCompletion(RecordSend send) {
-     *                         try {
-     *                             System.out.println("The offset of the message we just sent is: " + send.offset());
-     *                         } catch(KafkaException e) {
+     *                     public void onCompletion(RecordMetadata metadata, Exception e) {
+     *                         if(e != null)
      *                             e.printStackTrace();
-     *                         }
+     *                         System.out.println("The offset of the record we just sent is: " + metadata.offset());
      *                     }
      *                 });
      * </pre>
+     * 
+     * Callbacks for records being sent to the same partition are guaranteed to execute in order. That is, in the
+     * following example <code>callback1</code> is guaranteed to execute before <code>callback2</code>:
+     * 
+     * <pre>
+     * producer.send(new ProducerRecord(topic, partition, key, value), callback1);
+     * producer.send(new ProducerRecord(topic, partition, key2, value2), callback2);
+     * </pre>
      * <p>
-     * This call enqueues the message in the buffer of outgoing messages to be sent. This buffer has a hard limit on
-     * it's size controlled by the configuration <code>total.memory.bytes</code>. If <code>send()</code> is called
-     * faster than the I/O thread can send data to the brokers we will eventually run out of buffer space. The default
-     * behavior in this case is to block the send call until the I/O thread catches up and more buffer space is
-     * available. However if non-blocking usage is desired the setting <code>block.on.buffer.full=false</code> will
-     * cause the producer to instead throw an exception when this occurs.
+     * Note that callbacks will generally execute in the I/O thread of the producer and so should be reasonably fast or
+     * they will delay the sending of messages from other threads. If you want to execute blocking or computationally
+     * expensive callbacks it is recommended to use your own {@link java.util.concurrent.Executor} in the callback body
+     * to parallelize processing.
+     * <p>
+     * The producer manages a buffer of records waiting to be sent. This buffer has a hard limit on it's size, which is
+     * controlled by the configuration <code>total.memory.bytes</code>. If <code>send()</code> is called faster than the
+     * I/O thread can transfer data to the brokers the buffer will eventually run out of space. The default behavior in
+     * this case is to block the send call until the I/O thread catches up and more buffer space is available. However
+     * in cases where non-blocking usage is desired the setting <code>block.on.buffer.full=false</code> will cause the
+     * producer to instead throw an exception when buffer memory is exhausted.
      * 
      * @param record The record to send
      * @param callback A user-supplied callback to execute when the record has been acknowledged by the server (null
      *        indicates no callback)
-     * @throws BufferExhausedException This exception is thrown if the buffer is full and blocking has been disabled.
-     * @throws MessageTooLargeException This exception is thrown if the serialized size of the message is larger than
-     *         the maximum buffer memory or maximum request size that has been configured (whichever is smaller).
      */
     @Override
-    public RecordSend send(ProducerRecord record, Callback callback) {
-        Cluster cluster = metadata.fetch(record.topic(), this.metadataFetchTimeoutMs);
-        byte[] key = keySerializer.toBytes(record.key());
-        byte[] value = valueSerializer.toBytes(record.value());
-        byte[] partitionKey = keySerializer.toBytes(record.partitionKey());
-        int partition = partitioner.partition(record, key, partitionKey, value, cluster, cluster.partitionsFor(record.topic()).size());
-        ensureValidSize(key, value);
+    public Future<RecordMetadata> send(ProducerRecord record, Callback callback) {
         try {
+            Cluster cluster = metadata.fetch(record.topic(), this.metadataFetchTimeoutMs);
+            int partition = partitioner.partition(record, cluster);
+            ensureValidSize(record.key(), record.value());
             TopicPartition tp = new TopicPartition(record.topic(), partition);
-            RecordSend send = accumulator.append(tp, key, value, CompressionType.NONE, callback);
+            FutureRecordMetadata future = accumulator.append(tp, record.key(), record.value(), CompressionType.NONE, callback);
             this.sender.wakeup();
-            return send;
-        } catch (InterruptedException e) {
-            throw new KafkaException(e);
+            return future;
+        } catch (Exception e) {
+            if (callback != null)
+                callback.onCompletion(null, e);
+            return new FutureFailure(e);
         }
     }
 
@@ -207,15 +214,19 @@ public class KafkaProducer implements Producer {
     private void ensureValidSize(byte[] key, byte[] value) {
         int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(key, value);
         if (serializedSize > this.maxRequestSize)
-            throw new MessageTooLargeException("The message is " + serializedSize
-                                               + " bytes when serialized which is larger than the maximum request size you have configured with the "
-                                               + ProducerConfig.MAX_REQUEST_SIZE_CONFIG
-                                               + " configuration.");
+            throw new RecordTooLargeException("The message is " + serializedSize
+                                              + " bytes when serialized which is larger than the maximum request size you have configured with the "
+                                              + ProducerConfig.MAX_REQUEST_SIZE_CONFIG
+                                              + " configuration.");
         if (serializedSize > this.totalMemorySize)
-            throw new MessageTooLargeException("The message is " + serializedSize
-                                               + " bytes when serialized which is larger than the total memory buffer you have configured with the "
-                                               + ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG
-                                               + " configuration.");
+            throw new RecordTooLargeException("The message is " + serializedSize
+                                              + " bytes when serialized which is larger than the total memory buffer you have configured with the "
+                                              + ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG
+                                              + " configuration.");
+    }
+
+    public List<PartitionInfo> partitionsFor(String topic) {
+        return this.metadata.fetch(topic, this.metadataFetchTimeoutMs).partitionsFor(topic);
     }
 
     @Override
@@ -235,6 +246,41 @@ public class KafkaProducer implements Producer {
             throw new KafkaException(e);
         }
         this.metrics.close();
+    }
+
+    private static class FutureFailure implements Future<RecordMetadata> {
+
+        private final ExecutionException exception;
+
+        public FutureFailure(Exception exception) {
+            this.exception = new ExecutionException(exception);
+        }
+
+        @Override
+        public boolean cancel(boolean interrupt) {
+            return false;
+        }
+
+        @Override
+        public RecordMetadata get() throws ExecutionException {
+            throw this.exception;
+        }
+
+        @Override
+        public RecordMetadata get(long timeout, TimeUnit unit) throws ExecutionException {
+            throw this.exception;
+        }
+
+        @Override
+        public boolean isCancelled() {
+            return false;
+        }
+
+        @Override
+        public boolean isDone() {
+            return true;
+        }
+
     }
 
 }

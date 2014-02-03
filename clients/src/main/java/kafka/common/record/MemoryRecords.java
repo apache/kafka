@@ -48,7 +48,7 @@ public class MemoryRecords implements Records {
         return this.buffer.remaining() >= Records.LOG_OVERHEAD + Record.recordSize(key, value);
     }
 
-    /** Write the messages in this set to the given channel */
+    /** Write the records in this set to the given channel */
     public int writeTo(GatheringByteChannel channel) throws IOException {
         return channel.write(buffer);
     }
@@ -89,7 +89,7 @@ public class MemoryRecords implements Records {
             long offset = buffer.getLong();
             int size = buffer.getInt();
             if (size < 0)
-                throw new IllegalStateException("Message with size " + size);
+                throw new IllegalStateException("Record with size " + size);
             if (buffer.remaining() < size)
                 return allDone();
             ByteBuffer rec = buffer.slice();

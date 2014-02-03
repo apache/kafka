@@ -7,11 +7,14 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
 
+import kafka.clients.producer.internals.FutureRecordMetadata;
+import kafka.clients.producer.internals.Partitioner;
 import kafka.clients.producer.internals.ProduceRequestResult;
 import kafka.common.Cluster;
 import kafka.common.Metric;
-import kafka.common.Serializer;
+import kafka.common.PartitionInfo;
 import kafka.common.TopicPartition;
 
 /**
@@ -22,10 +25,8 @@ import kafka.common.TopicPartition;
  */
 public class MockProducer implements Producer {
 
-    private final Serializer keySerializer;
-    private final Serializer valueSerializer;
-    private final Partitioner partitioner;
     private final Cluster cluster;
+    private final Partitioner partitioner = new Partitioner();
     private final List<ProducerRecord> sent;
     private final Deque<Completion> completions;
     private boolean autoComplete;
@@ -34,21 +35,13 @@ public class MockProducer implements Producer {
     /**
      * Create a mock producer
      * 
-     * @param keySerializer A serializer to use on keys (useful to test your serializer on the values)
-     * @param valueSerializer A serializer to use on values (useful to test your serializer on the values)
-     * @param partitioner A partitioner to choose partitions (if null the partition will always be 0)
-     * @param cluster The cluster to pass to the partitioner (can be null if partitioner is null)
+     * @param cluster The cluster holding metadata for this producer
      * @param autoComplete If true automatically complete all requests successfully and execute the callback. Otherwise
      *        the user must call {@link #completeNext()} or {@link #errorNext(RuntimeException)} after
-     *        {@link #send(ProducerRecord) send()} to complete the call and unblock the @{link RecordSend} that is
-     *        returned.
+     *        {@link #send(ProducerRecord) send()} to complete the call and unblock the @{link
+     *        java.util.concurrent.Future Future&lt;RecordMetadata&gt;} that is returned.
      */
-    public MockProducer(Serializer keySerializer, Serializer valueSerializer, Partitioner partitioner, Cluster cluster, boolean autoComplete) {
-        if (partitioner != null && (cluster == null | keySerializer == null | valueSerializer == null))
-            throw new IllegalArgumentException("If a partitioner is provided a cluster instance and key and value serializer for partitioning must also be given.");
-        this.keySerializer = keySerializer;
-        this.valueSerializer = valueSerializer;
-        this.partitioner = partitioner;
+    public MockProducer(Cluster cluster, boolean autoComplete) {
         this.cluster = cluster;
         this.autoComplete = autoComplete;
         this.offsets = new HashMap<TopicPartition, Long>();
@@ -57,17 +50,16 @@ public class MockProducer implements Producer {
     }
 
     /**
-     * Create a new mock producer with no serializers or partitioner and the given autoComplete setting.
+     * Create a new mock producer with invented metadata the given autoComplete setting.
      * 
-     * Equivalent to {@link #MockProducer(Serializer, Serializer, Partitioner, Cluster, boolean) new MockProducer(null,
-     * null, null, null, autoComplete)}
+     * Equivalent to {@link #MockProducer(Cluster, boolean) new MockProducer(null, autoComplete)}
      */
     public MockProducer(boolean autoComplete) {
-        this(null, null, null, null, autoComplete);
+        this(Cluster.empty(), autoComplete);
     }
 
     /**
-     * Create a new auto completing mock producer with no serializers or partitioner.
+     * Create a new auto completing mock producer
      * 
      * Equivalent to {@link #MockProducer(boolean) new MockProducer(true)}
      */
@@ -76,39 +68,36 @@ public class MockProducer implements Producer {
     }
 
     /**
-     * Adds the record to the list of sent records. The {@link RecordSend} returned will be immediately satisfied.
+     * Adds the record to the list of sent records. The {@link RecordMetadata} returned will be immediately satisfied.
      * 
      * @see #history()
      */
     @Override
-    public synchronized RecordSend send(ProducerRecord record) {
+    public synchronized Future<RecordMetadata> send(ProducerRecord record) {
         return send(record, null);
     }
 
     /**
-     * Adds the record to the list of sent records. The {@link RecordSend} returned will be immediately satisfied and
-     * the callback will be synchronously executed.
+     * Adds the record to the list of sent records.
      * 
      * @see #history()
      */
     @Override
-    public synchronized RecordSend send(ProducerRecord record, Callback callback) {
-        byte[] key = keySerializer == null ? null : keySerializer.toBytes(record.key());
-        byte[] partitionKey = keySerializer == null ? null : keySerializer.toBytes(record.partitionKey());
-        byte[] value = valueSerializer == null ? null : valueSerializer.toBytes(record.value());
-        int numPartitions = partitioner == null ? 0 : this.cluster.partitionsFor(record.topic()).size();
-        int partition = partitioner == null ? 0 : partitioner.partition(record, key, partitionKey, value, this.cluster, numPartitions);
+    public synchronized Future<RecordMetadata> send(ProducerRecord record, Callback callback) {
+        int partition = 0;
+        if (this.cluster.partitionsFor(record.topic()) != null)
+            partition = partitioner.partition(record, this.cluster);
         ProduceRequestResult result = new ProduceRequestResult();
-        RecordSend send = new RecordSend(0, result);
+        FutureRecordMetadata future = new FutureRecordMetadata(result, 0);
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
         long offset = nextOffset(topicPartition);
-        Completion completion = new Completion(topicPartition, offset, send, result, callback);
+        Completion completion = new Completion(topicPartition, offset, new RecordMetadata(topicPartition, offset), result, callback);
         this.sent.add(record);
         if (autoComplete)
             completion.complete(null);
         else
             this.completions.addLast(completion);
-        return send;
+        return future;
     }
 
     /**
@@ -126,13 +115,14 @@ public class MockProducer implements Producer {
         }
     }
 
+    public List<PartitionInfo> partitionsFor(String topic) {
+        return this.cluster.partitionsFor(topic);
+    }
+
     public Map<String, Metric> metrics() {
         return Collections.emptyMap();
     }
 
-    /**
-     * "Closes" the producer
-     */
     @Override
     public void close() {
     }
@@ -178,13 +168,17 @@ public class MockProducer implements Producer {
 
     private static class Completion {
         private final long offset;
-        private final RecordSend send;
+        private final RecordMetadata metadata;
         private final ProduceRequestResult result;
         private final Callback callback;
         private final TopicPartition topicPartition;
 
-        public Completion(TopicPartition topicPartition, long offset, RecordSend send, ProduceRequestResult result, Callback callback) {
-            this.send = send;
+        public Completion(TopicPartition topicPartition,
+                          long offset,
+                          RecordMetadata metadata,
+                          ProduceRequestResult result,
+                          Callback callback) {
+            this.metadata = metadata;
             this.offset = offset;
             this.result = result;
             this.callback = callback;
@@ -193,8 +187,12 @@ public class MockProducer implements Producer {
 
         public void complete(RuntimeException e) {
             result.done(topicPartition, e == null ? offset : -1L, e);
-            if (callback != null)
-                callback.onCompletion(send);
+            if (callback != null) {
+                if (e == null)
+                    callback.onCompletion(metadata, null);
+                else
+                    callback.onCompletion(null, e);
+            }
         }
     }
 

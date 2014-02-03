@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import kafka.clients.producer.Callback;
-import kafka.clients.producer.RecordSend;
+import kafka.clients.producer.RecordMetadata;
 import kafka.common.TopicPartition;
 import kafka.common.record.CompressionType;
 import kafka.common.record.MemoryRecords;
@@ -31,19 +31,20 @@ public final class RecordBatch {
     }
 
     /**
-     * Append the message to the current message set and return the relative offset within that message set
+     * Append the record to the current record set and return the relative offset within that record set
      * 
-     * @return The RecordSend corresponding to this message or null if there isn't sufficient room.
+     * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
-    public RecordSend tryAppend(byte[] key, byte[] value, CompressionType compression, Callback callback) {
+    public FutureRecordMetadata tryAppend(byte[] key, byte[] value, CompressionType compression, Callback callback) {
         if (!this.records.hasRoomFor(key, value)) {
             return null;
         } else {
             this.records.append(0L, key, value, compression);
-            RecordSend send = new RecordSend(this.recordCount++, this.produceFuture);
+            FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount);
             if (callback != null)
-                thunks.add(new Thunk(callback, send));
-            return send;
+                thunks.add(new Thunk(callback, this.recordCount));
+            this.recordCount++;
+            return future;
         }
     }
 
@@ -58,7 +59,12 @@ public final class RecordBatch {
         // execute callbacks
         for (int i = 0; i < this.thunks.size(); i++) {
             try {
-                this.thunks.get(i).execute();
+                Thunk thunk = this.thunks.get(i);
+                if (exception == null)
+                    thunk.callback.onCompletion(new RecordMetadata(topicPartition, this.produceFuture.baseOffset() + thunk.relativeOffset),
+                                                null);
+                else
+                    thunk.callback.onCompletion(null, exception);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -70,15 +76,11 @@ public final class RecordBatch {
      */
     final private static class Thunk {
         final Callback callback;
-        final RecordSend send;
+        final long relativeOffset;
 
-        public Thunk(Callback callback, RecordSend send) {
+        public Thunk(Callback callback, long relativeOffset) {
             this.callback = callback;
-            this.send = send;
-        }
-
-        public void execute() {
-            this.callback.onCompletion(this.send);
+            this.relativeOffset = relativeOffset;
         }
     }
 }

@@ -4,9 +4,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 import kafka.common.errors.ApiException;
-import kafka.common.errors.CorruptMessageException;
+import kafka.common.errors.CorruptRecordException;
 import kafka.common.errors.LeaderNotAvailableException;
-import kafka.common.errors.MessageTooLargeException;
+import kafka.common.errors.RecordTooLargeException;
 import kafka.common.errors.NetworkException;
 import kafka.common.errors.NotLeaderForPartitionException;
 import kafka.common.errors.OffsetMetadataTooLarge;
@@ -27,14 +27,14 @@ public enum Errors {
     OFFSET_OUT_OF_RANGE(1,
                         new OffsetOutOfRangeException("The requested offset is not within the range of offsets maintained by the server.")),
     CORRUPT_MESSAGE(2,
-                    new CorruptMessageException("The message contents does not match the message CRC or the message is otherwise corrupt.")),
+                    new CorruptRecordException("The message contents does not match the message CRC or the message is otherwise corrupt.")),
     UNKNOWN_TOPIC_OR_PARTITION(3, new UnknownTopicOrPartitionException("This server does not host this topic-partition.")),
     LEADER_NOT_AVAILABLE(5,
                          new LeaderNotAvailableException("There is no leader for this topic-partition as we are in the middle of a leadership election.")),
     NOT_LEADER_FOR_PARTITION(6, new NotLeaderForPartitionException("This server is not the leader for that topic-partition.")),
     REQUEST_TIMED_OUT(7, new TimeoutException("The request timed out.")),
     MESSAGE_TOO_LARGE(10,
-                      new MessageTooLargeException("The request included a message larger than the max message size the server will accept.")),
+                      new RecordTooLargeException("The request included a message larger than the max message size the server will accept.")),
     OFFSET_METADATA_TOO_LARGE(12, new OffsetMetadataTooLarge("The metadata field of the offset request was too large.")),
     NETWORK_EXCEPTION(13, new NetworkException("The server disconnected before a response was received."));
 

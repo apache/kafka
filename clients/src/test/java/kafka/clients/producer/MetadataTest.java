@@ -1,12 +1,10 @@
 package kafka.clients.producer;
 
-import static java.util.Arrays.asList;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import kafka.clients.producer.internals.Metadata;
 import kafka.common.Cluster;
-import kafka.common.Node;
-import kafka.common.PartitionInfo;
+import kafka.test.TestUtils;
 
 import org.junit.Test;
 
@@ -30,16 +28,12 @@ public class MetadataTest {
         Thread t2 = asyncFetch(topic);
         assertTrue("Awaiting update", t1.isAlive());
         assertTrue("Awaiting update", t2.isAlive());
-        metadata.update(clusterWith(topic), time);
+        metadata.update(TestUtils.singletonCluster(topic, 1), time);
         t1.join();
         t2.join();
         assertFalse("No update needed.", metadata.needsUpdate(time));
         time += metadataExpireMs;
         assertTrue("Update needed due to stale metadata.", metadata.needsUpdate(time));
-    }
-
-    private Cluster clusterWith(String topic) {
-        return new Cluster(asList(new Node(0, "localhost", 1969)), asList(new PartitionInfo(topic, 0, 0, new int[0], new int[0])));
     }
 
     private Thread asyncFetch(final String topic) {

@@ -162,7 +162,7 @@ public final class Record {
     }
 
     /**
-     * Throw an InvalidMessageException if isValid is false for this record
+     * Throw an InvalidRecordException if isValid is false for this record
      */
     public void ensureValid() {
         if (!isValid())
@@ -260,7 +260,7 @@ public final class Record {
     }
 
     public String toString() {
-        return String.format("Message(magic = %d, attributes = %d, crc = %d, key = %d bytes, value = %d bytes)",
+        return String.format("Record(magic = %d, attributes = %d, crc = %d, key = %d bytes, value = %d bytes)",
                              magic(),
                              attributes(),
                              checksum(),

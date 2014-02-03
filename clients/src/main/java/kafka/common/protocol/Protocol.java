@@ -66,7 +66,7 @@ public class Protocol {
 
     public static Schema TOPIC_PRODUCE_DATA_V0 = new Schema(new Field("topic", STRING),
                                                             new Field("data", new ArrayOf(new Schema(new Field("partition", INT32),
-                                                                                                     new Field("message_set", BYTES)))));
+                                                                                                     new Field("record_set", BYTES)))));
 
     public static Schema PRODUCE_REQUEST_V0 = new Schema(new Field("acks",
                                                                    INT16,

@@ -1,8 +1,12 @@
 package kafka.clients.producer;
 
+import java.io.Closeable;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Future;
 
 import kafka.common.Metric;
+import kafka.common.PartitionInfo;
 
 /**
  * The interface for the {@link KafkaProducer}
@@ -10,7 +14,7 @@ import kafka.common.Metric;
  * @see KafkaProducer
  * @see MockProducer
  */
-public interface Producer {
+public interface Producer extends Closeable {
 
     /**
      * Send the given record asynchronously and return a future which will eventually contain the response information.
@@ -18,12 +22,18 @@ public interface Producer {
      * @param record The record to send
      * @return A future which will eventually contain the response information
      */
-    public RecordSend send(ProducerRecord record);
+    public Future<RecordMetadata> send(ProducerRecord record);
 
     /**
-     * Send a message and invoke the given callback when the send is complete
+     * Send a record and invoke the given callback when the record has been acknowledged by the server
      */
-    public RecordSend send(ProducerRecord record, Callback callback);
+    public Future<RecordMetadata> send(ProducerRecord record, Callback callback);
+
+    /**
+     * Get a list of partitions for the given topic for custom partition assignment. The partition metadata will change
+     * over time so this list should not be cached.
+     */
+    public List<PartitionInfo> partitionsFor(String topic);
 
     /**
      * Return a map of metrics maintained by the producer

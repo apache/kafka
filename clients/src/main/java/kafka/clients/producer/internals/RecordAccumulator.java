@@ -11,7 +11,6 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 
 import kafka.clients.producer.Callback;
-import kafka.clients.producer.RecordSend;
 import kafka.common.TopicPartition;
 import kafka.common.metrics.Measurable;
 import kafka.common.metrics.MetricConfig;
@@ -67,21 +66,21 @@ public final class RecordAccumulator {
 
     private void registerMetrics(Metrics metrics) {
         metrics.addMetric("blocked_threads",
-                          "The number of user threads blocked waiting for buffer memory to enqueue their messages",
+                          "The number of user threads blocked waiting for buffer memory to enqueue their records",
                           new Measurable() {
                               public double measure(MetricConfig config, long now) {
                                   return free.queued();
                               }
                           });
         metrics.addMetric("buffer_total_bytes",
-                          "The total amount of buffer memory that is available (not currently used for buffering messages).",
+                          "The total amount of buffer memory that is available (not currently used for buffering records).",
                           new Measurable() {
                               public double measure(MetricConfig config, long now) {
                                   return free.totalMemory();
                               }
                           });
         metrics.addMetric("buffer_available_bytes",
-                          "The total amount of buffer memory that is available (not currently used for buffering messages).",
+                          "The total amount of buffer memory that is available (not currently used for buffering records).",
                           new Measurable() {
                               public double measure(MetricConfig config, long now) {
                                   return free.availableMemory();
@@ -100,7 +99,7 @@ public final class RecordAccumulator {
      * @param compression The compression codec for the record
      * @param callback The user-supplied callback to execute when the request is complete
      */
-    public RecordSend append(TopicPartition tp, byte[] key, byte[] value, CompressionType compression, Callback callback) throws InterruptedException {
+    public FutureRecordMetadata append(TopicPartition tp, byte[] key, byte[] value, CompressionType compression, Callback callback) throws InterruptedException {
         if (closed)
             throw new IllegalStateException("Cannot send after the producer is closed.");
         // check if we have an in-progress batch
@@ -108,9 +107,9 @@ public final class RecordAccumulator {
         synchronized (dq) {
             RecordBatch batch = dq.peekLast();
             if (batch != null) {
-                RecordSend send = batch.tryAppend(key, value, compression, callback);
-                if (send != null)
-                    return send;
+                FutureRecordMetadata future = batch.tryAppend(key, value, compression, callback);
+                if (future != null)
+                    return future;
             }
         }
 
@@ -120,19 +119,18 @@ public final class RecordAccumulator {
         synchronized (dq) {
             RecordBatch first = dq.peekLast();
             if (first != null) {
-                RecordSend send = first.tryAppend(key, value, compression, callback);
-                if (send != null) {
-                    // somebody else found us a batch, return the one we waited for!
-                    // Hopefully this doesn't happen
+                FutureRecordMetadata future = first.tryAppend(key, value, compression, callback);
+                if (future != null) {
+                    // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen
                     // often...
                     free.deallocate(buffer);
-                    return send;
+                    return future;
                 }
             }
             RecordBatch batch = new RecordBatch(tp, new MemoryRecords(buffer), time.milliseconds());
-            RecordSend send = Utils.notNull(batch.tryAppend(key, value, compression, callback));
+            FutureRecordMetadata future = Utils.notNull(batch.tryAppend(key, value, compression, callback));
             dq.addLast(batch);
-            return send;
+            return future;
         }
     }
 

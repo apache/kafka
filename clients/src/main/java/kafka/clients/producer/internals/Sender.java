@@ -283,7 +283,8 @@ public class Sender implements Runnable {
 
     private void handleMetadataResponse(Struct body, long now) {
         this.metadataFetchInProgress = false;
-        this.metadata.update(ProtoUtils.parseMetadataResponse(body), now);
+        Cluster cluster = ProtoUtils.parseMetadataResponse(body);
+        this.metadata.update(cluster, now);
     }
 
     /**
@@ -377,7 +378,7 @@ public class Sender implements Runnable {
                 buffer.flip();
                 Struct part = topicData.instance("data")
                                        .set("partition", parts.get(i).topicPartition.partition())
-                                       .set("message_set", buffer);
+                                       .set("record_set", buffer);
                 partitionData[i] = part;
             }
             topicData.set("data", partitionData);

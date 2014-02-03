@@ -5,62 +5,59 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-import kafka.common.Cluster;
-import kafka.common.Node;
-import kafka.common.PartitionInfo;
-import kafka.common.Serializer;
-import kafka.common.StringSerialization;
+
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 
 import org.junit.Test;
 
 public class MockProducerTest {
 
+    private String topic = "topic";
+
     @Test
-    public void testAutoCompleteMock() {
+    public void testAutoCompleteMock() throws Exception {
         MockProducer producer = new MockProducer(true);
-        ProducerRecord record = new ProducerRecord("topic", "key", "value");
-        RecordSend send = producer.send(record);
-        assertTrue("Send should be immediately complete", send.completed());
-        assertFalse("Send should be successful", send.hasError());
-        assertEquals("Offset should be 0", 0, send.offset());
+        ProducerRecord record = new ProducerRecord(topic, "key".getBytes(), "value".getBytes());
+        Future<RecordMetadata> metadata = producer.send(record);
+        assertTrue("Send should be immediately complete", metadata.isDone());
+        assertFalse("Send should be successful", isError(metadata));
+        assertEquals("Offset should be 0", 0, metadata.get().offset());
+        assertEquals(topic, metadata.get().topic());
         assertEquals("We should have the record in our history", asList(record), producer.history());
         producer.clear();
         assertEquals("Clear should erase our history", 0, producer.history().size());
     }
 
-    public void testManualCompletion() {
+    @Test
+    public void testManualCompletion() throws Exception {
         MockProducer producer = new MockProducer(false);
-        ProducerRecord record1 = new ProducerRecord("topic", "key1", "value1");
-        ProducerRecord record2 = new ProducerRecord("topic", "key2", "value2");
-        RecordSend send1 = producer.send(record1);
-        assertFalse("Send shouldn't have completed", send1.completed());
-        RecordSend send2 = producer.send(record2);
-        assertFalse("Send shouldn't have completed", send2.completed());
+        ProducerRecord record1 = new ProducerRecord("topic", "key1".getBytes(), "value1".getBytes());
+        ProducerRecord record2 = new ProducerRecord("topic", "key2".getBytes(), "value2".getBytes());
+        Future<RecordMetadata> md1 = producer.send(record1);
+        assertFalse("Send shouldn't have completed", md1.isDone());
+        Future<RecordMetadata> md2 = producer.send(record2);
+        assertFalse("Send shouldn't have completed", md2.isDone());
         assertTrue("Complete the first request", producer.completeNext());
-        assertFalse("Requst should be successful", send1.hasError());
-        assertFalse("Second request still incomplete", send2.completed());
+        assertFalse("Requst should be successful", isError(md1));
+        assertFalse("Second request still incomplete", md2.isDone());
         IllegalArgumentException e = new IllegalArgumentException("blah");
         assertTrue("Complete the second request with an error", producer.errorNext(e));
         try {
-            send2.await();
+            md2.get();
             fail("Expected error to be thrown");
-        } catch (IllegalArgumentException err) {
-            // this is good
+        } catch (ExecutionException err) {
+            assertEquals(e, err.getCause());
         }
         assertFalse("No more requests to complete", producer.completeNext());
     }
 
-    public void testSerializationAndPartitioning() {
-        Cluster cluster = new Cluster(asList(new Node(0, "host", -1)), asList(new PartitionInfo("topic",
-                                                                                                0,
-                                                                                                0,
-                                                                                                new int[] { 0 },
-                                                                                                new int[] { 0 })));
-        Serializer serializer = new StringSerialization();
-        Partitioner partitioner = new DefaultPartitioner();
-        MockProducer producer = new MockProducer(serializer, serializer, partitioner, cluster, true);
-        ProducerRecord record = new ProducerRecord("topic", "key", "value");
-        RecordSend send = producer.send(record);
-        assertTrue("Send should be immediately complete", send.completed());
+    private boolean isError(Future<?> future) {
+        try {
+            future.get();
+            return false;
+        } catch (Exception e) {
+            return true;
+        }
     }
 }

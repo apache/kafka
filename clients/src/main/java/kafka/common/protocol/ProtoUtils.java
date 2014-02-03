@@ -2,7 +2,9 @@ package kafka.common.protocol;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import kafka.common.Cluster;
 import kafka.common.Node;
@@ -52,14 +54,14 @@ public class ProtoUtils {
     }
 
     public static Cluster parseMetadataResponse(Struct response) {
-        List<Node> brokers = new ArrayList<Node>();
+        Map<Integer, Node> brokers = new HashMap<Integer, Node>();
         Object[] brokerStructs = (Object[]) response.get("brokers");
         for (int i = 0; i < brokerStructs.length; i++) {
             Struct broker = (Struct) brokerStructs[i];
             int nodeId = (Integer) broker.get("node_id");
             String host = (String) broker.get("host");
             int port = (Integer) broker.get("port");
-            brokers.add(new Node(nodeId, host, port));
+            brokers.put(nodeId, new Node(nodeId, host, port));
         }
         List<PartitionInfo> partitions = new ArrayList<PartitionInfo>();
         Object[] topicInfos = (Object[]) response.get("topic_metadata");
@@ -75,21 +77,21 @@ public class ProtoUtils {
                     if (partError == Errors.NONE.code()) {
                         int partition = partitionInfo.getInt("partition_id");
                         int leader = partitionInfo.getInt("leader");
-                        int[] replicas = intArray((Object[]) partitionInfo.get("replicas"));
-                        int[] isr = intArray((Object[]) partitionInfo.get("isr"));
-                        partitions.add(new PartitionInfo(topic, partition, leader, replicas, isr));
+                        Node leaderNode = leader == -1 ? null : brokers.get(leader);
+                        Object[] replicas = (Object[]) partitionInfo.get("replicas");
+                        Node[] replicaNodes = new Node[replicas.length];
+                        for (int k = 0; k < replicas.length; k++)
+                            replicaNodes[k] = brokers.get(replicas[k]);
+                        Object[] isr = (Object[]) partitionInfo.get("isr");
+                        Node[] isrNodes = new Node[isr.length];
+                        for (int k = 0; k < isr.length; k++)
+                            isrNodes[k] = brokers.get(isr[k]);
+                        partitions.add(new PartitionInfo(topic, partition, leaderNode, replicaNodes, isrNodes));
                     }
                 }
             }
         }
-        return new Cluster(brokers, partitions);
-    }
-
-    private static int[] intArray(Object[] ints) {
-        int[] copy = new int[ints.length];
-        for (int i = 0; i < ints.length; i++)
-            copy[i] = (Integer) ints[i];
-        return copy;
+        return new Cluster(brokers.values(), partitions);
     }
 
 }

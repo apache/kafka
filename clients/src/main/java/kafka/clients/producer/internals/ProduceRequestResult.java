@@ -3,14 +3,13 @@ package kafka.clients.producer.internals;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
-import kafka.clients.producer.RecordSend;
+import kafka.clients.producer.RecordMetadata;
 import kafka.common.TopicPartition;
-import kafka.common.errors.TimeoutException;
 
 /**
  * A class that models the future completion of a produce request for a single partition. There is one of these per
- * partition in a produce request and it is shared by all the {@link RecordSend} instances that are batched together for
- * the same partition in the request.
+ * partition in a produce request and it is shared by all the {@link RecordMetadata} instances that are batched together
+ * for the same partition in the request.
  */
 public final class ProduceRequestResult {
 
@@ -25,7 +24,7 @@ public final class ProduceRequestResult {
     /**
      * Mark this request as complete and unblock any threads waiting on its completion.
      * @param topicPartition The topic and partition to which this record set was sent was sent
-     * @param baseOffset The base offset assigned to the message
+     * @param baseOffset The base offset assigned to the record
      * @param error The error that occurred if there was one, or null.
      */
     public void done(TopicPartition topicPartition, long baseOffset, RuntimeException error) {
@@ -38,12 +37,8 @@ public final class ProduceRequestResult {
     /**
      * Await the completion of this request
      */
-    public void await() {
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            throw new TimeoutException("Interrupted while waiting for request to complete.");
-        }
+    public void await() throws InterruptedException {
+        latch.await();
     }
 
     /**
@@ -52,16 +47,12 @@ public final class ProduceRequestResult {
      * @param unit The unit for the max time
      * @return true if the request completed, false if we timed out
      */
-    public boolean await(long timeout, TimeUnit unit) {
-        try {
-            return latch.await(timeout, unit);
-        } catch (InterruptedException e) {
-            throw new TimeoutException("Interrupted while waiting for request to complete.");
-        }
+    public boolean await(long timeout, TimeUnit unit) throws InterruptedException {
+        return latch.await(timeout, unit);
     }
 
     /**
-     * The base offset for the request (the first offset in the message set)
+     * The base offset for the request (the first offset in the record set)
      */
     public long baseOffset() {
         return baseOffset;
@@ -72,6 +63,13 @@ public final class ProduceRequestResult {
      */
     public RuntimeException error() {
         return error;
+    }
+
+    /**
+     * The topic and partition to which the record was appended
+     */
+    public TopicPartition topicPartition() {
+        return topicPartition;
     }
 
     /**

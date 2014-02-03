@@ -1,9 +1,17 @@
 package kafka.test;
 
+import static java.util.Arrays.asList;
+
 import java.io.File;
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
+
+import kafka.common.Cluster;
+import kafka.common.Node;
+import kafka.common.PartitionInfo;
 
 /**
  * Helper functions for writing unit tests
@@ -19,6 +27,20 @@ public class TestUtils {
     /* A consistent random number generator to make tests repeatable */
     public static final Random seededRandom = new Random(192348092834L);
     public static final Random random = new Random();
+
+    public static Cluster singletonCluster(String topic, int partitions) {
+        return clusterWith(1, topic, partitions);
+    }
+
+    public static Cluster clusterWith(int nodes, String topic, int partitions) {
+        Node[] ns = new Node[nodes];
+        for (int i = 0; i < nodes; i++)
+            ns[i] = new Node(0, "localhost", 1969);
+        List<PartitionInfo> parts = new ArrayList<PartitionInfo>();
+        for (int i = 0; i < partitions; i++)
+            parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
+        return new Cluster(asList(ns), parts);
+    }
 
     /**
      * Choose a number of random available ports
