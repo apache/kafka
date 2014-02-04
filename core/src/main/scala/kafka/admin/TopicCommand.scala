@@ -76,14 +76,15 @@ object TopicCommand {
   def createTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
     val topic = opts.options.valueOf(opts.topicOpt)
     val configs = parseTopicConfigsToBeAdded(opts)
+    val maxReplicaPerRack = if (opts.options.has(opts.maxRackReplicationOpt)) opts.options.valueOf(opts.maxRackReplicationOpt).intValue else -1
     if (opts.options.has(opts.replicaAssignmentOpt)) {
       val assignment = parseReplicaAssignment(opts.options.valueOf(opts.replicaAssignmentOpt))
-      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, assignment, configs)
+      AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, assignment, configs, maxReplicaPerRack)
     } else {
       CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.partitionsOpt, opts.replicationFactorOpt)
       val partitions = opts.options.valueOf(opts.partitionsOpt).intValue
       val replicas = opts.options.valueOf(opts.replicationFactorOpt).intValue
-      AdminUtils.createTopic(zkClient, topic, partitions, replicas, configs)
+      AdminUtils.createTopic(zkClient, topic, partitions, replicas, maxReplicaPerRack, configs)
     }
     println("Created topic \"%s\".".format(topic))
   }
@@ -100,6 +101,9 @@ object TopicCommand {
         configsToBeDeleted.foreach(config => configs.remove(config))
         AdminUtils.changeTopicConfig(zkClient, topic, configs)
         println("Updated config for topic \"%s\".".format(topic))
+      }
+      if(opts.options.has(opts.maxRackReplicationOpt)) {
+        Utils.croak("Changing the max-rack-replication is not supported.")
       }
       if(opts.options.has(opts.partitionsOpt)) {
         println("WARNING: If partitions are increased for a topic that has a key, the partition " +
@@ -244,6 +248,10 @@ object TopicCommand {
     val replicationFactorOpt = parser.accepts("replication-factor", "The replication factor for each partition in the topic being created.")
                            .withRequiredArg
                            .describedAs("replication factor")
+                           .ofType(classOf[java.lang.Integer])
+    val maxRackReplicationOpt = parser.accepts("max-rack-replication", "The maximum number of replicas assigned to a single rack for each partition in the topic being created.")
+                           .withRequiredArg
+                           .describedAs("max rack replication")
                            .ofType(classOf[java.lang.Integer])
     val replicaAssignmentOpt = parser.accepts("replica-assignment", "A list of manual partition-to-broker assignments for the topic being created.")
                            .withRequiredArg

@@ -24,6 +24,7 @@ import kafka.utils._
 import kafka.log._
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{Logging, ZkUtils, TestUtils}
+import kafka.cluster.{Broker, Cluster}
 import kafka.common.{TopicExistsException, TopicAndPartition}
 import kafka.server.{KafkaServer, KafkaConfig}
 import java.io.File
@@ -37,12 +38,12 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
 
     // test 0 replication factor
     intercept[AdminOperationException] {
-      AdminUtils.assignReplicasToBrokers(brokerList, 10, 0)
+      AdminUtils.assignReplicasToBrokers(brokerList, ZkUtils.getFilteredCluster(zkClient, brokerList), 10, 0)
     }
 
     // test wrong replication factor
     intercept[AdminOperationException] {
-      AdminUtils.assignReplicasToBrokers(brokerList, 10, 6)
+      AdminUtils.assignReplicasToBrokers(brokerList, ZkUtils.getFilteredCluster(zkClient, brokerList), 10, 6)
     }
 
     // correct assignment
@@ -58,9 +59,71 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
         8 -> List(3, 0, 1),
         9 -> List(4, 1, 2))
 
-    val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerList, 10, 3, 0)
+    val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerList, ZkUtils.getFilteredCluster(zkClient, brokerList), 10, 3, 0)
     val e = (expectedAssignment.toList == actualAssignment.toList)
     assertTrue(expectedAssignment.toList == actualAssignment.toList)
+  }
+
+  @Test
+  def testRackReplicaAssignment() {
+    val brokerList = List(0, 1, 2, 3, 4)
+
+    // test not enough distinct rack-ids
+    intercept[AdminOperationException] {
+      AdminUtils.assignReplicasToBrokers(brokerList, new Cluster(List(
+      Broker(0, "localhost", 0, 0), 
+      Broker(1, "localhost", 0, 1), 
+      Broker(2, "localhost", 0, 0), 
+      Broker(3, "localhost", 0, 1), 
+      Broker(4, "localhost", 0, 0))), 10, 3, maxReplicaPerRack = 1)
+    }
+
+    { // correct assignment with max-rack-replication = 1
+      val expectedAssignment = Map(
+          0 -> List(0, 1, 2),
+          1 -> List(1, 2, 3),
+          2 -> List(2, 3, 4),
+          3 -> List(3, 4, 2),
+          4 -> List(4, 0, 2),
+          5 -> List(0, 2, 4),
+          6 -> List(1, 3, 2),
+          7 -> List(2, 4, 0),
+          8 -> List(3, 1, 2),
+          9 -> List(4, 2, 3))
+  
+      val filteredCluster = new Cluster(List(
+        Broker(0, "localhost", 0, 0), 
+        Broker(1, "localhost", 0, 1), 
+        Broker(2, "localhost", 0, 2), 
+        Broker(3, "localhost", 0, 0), 
+        Broker(4, "localhost", 0, 1)))
+      val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerList, filteredCluster, 10, 3, 0, maxReplicaPerRack = 1)
+      val e = (expectedAssignment.toList == actualAssignment.toList)
+      assertTrue(expectedAssignment.toList == actualAssignment.toList)
+    }
+    { // correct assignment with max-rack-replication = 2
+      val expectedAssignment = Map(
+          0 -> List(0, 1, 2),
+          1 -> List(1, 2, 3),
+          2 -> List(2, 3, 4),
+          3 -> List(3, 4, 0),
+          4 -> List(4, 0, 1),
+          5 -> List(0, 2, 3),
+          6 -> List(1, 3, 4),
+          7 -> List(2, 4, 0),
+          8 -> List(3, 0, 1),
+          9 -> List(4, 1, 2))
+  
+      val filteredCluster = new Cluster(List(
+        Broker(0, "localhost", 0, 0), 
+        Broker(1, "localhost", 0, 1), 
+        Broker(2, "localhost", 0, 2), 
+        Broker(3, "localhost", 0, 0), 
+        Broker(4, "localhost", 0, 1)))
+      val actualAssignment = AdminUtils.assignReplicasToBrokers(brokerList, filteredCluster, 10, 3, 0, maxReplicaPerRack = 2)
+      val e = (expectedAssignment.toList == actualAssignment.toList)
+      assertTrue(expectedAssignment.toList == actualAssignment.toList)
+    }
   }
 
   @Test
@@ -377,7 +440,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       // create a topic with a few config overrides and check that they are applied
       val maxMessageSize = 1024
       val retentionMs = 1000*1000
-      AdminUtils.createTopic(server.zkClient, topic, partitions, 1, makeConfig(maxMessageSize, retentionMs))
+      AdminUtils.createTopic(server.zkClient, topic, partitions, 1, topicConfig = makeConfig(maxMessageSize, retentionMs))
       checkConfig(maxMessageSize, retentionMs)
 
       // now double the config values for the topic and check that it is applied

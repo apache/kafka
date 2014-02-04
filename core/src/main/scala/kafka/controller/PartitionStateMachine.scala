@@ -387,9 +387,11 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             controllerContext.allTopics = currentChildren
 
             val addedPartitionReplicaAssignment = ZkUtils.getReplicaAssignmentForTopics(zkClient, newTopics.toSeq)
+            val maxRackReplicaAssignment = ZkUtils.getMaxRackReplicationForTopics(zkClient, newTopics.toSeq)
             controllerContext.partitionReplicaAssignment = controllerContext.partitionReplicaAssignment.filter(p =>
               !deletedTopics.contains(p._1.topic))
             controllerContext.partitionReplicaAssignment.++=(addedPartitionReplicaAssignment)
+            controllerContext.maxRackReplicaAssignment.++=(maxRackReplicaAssignment)
             info("New topics: [%s], deleted topics: [%s], new partition replica assignment [%s]".format(newTopics,
               deletedTopics, addedPartitionReplicaAssignment))
             if(newTopics.size > 0)

@@ -20,7 +20,7 @@ package kafka.admin
 import java.util.Random
 import java.util.Properties
 import kafka.api.{TopicMetadata, PartitionMetadata}
-import kafka.cluster.Broker
+import kafka.cluster.{Broker, Cluster}
 import kafka.log.LogConfig
 import kafka.utils.{Logging, ZkUtils, Json}
 import org.I0Itec.zkclient.ZkClient
@@ -57,10 +57,12 @@ object AdminUtils extends Logging {
    * p7        p8        p9        p5        p6       (3nd replica)
    */
   def assignReplicasToBrokers(brokerList: Seq[Int],
+                              filteredCluster: Cluster,
                               nPartitions: Int,
                               replicationFactor: Int,
                               fixedStartIndex: Int = -1,
-                              startPartitionId: Int = -1)
+                              startPartitionId: Int = -1,
+                              maxReplicaPerRack: Int = -1)
   : Map[Int, Seq[Int]] = {
     if (nPartitions <= 0)
       throw new AdminOperationException("number of partitions must be larger than 0")
@@ -79,8 +81,33 @@ object AdminUtils extends Logging {
         nextReplicaShift += 1
       val firstReplicaIndex = (currentPartitionId + startIndex) % brokerList.size
       var replicaList = List(brokerList(firstReplicaIndex))
-      for (j <- 0 until replicationFactor - 1)
-        replicaList ::= brokerList(replicaIndex(firstReplicaIndex, nextReplicaShift, j, brokerList.size))
+      if (maxReplicaPerRack <= 0) {
+        for (j <- 0 until replicationFactor - 1)
+          replicaList ::= brokerList(replicaIndex(firstReplicaIndex, nextReplicaShift, j, brokerList.size))
+      } else {
+        var rackReplicaCount: mutable.Map[Int, Int] = mutable.Map(filteredCluster.getBroker(brokerList(firstReplicaIndex)).get.rack -> 1)
+        var k = 0
+        for (j <- 0 until replicationFactor - 1) {
+          var done = false;
+          while (!done && k < brokerList.size) {
+            val broker = brokerList(replicaIndex(firstReplicaIndex, nextReplicaShift, k, brokerList.size))
+            val rack = filteredCluster.getBroker(broker).get.rack
+            if (!(rackReplicaCount contains rack)) {
+              replicaList ::= broker
+              rackReplicaCount += (rack -> 1)
+              done = true;
+            } else if (rackReplicaCount(rack) < maxReplicaPerRack) {
+              rackReplicaCount(rack) = rackReplicaCount(rack) + 1
+              replicaList ::= broker
+              done = true;
+            }
+            k = k + 1
+          }
+          if (!done) {
+            throw new AdminOperationException("not enough brokers available in unique racks to meet maxReplicaPerRack limit of " + maxReplicaPerRack)
+          }
+        }
+      }
       ret.put(currentPartitionId, replicaList.reverse)
       currentPartitionId = currentPartitionId + 1
     }
@@ -89,10 +116,12 @@ object AdminUtils extends Logging {
 
   def addPartitions(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicaAssignmentStr: String = "") {
     val existingPartitionsReplicaList = ZkUtils.getReplicaAssignmentForTopics(zkClient, List(topic))
-    if (existingPartitionsReplicaList.size == 0)
+    val existingMaxRackReplication = ZkUtils.getMaxRackReplicationForTopics(zkClient, List(topic))
+    if (existingPartitionsReplicaList.size == 0 || existingMaxRackReplication.size == 0)
       throw new AdminOperationException("The topic %s does not exist".format(topic))
 
     val existingReplicaList = existingPartitionsReplicaList.head._2
+    val maxReplicaPerRack = existingMaxRackReplication.head._2
     val partitionsToAdd = numPartitions - existingPartitionsReplicaList.size
     if (partitionsToAdd <= 0)
       throw new AdminOperationException("The number of partitions for a topic can only be increased")
@@ -100,7 +129,7 @@ object AdminUtils extends Logging {
     // create the new partition replication list
     val brokerList = ZkUtils.getSortedBrokerList(zkClient)
     val newPartitionReplicaList = if (replicaAssignmentStr == null || replicaAssignmentStr == "")
-      AdminUtils.assignReplicasToBrokers(brokerList, partitionsToAdd, existingReplicaList.size, existingReplicaList.head, existingPartitionsReplicaList.size)
+      AdminUtils.assignReplicasToBrokers(brokerList, ZkUtils.getFilteredCluster(zkClient, brokerList), partitionsToAdd, existingReplicaList.size, existingReplicaList.head, existingPartitionsReplicaList.size, maxReplicaPerRack)
     else
       getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet, existingPartitionsReplicaList.size)
 
@@ -114,7 +143,7 @@ object AdminUtils extends Logging {
     val partitionReplicaList = existingPartitionsReplicaList.map(p => p._1.partition -> p._2)
     // add the new list
     partitionReplicaList ++= newPartitionReplicaList
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, partitionReplicaList, update = true)
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, partitionReplicaList, maxReplicaPerRack = maxReplicaPerRack, update = true)
   }
 
   def getManualReplicaAssignment(replicaAssignmentList: String, availableBrokerList: Set[Int], startPartitionId: Int): Map[Int, List[Int]] = {
@@ -151,16 +180,18 @@ object AdminUtils extends Logging {
                   topic: String,
                   partitions: Int, 
                   replicationFactor: Int, 
+                  maxReplicaPerRack: Int = -1,
                   topicConfig: Properties = new Properties) {
     val brokerList = ZkUtils.getSortedBrokerList(zkClient)
-    val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, partitions, replicationFactor)
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, replicaAssignment, topicConfig)
+    val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, ZkUtils.getFilteredCluster(zkClient, brokerList), partitions, replicationFactor, -1, -1, maxReplicaPerRack)
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, replicaAssignment, topicConfig, maxReplicaPerRack)
   }
                   
   def createOrUpdateTopicPartitionAssignmentPathInZK(zkClient: ZkClient,
                                                      topic: String,
                                                      partitionReplicaAssignment: Map[Int, Seq[Int]],
                                                      config: Properties = new Properties,
+                                                     maxReplicaPerRack: Int = -1,
                                                      update: Boolean = false) {
     // validate arguments
     Topic.validate(topic)
@@ -176,13 +207,13 @@ object AdminUtils extends Logging {
     writeTopicConfig(zkClient, topic, config)
     
     // create the partition assignment
-    writeTopicPartitionAssignment(zkClient, topic, partitionReplicaAssignment, update)
+    writeTopicPartitionAssignment(zkClient, topic, partitionReplicaAssignment, maxReplicaPerRack, update)
   }
   
-  private def writeTopicPartitionAssignment(zkClient: ZkClient, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
+  private def writeTopicPartitionAssignment(zkClient: ZkClient, topic: String, replicaAssignment: Map[Int, Seq[Int]], maxReplicaPerRack: Int, update: Boolean) {
     try {
       val zkPath = ZkUtils.getTopicPath(topic)
-      val jsonPartitionData = ZkUtils.replicaAssignmentZkData(replicaAssignment.map(e => (e._1.toString -> e._2)))
+      val jsonPartitionData = ZkUtils.replicaAssignmentZkData(replicaAssignment.map(e => (e._1.toString -> e._2)), maxReplicaPerRack)
 
       if (!update) {
         info("Topic creation " + jsonPartitionData.toString)

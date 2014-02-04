@@ -185,11 +185,11 @@ object ZkUtils extends Logging {
     }
   }
 
-  def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, port: Int, timeout: Int, jmxPort: Int) {
+  def registerBrokerInZk(zkClient: ZkClient, id: Int, host: String, port: Int, rack: Int, timeout: Int, jmxPort: Int) {
     val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
     val timestamp = SystemTime.milliseconds.toString
-    val brokerInfo = Json.encode(Map("version" -> 1, "host" -> host, "port" -> port, "jmx_port" -> jmxPort, "timestamp" -> timestamp))
-    val expectedBroker = new Broker(id, host, port)
+    val brokerInfo = Json.encode(Map("version" -> 2, "host" -> host, "port" -> port, "rack" -> rack, "jmx_port" -> jmxPort, "timestamp" -> timestamp))
+    val expectedBroker = new Broker(id, host, port, rack)
 
     try {
       createEphemeralPathExpectConflictHandleZKBug(zkClient, brokerIdPath, brokerInfo, expectedBroker,
@@ -220,8 +220,8 @@ object ZkUtils extends Logging {
   /**
    * Get JSON partition to replica map from zookeeper.
    */
-  def replicaAssignmentZkData(map: Map[String, Seq[Int]]): String = {
-    Json.encode(Map("version" -> 1, "partitions" -> map))
+  def replicaAssignmentZkData(map: Map[String, Seq[Int]], maxRackReplication: Int): String = {
+    Json.encode(Map("version" -> 2, "partitions" -> map, "max-rack-replication" -> maxRackReplication))
   }
 
   /**
@@ -504,12 +504,46 @@ object ZkUtils extends Logging {
     cluster
   }
 
+  /* Provide a Cluster object filtered with the given broker list. Usefull when dealing with a sub-cluster */
+  def getFilteredCluster(zkClient: ZkClient, brokerList: Seq[Int]) : Cluster = {
+    val cluster = new Cluster
+    for (brokerId <- brokerList) {
+      ZkUtils.readDataMaybeNull(zkClient, ZkUtils.BrokerIdsPath + "/" + brokerId)._1 match {
+        case Some(brokerInfo) => cluster.add(Broker.createBroker(brokerId, brokerInfo))
+        case None => /* do nothing */
+      }
+    }
+    cluster
+  }
+
   def getPartitionLeaderAndIsrForTopics(zkClient: ZkClient, topicAndPartitions: Set[TopicAndPartition])
   : mutable.Map[TopicAndPartition, LeaderIsrAndControllerEpoch] = {
     val ret = new mutable.HashMap[TopicAndPartition, LeaderIsrAndControllerEpoch]
     for(topicAndPartition <- topicAndPartitions) {
       ZkUtils.getLeaderIsrAndEpochForPartition(zkClient, topicAndPartition.topic, topicAndPartition.partition) match {
         case Some(leaderIsrAndControllerEpoch) => ret.put(topicAndPartition, leaderIsrAndControllerEpoch)
+        case None =>
+      }
+    }
+    ret
+  }
+
+  def getMaxRackReplicationForTopics(zkClient: ZkClient, topics: Seq[String]): mutable.Map[String, Int] = {
+    val ret = new mutable.HashMap[String, Int]()
+    topics.foreach { topic =>
+      val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
+      jsonPartitionMapOpt match {
+        case Some(jsonPartitionMap) =>
+          Json.parseFull(jsonPartitionMap) match {
+            case Some(m) => m.asInstanceOf[Map[String, Any]].get("max-rack-replication") match {
+              case Some(repl)  =>
+                val maxRackReplication = repl.asInstanceOf[Int]
+                ret.put(topic, maxRackReplication)
+              case None =>
+                ret.put(topic, -1)
+            }
+            case None =>
+          }
         case None =>
       }
     }

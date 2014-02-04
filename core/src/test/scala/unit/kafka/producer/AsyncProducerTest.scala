@@ -167,8 +167,8 @@ class AsyncProducerTest extends JUnit3Suite {
 
     val props = new Properties()
     props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
-    val broker1 = new Broker(0, "localhost", 9092)
-    val broker2 = new Broker(1, "localhost", 9093)
+    val broker1 = new Broker(0, "localhost", 9092, 0)
+    val broker2 = new Broker(1, "localhost", 9093, 0)
     broker1
     // form expected partitions metadata
     val partition1Metadata = new PartitionMetadata(0, Some(broker1), List(broker1, broker2))
@@ -403,7 +403,7 @@ class AsyncProducerTest extends JUnit3Suite {
     val config = new ProducerConfig(props)
 
     val topic1 = "topic1"
-    val topic1Metadata = getTopicMetadata(topic1, Array(0, 1), 0, "localhost", 9092)
+    val topic1Metadata = getTopicMetadata(topic1, Array(0, 1), 0, "localhost", 9092, 0)
     val topicPartitionInfos = new collection.mutable.HashMap[String, TopicMetadata]
     topicPartitionInfos.put("topic1", topic1Metadata)
 
@@ -492,12 +492,12 @@ class AsyncProducerTest extends JUnit3Suite {
     producerDataList
   }
 
-  private def getTopicMetadata(topic: String, partition: Int, brokerId: Int, brokerHost: String, brokerPort: Int): TopicMetadata = {
-    getTopicMetadata(topic, List(partition), brokerId, brokerHost, brokerPort)
+  private def getTopicMetadata(topic: String, partition: Int, brokerId: Int, brokerHost: String, brokerPort: Int, rackId: Int = 0): TopicMetadata = {
+    getTopicMetadata(topic, List(partition), brokerId, brokerHost, brokerPort, rackId)
   }
 
-  private def getTopicMetadata(topic: String, partition: Seq[Int], brokerId: Int, brokerHost: String, brokerPort: Int): TopicMetadata = {
-    val broker1 = new Broker(brokerId, brokerHost, brokerPort)
+  private def getTopicMetadata(topic: String, partition: Seq[Int], brokerId: Int, brokerHost: String, brokerPort: Int, rackId: Int): TopicMetadata = {
+    val broker1 = new Broker(brokerId, brokerHost, brokerPort, rackId)
     new TopicMetadata(topic, partition.map(new PartitionMetadata(_, Some(broker1), List(broker1))))
   }
   

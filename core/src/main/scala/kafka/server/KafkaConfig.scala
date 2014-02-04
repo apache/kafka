@@ -48,6 +48,12 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the broker id for this server */
   val brokerId: Int = props.getIntInRange("broker.id", (0, Int.MaxValue))
 
+  /* the rack id for this server */
+  val rackId: Int = props.getIntInRange("broker.rack", 0, (0, Int.MaxValue))
+
+  /* the default max-rack-replication for auto topic creation */
+  val defaultMaxRackReplication = props.getIntInRange("default.max.rack.replication", -1, (-1, Int.MaxValue))
+
   /* the maximum size of message that the server can receive */
   val messageMaxBytes = props.getIntInRange("message.max.bytes", 1000000 + MessageSet.LogOverhead, (0, Int.MaxValue))
   
