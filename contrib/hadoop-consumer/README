@@ -30,7 +30,7 @@ HOW TO RUN:
 In order to run this, make sure the HADOOP_HOME environment variable points to 
 your hadoop installation directory.
 
-1. Complile using "sbt" to create a package for hadoop consumer code.
+1. Compile using "sbt" to create a package for hadoop consumer code.
 ./sbt package
 
 2. Run the hadoop-setup.sh script that enables write permission on the 
