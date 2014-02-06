@@ -20,7 +20,7 @@ public abstract class SampledStat implements MeasurableStat {
 
     private double initialValue;
     private int current = 0;
-    private List<Sample> samples;
+    protected List<Sample> samples;
 
     public SampledStat(double initialValue) {
         this.initialValue = initialValue;
@@ -39,7 +39,7 @@ public abstract class SampledStat implements MeasurableStat {
     private Sample advance(MetricConfig config, long now) {
         this.current = (this.current + 1) % config.samples();
         if (this.current >= samples.size()) {
-            Sample sample = new Sample(this.initialValue, now);
+            Sample sample = newSample(now);
             this.samples.add(sample);
             return sample;
         } else {
@@ -47,6 +47,10 @@ public abstract class SampledStat implements MeasurableStat {
             sample.reset(now);
             return sample;
         }
+    }
+
+    protected Sample newSample(long now) {
+        return new Sample(this.initialValue, now);
     }
 
     @Override
@@ -57,7 +61,7 @@ public abstract class SampledStat implements MeasurableStat {
 
     public Sample current(long now) {
         if (samples.size() == 0)
-            this.samples.add(new Sample(initialValue, now));
+            this.samples.add(newSample(now));
         return this.samples.get(this.current);
     }
 
@@ -70,7 +74,7 @@ public abstract class SampledStat implements MeasurableStat {
     public abstract double combine(List<Sample> samples, MetricConfig config, long now);
 
     /* Timeout any windows that have expired in the absense of any events */
-    private void timeoutObsoleteSamples(MetricConfig config, long now) {
+    protected void timeoutObsoleteSamples(MetricConfig config, long now) {
         for (int i = 0; i < samples.size(); i++) {
             int idx = (this.current + i) % samples.size();
             Sample sample = this.samples.get(idx);

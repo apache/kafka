@@ -13,35 +13,33 @@ import kafka.common.metrics.stats.Histogram.LinearBinScheme;
 /**
  * A compound stat that reports one or more percentiles
  */
-public class Percentiles implements CompoundStat {
+public class Percentiles extends SampledStat implements CompoundStat {
 
     public static enum BucketSizing {
         CONSTANT, LINEAR
     }
 
+    private final int buckets;
     private final Percentile[] percentiles;
-    private Histogram current;
-    private Histogram shadow;
-    private long lastWindow;
-    private long eventCount;
+    private final BinScheme binScheme;
 
     public Percentiles(int sizeInBytes, double max, BucketSizing bucketing, Percentile... percentiles) {
         this(sizeInBytes, 0.0, max, bucketing, percentiles);
     }
 
     public Percentiles(int sizeInBytes, double min, double max, BucketSizing bucketing, Percentile... percentiles) {
+        super(0.0);
         this.percentiles = percentiles;
-        BinScheme scheme = null;
+        this.buckets = sizeInBytes / 4;
         if (bucketing == BucketSizing.CONSTANT) {
-            scheme = new ConstantBinScheme(sizeInBytes / 4, min, max);
+            this.binScheme = new ConstantBinScheme(buckets, min, max);
         } else if (bucketing == BucketSizing.LINEAR) {
             if (min != 0.0d)
                 throw new IllegalArgumentException("Linear bucket sizing requires min to be 0.0.");
-            scheme = new LinearBinScheme(sizeInBytes / 4, max);
+            this.binScheme = new LinearBinScheme(buckets, max);
+        } else {
+            throw new IllegalArgumentException("Unknown bucket type: " + bucketing);
         }
-        this.current = new Histogram(scheme);
-        this.shadow = new Histogram(scheme);
-        this.eventCount = 0L;
     }
 
     @Override
@@ -51,26 +49,56 @@ public class Percentiles implements CompoundStat {
             final double pct = percentile.percentile();
             ms.add(new NamedMeasurable(percentile.name(), percentile.description(), new Measurable() {
                 public double measure(MetricConfig config, long now) {
-                    return current.value(pct / 100.0);
+                    return value(config, now, pct / 100.0);
                 }
             }));
         }
         return ms;
     }
 
-    @Override
-    public void record(MetricConfig config, double value, long time) {
-        long ellapsed = time - this.lastWindow;
-        if (ellapsed > config.timeWindowNs() / 2 || this.eventCount > config.eventWindow() / 2)
-            this.shadow.clear();
-        if (ellapsed > config.timeWindowNs() || this.eventCount > config.eventWindow()) {
-            Histogram tmp = this.current;
-            this.current = this.shadow;
-            this.shadow = tmp;
-            this.shadow.clear();
+    public double value(MetricConfig config, long now, double quantile) {
+        timeoutObsoleteSamples(config, now);
+        float count = 0.0f;
+        for (Sample sample : this.samples)
+            count += sample.eventCount;
+        if (count == 0.0f)
+            return Double.NaN;
+        float sum = 0.0f;
+        float quant = (float) quantile;
+        for (int b = 0; b < buckets; b++) {
+            for (int s = 0; s < this.samples.size(); s++) {
+                HistogramSample sample = (HistogramSample) this.samples.get(s);
+                float[] hist = sample.histogram.counts();
+                sum += hist[b];
+                if (sum / count > quant)
+                    return binScheme.fromBin(b);
+            }
         }
-        this.current.record(value);
-        this.shadow.record(value);
+        return Double.POSITIVE_INFINITY;
+    }
+
+    public double combine(List<Sample> samples, MetricConfig config, long now) {
+        return value(config, now, 0.5);
+    }
+
+    @Override
+    protected HistogramSample newSample(long now) {
+        return new HistogramSample(this.binScheme, now);
+    }
+
+    @Override
+    protected void update(Sample sample, MetricConfig config, double value, long now) {
+        HistogramSample hist = (HistogramSample) sample;
+        hist.histogram.record(value);
+    }
+
+    private static class HistogramSample extends SampledStat.Sample {
+        private final Histogram histogram;
+
+        private HistogramSample(BinScheme scheme, long now) {
+            super(0.0, now);
+            this.histogram = new Histogram(scheme);
+        }
     }
 
 }

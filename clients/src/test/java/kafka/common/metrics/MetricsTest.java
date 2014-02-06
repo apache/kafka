@@ -6,6 +6,7 @@ import static org.junit.Assert.fail;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 
+import kafka.common.Metric;
 import kafka.common.metrics.stats.Avg;
 import kafka.common.metrics.stats.Count;
 import kafka.common.metrics.stats.Max;
@@ -161,6 +162,39 @@ public class MetricsTest {
         } catch (QuotaViolationException e) {
             // this is good
         }
+    }
+
+    @Test
+    public void testPercentiles() {
+        int buckets = 100;
+        Percentiles percs = new Percentiles(4 * buckets,
+                                            0.0,
+                                            100.0,
+                                            BucketSizing.CONSTANT,
+                                            new Percentile("test.p25", 25),
+                                            new Percentile("test.p50", 50),
+                                            new Percentile("test.p75", 75));
+        MetricConfig config = new MetricConfig().eventWindow(50).samples(2);
+        Sensor sensor = metrics.sensor("test", config);
+        sensor.add(percs);
+        Metric p25 = this.metrics.metrics().get("test.p25");
+        Metric p50 = this.metrics.metrics().get("test.p50");
+        Metric p75 = this.metrics.metrics().get("test.p75");
+
+        // record two windows worth of sequential values
+        for (int i = 0; i < buckets; i++)
+            sensor.record(i);
+
+        assertEquals(25, p25.value(), 1.0);
+        assertEquals(50, p50.value(), 1.0);
+        assertEquals(75, p75.value(), 1.0);
+
+        for (int i = 0; i < buckets; i++)
+            sensor.record(0.0);
+
+        assertEquals(0.0, p25.value(), 1.0);
+        assertEquals(0.0, p50.value(), 1.0);
+        assertEquals(0.0, p75.value(), 1.0);
     }
 
     public static class ConstantMeasurable implements Measurable {

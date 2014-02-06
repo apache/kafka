@@ -1,6 +1,10 @@
 package kafka.common.metrics.stats;
 
 import static org.junit.Assert.assertEquals;
+
+import java.util.Arrays;
+import java.util.Random;
+
 import kafka.common.metrics.stats.Histogram.BinScheme;
 import kafka.common.metrics.stats.Histogram.ConstantBinScheme;
 import kafka.common.metrics.stats.Histogram.LinearBinScheme;
@@ -11,14 +15,14 @@ public class HistogramTest {
 
     private static final double EPS = 0.0000001d;
 
-    // @Test
+    @Test
     public void testHistogram() {
         BinScheme scheme = new ConstantBinScheme(12, -5, 5);
         Histogram hist = new Histogram(scheme);
         for (int i = -5; i < 5; i++)
             hist.record(i);
         for (int i = 0; i < 10; i++)
-            assertEquals(scheme.fromBin(i + 1), hist.value(i / 10.0), EPS);
+            assertEquals(scheme.fromBin(i + 1), hist.value(i / 10.0 + EPS), EPS);
     }
 
     @Test
@@ -33,23 +37,49 @@ public class HistogramTest {
         checkBinningConsistency(scheme);
     }
 
+    @Test
     public void testLinearBinScheme() {
-        LinearBinScheme scheme = new LinearBinScheme(5, 5);
-        for (int i = 0; i < scheme.bins(); i++)
-            System.out.println(i + " " + scheme.fromBin(i));
+        LinearBinScheme scheme = new LinearBinScheme(10, 10);
         checkBinningConsistency(scheme);
     }
 
     private void checkBinningConsistency(BinScheme scheme) {
         for (int bin = 0; bin < scheme.bins(); bin++) {
             double fromBin = scheme.fromBin(bin);
-            int binAgain = scheme.toBin(fromBin);
-            assertEquals("unbinning and rebinning " + bin
+            int binAgain = scheme.toBin(fromBin + EPS);
+            assertEquals("unbinning and rebinning the bin " + bin
                          + " gave a different result ("
                          + fromBin
                          + " was placed in bin "
                          + binAgain
                          + " )", bin, binAgain);
+        }
+    }
+
+    public static void main(String[] args) {
+        Random random = new Random();
+        System.out.println("[-100, 100]:");
+        for (BinScheme scheme : Arrays.asList(new ConstantBinScheme(1000, -100, 100),
+                                              new ConstantBinScheme(100, -100, 100),
+                                              new ConstantBinScheme(10, -100, 100))) {
+            Histogram h = new Histogram(scheme);
+            for (int i = 0; i < 10000; i++)
+                h.record(200.0 * random.nextDouble() - 100.0);
+            for (double quantile = 0.0; quantile < 1.0; quantile += 0.05)
+                System.out.printf("%5.2f: %.1f, ", quantile, h.value(quantile));
+            System.out.println();
+        }
+
+        System.out.println("[0, 1000]");
+        for (BinScheme scheme : Arrays.asList(new LinearBinScheme(1000, 1000),
+                                              new LinearBinScheme(100, 1000),
+                                              new LinearBinScheme(10, 1000))) {
+            Histogram h = new Histogram(scheme);
+            for (int i = 0; i < 10000; i++)
+                h.record(1000.0 * random.nextDouble());
+            for (double quantile = 0.0; quantile < 1.0; quantile += 0.05)
+                System.out.printf("%5.2f: %.1f, ", quantile, h.value(quantile));
+            System.out.println();
         }
     }
 

@@ -18,7 +18,7 @@ public class Histogram {
     }
 
     public double value(double quantile) {
-        if (count == 0L)
+        if (count == 0.0d)
             return Double.NaN;
         float sum = 0.0f;
         float quant = (float) quantile;
@@ -28,6 +28,10 @@ public class Histogram {
                 return binScheme.fromBin(i);
         }
         return Float.POSITIVE_INFINITY;
+    }
+
+    public float[] counts() {
+        return this.hist;
     }
 
     public void clear() {
@@ -117,7 +121,7 @@ public class Histogram {
             if (b == this.bins - 1) {
                 return Float.POSITIVE_INFINITY;
             } else {
-                double unscaled = (b * (b - 1.0)) / 2.0;
+                double unscaled = (b * (b + 1.0)) / 2.0;
                 return unscaled * this.scale;
             }
         }
