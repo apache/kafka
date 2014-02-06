@@ -27,7 +27,7 @@ echo %BASE_DIR%
 
 set ivyPath=%USERPROFILE%\.ivy2\cache
 
-set snappy=%ivyPath%/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.4.1.jar
+set snappy=%ivyPath%/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.5.jar
 	call :concat %snappy%
 
 set library=%ivyPath%/org.scala-lang/scala-library/jars/scala-library-2.8.0.jar

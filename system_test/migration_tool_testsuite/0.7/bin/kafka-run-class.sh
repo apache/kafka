@@ -20,7 +20,7 @@ then
   exit 1
 fi
 
-snappy=~/.ivy2/cache/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.4.1.jar
+snappy=~/.ivy2/cache/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.5.jar
 CLASSPATH=$CLASSPATH:$snappy
 library=~/.ivy2/cache/org.scala-lang/scala-library/jars/scala-library-2.8.0.jar
 CLASSPATH=$CLASSPATH:$library

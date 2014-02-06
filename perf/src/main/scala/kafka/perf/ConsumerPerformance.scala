@@ -112,6 +112,11 @@ object ConsumerPerformance {
                            .describedAs("count")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(10)
+    val numFetchersOpt = parser.accepts("num-fetch-threads", "Number of fetcher threads.")
+                               .withRequiredArg
+                               .describedAs("count")
+                               .ofType(classOf[java.lang.Integer])
+                               .defaultsTo(1)
 
     val options = parser.parse(args : _*)
 
@@ -130,6 +135,7 @@ object ConsumerPerformance {
     props.put("auto.offset.reset", if(options.has(resetBeginningOffsetOpt)) "largest" else "smallest")
     props.put("zookeeper.connect", options.valueOf(zkConnectOpt))
     props.put("consumer.timeout.ms", "5000")
+    props.put("num.consumer.fetchers", options.valueOf(numFetchersOpt).toString)
     val consumerConfig = new ConsumerConfig(props)
     val numThreads = options.valueOf(numThreadsOpt).intValue
     val topic = options.valueOf(topicOpt)

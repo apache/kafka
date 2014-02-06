@@ -246,6 +246,6 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
   }
 
   trait CompressionDependencies {
-    val snappy = "org.xerial.snappy" % "snappy-java" % "1.0.4.1"	
+    val snappy = "org.xerial.snappy" % "snappy-java" % "1.0.5"
   }
 }
