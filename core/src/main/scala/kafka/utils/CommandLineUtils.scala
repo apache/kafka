@@ -17,20 +17,32 @@
  package kafka.utils
 
 import joptsimple.{OptionSpec, OptionSet, OptionParser}
+import scala.collection.Set
 
-/**
+ /**
  * Helper functions for dealing with command line utilities
  */
 object CommandLineUtils extends Logging {
 
-    def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
-      for(arg <- required) {
-        if(!options.has(arg)) {
-          System.err.println("Missing required argument \"" + arg + "\"")
+  def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
+    for(arg <- required) {
+      if(!options.has(arg)) {
+        System.err.println("Missing required argument \"" + arg + "\"")
+        parser.printHelpOn(System.err)
+        System.exit(1)
+      }
+    }
+  }
+  
+  def checkInvalidArgs(parser: OptionParser, options: OptionSet, usedOption: OptionSpec[_], invalidOptions: Set[OptionSpec[_]]) {
+    if(options.has(usedOption)) {
+      for(arg <- invalidOptions) {
+        if(options.has(arg)) {
+          System.err.println("Option \"" + usedOption + "\" can't be used with option\"" + arg + "\"")
           parser.printHelpOn(System.err)
           System.exit(1)
         }
       }
     }
-  
+  }
 }
