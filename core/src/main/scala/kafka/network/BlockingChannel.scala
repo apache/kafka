@@ -76,7 +76,7 @@ class BlockingChannel( val host: String,
       // but let's do it to be sure.
       swallow(channel.close())
       swallow(channel.socket.close())
-      swallow(readChannel.close())
+      if(readChannel != null) swallow(readChannel.close())
       channel = null; readChannel = null; writeChannel = null
       connected = false
     }

@@ -17,12 +17,12 @@
 package kafka.server
 
 import kafka.utils.ZkUtils._
-import kafka.utils.{Json, Utils, SystemTime, Logging}
+import kafka.utils.Utils._
+import kafka.utils.{Json, SystemTime, Logging}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.IZkDataListener
 import kafka.controller.ControllerContext
 import kafka.controller.KafkaController
-import kafka.common.KafkaException
 
 /**
  * This class handles zookeeper based leader election based on an ephemeral path. The election module does not handle
@@ -44,7 +44,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
   val leaderChangeListener = new LeaderChangeListener
 
   def startup {
-    controllerContext.controllerLock synchronized {
+    inLock(controllerContext.controllerLock) {
       controllerContext.zkClient.subscribeDataChanges(electionPath, leaderChangeListener)
       elect
     }
@@ -102,7 +102,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
      */
     @throws(classOf[Exception])
     def handleDataChange(dataPath: String, data: Object) {
-      controllerContext.controllerLock synchronized {
+      inLock(controllerContext.controllerLock) {
         leaderId = KafkaController.parseControllerId(data.toString)
         info("New leader is %d".format(leaderId))
       }
@@ -115,7 +115,7 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
      */
     @throws(classOf[Exception])
     def handleDataDeleted(dataPath: String) {
-      controllerContext.controllerLock synchronized {
+      inLock(controllerContext.controllerLock) {
         debug("%s leader change listener fired for path %s to handle data deleted: trying to elect as a leader"
           .format(brokerId, dataPath))
         if(amILeader)

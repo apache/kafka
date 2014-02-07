@@ -118,7 +118,7 @@ object TopicCommand {
     val topics = getTopics(zkClient, opts)
     topics.foreach { topic =>
       AdminUtils.deleteTopic(zkClient, topic)
-      println("Topic \"%s\" deleted.".format(topic))
+      println("Topic \"%s\" queued for deletion.".format(topic))
     }
   }
   
@@ -256,7 +256,6 @@ object TopicCommand {
                                                             "if set when describing topics, only show partitions whose leader is not available")
     val topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
                                                 "if set when listing topics, only show topics that have overridden configs")
-
 
     val options = parser.parse(args : _*)
   }

@@ -17,13 +17,13 @@
 
 package kafka.api
 
-
 import java.nio._
 import kafka.api.ApiUtils._
 import kafka.network.{BoundedByteBufferSend, RequestChannel, InvalidRequestException}
-import kafka.common.ErrorMapping
+import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
+import collection.Set
 
 
 object StopReplicaRequest extends Logging {
@@ -44,9 +44,9 @@ object StopReplicaRequest extends Logging {
         throw new InvalidRequestException("Invalid byte %d in delete partitions field. (Assuming false.)".format(x))
     }
     val topicPartitionPairCount = buffer.getInt
-    val topicPartitionPairSet = new collection.mutable.HashSet[(String, Int)]()
+    val topicPartitionPairSet = new collection.mutable.HashSet[TopicAndPartition]()
     (1 to topicPartitionPairCount) foreach { _ =>
-      topicPartitionPairSet.add(readShortString(buffer), buffer.getInt)
+      topicPartitionPairSet.add(TopicAndPartition(readShortString(buffer), buffer.getInt))
     }
     StopReplicaRequest(versionId, correlationId, clientId, controllerId, controllerEpoch,
                        deletePartitions, topicPartitionPairSet.toSet)
@@ -59,10 +59,10 @@ case class StopReplicaRequest(versionId: Short,
                               controllerId: Int,
                               controllerEpoch: Int,
                               deletePartitions: Boolean,
-                              partitions: Set[(String, Int)])
+                              partitions: Set[TopicAndPartition])
         extends RequestOrResponse(Some(RequestKeys.StopReplicaKey), correlationId) {
 
-  def this(deletePartitions: Boolean, partitions: Set[(String, Int)], controllerId: Int, controllerEpoch: Int, correlationId: Int) = {
+  def this(deletePartitions: Boolean, partitions: Set[TopicAndPartition], controllerId: Int, controllerEpoch: Int, correlationId: Int) = {
     this(StopReplicaRequest.CurrentVersion, correlationId, StopReplicaRequest.DefaultClientId,
          controllerId, controllerEpoch, deletePartitions, partitions)
   }
@@ -75,9 +75,9 @@ case class StopReplicaRequest(versionId: Short,
     buffer.putInt(controllerEpoch)
     buffer.put(if (deletePartitions) 1.toByte else 0.toByte)
     buffer.putInt(partitions.size)
-    for ((topic, partitionId) <- partitions){
-      writeShortString(buffer, topic)
-      buffer.putInt(partitionId)
+    for (topicAndPartition <- partitions) {
+      writeShortString(buffer, topicAndPartition.topic)
+      buffer.putInt(topicAndPartition.partition)
     }
   }
 
@@ -90,8 +90,8 @@ case class StopReplicaRequest(versionId: Short,
       4 + /* controller epoch */
       1 + /* deletePartitions */
       4 /* partition count */
-    for ((topic, partitionId) <- partitions){
-      size += (ApiUtils.shortStringLength(topic)) +
+    for (topicAndPartition <- partitions){
+      size += (ApiUtils.shortStringLength(topicAndPartition.topic)) +
               4 /* partition id */
     }
     size

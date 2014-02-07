@@ -140,8 +140,7 @@ object AdminUtils extends Logging {
   }
   
   def deleteTopic(zkClient: ZkClient, topic: String) {
-    zkClient.deleteRecursive(ZkUtils.getTopicPath(topic))
-    zkClient.deleteRecursive(ZkUtils.getTopicConfigPath(topic))
+    ZkUtils.createPersistentPath(zkClient, ZkUtils.getDeleteTopicPath(topic))
   }
   
   def topicExists(zkClient: ZkClient, topic: String): Boolean = 

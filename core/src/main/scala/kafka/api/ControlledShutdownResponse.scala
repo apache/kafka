@@ -18,11 +18,9 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import collection.mutable.HashMap
-import collection.immutable.Map
 import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.api.ApiUtils._
-
+import collection.Set
 
 object ControlledShutdownResponse {
   def readFrom(buffer: ByteBuffer): ControlledShutdownResponse = {

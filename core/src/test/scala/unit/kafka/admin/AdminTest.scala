@@ -27,6 +27,7 @@ import kafka.utils.{Logging, ZkUtils, TestUtils}
 import kafka.common.{TopicExistsException, TopicAndPartition}
 import kafka.server.{KafkaServer, KafkaConfig}
 import java.io.File
+import TestUtils._
 
 
 class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
@@ -161,9 +162,9 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     }, 1000)
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
     // in sync replicas should not have any replica that is not in the new assigned replicas
-    checkForPhantomInSyncReplicas(topic, partitionToBeReassigned, assignedReplicas)
+    checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
     assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
-    ensureNoUnderReplicatedPartitions(topic, partitionToBeReassigned, assignedReplicas, servers)
+    ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
     assertTrue(TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet, 5000))
     servers.foreach(_.shutdown())
   }
@@ -190,8 +191,8 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     }, 1000)
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
     assertEquals("Partition should have been reassigned to 0, 2, 3", newReplicas, assignedReplicas)
-    checkForPhantomInSyncReplicas(topic, partitionToBeReassigned, assignedReplicas)
-    ensureNoUnderReplicatedPartitions(topic, partitionToBeReassigned, assignedReplicas, servers)
+    checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
+    ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
     assertTrue(TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet, 5000))
     servers.foreach(_.shutdown())
   }
@@ -218,8 +219,8 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     }, 2000)
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
     assertEquals("Partition should have been reassigned to 2, 3", newReplicas, assignedReplicas)
-    checkForPhantomInSyncReplicas(topic, partitionToBeReassigned, assignedReplicas)
-    ensureNoUnderReplicatedPartitions(topic, partitionToBeReassigned, assignedReplicas, servers)
+    checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
+    ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
     assertTrue(TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet, 5000))
     servers.foreach(_.shutdown())
   }
@@ -255,12 +256,12 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     reassignPartitionsCommand.reassignPartitions
     // create brokers
     val servers = TestUtils.createBrokerConfigs(2).map(b => TestUtils.createServer(new KafkaConfig(b)))
-    TestUtils.waitUntilTrue(checkIfReassignPartitionPathExists, 1000)
+    TestUtils.waitUntilTrue(() => checkIfReassignPartitionPathExists(zkClient), 1000)
     val assignedReplicas = ZkUtils.getReplicasForPartition(zkClient, topic, partitionToBeReassigned)
     assertEquals("Partition should have been reassigned to 0, 1", newReplicas, assignedReplicas)
-    checkForPhantomInSyncReplicas(topic, partitionToBeReassigned, assignedReplicas)
+    checkForPhantomInSyncReplicas(zkClient, topic, partitionToBeReassigned, assignedReplicas)
     // ensure that there are no under replicated partitions
-    ensureNoUnderReplicatedPartitions(topic, partitionToBeReassigned, assignedReplicas, servers)
+    ensureNoUnderReplicatedPartitions(zkClient, topic, partitionToBeReassigned, assignedReplicas, servers)
     assertTrue(TestUtils.waitUntilTrue(() => getBrokersWithPartitionDir(servers, topic, 0) == newReplicas.toSet, 5000))
     servers.foreach(_.shutdown())
   }
@@ -319,9 +320,9 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     try {
       // wait for the update metadata request to trickle to the brokers
       assertTrue("Topic test not created after timeout", TestUtils.waitUntilTrue(() =>
-        activeServers.foldLeft(true)(_ && _.apis.leaderCache(TopicAndPartition(topic, partition)).leaderIsrAndControllerEpoch.leaderAndIsr.isr.size != 3), 1000))
+        activeServers.foldLeft(true)(_ && _.apis.metadataCache(TopicAndPartition(topic, partition)).leaderIsrAndControllerEpoch.leaderAndIsr.isr.size != 3), 1000))
       assertEquals(0, partitionsRemaining.size)
-      var partitionStateInfo = activeServers.head.apis.leaderCache(TopicAndPartition(topic, partition))
+      var partitionStateInfo = activeServers.head.apis.metadataCache(TopicAndPartition(topic, partition))
       var leaderAfterShutdown = partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
       assertEquals(0, leaderAfterShutdown)
       assertEquals(2, partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.isr.size)
@@ -330,15 +331,15 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       partitionsRemaining = controller.shutdownBroker(1)
       assertEquals(0, partitionsRemaining.size)
       activeServers = servers.filter(s => s.config.brokerId == 0)
-      partitionStateInfo = activeServers.head.apis.leaderCache(TopicAndPartition(topic, partition))
+      partitionStateInfo = activeServers.head.apis.metadataCache(TopicAndPartition(topic, partition))
       leaderAfterShutdown = partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
       assertEquals(0, leaderAfterShutdown)
 
-      assertTrue(servers.foldLeft(true)(_ && _.apis.leaderCache(TopicAndPartition(topic, partition)).leaderIsrAndControllerEpoch.leaderAndIsr.leader == 0))
+      assertTrue(servers.foldLeft(true)(_ && _.apis.metadataCache(TopicAndPartition(topic, partition)).leaderIsrAndControllerEpoch.leaderAndIsr.leader == 0))
       partitionsRemaining = controller.shutdownBroker(0)
       assertEquals(1, partitionsRemaining.size)
       // leader doesn't change since all the replicas are shut down
-      assertTrue(servers.foldLeft(true)(_ && _.apis.leaderCache(TopicAndPartition(topic, partition)).leaderIsrAndControllerEpoch.leaderAndIsr.leader == 0))
+      assertTrue(servers.foldLeft(true)(_ && _.apis.metadataCache(TopicAndPartition(topic, partition)).leaderIsrAndControllerEpoch.leaderAndIsr.leader == 0))
     }
     finally {
       servers.foreach(_.shutdown())
@@ -389,27 +390,4 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     }
   }
 
-  private def checkForPhantomInSyncReplicas(topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int]) {
-    val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, topic, partitionToBeReassigned)
-    // in sync replicas should not have any replica that is not in the new assigned replicas
-    val phantomInSyncReplicas = inSyncReplicas.toSet -- assignedReplicas.toSet
-    assertTrue("All in sync replicas %s must be in the assigned replica list %s".format(inSyncReplicas, assignedReplicas),
-      phantomInSyncReplicas.size == 0)
-  }
-
-  private def ensureNoUnderReplicatedPartitions(topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int],
-                                                servers: Seq[KafkaServer]) {
-    val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, topic, partitionToBeReassigned)
-    assertFalse("Reassigned partition [%s,%d] is underreplicated".format(topic, partitionToBeReassigned),
-                inSyncReplicas.size < assignedReplicas.size)
-    val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partitionToBeReassigned)
-    assertTrue("Reassigned partition [%s,%d] is unavailable".format(topic, partitionToBeReassigned), leader.isDefined)
-    val leaderBroker = servers.filter(s => s.config.brokerId == leader.get).head
-    assertTrue("Reassigned partition [%s,%d] is underreplicated as reported by the leader %d".format(topic, partitionToBeReassigned, leader.get),
-      leaderBroker.replicaManager.underReplicatedPartitionCount() == 0)
-  }
-
-  private def checkIfReassignPartitionPathExists(): Boolean = {
-    ZkUtils.pathExists(zkClient, ZkUtils.ReassignPartitionsPath)
-  }
 }

@@ -19,16 +19,14 @@ package kafka.server
 import kafka.cluster.{Partition, Replica}
 import kafka.log.Log
 import kafka.message.{ByteBufferMessageSet, Message}
-import kafka.network.{BoundedByteBufferSend, RequestChannel}
+import kafka.network.RequestChannel
 import kafka.utils.{ZkUtils, Time, TestUtils, MockTime}
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
 import org.scalatest.junit.JUnit3Suite
 import kafka.api._
 import scala.Some
-import org.junit.Assert._
 import kafka.common.TopicAndPartition
-
 
 class SimpleFetchTest extends JUnit3Suite {
 
@@ -94,7 +92,9 @@ class SimpleFetchTest extends JUnit3Suite {
     // don't provide replica or leader callbacks since they will not be tested here
     val requestChannel = new RequestChannel(2, 5)
     val apis = new KafkaApis(requestChannel, replicaManager, zkClient, configs.head.brokerId, configs.head, controller)
-
+    val partitionStateInfo = EasyMock.createNiceMock(classOf[PartitionStateInfo])
+    apis.metadataCache.put(TopicAndPartition(topic, partitionId), partitionStateInfo)
+    EasyMock.replay(partitionStateInfo)
     // This request (from a follower) wants to read up to 2*HW but should only get back up to HW bytes into the log
     val goodFetch = new FetchRequestBuilder()
           .replicaId(Request.OrdinaryConsumerId)
@@ -163,6 +163,9 @@ class SimpleFetchTest extends JUnit3Suite {
 
     val requestChannel = new RequestChannel(2, 5)
     val apis = new KafkaApis(requestChannel, replicaManager, zkClient, configs.head.brokerId, configs.head, controller)
+    val partitionStateInfo = EasyMock.createNiceMock(classOf[PartitionStateInfo])
+    apis.metadataCache.put(TopicAndPartition(topic, partitionId), partitionStateInfo)
+    EasyMock.replay(partitionStateInfo)
 
     /**
      * This fetch, coming from a replica, requests all data at offset "15".  Because the request is coming

@@ -114,7 +114,8 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def stopReplica(topic: String, partitionId: Int, deletePartition: Boolean): Short  = {
-    stateChangeLogger.trace("Broker %d handling stop replica for partition [%s,%d]".format(localBrokerId, topic, partitionId))
+    stateChangeLogger.trace("Broker %d handling stop replica (delete=%s) for partition [%s,%d]".format(localBrokerId,
+      deletePartition.toString, topic, partitionId))
     val errorCode = ErrorMapping.NoError
     getPartition(topic, partitionId) match {
       case Some(partition) =>
@@ -126,15 +127,18 @@ class ReplicaManager(val config: KafkaConfig,
           if (removedPartition != null)
             removedPartition.delete() // this will delete the local log
         }
-      case None => //do nothing if replica no longer exists
+      case None => //do nothing if replica no longer exists. This can happen during delete topic retries
+        stateChangeLogger.trace("Broker %d ignoring stop replica (delete=%s) for partition [%s,%d] as replica doesn't exist on broker"
+          .format(localBrokerId, deletePartition, topic, partitionId))
     }
-    stateChangeLogger.trace("Broker %d finished handling stop replica for partition [%s,%d]".format(localBrokerId, topic, partitionId))
+    stateChangeLogger.trace("Broker %d finished handling stop replica (delete=%s) for partition [%s,%d]"
+      .format(localBrokerId, deletePartition, topic, partitionId))
     errorCode
   }
 
-  def stopReplicas(stopReplicaRequest: StopReplicaRequest): (mutable.Map[(String, Int), Short], Short) = {
+  def stopReplicas(stopReplicaRequest: StopReplicaRequest): (mutable.Map[TopicAndPartition, Short], Short) = {
     replicaStateChangeLock synchronized {
-      val responseMap = new collection.mutable.HashMap[(String, Int), Short]
+      val responseMap = new collection.mutable.HashMap[TopicAndPartition, Short]
       if(stopReplicaRequest.controllerEpoch < controllerEpoch) {
         stateChangeLogger.warn("Broker %d received stop replica request from an old controller epoch %d."
           .format(localBrokerId, stopReplicaRequest.controllerEpoch) +
@@ -142,14 +146,11 @@ class ReplicaManager(val config: KafkaConfig,
         (responseMap, ErrorMapping.StaleControllerEpochCode)
       } else {
         controllerEpoch = stopReplicaRequest.controllerEpoch
-        val responseMap = new HashMap[(String, Int), Short]
         // First stop fetchers for all partitions, then stop the corresponding replicas
-        replicaFetcherManager.removeFetcherForPartitions(stopReplicaRequest.partitions.map {
-          case (topic, partition) => TopicAndPartition(topic, partition)
-        })
-        for((topic, partitionId) <- stopReplicaRequest.partitions){
-          val errorCode = stopReplica(topic, partitionId, stopReplicaRequest.deletePartitions)
-          responseMap.put((topic, partitionId), errorCode)
+        replicaFetcherManager.removeFetcherForPartitions(stopReplicaRequest.partitions.map(r => TopicAndPartition(r.topic, r.partition)))
+        for(topicAndPartition <- stopReplicaRequest.partitions){
+          val errorCode = stopReplica(topicAndPartition.topic, topicAndPartition.partition, stopReplicaRequest.deletePartitions)
+          responseMap.put(topicAndPartition, errorCode)
         }
         (responseMap, ErrorMapping.NoError)
       }
@@ -252,10 +253,10 @@ class ReplicaManager(val config: KafkaConfig,
 
         val partitionsTobeLeader = partitionState
           .filter{ case (partition, partitionStateInfo) => partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader == config.brokerId}
-        val partitionsTobeFollower = (partitionState -- partitionsTobeLeader.keys)
+        val partitionsToBeFollower = (partitionState -- partitionsTobeLeader.keys)
 
         if (!partitionsTobeLeader.isEmpty) makeLeaders(controllerId, controllerEpoch, partitionsTobeLeader, leaderAndISRRequest.correlationId, responseMap)
-        if (!partitionsTobeFollower.isEmpty) makeFollowers(controllerId, controllerEpoch, partitionsTobeFollower, leaderAndISRRequest.leaders, leaderAndISRRequest.correlationId, responseMap)
+        if (!partitionsToBeFollower.isEmpty) makeFollowers(controllerId, controllerEpoch, partitionsToBeFollower, leaderAndISRRequest.leaders, leaderAndISRRequest.correlationId, responseMap)
 
         // we initialize highwatermark thread after the first leaderisrrequest. This ensures that all the partitions
         // have been completely populated before starting the checkpointing there by avoiding weird race conditions

@@ -20,7 +20,7 @@ package kafka.api
 import java.nio.ByteBuffer
 import collection.mutable.HashMap
 import collection.immutable.Map
-import kafka.common.ErrorMapping
+import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.api.ApiUtils._
 
 
@@ -30,12 +30,12 @@ object StopReplicaResponse {
     val errorCode = buffer.getShort
     val numEntries = buffer.getInt
 
-    val responseMap = new HashMap[(String, Int), Short]()
+    val responseMap = new HashMap[TopicAndPartition, Short]()
     for (i<- 0 until numEntries){
       val topic = readShortString(buffer)
       val partition = buffer.getInt
       val partitionErrorCode = buffer.getShort()
-      responseMap.put((topic, partition), partitionErrorCode)
+      responseMap.put(TopicAndPartition(topic, partition), partitionErrorCode)
     }
     new StopReplicaResponse(correlationId, responseMap.toMap, errorCode)
   }
@@ -43,7 +43,7 @@ object StopReplicaResponse {
 
 
 case class StopReplicaResponse(override val correlationId: Int,
-                               val responseMap: Map[(String, Int), Short],
+                               val responseMap: Map[TopicAndPartition, Short],
                                val errorCode: Short = ErrorMapping.NoError)
     extends RequestOrResponse(correlationId = correlationId) {
   def sizeInBytes(): Int ={
@@ -53,7 +53,7 @@ case class StopReplicaResponse(override val correlationId: Int,
       4 /* number of responses */
     for ((key, value) <- responseMap) {
       size +=
-        2 + key._1.length /* topic */ +
+        2 + key.topic.length /* topic */ +
         4 /* partition */ +
         2 /* error code for this partition */
     }
@@ -64,10 +64,10 @@ case class StopReplicaResponse(override val correlationId: Int,
     buffer.putInt(correlationId)
     buffer.putShort(errorCode)
     buffer.putInt(responseMap.size)
-    for ((key:(String, Int), value) <- responseMap){
-      writeShortString(buffer, key._1)
-      buffer.putInt(key._2)
-      buffer.putShort(value)
+    for ((topicAndPartition, errorCode) <- responseMap){
+      writeShortString(buffer, topicAndPartition.topic)
+      buffer.putInt(topicAndPartition.partition)
+      buffer.putShort(errorCode)
     }
   }
 

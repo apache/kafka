@@ -20,7 +20,6 @@ package kafka.server
 import kafka.utils._
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
-import kafka.common._
 import java.net.InetAddress
 
 
