@@ -62,8 +62,14 @@ public class Schema extends Type {
      */
     public Object read(ByteBuffer buffer) {
         Object[] objects = new Object[fields.length];
-        for (int i = 0; i < fields.length; i++)
-            objects[i] = fields[i].type.read(buffer);
+        for (int i = 0; i < fields.length; i++) {
+            try {
+                objects[i] = fields[i].type.read(buffer);
+            } catch (Exception e) {
+                throw new SchemaException("Error reading field '" + fields[i].name + "': " + e.getMessage() == null ? e.getMessage()
+                                                                                                                   : e.getClass().getName());
+            }
+        }
         return new Struct(this, objects);
     }
 

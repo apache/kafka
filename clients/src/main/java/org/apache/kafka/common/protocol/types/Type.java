@@ -20,7 +20,6 @@ import java.nio.ByteBuffer;
 
 import org.apache.kafka.common.utils.Utils;
 
-
 /**
  * A serializable type
  */
