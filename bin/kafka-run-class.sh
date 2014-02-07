@@ -32,13 +32,40 @@ if [ -z "$SCALA_VERSION" ]; then
 	SCALA_VERSION=2.8.0
 fi
 
+# TODO: remove when removing sbt
 # assume all dependencies have been packaged into one jar with sbt-assembly's task "assembly-package-dependency"
 for file in $base_dir/core/target/scala-${SCALA_VERSION}/*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/perf/target/scala-${SCALA_VERSION}/kafka*.jar;
+# run ./gradlew copyDependantLibs to get all dependant jars in a local dir
+for file in $base_dir/core/build/dependant-libs-${SCALA_VERSION}/*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
+for file in $base_dir/perf/build/libs//kafka-perf_${SCALA_VERSION}*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
+for file in $base_dir/clients/build/libs//kafka-clients*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
+for file in $base_dir/examples/build/libs//kafka-examples*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
+for file in $base_dir/contrib/hadoop-consumer/build/libs//kafka-hadoop-consumer*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
+for file in $base_dir/contrib/hadoop-producer/build/libs//kafka-hadoop-producer*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
@@ -49,7 +76,7 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/kafka*.jar;
+for file in $base_dir/core/build/libs/kafka_${SCALA_VERSION}*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done

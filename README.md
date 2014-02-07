@@ -1,49 +1,77 @@
-# Apache Kafka #
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
 
+# Apache Kafka #
 See our [web site](http://kafka.apache.org) for details on the project.
 
-## Building it ##
-1. ./sbt update
-2. ./sbt package
-3. ./sbt assembly-package-dependency
-
-To build for a particular version of Scala (either 2.8.0, 2.8.2, 2.9.1, 2.9.2 or 2.10.1), change step 2 above to: 
-2. ./sbt "++2.8.0 package"
-
-To build for all supported versions of Scala, change step 2 above to: 
-2. ./sbt +package
-
-## Running it ##
-Follow instuctions in http://kafka.apache.org/documentation.html#quickstart
+## Building a jar and running it ##
+1. ./gradlew copyDependantLibs
+2. ./gradlew jar
+3. Follow instuctions in http://kafka.apache.org/documentation.html#quickstart
 
 ## Running unit tests ##
-  ./sbt test
+./gradlew test
 
-## Building a binary release zip or gzipped tar ball ##
-  ./sbt release-zip
-  ./sbt release-tar 
-The release file can be found inside ./target/RELEASE/.
+## Forcing re-running unit tests w/o code change ##
+./gradlew cleanTest test
 
-## Other Build Tips ##
-Here are some useful sbt commands, to be executed at the sbt command prompt (./sbt). Prefixing with "++<version> " runs the
-command for a specific Scala version, prefixing with "+" will perform the action for all versions of Scala, and no prefix
-runs the command for the default (2.8.0) version of Scala. -
+## Running a particular unit test ##
+./gradlew -Dtest.single=RequestResponseSerializationTest core:test
 
-tasks : Lists all the sbt commands and their descriptions
-clean : Deletes all generated files (the target directory).
-compile : Compile all the sub projects, but not create the jars
-test : Run all unit tests in all sub projects
-release-zip : Create all the jars, run unit tests and create a deployable release zip
-release-tar : Create all the jars, run unit tests and create a deployable release gzipped tar tall
-package: Creates jars for src, test, docs etc
-projects : List all the sub projects 
-project sub_project_name : Switch to a particular sub-project. For example, to switch to the core kafka code, use "project core-kafka"
+## Building a binary release gzipped tar ball ##
+./gradlew clean
+./gradlew releaseTarGz
+The release file can be found inside ./core/build/distributions/.
 
-The following commands can be run only on a particular sub project -
-test-only package.test.TestName : Runs only the specified test in the current sub project
-run : Provides options to run any of the classes that have a main method. For example, you can switch to project java-examples, and run the examples there by executing "project java-examples" followed by "run" 
+## Cleaning the build ##
+./gradlew clean
 
-For more details please see the [SBT documentation](https://github.com/harrah/xsbt/wiki)
+## Running a task on a particular version of Scala (either 2.8.0, 2.8.2, 2.9.1, 2.9.2 or 2.10.1) ##
+## (If building a jar with a version other than 2.8.0, the scala version variable in bin/kafka-run-class.sh needs to be changed to run quick start.) ##
+./gradlew -PscalaVersion=2.9.1 jar
+./gradlew -PscalaVersion=2.9.1 test
+./gradlew -PscalaVersion=2.9.1 releaseTarGz
+
+## Running a task for a specific project in 'core', 'perf', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'examples', 'clients' ##
+./gradlew core:jar
+./gradlew core:test
+
+## Listing all gradle tasks ##
+./gradlew tasks
+
+# Building IDE project ##
+./gradlew eclipse
+./gradlew idea
+
+# Building the jar for all scala versions and for all projects ##
+./gradlew jarAll
+
+## Running unit tests for all scala versions and for all projects ##
+./gradlew testAll
+
+## Building a binary release gzipped tar ball for all scala versions ##
+./gradlew releaseTarGzAll
+
+## Publishing the jar for all version of Scala and for all projects to maven (To test locally, change mavenUrl in gradle.properties to a local dir.) ##
+./gradlew uploadArchivesAll
+
+## Building the test jar ##
+./gradlew testJar
+
+## Determining how transitive dependencies are added ##
+./gradlew core:dependencies --configuration runtime
 
 ## Contribution ##
 
@@ -54,7 +82,3 @@ To contribute follow the instructions here:
 
 We also welcome patches for the website and documentation which can be found here:
  * https://svn.apache.org/repos/asf/kafka/site
-
-
-
-
