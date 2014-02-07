@@ -451,7 +451,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
               controllerContext.partitionsUndergoingPreferredReplicaElection.map(_.topic).contains(topic)
             val partitionReassignmentInProgress =
               controllerContext.partitionsBeingReassigned.keySet.map(_.topic).contains(topic)
-            if(preferredReplicaElectionInProgress | partitionReassignmentInProgress)
+            if(preferredReplicaElectionInProgress || partitionReassignmentInProgress)
               controller.deleteTopicManager.haltTopicDeletion(Set(topic))
           }
         }
