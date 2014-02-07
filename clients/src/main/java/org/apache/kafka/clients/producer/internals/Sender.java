@@ -39,11 +39,12 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.MetadataRequest;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.Time;
-
 
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
@@ -300,8 +301,12 @@ public class Sender implements Runnable {
 
     private void handleMetadataResponse(Struct body, long now) {
         this.metadataFetchInProgress = false;
-        Cluster cluster = ProtoUtils.parseMetadataResponse(body);
-        this.metadata.update(cluster, now);
+        MetadataResponse response = new MetadataResponse(body);
+        Cluster cluster = response.cluster();
+        // don't update the cluster if there are no valid nodes...the topic we want may still be in the process of being
+        // created which means we will get errors and no nodes until it exists
+        if (cluster.nodes().size() > 0)
+            this.metadata.update(cluster, now);
     }
 
     /**
@@ -338,11 +343,8 @@ public class Sender implements Runnable {
      * Create a metadata request for the given topics
      */
     private InFlightRequest metadataRequest(int node, Set<String> topics) {
-        String[] ts = new String[topics.size()];
-        topics.toArray(ts);
-        Struct body = new Struct(ProtoUtils.currentRequestSchema(ApiKeys.METADATA.id));
-        body.set("topics", topics.toArray());
-        RequestSend send = new RequestSend(node, new RequestHeader(ApiKeys.METADATA.id, clientId, correlation++), body);
+        MetadataRequest metadata = new MetadataRequest(new ArrayList<String>(topics));
+        RequestSend send = new RequestSend(node, header(ApiKeys.METADATA), metadata.toStruct());
         return new InFlightRequest(true, send, null);
     }
 
@@ -403,9 +405,12 @@ public class Sender implements Runnable {
         }
         produce.set("topic_data", topicDatas.toArray());
 
-        RequestHeader header = new RequestHeader(ApiKeys.PRODUCE.id, clientId, correlation++);
-        RequestSend send = new RequestSend(destination, header, produce);
+        RequestSend send = new RequestSend(destination, header(ApiKeys.PRODUCE), produce);
         return new InFlightRequest(acks != 0, send, batchesByPartition);
+    }
+
+    private RequestHeader header(ApiKeys key) {
+        return new RequestHeader(key.id, clientId, correlation++);
     }
 
     /**
