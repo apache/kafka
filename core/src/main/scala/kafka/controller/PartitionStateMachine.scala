@@ -51,6 +51,9 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   private val noOpPartitionLeaderSelector = new NoOpLeaderSelector(controllerContext)
   this.logIdent = "[Partition state machine on Controller " + controllerId + "]: "
   private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
+  private var topicChangeListener: TopicChangeListener = null
+  private var deleteTopicsListener: DeleteTopicsListener = null
+  private var addPartitionsListener: mutable.Map[String, AddPartitionsListener] = mutable.Map.empty
 
   /**
    * Invoked on successful controller election. First registers a topic change listener since that triggers all
@@ -167,8 +170,9 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           assignReplicasToPartitions(topic, partition)
           partitionState.put(topicAndPartition, NewPartition)
           val assignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition).mkString(",")
-          stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from NotExists to New with assigned replicas %s"
-                                    .format(controllerId, controller.epoch, topicAndPartition, assignedReplicas))
+          stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from %s to %s with assigned replicas %s"
+                                    .format(controllerId, controller.epoch, topicAndPartition, currState, targetState,
+                                            assignedReplicas))
           // post: partition has been assigned replicas
         case OnlinePartition =>
           assertValidPreviousStates(topicAndPartition, List(NewPartition, OnlinePartition, OfflinePartition), OnlinePartition)
@@ -184,22 +188,22 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           }
           partitionState.put(topicAndPartition, OnlinePartition)
           val leader = controllerContext.partitionLeadershipInfo(topicAndPartition).leaderAndIsr.leader
-          stateChangeLogger.trace("Controller %d epoch %d changed partition %s from %s to OnlinePartition with leader %d"
-                                    .format(controllerId, controller.epoch, topicAndPartition, partitionState(topicAndPartition), leader))
+          stateChangeLogger.trace("Controller %d epoch %d changed partition %s from %s to %s with leader %d"
+                                    .format(controllerId, controller.epoch, topicAndPartition, currState, targetState, leader))
            // post: partition has a leader
         case OfflinePartition =>
           // pre: partition should be in New or Online state
           assertValidPreviousStates(topicAndPartition, List(NewPartition, OnlinePartition, OfflinePartition), OfflinePartition)
           // should be called when the leader for a partition is no longer alive
-          stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from Online to Offline"
-                                    .format(controllerId, controller.epoch, topicAndPartition))
+          stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from %s to %s"
+                                    .format(controllerId, controller.epoch, topicAndPartition, currState, targetState))
           partitionState.put(topicAndPartition, OfflinePartition)
           // post: partition has no alive leader
         case NonExistentPartition =>
           // pre: partition should be in Offline state
           assertValidPreviousStates(topicAndPartition, List(OfflinePartition), NonExistentPartition)
-          stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from Offline to NotExists"
-                                    .format(controllerId, controller.epoch, topicAndPartition))
+          stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from %s to %s"
+                                    .format(controllerId, controller.epoch, topicAndPartition, currState, targetState))
           partitionState.put(topicAndPartition, NonExistentPartition)
           // post: partition state is deleted from all brokers and zookeeper
       }
@@ -358,15 +362,22 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   }
 
   private def registerTopicChangeListener() = {
-    zkClient.subscribeChildChanges(ZkUtils.BrokerTopicsPath, new TopicChangeListener())
+    topicChangeListener = new TopicChangeListener()
+    zkClient.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicChangeListener)
   }
 
   def registerPartitionChangeListener(topic: String) = {
-    zkClient.subscribeDataChanges(ZkUtils.getTopicPath(topic), new AddPartitionsListener(topic))
+    addPartitionsListener.put(topic, new AddPartitionsListener(topic))
+    zkClient.subscribeDataChanges(ZkUtils.getTopicPath(topic), addPartitionsListener(topic))
+  }
+
+  def deregisterPartitionChangeListener(topic: String) = {
+    zkClient.unsubscribeDataChanges(ZkUtils.getTopicPath(topic), addPartitionsListener(topic))
   }
 
   private def registerDeleteTopicListener() = {
-    zkClient.subscribeChildChanges(ZkUtils.DeleteTopicsPath, new DeleteTopicsListener())
+    deleteTopicsListener = new DeleteTopicsListener()
+    zkClient.subscribeChildChanges(ZkUtils.DeleteTopicsPath, deleteTopicsListener)
   }
 
   private def getLeaderIsrAndEpochOrThrowException(topic: String, partition: Int): LeaderIsrAndControllerEpoch = {
@@ -438,21 +449,23 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         }
         debug("Delete topics listener fired for topics %s to be deleted".format(topicsToBeDeleted.mkString(",")))
         val nonExistentTopics = topicsToBeDeleted.filter(t => !controllerContext.allTopics.contains(t))
-        if(nonExistentTopics.size > 0)
+        if(nonExistentTopics.size > 0) {
           warn("Ignoring request to delete non-existing topics " + nonExistentTopics.mkString(","))
+          nonExistentTopics.foreach(topic => ZkUtils.deletePathRecursive(zkClient, ZkUtils.getDeleteTopicPath(topic)))
+        }
         topicsToBeDeleted --= nonExistentTopics
         if(topicsToBeDeleted.size > 0) {
           info("Starting topic deletion for topics " + topicsToBeDeleted.mkString(","))
           // add topic to deletion list
           controller.deleteTopicManager.enqueueTopicsForDeletion(topicsToBeDeleted)
-          // halt if other state changes are in progress
+          // mark topic ineligible for deletion if other state changes are in progress
           topicsToBeDeleted.foreach { topic =>
             val preferredReplicaElectionInProgress =
               controllerContext.partitionsUndergoingPreferredReplicaElection.map(_.topic).contains(topic)
             val partitionReassignmentInProgress =
               controllerContext.partitionsBeingReassigned.keySet.map(_.topic).contains(topic)
             if(preferredReplicaElectionInProgress || partitionReassignmentInProgress)
-              controller.deleteTopicManager.haltTopicDeletion(Set(topic))
+              controller.deleteTopicManager.markTopicIneligibleForDeletion(Set(topic))
           }
         }
       }

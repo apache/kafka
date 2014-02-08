@@ -145,7 +145,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       // remove the topics that don't exist in the UpdateMetadata request since those are the topics that are
       // currently being deleted by the controller
-      val topicsKnownToThisBroker = metadataCache.map{
+      val topicsKnownToThisBroker = metadataCache.map {
         case(topicAndPartition, partitionStateInfo) => topicAndPartition.topic }.toSet
       val topicsKnownToTheController = updateMetadataRequest.partitionStateInfos.map {
         case(topicAndPartition, partitionStateInfo) => topicAndPartition.topic }.toSet
@@ -568,6 +568,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       partitionMetadataLock synchronized {
         uniqueTopics.map { topic =>
           if(metadataCache.keySet.map(_.topic).contains(topic)) {
+            debug("Topic %s exists in metadata cache on broker %d".format(topic, config.brokerId))
             val partitionStateInfo = metadataCache.filter(p => p._1.topic.equals(topic))
             val sortedPartitions = partitionStateInfo.toList.sortWith((m1,m2) => m1._1.partition < m2._1.partition)
             val partitionMetadata = sortedPartitions.map { case(topicAndPartition, partitionState) =>
@@ -600,6 +601,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
             new TopicMetadata(topic, partitionMetadata)
           } else {
+            debug("Topic %s does not exist in metadata cache on broker %d".format(topic, config.brokerId))
             // topic doesn't exist, send appropriate error code
             new TopicMetadata(topic, Seq.empty[PartitionMetadata], ErrorMapping.UnknownTopicOrPartitionCode)
           }
@@ -621,6 +623,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             }
             topicsMetadata += new TopicMetadata(topicMetadata.topic, topicMetadata.partitionsMetadata, ErrorMapping.LeaderNotAvailableCode)
           } else {
+            debug("Auto create topic skipped for %s".format(topicMetadata.topic))
             topicsMetadata += topicMetadata
           }
         case _ =>

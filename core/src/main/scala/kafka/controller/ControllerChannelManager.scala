@@ -235,18 +235,29 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
                                          callback: (RequestOrResponse) => Unit = null) {
     val partitionList = controllerContext.partitionLeadershipInfo.keySet.dropWhile(
       p => controller.deleteTopicManager.isTopicQueuedUpForDeletion(p.topic))
-    partitionList.foreach { partition =>
-      val leaderIsrAndControllerEpochOpt = controllerContext.partitionLeadershipInfo.get(partition)
-      leaderIsrAndControllerEpochOpt match {
-        case Some(leaderIsrAndControllerEpoch) =>
-          val replicas = controllerContext.partitionReplicaAssignment(partition).toSet
-          val partitionStateInfo = PartitionStateInfo(leaderIsrAndControllerEpoch, replicas)
+    if(partitionList.size > 0) {
+      partitionList.foreach { partition =>
+        val leaderIsrAndControllerEpochOpt = controllerContext.partitionLeadershipInfo.get(partition)
+        leaderIsrAndControllerEpochOpt match {
+          case Some(leaderIsrAndControllerEpoch) =>
+            val replicas = controllerContext.partitionReplicaAssignment(partition).toSet
+            val partitionStateInfo = PartitionStateInfo(leaderIsrAndControllerEpoch, replicas)
+            brokerIds.filter(b => b >= 0).foreach { brokerId =>
+              updateMetadataRequestMap.getOrElseUpdate(brokerId, new mutable.HashMap[TopicAndPartition, PartitionStateInfo])
+              updateMetadataRequestMap(brokerId).put(partition, partitionStateInfo)
+            }
+          case None =>
+            info("Leader not assigned yet for partition %s. Skip sending udpate metadata request".format(partition))
+        }
+      }
+    } else {
+      if(controllerContext.partitionLeadershipInfo.keySet.size > 0) {
+        // last set of topics are being deleted
+        controllerContext.partitionLeadershipInfo.foreach { case(partition, leaderIsrAndControllerEpoch) =>
           brokerIds.filter(b => b >= 0).foreach { brokerId =>
-            updateMetadataRequestMap.getOrElseUpdate(brokerId, new mutable.HashMap[TopicAndPartition, PartitionStateInfo])
-            updateMetadataRequestMap(brokerId).put(partition, partitionStateInfo)
+            updateMetadataRequestMap.put(brokerId, new mutable.HashMap[TopicAndPartition, PartitionStateInfo])
           }
-        case None =>
-          info("Leader not assigned yet for partition %s. Skip sending udpate metadata request".format(partition))
+        }
       }
     }
   }
@@ -272,10 +283,10 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
       val broker = m._1
       val partitionStateInfos = m._2.toMap
       val updateMetadataRequest = new UpdateMetadataRequest(controllerId, controllerEpoch, correlationId, clientId,
-                                                            partitionStateInfos, controllerContext.liveOrShuttingDownBrokers)
+        partitionStateInfos, controllerContext.liveOrShuttingDownBrokers)
       partitionStateInfos.foreach(p => stateChangeLogger.trace(("Controller %d epoch %d sending UpdateMetadata request %s with " +
         "correlationId %d to broker %d for partition %s").format(controllerId, controllerEpoch, p._2.leaderIsrAndControllerEpoch,
-                                                                 correlationId, broker, p._1)))
+        correlationId, broker, p._1)))
       controller.sendRequest(broker, updateMetadataRequest, null)
     }
     updateMetadataRequestMap.clear()
