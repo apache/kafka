@@ -40,7 +40,7 @@ import kafka.utils.Utils._
  * 4. ReplicaDeletionStarted: If replica deletion starts, it is moved to this state. Valid previous state is OfflineReplica
  * 5. ReplicaDeletionSuccessful: If replica responds with no error code in response to a delete replica request, it is
  *                        moved to this state. Valid previous state is ReplicaDeletionStarted
- * 6. ReplicaDeletionFailed: If replica deletion fails, it is moved to this state. Valid previous state is ReplicaDeletionStarted
+ * 6. ReplicaDeletionIneligible: If replica deletion fails, it is moved to this state. Valid previous state is ReplicaDeletionStarted
  * 7. NonExistentReplica: If a replica is deleted successfully, it is moved to this state. Valid previous state is
  *                        ReplicaDeletionSuccessful
  */
@@ -115,7 +115,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    * --send LeaderAndIsr request with current leader and isr to the new replica and UpdateMetadata request for the
    *   partition to every live broker
    *
-   * NewReplica,OnlineReplica,OfflineReplica,ReplicaDeletionFailed -> OfflineReplica
+   * NewReplica,OnlineReplica,OfflineReplica,ReplicaDeletionIneligible -> OfflineReplica
    * --send StopReplicaRequest to the replica (w/o deletion)
    * --remove this replica from the isr and send LeaderAndIsr request (with new isr) to the leader replica and
    *   UpdateMetadata request for the partition to every live broker.
@@ -126,7 +126,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
    * ReplicaDeletionStarted -> ReplicaDeletionSuccessful
    * -- mark the state of the replica in the state machine
    *
-   * ReplicaDeletionStarted -> ReplicaDeletionFailed
+   * ReplicaDeletionStarted -> ReplicaDeletionIneligible
    * -- mark the state of the replica in the state machine
    *
    * ReplicaDeletionSuccessful -> NonExistentReplica
@@ -146,8 +146,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
       throw new StateChangeFailedException(("Controller %d epoch %d initiated state change of replica %d for partition %s " +
                                             "to %s failed because replica state machine has not started")
                                               .format(controllerId, controller.epoch, replicaId, topicAndPartition, targetState))
+    val currState = replicaState.getOrElseUpdate(partitionAndReplica, NonExistentReplica)
     try {
-      replicaState.getOrElseUpdate(partitionAndReplica, NonExistentReplica)
       val replicaAssignment = controllerContext.partitionReplicaAssignment(topicAndPartition)
       targetState match {
         case NewReplica =>
@@ -165,45 +165,47 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
             case None => // new leader request will be sent to this replica when one gets elected
           }
           replicaState.put(partitionAndReplica, NewReplica)
-          stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to NewReplica"
-                                    .format(controllerId, controller.epoch, replicaId, topicAndPartition))
+          stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
+                                    .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState,
+                                            targetState))
         case ReplicaDeletionStarted =>
           assertValidPreviousStates(partitionAndReplica, List(OfflineReplica), targetState)
           replicaState.put(partitionAndReplica, ReplicaDeletionStarted)
           // send stop replica command
           brokerRequestBatch.addStopReplicaRequestForBrokers(List(replicaId), topic, partition, deletePartition = true,
             callbacks.stopReplicaResponseCallback)
-          stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to ReplicaDeletionStarted"
-            .format(controllerId, controller.epoch, replicaId, topicAndPartition))
-        case ReplicaDeletionFailed =>
+          stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
+            .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))
+        case ReplicaDeletionIneligible =>
           assertValidPreviousStates(partitionAndReplica, List(ReplicaDeletionStarted), targetState)
-          replicaState.put(partitionAndReplica, ReplicaDeletionFailed)
-          stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to ReplicaDeletionFailed"
-            .format(controllerId, controller.epoch, replicaId, topicAndPartition))
+          replicaState.put(partitionAndReplica, ReplicaDeletionIneligible)
+          stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
+            .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))
         case ReplicaDeletionSuccessful =>
           assertValidPreviousStates(partitionAndReplica, List(ReplicaDeletionStarted), targetState)
           replicaState.put(partitionAndReplica, ReplicaDeletionSuccessful)
-          stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to ReplicaDeletionSuccessful"
-            .format(controllerId, controller.epoch, replicaId, topicAndPartition))
+          stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
+            .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))
         case NonExistentReplica =>
           assertValidPreviousStates(partitionAndReplica, List(ReplicaDeletionSuccessful), targetState)
           // remove this replica from the assigned replicas list for its partition
           val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
           controllerContext.partitionReplicaAssignment.put(topicAndPartition, currentAssignedReplicas.filterNot(_ == replicaId))
           replicaState.remove(partitionAndReplica)
-          stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to NonExistentReplica"
-            .format(controllerId, controller.epoch, replicaId, topicAndPartition))
+          stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
+            .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))
         case OnlineReplica =>
           assertValidPreviousStates(partitionAndReplica,
-            List(NewReplica, OnlineReplica, OfflineReplica, ReplicaDeletionFailed), targetState)
+            List(NewReplica, OnlineReplica, OfflineReplica, ReplicaDeletionIneligible), targetState)
           replicaState(partitionAndReplica) match {
             case NewReplica =>
               // add this replica to the assigned replicas list for its partition
               val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
               if(!currentAssignedReplicas.contains(replicaId))
                 controllerContext.partitionReplicaAssignment.put(topicAndPartition, currentAssignedReplicas :+ replicaId)
-              stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OnlineReplica"
-                                        .format(controllerId, controller.epoch, replicaId, topicAndPartition))
+              stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
+                                        .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState,
+                                                targetState))
             case _ =>
               // check if the leader for this partition ever existed
               controllerContext.partitionLeadershipInfo.get(topicAndPartition) match {
@@ -211,8 +213,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                   brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(replicaId), topic, partition, leaderIsrAndControllerEpoch,
                     replicaAssignment)
                   replicaState.put(partitionAndReplica, OnlineReplica)
-                  stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OnlineReplica"
-                    .format(controllerId, controller.epoch, replicaId, topicAndPartition))
+                  stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
+                    .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))
                 case None => // that means the partition was never in OnlinePartition state, this means the broker never
                   // started a log for that partition and does not have a high watermark value for this partition
               }
@@ -220,7 +222,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
           replicaState.put(partitionAndReplica, OnlineReplica)
         case OfflineReplica =>
           assertValidPreviousStates(partitionAndReplica,
-            List(NewReplica, OnlineReplica, OfflineReplica, ReplicaDeletionFailed), targetState)
+            List(NewReplica, OnlineReplica, OfflineReplica, ReplicaDeletionIneligible), targetState)
           // send stop replica command to the replica so that it stops fetching from the leader
           brokerRequestBatch.addStopReplicaRequestForBrokers(List(replicaId), topic, partition, deletePartition = false)
           // As an optimization, the controller removes dead replicas from the ISR
@@ -233,8 +235,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                     brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader),
                       topic, partition, updatedLeaderIsrAndControllerEpoch, replicaAssignment)
                     replicaState.put(partitionAndReplica, OfflineReplica)
-                    stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s to OfflineReplica"
-                      .format(controllerId, controller.epoch, replicaId, topicAndPartition))
+                    stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
+                      .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))
                     false
                   case None =>
                     true
@@ -250,8 +252,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     }
     catch {
       case t: Throwable =>
-        stateChangeLogger.error("Controller %d epoch %d initiated state change of replica %d for partition [%s,%d] to %s failed"
-                                  .format(controllerId, controller.epoch, replicaId, topic, partition, targetState), t)
+        stateChangeLogger.error("Controller %d epoch %d initiated state change of replica %d for partition [%s,%d] from %s to %s failed"
+                                  .format(controllerId, controller.epoch, replicaId, topic, partition, currState, targetState), t)
     }
   }
 
@@ -273,7 +275,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   }
 
   def replicasInDeletionStates(topic: String): Set[PartitionAndReplica] = {
-    val deletionStates = Set(ReplicaDeletionStarted, ReplicaDeletionSuccessful, ReplicaDeletionFailed)
+    val deletionStates = Set(ReplicaDeletionStarted, ReplicaDeletionSuccessful, ReplicaDeletionIneligible)
     replicaState.filter(r => r._1.topic.equals(topic) && deletionStates.contains(r._2)).keySet
   }
 
@@ -304,8 +306,8 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
           case false =>
             // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
             // This is required during controller failover since during controller failover a broker can go down,
-            // so the replicas on that broker should be moved to ReplicaDeletionFailed to be on the safer side.
-            replicaState.put(partitionAndReplica, ReplicaDeletionFailed)
+            // so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.
+            replicaState.put(partitionAndReplica, ReplicaDeletionIneligible)
         }
       }
     }
@@ -356,7 +358,7 @@ case object OnlineReplica extends ReplicaState { val state: Byte = 2 }
 case object OfflineReplica extends ReplicaState { val state: Byte = 3 }
 case object ReplicaDeletionStarted extends ReplicaState { val state: Byte = 4}
 case object ReplicaDeletionSuccessful extends ReplicaState { val state: Byte = 5}
-case object ReplicaDeletionFailed extends ReplicaState { val state: Byte = 6}
+case object ReplicaDeletionIneligible extends ReplicaState { val state: Byte = 6}
 case object NonExistentReplica extends ReplicaState { val state: Byte = 7 }
 
 

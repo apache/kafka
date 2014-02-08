@@ -296,9 +296,8 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testDeleteTopicDuringAddPartition() {
     val topic = "test"
     val servers = createTestTopicAndCluster(topic)
-    // add partitions to topic
-    val topicAndPartition = TopicAndPartition(topic, 0)
     val newPartition = TopicAndPartition(topic, 1)
+    // add partitions to topic
     AdminUtils.addPartitions(zkClient, topic, 2, "0:1:2,0:1:2")
     // start topic deletion
     AdminUtils.deleteTopic(zkClient, topic)
@@ -364,6 +363,66 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
       case e: AdminOperationException => // expected
     }
     servers.foreach(_.shutdown())
+  }
+
+  @Test
+  def testAutoCreateAfterDeleteTopic() {
+    val topicAndPartition = TopicAndPartition("test", 0)
+    val topic = topicAndPartition.topic
+    val servers = createTestTopicAndCluster(topic)
+    // start topic deletion
+    AdminUtils.deleteTopic(zkClient, topic)
+    verifyTopicDeletion(topic, servers)
+    // test if first produce request after topic deletion auto creates the topic
+    val props = new Properties()
+    props.put("metadata.broker.list", servers.map(s => s.config.hostName + ":" + s.config.port).mkString(","))
+    props.put("serializer.class", "kafka.serializer.StringEncoder")
+    props.put("producer.type", "sync")
+    props.put("request.required.acks", "1")
+    props.put("message.send.max.retries", "1")
+    val producerConfig = new ProducerConfig(props)
+    val producer = new Producer[String, String](producerConfig)
+    try{
+      producer.send(new KeyedMessage[String, String](topic, "test", "test1"))
+    } catch {
+      case e: FailedToSendMessageException => fail("Topic should have been auto created")
+      case oe: Throwable => fail("fails with exception", oe)
+    }
+    // test the topic path exists
+    assertTrue("Topic not auto created", ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic)))
+    // wait until leader is elected
+    val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
+    assertTrue("New leader should be elected after re-creating topic test", leaderIdOpt.isDefined)
+    try {
+      producer.send(new KeyedMessage[String, String](topic, "test", "test1"))
+    } catch {
+      case e: FailedToSendMessageException => fail("Topic should have been auto created")
+      case oe: Throwable => fail("fails with exception", oe)
+    } finally {
+      producer.close()
+    }
+    servers.foreach(_.shutdown())
+  }
+
+  @Test
+  def testDeleteNonExistingTopic() {
+    val topicAndPartition = TopicAndPartition("test", 0)
+    val topic = topicAndPartition.topic
+    val servers = createTestTopicAndCluster(topic)
+    // start topic deletion
+    AdminUtils.deleteTopic(zkClient, "test2")
+    // verify delete topic path for test2 is removed from zookeeper
+    verifyTopicDeletion("test2", servers)
+    // verify that topic test is untouched
+    assertTrue("Replicas for topic test not created in 1000ms", TestUtils.waitUntilTrue(() => servers.foldLeft(true)((res, server) =>
+      res && server.getLogManager().getLog(topicAndPartition).isDefined), 1000))
+    // test the topic path exists
+    assertTrue("Topic test mistakenly deleted", ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic)))
+    // topic test should have a leader
+    val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
+    assertTrue("Leader should exist for topic test", leaderIdOpt.isDefined)
+    servers.foreach(_.shutdown())
+
   }
 
   private def createTestTopicAndCluster(topic: String): Seq[KafkaServer] = {

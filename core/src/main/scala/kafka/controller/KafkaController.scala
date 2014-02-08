@@ -433,7 +433,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     if(replicasForTopicsToBeDeleted.size > 0) {
       // it is required to mark the respective replicas in TopicDeletionFailed state since the replica cannot be
       // deleted when the broker is down. This will prevent the replica from being in TopicDeletionStarted state indefinitely
-      // since topic deletion cannot be retried if at least one replica is in TopicDeletionStarted state
+      // since topic deletion cannot be retried until at least one replica is in TopicDeletionStarted state
       deleteTopicManager.failReplicaDeletion(replicasForTopicsToBeDeleted)
     }
   }
@@ -443,6 +443,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
    * and partitions as input. It does the following -
    * 1. Registers partition change listener. This is not required until KAFKA-347
    * 2. Invokes the new partition callback
+   * 3. Send metadata request with the new topic to all brokers so they allow requests for that topic to be served
    */
   def onNewTopicCreation(topics: Set[String], newPartitions: Set[TopicAndPartition]) {
     info("New topic creation callback for %s".format(newPartitions.mkString(",")))
@@ -581,8 +582,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
               // first register ISR change listener
               watchIsrChangesForReassignedPartition(topic, partition, reassignedPartitionContext)
               controllerContext.partitionsBeingReassigned.put(topicAndPartition, reassignedPartitionContext)
-              // halt topic deletion for the partitions being reassigned
-              deleteTopicManager.haltTopicDeletion(Set(topic))
+              // mark topic ineligible for deletion for the partitions being reassigned
+              deleteTopicManager.markTopicIneligibleForDeletion(Set(topic))
               onPartitionReassignment(topicAndPartition, reassignedPartitionContext)
             } else {
               // some replica in RAR is not alive. Fail partition reassignment
@@ -605,7 +606,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     info("Starting preferred replica leader election for partitions %s".format(partitions.mkString(",")))
     try {
       controllerContext.partitionsUndergoingPreferredReplicaElection ++= partitions
-      deleteTopicManager.haltTopicDeletion(partitions.map(_.topic))
+      deleteTopicManager.markTopicIneligibleForDeletion(partitions.map(_.topic))
       partitionStateMachine.handleStateChanges(partitions, OnlinePartition, preferredReplicaPartitionLeaderSelector)
     } catch {
       case e: Throwable => error("Error completing preferred replica leader election for partitions %s".format(partitions.mkString(",")), e)
@@ -748,17 +749,16 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
 
   private def initializeTopicDeletion() {
     val topicsQueuedForDeletion = ZkUtils.getChildrenParentMayNotExist(zkClient, ZkUtils.DeleteTopicsPath).toSet
-    val replicasOnDeadBrokers = controllerContext.partitionReplicaAssignment.filter(r =>
-      r._2.foldLeft(false)((res,r) => res || !controllerContext.liveBrokerIds.contains(r)))
-    val topicsWithReplicasOnDeadBrokers = replicasOnDeadBrokers.map(_._1.topic).toSet
+    val topicsWithReplicasOnDeadBrokers = controllerContext.partitionReplicaAssignment.filter { case(partition, replicas) =>
+      replicas.exists(r => !controllerContext.liveBrokerIds.contains(r)) }.keySet.map(_.topic)
     val topicsForWhichPartitionReassignmentIsInProgress = controllerContext.partitionsUndergoingPreferredReplicaElection.map(_.topic)
     val topicsForWhichPreferredReplicaElectionIsInProgress = controllerContext.partitionsBeingReassigned.keySet.map(_.topic)
-    val haltedTopicsForDeletion = topicsWithReplicasOnDeadBrokers | topicsForWhichPartitionReassignmentIsInProgress |
+    val topicsIneligibleForDeletion = topicsWithReplicasOnDeadBrokers | topicsForWhichPartitionReassignmentIsInProgress |
                                   topicsForWhichPreferredReplicaElectionIsInProgress
     info("List of topics to be deleted: %s".format(topicsQueuedForDeletion.mkString(",")))
-    info("List of topics halted for deletion: %s".format(haltedTopicsForDeletion.mkString(",")))
+    info("List of topics ineligible for deletion: %s".format(topicsIneligibleForDeletion.mkString(",")))
     // initialize the topic deletion manager
-    deleteTopicManager = new TopicDeletionManager(this, topicsQueuedForDeletion, haltedTopicsForDeletion)
+    deleteTopicManager = new TopicDeletionManager(this, topicsQueuedForDeletion, topicsIneligibleForDeletion)
   }
 
   private def maybeTriggerPartitionReassignment() {
