@@ -45,7 +45,7 @@ public class ByteBufferSend implements Send {
 
     @Override
     public boolean complete() {
-        return remaining > 0;
+        return remaining <= 0;
     }
 
     @Override
