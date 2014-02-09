@@ -50,11 +50,6 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/clients/build/libs//kafka-clients*.jar;
-do
-  CLASSPATH=$CLASSPATH:$file
-done
-
 for file in $base_dir/examples/build/libs//kafka-examples*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
@@ -66,6 +61,11 @@ do
 done
 
 for file in $base_dir/contrib/hadoop-producer/build/libs//kafka-hadoop-producer*.jar;
+do
+  CLASSPATH=$CLASSPATH:$file
+done
+
+for file in $base_dir/clients/target/scala-${SCALA_VERSION}/clients*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
