@@ -136,6 +136,7 @@ project(':core') {
   }
 
   dependencies {
+    compile project(':clients')
     compile "org.scala-lang:scala-library:$scalaVersion"
     compile 'org.apache.zookeeper:zookeeper:3.3.4'
     compile 'com.101tec:zkclient:0.3'
