@@ -39,6 +39,7 @@ import collection.mutable.Map
 import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
 import kafka.common.TopicAndPartition
 import junit.framework.Assert
+import kafka.admin.AdminUtils
 
 
 /**
@@ -133,6 +134,20 @@ object TestUtils extends Logging {
     props.put("zookeeper.connect", TestZKUtils.zookeeperConnect)
     props.put("replica.socket.timeout.ms", "1500")
     props
+  }
+
+  /**
+   * Create a topic in zookeeper
+   */
+  def createTopic(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicationFactor: Int = 1,
+                  servers: List[KafkaServer]) : scala.collection.immutable.Map[Int, Option[Int]] = {
+    // create topic
+    AdminUtils.createTopic(zkClient, topic, numPartitions, replicationFactor)
+    // wait until the update metadata request for new topic reaches all servers
+    (0 until numPartitions).map { case i =>
+      TestUtils.waitUntilMetadataIsPropagated(servers, topic, i, 500)
+      i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i, 500)
+    }.toMap
   }
 
   /**

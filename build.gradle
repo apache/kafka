@@ -148,6 +148,7 @@ project(':core') {
     testCompile 'junit:junit:4.1'
     testCompile 'org.easymock:easymock:3.0'
     testCompile 'org.objenesis:objenesis:1.2'
+    testCompile project(':clients')
     if (scalaVersion.startsWith('2.8')) {
       testCompile 'org.scalatest:scalatest:1.2'
     } else if (scalaVersion.startsWith('2.10')) {
