@@ -17,9 +17,8 @@
 See our [web site](http://kafka.apache.org) for details on the project.
 
 ## Building a jar and running it ##
-1. ./gradlew copyDependantLibs
-2. ./gradlew jar
-3. Follow instuctions in http://kafka.apache.org/documentation.html#quickstart
+1. ./gradlew jar
+2. Follow instuctions in http://kafka.apache.org/documentation.html#quickstart
 
 ## Running unit tests ##
 ./gradlew test
