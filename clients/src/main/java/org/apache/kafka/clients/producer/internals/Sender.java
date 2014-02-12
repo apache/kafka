@@ -126,16 +126,16 @@ public class Sender implements Runnable {
         // get the list of partitions with data ready to send
         List<TopicPartition> ready = this.accumulator.ready(now);
 
-        // prune the list of ready topics to eliminate any that we aren't ready to send yet
-        List<TopicPartition> sendable = processReadyPartitions(cluster, ready, now);
-
         // should we update our metadata?
-        List<NetworkSend> sends = new ArrayList<NetworkSend>(sendable.size());
+        List<NetworkSend> sends = new ArrayList<NetworkSend>();
         InFlightRequest metadataReq = maybeMetadataRequest(cluster, now);
         if (metadataReq != null) {
             sends.add(metadataReq.request);
             this.inFlightRequests.add(metadataReq);
         }
+
+        // prune the list of ready topics to eliminate any that we aren't ready to send yet
+        List<TopicPartition> sendable = processReadyPartitions(cluster, ready, now);
 
         // create produce requests
         List<RecordBatch> batches = this.accumulator.drain(sendable, this.maxRequestSize);
@@ -165,7 +165,11 @@ public class Sender implements Runnable {
     private InFlightRequest maybeMetadataRequest(Cluster cluster, long now) {
         if (this.metadataFetchInProgress || !metadata.needsUpdate(now))
             return null;
-        Node node = cluster.nextNode();
+
+        Node node = nextFreeNode(cluster);
+        if (node == null)
+            return null;
+
         NodeState state = nodeState.get(node.id());
         if (state == null || (state.state == ConnectionState.DISCONNECTED && now - state.lastConnectAttempt > this.reconnectBackoffMs)) {
             // we don't have a connection to this node right now, make one
@@ -177,6 +181,18 @@ public class Sender implements Runnable {
         } else {
             return null;
         }
+    }
+
+    /**
+     * @return A node with no requests currently being sent or null if no such node exists
+     */
+    private Node nextFreeNode(Cluster cluster) {
+        for (int i = 0; i < cluster.nodes().size(); i++) {
+            Node node = cluster.nextNode();
+            if (this.inFlightRequests.canSendMore(node.id()))
+                return node;
+        }
+        return null;
     }
 
     /**
