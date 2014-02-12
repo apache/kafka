@@ -101,7 +101,9 @@ public class Sender implements Runnable {
             }
         }
 
-        // send anything left in the accumulator
+        // okay we stopped accepting requests but there may still be
+        // requests in the accumulator or waiting for acknowledgment,
+        // wait until these are completed.
         int unsent = 0;
         do {
             try {
@@ -109,7 +111,7 @@ public class Sender implements Runnable {
             } catch (Exception e) {
                 e.printStackTrace();
             }
-        } while (unsent > 0);
+        } while (unsent > 0 || this.inFlightRequests.totalInFlightRequests() > 0);
 
         // close all the connections
         this.selector.close();
@@ -533,6 +535,13 @@ public class Sender implements Runnable {
             } else {
                 return requests.remove(node);
             }
+        }
+
+        public int totalInFlightRequests() {
+            int total = 0;
+            for (Deque<InFlightRequest> deque : this.requests.values())
+                total += deque.size();
+            return total;
         }
     }
 
