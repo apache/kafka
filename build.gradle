@@ -28,6 +28,7 @@ allprojects {
 }
 
 apply from: file('gradle/license.gradle')
+apply from: file('scala.gradle')
 
 subprojects {
   apply plugin: 'java'
@@ -113,7 +114,7 @@ project(':core') {
   println "Building project 'core' with Scala version $scalaVersion"
 
   apply plugin: 'scala'
-  archivesBaseName = "kafka_${scalaVersion}"
+  archivesBaseName = "kafka_${baseScalaVersion}"
 
   def (major, minor, trivial) = scalaVersion.tokenize('.')
 
@@ -178,13 +179,18 @@ project(':core') {
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) { 
     into "."
     compression = Compression.GZIP 
-    classifier = 'dist'
     from(project.file("../bin")) { into "bin/" }
     from(project.file("../config")) { into "config/" }
     from '../LICENSE'
     from '../NOTICE'
     from(configurations.runtime) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
+  }
+  
+  jar {
+    dependsOn 'copyDependantLibs'
+    from '../LICENSE'
+    from '../NOTICE'
   }
 
   task testJar(type: Jar) {
@@ -204,7 +210,7 @@ project(':perf') {
   println "Building project 'perf' with Scala version $scalaVersion"
 
   apply plugin: 'scala'
-  archivesBaseName = "kafka-perf_${scalaVersion}"
+  archivesBaseName = "kafka-perf_${baseScalaVersion}"
 
   dependencies {
     compile project(':core')
@@ -212,6 +218,11 @@ project(':perf') {
     compile 'net.sf.jopt-simple:jopt-simple:3.2'
 
     zinc 'com.typesafe.zinc:zinc:0.2.5'
+  }
+
+  jar {
+    from '../LICENSE'
+    from '../NOTICE'
   }
 }
 
@@ -238,6 +249,11 @@ project(':contrib:hadoop-consumer') {
     compile.exclude module: 'mail'
     compile.exclude module: 'netty'
   }
+
+  jar {
+    from '../LICENSE'
+    from '../NOTICE'
+  }
 }
 
 project(':contrib:hadoop-producer') {
@@ -263,6 +279,11 @@ project(':contrib:hadoop-producer') {
     compile.exclude module: 'mail'
     compile.exclude module: 'netty'
   }
+
+  jar {
+    from '../LICENSE'
+    from '../NOTICE'
+  }
 }
 
 project(':examples') {
@@ -271,6 +292,11 @@ project(':examples') {
   dependencies {
     compile project(':core')
   }
+
+  jar {
+    from '../LICENSE'
+    from '../NOTICE'
+  }
 }
 
 project(':clients') {
@@ -278,6 +304,11 @@ project(':clients') {
 
   dependencies {
     testCompile 'com.novocode:junit-interface:0.9'
+  }
+
+  jar {
+    from '../LICENSE'
+    from '../NOTICE'
   }
 
   task testJar(type: Jar) {
