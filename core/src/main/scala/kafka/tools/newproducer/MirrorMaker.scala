@@ -37,14 +37,13 @@ object MirrorMaker extends Logging {
     val parser = new OptionParser
 
     val consumerConfigOpt = parser.accepts("consumer.config",
-      "Consumer config to consume from a source cluster. " +
-      "You may specify multiple of these.")
+      "Consumer config file to consume from a source cluster.")
       .withRequiredArg()
       .describedAs("config file")
       .ofType(classOf[String])
 
     val producerConfigOpt = parser.accepts("producer.config",
-      "Embedded producer config.")
+      "Embedded producer config file for target cluster.")
       .withRequiredArg()
       .describedAs("config file")
       .ofType(classOf[String])
@@ -158,7 +157,7 @@ object MirrorMaker extends Logging {
 
   class ProducerDataChannel extends Logging {
     val producers = new ListBuffer[KafkaProducer]
-    var producerIndex = 0
+    var producerIndex = new AtomicInteger(0)
 
     def addProducer(producer: KafkaProducer) {
       producers += producer
@@ -171,8 +170,9 @@ object MirrorMaker extends Logging {
         val producer = producers(producerId)
         producer.send(producerRecord)
       } else {
-        producers(producerIndex).send(producerRecord)
-        producerIndex = (producerIndex + 1) % producers.size
+        val producerId = producerIndex.getAndSet((producerIndex.get() + 1) % producers.size)
+        producers(producerId).send(producerRecord)
+        trace("Sent message to producer " + producerId)
       }
     }
 
