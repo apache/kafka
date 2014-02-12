@@ -18,6 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertTrue;
 
 import java.util.List;
@@ -61,11 +62,20 @@ public class PartitionerTest {
     }
 
     @Test
+    public void testRoundRobinIsStable() {
+        int startPart = partitioner.partition(new ProducerRecord("test", value), cluster);
+        for (int i = 1; i <= 100; i++) {
+            int partition = partitioner.partition(new ProducerRecord("test", value), cluster);
+            assertEquals("Should yield a different partition each call with round-robin partitioner",
+                partition, (startPart + i) % 2);
+      }
+    }
+
+    @Test
     public void testRoundRobinWithDownNode() {
         for (int i = 0; i < partitions.size(); i++) {
             int part = partitioner.partition(new ProducerRecord("test", value), cluster);
             assertTrue("We should never choose a leader-less node in round robin", part >= 0 && part < 2);
-
         }
     }
 }
