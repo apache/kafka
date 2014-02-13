@@ -10,28 +10,30 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
+
 package org.apache.kafka.common.errors;
 
 /**
- * The client has tried to save its offset with associated metadata larger than the maximum size allowed by the server.
+ * An exception that may indicate the client's metadata is out of date
  */
-public class OffsetMetadataTooLarge extends ApiException {
+public abstract class InvalidMetadataException extends RetriableException {
 
     private static final long serialVersionUID = 1L;
 
-    public OffsetMetadataTooLarge() {
+    public InvalidMetadataException() {
+        super();
     }
 
-    public OffsetMetadataTooLarge(String message) {
+    public InvalidMetadataException(String message) {
         super(message);
     }
 
-    public OffsetMetadataTooLarge(Throwable cause) {
-        super(cause);
+    public InvalidMetadataException(String message, Throwable cause) {
+        super(message, cause);
     }
 
-    public OffsetMetadataTooLarge(String message, Throwable cause) {
-        super(message, cause);
+    public InvalidMetadataException(Throwable cause) {
+        super(cause);
     }
 
 }

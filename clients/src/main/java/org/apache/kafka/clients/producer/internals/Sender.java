@@ -22,12 +22,15 @@ import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Selectable;
@@ -41,6 +44,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
@@ -48,19 +52,55 @@ import org.apache.kafka.common.utils.Time;
  */
 public class Sender implements Runnable {
 
-    private final Map<Integer, NodeState> nodeState;
+    /* the state of each nodes connection */
+    private final NodeStates nodeStates;
+
+    /* the record accumulator that batches records */
     private final RecordAccumulator accumulator;
+
+    /* the selector used to perform network i/o */
     private final Selectable selector;
+
+    /* the client id used to identify this client in requests to the server */
     private final String clientId;
+
+    /* the maximum request size to attempt to send to the server */
     private final int maxRequestSize;
-    private final long reconnectBackoffMs;
+
+    /* the number of acknowledgements to request from the server */
     private final short acks;
+
+    /* the max time in ms for the server to wait for acknowlegements */
     private final int requestTimeout;
+
+    /* the number of times to retry a failed request before giving up */
+    private final int retries;
+
+    /* the socket send buffer size in bytes */
+    private final int socketSendBuffer;
+
+    /* the socket receive size buffer in bytes */
+    private final int socketReceiveBuffer;
+
+    /* the set of currently in-flight requests awaiting a response from the server */
     private final InFlightRequests inFlightRequests;
+
+    /* a reference to the current Cluster instance */
     private final Metadata metadata;
+
+    /* the clock instance used for getting the time */
     private final Time time;
+
+    /* the current node to attempt to use for metadata requests (will round-robin over nodes) */
+    private int metadataFetchNodeIndex;
+
+    /* the current correlation id to use when sending requests to servers */
     private int correlation;
+
+    /* true iff there is a metadata request that has been sent and for which we have not yet received a response */
     private boolean metadataFetchInProgress;
+
+    /* true while the sender thread is still running */
     private volatile boolean running;
 
     public Sender(Selectable selector,
@@ -70,22 +110,28 @@ public class Sender implements Runnable {
                   int maxRequestSize,
                   long reconnectBackoffMs,
                   short acks,
+                  int retries,
                   int requestTimeout,
+                  int socketSendBuffer,
+                  int socketReceiveBuffer,
                   Time time) {
-        this.nodeState = new HashMap<Integer, NodeState>();
+        this.nodeStates = new NodeStates(reconnectBackoffMs);
         this.accumulator = accumulator;
         this.selector = selector;
         this.maxRequestSize = maxRequestSize;
-        this.reconnectBackoffMs = reconnectBackoffMs;
         this.metadata = metadata;
         this.clientId = clientId;
         this.running = true;
         this.requestTimeout = requestTimeout;
         this.acks = acks;
+        this.retries = retries;
+        this.socketSendBuffer = socketSendBuffer;
+        this.socketReceiveBuffer = socketReceiveBuffer;
         this.inFlightRequests = new InFlightRequests();
         this.correlation = 0;
         this.metadataFetchInProgress = false;
         this.time = time;
+        this.metadataFetchNodeIndex = new Random().nextInt();
     }
 
     /**
@@ -130,11 +176,7 @@ public class Sender implements Runnable {
 
         // should we update our metadata?
         List<NetworkSend> sends = new ArrayList<NetworkSend>();
-        InFlightRequest metadataReq = maybeMetadataRequest(cluster, now);
-        if (metadataReq != null) {
-            sends.add(metadataReq.request);
-            this.inFlightRequests.add(metadataReq);
-        }
+        maybeUpdateMetadata(cluster, sends, now);
 
         // prune the list of ready topics to eliminate any that we aren't ready to send yet
         List<TopicPartition> sendable = processReadyPartitions(cluster, ready, now);
@@ -158,43 +200,76 @@ public class Sender implements Runnable {
         // handle responses, connections, and disconnections
         handleSends(this.selector.completedSends());
         handleResponses(this.selector.completedReceives(), now);
-        handleDisconnects(this.selector.disconnected());
+        handleDisconnects(this.selector.disconnected(), now);
         handleConnects(this.selector.connected());
 
         return ready.size();
     }
 
-    private InFlightRequest maybeMetadataRequest(Cluster cluster, long now) {
+    /**
+     * Add a metadata request to the list of sends if we need to make one
+     */
+    private void maybeUpdateMetadata(Cluster cluster, List<NetworkSend> sends, long now) {
         if (this.metadataFetchInProgress || !metadata.needsUpdate(now))
-            return null;
+            return;
 
-        Node node = nextFreeNode(cluster);
+        Node node = selectMetadataDestination(cluster);
         if (node == null)
-            return null;
+            return;
 
-        NodeState state = nodeState.get(node.id());
-        if (state == null || (state.state == ConnectionState.DISCONNECTED && now - state.lastConnectAttempt > this.reconnectBackoffMs)) {
+        if (nodeStates.isConnected(node.id())) {
+            this.metadataFetchInProgress = true;
+            InFlightRequest request = metadataRequest(node.id(), metadata.topics());
+            sends.add(request.request);
+            this.inFlightRequests.add(request);
+        } else if (nodeStates.canConnect(node.id(), now)) {
             // we don't have a connection to this node right now, make one
             initiateConnect(node, now);
-            return null;
-        } else if (state.state == ConnectionState.CONNECTED) {
-            this.metadataFetchInProgress = true;
-            return metadataRequest(node.id(), metadata.topics());
-        } else {
-            return null;
         }
     }
 
     /**
+     * Find a good node to make a metadata request to. This method will first look for a node that has an existing
+     * connection and no outstanding requests. If there are no such nodes it will look for a node with no outstanding
+     * requests.
      * @return A node with no requests currently being sent or null if no such node exists
      */
-    private Node nextFreeNode(Cluster cluster) {
-        for (int i = 0; i < cluster.nodes().size(); i++) {
-            Node node = cluster.nextNode();
-            if (this.inFlightRequests.canSendMore(node.id()))
+    private Node selectMetadataDestination(Cluster cluster) {
+        List<Node> nodes = cluster.nodes();
+
+        // first look for a node to which we are connected and have no outstanding requests
+        boolean connectionInProgress = false;
+        for (int i = 0; i < nodes.size(); i++) {
+            Node node = nodes.get(metadataNodeIndex(i, nodes.size()));
+            if (nodeStates.isConnected(node.id()) && this.inFlightRequests.canSendMore(node.id())) {
+                this.metadataFetchNodeIndex = metadataNodeIndex(i + 1, nodes.size());
                 return node;
+            } else if (nodeStates.isConnecting(node.id())) {
+                connectionInProgress = true;
+            }
         }
-        return null;
+
+        // if we have a connection that is being established now, just wait for that don't make another
+        if (connectionInProgress)
+            return null;
+
+        // okay, no luck, pick a random unused node
+        for (int i = 0; i < nodes.size(); i++) {
+            Node node = nodes.get(metadataNodeIndex(i, nodes.size()));
+            if (this.inFlightRequests.canSendMore(node.id())) {
+                this.metadataFetchNodeIndex = metadataNodeIndex(i + 1, nodes.size());
+                return node;
+            }
+        }
+
+        return null; // we failed to find a good destination
+    }
+
+    /**
+     * Get the index in the node list of the node to use for the metadata request
+     */
+    private int metadataNodeIndex(int offset, int size) {
+        return Utils.abs(offset + this.metadataFetchNodeIndex) % size;
     }
 
     /**
@@ -209,7 +284,7 @@ public class Sender implements Runnable {
     /**
      * Process the set of topic-partitions with data ready to send. If we have a connection to the appropriate node, add
      * it to the returned set. For any partitions we have no connection to either make one, fetch the appropriate
-     * metdata to be able to do so
+     * metadata to be able to do so
      */
     private List<TopicPartition> processReadyPartitions(Cluster cluster, List<TopicPartition> ready, long now) {
         List<TopicPartition> sendable = new ArrayList<TopicPartition>(ready.size());
@@ -218,15 +293,11 @@ public class Sender implements Runnable {
             if (node == null) {
                 // we don't know about this topic/partition or it has no leader, re-fetch metadata
                 metadata.forceUpdate();
-            } else {
-                NodeState state = nodeState.get(node.id());
-                // TODO: encapsulate this logic somehow
-                if (state == null || (state.state == ConnectionState.DISCONNECTED && now - state.lastConnectAttempt > this.reconnectBackoffMs)) {
-                    // we don't have a connection to this node right now, make one
-                    initiateConnect(node, now);
-                } else if (state.state == ConnectionState.CONNECTED && inFlightRequests.canSendMore(node.id())) {
-                    sendable.add(tp);
-                }
+            } else if (nodeStates.isConnected(node.id()) && inFlightRequests.canSendMore(node.id())) {
+                sendable.add(tp);
+            } else if (nodeStates.canConnect(node.id(), now)) {
+                // we don't have a connection to this node right now, make one
+                initiateConnect(node, now);
             }
         }
         return sendable;
@@ -237,13 +308,11 @@ public class Sender implements Runnable {
      */
     private void initiateConnect(Node node, long now) {
         try {
-            selector.connect(node.id(), new InetSocketAddress(node.host(), node.port()), 64 * 1024 * 1024, 64 * 1024 * 1024); // TODO
-                                                                                                                              // socket
-                                                                                                                              // buffers
-            nodeState.put(node.id(), new NodeState(ConnectionState.CONNECTING, now));
+            selector.connect(node.id(), new InetSocketAddress(node.host(), node.port()), this.socketSendBuffer, this.socketReceiveBuffer);
+            this.nodeStates.connecting(node.id(), now);
         } catch (IOException e) {
             /* attempt failed, we'll try again after the backoff */
-            nodeState.put(node.id(), new NodeState(ConnectionState.DISCONNECTED, now));
+            nodeStates.disconnected(node.id());
             /* maybe the problem is our metadata, update it */
             metadata.forceUpdate();
         }
@@ -252,19 +321,26 @@ public class Sender implements Runnable {
     /**
      * Handle any closed connections
      */
-    private void handleDisconnects(List<Integer> disconnects) {
+    private void handleDisconnects(List<Integer> disconnects, long now) {
+        // clear out the in-flight requests for the disconnected broker
         for (int node : disconnects) {
             for (InFlightRequest request : this.inFlightRequests.clearAll(node)) {
                 if (request.batches != null) {
-                    for (RecordBatch batch : request.batches.values())
-                        batch.done(-1L, new NetworkException("The server disconnected unexpectedly without sending a response."));
-                    this.accumulator.deallocate(request.batches.values());
+                    for (RecordBatch batch : request.batches.values()) {
+                        if (canRetry(batch, Errors.NETWORK_EXCEPTION)) {
+                            this.accumulator.reenqueue(batch, now);
+                        } else {
+                            batch.done(-1L, new NetworkException("The server disconnected unexpectedly without sending a response."));
+                            this.accumulator.deallocate(batch);
+                        }
+                    }
                 }
-                NodeState state = this.nodeState.get(request.request.destination());
-                if (state != null)
-                    state.state = ConnectionState.DISCONNECTED;
+                nodeStates.disconnected(request.request.destination());
             }
         }
+        // we got a disconnect so we should probably refresh our metadata and see if that broker is dead
+        if (disconnects.size() > 0)
+            this.metadata.forceUpdate();
     }
 
     /**
@@ -272,7 +348,7 @@ public class Sender implements Runnable {
      */
     private void handleConnects(List<Integer> connects) {
         for (Integer id : connects)
-            this.nodeState.get(id).state = ConnectionState.CONNECTED;
+            this.nodeStates.connected(id);
     }
 
     /**
@@ -286,9 +362,10 @@ public class Sender implements Runnable {
             if (!request.expectResponse) {
                 requests.pollFirst();
                 if (request.request.header().apiKey() == ApiKeys.PRODUCE.id) {
-                    for (RecordBatch batch : request.batches.values())
+                    for (RecordBatch batch : request.batches.values()) {
                         batch.done(-1L, Errors.NONE.exception());
-                    this.accumulator.deallocate(request.batches.values());
+                        this.accumulator.deallocate(batch);
+                    }
                 }
             }
         }
@@ -306,7 +383,7 @@ public class Sender implements Runnable {
             Struct body = (Struct) ProtoUtils.currentResponseSchema(apiKey).read(receive.payload());
             correlate(req.request.header(), header);
             if (req.request.header().apiKey() == ApiKeys.PRODUCE.id)
-                handleProduceResponse(req, body);
+                handleProduceResponse(req, body, now);
             else if (req.request.header().apiKey() == ApiKeys.METADATA.id)
                 handleMetadataResponse(body, now);
             else
@@ -327,7 +404,7 @@ public class Sender implements Runnable {
     /**
      * Handle a produce response
      */
-    private void handleProduceResponse(InFlightRequest request, Struct response) {
+    private void handleProduceResponse(InFlightRequest request, Struct response, long now) {
         for (Object topicResponse : (Object[]) response.get("responses")) {
             Struct topicRespStruct = (Struct) topicResponse;
             String topic = (String) topicRespStruct.get("topic");
@@ -335,12 +412,31 @@ public class Sender implements Runnable {
                 Struct partRespStruct = (Struct) partResponse;
                 int partition = (Integer) partRespStruct.get("partition");
                 short errorCode = (Short) partRespStruct.get("error_code");
+
+                // if we got an error we may need to refresh our metadata
+                Errors error = Errors.forCode(errorCode);
+                if (error.exception() instanceof InvalidMetadataException)
+                    metadata.forceUpdate();
+
                 long offset = (Long) partRespStruct.get("base_offset");
                 RecordBatch batch = request.batches.get(new TopicPartition(topic, partition));
-                batch.done(offset, Errors.forCode(errorCode).exception());
+                if (canRetry(batch, error)) {
+                    // retry
+                    this.accumulator.reenqueue(batch, now);
+                } else {
+                    // tell the user the result of their request
+                    batch.done(offset, error.exception());
+                    this.accumulator.deallocate(batch);
+                }
             }
         }
-        this.accumulator.deallocate(request.batches.values());
+    }
+
+    /**
+     * We can retry a send if the error is transient and the number of attempts taken is fewer than the maximum allowed
+     */
+    private boolean canRetry(RecordBatch batch, Errors error) {
+        return batch.attempts < this.retries && error.exception() instanceof RetriableException;
     }
 
     /**
@@ -456,6 +552,53 @@ public class Sender implements Runnable {
 
         public String toString() {
             return "NodeState(" + state + ", " + lastConnectAttempt + ")";
+        }
+    }
+
+    private static class NodeStates {
+        private final long reconnectBackoffMs;
+        private final Map<Integer, NodeState> nodeState;
+
+        public NodeStates(long reconnectBackoffMs) {
+            this.reconnectBackoffMs = reconnectBackoffMs;
+            this.nodeState = new HashMap<Integer, NodeState>();
+        }
+
+        public boolean canConnect(int node, long now) {
+            NodeState state = nodeState.get(node);
+            if (state == null)
+                return true;
+            else
+                return state.state == ConnectionState.DISCONNECTED && now - state.lastConnectAttempt > this.reconnectBackoffMs;
+        }
+
+        public void connecting(int node, long now) {
+            nodeState.put(node, new NodeState(ConnectionState.CONNECTING, now));
+        }
+
+        public boolean isConnected(int node) {
+            NodeState state = nodeState.get(node);
+            return state != null && state.state == ConnectionState.CONNECTED;
+        }
+
+        public boolean isConnecting(int node) {
+            NodeState state = nodeState.get(node);
+            return state != null && state.state == ConnectionState.CONNECTING;
+        }
+
+        public void connected(int node) {
+            nodeState(node).state = ConnectionState.CONNECTED;
+        }
+
+        public void disconnected(int node) {
+            nodeState(node).state = ConnectionState.DISCONNECTED;
+        }
+
+        private NodeState nodeState(int node) {
+            NodeState state = this.nodeState.get(node);
+            if (state == null)
+                throw new IllegalStateException("No entry found for node " + node);
+            return state;
         }
     }
 

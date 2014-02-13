@@ -13,25 +13,25 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The client has tried to save its offset with associated metadata larger than the maximum size allowed by the server.
+ * A retryable exception is a transient exception that if retried may succeed.
  */
-public class OffsetMetadataTooLarge extends ApiException {
+public abstract class RetriableException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public OffsetMetadataTooLarge() {
+    public RetriableException(String message, Throwable cause) {
+        super(message, cause);
     }
 
-    public OffsetMetadataTooLarge(String message) {
+    public RetriableException(String message) {
         super(message);
     }
 
-    public OffsetMetadataTooLarge(Throwable cause) {
+    public RetriableException(Throwable cause) {
         super(cause);
     }
 
-    public OffsetMetadataTooLarge(String message, Throwable cause) {
-        super(message, cause);
+    public RetriableException() {
     }
 
 }

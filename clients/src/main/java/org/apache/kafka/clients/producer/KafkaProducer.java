@@ -96,7 +96,7 @@ public class KafkaProducer implements Producer {
         this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.MAX_PARTITION_SIZE_CONFIG),
                                                  this.totalMemorySize,
                                                  config.getLong(ProducerConfig.LINGER_MS_CONFIG),
-                                                 config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL),
+                                                 config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG),
                                                  metrics,
                                                  new SystemTime());
         List<InetSocketAddress> addresses = parseAndValidateAddresses(config.getList(ProducerConfig.BROKER_LIST_CONFIG));
@@ -108,7 +108,10 @@ public class KafkaProducer implements Producer {
                                  config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
                                  config.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                                  (short) config.getInt(ProducerConfig.REQUIRED_ACKS_CONFIG),
+                                 config.getInt(ProducerConfig.MAX_RETRIES_CONFIG),
                                  config.getInt(ProducerConfig.REQUEST_TIMEOUT_CONFIG),
+                                 config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
+                                 config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
                                  new SystemTime());
         this.ioThread = new KafkaThread("kafka-network-thread", this.sender, true);
         this.ioThread.start();
