@@ -28,8 +28,10 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.controller.KafkaController
 import org.apache.log4j.Logger
 import kafka.message.ByteBufferMessageSet
-import kafka.common.{NotAssignedReplicaException, TopicAndPartition, NotLeaderForPartitionException, ErrorMapping}
+import kafka.common.{NotAssignedReplicaException, NotLeaderForPartitionException, ErrorMapping}
 import java.io.IOException
+import scala.Some
+import kafka.common.TopicAndPartition
 
 
 /**
@@ -190,10 +192,11 @@ class Partition(val topic: String,
 
   /**
    *  Make the local replica the follower by setting the new leader and ISR to empty
+   *  If the leader replica id does not change, return false to indicate the replica manager
    */
   def makeFollower(controllerId: Int,
                    partitionStateInfo: PartitionStateInfo,
-                   leaders: Set[Broker], correlationId: Int): Boolean = {
+                   correlationId: Int): Boolean = {
     leaderIsrUpdateLock synchronized {
       val allReplicas = partitionStateInfo.allReplicas
       val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
@@ -202,23 +205,18 @@ class Partition(val topic: String,
       // record the epoch of the controller that made the leadership decision. This is useful while updating the isr
       // to maintain the decision maker controller's epoch in the zookeeper path
       controllerEpoch = leaderIsrAndControllerEpoch.controllerEpoch
-      // TODO: Delete leaders from LeaderAndIsrRequest in 0.8.1
-      leaders.find(_.id == newLeaderBrokerId) match {
-        case Some(leaderBroker) =>
-          // add replicas that are new
-          allReplicas.foreach(r => getOrCreateReplica(r))
-          // remove assigned replicas that have been removed by the controller
-          (assignedReplicas().map(_.brokerId) -- allReplicas).foreach(removeReplica(_))
-          inSyncReplicas = Set.empty[Replica]
-          leaderEpoch = leaderAndIsr.leaderEpoch
-          zkVersion = leaderAndIsr.zkVersion
-          leaderReplicaIdOpt = Some(newLeaderBrokerId)
-        case None => // we should not come here
-          stateChangeLogger.error(("Broker %d aborted the become-follower state change with correlation id %d from " +
-                                   "controller %d epoch %d for partition [%s,%d] new leader %d")
-                                    .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch,
-                                            topic, partitionId, newLeaderBrokerId))
-      }
+      // add replicas that are new
+      allReplicas.foreach(r => getOrCreateReplica(r))
+      // remove assigned replicas that have been removed by the controller
+      (assignedReplicas().map(_.brokerId) -- allReplicas).foreach(removeReplica(_))
+      inSyncReplicas = Set.empty[Replica]
+      leaderEpoch = leaderAndIsr.leaderEpoch
+      zkVersion = leaderAndIsr.zkVersion
+
+      if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == newLeaderBrokerId)
+        return false;
+
+      leaderReplicaIdOpt = Some(newLeaderBrokerId)
       true
     }
   }

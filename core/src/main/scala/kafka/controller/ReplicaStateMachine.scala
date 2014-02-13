@@ -231,8 +231,9 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
               case Some(currLeaderIsrAndControllerEpoch) =>
                 controller.removeReplicaFromIsr(topic, partition, replicaId) match {
                   case Some(updatedLeaderIsrAndControllerEpoch) =>
-                    // send the shrunk ISR state change request only to the leader
-                    brokerRequestBatch.addLeaderAndIsrRequestForBrokers(List(updatedLeaderIsrAndControllerEpoch.leaderAndIsr.leader),
+                    // send the shrunk ISR state change request to all the remaining alive replicas of the partition.
+                    val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
+                    brokerRequestBatch.addLeaderAndIsrRequestForBrokers(currentAssignedReplicas.filterNot(_ == replicaId),
                       topic, partition, updatedLeaderIsrAndControllerEpoch, replicaAssignment)
                     replicaState.put(partitionAndReplica, OfflineReplica)
                     stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
