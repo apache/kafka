@@ -34,25 +34,31 @@ subprojects {
   apply plugin: 'java'
   apply plugin: 'eclipse'
   apply plugin: 'maven'
-  
+  apply plugin: 'signing'
+
   uploadArchives {
     repositories {
-      // To test locally, replace mavenUrl in gradle.properties to file://localhost/tmp/myRepo/
-      mavenDeployer {
-        repository(url: "${mavenUrl}") {
-          authentication(userName: "${mavenUsername}", password: "${mavenPassword}")
-        }
-        afterEvaluate {
-          pom.artifactId = "${archivesBaseName}"
-          pom.project {
-            name 'Apache Kafka'
-            packaging 'jar'
-            url 'http://kafka.apache.org'
-            licenses {
-              license {
-                name 'The Apache Software License, Version 2.0'
-                url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                distribution 'repo'
+      signing {
+        sign configurations.archives
+
+        // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
+        mavenDeployer {
+          beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+          repository(url: "${mavenUrl}") {
+            authentication(userName: "${mavenUsername}", password: "${mavenPassword}")
+          }
+          afterEvaluate {
+            pom.artifactId = "${archivesBaseName}"
+            pom.project {
+              name 'Apache Kafka'
+              packaging 'jar'
+              url 'http://kafka.apache.org'
+              licenses {
+                license {
+                  name 'The Apache Software License, Version 2.0'
+                  url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                  distribution 'repo'
+                }
               }
             }
           }
