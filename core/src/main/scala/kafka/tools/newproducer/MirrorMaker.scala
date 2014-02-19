@@ -84,7 +84,7 @@ object MirrorMaker extends Logging {
       new Blacklist(options.valueOf(blacklistOpt))
     val producerConfig = options.valueOf(producerConfigOpt)
     val producerProps = Utils.loadProps(producerConfig)
-    producerProps.setProperty(ProducerConfig.BLOCK_ON_BUFFER_FULL, "true")
+    producerProps.setProperty(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
     val consumerConfig = options.valueOf(consumerConfigOpt)
     val numStreams = options.valueOf(numStreamsOpt)
     producerChannel = new ProducerDataChannel()
