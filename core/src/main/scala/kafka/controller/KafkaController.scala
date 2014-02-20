@@ -335,7 +335,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
    */
   def onControllerResignation() {
     inLock(controllerContext.controllerLock) {
-      autoRebalanceScheduler.shutdown()
+      if (config.autoLeaderRebalanceEnable)
+        autoRebalanceScheduler.shutdown()
       deleteTopicManager.shutdown()
       Utils.unregisterMBean(KafkaController.MBeanName)
       partitionStateMachine.shutdown()
