@@ -58,7 +58,7 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/clients/target/scala-${SCALA_VERSION}/clients*.jar;
+for file in $base_dir/clients/build/libs/kafka-clients*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done
