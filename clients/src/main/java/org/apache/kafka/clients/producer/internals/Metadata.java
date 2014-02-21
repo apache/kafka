@@ -19,6 +19,8 @@ import java.util.Set;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A class encapsulating some of the logic around metadata.
@@ -29,6 +31,8 @@ import org.apache.kafka.common.errors.TimeoutException;
  * topic we don't have any metadata for it will trigger a metadata update.
  */
 public final class Metadata {
+
+    private static final Logger log = LoggerFactory.getLogger(Metadata.class);
 
     private final long refreshBackoffMs;
     private final long metadataExpireMs;
@@ -81,6 +85,7 @@ public final class Metadata {
                 topics.add(topic);
                 forceUpdate = true;
                 try {
+                    log.trace("Requesting metadata update for topic {}.", topic);
                     wait(maxWaitMs);
                 } catch (InterruptedException e) { /* this is fine, just try again */
                 }
@@ -127,6 +132,7 @@ public final class Metadata {
         this.lastRefresh = now;
         this.cluster = cluster;
         notifyAll();
+        log.debug("Updated cluster metadata to {}", cluster);
     }
 
     /**

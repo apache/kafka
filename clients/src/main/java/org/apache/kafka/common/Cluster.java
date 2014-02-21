@@ -73,9 +73,9 @@ public final class Cluster {
      */
     public static Cluster bootstrap(List<InetSocketAddress> addresses) {
         List<Node> nodes = new ArrayList<Node>();
-        int nodeId = Integer.MIN_VALUE;
+        int nodeId = -1;
         for (InetSocketAddress address : addresses)
-            nodes.add(new Node(nodeId++, address.getHostName(), address.getPort()));
+            nodes.add(new Node(nodeId--, address.getHostName(), address.getPort()));
         return new Cluster(nodes, new ArrayList<PartitionInfo>(0));
     }
 
@@ -115,6 +115,11 @@ public final class Cluster {
      */
     public List<PartitionInfo> partitionsFor(String topic) {
         return this.partitionsByTopic.get(topic);
+    }
+
+    @Override
+    public String toString() {
+        return "Cluster(nodes = " + this.nodes + ", partitions = " + this.partitionsByTopicPartition.values() + ")";
     }
 
 }

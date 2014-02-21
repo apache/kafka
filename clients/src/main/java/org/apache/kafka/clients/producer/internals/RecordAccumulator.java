@@ -33,6 +33,8 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class acts as a queue that accumulates records into {@link org.apache.kafka.common.record.MemoryRecords}
@@ -42,6 +44,8 @@ import org.apache.kafka.common.utils.Utils;
  * this behavior is explicitly disabled.
  */
 public final class RecordAccumulator {
+
+    private static final Logger log = LoggerFactory.getLogger(RecordAccumulator.class);
 
     private volatile boolean closed;
     private int drainIndex;
@@ -126,6 +130,7 @@ public final class RecordAccumulator {
 
         // we don't have an in-progress record batch try to allocate a new batch
         int size = Math.max(this.batchSize, Records.LOG_OVERHEAD + Record.recordSize(key, value));
+        log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
         ByteBuffer buffer = free.allocate(size);
         synchronized (dq) {
             RecordBatch first = dq.peekLast();

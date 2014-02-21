@@ -474,6 +474,6 @@ class ReplicaManager(val config: KafkaConfig,
     info("Shut down")
     replicaFetcherManager.shutdown()
     checkpointHighWatermarks()
-    info("Shutted down completely")
+    info("Shut down completely")
   }
 }

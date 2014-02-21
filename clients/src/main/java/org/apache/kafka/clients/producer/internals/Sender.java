@@ -45,12 +45,16 @@ import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
  * requests to renew its view of the cluster and then sends produce requests to the appropriate nodes.
  */
 public class Sender implements Runnable {
+
+    private static final Logger log = LoggerFactory.getLogger(Sender.class);
 
     /* the state of each nodes connection */
     private final NodeStates nodeStates;
@@ -138,14 +142,18 @@ public class Sender implements Runnable {
      * The main run loop for the sender thread
      */
     public void run() {
+        log.trace("Starting Kafka producer I/O thread.");
+
         // main loop, runs until close is called
         while (running) {
             try {
                 run(time.milliseconds());
             } catch (Exception e) {
-                e.printStackTrace();
+                log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
         }
+
+        log.trace("Beginning shutdown of Kafka producer I/O thread, sending remaining records.");
 
         // okay we stopped accepting requests but there may still be
         // requests in the accumulator or waiting for acknowledgment,
@@ -155,12 +163,14 @@ public class Sender implements Runnable {
             try {
                 unsent = run(time.milliseconds());
             } catch (Exception e) {
-                e.printStackTrace();
+                log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
         } while (unsent > 0 || this.inFlightRequests.totalInFlightRequests() > 0);
 
         // close all the connections
         this.selector.close();
+
+        log.trace("Shutdown of Kafka producer I/O thread has completed.");
     }
 
     /**
@@ -184,6 +194,13 @@ public class Sender implements Runnable {
         // create produce requests
         List<RecordBatch> batches = this.accumulator.drain(sendable, this.maxRequestSize);
         List<InFlightRequest> requests = collate(cluster, batches);
+
+        if (ready.size() > 0) {
+            log.trace("Partitions with complete batches: {}", ready);
+            log.trace("Partitions ready to initiate a request: {}", sendable);
+            log.trace("Created {} requests: {}", requests.size(), requests);
+        }
+
         for (int i = 0; i < requests.size(); i++) {
             InFlightRequest request = requests.get(i);
             this.inFlightRequests.add(request);
@@ -194,7 +211,7 @@ public class Sender implements Runnable {
         try {
             this.selector.poll(100L, sends);
         } catch (IOException e) {
-            e.printStackTrace();
+            log.error("Unexpected error during I/O in producer network thread", e);
         }
 
         // handle responses, connections, and disconnections
@@ -218,8 +235,10 @@ public class Sender implements Runnable {
             return;
 
         if (nodeStates.isConnected(node.id())) {
+            Set<String> topics = metadata.topics();
+            log.debug("Sending metadata update request for topics {} to node {}", topics, node.id());
             this.metadataFetchInProgress = true;
-            InFlightRequest request = metadataRequest(node.id(), metadata.topics());
+            InFlightRequest request = metadataRequest(node.id(), topics);
             sends.add(request.request);
             this.inFlightRequests.add(request);
         } else if (nodeStates.canConnect(node.id(), now)) {
@@ -308,6 +327,7 @@ public class Sender implements Runnable {
      */
     private void initiateConnect(Node node, long now) {
         try {
+            log.debug("Initiating connection to node {} at {}:{}.", node.id(), node.host(), node.port());
             selector.connect(node.id(), new InetSocketAddress(node.host(), node.port()), this.socketSendBuffer, this.socketReceiveBuffer);
             this.nodeStates.connecting(node.id(), now);
         } catch (IOException e) {
@@ -315,6 +335,7 @@ public class Sender implements Runnable {
             nodeStates.disconnected(node.id());
             /* maybe the problem is our metadata, update it */
             metadata.forceUpdate();
+            log.debug("Error connecting to node {} at {}:{}:", node.id(), node.host(), node.port(), e);
         }
     }
 
@@ -325,6 +346,7 @@ public class Sender implements Runnable {
         // clear out the in-flight requests for the disconnected broker
         for (int node : disconnects) {
             nodeStates.disconnected(node);
+            log.debug("Node {} disconnected.", node);
             for (InFlightRequest request : this.inFlightRequests.clearAll(node)) {
                 if (request.batches != null) {
                     for (RecordBatch batch : request.batches.values()) {
@@ -347,8 +369,10 @@ public class Sender implements Runnable {
      * Record any connections that completed in our node state
      */
     private void handleConnects(List<Integer> connects) {
-        for (Integer id : connects)
+        for (Integer id : connects) {
+            log.debug("Completed connection to node {}", id);
             this.nodeStates.connected(id);
+        }
     }
 
     /**
@@ -359,6 +383,7 @@ public class Sender implements Runnable {
         for (NetworkSend send : sends) {
             Deque<InFlightRequest> requests = this.inFlightRequests.requestQueue(send.destination());
             InFlightRequest request = requests.peekFirst();
+            log.trace("Completed send of request to node {}: {}", request.request.destination(), request.request);
             if (!request.expectResponse) {
                 requests.pollFirst();
                 if (request.request.header().apiKey() == ApiKeys.PRODUCE.id) {
@@ -382,12 +407,16 @@ public class Sender implements Runnable {
             short apiKey = req.request.header().apiKey();
             Struct body = (Struct) ProtoUtils.currentResponseSchema(apiKey).read(receive.payload());
             correlate(req.request.header(), header);
-            if (req.request.header().apiKey() == ApiKeys.PRODUCE.id)
+            if (req.request.header().apiKey() == ApiKeys.PRODUCE.id) {
+                log.trace("Received produce response from node {} with correlation id {}", source, req.request.header().correlationId());
                 handleProduceResponse(req, body, now);
-            else if (req.request.header().apiKey() == ApiKeys.METADATA.id)
+            } else if (req.request.header().apiKey() == ApiKeys.METADATA.id) {
+                log.trace("Received metadata response response from node {} with correlation id {}", source, req.request.header()
+                                                                                                                        .correlationId());
                 handleMetadataResponse(body, now);
-            else
+            } else {
                 throw new IllegalStateException("Unexpected response type: " + req.request.header().apiKey());
+            }
         }
     }
 
@@ -399,6 +428,8 @@ public class Sender implements Runnable {
         // created which means we will get errors and no nodes until it exists
         if (cluster.nodes().size() > 0)
             this.metadata.update(cluster, now);
+        else
+            log.trace("Ignoring empty metadata response.");
     }
 
     /**
@@ -422,6 +453,7 @@ public class Sender implements Runnable {
                 RecordBatch batch = request.batches.get(new TopicPartition(topic, partition));
                 if (canRetry(batch, error)) {
                     // retry
+                    log.warn("Got error for topic-partition {}, retrying. Error: {}", topic, partition, error);
                     this.accumulator.reenqueue(batch, now);
                 } else {
                     // tell the user the result of their request
@@ -619,6 +651,11 @@ public class Sender implements Runnable {
             this.batches = batches;
             this.request = request;
             this.expectResponse = expectResponse;
+        }
+
+        @Override
+        public String toString() {
+            return "InFlightRequest(expectResponse=" + expectResponse + ", batches=" + batches + ", request=" + request + ")";
         }
     }
 

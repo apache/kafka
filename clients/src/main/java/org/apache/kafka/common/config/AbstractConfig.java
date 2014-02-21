@@ -1,18 +1,14 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.common.config;
 
@@ -25,7 +21,8 @@ import java.util.Set;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
-
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * A convenient base class for configurations to extend.
@@ -34,9 +31,16 @@ import org.apache.kafka.common.utils.Utils;
  */
 public class AbstractConfig {
 
+    private final Logger log = LoggerFactory.getLogger(getClass());
+
+    /* configs for which values have been requested, used to detect unused configs */
     private final Set<String> used;
-    private final Map<String, Object> values;
+
+    /* the original values passed in by the user */
     private final Map<String, ?> originals;
+
+    /* the parsed values */
+    private final Map<String, Object> values;
 
     @SuppressWarnings("unchecked")
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
@@ -47,6 +51,7 @@ public class AbstractConfig {
         this.originals = (Map<String, ?>) originals;
         this.values = definition.parse(this.originals);
         this.used = Collections.synchronizedSet(new HashSet<String>());
+        logAll();
     }
 
     protected Object get(String key) {
@@ -83,8 +88,28 @@ public class AbstractConfig {
 
     public Set<String> unused() {
         Set<String> keys = new HashSet<String>(originals.keySet());
-        keys.remove(used);
+        keys.removeAll(used);
         return keys;
+    }
+
+    private void logAll() {
+        StringBuilder b = new StringBuilder();
+        b.append(getClass().getSimpleName());
+        b.append(" values: ");
+        b.append(Utils.NL);
+        for (Map.Entry<String, Object> entry : this.values.entrySet()) {
+            b.append('\t');
+            b.append(entry.getKey());
+            b.append(" = ");
+            b.append(entry.getValue());
+            b.append(Utils.NL);
+        }
+        log.info(b.toString());
+    }
+
+    public void logUnused() {
+        for (String key : unused())
+            log.warn("The configuration {} = {} was supplied but isn't a known config.", key, this.values.get(key));
     }
 
     /**
