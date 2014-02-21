@@ -224,11 +224,14 @@ object TopicCommand {
                          .withRequiredArg
                          .describedAs("topic")
                          .ofType(classOf[String])
-    val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered.")
+    val nl = System.getProperty("line.separator")
+    val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered."  + 
+                                                         "The following is a list of valid configurations: " + nl + LogConfig.ConfigNames.map("\t" + _).mkString(nl) + nl +  
+                                                         "See the Kafka documentation for full details on the topic configs.")
                           .withRequiredArg
                           .describedAs("name=value")
                           .ofType(classOf[String])
-    val deleteConfigOpt = parser.accepts("deleteConfig", "A topic configuration override to be removed for an existing topic")
+    val deleteConfigOpt = parser.accepts("delete-config", "A topic configuration override to be removed for an existing topic (see the list of configurations under the --config option).")
                           .withRequiredArg
                           .describedAs("name")
                           .ofType(classOf[String])
