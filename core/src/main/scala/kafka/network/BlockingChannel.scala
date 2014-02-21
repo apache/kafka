@@ -71,19 +71,23 @@ class BlockingChannel( val host: String,
   }
   
   def disconnect() = lock synchronized {
-    if(connected || channel != null) {
-      // closing the main socket channel *should* close the read channel
-      // but let's do it to be sure.
+    if(channel != null) {
       swallow(channel.close())
       swallow(channel.socket.close())
-      if(readChannel != null) swallow(readChannel.close())
-      channel = null; readChannel = null; writeChannel = null
-      connected = false
+      channel = null
+      writeChannel = null
     }
+    // closing the main socket channel *should* close the read channel
+    // but let's do it to be sure.
+    if(readChannel != null) {
+      swallow(readChannel.close())
+      readChannel = null
+    }
+    connected = false
   }
 
   def isConnected = connected
-  
+
   def send(request: RequestOrResponse):Int = {
     if(!connected)
       throw new ClosedChannelException()

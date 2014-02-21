@@ -134,9 +134,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       // the shutdown.
       var remainingRetries = config.controlledShutdownMaxRetries
       info("Starting controlled shutdown")
-      var channel : BlockingChannel = null;
+      var channel : BlockingChannel = null
       var prevController : Broker = null
-      var shutdownSuceeded : Boolean =false
+      var shutdownSuceeded : Boolean = false
       try {
         while (!shutdownSuceeded && remainingRetries > 0) {
           remainingRetries = remainingRetries - 1
@@ -218,6 +218,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     val canShutdown = isShuttingDown.compareAndSet(false, true);
     if (canShutdown) {
       Utils.swallow(controlledShutdown())
+      if(kafkaHealthcheck != null)
+        Utils.swallow(kafkaHealthcheck.shutdown())
       if(socketServer != null)
         Utils.swallow(socketServer.shutdown())
       if(requestHandlerPool != null)

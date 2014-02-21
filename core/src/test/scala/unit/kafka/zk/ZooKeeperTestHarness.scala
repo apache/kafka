@@ -29,15 +29,15 @@ trait ZooKeeperTestHarness extends JUnit3Suite {
   val zkSessionTimeout = 6000
 
   override def setUp() {
+    super.setUp
     zookeeper = new EmbeddedZookeeper(zkConnect)
     zkClient = new ZkClient(zookeeper.connectString, zkSessionTimeout, zkConnectionTimeout, ZKStringSerializer)
-    super.setUp
   }
 
   override def tearDown() {
-    super.tearDown
     Utils.swallow(zkClient.close())
     Utils.swallow(zookeeper.shutdown())
+    super.tearDown
   }
 
 }

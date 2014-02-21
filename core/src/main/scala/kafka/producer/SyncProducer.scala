@@ -126,10 +126,8 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
    */
   private def disconnect() {
     try {
-      if(blockingChannel.isConnected) {
-        info("Disconnecting from " + config.host + ":" + config.port)
-        blockingChannel.disconnect()
-      }
+      info("Disconnecting from " + config.host + ":" + config.port)
+      blockingChannel.disconnect()
     } catch {
       case e: Exception => error("Error on disconnect: ", e)
     }
