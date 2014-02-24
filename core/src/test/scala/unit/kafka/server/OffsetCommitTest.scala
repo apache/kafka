@@ -30,6 +30,7 @@ import kafka.api.{OffsetCommitRequest, OffsetFetchRequest}
 import kafka.utils.TestUtils._
 import kafka.common.{ErrorMapping, TopicAndPartition, OffsetMetadataAndError}
 import scala.util.Random
+import kafka.admin.AdminUtils
 
 class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
   val random: Random = new Random()
@@ -66,6 +67,11 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // Commit an offset
     val topicAndPartition = TopicAndPartition(topic, 0)
+    val expectedReplicaAssignment = Map(0  -> List(1))
+    // create the topic
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
+    val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
+    assertTrue("Leader should be elected after topic creation", leaderIdOpt.isDefined)
     val commitRequest = OffsetCommitRequest("test-group", Map(topicAndPartition -> OffsetMetadataAndError(offset=42L)))
     val commitResponse = simpleConsumer.commitOffsets(commitRequest)
 
@@ -105,8 +111,23 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
     val topic3 = "topic-3"
     val topic4 = "topic-4"
 
+    val expectedReplicaAssignment = Map(0  -> List(1))
+    // create the topic
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic1, expectedReplicaAssignment)
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic2, expectedReplicaAssignment)
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic3, expectedReplicaAssignment)
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic4, expectedReplicaAssignment)
+    var leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 0, 1000)
+    assertTrue("Leader should be elected after topic creation", leaderIdOpt.isDefined)
+    leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 0, 1000)
+    assertTrue("Leader should be elected after topic creation", leaderIdOpt.isDefined)
+    leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic3, 0, 1000)
+    assertTrue("Leader should be elected after topic creation", leaderIdOpt.isDefined)
+    leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic4, 0, 1000)
+    assertTrue("Leader should be elected after topic creation", leaderIdOpt.isDefined)
+
     val commitRequest = OffsetCommitRequest("test-group", Map(
-      TopicAndPartition(topic1, 0) -> OffsetMetadataAndError(offset=42L, metadata="metadata one"), 
+      TopicAndPartition(topic1, 0) -> OffsetMetadataAndError(offset=42L, metadata="metadata one"),
       TopicAndPartition(topic2, 0) -> OffsetMetadataAndError(offset=43L, metadata="metadata two"),
       TopicAndPartition(topic3, 0) -> OffsetMetadataAndError(offset=44L, metadata="metadata three"),
       TopicAndPartition(topic2, 1) -> OffsetMetadataAndError(offset=45L)
@@ -152,6 +173,11 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Test
   def testLargeMetadataPayload() {
     val topicAndPartition = TopicAndPartition("large-metadata", 0)
+    val expectedReplicaAssignment = Map(0  -> List(1))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topicAndPartition.topic, expectedReplicaAssignment)
+    var leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topicAndPartition.topic, 0, 1000)
+    assertTrue("Leader should be elected after topic creation", leaderIdOpt.isDefined)
+
     val commitRequest = OffsetCommitRequest("test-group", Map(topicAndPartition -> OffsetMetadataAndError(
       offset=42L,
       metadata=random.nextString(server.config.offsetMetadataMaxSize)
@@ -173,6 +199,10 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Test
   def testNullMetadata() {
     val topicAndPartition = TopicAndPartition("null-metadata", 0)
+    val expectedReplicaAssignment = Map(0  -> List(1))
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topicAndPartition.topic, expectedReplicaAssignment)
+    var leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topicAndPartition.topic, 0, 1000)
+    assertTrue("Leader should be elected after topic creation", leaderIdOpt.isDefined)
     val commitRequest = OffsetCommitRequest("test-group", Map(topicAndPartition -> OffsetMetadataAndError(
       offset=42L,
       metadata=null

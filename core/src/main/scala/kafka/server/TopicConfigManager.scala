@@ -105,8 +105,13 @@ class TopicConfigManager(private val zkClient: ZkClient,
               log.config = logConfig
             lastExecutedChange = changeId
             info("Processed topic config change %d for topic %s, setting new config to %s.".format(changeId, topic, props))
-          } else if (now - stat.getCtime > changeExpirationMs) {
-            /* this change is now obsolete, try to delete it unless it is the last change left */
+          } else {
+            if (now - stat.getCtime > changeExpirationMs) {
+              /* this change is now obsolete, try to delete it unless it is the last change left */
+              error("Ignoring topic config change %d for topic %s since the change has expired")
+            } else {
+              error("Ignoring topic config change %d for topic %s since the topic may have been deleted")
+            }
             ZkUtils.deletePath(zkClient, changeZnode)
           }
         }

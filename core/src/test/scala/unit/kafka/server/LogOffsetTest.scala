@@ -85,7 +85,9 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     AdminUtils.createTopic(zkClient, topic, 1, 1)
 
     val logManager = server.getLogManager
-    val log = logManager.createLog(TopicAndPartition(topic, part), logManager.defaultConfig)
+    assertTrue("Log for partition [topic,0] should be created",
+      waitUntilTrue(() => logManager.getLog(TopicAndPartition(topic, part)).isDefined, 1000))
+    val log = logManager.getLog(TopicAndPartition(topic, part)).get
 
     val message = new Message(Integer.toString(42).getBytes())
     for(i <- 0 until 20)

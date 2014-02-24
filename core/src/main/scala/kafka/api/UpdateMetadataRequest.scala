@@ -22,6 +22,7 @@ import kafka.cluster.Broker
 import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.network.{BoundedByteBufferSend, RequestChannel}
 import kafka.network.RequestChannel.Response
+import collection.Set
 
 object UpdateMetadataRequest {
   val CurrentVersion = 0.shortValue

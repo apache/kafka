@@ -33,7 +33,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   }
   
   private def getLogRetentionTimeMillis(): Long = {
-    var millisInMinute = 60L * 1000L
+    val millisInMinute = 60L * 1000L
     val millisInHour = 60L * millisInMinute
     if(props.containsKey("log.retention.minutes")){
        millisInMinute * props.getIntInRange("log.retention.minutes", (1, Int.MaxValue))

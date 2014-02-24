@@ -19,7 +19,6 @@ package kafka.server
 import scala.collection._
 import kafka.utils.Logging
 import kafka.common._
-import java.util.concurrent.locks.ReentrantLock
 import java.io._
 
 /**

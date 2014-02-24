@@ -16,21 +16,21 @@
  */
 package kafka.server
 
-import kafka.cluster.{Broker, Partition, Replica}
 import collection._
 import mutable.HashMap
-import org.I0Itec.zkclient.ZkClient
-import java.io.{File, IOException}
-import java.util.concurrent.atomic.AtomicBoolean
+import kafka.cluster.{Broker, Partition, Replica}
 import kafka.utils._
 import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsGroup
-import com.yammer.metrics.core.Gauge
-import java.util.concurrent.TimeUnit
 import kafka.common._
 import kafka.api.{StopReplicaRequest, PartitionStateInfo, LeaderAndIsrRequest}
 import kafka.controller.KafkaController
 import org.apache.log4j.Logger
+import org.I0Itec.zkclient.ZkClient
+import com.yammer.metrics.core.Gauge
+import java.util.concurrent.atomic.AtomicBoolean
+import java.io.{IOException, File}
+import java.util.concurrent.TimeUnit
 
 
 object ReplicaManager {
@@ -114,7 +114,8 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def stopReplica(topic: String, partitionId: Int, deletePartition: Boolean): Short  = {
-    stateChangeLogger.trace("Broker %d handling stop replica for partition [%s,%d]".format(localBrokerId, topic, partitionId))
+    stateChangeLogger.trace("Broker %d handling stop replica (delete=%s) for partition [%s,%d]".format(localBrokerId,
+      deletePartition.toString, topic, partitionId))
     val errorCode = ErrorMapping.NoError
     getPartition(topic, partitionId) match {
       case Some(partition) =>
@@ -126,15 +127,18 @@ class ReplicaManager(val config: KafkaConfig,
           if (removedPartition != null)
             removedPartition.delete() // this will delete the local log
         }
-      case None => //do nothing if replica no longer exists
+      case None => //do nothing if replica no longer exists. This can happen during delete topic retries
+        stateChangeLogger.trace("Broker %d ignoring stop replica (delete=%s) for partition [%s,%d] as replica doesn't exist on broker"
+          .format(localBrokerId, deletePartition, topic, partitionId))
     }
-    stateChangeLogger.trace("Broker %d finished handling stop replica for partition [%s,%d]".format(localBrokerId, topic, partitionId))
+    stateChangeLogger.trace("Broker %d finished handling stop replica (delete=%s) for partition [%s,%d]"
+      .format(localBrokerId, deletePartition, topic, partitionId))
     errorCode
   }
 
-  def stopReplicas(stopReplicaRequest: StopReplicaRequest): (mutable.Map[(String, Int), Short], Short) = {
+  def stopReplicas(stopReplicaRequest: StopReplicaRequest): (mutable.Map[TopicAndPartition, Short], Short) = {
     replicaStateChangeLock synchronized {
-      val responseMap = new collection.mutable.HashMap[(String, Int), Short]
+      val responseMap = new collection.mutable.HashMap[TopicAndPartition, Short]
       if(stopReplicaRequest.controllerEpoch < controllerEpoch) {
         stateChangeLogger.warn("Broker %d received stop replica request from an old controller epoch %d."
           .format(localBrokerId, stopReplicaRequest.controllerEpoch) +
@@ -142,14 +146,11 @@ class ReplicaManager(val config: KafkaConfig,
         (responseMap, ErrorMapping.StaleControllerEpochCode)
       } else {
         controllerEpoch = stopReplicaRequest.controllerEpoch
-        val responseMap = new HashMap[(String, Int), Short]
         // First stop fetchers for all partitions, then stop the corresponding replicas
-        replicaFetcherManager.removeFetcherForPartitions(stopReplicaRequest.partitions.map {
-          case (topic, partition) => TopicAndPartition(topic, partition)
-        })
-        for((topic, partitionId) <- stopReplicaRequest.partitions){
-          val errorCode = stopReplica(topic, partitionId, stopReplicaRequest.deletePartitions)
-          responseMap.put((topic, partitionId), errorCode)
+        replicaFetcherManager.removeFetcherForPartitions(stopReplicaRequest.partitions.map(r => TopicAndPartition(r.topic, r.partition)))
+        for(topicAndPartition <- stopReplicaRequest.partitions){
+          val errorCode = stopReplica(topicAndPartition.topic, topicAndPartition.partition, stopReplicaRequest.deletePartitions)
+          responseMap.put(topicAndPartition, errorCode)
         }
         (responseMap, ErrorMapping.NoError)
       }
@@ -214,9 +215,9 @@ class ReplicaManager(val config: KafkaConfig,
       val responseMap = new collection.mutable.HashMap[(String, Int), Short]
       if(leaderAndISRRequest.controllerEpoch < controllerEpoch) {
         leaderAndISRRequest.partitionStateInfos.foreach { case ((topic, partition), stateInfo) =>
-        stateChangeLogger.warn(("Broker %d received LeaderAndIsr request correlation id %d with an old controller epoch %d." +
-          " Latest known controller epoch is %d").format(localBrokerId, leaderAndISRRequest.correlationId,
-                                                         leaderAndISRRequest.controllerEpoch, controllerEpoch))
+        stateChangeLogger.warn(("Broker %d ignoring LeaderAndIsr request from controller %d with correlation id %d since " +
+          "its controller epoch %d is old. Latest known controller epoch is %d").format(localBrokerId, leaderAndISRRequest.controllerId,
+          leaderAndISRRequest.correlationId, leaderAndISRRequest.controllerEpoch, controllerEpoch))
         }
         (responseMap, ErrorMapping.StaleControllerEpochCode)
       } else {
@@ -235,27 +236,27 @@ class ReplicaManager(val config: KafkaConfig,
             if(partitionStateInfo.allReplicas.contains(config.brokerId))
               partitionState.put(partition, partitionStateInfo)
             else {
-              stateChangeLogger.warn(("Broker %d ignoring LeaderAndIsr request with correlation id %d from " +
-                "controller %d epoch %d as broker is not in assigned replica list %s for partition [%s,%d]")
-                .format(localBrokerId, correlationId, controllerId, leaderAndISRRequest.controllerEpoch,
-                partitionStateInfo.allReplicas.mkString(","), topic, partition.partitionId))
+              stateChangeLogger.warn(("Broker %d ignoring LeaderAndIsr request from controller %d with correlation id %d " +
+                "epoch %d for partition [%s,%d] as itself is not in assigned replica list %s")
+                .format(localBrokerId, controllerId, correlationId, leaderAndISRRequest.controllerEpoch,
+                topic, partition.partitionId, partitionStateInfo.allReplicas.mkString(",")))
             }
           } else {
             // Otherwise record the error code in response
-            stateChangeLogger.warn(("Broker %d received invalid LeaderAndIsr request with correlation id %d from " +
-              "controller %d epoch %d with an older leader epoch %d for partition [%s,%d], current leader epoch is %d")
-              .format(localBrokerId, correlationId, controllerId, leaderAndISRRequest.controllerEpoch,
-              partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch, topic, partition.partitionId, partitionLeaderEpoch))
+            stateChangeLogger.warn(("Broker %d ignoring LeaderAndIsr request from controller %d with correlation id %d " +
+              "epoch %d for partition [%s,%d] since its associated leader epoch %d is old. Current leader epoch is %d")
+              .format(localBrokerId, controllerId, correlationId, leaderAndISRRequest.controllerEpoch,
+              topic, partition.partitionId, partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch, partitionLeaderEpoch))
             responseMap.put((topic, partitionId), ErrorMapping.StaleLeaderEpochCode)
           }
         }
 
         val partitionsTobeLeader = partitionState
           .filter{ case (partition, partitionStateInfo) => partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader == config.brokerId}
-        val partitionsTobeFollower = (partitionState -- partitionsTobeLeader.keys)
+        val partitionsToBeFollower = (partitionState -- partitionsTobeLeader.keys)
 
         if (!partitionsTobeLeader.isEmpty) makeLeaders(controllerId, controllerEpoch, partitionsTobeLeader, leaderAndISRRequest.correlationId, responseMap)
-        if (!partitionsTobeFollower.isEmpty) makeFollowers(controllerId, controllerEpoch, partitionsTobeFollower, leaderAndISRRequest.leaders, leaderAndISRRequest.correlationId, responseMap)
+        if (!partitionsToBeFollower.isEmpty) makeFollowers(controllerId, controllerEpoch, partitionsToBeFollower, leaderAndISRRequest.leaders, leaderAndISRRequest.correlationId, responseMap)
 
         // we initialize highwatermark thread after the first leaderisrrequest. This ensures that all the partitions
         // have been completely populated before starting the checkpointing there by avoiding weird race conditions
@@ -344,10 +345,11 @@ class ReplicaManager(val config: KafkaConfig,
    */
   private def makeFollowers(controllerId: Int, epoch: Int, partitionState: Map[Partition, PartitionStateInfo],
                             leaders: Set[Broker], correlationId: Int, responseMap: mutable.Map[(String, Int), Short]) {
-    partitionState.foreach(state =>
+    partitionState.foreach { state =>
       stateChangeLogger.trace(("Broker %d handling LeaderAndIsr request correlationId %d from controller %d epoch %d " +
         "starting the become-follower transition for partition %s")
-        .format(localBrokerId, correlationId, controllerId, epoch, TopicAndPartition(state._1.topic, state._1.partitionId))))
+        .format(localBrokerId, correlationId, controllerId, epoch, TopicAndPartition(state._1.topic, state._1.partitionId)))
+    }
 
     for (partition <- partitionState.keys)
       responseMap.put((partition.topic, partition.partitionId), ErrorMapping.NoError)
@@ -357,47 +359,63 @@ class ReplicaManager(val config: KafkaConfig,
         leaderPartitions --= partitionState.keySet
       }
 
-      partitionState.foreach{ case (partition, leaderIsrAndControllerEpoch) =>
-        partition.makeFollower(controllerId, leaderIsrAndControllerEpoch, leaders, correlationId)}
+      var partitionsToMakeFollower: Set[Partition] = Set()
 
-      replicaFetcherManager.removeFetcherForPartitions(partitionState.keySet.map(new TopicAndPartition(_)))
-      partitionState.foreach { state =>
+      // TODO: Delete leaders from LeaderAndIsrRequest in 0.8.1
+      partitionState.foreach{ case (partition, partitionStateInfo) =>
+        val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
+        val newLeaderBrokerId = leaderIsrAndControllerEpoch.leaderAndIsr.leader
+        leaders.find(_.id == newLeaderBrokerId) match {
+          case Some(leaderBroker) =>
+            if (partition.makeFollower(controllerId, partitionStateInfo, correlationId))
+              partitionsToMakeFollower += partition
+            else
+              stateChangeLogger.info(("Broker %d skipped the become-follower state change after marking its partition as follower with correlation id %d from " +
+                "controller %d epoch %d for partition [%s,%d] since the new leader %d is the same as the old leader")
+                .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch,
+                partition.topic, partition.partitionId, newLeaderBrokerId))
+          case None =>
+            // The leader broker should always be present in the leaderAndIsrRequest.
+            // If not, we should record the error message and abort the transition process for this partition
+            stateChangeLogger.error(("Broker %d aborted the become-follower state change with correlation id %d from " +
+              "controller %d epoch %d for partition [%s,%d] since new leader %d is not currently available")
+              .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch,
+              partition.topic, partition.partitionId, newLeaderBrokerId))
+        }
+      }
+
+      replicaFetcherManager.removeFetcherForPartitions(partitionsToMakeFollower.map(new TopicAndPartition(_)))
+      partitionsToMakeFollower.foreach { partition =>
         stateChangeLogger.trace(("Broker %d stopped fetchers as part of become-follower request from controller " +
           "%d epoch %d with correlation id %d for partition %s")
-          .format(localBrokerId, controllerId, epoch, correlationId, TopicAndPartition(state._1.topic, state._1.partitionId)))
+          .format(localBrokerId, controllerId, epoch, correlationId, TopicAndPartition(partition.topic, partition.partitionId)))
       }
 
-      logManager.truncateTo(partitionState.map{ case(partition, leaderISRAndControllerEpoch) =>
-        new TopicAndPartition(partition) -> partition.getOrCreateReplica().highWatermark
-      })
-      partitionState.foreach { state =>
-        stateChangeLogger.trace(("Broker %d truncated logs and checkpointed recovery boundaries for partition %s as part of " +
+      logManager.truncateTo(partitionsToMakeFollower.map(partition => (new TopicAndPartition(partition), partition.getOrCreateReplica().highWatermark)).toMap)
+
+      partitionsToMakeFollower.foreach { partition =>
+        stateChangeLogger.trace(("Broker %d truncated logs and checkpointed recovery boundaries for partition [%s,%d] as part of " +
           "become-follower request with correlation id %d from controller %d epoch %d").format(localBrokerId,
-          TopicAndPartition(state._1.topic, state._1.partitionId), correlationId, controllerId, epoch))
+          partition.topic, partition.partitionId, correlationId, controllerId, epoch))
       }
-      if (!isShuttingDown.get()) {
-        val partitionAndOffsets = mutable.Map[TopicAndPartition, BrokerAndInitialOffset]()
-        partitionState.foreach {
-          case (partition, partitionStateInfo) =>
-            val leader = partitionStateInfo.leaderIsrAndControllerEpoch.leaderAndIsr.leader
-            leaders.find(_.id == leader) match {
-              case Some(leaderBroker) =>
-                partitionAndOffsets.put(new TopicAndPartition(partition), 
-                                        BrokerAndInitialOffset(leaderBroker, partition.getReplica().get.logEndOffset))
-              case None =>
-                stateChangeLogger.trace(("Broker %d ignored the become-follower state change with correlation id %d " +
-                                         "controller %d epoch %d for partition %s since the designated leader %d " +
-                                         "cannot be found in live or shutting down brokers %s").format(localBrokerId,
-                                         correlationId, controllerId, epoch, partition, leader, leaders.mkString(",")))
-            }
+
+      if (isShuttingDown.get()) {
+        partitionsToMakeFollower.foreach { partition =>
+          stateChangeLogger.trace(("Broker %d skipped the adding-fetcher step of the become-follower state change with correlation id %d from " +
+            "controller %d epoch %d for partition [%s,%d] since it is shutting down").format(localBrokerId, correlationId,
+            controllerId, epoch, partition.topic, partition.partitionId))
         }
-        replicaFetcherManager.addFetcherForPartitions(partitionAndOffsets)
       }
       else {
-        partitionState.foreach { state =>
-          stateChangeLogger.trace(("Broker %d ignored the become-follower state change with correlation id %d from " +
-            "controller %d epoch %d for partition %s since it is shutting down").format(localBrokerId, correlationId,
-            controllerId, epoch, TopicAndPartition(state._1.topic, state._1.partitionId)))
+        // we do not need to check if the leader exists again since this has been done at the beginning of this process
+        val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map(partition =>
+          new TopicAndPartition(partition) -> BrokerAndInitialOffset(leaders.find(_.id == partition.leaderReplicaIdOpt.get).get, partition.getReplica().get.logEndOffset)).toMap
+        replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
+
+        partitionsToMakeFollower.foreach { partition =>
+          stateChangeLogger.trace(("Broker %d started fetcher to new leader as part of become-follower request from controller " +
+            "%d epoch %d with correlation id %d for partition [%s,%d]")
+            .format(localBrokerId, controllerId, epoch, correlationId, partition.topic, partition.partitionId))
         }
       }
     } catch {

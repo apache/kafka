@@ -26,6 +26,7 @@ import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.network.{BoundedByteBufferSend, RequestChannel}
 import kafka.common.ErrorMapping
 import kafka.network.RequestChannel.Response
+import collection.Set
 
 
 object LeaderAndIsr {

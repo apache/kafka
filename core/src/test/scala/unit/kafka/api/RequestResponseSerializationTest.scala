@@ -100,12 +100,12 @@ object SerializationTestUtils{
 
   def createTestStopReplicaRequest() : StopReplicaRequest = {
     new StopReplicaRequest(controllerId = 0, controllerEpoch = 1, correlationId = 0, deletePartitions = true,
-                           partitions = collection.immutable.Set((topic1, 0), (topic2, 0)))
+                           partitions = collection.immutable.Set(TopicAndPartition(topic1, 0),TopicAndPartition(topic2, 0)))
   }
 
   def createTestStopReplicaResponse() : StopReplicaResponse = {
-    val responseMap = Map(((topic1, 0), ErrorMapping.NoError),
-                          ((topic2, 0), ErrorMapping.NoError))
+    val responseMap = Map((TopicAndPartition(topic1, 0), ErrorMapping.NoError),
+                          (TopicAndPartition(topic2, 0), ErrorMapping.NoError))
     new StopReplicaResponse(0, responseMap.toMap)
   }
 

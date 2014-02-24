@@ -47,20 +47,24 @@ object ZkUtils extends Logging {
   val ControllerPath = "/controller"
   val ControllerEpochPath = "/controller_epoch"
   val ReassignPartitionsPath = "/admin/reassign_partitions"
+  val DeleteTopicsPath = "/admin/delete_topics"
   val PreferredReplicaLeaderElectionPath = "/admin/preferred_replica_election"
 
-  def getTopicPath(topic: String): String ={
+  def getTopicPath(topic: String): String = {
     BrokerTopicsPath + "/" + topic
   }
 
-  def getTopicPartitionsPath(topic: String): String ={
+  def getTopicPartitionsPath(topic: String): String = {
     getTopicPath(topic) + "/partitions"
   }
 
   def getTopicConfigPath(topic: String): String = 
     TopicConfigPath + "/" + topic
-  
-  def getController(zkClient: ZkClient): Int= {
+
+  def getDeleteTopicPath(topic: String): String =
+    DeleteTopicsPath + "/" + topic
+
+  def getController(zkClient: ZkClient): Int = {
     readDataMaybeNull(zkClient, ControllerPath)._1 match {
       case Some(controller) => KafkaController.parseControllerId(controller)
       case None => throw new KafkaException("Controller doesn't exist")
@@ -97,7 +101,7 @@ object ZkUtils extends Logging {
   }
   
   def setupCommonPaths(zkClient: ZkClient) {
-    for(path <- Seq(ConsumersPath, BrokerIdsPath, BrokerTopicsPath, TopicConfigChangesPath, TopicConfigPath))
+    for(path <- Seq(ConsumersPath, BrokerIdsPath, BrokerTopicsPath, TopicConfigChangesPath, TopicConfigPath, DeleteTopicsPath))
       makeSurePersistentPathExists(zkClient, path)
   }
 
@@ -204,6 +208,12 @@ object ZkUtils extends Logging {
           + "timeout so it appears to be re-registering.")
     }
     info("Registered broker %d at path %s with address %s:%d.".format(id, brokerIdPath, host, port))
+  }
+
+  def deregisterBrokerInZk(zkClient: ZkClient, id: Int) {
+    val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
+    deletePath(zkClient, brokerIdPath)
+    info("Deregistered broker %d at path %s.".format(id, brokerIdPath))
   }
 
   def getConsumerPartitionOwnerPath(group: String, topic: String, partition: Int): String = {

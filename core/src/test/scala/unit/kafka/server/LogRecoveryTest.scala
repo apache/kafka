@@ -56,11 +56,11 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   producerProps.put("request.required.acks", "-1")
   
   override def tearDown() {
-    super.tearDown()
     for(server <- servers) {
       server.shutdown()
       Utils.rm(server.config.logDirs(0))
     }
+    super.tearDown()
   }
 
   def testHWCheckpointNoFailuresSingleLogSegment {
