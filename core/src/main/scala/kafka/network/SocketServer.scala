@@ -52,14 +52,14 @@ class SocketServer(val brokerId: Int,
   def startup() {
     for(i <- 0 until numProcessorThreads) {
       processors(i) = new Processor(i, time, maxRequestSize, requestChannel)
-      Utils.newThread("kafka-processor-%d-%d".format(port, i), processors(i), false).start()
+      Utils.newThread("kafka-network-thread-%d-%d".format(port, i), processors(i), false).start()
     }
     // register the processor threads for notification of responses
     requestChannel.addResponseListener((id:Int) => processors(id).wakeup())
    
     // start accepting connections
     this.acceptor = new Acceptor(host, port, processors, sendBufferSize, recvBufferSize)
-    Utils.newThread("kafka-acceptor", acceptor, false).start()
+    Utils.newThread("kafka-socket-acceptor", acceptor, false).start()
     acceptor.awaitStartup
     info("Started")
   }
@@ -265,6 +265,7 @@ private[kafka] class Processor(val id: Int,
       }
     }
     debug("Closing selector.")
+    closeAll()
     swallowError(selector.close())
     shutdownComplete()
   }
@@ -313,6 +314,17 @@ private[kafka] class Processor(val id: Int,
     swallowError(channel.close())
     key.attach(null)
     swallowError(key.cancel())
+  }
+  
+  /*
+   * Close all open connections
+   */
+  private def closeAll() {
+    val iter = this.selector.keys().iterator()
+    while (iter.hasNext) {
+      val key = iter.next()
+      close(key)
+    }
   }
 
   /**
