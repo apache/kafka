@@ -1114,7 +1114,6 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
                       controllerContext.partitionsBeingReassigned.size == 0 &&
                       controllerContext.partitionsUndergoingPreferredReplicaElection.size == 0 &&
                       !deleteTopicManager.isTopicQueuedUpForDeletion(topicPartition.topic) &&
-                      !deleteTopicManager.isTopicDeletionInProgress(topicPartition.topic) &&
                       controllerContext.allTopics.contains(topicPartition.topic)) {
                     onPreferredReplicaElection(Set(topicPartition), false)
                   }
