@@ -23,9 +23,12 @@ fi
 base_dir=$(dirname $0)/..
 
 # create logs directory
-LOG_DIR=$base_dir/logs
-if [ ! -d $LOG_DIR ]; then
-	mkdir $LOG_DIR
+if [ "x$LOG_DIR" = "x" ]; then
+    LOG_DIR="$base_dir/logs"
+fi
+
+if [ ! -d "$LOG_DIR" ]; then
+    mkdir -p "$LOG_DIR"
 fi
 
 if [ -z "$SCALA_VERSION" ]; then
