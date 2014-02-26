@@ -180,6 +180,7 @@ project(':core') {
   tasks.create(name: "copyDependantLibs", type: Copy) {
     into "$buildDir/dependant-libs-${scalaVersion}"
     from configurations.runtime
+    exclude('kafka-clients*')
   }
 
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) { 
