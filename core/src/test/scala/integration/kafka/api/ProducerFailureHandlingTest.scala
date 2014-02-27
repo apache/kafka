@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.api.test
+package kafka.api
 
 import org.scalatest.junit.JUnit3Suite
 import org.junit.Test
@@ -218,13 +218,13 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
 
     // create a record with incorrect partition id, send should fail
     val record = new ProducerRecord(topic1, new Integer(1), "key".getBytes, "value".getBytes)
-    intercept[KafkaException] {
+    intercept[IllegalArgumentException] {
       producer1.send(record)
     }
-    intercept[KafkaException] {
+    intercept[IllegalArgumentException] {
       producer2.send(record)
     }
-    intercept[KafkaException] {
+    intercept[IllegalArgumentException] {
       producer3.send(record)
     }
   }
@@ -244,15 +244,15 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     producer2.send(record).get
     producer3.send(record).get
 
-    intercept[KafkaException] {
+    intercept[IllegalStateException] {
       producer1.close
       producer1.send(record)
     }
-    intercept[KafkaException] {
+    intercept[IllegalStateException] {
       producer2.close
       producer2.send(record)
     }
-    intercept[KafkaException] {
+    intercept[IllegalStateException] {
       producer3.close
       producer3.send(record)
     }
