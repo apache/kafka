@@ -55,7 +55,7 @@ public final class RecordBatch {
             this.records.append(0L, key, value, compression);
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount);
             if (callback != null)
-                thunks.add(new Thunk(callback, this.recordCount));
+                thunks.add(new Thunk(callback, future));
             this.recordCount++;
             return future;
         }
@@ -74,8 +74,7 @@ public final class RecordBatch {
             try {
                 Thunk thunk = this.thunks.get(i);
                 if (exception == null)
-                    thunk.callback.onCompletion(new RecordMetadata(topicPartition, this.produceFuture.baseOffset() + thunk.relativeOffset),
-                                                null);
+                    thunk.callback.onCompletion(thunk.future.get(), null);
                 else
                     thunk.callback.onCompletion(null, exception);
             } catch (Exception e) {
@@ -85,15 +84,15 @@ public final class RecordBatch {
     }
 
     /**
-     * A callback and the associated RecordSend argument to pass to it.
+     * A callback and the associated FutureRecordMetadata argument to pass to it.
      */
     final private static class Thunk {
         final Callback callback;
-        final long relativeOffset;
+        final FutureRecordMetadata future;
 
-        public Thunk(Callback callback, long relativeOffset) {
+        public Thunk(Callback callback, FutureRecordMetadata future) {
             this.callback = callback;
-            this.relativeOffset = relativeOffset;
+            this.future = future;
         }
     }
 }

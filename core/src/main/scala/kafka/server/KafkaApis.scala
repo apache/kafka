@@ -231,7 +231,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       // create a list of (topic, partition) pairs to use as keys for this delayed request
       val producerRequestKeys = produceRequest.data.keys.map(
         topicAndPartition => new RequestKey(topicAndPartition)).toSeq
-      val statuses = localProduceResults.map(r => r.key -> ProducerResponseStatus(r.errorCode, r.end + 1)).toMap
+      val statuses = localProduceResults.map(r =>
+        r.key -> DelayedProduceResponseStatus(r.end + 1, ProducerResponseStatus(r.errorCode, r.start))).toMap
       val delayedProduce = new DelayedProduce(producerRequestKeys, 
                                               request,
                                               statuses,
@@ -255,7 +256,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       produceRequest.emptyData()
     }
   }
-  
+
+  case class DelayedProduceResponseStatus(requiredOffset: Long,
+                                          status: ProducerResponseStatus) {
+    var acksPending = false
+
+    override def toString =
+      "acksPending:%b, error: %d, startOffset: %d, requiredOffset: %d".format(
+        acksPending, status.error, status.offset, requiredOffset)
+  }
+
   case class ProduceResult(key: TopicAndPartition, start: Long, end: Long, error: Option[Throwable] = None) {
     def this(key: TopicAndPartition, throwable: Throwable) = 
       this(key, -1L, -1L, Some(throwable))
@@ -762,41 +772,31 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   class DelayedProduce(keys: Seq[RequestKey],
                        request: RequestChannel.Request,
-                       initialErrorsAndOffsets: Map[TopicAndPartition, ProducerResponseStatus],
+                       val partitionStatus: Map[TopicAndPartition, DelayedProduceResponseStatus],
                        val produce: ProducerRequest,
                        delayMs: Long)
           extends DelayedRequest(keys, request, delayMs) with Logging {
 
-    /**
-     * Map of (topic, partition) -> partition status
-     * The values in this map don't need to be synchronized since updates to the
-     * values are effectively synchronized by the ProducerRequestPurgatory's
-     * update method
-     */
-    private [kafka] val partitionStatus = keys.map(requestKey => {
-      val producerResponseStatus = initialErrorsAndOffsets(TopicAndPartition(requestKey.topic, requestKey.partition))
-      // if there was an error in writing to the local replica's log, then don't
-      // wait for acks on this partition
-      val (acksPending, error, nextOffset) =
-        if (producerResponseStatus.error == ErrorMapping.NoError) {
-          // Timeout error state will be cleared when requiredAcks are received
-          (true, ErrorMapping.RequestTimedOutCode, producerResponseStatus.offset)
-        }
-        else (false, producerResponseStatus.error, producerResponseStatus.offset)
+    // first update the acks pending variable according to error code
+    partitionStatus foreach { case (topicAndPartition, delayedStatus) =>
+      if (delayedStatus.status.error == ErrorMapping.NoError) {
+        // Timeout error state will be cleared when requiredAcks are received
+        delayedStatus.acksPending = true
+        delayedStatus.status.error = ErrorMapping.RequestTimedOutCode
+      } else {
+        delayedStatus.acksPending = false
+      }
 
-      val initialStatus = PartitionStatus(acksPending, error, nextOffset)
-      trace("Initial partition status for %s = %s".format(requestKey.keyLabel, initialStatus))
-      (requestKey, initialStatus)
-    }).toMap
+      trace("Initial partition status for %s is %s".format(topicAndPartition, delayedStatus))
+    }
+
 
     def respond() {
-      val finalErrorsAndOffsets = initialErrorsAndOffsets.map(
-        status => {
-          val pstat = partitionStatus(new RequestKey(status._1))
-          (status._1, ProducerResponseStatus(pstat.error, pstat.requiredOffset))
-        })
-      
-      val response = ProducerResponse(produce.correlationId, finalErrorsAndOffsets)
+      val responseStatus = partitionStatus.map { case (topicAndPartition, delayedStatus) =>
+        topicAndPartition -> delayedStatus.status
+      }
+
+      val response = ProducerResponse(produce.correlationId, responseStatus)
 
       requestChannel.sendResponse(new RequestChannel.Response(
         request, new BoundedByteBufferSend(response)))
@@ -816,8 +816,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     def isSatisfied(followerFetchRequestKey: RequestKey) = {
       val topic = followerFetchRequestKey.topic
       val partitionId = followerFetchRequestKey.partition
-      val key = RequestKey(topic, partitionId)
-      val fetchPartitionStatus = partitionStatus(key)
+      val fetchPartitionStatus = partitionStatus(TopicAndPartition(topic, partitionId))
       trace("Checking producer request satisfaction for %s-%d, acksPending = %b"
         .format(topic, partitionId, fetchPartitionStatus.acksPending))
       if (fetchPartitionStatus.acksPending) {
@@ -830,10 +829,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
         if (errorCode != ErrorMapping.NoError) {
           fetchPartitionStatus.acksPending = false
-          fetchPartitionStatus.error = errorCode
+          fetchPartitionStatus.status.error = errorCode
         } else if (hasEnough) {
           fetchPartitionStatus.acksPending = false
-          fetchPartitionStatus.error = ErrorMapping.NoError
+          fetchPartitionStatus.status.error = ErrorMapping.NoError
         }
         if (!fetchPartitionStatus.acksPending) {
           val messageSizeInBytes = produce.topicPartitionMessageSizeMap(followerFetchRequestKey.topicAndPartition)
@@ -845,20 +844,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       val satisfied = ! partitionStatus.exists(p => p._2.acksPending)
       trace("Producer request satisfaction for %s-%d = %b".format(topic, partitionId, satisfied))
       satisfied
-    }
-
-    case class PartitionStatus(var acksPending: Boolean,
-                          var error: Short,
-                          requiredOffset: Long) {
-      def setThisBrokerNotLeader() {
-        error = ErrorMapping.NotLeaderForPartitionCode
-        acksPending = false
-      }
-
-      override def toString =
-        "acksPending:%b, error: %d, requiredOffset: %d".format(
-          acksPending, error, requiredOffset
-        )
     }
   }
 
@@ -877,8 +862,8 @@ class KafkaApis(val requestChannel: RequestChannel,
      * Handle an expired delayed request
      */
     protected def expire(delayedProduce: DelayedProduce) {
-      for (partitionStatus <- delayedProduce.partitionStatus if partitionStatus._2.acksPending)
-        delayedRequestMetrics.recordDelayedProducerKeyExpired(partitionStatus._1)
+      for ((topicPartition, responseStatus) <- delayedProduce.partitionStatus if responseStatus.acksPending)
+        delayedRequestMetrics.recordDelayedProducerKeyExpired(RequestKey(topicPartition.topic, topicPartition.partition))
 
       delayedProduce.respond()
     }

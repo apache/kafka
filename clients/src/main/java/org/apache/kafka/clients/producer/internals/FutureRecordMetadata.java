@@ -60,7 +60,7 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
         if (this.result.error() != null)
             throw new ExecutionException(this.result.error());
         else
-            return new RecordMetadata(result.topicPartition(), this.result.baseOffset() + this.relativeOffset);
+            return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.relativeOffset);
     }
 
     public long relativeOffset() {

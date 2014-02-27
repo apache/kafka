@@ -15,12 +15,11 @@
  * limitations under the License.
  */
 
-package kafka.test
+package kafka.api.test
 
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.{ZkUtils, Utils, TestUtils, Logging}
+import kafka.utils.{Utils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
-import kafka.admin.AdminUtils
 import kafka.consumer.SimpleConsumer
 import kafka.api.FetchRequestBuilder
 import kafka.message.Message
@@ -33,7 +32,6 @@ import org.junit.Assert._
 
 import java.util.Properties
 import java.lang.{Integer, IllegalArgumentException}
-import org.apache.log4j.Logger
 
 
 class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
@@ -110,29 +108,25 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
 
       // send a normal record
       val record0 = new ProducerRecord(topic, new Integer(0), "key".getBytes, "value".getBytes)
-      val response0 = producer.send(record0, callback)
-      assertEquals("Should have offset 0", 0L, response0.get.offset)
+      assertEquals("Should have offset 0", 0L, producer.send(record0, callback).get.offset)
 
       // send a record with null value should be ok
       val record1 = new ProducerRecord(topic, new Integer(0), "key".getBytes, null)
-      val response1 = producer.send(record1, callback)
-      assertEquals("Should have offset 1", 1L, response1.get.offset)
+      assertEquals("Should have offset 1", 1L, producer.send(record1, callback).get.offset)
 
       // send a record with null key should be ok
       val record2 = new ProducerRecord(topic, new Integer(0), null, "value".getBytes)
-      val response2 = producer.send(record2, callback)
-      assertEquals("Should have offset 2", 2L, response2.get.offset)
+      assertEquals("Should have offset 2", 2L, producer.send(record2, callback).get.offset)
 
       // send a record with null part id should be ok
       val record3 = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
-      val response3 = producer.send(record3, callback)
-      assertEquals("Should have offset 3", 3L, response3.get.offset)
+      assertEquals("Should have offset 3", 3L, producer.send(record3, callback).get.offset)
 
       // send a record with null topic should fail
       try {
         val record4 = new ProducerRecord(null, new Integer(0), "key".getBytes, "value".getBytes)
-        val response4 = producer.send(record4, callback)
-        response4.wait
+        producer.send(record4, callback)
+        fail("Should not allow sending a record without topic")
       } catch {
         case iae: IllegalArgumentException => // this is ok
         case e: Throwable => fail("Only expecting IllegalArgumentException", e)
@@ -143,8 +137,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
         producer.send(record0)
 
       // check that all messages have been acked via offset
-      val response5 = producer.send(record0, callback)
-      assertEquals("Should have offset " + (numRecords + 4), numRecords + 4L, response5.get.offset)
+      assertEquals("Should have offset " + (numRecords + 4), numRecords + 4L, producer.send(record0, callback).get.offset)
 
     } finally {
       if (producer != null) {
@@ -157,7 +150,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
   /**
    * testClose checks the closing behavior
    *
-   * 1. After close() returns, all messages should be sent with correct returned offset metadata
+   * After close() returns, all messages should be sent with correct returned offset metadata
    */
   @Test
   def testClose() {
@@ -195,7 +188,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
   /**
    * testSendToPartition checks the partitioning behavior
    *
-   * 1. The specified partition-id should be respected
+   * The specified partition-id should be respected
    */
   @Test
   def testSendToPartition() {
@@ -207,40 +200,40 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
     try {
       // create topic
       val leaders = TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+      val partition = 1
 
       // make sure leaders exist
-      val leader1 = leaders.get(1)
+      val leader1 = leaders(partition)
       assertTrue("Leader for topic \"topic\" partition 1 should exist", leader1.isDefined)
 
-      val partition = 1
       val responses =
-        for (i <- 0 until numRecords)
+        for (i <- 1 to numRecords)
         yield producer.send(new ProducerRecord(topic, partition, null, ("value" + i).getBytes))
       val futures = responses.toList
-      futures.map(_.wait)
+      futures.map(_.get)
       for (future <- futures)
         assertTrue("Request should have completed", future.isDone)
 
       // make sure all of them end up in the same partition with increasing offset values
       for ((future, offset) <- futures zip (0 until numRecords)) {
-        assertEquals(offset, future.get.offset)
+        assertEquals(offset.toLong, future.get.offset)
         assertEquals(topic, future.get.topic)
-        assertEquals(1, future.get.partition)
+        assertEquals(partition, future.get.partition)
       }
 
       // make sure the fetched messages also respect the partitioning and ordering
       val fetchResponse1 = if(leader1.get == server1.config.brokerId) {
-        consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 1, 0, Int.MaxValue).build())
-      }else {
-        consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 1, 0, Int.MaxValue).build())
+        consumer1.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
+      } else {
+        consumer2.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
       }
-      val messageSet1 = fetchResponse1.messageSet(topic, 1).iterator.toBuffer
+      val messageSet1 = fetchResponse1.messageSet(topic, partition).iterator.toBuffer
       assertEquals("Should have fetched " + numRecords + " messages", numRecords, messageSet1.size)
 
       // TODO: also check topic and partition after they are added in the return messageSet
       for (i <- 0 to numRecords - 1) {
         assertEquals(new Message(bytes = ("value" + (i + 1)).getBytes), messageSet1(i).message)
-        assertEquals(i, messageSet1(i).offset)
+        assertEquals(i.toLong, messageSet1(i).offset)
       }
     } finally {
       if (producer != null) {
@@ -250,6 +243,11 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
     }
   }
 
+  /**
+   * testAutoCreateTopic
+   *
+   * The topic should be created upon sending the first message
+   */
   @Test
   def testAutoCreateTopic() {
     val props = new Properties()
@@ -259,8 +257,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
     try {
       // Send a message to auto-create the topic
       val record = new ProducerRecord(topic, null, "key".getBytes, "value".getBytes)
-      val response = producer.send(record)
-      assertEquals("Should have offset 0", 0L, response.get.offset)
+      assertEquals("Should have offset 0", 0L, producer.send(record).get.offset)
 
       // double check that the topic is created with leader elected
       assertTrue("Topic should already be created with leader", TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 0).isDefined)

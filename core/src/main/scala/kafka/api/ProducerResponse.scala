@@ -41,7 +41,7 @@ object ProducerResponse {
   }
 }
 
-case class ProducerResponseStatus(error: Short, offset: Long)
+case class ProducerResponseStatus(var error: Short, offset: Long)
 
 case class ProducerResponse(override val correlationId: Int,
                             status: Map[TopicAndPartition, ProducerResponseStatus])

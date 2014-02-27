@@ -324,6 +324,7 @@ public class Sender implements Runnable {
     private void handleDisconnects(List<Integer> disconnects, long now) {
         // clear out the in-flight requests for the disconnected broker
         for (int node : disconnects) {
+            nodeStates.disconnected(node);
             for (InFlightRequest request : this.inFlightRequests.clearAll(node)) {
                 if (request.batches != null) {
                     for (RecordBatch batch : request.batches.values()) {
@@ -335,7 +336,6 @@ public class Sender implements Runnable {
                         }
                     }
                 }
-                nodeStates.disconnected(request.request.destination());
             }
         }
         // we got a disconnect so we should probably refresh our metadata and see if that broker is dead

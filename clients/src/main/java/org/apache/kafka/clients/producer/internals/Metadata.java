@@ -74,10 +74,10 @@ public final class Metadata {
      */
     public synchronized Cluster fetch(String topic, long maxWaitMs) {
         List<PartitionInfo> partitions = null;
+        long begin = System.currentTimeMillis();
         do {
             partitions = cluster.partitionsFor(topic);
             if (partitions == null) {
-                long begin = System.currentTimeMillis();
                 topics.add(topic);
                 forceUpdate = true;
                 try {
@@ -85,7 +85,7 @@ public final class Metadata {
                 } catch (InterruptedException e) { /* this is fine, just try again */
                 }
                 long ellapsed = System.currentTimeMillis() - begin;
-                if (ellapsed > maxWaitMs)
+                if (ellapsed >= maxWaitMs)
                     throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
             } else {
                 return cluster;

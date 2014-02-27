@@ -299,6 +299,7 @@ public class Selector implements Selectable {
         Transmissions trans = transmissions(key);
         if (trans != null) {
             this.disconnected.add(trans.id);
+            this.keys.remove(trans.id);
             trans.clearReceive();
             trans.clearSend();
         }

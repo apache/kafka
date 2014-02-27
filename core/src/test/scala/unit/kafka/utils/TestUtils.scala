@@ -23,24 +23,27 @@ import java.nio._
 import java.nio.channels._
 import java.util.Random
 import java.util.Properties
-import junit.framework.AssertionFailedError
-import junit.framework.Assert._
+import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.TimeUnit
+
+import collection.mutable.Map
+import collection.mutable.ListBuffer
+
+import org.I0Itec.zkclient.ZkClient
+
 import kafka.server._
 import kafka.producer._
 import kafka.message._
-import org.I0Itec.zkclient.ZkClient
-import kafka.cluster.Broker
-import collection.mutable.ListBuffer
-import kafka.consumer.ConsumerConfig
-import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.TimeUnit
 import kafka.api._
-import collection.mutable.Map
+import kafka.cluster.Broker
+import kafka.consumer.ConsumerConfig
 import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
 import kafka.common.TopicAndPartition
-import junit.framework.Assert
 import kafka.admin.AdminUtils
+import kafka.producer.ProducerConfig
 
+import junit.framework.AssertionFailedError
+import junit.framework.Assert._
 
 /**
  * Utility functions to help with testing
@@ -526,7 +529,7 @@ object TestUtils extends Logging {
   }
 
   def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long) = {
-    Assert.assertTrue("Partition [%s,%d] metadata not propagated after timeout".format(topic, partition),
+    assertTrue("Partition [%s,%d] metadata not propagated after timeout".format(topic, partition),
       TestUtils.waitUntilTrue(() =>
         servers.foldLeft(true)(_ && _.apis.metadataCache.keySet.contains(TopicAndPartition(topic, partition))), timeout))
   }

@@ -33,6 +33,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -217,10 +218,14 @@ public class KafkaProducer implements Producer {
             FutureRecordMetadata future = accumulator.append(tp, record.key(), record.value(), CompressionType.NONE, callback);
             this.sender.wakeup();
             return future;
-        } catch (Exception e) {
+            // For API exceptions return them in the future;
+            // for other exceptions throw directly
+        } catch (ApiException e) {
             if (callback != null)
                 callback.onCompletion(null, e);
             return new FutureFailure(e);
+        } catch (InterruptedException e) {
+            throw new KafkaException(e);
         }
     }
 
@@ -255,7 +260,6 @@ public class KafkaProducer implements Producer {
      */
     @Override
     public void close() {
-        this.accumulator.close();
         this.sender.initiateClose();
         try {
             this.ioThread.join();

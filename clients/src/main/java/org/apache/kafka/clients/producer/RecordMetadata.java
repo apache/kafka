@@ -26,10 +26,16 @@ public final class RecordMetadata {
     private final long offset;
     private final TopicPartition topicPartition;
 
-    public RecordMetadata(TopicPartition topicPartition, long offset) {
+    private RecordMetadata(TopicPartition topicPartition, long offset) {
         super();
         this.offset = offset;
         this.topicPartition = topicPartition;
+    }
+
+    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset) {
+        // ignore the relativeOffset if the base offset is -1,
+        // since this indicates the offset is unknown
+        this(topicPartition, baseOffset == -1 ? baseOffset : baseOffset + relativeOffset);
     }
 
     /**
