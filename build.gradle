@@ -20,6 +20,8 @@ buildscript {
   apply from: file('gradle/buildscript.gradle'), to: buildscript
 }
 
+slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.6'
+
 allprojects {
   apply plugin: 'idea'
   repositories {
@@ -163,6 +165,7 @@ project(':core') {
     } else {
       testCompile "org.scalatest:scalatest_$scalaVersion:1.8"
     }   
+    testRuntime "$slf4jlog4j"
 
     zinc 'com.typesafe.zinc:zinc:0.2.5'
   }
@@ -312,6 +315,7 @@ project(':clients') {
   dependencies {
     compile "org.slf4j:slf4j-api:1.7.6"
     testCompile 'com.novocode:junit-interface:0.9'
+    testRuntime "$slf4jlog4j"
   }
 
   jar {
