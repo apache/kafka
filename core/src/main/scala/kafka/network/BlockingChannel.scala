@@ -45,28 +45,32 @@ class BlockingChannel( val host: String,
   
   def connect() = lock synchronized  {
     if(!connected) {
-      channel = SocketChannel.open()
-      if(readBufferSize > 0)
-        channel.socket.setReceiveBufferSize(readBufferSize)
-      if(writeBufferSize > 0)
-        channel.socket.setSendBufferSize(writeBufferSize)
-      channel.configureBlocking(true)
-      channel.socket.setSoTimeout(readTimeoutMs)
-      channel.socket.setKeepAlive(true)
-      channel.socket.setTcpNoDelay(true)
-      channel.connect(new InetSocketAddress(host, port))
+      try {
+        channel = SocketChannel.open()
+        if(readBufferSize > 0)
+          channel.socket.setReceiveBufferSize(readBufferSize)
+        if(writeBufferSize > 0)
+          channel.socket.setSendBufferSize(writeBufferSize)
+        channel.configureBlocking(true)
+        channel.socket.setSoTimeout(readTimeoutMs)
+        channel.socket.setKeepAlive(true)
+        channel.socket.setTcpNoDelay(true)
+        channel.connect(new InetSocketAddress(host, port))
 
-      writeChannel = channel
-      readChannel = Channels.newChannel(channel.socket().getInputStream)
-      connected = true
-      // settings may not match what we requested above
-      val msg = "Created socket with SO_TIMEOUT = %d (requested %d), SO_RCVBUF = %d (requested %d), SO_SNDBUF = %d (requested %d)."
-      debug(msg.format(channel.socket.getSoTimeout,
-                       readTimeoutMs,
-                       channel.socket.getReceiveBufferSize, 
-                       readBufferSize,
-                       channel.socket.getSendBufferSize,
-                       writeBufferSize))
+        writeChannel = channel
+        readChannel = Channels.newChannel(channel.socket().getInputStream)
+        connected = true
+        // settings may not match what we requested above
+        val msg = "Created socket with SO_TIMEOUT = %d (requested %d), SO_RCVBUF = %d (requested %d), SO_SNDBUF = %d (requested %d)."
+        debug(msg.format(channel.socket.getSoTimeout,
+                         readTimeoutMs,
+                         channel.socket.getReceiveBufferSize, 
+                         readBufferSize,
+                         channel.socket.getSendBufferSize,
+                         writeBufferSize))
+      } catch {
+        case e: Throwable => disconnect()
+      }
     }
   }
   
