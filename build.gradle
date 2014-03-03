@@ -20,7 +20,7 @@ buildscript {
   apply from: file('gradle/buildscript.gradle'), to: buildscript
 }
 
-slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.6'
+def slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.6'
 
 allprojects {
   apply plugin: 'idea'
@@ -181,9 +181,13 @@ project(':core') {
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
+    from (configurations.testRuntime) {
+      include('slf4j-log4j12*')
+    }
+    from (configurations.runtime) {
+      exclude('kafka-clients*')
+    }
     into "$buildDir/dependant-libs-${scalaVersion}"
-    from configurations.runtime
-    exclude('kafka-clients*')
   }
 
   tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) { 
