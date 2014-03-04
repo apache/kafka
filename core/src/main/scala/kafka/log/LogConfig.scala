@@ -34,7 +34,7 @@ import kafka.common._
  * @param fileDeleteDelayMs The time to wait before deleting a file from the filesystem
  * @param deleteRetentionMs The time to retain delete markers in the log. Only applicable for logs that are being compacted.
  * @param minCleanableRatio The ratio of bytes that are available for cleaning to the bytes already cleaned
- * @param dedupe Should old segments in this log be deleted or deduplicated?
+ * @param compact Should old segments in this log be deleted or deduplicated?
  */
 case class LogConfig(val segmentSize: Int = 1024*1024, 
                      val segmentMs: Long = Long.MaxValue,
@@ -48,7 +48,7 @@ case class LogConfig(val segmentSize: Int = 1024*1024,
                      val fileDeleteDelayMs: Long = 60*1000,
                      val deleteRetentionMs: Long = 24 * 60 * 60 * 1000L,
                      val minCleanableRatio: Double = 0.5,
-                     val dedupe: Boolean = false) {
+                     val compact: Boolean = false) {
   
   def toProps: Properties = {
     val props = new Properties()
@@ -65,7 +65,7 @@ case class LogConfig(val segmentSize: Int = 1024*1024,
     props.put(DeleteRetentionMsProp, deleteRetentionMs.toString)
     props.put(FileDeleteDelayMsProp, fileDeleteDelayMs.toString)
     props.put(MinCleanableDirtyRatioProp, minCleanableRatio.toString)
-    props.put(CleanupPolicyProp, if(dedupe) "dedupe" else "delete")
+    props.put(CleanupPolicyProp, if(compact) "compact" else "delete")
     props
   }
   
@@ -117,7 +117,7 @@ object LogConfig {
                   fileDeleteDelayMs = props.getProperty(FileDeleteDelayMsProp).toInt,
                   deleteRetentionMs = props.getProperty(DeleteRetentionMsProp).toLong,
                   minCleanableRatio = props.getProperty(MinCleanableDirtyRatioProp).toDouble,
-                  dedupe = props.getProperty(CleanupPolicyProp).trim.toLowerCase == "dedupe")
+                  compact = props.getProperty(CleanupPolicyProp).trim.toLowerCase != "delete")
   }
   
   /**

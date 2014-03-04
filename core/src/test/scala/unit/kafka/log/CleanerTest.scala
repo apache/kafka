@@ -33,7 +33,7 @@ import kafka.message._
 class CleanerTest extends JUnitSuite {
   
   val dir = TestUtils.tempDir()
-  val logConfig = LogConfig(segmentSize=1024, maxIndexSize=1024, dedupe=true)
+  val logConfig = LogConfig(segmentSize=1024, maxIndexSize=1024, compact=true)
   val time = new MockTime()
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
   

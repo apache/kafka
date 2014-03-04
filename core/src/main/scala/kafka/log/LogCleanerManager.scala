@@ -40,6 +40,9 @@ private[log] case object LogCleaningPaused extends LogCleaningState
  *  requested to be resumed.
  */
 private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[TopicAndPartition, Log]) extends Logging {
+  
+  override val loggerName = classOf[LogCleaner].getName
+  
   /* the offset checkpoints holding the last cleaned point for each log */
   private val checkpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, "cleaner-offset-checkpoint")))).toMap
 
@@ -65,7 +68,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   def grabFilthiestLog(): Option[LogToClean] = {
     inLock(lock) {
       val lastClean = allCleanerCheckpoints()
-      val cleanableLogs = logs.filter(l => l._2.config.dedupe)                                     // skip any logs marked for delete rather than dedupe
+      val cleanableLogs = logs.filter(l => l._2.config.compact)                                    // skip any logs marked for delete rather than dedupe
                               .filterNot(l => inProgress.contains(l._1))                           // skip any logs already in-progress
                               .map(l => LogToClean(l._1, l._2, lastClean.getOrElse(l._1, 0)))      // create a LogToClean instance for each
       val dirtyLogs = cleanableLogs.filter(l => l.totalBytes > 0)                                  // must have some bytes

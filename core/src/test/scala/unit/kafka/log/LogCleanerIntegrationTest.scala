@@ -101,7 +101,7 @@ class LogCleanerIntegrationTest extends JUnitSuite {
       val dir = new File(logDir, "log-" + i)
       dir.mkdirs()
       val log = new Log(dir = dir,
-                        LogConfig(segmentSize = segmentSize, maxIndexSize = 100*1024, fileDeleteDelayMs = deleteDelay, dedupe = true),
+                        LogConfig(segmentSize = segmentSize, maxIndexSize = 100*1024, fileDeleteDelayMs = deleteDelay, compact = true),
                         recoveryPoint = 0L,
                         scheduler = time.scheduler,
                         time = time)
