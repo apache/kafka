@@ -262,7 +262,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                      deleteRetentionMs = config.logCleanerDeleteRetentionMs,
                                      fileDeleteDelayMs = config.logDeleteDelayMs,
                                      minCleanableRatio = config.logCleanerMinCleanRatio,
-                                     dedupe = config.logCleanupPolicy.trim.toLowerCase == "dedupe")
+                                     compact = config.logCleanupPolicy.trim.toLowerCase == "compact")
     val defaultProps = defaultLogConfig.toProps
     val configs = AdminUtils.fetchAllTopicConfigs(zkClient).mapValues(LogConfig.fromProps(defaultProps, _))
     // read the log configurations from zookeeper

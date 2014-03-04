@@ -35,7 +35,7 @@ case class CleanerConfig(val numThreads: Int = 1,
                          val ioBufferSize: Int = 1024*1024,
                          val maxMessageSize: Int = 32*1024*1024,
                          val maxIoBytesPerSecond: Double = Double.MaxValue,
-                         val backOffMs: Long = 60 * 1000,
+                         val backOffMs: Long = 15 * 1000,
                          val enableCleaner: Boolean = true,
                          val hashAlgorithm: String = "MD5") {
 }

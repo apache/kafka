@@ -243,11 +243,11 @@ object TestLogCleaning {
                       percentDeletes: Int): File = {
     val producerProps = new Properties
     producerProps.setProperty("producer.type", "async")
-    producerProps.setProperty("broker.list", brokerUrl)
+    producerProps.setProperty("metadata.broker.list", brokerUrl)
     producerProps.setProperty("serializer.class", classOf[StringEncoder].getName)
     producerProps.setProperty("key.serializer.class", classOf[StringEncoder].getName)
     producerProps.setProperty("queue.enqueue.timeout.ms", "-1")
-    producerProps.setProperty("batch.size", 1000.toString)
+    producerProps.setProperty("batch.num.messages", 1000.toString)
     val producer = new Producer[String, String](new ProducerConfig(producerProps))
     val rand = new Random(1)
     val keyCount = (messages / dups).toInt
@@ -275,8 +275,9 @@ object TestLogCleaning {
   def makeConsumer(zkUrl: String, topics: Array[String]): ZookeeperConsumerConnector = {
     val consumerProps = new Properties
     consumerProps.setProperty("group.id", "log-cleaner-test-" + new Random().nextInt(Int.MaxValue))
-    consumerProps.setProperty("zk.connect", zkUrl)
-    consumerProps.setProperty("consumer.timeout.ms", (10*1000).toString)
+    consumerProps.setProperty("zookeeper.connect", zkUrl)
+    consumerProps.setProperty("consumer.timeout.ms", (20*1000).toString)
+    consumerProps.setProperty("auto.offset.reset", "smallest")
     new ZookeeperConsumerConnector(new ConsumerConfig(consumerProps))
   }
   

@@ -131,6 +131,9 @@ class LogCleaner(val config: CleanerConfig,
    */
   private class CleanerThread(threadId: Int)
     extends ShutdownableThread(name = "kafka-log-cleaner-thread-" + threadId, isInterruptible = false) {
+    
+    override val loggerName = classOf[LogCleaner].getName
+    
     if(config.dedupeBufferSize / config.numThreads > Int.MaxValue)
       warn("Cannot use more than 2G of cleaner buffer space per cleaner thread, ignoring excess buffer space...")
 
@@ -185,7 +188,7 @@ class LogCleaner(val config: CleanerConfig,
     def logStats(id: Int, name: String, from: Long, to: Long, stats: CleanerStats) {
       def mb(bytes: Double) = bytes / (1024*1024)
       val message = 
-        "%n\tLog cleaner %d cleaned log %s (dirty section = [%d, %d])%n".format(id, name, from, to) + 
+        "%n\tLog cleaner thread %d cleaned log %s (dirty section = [%d, %d])%n".format(id, name, from, to) + 
         "\t%,.1f MB of log processed in %,.1f seconds (%,.1f MB/sec).%n".format(mb(stats.bytesRead), 
                                                                                 stats.elapsedSecs, 
                                                                                 mb(stats.bytesRead/stats.elapsedSecs)) + 
@@ -222,6 +225,8 @@ private[log] class Cleaner(val id: Int,
                            throttler: Throttler,
                            time: Time,
                            checkDone: (TopicAndPartition) => Unit) extends Logging {
+  
+  override val loggerName = classOf[LogCleaner].getName
 
   this.logIdent = "Cleaner " + id + ": "
   
