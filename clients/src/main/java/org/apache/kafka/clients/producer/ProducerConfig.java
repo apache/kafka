@@ -167,7 +167,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(BLOCK_ON_BUFFER_FULL_CONFIG, Type.BOOLEAN, true, "blah blah")
                                 .define(ENABLE_JMX_CONFIG, Type.BOOLEAN, true, "")
                                 .define(MAX_RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), "")
-                                .define(RETRY_BACKOFF_MS_CONFIG, Type.LONG, 500L, atLeast(0L), "blah blah");
+                                .define(RETRY_BACKOFF_MS_CONFIG, Type.LONG, 100L, atLeast(0L), "blah blah");
     }
 
     ProducerConfig(Map<? extends Object, ? extends Object> props) {
