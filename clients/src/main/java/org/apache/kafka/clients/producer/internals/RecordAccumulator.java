@@ -195,8 +195,8 @@ public final class RecordAccumulator {
                     boolean backingOff = batch.attempts > 0 && batch.lastAttempt + retryBackoffMs > now;
                     boolean full = deque.size() > 1 || !batch.records.buffer().hasRemaining();
                     boolean expired = now - batch.created >= lingerMs;
-                    boolean sendable = full | expired | exhausted | closed;
-                    if (sendable & !backingOff)
+                    boolean sendable = full || expired || exhausted || closed;
+                    if (sendable && !backingOff)
                         ready.add(batch.topicPartition);
                 }
             }
