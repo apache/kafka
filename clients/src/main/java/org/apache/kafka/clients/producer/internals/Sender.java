@@ -40,6 +40,7 @@ import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.requests.ResponseHeader;
@@ -142,7 +143,7 @@ public class Sender implements Runnable {
      * The main run loop for the sender thread
      */
     public void run() {
-        log.trace("Starting Kafka producer I/O thread.");
+        log.debug("Starting Kafka producer I/O thread.");
 
         // main loop, runs until close is called
         while (running) {
@@ -153,7 +154,7 @@ public class Sender implements Runnable {
             }
         }
 
-        log.trace("Beginning shutdown of Kafka producer I/O thread, sending remaining records.");
+        log.debug("Beginning shutdown of Kafka producer I/O thread, sending remaining records.");
 
         // okay we stopped accepting requests but there may still be
         // requests in the accumulator or waiting for acknowledgment,
@@ -170,7 +171,7 @@ public class Sender implements Runnable {
         // close all the connections
         this.selector.close();
 
-        log.trace("Shutdown of Kafka producer I/O thread has completed.");
+        log.debug("Shutdown of Kafka producer I/O thread has completed.");
     }
 
     /**
@@ -216,8 +217,8 @@ public class Sender implements Runnable {
 
         // handle responses, connections, and disconnections
         handleSends(this.selector.completedSends());
-        handleResponses(this.selector.completedReceives(), now);
-        handleDisconnects(this.selector.disconnected(), now);
+        handleResponses(this.selector.completedReceives(), time.milliseconds());
+        handleDisconnects(this.selector.disconnected(), time.milliseconds());
         handleConnects(this.selector.connected());
 
         return ready.size();
@@ -348,15 +349,25 @@ public class Sender implements Runnable {
             nodeStates.disconnected(node);
             log.debug("Node {} disconnected.", node);
             for (InFlightRequest request : this.inFlightRequests.clearAll(node)) {
-                if (request.batches != null) {
-                    for (RecordBatch batch : request.batches.values()) {
-                        if (canRetry(batch, Errors.NETWORK_EXCEPTION)) {
-                            this.accumulator.reenqueue(batch, now);
-                        } else {
-                            batch.done(-1L, new NetworkException("The server disconnected unexpectedly without sending a response."));
-                            this.accumulator.deallocate(batch);
+                ApiKeys requestKey = ApiKeys.forId(request.request.header().apiKey());
+                switch (requestKey) {
+                    case PRODUCE:
+                        for (RecordBatch batch : request.batches.values()) {
+                            if (canRetry(batch, Errors.NETWORK_EXCEPTION)) {
+                                log.warn("Destination node disconnected for topic-partition {}, retrying ({} attempts left).",
+                                    batch.topicPartition, this.retries - batch.attempts - 1);
+                                this.accumulator.reenqueue(batch, now);
+                            } else {
+                                batch.done(-1L, new NetworkException("The server disconnected unexpectedly without sending a response."));
+                                this.accumulator.deallocate(batch);
+                            }
                         }
-                    }
+                        break;
+                    case METADATA:
+                        metadataFetchInProgress = false;
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Unexpected api key id: " + requestKey.id);
                 }
             }
         }
@@ -409,18 +420,18 @@ public class Sender implements Runnable {
             correlate(req.request.header(), header);
             if (req.request.header().apiKey() == ApiKeys.PRODUCE.id) {
                 log.trace("Received produce response from node {} with correlation id {}", source, req.request.header().correlationId());
-                handleProduceResponse(req, body, now);
+                handleProduceResponse(req, req.request.header(), body, now);
             } else if (req.request.header().apiKey() == ApiKeys.METADATA.id) {
                 log.trace("Received metadata response response from node {} with correlation id {}", source, req.request.header()
-                                                                                                                        .correlationId());
-                handleMetadataResponse(body, now);
+                    .correlationId());
+                handleMetadataResponse(req.request.header(), body, now);
             } else {
                 throw new IllegalStateException("Unexpected response type: " + req.request.header().apiKey());
             }
         }
     }
 
-    private void handleMetadataResponse(Struct body, long now) {
+    private void handleMetadataResponse(RequestHeader header, Struct body, long now) {
         this.metadataFetchInProgress = false;
         MetadataResponse response = new MetadataResponse(body);
         Cluster cluster = response.cluster();
@@ -429,35 +440,30 @@ public class Sender implements Runnable {
         if (cluster.nodes().size() > 0)
             this.metadata.update(cluster, now);
         else
-            log.trace("Ignoring empty metadata response.");
+            log.trace("Ignoring empty metadata response with correlation id {}.", header.correlationId());
     }
 
     /**
      * Handle a produce response
      */
-    private void handleProduceResponse(InFlightRequest request, Struct response, long now) {
-        for (Object topicResponse : (Object[]) response.get("responses")) {
-            Struct topicRespStruct = (Struct) topicResponse;
-            String topic = (String) topicRespStruct.get("topic");
-            for (Object partResponse : (Object[]) topicRespStruct.get("partition_responses")) {
-                Struct partRespStruct = (Struct) partResponse;
-                int partition = (Integer) partRespStruct.get("partition");
-                short errorCode = (Short) partRespStruct.get("error_code");
-
-                // if we got an error we may need to refresh our metadata
-                Errors error = Errors.forCode(errorCode);
+    private void handleProduceResponse(InFlightRequest request, RequestHeader header, Struct body, long now) {
+        ProduceResponse pr = new ProduceResponse(body);
+        for (Map<TopicPartition, ProduceResponse.PartitionResponse> responses : pr.responses().values()) {
+            for (Map.Entry<TopicPartition, ProduceResponse.PartitionResponse> entry : responses.entrySet()) {
+                TopicPartition tp = entry.getKey();
+                ProduceResponse.PartitionResponse response = entry.getValue();
+                Errors error = Errors.forCode(response.errorCode);
                 if (error.exception() instanceof InvalidMetadataException)
                     metadata.forceUpdate();
-
-                long offset = (Long) partRespStruct.get("base_offset");
-                RecordBatch batch = request.batches.get(new TopicPartition(topic, partition));
+                RecordBatch batch = request.batches.get(tp);
                 if (canRetry(batch, error)) {
                     // retry
-                    log.warn("Got error for topic-partition {}, retrying. Error: {}", topic, partition, error);
+                    log.warn("Got error produce response with correlation id {} on topic-partition {}, retrying ({} attempts left). Error: {}",
+                        header.correlationId(), batch.topicPartition, this.retries - batch.attempts - 1, error);
                     this.accumulator.reenqueue(batch, now);
                 } else {
                     // tell the user the result of their request
-                    batch.done(offset, error.exception());
+                    batch.done(response.baseOffset, error.exception());
                     this.accumulator.deallocate(batch);
                 }
             }

@@ -337,7 +337,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     inLock(controllerContext.controllerLock) {
       if (config.autoLeaderRebalanceEnable)
         autoRebalanceScheduler.shutdown()
-      deleteTopicManager.shutdown()
+      if (deleteTopicManager != null)
+        deleteTopicManager.shutdown()
       Utils.unregisterMBean(KafkaController.MBeanName)
       partitionStateMachine.shutdown()
       replicaStateMachine.shutdown()
@@ -647,8 +648,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
       if(controllerContext.controllerChannelManager != null) {
         controllerContext.controllerChannelManager.shutdown()
         controllerContext.controllerChannelManager = null
-        info("Controller shutdown complete")
       }
+      info("Controller shutdown complete")
     }
   }
 

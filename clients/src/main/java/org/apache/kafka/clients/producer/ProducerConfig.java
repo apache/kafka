@@ -136,6 +136,12 @@ public class ProducerConfig extends AbstractConfig {
     public static final String MAX_RETRIES_CONFIG = "request.retries";
 
     /**
+     * The amount of time to wait before attempting to resend produce request to a given topic partition. This avoids
+     * repeated sending-and-failing in a tight loop
+     */
+    public static final String RETRY_BACKOFF_MS_CONFIG = "retry.backoff.ms";
+
+    /**
      * Should we register the Kafka metrics as JMX mbeans?
      */
     public static final String ENABLE_JMX_CONFIG = "enable.jmx";
@@ -160,7 +166,8 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(RECONNECT_BACKOFF_MS_CONFIG, Type.LONG, 10L, atLeast(0L), "blah blah")
                                 .define(BLOCK_ON_BUFFER_FULL_CONFIG, Type.BOOLEAN, true, "blah blah")
                                 .define(ENABLE_JMX_CONFIG, Type.BOOLEAN, true, "")
-                                .define(MAX_RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), "");
+                                .define(MAX_RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), "")
+                                .define(RETRY_BACKOFF_MS_CONFIG, Type.LONG, 500L, atLeast(0L), "blah blah");
     }
 
     ProducerConfig(Map<? extends Object, ? extends Object> props) {

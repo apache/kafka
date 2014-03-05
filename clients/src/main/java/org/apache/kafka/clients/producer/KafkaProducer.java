@@ -102,6 +102,7 @@ public class KafkaProducer implements Producer {
         this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.MAX_PARTITION_SIZE_CONFIG),
                                                  this.totalMemorySize,
                                                  config.getLong(ProducerConfig.LINGER_MS_CONFIG),
+                                                 config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
                                                  config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG),
                                                  metrics,
                                                  new SystemTime());

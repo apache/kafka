@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.protocol;
 
+
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Identifiers for all the Kafka APIs
  */
@@ -29,11 +33,16 @@ public enum ApiKeys {
     OFFSET_COMMIT(6, "offset_commit"),
     OFFSET_FETCH(7, "offset_fetch");
 
-    public static int MAX_API_KEY = 0;
+    private static ApiKeys[] codeToType;
+    public static int MAX_API_KEY = -1;
 
     static {
         for (ApiKeys key : ApiKeys.values()) {
             MAX_API_KEY = Math.max(MAX_API_KEY, key.id);
+        }
+        codeToType = new ApiKeys[MAX_API_KEY+1];
+        for (ApiKeys key : ApiKeys.values()) {
+            codeToType[key.id] = key;
         }
     }
 
@@ -48,4 +57,7 @@ public enum ApiKeys {
         this.name = name;
     }
 
+    public static ApiKeys forId(int id) {
+        return codeToType[id];
+    }
 }

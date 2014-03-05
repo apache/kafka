@@ -34,6 +34,7 @@ public final class RecordBatch {
     public int recordCount = 0;
     public volatile int attempts = 0;
     public final long created;
+    public long lastAttempt;
     public final MemoryRecords records;
     public final TopicPartition topicPartition;
     private final ProduceRequestResult produceFuture;
@@ -41,6 +42,7 @@ public final class RecordBatch {
 
     public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {
         this.created = now;
+        this.lastAttempt = now;
         this.records = records;
         this.topicPartition = tp;
         this.produceFuture = new ProduceRequestResult();

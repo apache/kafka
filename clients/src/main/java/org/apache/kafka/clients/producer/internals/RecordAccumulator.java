@@ -51,9 +51,10 @@ public final class RecordAccumulator {
     private int drainIndex;
     private final int batchSize;
     private final long lingerMs;
-    private final ConcurrentMap<TopicPartition, Deque<RecordBatch>> batches;
+    private final long retryBackoffMs;
     private final BufferPool free;
     private final Time time;
+    private final ConcurrentMap<TopicPartition, Deque<RecordBatch>> batches;
 
     /**
      * Create a new record accumulator
@@ -63,16 +64,25 @@ public final class RecordAccumulator {
      * @param lingerMs An artificial delay time to add before declaring a records instance that isn't full ready for
      *        sending. This allows time for more records to arrive. Setting a non-zero lingerMs will trade off some
      *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
+     * @param retryBackoffMs An artificial delay time to retry the produce request upon receiving an error. This avoids
+     *        exhausting all retries in a short period of time.
      * @param blockOnBufferFull If true block when we are out of memory; if false throw an exception when we are out of
      *        memory
      * @param metrics The metrics
      * @param time The time instance to use
      */
-    public RecordAccumulator(int batchSize, long totalSize, long lingerMs, boolean blockOnBufferFull, Metrics metrics, Time time) {
+    public RecordAccumulator(int batchSize,
+                             long totalSize,
+                             long lingerMs,
+                             long retryBackoffMs,
+                             boolean blockOnBufferFull,
+                             Metrics metrics,
+                             Time time) {
         this.drainIndex = 0;
         this.closed = false;
         this.batchSize = batchSize;
         this.lingerMs = lingerMs;
+        this.retryBackoffMs = retryBackoffMs;
         this.batches = new CopyOnWriteMap<TopicPartition, Deque<RecordBatch>>();
         this.free = new BufferPool(totalSize, batchSize, blockOnBufferFull);
         this.time = time;
@@ -155,6 +165,7 @@ public final class RecordAccumulator {
      */
     public void reenqueue(RecordBatch batch, long now) {
         batch.attempts++;
+        batch.lastAttempt = now;
         Deque<RecordBatch> deque = dequeFor(batch.topicPartition);
         synchronized (deque) {
             deque.addFirst(batch);
@@ -181,9 +192,11 @@ public final class RecordAccumulator {
             synchronized (deque) {
                 RecordBatch batch = deque.peekFirst();
                 if (batch != null) {
+                    boolean backingOff = batch.attempts > 0 && batch.lastAttempt + retryBackoffMs > now;
                     boolean full = deque.size() > 1 || !batch.records.buffer().hasRemaining();
                     boolean expired = now - batch.created >= lingerMs;
-                    if (full | expired | exhausted | closed)
+                    boolean sendable = full | expired | exhausted | closed;
+                    if (sendable & !backingOff)
                         ready.add(batch.topicPartition);
                 }
             }

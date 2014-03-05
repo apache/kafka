@@ -26,7 +26,7 @@ import java.lang.Integer
 import java.util.concurrent.{TimeoutException, TimeUnit, ExecutionException}
 
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.{Utils, TestUtils}
+import kafka.utils.{ShutdownableThread, Utils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.consumer.SimpleConsumer
 
@@ -267,18 +267,73 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
   def testBrokerFailure() {
     // create topic
     val leaders = TestUtils.createTopic(zkClient, topic1, 1, 2, servers)
-    val leader = leaders(0)
+    val partition = 0
+    var leader = leaders(partition)
     assertTrue("Leader of partition 0 of the topic should exist", leader.isDefined)
 
-    val record = new ProducerRecord(topic1, null, "key".getBytes, "value".getBytes)
-    assertEquals("Returned metadata should have offset 0", producer3.send(record).get.offset, 0L)
+    val scheduler = new ProducerScheduler()
+    scheduler.start
 
-    // shutdown broker
-    val serverToShutdown = if(leader.get == server1.config.brokerId) server1 else server2
-    serverToShutdown.shutdown()
-    serverToShutdown.awaitShutdown()
+    // rolling bounce brokers
+    for (i <- 0 until 5) {
+      server1.shutdown()
+      server1.awaitShutdown()
+      server1.startup
 
-    // send the message again, it should still succeed due-to retry
-    assertEquals("Returned metadata should have offset 1", producer3.send(record).get.offset, 1L)
+      Thread.sleep(2000)
+
+      server2.shutdown()
+      server2.awaitShutdown()
+      server2.startup
+
+      Thread.sleep(2000)
+
+      assertTrue(scheduler.failed == false)
+    }
+
+    scheduler.shutdown
+    leader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, partition, 500)
+
+    val fetchResponse = if(leader.get == server1.config.brokerId) {
+      consumer1.fetch(new FetchRequestBuilder().addFetch(topic1, partition, 0, Int.MaxValue).build()).messageSet(topic1, partition)
+    } else {
+      consumer2.fetch(new FetchRequestBuilder().addFetch(topic1, partition, 0, Int.MaxValue).build()).messageSet(topic1, partition)
+    }
+
+    val messages = fetchResponse.iterator.toList.map(_.message)
+    val uniqueMessages = messages.toSet
+    val uniqueMessageSize = uniqueMessages.size
+
+    assertEquals("Should have fetched " + scheduler.sent + " unique messages", scheduler.sent, uniqueMessageSize)
+  }
+
+  private class ProducerScheduler extends ShutdownableThread("daemon-producer", false)
+  {
+    val numRecords = 1000
+    var sent = 0
+    var failed = false
+
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BROKER_LIST_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.REQUIRED_ACKS_CONFIG, (-1).toString)
+    producerProps.put(ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG, bufferSize.toString)
+    producerProps.put(ProducerConfig.MAX_RETRIES_CONFIG, 10.toString)
+    producerProps.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, 1000.toString)
+
+    val producer = new KafkaProducer(producerProps)
+
+    override def doWork(): Unit = {
+      val responses =
+        for (i <- sent+1 to sent+numRecords)
+        yield producer.send(new ProducerRecord(topic1, null, null, i.toString.getBytes))
+      val futures = responses.toList
+
+      try {
+        futures.map(_.get)
+        sent += numRecords
+      } catch {
+        case e : Exception => failed = true
+      }
+    }
   }
 }
