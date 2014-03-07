@@ -18,6 +18,7 @@
 
 import joptsimple.{OptionSpec, OptionSet, OptionParser}
 import scala.collection.Set
+ import java.util.Properties
 
  /**
  * Helper functions for dealing with command line utilities
@@ -45,4 +46,16 @@ object CommandLineUtils extends Logging {
       }
     }
   }
-}
+
+   def parseCommandLineArgs(args: Iterable[String]): Properties = {
+     val splits = args.map(_ split "=").filterNot(_ == null).filterNot(_.length == 0)
+     if(!splits.forall(_.length == 2)) {
+       System.err.println("Invalid command line properties: " + args.mkString(" "))
+       System.exit(1)
+     }
+     val props = new Properties
+     for(a <- splits)
+       props.put(a(0), a(1))
+     props
+   }
+ }

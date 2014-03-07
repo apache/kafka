@@ -15,12 +15,11 @@
  * limitations under the License.
  */
 
-package kafka
+package kafka.tools
 
 import java.util.Properties
 import kafka.consumer._
-import kafka.producer._
-import kafka.message._
+import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer}
 
 object TestEndToEndLatency {
   def main(args: Array[String]) {
@@ -36,7 +35,7 @@ object TestEndToEndLatency {
 
     val consumerProps = new Properties()
     consumerProps.put("group.id", topic)
-    consumerProps.put("auto.commit", "true")
+    consumerProps.put("auto.commit.enable", "true")
     consumerProps.put("auto.offset.reset", "largest")
     consumerProps.put("zookeeper.connect", zkConnect)
     consumerProps.put("socket.timeout.ms", 1201000.toString)
@@ -48,14 +47,16 @@ object TestEndToEndLatency {
 
     val producerProps = new Properties()
     producerProps.put("metadata.broker.list", brokerList)
-    producerProps.put("producer.type", "sync")
-    val producer = new Producer[Any, Any](new ProducerConfig(producerProps))
+    producerProps.put("linger.ms", "0")
+    producerProps.put("block.on.buffer.full", "true")
+    val producer = new KafkaProducer(producerProps)
 
     val message = "hello there beautiful".getBytes
     var totalTime = 0.0
     for (i <- 0 until numMessages) {
       var begin = System.nanoTime
-      producer.send(new KeyedMessage(topic, message))
+      val response = producer.send(new ProducerRecord(topic, message))
+      response.get()
       val received = iter.next
       val elapsed = System.nanoTime - begin
       // poor man's progress bar

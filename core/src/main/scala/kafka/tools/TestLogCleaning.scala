@@ -15,20 +15,18 @@
  * limitations under the License.
  */
 
-package kafka
+package kafka.tools
 
 import joptsimple.OptionParser
 import java.util.Properties
 import java.util.Random
 import java.io._
-import scala.io.Source
-import scala.io.BufferedSource
-import kafka.producer._
 import kafka.consumer._
 import kafka.serializer._
 import kafka.utils._
 import kafka.log.FileMessageSet
 import kafka.log.Log
+import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer}
 
 /**
  * This is a torture test that runs against an existing broker. Here is how it works:
@@ -123,14 +121,14 @@ object TestLogCleaning {
     val reduction = 1.0 - consumedLines.toDouble/producedLines.toDouble
     println("%d rows of data produced, %d rows of data consumed (%.1f%% reduction).".format(producedLines, consumedLines, 100 * reduction))
     
-    println("Deduplicating and validating output files...")
+    println("De-duplicating and validating output files...")
     validateOutput(producedDataFile, consumedDataFile)
     producedDataFile.delete()
     consumedDataFile.delete()
   }
   
   def dumpLog(dir: File) {
-    require(dir.exists, "Non-existant directory: " + dir.getAbsolutePath)
+    require(dir.exists, "Non-existent directory: " + dir.getAbsolutePath)
     for(file <- dir.list.sorted; if file.endsWith(Log.LogFileSuffix)) {
       val ms = new FileMessageSet(new File(dir, file))
       for(entry <- ms) {
@@ -242,13 +240,9 @@ object TestLogCleaning {
                       dups: Int,
                       percentDeletes: Int): File = {
     val producerProps = new Properties
-    producerProps.setProperty("producer.type", "async")
+    producerProps.setProperty("block.on.buffer.full", "true")
     producerProps.setProperty("metadata.broker.list", brokerUrl)
-    producerProps.setProperty("serializer.class", classOf[StringEncoder].getName)
-    producerProps.setProperty("key.serializer.class", classOf[StringEncoder].getName)
-    producerProps.setProperty("queue.enqueue.timeout.ms", "-1")
-    producerProps.setProperty("batch.num.messages", 1000.toString)
-    val producer = new Producer[String, String](new ProducerConfig(producerProps))
+    val producer = new KafkaProducer(producerProps)
     val rand = new Random(1)
     val keyCount = (messages / dups).toInt
     val producedFile = File.createTempFile("kafka-log-cleaner-produced-", ".txt")
@@ -260,9 +254,9 @@ object TestLogCleaning {
       val delete = i % 100 < percentDeletes
       val msg = 
         if(delete)
-          new KeyedMessage[String, String](topic = topic, key = key.toString, message = null)
+          new ProducerRecord(topic, key.toString.getBytes(), null)
         else
-          new KeyedMessage[String, String](topic = topic, key = key.toString, message = i.toString)
+          new ProducerRecord(topic, key.toString.getBytes(), i.toString.getBytes())
       producer.send(msg)
       producedWriter.write(TestRecord(topic, key, i, delete).toString)
       producedWriter.newLine()

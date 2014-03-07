@@ -90,12 +90,6 @@ public class ProducerConfig extends AbstractConfig {
     public static final String LINGER_MS_CONFIG = "linger.ms";
 
     /**
-     * Force a refresh of the cluster metadata after this period of time. This ensures that changes to the number of
-     * partitions or other settings will by taken up by producers without restart.
-     */
-    public static final String METADATA_REFRESH_MS_CONFIG = "topic.metadata.refresh.interval.ms";
-
-    /**
      * The id string to pass to the server when making requests. The purpose of this is to be able to track the source
      * of requests beyond just ip/port by allowing a logical application name to be included.
      */
@@ -158,7 +152,6 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(REQUIRED_ACKS_CONFIG, Type.INT, 1, between(-1, Short.MAX_VALUE), "blah blah")
                                 .define(REQUEST_TIMEOUT_CONFIG, Type.INT, 30 * 1000, atLeast(0), "blah blah")
                                 .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0L), "blah blah")
-                                .define(METADATA_REFRESH_MS_CONFIG, Type.LONG, 10 * 60 * 1000, atLeast(-1L), "blah blah")
                                 .define(CLIENT_ID_CONFIG, Type.STRING, "", "blah blah")
                                 .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(0), "blah blah")
                                 .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(0), "blah blah")
