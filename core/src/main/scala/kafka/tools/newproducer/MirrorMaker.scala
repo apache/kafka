@@ -168,10 +168,10 @@ object MirrorMaker extends Logging {
         val producerId = Utils.abs(java.util.Arrays.hashCode(producerRecord.key())) % producers.size
         trace("Send message with key %s to producer %d.".format(java.util.Arrays.toString(producerRecord.key()), producerId))
         val producer = producers(producerId)
-        producer.send(producerRecord)
+        producer.send(producerRecord, Utils.errorLoggingCallback(producerRecord.key(), producerRecord.value()))
       } else {
         val producerId = producerIndex.getAndSet((producerIndex.get() + 1) % producers.size)
-        producers(producerId).send(producerRecord)
+        producers(producerId).send(producerRecord, Utils.errorLoggingCallback(producerRecord.key(), producerRecord.value()))
         trace("Sent message to producer " + producerId)
       }
     }

@@ -21,15 +21,14 @@ import java.util.concurrent.{ CountDownLatch, Executors }
 import java.util.concurrent.atomic.AtomicLong
 import kafka.producer._
 import org.apache.log4j.Logger
-import kafka.message.{ CompressionCodec, Message }
+import kafka.message.CompressionCodec
 import java.text.SimpleDateFormat
 import kafka.serializer._
 import java.util._
 import collection.immutable.List
 import kafka.utils.{ VerifiableProperties, Logging, Utils }
 import kafka.metrics.KafkaMetricsReporter
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 
 /**
  * Load test for the producer
@@ -210,11 +209,18 @@ object ProducerPerformance extends Logging {
     props.put("client.id", "perf-test")
     props.put("request.required.acks", config.producerRequestRequiredAcks.toString)
     props.put("request.timeout.ms", config.producerRequestTimeoutMs.toString)
+    props.put("request.retries", config.producerNumRetries.toString)
+    props.put("retry.backoff.ms", config.producerRetryBackoffMs.toString)
     val producer = new KafkaProducer(props)
 
     def send(topic: String, partition: Long, bytes: Array[Byte]) {
       val part = partition % this.producer.partitionsFor(topic).size
-      this.producer.send(new ProducerRecord(topic, Utils.abs(part.toInt), null, bytes))
+      if (config.isSync) {
+        this.producer.send(new ProducerRecord(topic, Utils.abs(part.toInt), null, bytes)).get()
+      } else {
+        this.producer.send(new ProducerRecord(topic, Utils.abs(part.toInt), null, bytes),
+                           Utils.errorLoggingCallback(null, bytes, if (config.seqIdMode) true else false))
+      }
     }
 
     def close() {
@@ -280,21 +286,28 @@ object ProducerPerformance extends Logging {
       var bytesSent = 0L
       var nSends = 0
       var j: Long = 0L
+      var message: Array[Byte] = null
+
       while (j < messagesPerThread) {
         try {
           config.topics.foreach(
             topic => {
-              producer.send(topic, j, generateProducerData(topic, j))
+              message = generateProducerData(topic, j)
+              producer.send(topic, j, message)
               nSends += 1
               if (config.messageSendGapMs > 0)
                 Thread.sleep(config.messageSendGapMs)
             })
         } catch {
-          case e: Exception => error("Error sending messages", e)
+          case e: Throwable => error("Error when sending message " + new String(message), e)
         }
         j += 1
       }
-      producer.close()
+      try {
+        producer.close()
+      } catch {
+        case e: Throwable => error("Error when closing producer", e)
+      }
       totalBytesSent.addAndGet(bytesSent)
       totalMessagesSent.addAndGet(nSends)
       allDone.countDown()

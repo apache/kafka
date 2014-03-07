@@ -120,6 +120,7 @@
 
     {
       "entity_id": "10",
+      "new-producer":"true",
       "topic": "test_1",
       "threads": "5",
       "compression-codec": "2",
@@ -142,12 +143,14 @@
 
     {
       "entity_id": "12",
+      "new-producer":"true",
       "log_filename": "mirror_maker_12.log",
       "mirror_consumer_config_filename": "mirror_consumer_12.properties",
       "mirror_producer_config_filename": "mirror_producer_12.properties"
     },
     {
       "entity_id": "13",
+      "new-producer":"true",
       "log_filename": "mirror_maker_13.log",
       "mirror_consumer_config_filename": "mirror_consumer_13.properties",
       "mirror_producer_config_filename": "mirror_producer_13.properties"

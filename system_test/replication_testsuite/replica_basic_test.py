@@ -363,6 +363,7 @@ class ReplicaBasicTest(ReplicationUtils, SetupUtils):
                         str(self.testcaseEnv.userDefinedEnvVarDict["backgroundProducerStopped"]) + "]", extra=self.d)
                     if self.testcaseEnv.userDefinedEnvVarDict["backgroundProducerStopped"]:
                         time.sleep(1)
+                        self.testcaseEnv.lock.release()
                         self.logger.info("all producer threads completed", extra=self.d)
                         break
                     time.sleep(1)

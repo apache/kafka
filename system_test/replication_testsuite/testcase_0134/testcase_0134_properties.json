@@ -68,6 +68,7 @@
     },
     {
       "entity_id": "4",
+      "new-producer":"true",
       "topic": "test_1,test_2",
       "threads": "5",
       "compression-codec": "1",
