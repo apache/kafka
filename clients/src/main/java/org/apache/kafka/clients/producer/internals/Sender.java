@@ -159,14 +159,13 @@ public class Sender implements Runnable {
         // okay we stopped accepting requests but there may still be
         // requests in the accumulator or waiting for acknowledgment,
         // wait until these are completed.
-        int unsent = 0;
         do {
             try {
-                unsent = run(time.milliseconds());
+                run(time.milliseconds());
             } catch (Exception e) {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
-        } while (unsent > 0 || this.inFlightRequests.totalInFlightRequests() > 0);
+        } while (this.accumulator.hasUnsent() || this.inFlightRequests.totalInFlightRequests() > 0);
 
         // close all the connections
         this.selector.close();
@@ -178,9 +177,8 @@ public class Sender implements Runnable {
      * Run a single iteration of sending
      * 
      * @param now The current time
-     * @return The total number of topic/partitions that had data ready (regardless of what we actually sent)
      */
-    public int run(long now) {
+    public void run(long now) {
         Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
         List<TopicPartition> ready = this.accumulator.ready(now);
@@ -220,8 +218,6 @@ public class Sender implements Runnable {
         handleResponses(this.selector.completedReceives(), time.milliseconds());
         handleDisconnects(this.selector.disconnected(), time.milliseconds());
         handleConnects(this.selector.connected());
-
-        return ready.size();
     }
 
     /**

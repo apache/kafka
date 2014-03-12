@@ -205,6 +205,20 @@ public final class RecordAccumulator {
     }
 
     /**
+     * @return Whether there is any unsent record in the accumulator.
+     */
+    public boolean hasUnsent() {
+        for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
+            Deque<RecordBatch> deque = entry.getValue();
+            synchronized (deque) {
+                if (deque.size() > 0)
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * Drain all the data for the given topic-partitions that will fit within the specified size. This method attempts
      * to avoid choosing the same topic-partitions over and over.
      * 
