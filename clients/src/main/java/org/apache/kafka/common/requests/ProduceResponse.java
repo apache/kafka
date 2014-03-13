@@ -29,6 +29,16 @@ public class ProduceResponse {
             this.errorCode = errorCode;
             this.baseOffset = baseOffset;
         }
+        @Override
+        public String toString() {
+            StringBuilder b = new StringBuilder();
+            b.append('{');
+            b.append("pid: " + partitionId);
+            b.append(",error: " + errorCode);
+            b.append(",offset: " + baseOffset);
+            b.append('}');
+            return b.toString();
+        }
     }
 
     private final Map<String, Map<TopicPartition, PartitionResponse>> responses;
@@ -53,5 +63,23 @@ public class ProduceResponse {
 
     public Map<String, Map<TopicPartition, PartitionResponse>> responses() {
         return this.responses;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder b = new StringBuilder();
+        b.append('{');
+        boolean isFirst = true;
+        for (Map<TopicPartition, PartitionResponse> response : responses.values()) {
+            for (Map.Entry<TopicPartition, PartitionResponse> entry : response.entrySet()) {
+                if (isFirst)
+                    isFirst = false;
+                else
+                    b.append(',');
+                b.append(entry.getKey() + " : " + entry.getValue());
+            }
+        }
+        b.append('}');
+        return b.toString();
     }
 }

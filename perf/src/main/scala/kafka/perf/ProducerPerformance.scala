@@ -26,9 +26,10 @@ import java.text.SimpleDateFormat
 import kafka.serializer._
 import java.util._
 import collection.immutable.List
-import kafka.utils.{ VerifiableProperties, Logging, Utils }
+import kafka.utils.{VerifiableProperties, Logging, Utils}
 import kafka.metrics.KafkaMetricsReporter
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
+import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 
 /**
  * Load test for the producer
@@ -219,7 +220,7 @@ object ProducerPerformance extends Logging {
         this.producer.send(new ProducerRecord(topic, Utils.abs(part.toInt), null, bytes)).get()
       } else {
         this.producer.send(new ProducerRecord(topic, Utils.abs(part.toInt), null, bytes),
-                           Utils.errorLoggingCallback(null, bytes, if (config.seqIdMode) true else false))
+                           new ErrorLoggingCallback(null, bytes, if (config.seqIdMode) true else false))
       }
     }
 

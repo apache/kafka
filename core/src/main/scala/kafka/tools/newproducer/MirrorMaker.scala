@@ -24,6 +24,7 @@ import kafka.consumer._
 import collection.mutable.ListBuffer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord, KafkaProducer}
 import java.util.concurrent.atomic.AtomicInteger
+import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 
 
 object MirrorMaker extends Logging {
@@ -168,10 +169,12 @@ object MirrorMaker extends Logging {
         val producerId = Utils.abs(java.util.Arrays.hashCode(producerRecord.key())) % producers.size
         trace("Send message with key %s to producer %d.".format(java.util.Arrays.toString(producerRecord.key()), producerId))
         val producer = producers(producerId)
-        producer.send(producerRecord, Utils.errorLoggingCallback(producerRecord.key(), producerRecord.value()))
+        producer.send(producerRecord,
+                      new ErrorLoggingCallback(producerRecord.key(), producerRecord.value(), false))
       } else {
         val producerId = producerIndex.getAndSet((producerIndex.get() + 1) % producers.size)
-        producers(producerId).send(producerRecord, Utils.errorLoggingCallback(producerRecord.key(), producerRecord.value()))
+        producers(producerId).send(producerRecord,
+                                   new ErrorLoggingCallback(producerRecord.key(), producerRecord.value(), false))
         trace("Sent message to producer " + producerId)
       }
     }

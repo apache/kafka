@@ -230,9 +230,20 @@ public class Struct {
         StringBuilder b = new StringBuilder();
         b.append('{');
         for (int i = 0; i < this.values.length; i++) {
-            b.append(this.schema.get(i).name);
+            Field f = this.schema.get(i);
+            b.append(f.name);
             b.append('=');
-            b.append(this.values[i]);
+            if (f.type() instanceof ArrayOf) {
+                Object[] arrayValue = (Object[]) this.values[i];
+                b.append('[');
+                for (int j = 0; j < arrayValue.length; j++) {
+                    b.append(arrayValue[j]);
+                    if (j < arrayValue.length - 1)
+                        b.append(',');
+                }
+                b.append(']');
+            } else
+                b.append(this.values[i]);
             if (i < this.values.length - 1)
                 b.append(',');
         }

@@ -197,7 +197,7 @@ public class Sender implements Runnable {
         if (ready.size() > 0) {
             log.trace("Partitions with complete batches: {}", ready);
             log.trace("Partitions ready to initiate a request: {}", sendable);
-            log.trace("Created {} requests: {}", requests.size(), requests);
+            log.trace("Created {} produce requests: {}", requests.size(), requests);
         }
 
         for (int i = 0; i < requests.size(); i++) {
@@ -233,11 +233,11 @@ public class Sender implements Runnable {
 
         if (nodeStates.isConnected(node.id())) {
             Set<String> topics = metadata.topics();
-            log.debug("Sending metadata update request for topics {} to node {}", topics, node.id());
             this.metadataFetchInProgress = true;
-            InFlightRequest request = metadataRequest(node.id(), topics);
-            sends.add(request.request);
-            this.inFlightRequests.add(request);
+            InFlightRequest metadataRequest = metadataRequest(node.id(), topics);
+            log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
+            sends.add(metadataRequest.request);
+            this.inFlightRequests.add(metadataRequest);
         } else if (nodeStates.canConnect(node.id(), now)) {
             // we don't have a connection to this node right now, make one
             initiateConnect(node, now);
@@ -345,6 +345,7 @@ public class Sender implements Runnable {
             nodeStates.disconnected(node);
             log.debug("Node {} disconnected.", node);
             for (InFlightRequest request : this.inFlightRequests.clearAll(node)) {
+                log.trace("Cancelled request {} due to node {} being disconnected", request, node);
                 ApiKeys requestKey = ApiKeys.forId(request.request.header().apiKey());
                 switch (requestKey) {
                     case PRODUCE:

@@ -25,12 +25,10 @@ import java.util.concurrent.locks.Lock
 import java.lang.management._
 import javax.management._
 import scala.collection._
-import mutable.ListBuffer
 import scala.collection.mutable
 import java.util.Properties
 import kafka.common.KafkaException
 import kafka.common.KafkaStorageException
-import org.apache.kafka.clients.producer.{RecordMetadata, Callback}
 
 
 /**
@@ -539,27 +537,6 @@ object Utils extends Logging {
        return fun
     } finally {
       lock.unlock()
-    }
-  }
-
-  def errorLoggingCallback(key: Array[Byte], value: Array[Byte], logAsString: Boolean = false) = {
-    new Callback() {
-      def onCompletion(metadata: RecordMetadata, e: Exception) {
-        if (e != null) {
-          val keyString = if (key == null)
-                            "null"
-                          else {
-                            if (logAsString) new String(key) else key.length + " bytes"
-                          }
-          val valueString = if (value == null)
-                            "null"
-                          else {
-                            if (logAsString) new String(value) else value.length + " bytes"
-                          }
-          error("Error when sending message with key: " + keyString + ", value: " + valueString +
-                " with exception " + e.getMessage)
-        }
-      }
     }
   }
 }
