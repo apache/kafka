@@ -18,12 +18,11 @@
 package kafka.javaapi.consumer;
 
 
+import java.util.List;
+import java.util.Map;
 import kafka.consumer.KafkaStream;
 import kafka.consumer.TopicFilter;
 import kafka.serializer.Decoder;
-
-import java.util.List;
-import java.util.Map;
 
 public interface ConsumerConnector {
   /**
@@ -62,6 +61,7 @@ public interface ConsumerConnector {
    *  Commit the offsets of all broker partitions connected by this connector.
    */
   public void commitOffsets();
+  public void commitOffsets(boolean retryOnFailure);
 
   /**
    *  Shut down the connector

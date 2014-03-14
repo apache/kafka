@@ -123,7 +123,13 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("metrics dictory")
       .ofType(classOf[java.lang.String])
-
+    val includeInternalTopicsOpt = parser.accepts("include-internal-topics", "Allow consuming internal topics.")
+    val offsetsStorageOpt = parser.accepts("offsets-storage", "Specify offsets storage backend (kafka/zookeeper).")
+            .withRequiredArg
+            .describedAs("Offsets storage method.")
+            .ofType(classOf[String])
+            .defaultsTo("zookeeper")
+    val dualCommitEnabledOpt = parser.accepts("dual-commit-enabled", "If offsets storage is kafka and this is set, then commit to zookeeper as well.")
 
     val options: OptionSet = tryParse(parser, args)
     CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
@@ -153,6 +159,7 @@ object ConsoleConsumer extends Logging {
       KafkaMetricsReporter.startReporters(verifiableProps)
     }
 
+    val offsetsStorage = options.valueOf(offsetsStorageOpt)
     val props = new Properties()
     props.put("group.id", options.valueOf(groupIdOpt))
     props.put("socket.receive.buffer.bytes", options.valueOf(socketBufferSizeOpt).toString)
@@ -166,6 +173,13 @@ object ConsoleConsumer extends Logging {
     props.put("zookeeper.connect", options.valueOf(zkConnectOpt))
     props.put("consumer.timeout.ms", options.valueOf(consumerTimeoutMsOpt).toString)
     props.put("refresh.leader.backoff.ms", options.valueOf(refreshMetadataBackoffMsOpt).toString)
+    props.put("offsets.storage", offsetsStorage)
+    if (options.has(includeInternalTopicsOpt))
+      props.put("exclude.internal.topics", "false")
+    if (options.has(dualCommitEnabledOpt))
+      props.put("dual.commit.enabled", "true")
+    else
+      props.put("dual.commit.enabled", "false")
 
     val config = new ConsumerConfig(props)
     val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false

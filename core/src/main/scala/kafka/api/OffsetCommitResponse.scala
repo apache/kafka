@@ -19,9 +19,8 @@ package kafka.api
 
 import java.nio.ByteBuffer
 
-import kafka.api.ApiUtils._
-import kafka.common.TopicAndPartition
 import kafka.utils.Logging
+import kafka.common.TopicAndPartition
 
 object OffsetCommitResponse extends Logging {
   val CurrentVersion: Short = 0
@@ -30,7 +29,7 @@ object OffsetCommitResponse extends Logging {
     val correlationId = buffer.getInt
     val topicCount = buffer.getInt
     val pairs = (1 to topicCount).flatMap(_ => {
-      val topic = readShortString(buffer)
+      val topic = ApiUtils.readShortString(buffer)
       val partitionCount = buffer.getInt
       (1 to partitionCount).map(_ => {
         val partitionId = buffer.getInt
@@ -42,37 +41,34 @@ object OffsetCommitResponse extends Logging {
   }
 }
 
-case class OffsetCommitResponse(requestInfo: Map[TopicAndPartition, Short],
+case class OffsetCommitResponse(commitStatus: Map[TopicAndPartition, Short],
                                override val correlationId: Int = 0)
     extends RequestOrResponse(correlationId=correlationId) {
 
-  lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
+  lazy val commitStatusGroupedByTopic = commitStatus.groupBy(_._1.topic)
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(correlationId)
-    buffer.putInt(requestInfoGroupedByTopic.size) // number of topics
-    requestInfoGroupedByTopic.foreach( t1 => { // topic -> Map[TopicAndPartition, Short]
-      writeShortString(buffer, t1._1) // topic
-      buffer.putInt(t1._2.size)       // number of partitions for this topic
-      t1._2.foreach( t2 => {  // TopicAndPartition -> Short
-        buffer.putInt(t2._1.partition)
-        buffer.putShort(t2._2)  //error
-      })
-    })
+    buffer.putInt(commitStatusGroupedByTopic.size)
+    commitStatusGroupedByTopic.foreach { case(topic, statusMap) =>
+      ApiUtils.writeShortString(buffer, topic)
+      buffer.putInt(statusMap.size) // partition count
+      statusMap.foreach { case(topicAndPartition, errorCode) =>
+        buffer.putInt(topicAndPartition.partition)
+        buffer.putShort(errorCode)
+      }
+    }
   }
 
   override def sizeInBytes = 
     4 + /* correlationId */
     4 + /* topic count */
-    requestInfoGroupedByTopic.foldLeft(0)((count, topicAndOffsets) => {
-      val (topic, offsets) = topicAndOffsets
+    commitStatusGroupedByTopic.foldLeft(0)((count, partitionStatusMap) => {
+      val (topic, partitionStatus) = partitionStatusMap
       count +
-      shortStringLength(topic) + /* topic */
-      4 + /* number of partitions */
-      offsets.size * (
-        4 + /* partition */
-        2 /* error */
-      )
+      ApiUtils.shortStringLength(topic) +
+      4 + /* partition count */
+      partitionStatus.size * ( 4 /* partition */  + 2 /* error code */)
     })
 
   override def describe(details: Boolean):String = { toString }

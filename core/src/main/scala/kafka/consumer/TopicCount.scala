@@ -47,7 +47,7 @@ private[kafka] object TopicCount extends Logging {
   val blackListPattern = "black_list"
   val staticPattern = "static"
 
-  def constructTopicCount(group: String, consumerId: String, zkClient: ZkClient) : TopicCount = {
+  def constructTopicCount(group: String, consumerId: String, zkClient: ZkClient, excludeInternalTopics: Boolean) : TopicCount = {
     val dirs = new ZKGroupDirs(group)
     val topicCountString = ZkUtils.readData(zkClient, dirs.consumerRegistryDir + "/" + consumerId)._1
     var subscriptionPattern: String = null
@@ -85,15 +85,15 @@ private[kafka] object TopicCount extends Logging {
           new Whitelist(regex)
         else
           new Blacklist(regex)
-      new WildcardTopicCount(zkClient, consumerId, filter, numStreams)
+      new WildcardTopicCount(zkClient, consumerId, filter, numStreams, excludeInternalTopics)
     }
   }
 
   def constructTopicCount(consumerIdString: String, topicCount: Map[String, Int]) =
     new StaticTopicCount(consumerIdString, topicCount)
 
-  def constructTopicCount(consumerIdString: String, filter: TopicFilter, numStreams: Int, zkClient: ZkClient) =
-    new WildcardTopicCount(zkClient, consumerIdString, filter, numStreams)
+  def constructTopicCount(consumerIdString: String, filter: TopicFilter, numStreams: Int, zkClient: ZkClient, excludeInternalTopics: Boolean) =
+    new WildcardTopicCount(zkClient, consumerIdString, filter, numStreams, excludeInternalTopics)
 
 }
 
@@ -119,9 +119,11 @@ private[kafka] class StaticTopicCount(val consumerIdString: String,
 private[kafka] class WildcardTopicCount(zkClient: ZkClient,
                                         consumerIdString: String,
                                         topicFilter: TopicFilter,
-                                        numStreams: Int) extends TopicCount {
+                                        numStreams: Int,
+                                        excludeInternalTopics: Boolean) extends TopicCount {
   def getConsumerThreadIdsPerTopic = {
-    val wildcardTopics = ZkUtils.getChildrenParentMayNotExist(zkClient, ZkUtils.BrokerTopicsPath).filter(topicFilter.isTopicAllowed(_))
+    val wildcardTopics = ZkUtils.getChildrenParentMayNotExist(zkClient, ZkUtils.BrokerTopicsPath)
+                         .filter(topic => topicFilter.isTopicAllowed(topic, excludeInternalTopics))
     makeConsumerThreadIdsPerTopic(consumerIdString, Map(wildcardTopics.map((_, numStreams)): _*))
   }
 

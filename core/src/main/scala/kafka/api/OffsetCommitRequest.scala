@@ -18,17 +18,20 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-
 import kafka.api.ApiUtils._
-import kafka.utils.Logging
+import kafka.utils.{SystemTime, Logging}
 import kafka.network.{RequestChannel, BoundedByteBufferSend}
-import kafka.common.{ErrorMapping, TopicAndPartition, OffsetMetadataAndError}
+import kafka.common.{OffsetAndMetadata, ErrorMapping, TopicAndPartition}
 import kafka.network.RequestChannel.Response
+import scala.collection._
+
 object OffsetCommitRequest extends Logging {
   val CurrentVersion: Short = 0
   val DefaultClientId = ""
 
   def readFrom(buffer: ByteBuffer): OffsetCommitRequest = {
+    val now = SystemTime.milliseconds
+
     // Read values from the envelope
     val versionId = buffer.getShort
     val correlationId = buffer.getInt
@@ -43,23 +46,45 @@ object OffsetCommitRequest extends Logging {
       (1 to partitionCount).map(_ => {
         val partitionId = buffer.getInt
         val offset = buffer.getLong
+        val timestamp = {
+          val given = buffer.getLong
+          if (given == -1L) now else given
+        }
         val metadata = readShortString(buffer)
-        (TopicAndPartition(topic, partitionId), OffsetMetadataAndError(offset, metadata))
+        (TopicAndPartition(topic, partitionId), OffsetAndMetadata(offset, metadata, timestamp))
       })
     })
-    OffsetCommitRequest(consumerGroupId, Map(pairs:_*), versionId, correlationId, clientId)
+    OffsetCommitRequest(consumerGroupId, mutable.Map(pairs:_*), versionId, correlationId, clientId)
   }
 }
 
 case class OffsetCommitRequest(groupId: String,
-                               requestInfo: Map[TopicAndPartition, OffsetMetadataAndError],
+                               requestInfo: mutable.Map[TopicAndPartition, OffsetAndMetadata],
                                versionId: Short = OffsetCommitRequest.CurrentVersion,
                                override val correlationId: Int = 0,
                                clientId: String = OffsetCommitRequest.DefaultClientId)
     extends RequestOrResponse(Some(RequestKeys.OffsetCommitKey), correlationId) {
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
-  
+
+  def filterLargeMetadata(maxMetadataSize: Int) =
+    requestInfo.filter(info => info._2.metadata == null || info._2.metadata.length <= maxMetadataSize)
+
+  def responseFor(errorCode: Short, offsetMetadataMaxSize: Int) = {
+    val commitStatus = requestInfo.map {info =>
+      (info._1, if (info._2.metadata != null && info._2.metadata.length > offsetMetadataMaxSize)
+                  ErrorMapping.OffsetMetadataTooLargeCode
+                else if (errorCode == ErrorMapping.UnknownTopicOrPartitionCode)
+                  ErrorMapping.ConsumerCoordinatorNotAvailableCode
+                else if (errorCode == ErrorMapping.NotLeaderForPartitionCode)
+                  ErrorMapping.NotCoordinatorForConsumerCode
+                else
+                  errorCode)
+    }.toMap
+    OffsetCommitResponse(commitStatus, correlationId)
+  }
+
+
   def writeTo(buffer: ByteBuffer) {
     // Write envelope
     buffer.putShort(versionId)
@@ -73,9 +98,10 @@ case class OffsetCommitRequest(groupId: String,
       writeShortString(buffer, t1._1) // topic
       buffer.putInt(t1._2.size)       // number of partitions for this topic
       t1._2.foreach( t2 => {
-        buffer.putInt(t2._1.partition)  // partition
-        buffer.putLong(t2._2.offset)    // offset
-        writeShortString(buffer, t2._2.metadata) // metadata
+        buffer.putInt(t2._1.partition)
+        buffer.putLong(t2._2.offset)
+        buffer.putLong(t2._2.timestamp)
+        writeShortString(buffer, t2._2.metadata)
       })
     })
   }
@@ -95,15 +121,14 @@ case class OffsetCommitRequest(groupId: String,
         innerCount +
         4 /* partition */ +
         8 /* offset */ +
+        8 /* timestamp */ +
         shortStringLength(offsetAndMetadata._2.metadata)
       })
     })
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val responseMap = requestInfo.map {
-      case (topicAndPartition, offset) => (topicAndPartition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
-    }.toMap
-    val errorResponse = OffsetCommitResponse(requestInfo=responseMap, correlationId=correlationId)
+    val errorCode = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
+    val errorResponse = responseFor(errorCode, Int.MaxValue)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
   }
 
@@ -119,7 +144,7 @@ case class OffsetCommitRequest(groupId: String,
     offsetCommitRequest.toString()
   }
 
-  override def toString(): String = {
-    describe(true)
+  override def toString = {
+    describe(details = true)
   }
 }

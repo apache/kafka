@@ -21,6 +21,7 @@ package kafka.consumer
 import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Test
+import kafka.server.OffsetManager
 
 
 class TopicFilterTest extends JUnitSuite {
@@ -29,19 +30,30 @@ class TopicFilterTest extends JUnitSuite {
   def testWhitelists() {
 
     val topicFilter1 = new Whitelist("white1,white2")
-    assertTrue(topicFilter1.isTopicAllowed("white2"))
-    assertFalse(topicFilter1.isTopicAllowed("black1"))
+    assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))
+    assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = false))
+    assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = true))
+    assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = false))
 
     val topicFilter2 = new Whitelist(".+")
-    assertTrue(topicFilter2.isTopicAllowed("alltopics"))
-    
+    assertTrue(topicFilter2.isTopicAllowed("alltopics", excludeInternalTopics = true))
+    assertFalse(topicFilter2.isTopicAllowed(OffsetManager.OffsetsTopicName, excludeInternalTopics = true))
+    assertTrue(topicFilter2.isTopicAllowed(OffsetManager.OffsetsTopicName, excludeInternalTopics = false))
+
     val topicFilter3 = new Whitelist("white_listed-topic.+")
-    assertTrue(topicFilter3.isTopicAllowed("white_listed-topic1"))
-    assertFalse(topicFilter3.isTopicAllowed("black1"))
+    assertTrue(topicFilter3.isTopicAllowed("white_listed-topic1", excludeInternalTopics = true))
+    assertFalse(topicFilter3.isTopicAllowed("black1", excludeInternalTopics = true))
   }
 
   @Test
   def testBlacklists() {
     val topicFilter1 = new Blacklist("black1")
+    assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = true))
+    assertTrue(topicFilter1.isTopicAllowed("white2", excludeInternalTopics = false))
+    assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = true))
+    assertFalse(topicFilter1.isTopicAllowed("black1", excludeInternalTopics = false))
+
+    assertFalse(topicFilter1.isTopicAllowed(OffsetManager.OffsetsTopicName, excludeInternalTopics = true))
+    assertTrue(topicFilter1.isTopicAllowed(OffsetManager.OffsetsTopicName, excludeInternalTopics = false))
   }
 }

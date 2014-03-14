@@ -86,12 +86,15 @@ class SimpleFetchTest extends JUnit3Suite {
     EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(topic, partitionId)).andReturn(partition.leaderReplicaIfLocal().get).anyTimes()
     EasyMock.replay(replicaManager)
 
+    val offsetManager = EasyMock.createMock(classOf[kafka.server.OffsetManager])
+
     val controller = EasyMock.createMock(classOf[kafka.controller.KafkaController])
 
     // start a request channel with 2 processors and a queue size of 5 (this is more or less arbitrary)
     // don't provide replica or leader callbacks since they will not be tested here
     val requestChannel = new RequestChannel(2, 5)
-    val apis = new KafkaApis(requestChannel, replicaManager, zkClient, configs.head.brokerId, configs.head, controller)
+    val apis = new KafkaApis(requestChannel, replicaManager, offsetManager, zkClient, configs.head.brokerId, configs.head, controller)
+
     val partitionStateInfo = EasyMock.createNiceMock(classOf[PartitionStateInfo])
     apis.metadataCache.put(TopicAndPartition(topic, partitionId), partitionStateInfo)
     EasyMock.replay(partitionStateInfo)
@@ -159,10 +162,12 @@ class SimpleFetchTest extends JUnit3Suite {
     EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(topic, partitionId)).andReturn(partition.leaderReplicaIfLocal().get).anyTimes()
     EasyMock.replay(replicaManager)
 
+    val offsetManager = EasyMock.createMock(classOf[kafka.server.OffsetManager])
+
     val controller = EasyMock.createMock(classOf[kafka.controller.KafkaController])
 
     val requestChannel = new RequestChannel(2, 5)
-    val apis = new KafkaApis(requestChannel, replicaManager, zkClient, configs.head.brokerId, configs.head, controller)
+    val apis = new KafkaApis(requestChannel, replicaManager, offsetManager, zkClient, configs.head.brokerId, configs.head, controller)
     val partitionStateInfo = EasyMock.createNiceMock(classOf[PartitionStateInfo])
     apis.metadataCache.put(TopicAndPartition(topic, partitionId), partitionStateInfo)
     EasyMock.replay(partitionStateInfo)

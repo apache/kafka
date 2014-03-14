@@ -1,5 +1,3 @@
-package kafka.common
-
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -17,20 +15,41 @@ package kafka.common
  * limitations under the License.
  */
 
-/**
- * Convenience case class since (topic, partition) pairs are ubiquitous.
- */
-case class OffsetMetadataAndError(offset: Long, metadata: String = OffsetMetadataAndError.NoMetadata, error: Short = ErrorMapping.NoError) {
+package kafka.common
 
-  def this(tuple: (Long, String, Short)) = this(tuple._1, tuple._2, tuple._3)
+case class OffsetAndMetadata(offset: Long,
+                             metadata: String = OffsetAndMetadata.NoMetadata,
+                             timestamp: Long = -1L) {
+  override def toString = "OffsetAndMetadata[%d,%s%s]"
+                          .format(offset,
+                                  if (metadata != null && metadata.length > 0) metadata else "NO_METADATA",
+                                  if (timestamp == -1) "" else "," + timestamp.toString)
+}
+
+object OffsetAndMetadata {
+  val InvalidOffset: Long = -1L
+  val NoMetadata: String = ""
+  val InvalidTime: Long = -1L
+}
+
+case class OffsetMetadataAndError(offset: Long,
+                                  metadata: String = OffsetAndMetadata.NoMetadata,
+                                  error: Short = ErrorMapping.NoError) {
+
+  def this(offsetMetadata: OffsetAndMetadata, error: Short) =
+    this(offsetMetadata.offset, offsetMetadata.metadata, error)
+
+  def this(error: Short) =
+    this(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, error)
 
   def asTuple = (offset, metadata, error)
 
-  override def toString = "OffsetAndMetadata[%d,%s,%d]".format(offset, metadata, error)
-
+  override def toString = "OffsetMetadataAndError[%d,%s,%d]".format(offset, metadata, error)
 }
 
 object OffsetMetadataAndError {
-  val InvalidOffset: Long = -1L;
-  val NoMetadata: String = "";
+  val NoOffset = OffsetMetadataAndError(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, ErrorMapping.NoError)
+  val OffsetsLoading = OffsetMetadataAndError(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, ErrorMapping.OffsetsLoadInProgressCode)
+  val NotOffsetManagerForGroup = OffsetMetadataAndError(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, ErrorMapping.NotCoordinatorForConsumerCode)
 }
+

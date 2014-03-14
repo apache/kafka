@@ -171,7 +171,7 @@ class MigrationToolTest(ReplicationUtils, SetupUtils):
                 time.sleep(5)
 
                 self.log_message("creating topics")
-                kafka_system_test_utils.create_topic(self.systemTestEnv, self.testcaseEnv)
+                kafka_system_test_utils.create_topic_for_producer_performance(self.systemTestEnv, self.testcaseEnv)
                 self.anonLogger.info("sleeping for 5s")
                 time.sleep(5)
 

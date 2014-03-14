@@ -58,7 +58,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val numIoThreads = props.getIntInRange("num.io.threads", 8, (1, Int.MaxValue))
   
   /* the number of threads to use for various background processing tasks */
-  val backgroundThreads = props.getIntInRange("background.threads", 4, (1, Int.MaxValue))
+  val backgroundThreads = props.getIntInRange("background.threads", 10, (1, Int.MaxValue))
   
   /* the number of queued requests allowed before blocking the network threads */
   val queuedMaxRequests = props.getIntInRange("queued.max.requests", 500, (1, Int.MaxValue))
@@ -242,10 +242,46 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val controlledShutdownRetryBackoffMs = props.getInt("controlled.shutdown.retry.backoff.ms", 5000)
 
   /* enable controlled shutdown of the server */
-  val controlledShutdownEnable = props.getBoolean("controlled.shutdown.enable", false)
+  val controlledShutdownEnable = props.getBoolean("controlled.shutdown.enable", default = false)
 
-  /*********** Misc configuration ***********/
+  /*********** Offset management configuration ***********/
   
   /* the maximum size for a metadata entry associated with an offset commit */
-  val offsetMetadataMaxSize = props.getInt("offset.metadata.max.bytes", 1024)
+  val offsetMetadataMaxSize = props.getInt("offset.metadata.max.bytes", OffsetManagerConfig.DefaultMaxMetadataSize)
+
+  /** Batch size for reading from the offsets segments when loading offsets into the cache. */
+  val offsetsLoadBufferSize = props.getIntInRange("offsets.load.buffer.size",
+    OffsetManagerConfig.DefaultLoadBufferSize, (1, Integer.MAX_VALUE))
+
+  /** The replication factor for the offset commit topic (set higher to ensure availability). */
+  val offsetsTopicReplicationFactor: Short = props.getShortInRange("offsets.topic.replication.factor",
+    OffsetManagerConfig.DefaultOffsetsTopicReplicationFactor, (1, Short.MaxValue))
+
+  /** The number of partitions for the offset commit topic (should not change after deployment). */
+  val offsetsTopicPartitions: Int = props.getIntInRange("offsets.topic.num.partitions",
+    OffsetManagerConfig.DefaultOffsetsTopicNumPartitions, (1, Integer.MAX_VALUE))
+
+  /** The offsets topic segment bytes should be kept relatively small in order to facilitate faster log compaction and cache loads */
+  val offsetsTopicSegmentBytes: Int = props.getIntInRange("offsets.topic.segment.bytes",
+    OffsetManagerConfig.DefaultOffsetsTopicSegmentBytes, (1, Integer.MAX_VALUE))
+
+  /** Compression codec for the offsets topic - compression may be used to achieve "atomic" commits. */
+  val offsetsTopicCompressionCodec = props.getCompressionCodec("offsets.topic.compression.codec",
+    OffsetManagerConfig.DefaultOffsetsTopicCompressionCodec)
+
+  /** Offsets older than this retention period will be discarded. */
+  val offsetsRetentionMinutes: Int = props.getIntInRange("offsets.retention.minutes", 24*60, (1, Integer.MAX_VALUE))
+
+  /** Frequency at which to check for stale offsets. */
+  val offsetsRetentionCheckIntervalMs: Long = props.getLongInRange("offsets.retention.check.interval.ms",
+    OffsetManagerConfig.DefaultOffsetsRetentionCheckIntervalMs, (1, Long.MaxValue))
+
+  /* Offset commit will be delayed until all replicas for the offsets topic receive the commit or this timeout is
+   * reached. This is similar to the producer request timeout. */
+   val offsetCommitTimeoutMs = props.getIntInRange("offsets.commit.timeout.ms",
+    OffsetManagerConfig.DefaultOffsetCommitTimeoutMs, (1, Integer.MAX_VALUE))
+
+  /** The required acks before the commit can be accepted. In general, the default (-1) should not be overridden. */
+  val offsetCommitRequiredAcks = props.getShortInRange("offsets.commit.required.acks",
+    OffsetManagerConfig.DefaultOffsetCommitRequiredAcks, (-1, offsetsTopicReplicationFactor))
 }

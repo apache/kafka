@@ -62,7 +62,7 @@ object DumpLogSegments {
       val file = new File(arg)
       if(file.getName.endsWith(Log.LogFileSuffix)) {
         println("Dumping " + file)
-        dumpLog(file, print, nonConsecutivePairsForLogFilesMap, isDeepIteration)
+        dumpLog(file, print, nonConsecutivePairsForLogFilesMap, isDeepIteration, maxMessageSize)
       } else if(file.getName.endsWith(Log.IndexFileSuffix)) {
         println("Dumping " + file)
         dumpIndex(file, verifyOnly, misMatchesForIndexFilesMap, maxMessageSize)
@@ -117,13 +117,15 @@ object DumpLogSegments {
   private def dumpLog(file: File,
                       printContents: Boolean,
                       nonConsecutivePairsForLogFilesMap: mutable.HashMap[String, List[(Long, Long)]],
-                      isDeepIteration: Boolean) {
+                      isDeepIteration: Boolean,
+                      maxMessageSize: Int) {
     val startOffset = file.getName().split("\\.")(0).toLong
     println("Starting offset: " + startOffset)
     val messageSet = new FileMessageSet(file, false)
     var validBytes = 0L
     var lastOffset = -1l
-    for(shallowMessageAndOffset <- messageSet) { // this only does shallow iteration
+    val shallowIterator = messageSet.iterator(maxMessageSize)
+    for(shallowMessageAndOffset <- shallowIterator) { // this only does shallow iteration
       val itr = getIterator(shallowMessageAndOffset, isDeepIteration)
       for (messageAndOffset <- itr) {
         val msg = messageAndOffset.message

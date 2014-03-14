@@ -77,16 +77,7 @@ class ProducerConfig private (val props: VerifiableProperties)
    * This parameter allows you to specify the compression codec for all data generated *
    * by this producer. The default is NoCompressionCodec
    */
-  val compressionCodec = {
-    val prop = props.getString("compression.codec", NoCompressionCodec.name)
-    try {
-      CompressionCodec.getCompressionCodec(prop.toInt)
-    }
-    catch {
-      case nfe: NumberFormatException =>
-        CompressionCodec.getCompressionCodec(prop)
-    }
-  }
+  val compressionCodec = props.getCompressionCodec("compression.codec", NoCompressionCodec)
 
   /** This parameter allows you to set whether compression should be turned *
    *  on for particular topics

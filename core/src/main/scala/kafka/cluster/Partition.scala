@@ -22,7 +22,7 @@ import kafka.utils._
 import java.lang.Object
 import kafka.api.{PartitionStateInfo, LeaderAndIsr}
 import kafka.log.LogConfig
-import kafka.server.ReplicaManager
+import kafka.server.{OffsetManager, ReplicaManager}
 import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.controller.KafkaController
@@ -165,7 +165,8 @@ class Partition(val topic: String,
    *  and setting the new leader and ISR
    */
   def makeLeader(controllerId: Int,
-                 partitionStateInfo: PartitionStateInfo, correlationId: Int): Boolean = {
+                 partitionStateInfo: PartitionStateInfo, correlationId: Int,
+                 offsetManager: OffsetManager): Boolean = {
     leaderIsrUpdateLock synchronized {
       val allReplicas = partitionStateInfo.allReplicas
       val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
@@ -186,6 +187,8 @@ class Partition(val topic: String,
       leaderReplicaIdOpt = Some(localBrokerId)
       // we may need to increment high watermark since ISR could be down to 1
       maybeIncrementLeaderHW(getReplica().get)
+      if (topic == OffsetManager.OffsetsTopicName)
+        offsetManager.loadOffsetsFromLog(partitionId)
       true
     }
   }
@@ -196,7 +199,7 @@ class Partition(val topic: String,
    */
   def makeFollower(controllerId: Int,
                    partitionStateInfo: PartitionStateInfo,
-                   correlationId: Int): Boolean = {
+                   correlationId: Int, offsetManager: OffsetManager): Boolean = {
     leaderIsrUpdateLock synchronized {
       val allReplicas = partitionStateInfo.allReplicas
       val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
@@ -212,12 +215,21 @@ class Partition(val topic: String,
       inSyncReplicas = Set.empty[Replica]
       leaderEpoch = leaderAndIsr.leaderEpoch
       zkVersion = leaderAndIsr.zkVersion
+      
+      leaderReplicaIdOpt.foreach { leaderReplica =>
+        if (topic == OffsetManager.OffsetsTopicName &&
+           /* if we are making a leader->follower transition */
+           leaderReplica == localBrokerId)
+          offsetManager.clearOffsetsInPartition(partitionId)
+      }
 
-      if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == newLeaderBrokerId)
-        return false;
-
-      leaderReplicaIdOpt = Some(newLeaderBrokerId)
-      true
+      if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == newLeaderBrokerId) {
+        false
+      }
+      else {
+        leaderReplicaIdOpt = Some(newLeaderBrokerId)
+        true
+      }
     }
   }
 

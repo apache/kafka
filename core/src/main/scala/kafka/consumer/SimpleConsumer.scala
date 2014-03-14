@@ -92,6 +92,11 @@ class SimpleConsumer(val host: String,
     TopicMetadataResponse.readFrom(response.buffer)
   }
 
+  def send(request: ConsumerMetadataRequest): ConsumerMetadataResponse = {
+    val response = sendRequest(request)
+    ConsumerMetadataResponse.readFrom(response.buffer)
+  }
+
   /**
    *  Fetch a set of messages from a topic.
    *
@@ -126,7 +131,11 @@ class SimpleConsumer(val host: String,
    * @param request a [[kafka.api.OffsetCommitRequest]] object.
    * @return a [[kafka.api.OffsetCommitResponse]] object.
    */
-  def commitOffsets(request: OffsetCommitRequest) = OffsetCommitResponse.readFrom(sendRequest(request).buffer)
+  def commitOffsets(request: OffsetCommitRequest) = {
+    // TODO: With KAFKA-1012, we have to first issue a ConsumerMetadataRequest and connect to the coordinator before
+    // we can commit offsets.
+    OffsetCommitResponse.readFrom(sendRequest(request).buffer)
+  }
 
   /**
    * Fetch offsets for a topic

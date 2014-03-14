@@ -51,6 +51,12 @@ class TestcaseEnv():
     # { 0: 12345, 1: 12389, ... }
     entityMirrorMakerParentPidDict = {}
 
+    # dictionary of entity_id to ppid for console-consumer entities
+    # key: entity_id
+    # val: ppid of console consumer associated to that entity_id
+    # { 0: 12345, 1: 12389, ... }
+    entityConsoleConsumerParentPidDict = {}
+
     # dictionary of entity_id to ppid for migration tool entities
     # key: entity_id
     # val: ppid of broker associated to that entity_id

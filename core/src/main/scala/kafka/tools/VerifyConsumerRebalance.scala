@@ -26,7 +26,7 @@ object VerifyConsumerRebalance extends Logging {
     val parser = new OptionParser()
 
     val zkConnectOpt = parser.accepts("zookeeper.connect", "ZooKeeper connect string.").
-      withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String]);
+      withRequiredArg().defaultsTo("localhost:2181").ofType(classOf[String])
     val groupOpt = parser.accepts("group", "Consumer group.").
       withRequiredArg().ofType(classOf[String])
     parser.accepts("help", "Print this message.")
@@ -78,7 +78,7 @@ object VerifyConsumerRebalance extends Logging {
      * This means that for each partition registered under /brokers/topics/[topic]/[broker-id], an owner exists
      * under /consumers/[consumer_group]/owners/[topic]/[broker_id-partition_id]
      */
-    val consumersPerTopicMap = ZkUtils.getConsumersPerTopic(zkClient, group)
+    val consumersPerTopicMap = ZkUtils.getConsumersPerTopic(zkClient, group, excludeInternalTopics = false)
     val partitionsPerTopicMap = ZkUtils.getPartitionsForTopics(zkClient, consumersPerTopicMap.keySet.toSeq)
 
     partitionsPerTopicMap.foreach { partitionsForTopic =>

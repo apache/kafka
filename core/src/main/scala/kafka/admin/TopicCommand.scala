@@ -26,6 +26,8 @@ import scala.collection.JavaConversions._
 import kafka.cluster.Broker
 import kafka.log.LogConfig
 import kafka.consumer.Whitelist
+import kafka.server.OffsetManager
+
 
 object TopicCommand {
 
@@ -70,7 +72,7 @@ object TopicCommand {
     if (opts.options.has(opts.topicOpt)) {
       val topicsSpec = opts.options.valueOf(opts.topicOpt)
       val topicsFilter = new Whitelist(topicsSpec)
-      allTopics.filter(topicsFilter.isTopicAllowed)
+      allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics = false))
     } else
       allTopics
   }
@@ -104,6 +106,9 @@ object TopicCommand {
         println("Updated config for topic \"%s\".".format(topic))
       }
       if(opts.options.has(opts.partitionsOpt)) {
+        if (topic == OffsetManager.OffsetsTopicName) {
+          throw new IllegalArgumentException("The number of partitions for the offsets topic cannot be changed.")
+        }
         println("WARNING: If partitions are increased for a topic that has a key, the partition " +
           "logic or ordering of the messages will be affected")
         val nPartitions = opts.options.valueOf(opts.partitionsOpt).intValue

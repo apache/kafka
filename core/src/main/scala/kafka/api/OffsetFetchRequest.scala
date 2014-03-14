@@ -23,7 +23,7 @@ import kafka.api.ApiUtils._
 import kafka.utils.Logging
 import kafka.network.{BoundedByteBufferSend, RequestChannel}
 import kafka.network.RequestChannel.Response
-import kafka.common.{ErrorMapping, OffsetMetadataAndError, TopicAndPartition}
+import kafka.common.{OffsetAndMetadata, ErrorMapping, OffsetMetadataAndError, TopicAndPartition}
 object OffsetFetchRequest extends Logging {
   val CurrentVersion: Short = 0
   val DefaultClientId = ""
@@ -50,10 +50,10 @@ object OffsetFetchRequest extends Logging {
 }
 
 case class OffsetFetchRequest(groupId: String,
-                               requestInfo: Seq[TopicAndPartition],
-                               versionId: Short = OffsetFetchRequest.CurrentVersion,
-                               override val correlationId: Int = 0,
-                               clientId: String = OffsetFetchRequest.DefaultClientId)
+                              requestInfo: Seq[TopicAndPartition],
+                              versionId: Short = OffsetFetchRequest.CurrentVersion,
+                              override val correlationId: Int = 0,
+                              clientId: String = OffsetFetchRequest.DefaultClientId)
     extends RequestOrResponse(Some(RequestKeys.OffsetFetchKey), correlationId) {
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_.topic)
@@ -91,8 +91,8 @@ case class OffsetFetchRequest(groupId: String,
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     val responseMap = requestInfo.map {
       case (topicAndPartition) => (topicAndPartition, OffsetMetadataAndError(
-        offset=OffsetMetadataAndError.InvalidOffset,
-        error=ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
+        offset = OffsetAndMetadata.InvalidOffset,
+        error = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
       ))
     }.toMap
     val errorResponse = OffsetFetchResponse(requestInfo=responseMap, correlationId=correlationId)
@@ -111,7 +111,7 @@ case class OffsetFetchRequest(groupId: String,
     offsetFetchRequest.toString()
   }
 
-  override def toString(): String = {
-    describe(true)
+  override def toString: String = {
+    describe(details = true)
   }
 }

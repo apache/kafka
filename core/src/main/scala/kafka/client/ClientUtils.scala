@@ -20,12 +20,16 @@ import scala.collection._
 import kafka.cluster._
 import kafka.api._
 import kafka.producer._
-import kafka.common.KafkaException
+import kafka.common.{ErrorMapping, KafkaException}
 import kafka.utils.{Utils, Logging}
 import java.util.Properties
 import util.Random
+ import kafka.network.BlockingChannel
+ import kafka.utils.ZkUtils._
+ import org.I0Itec.zkclient.ZkClient
+ import java.io.IOException
 
-/**
+ /**
  * Helper functions common to clients (producer, consumer, or admin)
  */
 object ClientUtils extends Logging{
@@ -103,5 +107,93 @@ object ClientUtils extends Logging{
       new Broker(brokerId, hostName, port)
     })
   }
-  
-}
+
+   /**
+    * Creates a blocking channel to a random broker
+    */
+   def channelToAnyBroker(zkClient: ZkClient, socketTimeoutMs: Int = 3000) : BlockingChannel = {
+     var channel: BlockingChannel = null
+     var connected = false
+     while (!connected) {
+       val allBrokers = getAllBrokersInCluster(zkClient)
+       Random.shuffle(allBrokers).find { broker =>
+         trace("Connecting to broker %s:%d.".format(broker.host, broker.port))
+         try {
+           channel = new BlockingChannel(broker.host, broker.port, BlockingChannel.UseDefaultBufferSize, BlockingChannel.UseDefaultBufferSize, socketTimeoutMs)
+           channel.connect()
+           debug("Created channel to broker %s:%d.".format(channel.host, channel.port))
+           true
+         } catch {
+           case e: Exception =>
+             if (channel != null) channel.disconnect()
+             channel = null
+             info("Error while creating channel to %s:%d.".format(broker.host, broker.port))
+             false
+         }
+       }
+       connected = if (channel == null) false else true
+     }
+
+     channel
+   }
+
+   /**
+    * Creates a blocking channel to the offset manager of the given group
+    */
+   def channelToOffsetManager(group: String, zkClient: ZkClient, socketTimeoutMs: Int = 3000, retryBackOffMs: Int = 1000) = {
+     var queryChannel = channelToAnyBroker(zkClient)
+
+     var offsetManagerChannelOpt: Option[BlockingChannel] = None
+
+     while (!offsetManagerChannelOpt.isDefined) {
+
+       var coordinatorOpt: Option[Broker] = None
+
+       while (!coordinatorOpt.isDefined) {
+         try {
+           if (!queryChannel.isConnected)
+             queryChannel = channelToAnyBroker(zkClient)
+           debug("Querying %s:%d to locate offset manager for %s.".format(queryChannel.host, queryChannel.port, group))
+           queryChannel.send(ConsumerMetadataRequest(group))
+           val response = queryChannel.receive()
+           val consumerMetadataResponse =  ConsumerMetadataResponse.readFrom(response.buffer)
+           debug("Consumer metadata response: " + consumerMetadataResponse.toString)
+           if (consumerMetadataResponse.errorCode == ErrorMapping.NoError)
+             coordinatorOpt = consumerMetadataResponse.coordinator
+         }
+         catch {
+           case ioe: IOException =>
+             info("Failed to fetch consumer metadata from %s:%d.".format(queryChannel.host, queryChannel.port))
+             queryChannel.disconnect()
+         }
+       }
+
+       val coordinator = coordinatorOpt.get
+       if (coordinator.host == queryChannel.host && coordinator.port == queryChannel.port) {
+         offsetManagerChannelOpt = Some(queryChannel)
+       } else {
+         val connectString = "%s:%d".format(coordinator.host, coordinator.port)
+         var offsetManagerChannel: BlockingChannel = null
+         try {
+           debug("Connecting to offset manager %s.".format(connectString))
+           offsetManagerChannel = new BlockingChannel(coordinator.host, coordinator.port,
+                                                      BlockingChannel.UseDefaultBufferSize,
+                                                      BlockingChannel.UseDefaultBufferSize,
+                                                      socketTimeoutMs)
+           offsetManagerChannel.connect()
+           offsetManagerChannelOpt = Some(offsetManagerChannel)
+           queryChannel.disconnect()
+         }
+         catch {
+           case ioe: IOException => // offsets manager may have moved
+             info("Error while connecting to %s.".format(connectString))
+             if (offsetManagerChannel != null) offsetManagerChannel.disconnect()
+             Thread.sleep(retryBackOffMs)
+             offsetManagerChannelOpt = None // just in case someone decides to change shutdownChannel to not swallow exceptions
+         }
+       }
+     }
+
+     offsetManagerChannelOpt.get
+   }
+ }

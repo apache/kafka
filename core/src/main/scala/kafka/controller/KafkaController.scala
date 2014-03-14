@@ -604,7 +604,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
     }
   }
 
-  def onPreferredReplicaElection(partitions: Set[TopicAndPartition], isTriggeredByAutoRebalance: Boolean = true) {
+  def onPreferredReplicaElection(partitions: Set[TopicAndPartition], isTriggeredByAutoRebalance: Boolean = false) {
     info("Starting preferred replica leader election for partitions %s".format(partitions.mkString(",")))
     try {
       controllerContext.partitionsUndergoingPreferredReplicaElection ++= partitions
@@ -1116,7 +1116,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
                       controllerContext.partitionsUndergoingPreferredReplicaElection.size == 0 &&
                       !deleteTopicManager.isTopicQueuedUpForDeletion(topicPartition.topic) &&
                       controllerContext.allTopics.contains(topicPartition.topic)) {
-                    onPreferredReplicaElection(Set(topicPartition), false)
+                    onPreferredReplicaElection(Set(topicPartition), true)
                   }
                 }
               }

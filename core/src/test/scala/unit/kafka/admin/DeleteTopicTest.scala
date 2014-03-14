@@ -142,13 +142,6 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
       val offsetResponse = consumer.getOffsetsBefore(offsetRequest)
       val errorCode = offsetResponse.partitionErrorAndOffsets(topicAndPartition).error
       assertTrue("Offset request should fail with UnknownTopicOrPartitionCode", errorCode == ErrorMapping.UnknownTopicOrPartitionCode)
-      // test if offset fetch requests fail during delete topic
-      val offsetFetchRequest = new OffsetFetchRequest("test-group", Seq(topicAndPartition))
-      val offsetFetchResponse = consumer.fetchOffsets(offsetFetchRequest)
-      val offsetFetchErrorCode = offsetFetchResponse.requestInfo(topicAndPartition).error
-      assertTrue("Offset fetch request should fail with UnknownTopicOrPartitionCode",
-        offsetFetchErrorCode == ErrorMapping.UnknownTopicOrPartitionCode)
-      // TODO: test if offset commit requests fail during delete topic
     }
     // restart follower replica
     follower.startup()

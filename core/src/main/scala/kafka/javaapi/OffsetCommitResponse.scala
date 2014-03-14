@@ -24,7 +24,7 @@ class OffsetCommitResponse(private val underlying: kafka.api.OffsetCommitRespons
 
   def errors: java.util.Map[TopicAndPartition, Short] = {
     import JavaConversions._
-    underlying.requestInfo
+    underlying.commitStatus
   }
 
 }

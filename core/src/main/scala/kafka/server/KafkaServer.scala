@@ -40,11 +40,12 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   this.logIdent = "[Kafka Server " + config.brokerId + "], "
   private var isShuttingDown = new AtomicBoolean(false)
   private var shutdownLatch = new CountDownLatch(1)
-  private var startupComplete = new AtomicBoolean(false);
+  private var startupComplete = new AtomicBoolean(false)
   val correlationId: AtomicInteger = new AtomicInteger(0)
   var socketServer: SocketServer = null
   var requestHandlerPool: KafkaRequestHandlerPool = null
   var logManager: LogManager = null
+  var offsetManager: OffsetManager = null
   var kafkaHealthcheck: KafkaHealthcheck = null
   var topicConfigManager: TopicConfigManager = null
   var replicaManager: ReplicaManager = null
@@ -83,10 +84,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     socketServer.startup()
 
     replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler, logManager, isShuttingDown)
+
+    /* start offset manager */
+    offsetManager = createOffsetManager()
+
     kafkaController = new KafkaController(config, zkClient)
     
     /* start processing requests */
-    apis = new KafkaApis(socketServer.requestChannel, replicaManager, zkClient, config.brokerId, config, kafkaController)
+    apis = new KafkaApis(socketServer.requestChannel, replicaManager, offsetManager, zkClient, config.brokerId, config, kafkaController)
     requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
    
     Mx4jLoader.maybeLoad()
@@ -104,7 +109,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
     
     registerStats()
-    startupComplete.set(true);
+    startupComplete.set(true)
     info("started")
   }
   
@@ -215,7 +220,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
    */
   def shutdown() {
     info("shutting down")
-    val canShutdown = isShuttingDown.compareAndSet(false, true);
+    val canShutdown = isShuttingDown.compareAndSet(false, true)
     if (canShutdown) {
       Utils.swallow(controlledShutdown())
       if(kafkaHealthcheck != null)
@@ -224,6 +229,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         Utils.swallow(socketServer.shutdown())
       if(requestHandlerPool != null)
         Utils.swallow(requestHandlerPool.shutdown())
+      if(offsetManager != null)
+        offsetManager.shutdown()
       Utils.swallow(kafkaScheduler.shutdown())
       if(apis != null)
         Utils.swallow(apis.close())
@@ -237,7 +244,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         Utils.swallow(zkClient.close())
 
       shutdownLatch.countDown()
-      startupComplete.set(false);
+      startupComplete.set(false)
       info("shut down completed")
     }
   }
@@ -285,6 +292,17 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                    time = time)
   }
 
-}
+  private def createOffsetManager(): OffsetManager = {
+    val offsetManagerConfig = OffsetManagerConfig(
+      maxMetadataSize = config.offsetMetadataMaxSize,
+      loadBufferSize = config.offsetsLoadBufferSize,
+      offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
+      offsetsTopicNumPartitions = config.offsetsTopicPartitions,
+      offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
+      offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
+      offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
+    new OffsetManager(offsetManagerConfig, replicaManager, zkClient, kafkaScheduler)
+  }
 
+}
 

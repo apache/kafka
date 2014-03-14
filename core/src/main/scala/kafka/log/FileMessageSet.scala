@@ -255,8 +255,8 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /**
    * Read from the underlying file into the buffer starting at the given position
    */
-  def readInto(buffer: ByteBuffer, position: Int): ByteBuffer = {
-    channel.read(buffer, position)
+  def readInto(buffer: ByteBuffer, relativePosition: Int): ByteBuffer = {
+    channel.read(buffer, relativePosition + this.start)
     buffer.flip()
     buffer
   }

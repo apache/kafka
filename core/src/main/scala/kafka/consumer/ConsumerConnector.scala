@@ -70,7 +70,7 @@ trait ConsumerConnector {
   /**
    *  Commit the offsets of all broker partitions connected by this connector.
    */
-  def commitOffsets
+  def commitOffsets(retryOnFailure: Boolean = true)
   
   /**
    *  Shut down the connector
