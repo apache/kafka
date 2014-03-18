@@ -96,7 +96,7 @@ public class Selector implements Selectable {
      * @param sendBufferSize The send buffer for the new connection
      * @param receiveBufferSize The receive buffer for the new connection
      * @throws IllegalStateException if there is already a connection for that id
-     * @throws UnresolvedAddressException if DNS resolution fails on the hostname
+     * @throws IOException if DNS resolution fails on the hostname or if the broker is down
      */
     @Override
     public void connect(int id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
@@ -110,6 +110,9 @@ public class Selector implements Selectable {
         try {
             channel.connect(address);
         } catch (UnresolvedAddressException e) {
+            channel.close();
+            throw new IOException("Can't resolve address: " + address, e);
+        } catch (IOException e) {
             channel.close();
             throw e;
         }

@@ -65,7 +65,8 @@ public final class BufferPool {
     }
 
     /**
-     * Allocate a buffer of the given size
+     * Allocate a buffer of the given size. This method blocks if there is not enough memory and the buffer pool
+     * is configured with blocking mode.
      * 
      * @param size The buffer size to allocate in bytes
      * @return The buffer

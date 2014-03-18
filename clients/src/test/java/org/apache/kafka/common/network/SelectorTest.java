@@ -125,7 +125,7 @@ public class SelectorTest {
     /**
      * Sending a request to a node with a bad hostname should result in an exception during connect
      */
-    @Test(expected = UnresolvedAddressException.class)
+    @Test(expected = IOException.class)
     public void testNoRouteToHost() throws Exception {
         selector.connect(0, new InetSocketAddress("asdf.asdf.dsc", server.port), BUFFER_SIZE, BUFFER_SIZE);
     }

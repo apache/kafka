@@ -150,7 +150,9 @@ public class Struct {
     }
 
     /**
-     * Create a struct for the schema of a container type (struct or array)
+     * Create a struct for the schema of a container type (struct or array).
+     * Note that for array type, this method assumes that the type is an array of schema and creates a struct
+     * of that schema. Arrays of other types can't be instantiated with this method.
      * 
      * @param field The field to create an instance of
      * @return The struct

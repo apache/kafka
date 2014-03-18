@@ -181,7 +181,7 @@ public class ConfigDef {
                     else if (value instanceof String)
                         return Arrays.asList(trimmed.split("\\s*,\\s*", -1));
                     else
-                        throw new ConfigException(name, value, "Expected a comma seperated list.");
+                        throw new ConfigException(name, value, "Expected a comma separated list.");
                 case CLASS:
                     if (value instanceof Class)
                         return (Class<?>) value;

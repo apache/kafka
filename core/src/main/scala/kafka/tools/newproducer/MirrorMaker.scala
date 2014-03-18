@@ -170,11 +170,11 @@ object MirrorMaker extends Logging {
         trace("Send message with key %s to producer %d.".format(java.util.Arrays.toString(producerRecord.key()), producerId))
         val producer = producers(producerId)
         producer.send(producerRecord,
-                      new ErrorLoggingCallback(producerRecord.key(), producerRecord.value(), false))
+                      new ErrorLoggingCallback(producerRecord.topic(), producerRecord.key(), producerRecord.value(), false))
       } else {
         val producerId = producerIndex.getAndSet((producerIndex.get() + 1) % producers.size)
         producers(producerId).send(producerRecord,
-                                   new ErrorLoggingCallback(producerRecord.key(), producerRecord.value(), false))
+                                   new ErrorLoggingCallback(producerRecord.topic(), producerRecord.key(), producerRecord.value(), false))
         trace("Sent message to producer " + producerId)
       }
     }

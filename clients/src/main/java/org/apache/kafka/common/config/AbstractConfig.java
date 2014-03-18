@@ -65,8 +65,12 @@ public class AbstractConfig {
         return (Integer) get(key);
     }
 
-    public Long getLong(String key) {
+    public long getLong(String key) {
         return (Long) get(key);
+    }
+
+    public double getDouble(String key) {
+        return (Double) get(key);
     }
 
     @SuppressWarnings("unchecked")

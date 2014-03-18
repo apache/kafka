@@ -143,9 +143,9 @@ public final class RecordAccumulator {
         log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
         ByteBuffer buffer = free.allocate(size);
         synchronized (dq) {
-            RecordBatch first = dq.peekLast();
-            if (first != null) {
-                FutureRecordMetadata future = first.tryAppend(key, value, compression, callback);
+            RecordBatch last = dq.peekLast();
+            if (last != null) {
+                FutureRecordMetadata future = last.tryAppend(key, value, compression, callback);
                 if (future != null) {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen
                     // often...

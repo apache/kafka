@@ -220,7 +220,7 @@ object ProducerPerformance extends Logging {
         this.producer.send(new ProducerRecord(topic, Utils.abs(part.toInt), null, bytes)).get()
       } else {
         this.producer.send(new ProducerRecord(topic, Utils.abs(part.toInt), null, bytes),
-                           new ErrorLoggingCallback(null, bytes, if (config.seqIdMode) true else false))
+                           new ErrorLoggingCallback(topic, null, bytes, if (config.seqIdMode) true else false))
       }
     }
 

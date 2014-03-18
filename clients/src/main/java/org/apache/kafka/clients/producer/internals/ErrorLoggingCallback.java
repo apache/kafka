@@ -20,11 +20,13 @@ import org.slf4j.LoggerFactory;
 
 public class ErrorLoggingCallback implements Callback {
     private static final Logger log = LoggerFactory.getLogger(ErrorLoggingCallback.class);
+    private String topic;
     private byte[] key;
     private byte[] value;
     private boolean logAsString;
 
-    public ErrorLoggingCallback(byte[] key, byte[] value, boolean logAsString) {
+    public ErrorLoggingCallback(String topic, byte[] key, byte[] value, boolean logAsString) {
+        this.topic = topic;
         this.key = key;
         this.value = value;
         this.logAsString = logAsString;
@@ -36,8 +38,8 @@ public class ErrorLoggingCallback implements Callback {
                     logAsString ? new String(key) : key.length + " bytes";
             String valueString = (value == null) ? "null" :
                     logAsString ? new String(value) : value.length + " bytes";
-            log.error("Error when sending message with key: " + keyString + ", value: " + valueString +
-                    " with error " + e.getMessage());
+            log.error("Error when sending message to topic {} with key: {}, value: {} with error: {}",
+                      topic, keyString, valueString, e.getMessage());
         }
     }
 }
