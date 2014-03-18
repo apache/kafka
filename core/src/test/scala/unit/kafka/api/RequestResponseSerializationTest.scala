@@ -147,7 +147,7 @@ object SerializationTestUtils {
   }
 
   def createTestOffsetCommitRequest: OffsetCommitRequest = {
-    new OffsetCommitRequest("group 1", collection.mutable.Map(
+    new OffsetCommitRequest("group 1", collection.immutable.Map(
       TopicAndPartition(topic1, 0) -> OffsetAndMetadata(offset=42L, metadata="some metadata", timestamp=SystemTime.milliseconds),
       TopicAndPartition(topic1, 1) -> OffsetAndMetadata(offset=100L, metadata=OffsetAndMetadata.NoMetadata, timestamp=SystemTime.milliseconds)
     ))

@@ -66,7 +66,7 @@ object TestOffsetManager {
     }
 
     override def doWork() {
-      val commitRequest = OffsetCommitRequest(group, mutable.Map((1 to partitionCount).map(TopicAndPartition("topic-" + id, _) -> OffsetAndMetadata(offset, metadata)):_*))
+      val commitRequest = OffsetCommitRequest(group, immutable.Map((1 to partitionCount).map(TopicAndPartition("topic-" + id, _) -> OffsetAndMetadata(offset, metadata)):_*))
       try {
         ensureConnected()
         offsetsChannel.send(commitRequest)

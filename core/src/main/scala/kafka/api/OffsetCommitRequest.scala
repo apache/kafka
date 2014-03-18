@@ -54,12 +54,12 @@ object OffsetCommitRequest extends Logging {
         (TopicAndPartition(topic, partitionId), OffsetAndMetadata(offset, metadata, timestamp))
       })
     })
-    OffsetCommitRequest(consumerGroupId, mutable.Map(pairs:_*), versionId, correlationId, clientId)
+    OffsetCommitRequest(consumerGroupId, immutable.Map(pairs:_*), versionId, correlationId, clientId)
   }
 }
 
 case class OffsetCommitRequest(groupId: String,
-                               requestInfo: mutable.Map[TopicAndPartition, OffsetAndMetadata],
+                               requestInfo: immutable.Map[TopicAndPartition, OffsetAndMetadata],
                                versionId: Short = OffsetCommitRequest.CurrentVersion,
                                override val correlationId: Int = 0,
                                clientId: String = OffsetCommitRequest.DefaultClientId)

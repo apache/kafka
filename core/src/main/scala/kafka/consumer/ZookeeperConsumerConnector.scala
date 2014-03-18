@@ -286,7 +286,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     while (!done) {
       val committed = offsetsChannelLock synchronized { // committed when we receive either no error codes or only MetadataTooLarge errors
-        val offsetsToCommit = mutable.Map(topicRegistry.flatMap { case (topic, partitionTopicInfos) =>
+        val offsetsToCommit = immutable.Map(topicRegistry.flatMap { case (topic, partitionTopicInfos) =>
           partitionTopicInfos.filterNot { case (partition, info) =>
             val newOffset = info.getConsumeOffset()
             newOffset == checkpointedOffsets.get(TopicAndPartition(topic, info.partitionId))
