@@ -16,9 +16,12 @@
  */
 package kafka.controller
 
+import kafka.admin.AdminUtils
 import kafka.api.LeaderAndIsr
+import kafka.log.LogConfig
 import kafka.utils.Logging
 import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
+import kafka.server.KafkaConfig
 
 trait PartitionLeaderSelector {
 
@@ -37,12 +40,14 @@ trait PartitionLeaderSelector {
  * Select the new leader, new isr and receiving replicas (for the LeaderAndIsrRequest):
  * 1. If at least one broker from the isr is alive, it picks a broker from the live isr as the new leader and the live
  *    isr as the new isr.
- * 2. Else, it picks some alive broker from the assigned replica list as the new leader and the new isr.
- * 3. If no broker in the assigned replica list is alive, it throws NoReplicaOnlineException
+ * 2. Else, if unclean leader election for the topic is disabled, it throws a NoReplicaOnlineException.
+ * 3. Else, it picks some alive broker from the assigned replica list as the new leader and the new isr.
+ * 4. If no broker in the assigned replica list is alive, it throws a NoReplicaOnlineException
  * Replicas to receive LeaderAndIsr request = live assigned replicas
  * Once the leader is successfully registered in zookeeper, it updates the allLeaders cache
  */
-class OfflinePartitionLeaderSelector(controllerContext: ControllerContext) extends PartitionLeaderSelector with Logging {
+class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, config: KafkaConfig)
+  extends PartitionLeaderSelector with Logging {
   this.logIdent = "[OfflinePartitionLeaderSelector]: "
 
   def selectLeader(topicAndPartition: TopicAndPartition, currentLeaderAndIsr: LeaderAndIsr): (LeaderAndIsr, Seq[Int]) = {
@@ -54,6 +59,15 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext) exten
         val currentLeaderIsrZkPathVersion = currentLeaderAndIsr.zkVersion
         val newLeaderAndIsr = liveBrokersInIsr.isEmpty match {
           case true =>
+            // Prior to electing an unclean (i.e. non-ISR) leader, ensure that doing so is not disallowed by the configuration
+            // for unclean leader election.
+            if (!LogConfig.fromProps(config.props.props, AdminUtils.fetchTopicConfig(controllerContext.zkClient,
+              topicAndPartition.topic)).uncleanLeaderElectionEnable) {
+              throw new NoReplicaOnlineException(("No broker in ISR for partition " +
+                "%s is alive. Live brokers are: [%s],".format(topicAndPartition, controllerContext.liveBrokerIds)) +
+                " ISR brokers are: [%s]".format(currentLeaderAndIsr.isr.mkString(",")))
+            }
+
             debug("No broker in ISR is alive for %s. Pick the leader from the alive assigned replicas: %s"
               .format(topicAndPartition, liveAssignedReplicas.mkString(",")))
             liveAssignedReplicas.isEmpty match {
@@ -77,7 +91,7 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext) exten
         info("Selected new leader and ISR %s for offline partition %s".format(newLeaderAndIsr.toString(), topicAndPartition))
         (newLeaderAndIsr, liveAssignedReplicas)
       case None =>
-        throw new NoReplicaOnlineException("Partition %s doesn't have".format(topicAndPartition) + "replicas assigned to it")
+        throw new NoReplicaOnlineException("Partition %s doesn't have replicas assigned to it".format(topicAndPartition))
     }
   }
 }

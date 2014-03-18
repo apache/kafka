@@ -17,7 +17,9 @@
 
 package kafka.server
 
+import kafka.admin.AdminUtils
 import kafka.cluster.Broker
+import kafka.log.LogConfig
 import kafka.message.ByteBufferMessageSet
 import kafka.api.{OffsetRequest, FetchResponsePartitionData}
 import kafka.common.{KafkaStorageException, TopicAndPartition}
@@ -81,9 +83,21 @@ class ReplicaFetcherThread(name:String,
      */
     val leaderEndOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, OffsetRequest.LatestTime, brokerConfig.brokerId)
     if (leaderEndOffset < replica.logEndOffset) {
+      // Prior to truncating the follower's log, ensure that doing so is not disallowed by the configuration for unclean leader election.
+      // This situation could only happen if the unclean election configuration for a topic changes while a replica is down. Otherwise,
+      // we should never encounter this situation since a non-ISR leader cannot be elected if disallowed by the broker configuration.
+      if (!LogConfig.fromProps(brokerConfig.props.props, AdminUtils.fetchTopicConfig(replicaMgr.zkClient,
+        topicAndPartition.topic)).uncleanLeaderElectionEnable) {
+        // Log a fatal error and shutdown the broker to ensure that data loss does not unexpectedly occur.
+        fatal("Halting because log truncation is not allowed for topic %s,".format(topicAndPartition.topic) +
+          " Current leader %d's latest offset %d is less than replica %d's latest offset %d"
+          .format(sourceBroker.id, leaderEndOffset, brokerConfig.brokerId, replica.logEndOffset))
+        Runtime.getRuntime.halt(1)
+      }
+
       replicaMgr.logManager.truncateTo(Map(topicAndPartition -> leaderEndOffset))
-      warn("Replica %d for partition %s reset its fetch offset to current leader %d's latest offset %d"
-        .format(brokerConfig.brokerId, topicAndPartition, sourceBroker.id, leaderEndOffset))
+      warn("Replica %d for partition %s reset its fetch offset from %d to current leader %d's latest offset %d"
+        .format(brokerConfig.brokerId, topicAndPartition, replica.logEndOffset, sourceBroker.id, leaderEndOffset))
       leaderEndOffset
     } else {
       /**
@@ -94,8 +108,8 @@ class ReplicaFetcherThread(name:String,
        */
       val leaderStartOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, OffsetRequest.EarliestTime, brokerConfig.brokerId)
       replicaMgr.logManager.truncateFullyAndStartAt(topicAndPartition, leaderStartOffset)
-      warn("Replica %d for partition %s reset its fetch offset to current leader %d's start offset %d"
-        .format(brokerConfig.brokerId, topicAndPartition, sourceBroker.id, leaderStartOffset))
+      warn("Replica %d for partition %s reset its fetch offset from %d to current leader %d's start offset %d"
+        .format(brokerConfig.brokerId, topicAndPartition, replica.logEndOffset, sourceBroker.id, leaderStartOffset))
       leaderStartOffset
     }
   }

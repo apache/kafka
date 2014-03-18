@@ -93,5 +93,40 @@ class KafkaConfigTest extends JUnit3Suite {
     assertEquals(serverConfig.advertisedHostName, advertisedHostName)
     assertEquals(serverConfig.advertisedPort, advertisedPort)
   }
-  
+
+  @Test
+  def testUncleanLeaderElectionDefault() {
+    val props = TestUtils.createBrokerConfig(0, 8181)
+    val serverConfig = new KafkaConfig(props)
+
+    assertEquals(serverConfig.uncleanLeaderElectionEnable, true)
+  }
+
+  @Test
+  def testUncleanElectionDisabled() {
+    val props = TestUtils.createBrokerConfig(0, 8181)
+    props.put("unclean.leader.election.enable", String.valueOf(false))
+    val serverConfig = new KafkaConfig(props)
+
+    assertEquals(serverConfig.uncleanLeaderElectionEnable, false)
+  }
+
+  @Test
+  def testUncleanElectionEnabled() {
+    val props = TestUtils.createBrokerConfig(0, 8181)
+    props.put("unclean.leader.election.enable", String.valueOf(true))
+    val serverConfig = new KafkaConfig(props)
+
+    assertEquals(serverConfig.uncleanLeaderElectionEnable, true)
+  }
+
+  @Test
+  def testUncleanElectionInvalid() {
+    val props = TestUtils.createBrokerConfig(0, 8181)
+    props.put("unclean.leader.election.enable", "invalid")
+
+    intercept[IllegalArgumentException] {
+      new KafkaConfig(props)
+    }
+  }
 }

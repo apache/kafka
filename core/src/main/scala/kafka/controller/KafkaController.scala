@@ -21,10 +21,12 @@ import collection.Set
 import com.yammer.metrics.core.Gauge
 import java.lang.{IllegalStateException, Object}
 import java.util.concurrent.TimeUnit
+import kafka.admin.AdminUtils
 import kafka.admin.PreferredReplicaLeaderElectionCommand
 import kafka.api._
 import kafka.cluster.Broker
 import kafka.common._
+import kafka.log.LogConfig
 import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 import kafka.server.{ZookeeperLeaderElector, KafkaConfig}
 import kafka.utils.ZkUtils._
@@ -164,7 +166,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   // kafka server
   private val autoRebalanceScheduler = new KafkaScheduler(1)
   var deleteTopicManager: TopicDeletionManager = null
-  val offlinePartitionSelector = new OfflinePartitionLeaderSelector(controllerContext)
+  val offlinePartitionSelector = new OfflinePartitionLeaderSelector(controllerContext, config)
   private val reassignedPartitionLeaderSelector = new ReassignedPartitionLeaderSelector(controllerContext)
   private val preferredReplicaPartitionLeaderSelector = new PreferredReplicaPartitionLeaderSelector(controllerContext)
   private val controlledShutdownPartitionLeaderSelector = new ControlledShutdownLeaderSelector(controllerContext)
@@ -972,8 +974,19 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
           if (leaderAndIsr.isr.contains(replicaId)) {
             // if the replica to be removed from the ISR is also the leader, set the new leader value to -1
             val newLeader = if(replicaId == leaderAndIsr.leader) -1 else leaderAndIsr.leader
+            var newIsr = leaderAndIsr.isr.filter(b => b != replicaId)
+
+            // if the replica to be removed from the ISR is the last surviving member of the ISR and unclean leader election
+            // is disallowed for the corresponding topic, then we must preserve the ISR membership so that the replica can
+            // eventually be restored as the leader.
+            if (newIsr.isEmpty && !LogConfig.fromProps(config.props.props, AdminUtils.fetchTopicConfig(zkClient,
+              topicAndPartition.topic)).uncleanLeaderElectionEnable) {
+              info("Retaining last ISR %d of partition %s since unclean leader election is disabled".format(replicaId, topicAndPartition))
+              newIsr = leaderAndIsr.isr
+            }
+
             val newLeaderAndIsr = new LeaderAndIsr(newLeader, leaderAndIsr.leaderEpoch + 1,
-              leaderAndIsr.isr.filter(b => b != replicaId), leaderAndIsr.zkVersion + 1)
+              newIsr, leaderAndIsr.zkVersion + 1)
             // update the new leadership decision in zookeeper or retry
             val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(
               zkClient,

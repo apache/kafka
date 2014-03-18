@@ -21,6 +21,23 @@ import java.util.Properties
 import scala.collection._
 import kafka.common._
 
+object Defaults {
+  val SegmentSize = 1024 * 1024
+  val SegmentMs = Long.MaxValue
+  val FlushInterval = Long.MaxValue
+  val FlushMs = Long.MaxValue
+  val RetentionSize = Long.MaxValue
+  val RetentionMs = Long.MaxValue
+  val MaxMessageSize = Int.MaxValue
+  val MaxIndexSize = 1024 * 1024
+  val IndexInterval = 4096
+  val FileDeleteDelayMs = 60 * 1000L
+  val DeleteRetentionMs = 24 * 60 * 60 * 1000L
+  val MinCleanableDirtyRatio = 0.5
+  val Compact = false
+  val UncleanLeaderElectionEnable = true
+}
+
 /**
  * Configuration settings for a log
  * @param segmentSize The soft maximum for the size of a segment file in the log
@@ -35,20 +52,23 @@ import kafka.common._
  * @param deleteRetentionMs The time to retain delete markers in the log. Only applicable for logs that are being compacted.
  * @param minCleanableRatio The ratio of bytes that are available for cleaning to the bytes already cleaned
  * @param compact Should old segments in this log be deleted or deduplicated?
+ * @param uncleanLeaderElectionEnable Indicates whether unclean leader election is enabled; actually a controller-level property
+ *   but included here for topic-specific configuration validation purposes
  */
-case class LogConfig(val segmentSize: Int = 1024*1024, 
-                     val segmentMs: Long = Long.MaxValue,
-                     val flushInterval: Long = Long.MaxValue, 
-                     val flushMs: Long = Long.MaxValue,
-                     val retentionSize: Long = Long.MaxValue,
-                     val retentionMs: Long = Long.MaxValue,
-                     val maxMessageSize: Int = Int.MaxValue,
-                     val maxIndexSize: Int = 1024*1024,
-                     val indexInterval: Int = 4096,
-                     val fileDeleteDelayMs: Long = 60*1000,
-                     val deleteRetentionMs: Long = 24 * 60 * 60 * 1000L,
-                     val minCleanableRatio: Double = 0.5,
-                     val compact: Boolean = false) {
+case class LogConfig(val segmentSize: Int = Defaults.SegmentSize,
+                     val segmentMs: Long = Defaults.SegmentMs,
+                     val flushInterval: Long = Defaults.FlushInterval,
+                     val flushMs: Long = Defaults.FlushMs,
+                     val retentionSize: Long = Defaults.RetentionSize,
+                     val retentionMs: Long = Defaults.RetentionMs,
+                     val maxMessageSize: Int = Defaults.MaxMessageSize,
+                     val maxIndexSize: Int = Defaults.MaxIndexSize,
+                     val indexInterval: Int = Defaults.IndexInterval,
+                     val fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs,
+                     val deleteRetentionMs: Long = Defaults.DeleteRetentionMs,
+                     val minCleanableRatio: Double = Defaults.MinCleanableDirtyRatio,
+                     val compact: Boolean = Defaults.Compact,
+                     val uncleanLeaderElectionEnable: Boolean = Defaults.UncleanLeaderElectionEnable) {
   
   def toProps: Properties = {
     val props = new Properties()
@@ -66,6 +86,7 @@ case class LogConfig(val segmentSize: Int = 1024*1024,
     props.put(FileDeleteDelayMsProp, fileDeleteDelayMs.toString)
     props.put(MinCleanableDirtyRatioProp, minCleanableRatio.toString)
     props.put(CleanupPolicyProp, if(compact) "compact" else "delete")
+    props.put(UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)
     props
   }
   
@@ -85,6 +106,7 @@ object LogConfig {
   val FileDeleteDelayMsProp = "file.delete.delay.ms"
   val MinCleanableDirtyRatioProp = "min.cleanable.dirty.ratio"
   val CleanupPolicyProp = "cleanup.policy"
+  val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
   
   val ConfigNames = Set(SegmentBytesProp, 
                         SegmentMsProp, 
@@ -98,26 +120,31 @@ object LogConfig {
                         FileDeleteDelayMsProp,
                         DeleteRetentionMsProp,
                         MinCleanableDirtyRatioProp,
-                        CleanupPolicyProp)
+                        CleanupPolicyProp,
+                        UncleanLeaderElectionEnableProp)
     
   
   /**
    * Parse the given properties instance into a LogConfig object
    */
   def fromProps(props: Properties): LogConfig = {
-    new LogConfig(segmentSize = props.getProperty(SegmentBytesProp).toInt,
-                  segmentMs = props.getProperty(SegmentMsProp).toLong,
-                  maxIndexSize = props.getProperty(SegmentIndexBytesProp).toInt,
-                  flushInterval = props.getProperty(FlushMessagesProp).toLong,
-                  flushMs = props.getProperty(FlushMsProp).toLong,
-                  retentionSize = props.getProperty(RetentionBytesProp).toLong,
-                  retentionMs = props.getProperty(RententionMsProp).toLong,
-                  maxMessageSize = props.getProperty(MaxMessageBytesProp).toInt,
-                  indexInterval = props.getProperty(IndexIntervalBytesProp).toInt,
-                  fileDeleteDelayMs = props.getProperty(FileDeleteDelayMsProp).toInt,
-                  deleteRetentionMs = props.getProperty(DeleteRetentionMsProp).toLong,
-                  minCleanableRatio = props.getProperty(MinCleanableDirtyRatioProp).toDouble,
-                  compact = props.getProperty(CleanupPolicyProp).trim.toLowerCase != "delete")
+    new LogConfig(segmentSize = props.getProperty(SegmentBytesProp, Defaults.SegmentSize.toString).toInt,
+                  segmentMs = props.getProperty(SegmentMsProp, Defaults.SegmentMs.toString).toLong,
+                  maxIndexSize = props.getProperty(SegmentIndexBytesProp, Defaults.MaxIndexSize.toString).toInt,
+                  flushInterval = props.getProperty(FlushMessagesProp, Defaults.FlushInterval.toString).toLong,
+                  flushMs = props.getProperty(FlushMsProp, Defaults.FlushMs.toString).toLong,
+                  retentionSize = props.getProperty(RetentionBytesProp, Defaults.RetentionSize.toString).toLong,
+                  retentionMs = props.getProperty(RententionMsProp, Defaults.RetentionMs.toString).toLong,
+                  maxMessageSize = props.getProperty(MaxMessageBytesProp, Defaults.MaxMessageSize.toString).toInt,
+                  indexInterval = props.getProperty(IndexIntervalBytesProp, Defaults.IndexInterval.toString).toInt,
+                  fileDeleteDelayMs = props.getProperty(FileDeleteDelayMsProp, Defaults.FileDeleteDelayMs.toString).toInt,
+                  deleteRetentionMs = props.getProperty(DeleteRetentionMsProp, Defaults.DeleteRetentionMs.toString).toLong,
+                  minCleanableRatio = props.getProperty(MinCleanableDirtyRatioProp,
+                    Defaults.MinCleanableDirtyRatio.toString).toDouble,
+                  compact = props.getProperty(CleanupPolicyProp, if(Defaults.Compact) "compact" else "delete")
+                    .trim.toLowerCase != "delete",
+                  uncleanLeaderElectionEnable = props.getProperty(UncleanLeaderElectionEnableProp,
+                    Defaults.UncleanLeaderElectionEnable.toString).toBoolean)
   }
   
   /**

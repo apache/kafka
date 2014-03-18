@@ -312,8 +312,8 @@ object TestUtils extends Logging {
    */
   def createProducer[K, V](brokerList: String, 
                            encoder: Encoder[V] = new DefaultEncoder(), 
-                           keyEncoder: Encoder[K] = new DefaultEncoder()): Producer[K, V] = {
-    val props = new Properties()
+                           keyEncoder: Encoder[K] = new DefaultEncoder(),
+                           props: Properties = new Properties()): Producer[K, V] = {
     props.put("metadata.broker.list", brokerList)
     props.put("send.buffer.bytes", "65536")
     props.put("connect.timeout.ms", "100000")

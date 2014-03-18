@@ -231,6 +231,9 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the frequency with which the partition rebalance check is triggered by the controller */
   val leaderImbalanceCheckIntervalSeconds = props.getInt("leader.imbalance.check.interval.seconds", 300)
 
+  /* indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though
+   * doing so may result in data loss */
+  val uncleanLeaderElectionEnable = props.getBoolean("unclean.leader.election.enable", true)
 
   /*********** Controlled shutdown configuration ***********/
 

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server
+package kafka.integration
 
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
@@ -27,6 +27,7 @@ import kafka.cluster.Broker
 import kafka.common.ErrorMapping
 import kafka.api._
 import kafka.admin.AdminUtils
+import kafka.server.{KafkaConfig, KafkaServer}
 
 class RollingBounceTest extends JUnit3Suite with ZooKeeperTestHarness {
   val brokerId1 = 0
