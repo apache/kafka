@@ -41,7 +41,7 @@ import org.slf4j.LoggerFactory;
 public class JmxReporter implements MetricsReporter {
 
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
-
+    private static final Object lock = new Object();
     private final String prefix;
     private final Map<String, KafkaMbean> mbeans = new HashMap<String, KafkaMbean>();
 
@@ -57,18 +57,21 @@ public class JmxReporter implements MetricsReporter {
     }
 
     @Override
-    public synchronized void init(List<KafkaMetric> metrics) {
-        for (KafkaMetric metric : metrics)
-            addAttribute(metric);
-        for (KafkaMbean mbean : mbeans.values())
-            reregister(mbean);
-
+    public void init(List<KafkaMetric> metrics) {
+        synchronized (lock) {
+            for (KafkaMetric metric : metrics)
+                addAttribute(metric);
+            for (KafkaMbean mbean : mbeans.values())
+                reregister(mbean);
+        }
     }
 
     @Override
-    public synchronized void metricChange(KafkaMetric metric) {
-        KafkaMbean mbean = addAttribute(metric);
-        reregister(mbean);
+    public void metricChange(KafkaMetric metric) {
+        synchronized (lock) {
+            KafkaMbean mbean = addAttribute(metric);
+            reregister(mbean);
+        }
     }
 
     private KafkaMbean addAttribute(KafkaMetric metric) {
@@ -85,10 +88,11 @@ public class JmxReporter implements MetricsReporter {
         }
     }
 
-    public synchronized void close() {
-        for (KafkaMbean mbean : this.mbeans.values())
-            unregister(mbean);
-
+    public void close() {
+        synchronized (lock) {
+            for (KafkaMbean mbean : this.mbeans.values())
+                unregister(mbean);
+        }
     }
 
     private void unregister(KafkaMbean mbean) {
