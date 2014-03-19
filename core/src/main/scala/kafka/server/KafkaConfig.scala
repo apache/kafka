@@ -287,4 +287,8 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /** The required acks before the commit can be accepted. In general, the default (-1) should not be overridden. */
   val offsetCommitRequiredAcks = props.getShortInRange("offsets.commit.required.acks",
     OffsetManagerConfig.DefaultOffsetCommitRequiredAcks, (-1, offsetsTopicReplicationFactor))
+
+  /* Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off */
+  val deleteTopicEnable = props.getBoolean("delete.topic.enable", false)
+
 }
