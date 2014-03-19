@@ -52,7 +52,7 @@ public class RecordAccumulatorTest {
         }
         accum.append(tp, key, value, CompressionType.NONE, null);
         assertEquals("Our partition should be ready", asList(tp), accum.ready(time.milliseconds()));
-        List<RecordBatch> batches = accum.drain(asList(tp), Integer.MAX_VALUE);
+        List<RecordBatch> batches = accum.drain(asList(tp), Integer.MAX_VALUE, 0);
         assertEquals(1, batches.size());
         RecordBatch batch = batches.get(0);
         Iterator<LogEntry> iter = batch.records.iterator();
@@ -80,7 +80,7 @@ public class RecordAccumulatorTest {
         assertEquals("No partitions should be ready", 0, accum.ready(time.milliseconds()).size());
         time.sleep(10);
         assertEquals("Our partition should be ready", asList(tp), accum.ready(time.milliseconds()));
-        List<RecordBatch> batches = accum.drain(asList(tp), Integer.MAX_VALUE);
+        List<RecordBatch> batches = accum.drain(asList(tp), Integer.MAX_VALUE, 0);
         assertEquals(1, batches.size());
         RecordBatch batch = batches.get(0);
         Iterator<LogEntry> iter = batch.records.iterator();
@@ -101,7 +101,7 @@ public class RecordAccumulatorTest {
         }
         assertEquals("Both partitions should be ready", 2, accum.ready(time.milliseconds()).size());
 
-        List<RecordBatch> batches = accum.drain(partitions, 1024);
+        List<RecordBatch> batches = accum.drain(partitions, 1024, 0);
         assertEquals("But due to size bound only one partition should have been retrieved", 1, batches.size());
     }
 
@@ -131,7 +131,7 @@ public class RecordAccumulatorTest {
         long now = time.milliseconds();
         while (read < numThreads * msgs) {
             List<TopicPartition> tps = accum.ready(now);
-            List<RecordBatch> batches = accum.drain(tps, 5 * 1024);
+            List<RecordBatch> batches = accum.drain(tps, 5 * 1024, 0);
             for (RecordBatch batch : batches) {
                 for (LogEntry entry : batch.records)
                     read++;

@@ -18,6 +18,7 @@ import java.util.List;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.Record;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,8 +32,10 @@ public final class RecordBatch {
     private static final Logger log = LoggerFactory.getLogger(RecordBatch.class);
 
     public int recordCount = 0;
+    public int maxRecordSize = 0;
     public volatile int attempts = 0;
     public final long created;
+    public long drained;
     public long lastAttempt;
     public final MemoryRecords records;
     public final TopicPartition topicPartition;
@@ -58,6 +61,7 @@ public final class RecordBatch {
             return null;
         } else {
             this.records.append(0L, key, value);
+            this.maxRecordSize = Math.max(this.maxRecordSize, Record.recordSize(key, value));
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount);
             if (callback != null)
                 thunks.add(new Thunk(callback, future));
@@ -70,7 +74,7 @@ public final class RecordBatch {
      * Complete the request
      * 
      * @param baseOffset The base offset of the messages assigned by the server
-     * @param exception The exception returned or null if no exception
+     * @param exception The exception that occurred (or null if the request was successful)
      */
     public void done(long baseOffset, RuntimeException exception) {
         this.produceFuture.done(topicPartition, baseOffset, exception);

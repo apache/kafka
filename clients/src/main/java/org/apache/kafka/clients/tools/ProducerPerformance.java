@@ -1,18 +1,14 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.clients.tools;
 
@@ -30,7 +26,8 @@ public class ProducerPerformance {
 
     public static void main(String[] args) throws Exception {
         if (args.length < 5) {
-            System.err.println("USAGE: java " + ProducerPerformance.class.getName() + " url topic_name num_records record_size acks [compression_type]");
+            System.err.println("USAGE: java " + ProducerPerformance.class.getName()
+                               + " url topic_name num_records record_size acks [compression_type]");
             System.exit(1);
         }
         String url = args[0];
@@ -43,8 +40,8 @@ public class ProducerPerformance {
         props.setProperty(ProducerConfig.BROKER_LIST_CONFIG, url);
         props.setProperty(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG, Integer.toString(5 * 1000));
         props.setProperty(ProducerConfig.REQUEST_TIMEOUT_CONFIG, Integer.toString(Integer.MAX_VALUE));
-        props.setProperty(ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG, Integer.toString(256 * 1024 * 1024));
-        props.setProperty(ProducerConfig.MAX_PARTITION_SIZE_CONFIG, Integer.toString(256 * 1024));
+        props.setProperty(ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG, Integer.toString(64 * 1024 * 1024));
+        props.setProperty(ProducerConfig.MAX_PARTITION_SIZE_CONFIG, Integer.toString(64 * 1024));
         if (args.length == 6)
             props.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, args[5]);
 
@@ -65,9 +62,9 @@ public class ProducerPerformance {
         for (int i = 0; i < numRecords; i++) {
             long sendStart = System.currentTimeMillis();
             producer.send(record, callback);
-            long sendEllapsed = System.currentTimeMillis() - sendStart;
-            maxLatency = Math.max(maxLatency, sendEllapsed);
-            totalLatency += sendEllapsed;
+            long sendElapsed = System.currentTimeMillis() - sendStart;
+            maxLatency = Math.max(maxLatency, sendElapsed);
+            totalLatency += sendElapsed;
             if (i % reportingInterval == 0) {
                 System.out.printf("%d  max latency = %d ms, avg latency = %.5f\n",
                                   i,
@@ -81,7 +78,7 @@ public class ProducerPerformance {
         double msgsSec = 1000.0 * numRecords / (double) ellapsed;
         double mbSec = msgsSec * (recordSize + Records.LOG_OVERHEAD) / (1024.0 * 1024.0);
         producer.close();
-        System.out.printf("%d records sent in %d ms ms. %.2f records per second (%.2f mb/sec).\n", numRecords, ellapsed, msgsSec, mbSec);
+        System.out.printf("%d records sent in %d ms. %.2f records per second (%.2f mb/sec).\n", numRecords, ellapsed, msgsSec, mbSec);
     }
 
 }

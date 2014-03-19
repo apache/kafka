@@ -39,12 +39,15 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.SystemTime;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,6 +73,7 @@ public class KafkaProducer implements Producer {
     private final Metrics metrics;
     private final Thread ioThread;
     private final CompressionType compressionType;
+    private final Sensor errors;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -91,9 +95,14 @@ public class KafkaProducer implements Producer {
 
     private KafkaProducer(ProducerConfig config) {
         log.trace("Starting the Kafka producer");
-        this.metrics = new Metrics(new MetricConfig(),
-                                   Collections.singletonList((MetricsReporter) new JmxReporter("kafka.producer.")),
-                                   new SystemTime());
+        Time time = new SystemTime();
+        MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES))
+                                                      .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS),
+                                                                  TimeUnit.MILLISECONDS);
+        String clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
+        String jmxPrefix = "kafka.producer." + (clientId.length() > 0 ? clientId + "." : "");
+        List<MetricsReporter> reporters = Collections.singletonList((MetricsReporter) new JmxReporter(jmxPrefix));
+        this.metrics = new Metrics(metricConfig, reporters, time);
         this.partitioner = new Partitioner();
         this.metadataFetchTimeoutMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
         this.metadata = new Metadata(config.getLong(ProducerConfig.METADATA_FETCH_BACKOFF_CONFIG),
@@ -107,13 +116,13 @@ public class KafkaProducer implements Producer {
                                                  config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
                                                  config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG),
                                                  metrics,
-                                                 new SystemTime());
+                                                 time);
         List<InetSocketAddress> addresses = parseAndValidateAddresses(config.getList(ProducerConfig.BROKER_LIST_CONFIG));
-        this.metadata.update(Cluster.bootstrap(addresses), System.currentTimeMillis());
-        this.sender = new Sender(new Selector(),
+        this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
+        this.sender = new Sender(new Selector(this.metrics, time),
                                  this.metadata,
                                  this.accumulator,
-                                 config.getString(ProducerConfig.CLIENT_ID_CONFIG),
+                                 clientId,
                                  config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
                                  config.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                                  (short) config.getInt(ProducerConfig.REQUIRED_ACKS_CONFIG),
@@ -121,9 +130,14 @@ public class KafkaProducer implements Producer {
                                  config.getInt(ProducerConfig.REQUEST_TIMEOUT_CONFIG),
                                  config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
                                  config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
+                                 this.metrics,
                                  new SystemTime());
         this.ioThread = new KafkaThread("kafka-producer-network-thread", this.sender, true);
         this.ioThread.start();
+
+        this.errors = this.metrics.sensor("errors");
+        this.errors.add("message-error-rate", "The average number of errors per second returned to the client.", new Rate());
+
         config.logUnused();
         log.debug("Kafka producer started");
     }
@@ -223,7 +237,8 @@ public class KafkaProducer implements Producer {
         try {
             Cluster cluster = metadata.fetch(record.topic(), this.metadataFetchTimeoutMs);
             int partition = partitioner.partition(record, cluster);
-            ensureValidSize(record.key(), record.value());
+            int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(record.key(), record.value());
+            ensureValidRecordSize(serializedSize);
             TopicPartition tp = new TopicPartition(record.topic(), partition);
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             FutureRecordMetadata future = accumulator.append(tp, record.key(), record.value(), compressionType, callback);
@@ -235,24 +250,25 @@ public class KafkaProducer implements Producer {
             log.debug("Exception occurred during message send:", e);
             if (callback != null)
                 callback.onCompletion(null, e);
+            this.errors.record();
             return new FutureFailure(e);
         } catch (InterruptedException e) {
+            this.errors.record();
             throw new KafkaException(e);
         }
     }
 
     /**
-     * Check that this key-value pair will have a serialized size small enough
+     * Validate that the record size isn't too large
      */
-    private void ensureValidSize(byte[] key, byte[] value) {
-        int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(key, value);
-        if (serializedSize > this.maxRequestSize)
-            throw new RecordTooLargeException("The message is " + serializedSize
+    private void ensureValidRecordSize(int size) {
+        if (size > this.maxRequestSize)
+            throw new RecordTooLargeException("The message is " + size
                                               + " bytes when serialized which is larger than the maximum request size you have configured with the "
                                               + ProducerConfig.MAX_REQUEST_SIZE_CONFIG
                                               + " configuration.");
-        if (serializedSize > this.totalMemorySize)
-            throw new RecordTooLargeException("The message is " + serializedSize
+        if (size > this.totalMemorySize)
+            throw new RecordTooLargeException("The message is " + size
                                               + " bytes when serialized which is larger than the total memory buffer you have configured with the "
                                               + ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG
                                               + " configuration.");

@@ -141,6 +141,17 @@ public class ProducerConfig extends AbstractConfig {
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
 
     /**
+     * The window size for a single metrics sample in ms. Defaults to 30 seconds.
+     */
+    public static final String METRICS_SAMPLE_WINDOW_MS = "metrics.sample.window.ms";
+
+    /**
+     * The number of samples used when reporting metrics. Defaults to two. So by default we use two 30 second windows,
+     * so metrics are computed over up to 60 seconds.
+     */
+    public static final String METRICS_NUM_SAMPLES = "metrics.num.samples";
+
+    /**
      * Should we register the Kafka metrics as JMX mbeans?
      */
     public static final String ENABLE_JMX_CONFIG = "enable.jmx";
@@ -166,7 +177,9 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(MAX_RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), "")
                                 .define(RETRY_BACKOFF_MS_CONFIG, Type.LONG, 100L, atLeast(0L), "blah blah")
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", "blah blah")
-                                .define(ENABLE_JMX_CONFIG, Type.BOOLEAN, true, "");
+                                .define(ENABLE_JMX_CONFIG, Type.BOOLEAN, true, "")
+                                .define(METRICS_SAMPLE_WINDOW_MS, Type.LONG, 30000, atLeast(0), "")
+                                .define(METRICS_NUM_SAMPLES, Type.INT, 2, atLeast(1), "");
     }
 
     ProducerConfig(Map<? extends Object, ? extends Object> props) {

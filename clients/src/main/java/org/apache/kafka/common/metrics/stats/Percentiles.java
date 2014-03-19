@@ -74,7 +74,7 @@ public class Percentiles extends SampledStat implements CompoundStat {
     }
 
     public double value(MetricConfig config, long now, double quantile) {
-        timeoutObsoleteSamples(config, now);
+        purgeObsoleteSamples(config, now);
         float count = 0.0f;
         for (Sample sample : this.samples)
             count += sample.eventCount;

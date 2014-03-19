@@ -1,18 +1,14 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.common.metrics.stats;
 
@@ -21,7 +17,6 @@ import java.util.List;
 
 import org.apache.kafka.common.metrics.MeasurableStat;
 import org.apache.kafka.common.metrics.MetricConfig;
-
 
 /**
  * A SampledStat records a single scalar value measured over one or more samples. Each sample is recorded over a
@@ -72,7 +67,7 @@ public abstract class SampledStat implements MeasurableStat {
 
     @Override
     public double measure(MetricConfig config, long now) {
-        timeoutObsoleteSamples(config, now);
+        purgeObsoleteSamples(config, now);
         return combine(this.samples, config, now);
     }
 
@@ -82,20 +77,28 @@ public abstract class SampledStat implements MeasurableStat {
         return this.samples.get(this.current);
     }
 
-    public Sample oldest() {
-        return this.samples.get((this.current + 1) % this.samples.size());
+    public Sample oldest(long now) {
+        if (samples.size() == 0)
+            this.samples.add(newSample(now));
+        Sample oldest = this.samples.get(0);
+        for (int i = 1; i < this.samples.size(); i++) {
+            Sample curr = this.samples.get(i);
+            if (curr.lastWindow < oldest.lastWindow)
+                oldest = curr;
+        }
+        return oldest;
     }
 
     protected abstract void update(Sample sample, MetricConfig config, double value, long now);
 
     public abstract double combine(List<Sample> samples, MetricConfig config, long now);
 
-    /* Timeout any windows that have expired in the absense of any events */
-    protected void timeoutObsoleteSamples(MetricConfig config, long now) {
+    /* Timeout any windows that have expired in the absence of any events */
+    protected void purgeObsoleteSamples(MetricConfig config, long now) {
+        long expireAge = config.samples() * config.timeWindowNs();
         for (int i = 0; i < samples.size(); i++) {
-            int idx = (this.current + i) % samples.size();
-            Sample sample = this.samples.get(idx);
-            if (now - sample.lastWindow >= (i + 1) * config.timeWindowNs())
+            Sample sample = this.samples.get(i);
+            if (now - sample.lastWindow >= expireAge)
                 sample.reset(now);
         }
     }

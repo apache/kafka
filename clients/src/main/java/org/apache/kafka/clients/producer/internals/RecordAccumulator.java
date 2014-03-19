@@ -28,8 +28,8 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.Record;
+import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -90,27 +90,32 @@ public final class RecordAccumulator {
     }
 
     private void registerMetrics(Metrics metrics) {
-        metrics.addMetric("blocked_threads",
-            "The number of user threads blocked waiting for buffer memory to enqueue their records",
-            new Measurable() {
+        metrics.addMetric("waiting-threads",
+                          "The number of user threads blocked waiting for buffer memory to enqueue their records",
+                          new Measurable() {
                               public double measure(MetricConfig config, long now) {
                                   return free.queued();
                               }
                           });
-        metrics.addMetric("buffer_total_bytes",
-            "The total amount of buffer memory that is available (not currently used for buffering records).",
-            new Measurable() {
+        metrics.addMetric("buffer-total-bytes",
+                          "The maximum amount of buffer memory the client can use (whether or not it is currently used).",
+                          new Measurable() {
                               public double measure(MetricConfig config, long now) {
                                   return free.totalMemory();
                               }
                           });
-        metrics.addMetric("buffer_available_bytes",
-            "The total amount of buffer memory that is available (not currently used for buffering records).",
-            new Measurable() {
-                public double measure(MetricConfig config, long now) {
-                    return free.availableMemory();
-                }
-            });
+        metrics.addMetric("buffer-available-bytes",
+                          "The total amount of buffer memory that is not being used (either unallocated or in the free list).",
+                          new Measurable() {
+                              public double measure(MetricConfig config, long now) {
+                                  return free.availableMemory();
+                              }
+                          });
+        metrics.addMetric("ready-partitions", "The number of topic-partitions with buffered data ready to be sent.", new Measurable() {
+            public double measure(MetricConfig config, long now) {
+                return ready(now).size();
+            }
+        });
     }
 
     /**
@@ -226,10 +231,11 @@ public final class RecordAccumulator {
      * 
      * @param partitions The list of partitions to drain
      * @param maxSize The maximum number of bytes to drain
+     * @param now The current unix time
      * @return A list of {@link RecordBatch} for partitions specified with total size less than the requested maxSize.
      *         TODO: There may be a starvation issue due to iteration order
      */
-    public List<RecordBatch> drain(List<TopicPartition> partitions, int maxSize) {
+    public List<RecordBatch> drain(List<TopicPartition> partitions, int maxSize, long now) {
         if (partitions.isEmpty())
             return Collections.emptyList();
         int size = 0;
@@ -252,6 +258,7 @@ public final class RecordAccumulator {
                         batch.records.close();
                         size += batch.records.sizeInBytes();
                         ready.add(batch);
+                        batch.drained = now;
                     }
                 }
             }

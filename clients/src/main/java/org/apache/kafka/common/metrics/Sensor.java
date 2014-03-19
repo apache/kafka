@@ -1,18 +1,14 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.common.metrics;
 
@@ -25,7 +21,6 @@ import java.util.Set;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-
 
 /**
  * A sensor applies a continuous sequence of numerical values to a set of associated metrics. For example a sensor on
@@ -46,7 +41,7 @@ public final class Sensor {
         super();
         this.registry = registry;
         this.name = Utils.notNull(name);
-        this.parents = parents;
+        this.parents = parents == null ? new Sensor[0] : parents;
         this.metrics = new ArrayList<KafkaMetric>();
         this.stats = new ArrayList<Stat>();
         this.config = config;
@@ -86,27 +81,39 @@ public final class Sensor {
         record(value, time.nanoseconds());
     }
 
-    private void record(double value, long time) {
+    /**
+     * Record a value at a known time. This method is slightly faster than {@link #record(double)} since it will reuse
+     * the time stamp.
+     * @param value The value we are recording
+     * @param time The time in nanoseconds
+     * @throws QuotaViolationException if recording this value moves a metric beyond its configured maximum or minimum
+     *         bound
+     */
+    public void record(double value, long time) {
         synchronized (this) {
             // increment all the stats
             for (int i = 0; i < this.stats.size(); i++)
                 this.stats.get(i).record(config, value, time);
             checkQuotas(time);
-
         }
         for (int i = 0; i < parents.length; i++)
             parents[i].record(value, time);
     }
 
+    /**
+     * Check if we have violated our quota for any metric that has a configured quota
+     * @param time
+     */
     private void checkQuotas(long time) {
         for (int i = 0; i < this.metrics.size(); i++) {
             KafkaMetric metric = this.metrics.get(i);
             MetricConfig config = metric.config();
             if (config != null) {
                 Quota quota = config.quota();
-                if (quota != null)
+                if (quota != null) {
                     if (!quota.acceptable(metric.value(time)))
                         throw new QuotaViolationException("Metric " + metric.name() + " is in violation of its quota of " + quota.bound());
+                }
             }
         }
     }

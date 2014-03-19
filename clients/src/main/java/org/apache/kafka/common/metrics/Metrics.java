@@ -1,31 +1,26 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.common.metrics;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
+import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-
 
 /**
  * A registry of sensors and metrics.
@@ -67,7 +62,7 @@ public class Metrics {
      * Create a metrics repository with no metric reporters and default configuration.
      */
     public Metrics(Time time) {
-        this(new MetricConfig(), new ArrayList<MetricsReporter>(), time);
+        this(new MetricConfig(), new ArrayList<MetricsReporter>(0), time);
     }
 
     /**
@@ -87,8 +82,8 @@ public class Metrics {
      */
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time) {
         this.config = defaultConfig;
-        this.sensors = new ConcurrentHashMap<String, Sensor>();
-        this.metrics = new ConcurrentHashMap<String, KafkaMetric>();
+        this.sensors = new CopyOnWriteMap<String, Sensor>();
+        this.metrics = new CopyOnWriteMap<String, KafkaMetric>();
         this.reporters = Utils.notNull(reporters);
         this.time = time;
         for (MetricsReporter reporter : reporters)
@@ -96,8 +91,26 @@ public class Metrics {
     }
 
     /**
-     * Create a sensor with the given unique name and zero or more parent sensors. All parent sensors will receive every
-     * value recorded with this sensor.
+     * Get the sensor with the given name if it exists
+     * @param name The name of the sensor
+     * @return Return the sensor or null if no such sensor exists
+     */
+    public Sensor getSensor(String name) {
+        return this.sensors.get(Utils.notNull(name));
+    }
+
+    /**
+     * Get or create a sensor with the given unique name and no parent sensors.
+     * @param name The sensor name
+     * @return The sensor
+     */
+    public Sensor sensor(String name) {
+        return sensor(name, null, (Sensor[]) null);
+    }
+
+    /**
+     * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+     * receive every value recorded with this sensor.
      * @param name The name of the sensor
      * @param parents The parent sensors
      * @return The sensor that is created
@@ -107,15 +120,15 @@ public class Metrics {
     }
 
     /**
-     * Create a sensor with the given unique name and zero or more parent sensors. All parent sensors will receive every
-     * value recorded with this sensor.
+     * Get or create a sensor with the given unique name and zero or more parent sensors. All parent sensors will
+     * receive every value recorded with this sensor.
      * @param name The name of the sensor
      * @param config A default configuration to use for this sensor for metrics that don't have their own config
      * @param parents The parent sensors
      * @return The sensor that is created
      */
     public synchronized Sensor sensor(String name, MetricConfig config, Sensor... parents) {
-        Sensor s = this.sensors.get(Utils.notNull(name));
+        Sensor s = getSensor(name);
         if (s == null) {
             s = new Sensor(this, name, parents, config == null ? this.config : config, time);
             this.sensors.put(name, s);

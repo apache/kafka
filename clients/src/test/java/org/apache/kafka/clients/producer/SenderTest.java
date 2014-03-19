@@ -70,6 +70,7 @@ public class SenderTest {
                                        REQUEST_TIMEOUT_MS,
                                        SEND_BUFFER_SIZE,
                                        RECEIVE_BUFFER_SIZE,
+                                       metrics,
                                        time);
 
     @Before
@@ -114,6 +115,7 @@ public class SenderTest {
                                    REQUEST_TIMEOUT_MS,
                                    SEND_BUFFER_SIZE,
                                    RECEIVE_BUFFER_SIZE,
+                                   new Metrics(),
                                    time);
         Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), CompressionType.NONE, null);
         RequestSend request1 = completeSend(sender);
