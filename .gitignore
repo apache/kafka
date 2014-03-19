@@ -5,7 +5,6 @@ lib_managed/
 src_managed/
 project/boot/
 project/plugins/project/
-project/sbt_project_definition.iml
 .idea
 .svn
 .classpath
@@ -14,3 +13,9 @@ project/sbt_project_definition.iml
 .#*
 rat.out
 TAGS
+*.iml
+.project
+.settings
+.gradle
+kafka.ipr
+kafka.iws
