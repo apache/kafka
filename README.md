@@ -23,6 +23,8 @@ Follow instuctions in http://kafka.apache.org/documentation.html#quickstart
 ### Building a binary release gzipped tar ball ###
     ./gradlew clean
     ./gradlew releaseTarGz  
+    The above command will fail if you haven't set up the signing key. To bypass signing the artifact, you can run
+    ./gradlew releaseTarGz -x signArchives
 
 The release file can be found inside ./core/build/distributions/.
 
