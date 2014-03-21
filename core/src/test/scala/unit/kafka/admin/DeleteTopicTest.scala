@@ -219,8 +219,10 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     val topicAndPartition = TopicAndPartition(topic, 0)
+    val brokerConfigs = TestUtils.createBrokerConfigs(4)
+    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
     // create brokers
-    val allServers = TestUtils.createBrokerConfigs(4).map(b => TestUtils.createServer(new KafkaConfig(b)))
+    val allServers = brokerConfigs.map(b => TestUtils.createServer(new KafkaConfig(b)))
     val servers = allServers.filter(s => expectedReplicaAssignment(0).contains(s.config.brokerId))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
@@ -259,8 +261,10 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     val topicAndPartition = TopicAndPartition(topic, 0)
+    val brokerConfigs = TestUtils.createBrokerConfigs(4)
+    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
     // create brokers
-    val allServers = TestUtils.createBrokerConfigs(4).map(b => TestUtils.createServer(new KafkaConfig(b)))
+    val allServers = brokerConfigs.map(b => TestUtils.createServer(new KafkaConfig(b)))
     val servers = allServers.filter(s => expectedReplicaAssignment(0).contains(s.config.brokerId))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
@@ -428,8 +432,10 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
   private def createTestTopicAndCluster(topic: String): Seq[KafkaServer] = {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topicAndPartition = TopicAndPartition(topic, 0)
+    val brokerConfigs = TestUtils.createBrokerConfigs(3)
+    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
     // create brokers
-    val servers = TestUtils.createBrokerConfigs(3).map(b => TestUtils.createServer(new KafkaConfig(b)))
+    val servers = brokerConfigs.map(b => TestUtils.createServer(new KafkaConfig(b)))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
     // wait until replica log is created on every broker

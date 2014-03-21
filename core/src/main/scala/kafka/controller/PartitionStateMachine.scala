@@ -72,7 +72,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   // register topic and partition change listeners
   def registerListeners() {
     registerTopicChangeListener()
-    registerDeleteTopicListener()
+    if(controller.config.deleteTopicEnable)
+      registerDeleteTopicListener()
   }
 
   /**

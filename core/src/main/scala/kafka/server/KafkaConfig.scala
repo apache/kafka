@@ -248,4 +248,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   
   /* the maximum size for a metadata entry associated with an offset commit */
   val offsetMetadataMaxSize = props.getInt("offset.metadata.max.bytes", 1024)
+
+  /* Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off */
+  val deleteTopicEnable = props.getBoolean("delete.topic.enable", false)
 }

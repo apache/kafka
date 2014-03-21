@@ -34,9 +34,9 @@ object TopicCommand {
     val opts = new TopicCommandOptions(args)
     
     // should have exactly one action
-    val actions = Seq(opts.createOpt, opts.deleteOpt, opts.listOpt, opts.alterOpt, opts.describeOpt).count(opts.options.has _)
+    val actions = Seq(opts.createOpt, opts.listOpt, opts.alterOpt, opts.describeOpt).count(opts.options.has _)
     if(actions != 1) {
-      System.err.println("Command must include exactly one action: --list, --describe, --create, --delete, or --alter")
+      System.err.println("Command must include exactly one action: --list, --describe, --create or --alter")
       opts.parser.printHelpOn(System.err)
       System.exit(1)
     }
@@ -50,8 +50,6 @@ object TopicCommand {
         createTopic(zkClient, opts)
       else if(opts.options.has(opts.alterOpt))
         alterTopic(zkClient, opts)
-      else if(opts.options.has(opts.deleteOpt))
-        deleteTopic(zkClient, opts)
       else if(opts.options.has(opts.listOpt))
         listTopics(zkClient, opts)
       else if(opts.options.has(opts.describeOpt))
@@ -111,14 +109,6 @@ object TopicCommand {
         AdminUtils.addPartitions(zkClient, topic, nPartitions, replicaAssignmentStr)
         println("Adding partitions succeeded!")
       }
-    }
-  }
-  
-  def deleteTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
-    val topics = getTopics(zkClient, opts)
-    topics.foreach { topic =>
-      AdminUtils.deleteTopic(zkClient, topic)
-      println("Topic \"%s\" queued for deletion.".format(topic))
     }
   }
   
@@ -216,10 +206,9 @@ object TopicCommand {
     val listOpt = parser.accepts("list", "List all available topics.")
     val createOpt = parser.accepts("create", "Create a new topic.")
     val alterOpt = parser.accepts("alter", "Alter the configuration for the topic.")
-    val deleteOpt = parser.accepts("delete", "Delete the topic.")
     val describeOpt = parser.accepts("describe", "List details for the given topics.")
     val helpOpt = parser.accepts("help", "Print usage information.")
-    val topicOpt = parser.accepts("topic", "The topic to be create, alter, delete, or describe. Can also accept a regular " +
+    val topicOpt = parser.accepts("topic", "The topic to be create, alter or describe. Can also accept a regular " +
                                            "expression except for --create option")
                          .withRequiredArg
                          .describedAs("topic")
@@ -255,7 +244,7 @@ object TopicCommand {
 
     val options = parser.parse(args : _*)
 
-    val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, deleteOpt, describeOpt, listOpt)
+    val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt)
 
     def checkArgs() {
       // check required args
