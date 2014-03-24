@@ -147,7 +147,6 @@ project(':core') {
     compile 'org.apache.zookeeper:zookeeper:3.3.4'
     compile 'com.101tec:zkclient:0.3'
     compile 'com.yammer.metrics:metrics-core:2.2.0'
-    compile 'com.yammer.metrics:metrics-annotation:2.2.0'
     compile 'net.sf.jopt-simple:jopt-simple:3.2'
     compile 'org.xerial.snappy:snappy-java:1.0.5'
 
