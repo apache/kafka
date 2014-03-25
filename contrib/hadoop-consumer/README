@@ -58,9 +58,12 @@ your hadoop installation directory.
 			     -1 means no limitation.
         hdfs.default.classpath.dir : hdfs location of jars
 
-  2) copy jars into hdfs
+  2) downloads neccessary jars
+   ./import-jars.sh
+
+  3) copy jars into hdfs
    ./copy-jars.sh ${hdfs.default.classpath.dir}
 
-  2) Fetch data
+  4) Fetch data
   ./run-class.sh kafka.etl.impl.SimpleKafkaETLJob test/test.properties
 

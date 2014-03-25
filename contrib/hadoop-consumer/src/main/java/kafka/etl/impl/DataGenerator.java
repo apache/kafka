@@ -27,7 +27,6 @@ import kafka.etl.KafkaETLKey;
 import kafka.etl.KafkaETLRequest;
 import kafka.etl.Props;
 import kafka.javaapi.producer.Producer;
-import kafka.message.Message;
 import kafka.producer.ProducerConfig;
 import kafka.producer.KeyedMessage;
 import org.apache.hadoop.fs.FileSystem;
@@ -86,8 +85,7 @@ public class DataGenerator {
 			Long timestamp = RANDOM.nextLong();
 			if (timestamp < 0) timestamp = -timestamp;
 			byte[] bytes = timestamp.toString().getBytes("UTF8");
-			Message message = new Message(bytes);
-			list.add(new KeyedMessage<Integer, Message>(_topic, null, message));
+			list.add(new KeyedMessage<byte[], byte[]>(_topic, null, bytes));
 		}
 		// send events
 		System.out.println(" send " + list.size() + " " + _topic + " count events to " + _uri);

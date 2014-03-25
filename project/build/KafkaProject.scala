@@ -190,7 +190,7 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
            <exclude module="jmxtools"/>
            <exclude module="mail"/>
            <exclude module="jms"/>
-         <dependency org="org.apache.hadoop" name="hadoop-core" rev="0.20.2">
+         <dependency org="org.apache.hadoop" name="hadoop-core" rev="1.2.1">
            <exclude module="junit"/>
          </dependency>
          <dependency org="org.apache.pig" name="pig" rev="0.10.0">
@@ -213,7 +213,7 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
            <exclude module="mail"/>
            <exclude module="jms"/>
            <exclude module=""/>
-         <dependency org="org.apache.hadoop" name="hadoop-core" rev="0.20.2">
+         <dependency org="org.apache.hadoop" name="hadoop-core" rev="1.2.1">
            <exclude module="junit"/>
          </dependency>
          <dependency org="org.apache.pig" name="pig" rev="0.8.0">
@@ -242,7 +242,7 @@ class KafkaProject(info: ProjectInfo) extends ParentProject(info) with IdeaProje
     val commonsLogging = "commons-logging" % "commons-logging" % "1.0.4"
     val jacksonCore = "org.codehaus.jackson" % "jackson-core-asl" % "1.5.5"
     val jacksonMapper = "org.codehaus.jackson" % "jackson-mapper-asl" % "1.5.5"
-    val hadoop = "org.apache.hadoop" % "hadoop-core" % "0.20.2"
+    val hadoop = "org.apache.hadoop" % "hadoop-core" % "1.2.1"
   }
 
   trait CompressionDependencies {

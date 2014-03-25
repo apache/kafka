@@ -36,7 +36,7 @@ done
 local_dir=$(dirname $0)
 
 # include hadoop-consumer jars
-for file in $base_dir/contrib/hadoop-consumer/target/scala_2.8.0/*.jar;
+for file in $base_dir/contrib/hadoop-consumer/target/*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done

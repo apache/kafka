@@ -84,7 +84,7 @@ object KafkaBuild extends Build {
       "commons-logging"      % "commons-logging"    % "1.0.4",
       "org.codehaus.jackson" % "jackson-core-asl"   % "1.5.5",
       "org.codehaus.jackson" % "jackson-mapper-asl" % "1.5.5",
-      "org.apache.hadoop"    % "hadoop-core"        % "0.20.2"
+      "org.apache.hadoop"    % "hadoop-core"        % "1.2.1"
     ),
     ivyXML := 
        <dependencies>
@@ -94,7 +94,7 @@ object KafkaBuild extends Build {
          <exclude module="jmxtools"/>
          <exclude module="mail"/>
          <exclude module="jms"/>
-         <dependency org="org.apache.hadoop" name="hadoop-core" rev="0.20.2">
+         <dependency org="org.apache.hadoop" name="hadoop-core" rev="1.2.1">
            <exclude org="junit" module="junit"/>
          </dependency>
          <dependency org="org.apache.pig" name="pig" rev="0.8.0">
