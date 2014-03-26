@@ -22,6 +22,7 @@ import kafka.utils.Utils._
 import collection.Set
 import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.api.{StopReplicaResponse, RequestOrResponse}
+import java.util.concurrent.locks.ReentrantLock
 
 /**
  * This manages the state machine for topic deletion.
@@ -71,9 +72,10 @@ class TopicDeletionManager(controller: KafkaController,
   val partitionStateMachine = controller.partitionStateMachine
   val replicaStateMachine = controller.replicaStateMachine
   var topicsToBeDeleted: mutable.Set[String] = mutable.Set.empty[String] ++ initialTopicsToBeDeleted
+  val deleteLock = new ReentrantLock()
   var topicsIneligibleForDeletion: mutable.Set[String] = mutable.Set.empty[String] ++
     (initialTopicsIneligibleForDeletion & initialTopicsToBeDeleted)
-  val deleteTopicsCond = controllerContext.controllerLock.newCondition()
+  val deleteTopicsCond = deleteLock.newCondition()
   var deleteTopicStateChanged: Boolean = false
   var deleteTopicsThread: DeleteTopicsThread = null
   val isDeleteTopicEnabled = controller.config.deleteTopicEnable
@@ -195,11 +197,14 @@ class TopicDeletionManager(controller: KafkaController,
    * controllerLock should be acquired before invoking this API
    */
   private def awaitTopicDeletionNotification() {
-    while(!deleteTopicStateChanged) {
-      info("Waiting for signal to start or continue topic deletion")
-      deleteTopicsCond.await()
+    inLock(deleteLock) {
+      while(!deleteTopicStateChanged) {
+        info("Waiting for signal to start or continue topic deletion")
+
+        deleteTopicsCond.await()
+      }
+      deleteTopicStateChanged = false
     }
-    deleteTopicStateChanged = false
   }
 
   /**
@@ -207,7 +212,9 @@ class TopicDeletionManager(controller: KafkaController,
    */
   private def resumeTopicDeletionThread() {
     deleteTopicStateChanged = true
-    deleteTopicsCond.signal()
+    inLock(deleteLock) {
+      deleteTopicsCond.signal()
+    }
   }
 
   /**
@@ -352,8 +359,9 @@ class TopicDeletionManager(controller: KafkaController,
   class DeleteTopicsThread() extends ShutdownableThread("delete-topics-thread") {
     val zkClient = controllerContext.zkClient
     override def doWork() {
+      awaitTopicDeletionNotification()
+
       inLock(controllerContext.controllerLock) {
-        awaitTopicDeletionNotification()
         val topicsQueuedForDeletion = Set.empty[String] ++ topicsToBeDeleted
         if(topicsQueuedForDeletion.size > 0)
           info("Handling deletion for topics " + topicsQueuedForDeletion.mkString(","))

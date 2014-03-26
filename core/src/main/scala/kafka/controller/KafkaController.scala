@@ -35,9 +35,9 @@ import org.I0Itec.zkclient.{IZkDataListener, IZkStateListener, ZkClient}
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
 import java.util.concurrent.atomic.AtomicInteger
 import org.apache.log4j.Logger
+import java.util.concurrent.locks.ReentrantLock
 import scala.Some
 import kafka.common.TopicAndPartition
-import java.util.concurrent.locks.ReentrantLock
 
 class ControllerContext(val zkClient: ZkClient,
                         val zkSessionTimeout: Int) {
@@ -335,15 +335,16 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
    */
   def onControllerResignation() {
     inLock(controllerContext.controllerLock) {
-      if (config.autoLeaderRebalanceEnable)
-        autoRebalanceScheduler.shutdown()
-      deleteTopicManager.shutdown()
       Utils.unregisterMBean(KafkaController.MBeanName)
+      deleteTopicManager.shutdown()
       partitionStateMachine.shutdown()
       replicaStateMachine.shutdown()
+      if(config.autoLeaderRebalanceEnable)
+        autoRebalanceScheduler.shutdown()
       if(controllerContext.controllerChannelManager != null) {
         controllerContext.controllerChannelManager.shutdown()
         controllerContext.controllerChannelManager = null
+        info("Controller shutdown complete")
       }
     }
   }
@@ -640,15 +641,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   def shutdown() = {
     inLock(controllerContext.controllerLock) {
       isRunning = false
-      partitionStateMachine.shutdown()
-      replicaStateMachine.shutdown()
-      if (config.autoLeaderRebalanceEnable)
-        autoRebalanceScheduler.shutdown()
-      if(controllerContext.controllerChannelManager != null) {
-        controllerContext.controllerChannelManager.shutdown()
-        controllerContext.controllerChannelManager = null
-        info("Controller shutdown complete")
-      }
+      onControllerResignation()
     }
   }
 

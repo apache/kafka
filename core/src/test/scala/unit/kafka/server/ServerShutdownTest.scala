@@ -96,5 +96,25 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer.close()
     server.shutdown()
     Utils.rm(server.config.logDirs)
+    verifyNonDaemonThreadsStatus
+  }
+
+  @Test
+  def testCleanShutdownWithDeleteTopicEnabled() {
+    val newProps = TestUtils.createBrokerConfig(0, port)
+    newProps.setProperty("delete.topic.enable", "true")
+    val newConfig = new KafkaConfig(newProps)
+    var server = new KafkaServer(newConfig)
+    server.startup()
+    server.shutdown()
+    server.awaitShutdown()
+    Utils.rm(server.config.logDirs)
+    verifyNonDaemonThreadsStatus
+  }
+
+  def verifyNonDaemonThreadsStatus() {
+    assertEquals(0, Thread.getAllStackTraces.keySet().toArray
+      .map(_.asInstanceOf[Thread])
+      .count(t => !t.isDaemon && t.isAlive && t.getClass.getCanonicalName.toLowerCase.startsWith("kafka")))
   }
 }
