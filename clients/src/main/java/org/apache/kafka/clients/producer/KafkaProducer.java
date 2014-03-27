@@ -95,28 +95,30 @@ public class KafkaProducer implements Producer {
     private KafkaProducer(ProducerConfig config) {
         log.trace("Starting the Kafka producer");
         Time time = new SystemTime();
-        MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES))
-                                                      .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS),
+        MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
+                                                      .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                                                                   TimeUnit.MILLISECONDS);
         String clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
         String jmxPrefix = "kafka.producer." + (clientId.length() > 0 ? clientId + "." : "");
-        List<MetricsReporter> reporters = Collections.singletonList((MetricsReporter) new JmxReporter(jmxPrefix));
+        List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
+                                                                        MetricsReporter.class);
+        reporters.add(new JmxReporter(jmxPrefix));
         this.metrics = new Metrics(metricConfig, reporters, time);
         this.partitioner = new Partitioner();
+        long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.metadataFetchTimeoutMs = config.getLong(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG);
-        this.metadata = new Metadata(config.getLong(ProducerConfig.METADATA_FETCH_BACKOFF_CONFIG),
-                                     config.getLong(ProducerConfig.METADATA_EXPIRY_CONFIG));
+        this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG));
         this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
-        this.totalMemorySize = config.getLong(ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG);
+        this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
         this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
-        this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.MAX_PARTITION_SIZE_CONFIG),
+        this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                                                  this.totalMemorySize,
                                                  config.getLong(ProducerConfig.LINGER_MS_CONFIG),
-                                                 config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
+                                                 retryBackoffMs,
                                                  config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG),
                                                  metrics,
                                                  time);
-        List<InetSocketAddress> addresses = parseAndValidateAddresses(config.getList(ProducerConfig.BROKER_LIST_CONFIG));
+        List<InetSocketAddress> addresses = parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
         this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
         this.sender = new Sender(new Selector(this.metrics, time),
                                  this.metadata,
@@ -124,9 +126,9 @@ public class KafkaProducer implements Producer {
                                  clientId,
                                  config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
                                  config.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                                 (short) config.getInt(ProducerConfig.REQUIRED_ACKS_CONFIG),
-                                 config.getInt(ProducerConfig.MAX_RETRIES_CONFIG),
-                                 config.getInt(ProducerConfig.REQUEST_TIMEOUT_CONFIG),
+                                 (short) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG)),
+                                 config.getInt(ProducerConfig.RETRIES_CONFIG),
+                                 config.getInt(ProducerConfig.TIMEOUT_CONFIG),
                                  config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
                                  config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
                                  this.metrics,
@@ -140,13 +142,21 @@ public class KafkaProducer implements Producer {
         log.debug("Kafka producer started");
     }
 
+    private static int parseAcks(String acksString) {
+        try {
+            return acksString.trim().toLowerCase().equals("all") ? -1 : Integer.parseInt(acksString.trim());
+        } catch (NumberFormatException e) {
+            throw new ConfigException("Invalid configuration value for 'acks': " + acksString);
+        }
+    }
+
     private static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
         List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
         for (String url : urls) {
             if (url != null && url.length() > 0) {
                 String[] pieces = url.split(":");
                 if (pieces.length != 2)
-                    throw new ConfigException("Invalid url in " + ProducerConfig.BROKER_LIST_CONFIG + ": " + url);
+                    throw new ConfigException("Invalid url in " + ProducerConfig.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 try {
                     InetSocketAddress address = new InetSocketAddress(pieces[0], Integer.parseInt(pieces[1]));
                     if (address.isUnresolved())
@@ -268,7 +278,7 @@ public class KafkaProducer implements Producer {
         if (size > this.totalMemorySize)
             throw new RecordTooLargeException("The message is " + size +
                                               " bytes when serialized which is larger than the total memory buffer you have configured with the " +
-                                              ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG +
+                                              ProducerConfig.BUFFER_MEMORY_CONFIG +
                                               " configuration.");
     }
 

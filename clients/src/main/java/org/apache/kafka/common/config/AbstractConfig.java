@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.config;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -111,6 +112,9 @@ public class AbstractConfig {
         log.info(b.toString());
     }
 
+    /**
+     * Log warnings for any unused configurations
+     */
     public void logUnused() {
         for (String key : unused())
             log.warn("The configuration {} = {} was supplied but isn't a known config.", key, this.values.get(key));
@@ -134,6 +138,23 @@ public class AbstractConfig {
         if (o instanceof Configurable)
             ((Configurable) o).configure(this.originals);
         return t.cast(o);
+    }
+
+    public <T> List<T> getConfiguredInstances(String key, Class<T> t) {
+        List<String> klasses = getList(key);
+        List<T> objects = new ArrayList<T>();
+        for (String klass : klasses) {
+            Class<?> c = getClass(klass);
+            if (c == null)
+                return null;
+            Object o = Utils.newInstance(c);
+            if (!t.isInstance(o))
+                throw new KafkaException(c.getName() + " is not an instance of " + t.getName());
+            if (o instanceof Configurable)
+                ((Configurable) o).configure(this.originals);
+            objects.add(t.cast(o));
+        }
+        return objects;
     }
 
 }

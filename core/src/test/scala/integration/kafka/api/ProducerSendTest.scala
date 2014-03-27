@@ -91,7 +91,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Test
   def testSendOffset() {
     val props = new Properties()
-    props.put(ProducerConfig.BROKER_LIST_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
     var producer = new KafkaProducer(props)
 
     val callback = new CheckErrorCallback
@@ -149,7 +149,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Test
   def testClose() {
     val props = new Properties()
-    props.put(ProducerConfig.BROKER_LIST_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
     var producer = new KafkaProducer(props)
 
     try {
@@ -187,8 +187,8 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Test
   def testSendToPartition() {
     val props = new Properties()
-    props.put(ProducerConfig.BROKER_LIST_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
-    props.put(ProducerConfig.REQUIRED_ACKS_CONFIG, "-1")
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    props.put(ProducerConfig.ACKS_CONFIG, "-1")
     var producer = new KafkaProducer(props)
 
     try {
@@ -245,7 +245,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Test
   def testAutoCreateTopic() {
     val props = new Properties()
-    props.put(ProducerConfig.BROKER_LIST_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
     var producer = new KafkaProducer(props)
 
     try {

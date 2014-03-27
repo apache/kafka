@@ -71,7 +71,7 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
   def testCompression() {
 
     val props = new Properties()
-    props.put(ProducerConfig.BROKER_LIST_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config)))
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config)))
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression)
     var producer = new KafkaProducer(props)
 

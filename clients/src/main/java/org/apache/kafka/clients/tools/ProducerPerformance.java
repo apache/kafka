@@ -36,12 +36,12 @@ public class ProducerPerformance {
         int recordSize = Integer.parseInt(args[3]);
         int acks = Integer.parseInt(args[4]);
         Properties props = new Properties();
-        props.setProperty(ProducerConfig.REQUIRED_ACKS_CONFIG, Integer.toString(acks));
-        props.setProperty(ProducerConfig.BROKER_LIST_CONFIG, url);
+        props.setProperty(ProducerConfig.ACKS_CONFIG, Integer.toString(acks));
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, url);
         props.setProperty(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG, Integer.toString(5 * 1000));
-        props.setProperty(ProducerConfig.REQUEST_TIMEOUT_CONFIG, Integer.toString(Integer.MAX_VALUE));
-        props.setProperty(ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG, Integer.toString(64 * 1024 * 1024));
-        props.setProperty(ProducerConfig.MAX_PARTITION_SIZE_CONFIG, Integer.toString(64 * 1024));
+        props.setProperty(ProducerConfig.TIMEOUT_CONFIG, Integer.toString(Integer.MAX_VALUE));
+        props.setProperty(ProducerConfig.BUFFER_MEMORY_CONFIG, Integer.toString(64 * 1024 * 1024));
+        props.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, Integer.toString(64 * 1024));
         if (args.length == 6)
             props.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, args[5]);
 

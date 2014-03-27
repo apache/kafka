@@ -204,15 +204,16 @@ object ProducerPerformance extends Logging {
   }
 
   class NewShinyProducer(config: ProducerPerfConfig) extends Producer {
+    import org.apache.kafka.clients.producer.ProducerConfig
     val props = new Properties()
-    props.put("metadata.broker.list", config.brokerList)
-    props.put("send.buffer.bytes", (64 * 1024).toString)
-    props.put("client.id", "perf-test")
-    props.put("request.required.acks", config.producerRequestRequiredAcks.toString)
-    props.put("request.timeout.ms", config.producerRequestTimeoutMs.toString)
-    props.put("request.retries", config.producerNumRetries.toString)
-    props.put("retry.backoff.ms", config.producerRetryBackoffMs.toString)
-    props.put("compression.type", config.compressionCodec.name)
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
+    props.put(ProducerConfig.SEND_BUFFER_CONFIG, (64 * 1024).toString)
+    props.put(ProducerConfig.CLIENT_ID_CONFIG, "perf-test")
+    props.put(ProducerConfig.ACKS_CONFIG, config.producerRequestRequiredAcks.toString)
+    props.put(ProducerConfig.TIMEOUT_CONFIG, config.producerRequestTimeoutMs.toString)
+    props.put(ProducerConfig.RETRIES_CONFIG, config.producerNumRetries.toString)
+    props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.producerRetryBackoffMs.toString)
+    props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec.name)
     val producer = new KafkaProducer(props)
 
     def send(topic: String, partition: Long, bytes: Array[Byte]) {

@@ -42,7 +42,7 @@ public class JmxReporter implements MetricsReporter {
 
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
     private static final Object lock = new Object();
-    private final String prefix;
+    private String prefix;
     private final Map<String, KafkaMbean> mbeans = new HashMap<String, KafkaMbean>();
 
     public JmxReporter() {
@@ -54,6 +54,10 @@ public class JmxReporter implements MetricsReporter {
      */
     public JmxReporter(String prefix) {
         this.prefix = prefix;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs) {
     }
 
     @Override

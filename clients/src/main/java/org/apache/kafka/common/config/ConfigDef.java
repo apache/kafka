@@ -1,22 +1,21 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.common.config;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +44,7 @@ import java.util.Map;
  */
 public class ConfigDef {
 
-    private static final Object NO_DEFAULT_VALUE = new Object();
+    private static final Object NO_DEFAULT_VALUE = new String("");
 
     private final Map<String, ConfigKey> configKeys = new HashMap<String, ConfigKey>();
 
@@ -55,14 +54,15 @@ public class ConfigDef {
      * @param type The type of the config
      * @param defaultValue The default value to use if this config isn't present
      * @param validator A validator to use in checking the correctness of the config
+     * @param importance The importance of this config: is this something you will likely need to change.
      * @param documentation The documentation string for the config
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, String documentation) {
+    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation) {
         if (configKeys.containsKey(name))
             throw new ConfigException("Configuration " + name + " is defined twice.");
         Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
-        configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, documentation));
+        configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation));
         return this;
     }
 
@@ -71,11 +71,12 @@ public class ConfigDef {
      * @param name The name of the config parameter
      * @param type The type of the config
      * @param defaultValue The default value to use if this config isn't present
+     * @param importance The importance of this config: is this something you will likely need to change.
      * @param documentation The documentation string for the config
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, String documentation) {
-        return define(name, type, defaultValue, null, documentation);
+    public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation) {
+        return define(name, type, defaultValue, null, importance, documentation);
     }
 
     /**
@@ -83,22 +84,24 @@ public class ConfigDef {
      * @param name The name of the config parameter
      * @param type The type of the config
      * @param validator A validator to use in checking the correctness of the config
+     * @param importance The importance of this config: is this something you will likely need to change.
      * @param documentation The documentation string for the config
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Validator validator, String documentation) {
-        return define(name, type, NO_DEFAULT_VALUE, validator, documentation);
+    public ConfigDef define(String name, Type type, Validator validator, Importance importance, String documentation) {
+        return define(name, type, NO_DEFAULT_VALUE, validator, importance, documentation);
     }
 
     /**
      * Define a required parameter with no default value and no special validation logic
      * @param name The name of the config parameter
      * @param type The type of the config
+     * @param importance The importance of this config: is this something you will likely need to change.
      * @param documentation The documentation string for the config
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, String documentation) {
-        return define(name, type, NO_DEFAULT_VALUE, null, documentation);
+    public ConfigDef define(String name, Type type, Importance importance, String documentation) {
+        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation);
     }
 
     /**
@@ -206,6 +209,10 @@ public class ConfigDef {
         BOOLEAN, STRING, INT, LONG, DOUBLE, LIST, CLASS;
     }
 
+    public enum Importance {
+        HIGH, MEDIUM, LOW
+    }
+
     /**
      * Validation logic the user may provide
      */
@@ -230,7 +237,7 @@ public class ConfigDef {
          * @param min The minimum acceptable value
          */
         public static Range atLeast(Number min) {
-            return new Range(min, Double.MAX_VALUE);
+            return new Range(min, null);
         }
 
         /**
@@ -242,8 +249,19 @@ public class ConfigDef {
 
         public void ensureValid(String name, Object o) {
             Number n = (Number) o;
-            if (n.doubleValue() < min.doubleValue() || n.doubleValue() > max.doubleValue())
-                throw new ConfigException(name, o, "Value must be in the range [" + min + ", " + max + "]");
+            if (min != null && n.doubleValue() < min.doubleValue())
+                throw new ConfigException(name, o, "Value must be at least " + min);
+            if (max != null && n.doubleValue() > max.doubleValue())
+                throw new ConfigException(name, o, "Value must be no more than " + max);
+        }
+
+        public String toString() {
+            if (min == null)
+                return "[...," + max + "]";
+            else if (max == null)
+                return "[" + min + ",...]";
+            else
+                return "[" + min + ",...," + max + "]";
         }
     }
 
@@ -253,17 +271,75 @@ public class ConfigDef {
         public final String documentation;
         public final Object defaultValue;
         public final Validator validator;
+        public final Importance importance;
 
-        public ConfigKey(String name, Type type, Object defaultValue, Validator validator, String documentation) {
+        public ConfigKey(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation) {
             super();
             this.name = name;
             this.type = type;
             this.defaultValue = defaultValue;
             this.validator = validator;
+            this.importance = importance;
             if (this.validator != null)
                 this.validator.ensureValid(name, defaultValue);
             this.documentation = documentation;
         }
 
+        public boolean hasDefault() {
+            return this.defaultValue != NO_DEFAULT_VALUE;
+        }
+
+    }
+
+    public String toHtmlTable() {
+        // sort first required fields, then by importance, then name
+        List<ConfigDef.ConfigKey> configs = new ArrayList<ConfigDef.ConfigKey>(this.configKeys.values());
+        Collections.sort(configs, new Comparator<ConfigDef.ConfigKey>() {
+            public int compare(ConfigDef.ConfigKey k1, ConfigDef.ConfigKey k2) {
+                // first take anything with no default value
+                if (!k1.hasDefault() && k2.hasDefault())
+                    return -1;
+                else if (!k2.hasDefault() && k1.hasDefault())
+                    return 1;
+
+                // then sort by importance
+                int cmp = k1.importance.compareTo(k2.importance);
+                if (cmp == 0)
+                    // then sort in alphabetical order
+                    return k1.name.compareTo(k2.name);
+                else
+                    return cmp;
+            }
+        });
+        StringBuilder b = new StringBuilder();
+        b.append("<table>\n");
+        b.append("<tr>\n");
+        b.append("<th>Name</th>\n");
+        b.append("<th>Type</th>\n");
+        b.append("<th>Default</th>\n");
+        b.append("<th>Importance</th>\n");
+        b.append("<th>Description</th>\n");
+        b.append("</tr>\n");
+        for (ConfigKey def : configs) {
+            b.append("<tr>\n");
+            b.append("<td>");
+            b.append(def.name);
+            b.append("</td>");
+            b.append("<td>");
+            b.append(def.type.toString().toLowerCase());
+            b.append("</td>");
+            b.append("<td>");
+            b.append(def.defaultValue == null ? "" : def.defaultValue);
+            b.append("</td>");
+            b.append("<td>");
+            b.append(def.importance.toString().toLowerCase());
+            b.append("</td>");
+            b.append("<td>");
+            b.append(def.documentation);
+            b.append("</td>");
+            b.append("</tr>\n");
+        }
+        b.append("</table>");
+        return b.toString();
     }
 }

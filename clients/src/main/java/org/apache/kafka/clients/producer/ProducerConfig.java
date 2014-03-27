@@ -19,171 +19,198 @@ import java.util.Map;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 
 /**
- * The producer configuration keys
+ * Configuration for the Kafka Producer. Documentation for these configurations can be found in the <a
+ * href="http://kafka.apache.org/documentation.html#new-producer">Kafka documentation</a>
  */
 public class ProducerConfig extends AbstractConfig {
 
+    /*
+     * NOTE: DO NOT CHANGE EITHER CONFIG STRINGS OR THEIR JAVA VARIABLE NAMES AS THESE ARE PART OF THE PUBLIC API AND
+     * CHANGE WILL BREAK USER CODE.
+     */
+
     private static final ConfigDef config;
 
-    /**
-     * A list of URLs to use for establishing the initial connection to the cluster. This list should be in the form
-     * <code>host1:port1,host2:port2,...</code>. These urls are just used for the initial connection to discover the
-     * full cluster membership (which may change dynamically) so this list need not contain the full set of servers (you
-     * may want more than one, though, in case a server is down).
-     */
-    public static final String BROKER_LIST_CONFIG = "metadata.broker.list";
+    /** <code>bootstrap.servers</code> */
+    public static final String BOOTSTRAP_SERVERS_CONFIG = "bootstrap.servers";
+    private static final String BOOSTRAP_SERVERS_DOC = "A list of host/port pairs to use for establishing the initial connection to the Kafka cluster. Data will be load " + "balanced over all servers irrespective of which servers are specified here for bootstrapping&mdash;this list only "
+                                                       + "impacts the initial hosts used to discover the full set of servers. This list should be in the form "
+                                                       + "<code>host1:port1,host2:port2,...</code>. Since these servers are just used for the initial connection to "
+                                                       + "discover the full cluster membership (which may change dynamically), this list need not contain the full set of "
+                                                       + "servers (you may want more than one, though, in case a server is down). If no server in this list is available sending "
+                                                       + "data will fail until on becomes available.";
 
-    /**
-     * The amount of time to block waiting to fetch metadata about a topic the first time a record is sent to that
-     * topic.
-     */
+    /** <code>metadata.fetch.timeout.ms</code> */
     public static final String METADATA_FETCH_TIMEOUT_CONFIG = "metadata.fetch.timeout.ms";
+    private static final String METADATA_FETCH_TIMEOUT_DOC = "The first time data is sent to a topic we must fetch metadata about that topic to know which servers host the " + "topic's partitions. This configuration controls the maximum amount of time we will block waiting for the metadata "
+                                                             + "fetch to succeed before throwing an exception back to the client.";
 
-    /**
-     * The minimum amount of time between metadata fetches. This prevents polling for metadata too quickly.
-     */
-    public static final String METADATA_FETCH_BACKOFF_CONFIG = "metadata.fetch.backoff.ms";
+    /** <code>metadata.max.age.ms</code> */
+    public static final String METADATA_MAX_AGE_CONFIG = "metadata.max.age.ms";
+    private static final String METADATA_MAX_AGE_DOC = "The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any " + " partition leadership changes to proactively discover any new brokers or partitions.";
 
-    /**
-     * The period of time in milliseconds after which we force a refresh of metadata even if we haven't seen any
-     * leadership changes.
-     */
-    public static final String METADATA_EXPIRY_CONFIG = "metadata.expiry.ms";
+    /** <code>batch.size</code> */
+    public static final String BATCH_SIZE_CONFIG = "batch.size";
+    private static final String BATCH_SIZE_DOC = "The producer will attempt to batch records together into fewer requests whenever multiple records are being sent" + " to the same partition. This helps performance on both the client and the server. This configuration controls the "
+                                                 + "default batch size in bytes. "
+                                                 + "<p>"
+                                                 + "No attempt will be made to batch records larger than this size. "
+                                                 + "<p>"
+                                                 + "Requests sent to brokers will contain multiple batches, one for each partition with data available to be sent. "
+                                                 + "<p>"
+                                                 + "A small batch size will make batching less common and may reduce throughput (a batch size of zero will disable "
+                                                 + "batching entirely). A very large batch size may use memory a bit more wastefully as we will always allocate a "
+                                                 + "buffer of the specified batch size in anticipation of additional records.";
 
-    /**
-     * The buffer size allocated for a partition. When records are received which are smaller than this size the
-     * producer will attempt to optimistically group them together until this size is reached.
-     */
-    public static final String MAX_PARTITION_SIZE_CONFIG = "max.partition.bytes";
+    /** <code>buffer.memory</code> */
+    public static final String BUFFER_MEMORY_CONFIG = "buffer.memory";
+    private static final String BUFFER_MEMORY_DOC = "The total bytes of memory the producer can use to buffer records waiting to be sent to the server. If records are " + "sent faster than they can be delivered to the server the producer will either block or throw an exception based "
+                                                    + "on the preference specified by <code>block.on.buffer.full</code>. "
+                                                    + "<p>"
+                                                    + "This setting should correspond roughly to the total memory the producer will use, but is not a hard bound since "
+                                                    + "not all memory the producer uses is used for buffering. Some additional memory will be used for compression (if "
+                                                    + "compression is enabled) as well as for maintaining in-flight requests.";
 
-    /**
-     * The total memory used by the producer to buffer records waiting to be sent to the server. If records are sent
-     * faster than they can be delivered to the server the producer will either block or throw an exception based on the
-     * preference specified by {@link #BLOCK_ON_BUFFER_FULL_CONFIG}.
-     */
-    public static final String TOTAL_BUFFER_MEMORY_CONFIG = "total.memory.bytes";
+    /** <code>acks</code> */
+    public static final String ACKS_CONFIG = "acks";
+    private static final String ACKS_DOC = "The number of acknowledgments the producer requires the leader to have received before considering a request complete. This controls the " + " durability of records that are sent. The following settings are common: "
+                                           + " <ul>"
+                                           + " <li><code>acks=0</code> If set to zero then the producer will not wait for any acknowledgment from the"
+                                           + " server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be"
+                                           + " made that the server has received the record in this case, and the <code>retries</code> configuration will not"
+                                           + " take effect (as the client won't generally know of any failures). The offset given back for each record will"
+                                           + " always be set to -1."
+                                           + " <li><code>acks=1</code> This will mean the leader will write the record to its local log but will respond"
+                                           + " without awaiting full acknowledgement from all followers. In this case should the leader fail immediately after"
+                                           + " acknowledging the record but before the followers have replicated it then the record will be lost."
+                                           + " <li><code>acks=all</code> This means the leader will wait for the full set of in-sync replicas to"
+                                           + " acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica"
+                                           + " remains alive. This is the strongest available guarantee."
+                                           + " <li>Other settings such as <code>acks=2</code> are also possible, and will require the given number of"
+                                           + " acknowledgements but this is generally less useful.";
 
-    /**
-     * The number of acknowledgments the producer requires from the server before considering a request complete.
-     */
-    public static final String REQUIRED_ACKS_CONFIG = "request.required.acks";
+    /** <code>timeout.ms</code> */
+    public static final String TIMEOUT_CONFIG = "timeout.ms";
+    private static final String TIMEOUT_DOC = "The configuration controls the maximum amount of time the server will wait for acknowledgments from followers to " + "meet the acknowledgment requirements the producer has specified with the <code>acks</code> configuration. If the "
+                                              + "requested number of acknowledgments are not met when the timeout elapses an error will be returned. This timeout "
+                                              + "is measured on the server side and does not include the network latency of the request.";
 
-    /**
-     * The maximum amount of time the server will wait for acknowledgments from followers to meet the acknowledgment
-     * requirements the producer has specified. If the requested number of acknowledgments are not met an error will be
-     * returned.
-     */
-    public static final String REQUEST_TIMEOUT_CONFIG = "request.timeout.ms";
-
-    /**
-     * The producer groups together any records that arrive in between request sends. Normally this occurs only under
-     * load when records arrive faster than they can be sent out. However the client can reduce the number of requests
-     * and increase throughput by adding a small amount of artificial delay to force more records to batch together.
-     * This setting gives an upper bound on this delay. If we get {@link #MAX_PARTITION_SIZE_CONFIG} worth of records
-     * for a partition it will be sent immediately regardless of this setting, however if we have fewer than this many
-     * bytes accumulated for this partition we will "linger" for the specified time waiting for more records to show up.
-     * This setting defaults to 0.
-     */
+    /** <code>linger.ms</code> */
     public static final String LINGER_MS_CONFIG = "linger.ms";
+    private static final String LINGER_MS_DOC = "The producer groups together any records that arrive in between request transmissions into a single batched request. " + "Normally this occurs only under load when records arrive faster than they can be sent out. However in some circumstances the client may want to "
+                                                + "reduce the number of requests even under moderate load. This setting accomplishes this by adding a small amount "
+                                                + "of artificial delay&mdash;that is, rather than immediately sending out a record the producer will wait for up to "
+                                                + "the given delay to allow other records to be sent so that the sends can be batched together. This can be thought "
+                                                + "of as analogous to Nagle's algorithm in TCP. This setting gives the upper bound on the delay for batching: once "
+                                                + "we get <code>batch.size</code> worth of records for a partition it will be sent immediately regardless of this "
+                                                + "setting, however if we have fewer than this many bytes accumulated for this partition we will 'linger' for the "
+                                                + "specified time waiting for more records to show up. This setting defaults to 0 (i.e. no delay). Setting <code>linger.ms=5</code>, "
+                                                + "for example, would have the effect of reducing the number of requests sent but would add up to 5ms of latency to records sent in the absense of load.";
 
-    /**
-     * The id string to pass to the server when making requests. The purpose of this is to be able to track the source
-     * of requests beyond just ip/port by allowing a logical application name to be included.
-     */
+    /** <code>client.id</code> */
     public static final String CLIENT_ID_CONFIG = "client.id";
+    private static final String CLIENT_ID_DOC = "The id string to pass to the server when making requests. The purpose of this is to be able to track the source " + "of requests beyond just ip/port by allowing a logical application name to be included with the request. The "
+                                                + "application can set any string it wants as this has no functional purpose other than in logging and metrics.";
 
-    /**
-     * The size of the TCP send buffer to use when sending data
-     */
+    /** <code>send.buffer.bytes</code> */
     public static final String SEND_BUFFER_CONFIG = "send.buffer.bytes";
+    private static final String SEND_BUFFER_DOC = "The size of the TCP send buffer to use when sending data";
 
-    /**
-     * The size of the TCP receive buffer to use when reading data (you generally shouldn't need to change this)
-     */
+    /** <code>receive.buffer.bytes</code> */
     public static final String RECEIVE_BUFFER_CONFIG = "receive.buffer.bytes";
+    private static final String RECEIVE_BUFFER_DOC = "The size of the TCP receive buffer to use when reading data";
 
-    /**
-     * The maximum size of a request. This is also effectively a cap on the maximum record size. Note that the server
-     * has its own cap on record size which may be different from this.
-     */
+    /** <code>max.request.size</code> */
     public static final String MAX_REQUEST_SIZE_CONFIG = "max.request.size";
+    private static final String MAX_REQUEST_SIZE_DOC = "The maximum size of a request. This is also effectively a cap on the maximum record size. Note that the server " + "has its own cap on record size which may be different from this. This setting will limit the number of record "
+                                                       + "batches the producer will send in a single request to avoid sending huge requests.";
 
-    /**
-     * The amount of time to wait before attempting to reconnect to a given host. This avoids repeated connecting to a
-     * host in a tight loop.
-     */
+    /** <code>reconnect.backoff.ms</code> */
     public static final String RECONNECT_BACKOFF_MS_CONFIG = "reconnect.backoff.ms";
+    private static final String RECONNECT_BACKOFF_MS_DOC = "The amount of time to wait before attempting to reconnect to a given host when a connection fails." + " This avoids a scenario where the client repeatedly attempts to connect to a host in a tight loop.";
 
-    /**
-     * When our memory buffer is exhausted we must either stop accepting new records (block) or throw errors. By default
-     * this setting is true and we block, however users who want to guarantee we never block can turn this into an
-     * error.
-     */
+    /** <code>block.on.buffer.full</code> */
     public static final String BLOCK_ON_BUFFER_FULL_CONFIG = "block.on.buffer.full";
+    private static final String BLOCK_ON_BUFFER_FULL_DOC = "When our memory buffer is exhausted we must either stop accepting new records (block) or throw errors. By default " + "this setting is true and we block, however in some scenarios blocking is not desirable and it is better to "
+                                                           + "immediately give an error. Setting this to <code>false</code> will accomplish that: the producer will throw a BufferExhaustedException if a recrord is sent and the buffer space is full.";
 
-    /**
-     * The maximum number of times to attempt resending the request before giving up.
-     */
-    public static final String MAX_RETRIES_CONFIG = "request.retries";
+    /** <code>retries</code> */
+    public static final String RETRIES_CONFIG = "retries";
+    private static final String RETRIES_DOC = "Setting a value greater than zero will cause the client to resend any record whose send fails with a potentially transient error." + " Note that this retry is no different than if the client resent the record upon receiving the "
+                                              + "error. Allowing retries will potentially change the ordering of records because if two records are "
+                                              + "sent to a single partition, and the first fails and is retried but the second succeeds, then the second record "
+                                              + "may appear first.";
 
-    /**
-     * The amount of time to wait before attempting to resend produce request to a given topic partition. This avoids
-     * repeated sending-and-failing in a tight loop
-     */
+    /** <code>retry.backoff.ms</code> */
     public static final String RETRY_BACKOFF_MS_CONFIG = "retry.backoff.ms";
+    private static final String RETRY_BACKOFF_MS_DOC = "The amount of time to wait before attempting to retry a failed produce request to a given topic partition." + " This avoids repeated sending-and-failing in a tight loop.";
 
-    /**
-     * The compression type for all data generated. The default is none (i.e. no compression)
-     */
+    /** <code>compression.type</code> */
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
+    private static final String COMPRESSION_TYPE_DOC = "The compression type for all data generated by the producer. The default is none (i.e. no compression). Valid " + " values are <code>none</code>, <code>gzip</code>, or <code>snappy</code>. Compression is of full batches of data, "
+                                                       + " so the efficacy of batching will also impact the compression ratio (more batching means better compression).";
 
-    /**
-     * The window size for a single metrics sample in ms. Defaults to 30 seconds.
-     */
-    public static final String METRICS_SAMPLE_WINDOW_MS = "metrics.sample.window.ms";
+    /** <code>metrics.sample.window.ms</code> */
+    public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = "metrics.sample.window.ms";
+    private static final String METRICS_SAMPLE_WINDOW_MS_DOC = "The metrics system maintains a configurable number of samples over a fixed window size. This configuration " + "controls the size of the window. For example we might maintain two samples each measured over a 30 second period. "
+                                                               + "When a window expires we erase and overwrite the oldest window.";
 
-    /**
-     * The number of samples used when reporting metrics. Defaults to two. So by default we use two 30 second windows,
-     * so metrics are computed over up to 60 seconds.
-     */
-    public static final String METRICS_NUM_SAMPLES = "metrics.num.samples";
+    /** <code>metrics.num.samples</code> */
+    public static final String METRICS_NUM_SAMPLES_CONFIG = "metrics.num.samples";
+    private static final String METRICS_NUM_SAMPLES_DOC = "The number of samples maintained to compute metrics.";
 
-    /**
-     * Should we register the Kafka metrics as JMX mbeans?
-     */
-    public static final String ENABLE_JMX_CONFIG = "enable.jmx";
+    /** <code>metric.reporters</code> */
+    public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
+    private static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>MetricReporter</code> interface allows " + "plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
 
     static {
-        /* TODO: add docs */
-        config = new ConfigDef().define(BROKER_LIST_CONFIG, Type.LIST, "blah blah")
-                                .define(METADATA_FETCH_TIMEOUT_CONFIG, Type.LONG, 60 * 1000, atLeast(0), "blah blah")
-                                .define(METADATA_FETCH_BACKOFF_CONFIG, Type.LONG, 50, atLeast(0), "blah blah")
-                                .define(METADATA_EXPIRY_CONFIG, Type.LONG, 5 * 60 * 1000, atLeast(0), "blah blah")
-                                .define(MAX_PARTITION_SIZE_CONFIG, Type.INT, 16384, atLeast(0), "blah blah")
-                                .define(TOTAL_BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), "blah blah")
-                                /* TODO: should be a string to handle acks=in-sync */
-                                .define(REQUIRED_ACKS_CONFIG, Type.INT, 1, between(-1, Short.MAX_VALUE), "blah blah")
-                                .define(REQUEST_TIMEOUT_CONFIG, Type.INT, 30 * 1000, atLeast(0), "blah blah")
-                                .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0L), "blah blah")
-                                .define(CLIENT_ID_CONFIG, Type.STRING, "", "blah blah")
-                                .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(0), "blah blah")
-                                .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(0), "blah blah")
-                                .define(MAX_REQUEST_SIZE_CONFIG, Type.INT, 1 * 1024 * 1024, atLeast(0), "blah blah")
-                                .define(RECONNECT_BACKOFF_MS_CONFIG, Type.LONG, 10L, atLeast(0L), "blah blah")
-                                .define(BLOCK_ON_BUFFER_FULL_CONFIG, Type.BOOLEAN, true, "blah blah")
-                                .define(MAX_RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), "")
-                                .define(RETRY_BACKOFF_MS_CONFIG, Type.LONG, 100L, atLeast(0L), "blah blah")
-                                .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", "blah blah")
-                                .define(ENABLE_JMX_CONFIG, Type.BOOLEAN, true, "")
-                                .define(METRICS_SAMPLE_WINDOW_MS, Type.LONG, 30000, atLeast(0), "")
-                                .define(METRICS_NUM_SAMPLES, Type.INT, 2, atLeast(1), "");
+        config = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, BOOSTRAP_SERVERS_DOC)
+                                .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
+                                .define(RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
+                                .define(ACKS_CONFIG, Type.STRING, "1", Importance.HIGH, ACKS_DOC)
+                                .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", Importance.HIGH, COMPRESSION_TYPE_DOC)
+                                .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
+                                .define(TIMEOUT_CONFIG, Type.INT, 30 * 1000, atLeast(0), Importance.MEDIUM, TIMEOUT_DOC)
+                                .define(LINGER_MS_CONFIG, Type.LONG, 0, atLeast(0L), Importance.MEDIUM, LINGER_MS_DOC)
+                                .define(CLIENT_ID_CONFIG, Type.STRING, "", Importance.MEDIUM, CLIENT_ID_DOC)
+                                .define(SEND_BUFFER_CONFIG, Type.INT, 128 * 1024, atLeast(0), Importance.MEDIUM, SEND_BUFFER_DOC)
+                                .define(RECEIVE_BUFFER_CONFIG, Type.INT, 32 * 1024, atLeast(0), Importance.MEDIUM, RECEIVE_BUFFER_DOC)
+                                .define(MAX_REQUEST_SIZE_CONFIG,
+                                        Type.INT,
+                                        1 * 1024 * 1024,
+                                        atLeast(0),
+                                        Importance.MEDIUM,
+                                        MAX_REQUEST_SIZE_DOC)
+                                .define(BLOCK_ON_BUFFER_FULL_CONFIG, Type.BOOLEAN, true, Importance.LOW, BLOCK_ON_BUFFER_FULL_DOC)
+                                .define(RECONNECT_BACKOFF_MS_CONFIG, Type.LONG, 10L, atLeast(0L), Importance.LOW, RECONNECT_BACKOFF_MS_DOC)
+                                .define(METRIC_REPORTER_CLASSES_CONFIG, Type.LIST, "", Importance.LOW, METRIC_REPORTER_CLASSES_DOC)
+                                .define(RETRY_BACKOFF_MS_CONFIG, Type.LONG, 100L, atLeast(0L), Importance.LOW, RETRY_BACKOFF_MS_DOC)
+                                .define(METADATA_FETCH_TIMEOUT_CONFIG,
+                                        Type.LONG,
+                                        60 * 1000,
+                                        atLeast(0),
+                                        Importance.LOW,
+                                        METADATA_FETCH_TIMEOUT_DOC)
+                                .define(METADATA_MAX_AGE_CONFIG, Type.LONG, 5 * 60 * 1000, atLeast(0), Importance.LOW, METADATA_MAX_AGE_DOC)
+                                .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
+                                        Type.LONG,
+                                        30000,
+                                        atLeast(0),
+                                        Importance.LOW,
+                                        METRICS_SAMPLE_WINDOW_MS_DOC)
+                                .define(METRICS_NUM_SAMPLES_CONFIG, Type.INT, 2, atLeast(1), Importance.LOW, METRICS_NUM_SAMPLES_DOC);
     }
 
     ProducerConfig(Map<? extends Object, ? extends Object> props) {
         super(config, props);
+    }
+
+    public static void main(String[] args) {
+        System.out.println(config.toHtmlTable());
     }
 
 }

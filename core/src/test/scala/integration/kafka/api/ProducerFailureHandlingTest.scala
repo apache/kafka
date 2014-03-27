@@ -67,11 +67,11 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
   private def makeProducer(brokerList: String, acks: Int, metadataFetchTimeout: Long,
                            blockOnBufferFull: Boolean, bufferSize: Long) : KafkaProducer = {
     val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BROKER_LIST_CONFIG, brokerList)
-    producerProps.put(ProducerConfig.REQUIRED_ACKS_CONFIG, acks.toString)
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.ACKS_CONFIG, acks.toString)
     producerProps.put(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG, metadataFetchTimeout.toString)
     producerProps.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, blockOnBufferFull.toString)
-    producerProps.put(ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG, bufferSize.toString)
+    producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
     return new KafkaProducer(producerProps)
   }
 
@@ -314,10 +314,10 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     var failed = false
 
     val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BROKER_LIST_CONFIG, brokerList)
-    producerProps.put(ProducerConfig.REQUIRED_ACKS_CONFIG, (-1).toString)
-    producerProps.put(ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG, bufferSize.toString)
-    producerProps.put(ProducerConfig.MAX_RETRIES_CONFIG, 10.toString)
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.ACKS_CONFIG, (-1).toString)
+    producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
+    producerProps.put(ProducerConfig.RETRIES_CONFIG, 10.toString)
     producerProps.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, 1000.toString)
     val producer = new KafkaProducer(producerProps)
 
