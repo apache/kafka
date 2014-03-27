@@ -28,8 +28,8 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -91,26 +91,26 @@ public final class RecordAccumulator {
 
     private void registerMetrics(Metrics metrics) {
         metrics.addMetric("blocked_threads",
-                          "The number of user threads blocked waiting for buffer memory to enqueue their records",
-                          new Measurable() {
+            "The number of user threads blocked waiting for buffer memory to enqueue their records",
+            new Measurable() {
                               public double measure(MetricConfig config, long now) {
                                   return free.queued();
                               }
                           });
         metrics.addMetric("buffer_total_bytes",
-                          "The total amount of buffer memory that is available (not currently used for buffering records).",
-                          new Measurable() {
+            "The total amount of buffer memory that is available (not currently used for buffering records).",
+            new Measurable() {
                               public double measure(MetricConfig config, long now) {
                                   return free.totalMemory();
                               }
                           });
         metrics.addMetric("buffer_available_bytes",
-                          "The total amount of buffer memory that is available (not currently used for buffering records).",
-                          new Measurable() {
-                              public double measure(MetricConfig config, long now) {
-                                  return free.availableMemory();
-                              }
-                          });
+            "The total amount of buffer memory that is available (not currently used for buffering records).",
+            new Measurable() {
+                public double measure(MetricConfig config, long now) {
+                    return free.availableMemory();
+                }
+            });
     }
 
     /**
@@ -132,7 +132,7 @@ public final class RecordAccumulator {
         synchronized (dq) {
             RecordBatch batch = dq.peekLast();
             if (batch != null) {
-                FutureRecordMetadata future = batch.tryAppend(key, value, compression, callback);
+                FutureRecordMetadata future = batch.tryAppend(key, value, callback);
                 if (future != null)
                     return future;
             }
@@ -145,7 +145,7 @@ public final class RecordAccumulator {
         synchronized (dq) {
             RecordBatch last = dq.peekLast();
             if (last != null) {
-                FutureRecordMetadata future = last.tryAppend(key, value, compression, callback);
+                FutureRecordMetadata future = last.tryAppend(key, value, callback);
                 if (future != null) {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen
                     // often...
@@ -153,8 +153,10 @@ public final class RecordAccumulator {
                     return future;
                 }
             }
-            RecordBatch batch = new RecordBatch(tp, new MemoryRecords(buffer), time.milliseconds());
-            FutureRecordMetadata future = Utils.notNull(batch.tryAppend(key, value, compression, callback));
+            MemoryRecords records = MemoryRecords.emptyRecords(buffer, compression);
+            RecordBatch batch = new RecordBatch(tp, records, time.milliseconds());
+            FutureRecordMetadata future = Utils.notNull(batch.tryAppend(key, value, callback));
+
             dq.addLast(batch);
             return future;
         }
@@ -193,7 +195,7 @@ public final class RecordAccumulator {
                 RecordBatch batch = deque.peekFirst();
                 if (batch != null) {
                     boolean backingOff = batch.attempts > 0 && batch.lastAttempt + retryBackoffMs > now;
-                    boolean full = deque.size() > 1 || !batch.records.buffer().hasRemaining();
+                    boolean full = deque.size() > 1 || batch.records.isFull();
                     boolean expired = now - batch.created >= lingerMs;
                     boolean sendable = full || expired || exhausted || closed;
                     if (sendable && !backingOff)
@@ -239,10 +241,15 @@ public final class RecordAccumulator {
             Deque<RecordBatch> deque = dequeFor(tp);
             if (deque != null) {
                 synchronized (deque) {
-                    if (size + deque.peekFirst().records.sizeInBytes() > maxSize) {
+                    RecordBatch first = deque.peekFirst();
+                    if (size + first.records.sizeInBytes() > maxSize && !ready.isEmpty()) {
+                        // there is a rare case that a single batch size is larger than the request size due
+                        // to compression; in this case we will still eventually send this batch in a single
+                        // request
                         return ready;
                     } else {
                         RecordBatch batch = deque.pollFirst();
+                        batch.records.close();
                         size += batch.records.sizeInBytes();
                         ready.add(batch);
                     }
@@ -269,7 +276,7 @@ public final class RecordAccumulator {
      * Deallocate the record batch
      */
     public void deallocate(RecordBatch batch) {
-        free.deallocate(batch.records.buffer());
+        free.deallocate(batch.records.buffer(), batch.records.capacity());
     }
 
     /**

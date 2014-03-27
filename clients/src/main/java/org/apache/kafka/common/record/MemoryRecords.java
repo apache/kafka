@@ -16,53 +16,99 @@
  */
 package org.apache.kafka.common.record;
 
+import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 import java.util.Iterator;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.AbstractIterator;
-
 
 /**
  * A {@link Records} implementation backed by a ByteBuffer.
  */
 public class MemoryRecords implements Records {
 
-    private final ByteBuffer buffer;
+    private final Compressor compressor;
+    private final int capacity;
+    private ByteBuffer buffer;
+    private boolean writable;
 
-    public MemoryRecords(int size) {
-        this(ByteBuffer.allocate(size));
+    // Construct a writable memory records
+    private MemoryRecords(ByteBuffer buffer, CompressionType type, boolean writable) {
+        this.writable = writable;
+        this.capacity = buffer.capacity();
+        if (this.writable) {
+            this.buffer = null;
+            this.compressor = new Compressor(buffer, type);
+        } else {
+            this.buffer = buffer;
+            this.compressor = null;
+        }
     }
 
-    public MemoryRecords(ByteBuffer buffer) {
-        this.buffer = buffer;
+    public static MemoryRecords emptyRecords(ByteBuffer buffer, CompressionType type) {
+        return new MemoryRecords(buffer, type, true);
+    }
+
+    public static MemoryRecords iterableRecords(ByteBuffer buffer) {
+        return new MemoryRecords(buffer, CompressionType.NONE, false);
     }
 
     /**
      * Append the given record and offset to the buffer
      */
     public void append(long offset, Record record) {
-        buffer.putLong(offset);
-        buffer.putInt(record.size());
-        buffer.put(record.buffer());
+        if (!writable)
+            throw new IllegalStateException("Memory records is not writable");
+
+        int size = record.size();
+        compressor.putLong(offset);
+        compressor.putInt(size);
+        compressor.put(record.buffer());
+        compressor.recordWritten(size + Records.LOG_OVERHEAD);
         record.buffer().rewind();
     }
 
     /**
      * Append a new record and offset to the buffer
      */
-    public void append(long offset, byte[] key, byte[] value, CompressionType type) {
-        buffer.putLong(offset);
-        buffer.putInt(Record.recordSize(key, value));
-        Record.write(this.buffer, key, value, type);
+    public void append(long offset, byte[] key, byte[] value) {
+        if (!writable)
+            throw new IllegalStateException("Memory records is not writable");
+
+        int size = Record.recordSize(key, value);
+        compressor.putLong(offset);
+        compressor.putInt(size);
+        compressor.putRecord(key, value);
+        compressor.recordWritten(size + Records.LOG_OVERHEAD);
     }
 
     /**
      * Check if we have room for a new record containing the given key/value pair
+     *
+     * Note that the return value is based on the estimate of the bytes written to the compressor,
+     * which may not be accurate if compression is really used. When this happens, the following
+     * append may cause dynamic buffer re-allocation in the underlying byte buffer stream.
      */
     public boolean hasRoomFor(byte[] key, byte[] value) {
-        return this.buffer.remaining() >= Records.LOG_OVERHEAD + Record.recordSize(key, value);
+        return this.writable &&
+            this.capacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value);
+    }
+
+    public boolean isFull() {
+        return !this.writable || this.capacity <= this.compressor.estimatedBytesWritten();
+    }
+
+    /**
+     * Close this batch for no more appends
+     */
+    public void close() {
+        compressor.close();
+        writable = false;
+        buffer = compressor.buffer();
     }
 
     /** Write the records in this set to the given channel */
@@ -74,7 +120,14 @@ public class MemoryRecords implements Records {
      * The size of this record set
      */
     public int sizeInBytes() {
-        return this.buffer.position();
+        return compressor.buffer().position();
+    }
+
+    /**
+     * Return the capacity of the buffer
+     */
+    public int capacity() {
+        return this.capacity;
     }
 
     /**
@@ -86,34 +139,79 @@ public class MemoryRecords implements Records {
 
     @Override
     public Iterator<LogEntry> iterator() {
-        return new RecordsIterator(this.buffer);
+        ByteBuffer copy = (ByteBuffer) this.buffer.duplicate().flip();
+        return new RecordsIterator(copy, CompressionType.NONE, false);
     }
 
-    /* TODO: allow reuse of the buffer used for iteration */
     public static class RecordsIterator extends AbstractIterator<LogEntry> {
         private final ByteBuffer buffer;
+        private final DataInputStream stream;
+        private final CompressionType type;
+        private final boolean shallow;
+        private RecordsIterator innerIter;
 
-        public RecordsIterator(ByteBuffer buffer) {
-            ByteBuffer copy = buffer.duplicate();
-            copy.flip();
-            this.buffer = copy;
+        public RecordsIterator(ByteBuffer buffer, CompressionType type, boolean shallow) {
+            this.type = type;
+            this.buffer = buffer;
+            this.shallow = shallow;
+            stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type);
         }
 
+        /*
+         * Read the next record from the buffer.
+         *
+         * Note that in the compressed message set, each message value size is set as the size
+         * of the un-compressed version of the message value, so when we do de-compression
+         * allocating an array of the specified size for reading compressed value data is sufficient.
+         */
         @Override
         protected LogEntry makeNext() {
-            if (buffer.remaining() < Records.LOG_OVERHEAD)
-                return allDone();
-            long offset = buffer.getLong();
-            int size = buffer.getInt();
-            if (size < 0)
-                throw new IllegalStateException("Record with size " + size);
-            if (buffer.remaining() < size)
-                return allDone();
-            ByteBuffer rec = buffer.slice();
-            rec.limit(size);
-            this.buffer.position(this.buffer.position() + size);
-            return new LogEntry(offset, new Record(rec));
+            if (innerDone()) {
+                try {
+                    // read the offset
+                    long offset = stream.readLong();
+                    // read record size
+                    int size = stream.readInt();
+                    if (size < 0)
+                        throw new IllegalStateException("Record with size " + size);
+                    // read the record, if compression is used we cannot depend on size
+                    // and hence has to do extra copy
+                    ByteBuffer rec;
+                    if (type == CompressionType.NONE) {
+                        rec = buffer.slice();
+                        buffer.position(buffer.position() + size);
+                        rec.limit(size);
+                    } else {
+                        byte[] recordBuffer = new byte[size];
+                        stream.read(recordBuffer, 0, size);
+                        rec = ByteBuffer.wrap(recordBuffer);
+                    }
+                    LogEntry entry = new LogEntry(offset, new Record(rec));
+                    entry.record().ensureValid();
+
+                    // decide whether to go shallow or deep iteration if it is compressed
+                    CompressionType compression = entry.record().compressionType();
+                    if (compression == CompressionType.NONE || shallow) {
+                        return entry;
+                    } else {
+                        // init the inner iterator with the value payload of the message,
+                        // which will de-compress the payload to a set of messages
+                        ByteBuffer value = entry.record().value();
+                        innerIter = new RecordsIterator(value, compression, true);
+                        return innerIter.next();
+                    }
+                } catch (EOFException e) {
+                    return allDone();
+                } catch (IOException e) {
+                    throw new KafkaException(e);
+                }
+            } else {
+                return innerIter.next();
+            }
+        }
+
+        private boolean innerDone() {
+            return (innerIter == null || !innerIter.hasNext());
         }
     }
-
 }

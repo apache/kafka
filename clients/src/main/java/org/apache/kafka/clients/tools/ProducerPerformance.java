@@ -29,8 +29,8 @@ import org.apache.kafka.common.record.Records;
 public class ProducerPerformance {
 
     public static void main(String[] args) throws Exception {
-        if (args.length != 5) {
-            System.err.println("USAGE: java " + ProducerPerformance.class.getName() + " url topic_name num_records record_size acks");
+        if (args.length < 5) {
+            System.err.println("USAGE: java " + ProducerPerformance.class.getName() + " url topic_name num_records record_size acks [compression_type]");
             System.exit(1);
         }
         String url = args[0];
@@ -45,6 +45,8 @@ public class ProducerPerformance {
         props.setProperty(ProducerConfig.REQUEST_TIMEOUT_CONFIG, Integer.toString(Integer.MAX_VALUE));
         props.setProperty(ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG, Integer.toString(256 * 1024 * 1024));
         props.setProperty(ProducerConfig.MAX_PARTITION_SIZE_CONFIG, Integer.toString(256 * 1024));
+        if (args.length == 6)
+            props.setProperty(ProducerConfig.COMPRESSION_TYPE_CONFIG, args[5]);
 
         KafkaProducer producer = new KafkaProducer(props);
         Callback callback = new Callback() {

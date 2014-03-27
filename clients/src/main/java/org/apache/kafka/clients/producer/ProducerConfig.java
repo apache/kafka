@@ -136,6 +136,11 @@ public class ProducerConfig extends AbstractConfig {
     public static final String RETRY_BACKOFF_MS_CONFIG = "retry.backoff.ms";
 
     /**
+     * The compression type for all data generated. The default is none (i.e. no compression)
+     */
+    public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
+
+    /**
      * Should we register the Kafka metrics as JMX mbeans?
      */
     public static final String ENABLE_JMX_CONFIG = "enable.jmx";
@@ -158,9 +163,10 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(MAX_REQUEST_SIZE_CONFIG, Type.INT, 1 * 1024 * 1024, atLeast(0), "blah blah")
                                 .define(RECONNECT_BACKOFF_MS_CONFIG, Type.LONG, 10L, atLeast(0L), "blah blah")
                                 .define(BLOCK_ON_BUFFER_FULL_CONFIG, Type.BOOLEAN, true, "blah blah")
-                                .define(ENABLE_JMX_CONFIG, Type.BOOLEAN, true, "")
                                 .define(MAX_RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), "")
-                                .define(RETRY_BACKOFF_MS_CONFIG, Type.LONG, 100L, atLeast(0L), "blah blah");
+                                .define(RETRY_BACKOFF_MS_CONFIG, Type.LONG, 100L, atLeast(0L), "blah blah")
+                                .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", "blah blah")
+                                .define(ENABLE_JMX_CONFIG, Type.BOOLEAN, true, "");
     }
 
     ProducerConfig(Map<? extends Object, ? extends Object> props) {

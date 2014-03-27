@@ -88,7 +88,7 @@ public class TestUtils {
     /**
      * Generate an array of random bytes
      * 
-     * @param numBytes The size of the array
+     * @param size The size of the array
      */
     public static byte[] randomBytes(int size) {
         byte[] bytes = new byte[size];

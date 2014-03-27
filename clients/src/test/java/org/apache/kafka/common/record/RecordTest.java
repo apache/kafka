@@ -27,9 +27,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 
-import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.InvalidRecordException;
-import org.apache.kafka.common.record.Record;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -66,6 +63,10 @@ public class RecordTest {
     @Test
     public void testChecksum() {
         assertEquals(record.checksum(), record.computeChecksum());
+        assertEquals(record.checksum(), record.computeChecksum(
+            this.key == null ? null : this.key.array(),
+            this.value == null ? null : this.value.array(),
+            this.compression, 0, -1));
         assertTrue(record.isValid());
         for (int i = Record.CRC_OFFSET + Record.CRC_LENGTH; i < record.size(); i++) {
             Record copy = copyOf(record);
@@ -95,9 +96,11 @@ public class RecordTest {
 
     @Parameters
     public static Collection<Object[]> data() {
+        byte[] payload = new byte[1000];
+        Arrays.fill(payload, (byte) 1);
         List<Object[]> values = new ArrayList<Object[]>();
-        for (byte[] key : Arrays.asList(null, "".getBytes(), "key".getBytes()))
-            for (byte[] value : Arrays.asList(null, "".getBytes(), "value".getBytes()))
+        for (byte[] key : Arrays.asList(null, "".getBytes(), "key".getBytes(), payload))
+            for (byte[] value : Arrays.asList(null, "".getBytes(), "value".getBytes(), payload))
                 for (CompressionType compression : CompressionType.values())
                     values.add(new Object[] { key, value, compression });
         return values;

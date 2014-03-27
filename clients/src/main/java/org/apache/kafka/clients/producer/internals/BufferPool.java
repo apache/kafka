@@ -71,7 +71,7 @@ public final class BufferPool {
      * @param size The buffer size to allocate in bytes
      * @return The buffer
      * @throws InterruptedException If the thread is interrupted while blocked
-     * @throws IllegalArgument if size is larger than the total memory controlled by the pool (and hence we would block
+     * @throws IllegalArgumentException if size is larger than the total memory controlled by the pool (and hence we would block
      *         forever)
      * @throws BufferExhaustedException if the pool is in non-blocking mode and size exceeds the free memory in the pool
      */
@@ -167,26 +167,29 @@ public final class BufferPool {
      * Return buffers to the pool. If they are of the poolable size add them to the free list, otherwise just mark the
      * memory as free.
      * 
-     * @param buffers The buffers to return
+     * @param buffer The buffer to return
+     * @param size The size of the buffer to mark as deallocated, note that this maybe smaller than buffer.capacity
+     *             since the buffer may re-allocate itself during in-place compression
      */
-    public void deallocate(ByteBuffer... buffers) {
+    public void deallocate(ByteBuffer buffer, int size) {
         lock.lock();
         try {
-            for (int i = 0; i < buffers.length; i++) {
-                int size = buffers[i].capacity();
-                if (size == this.poolableSize) {
-                    buffers[i].clear();
-                    this.free.add(buffers[i]);
-                } else {
-                    this.availableMemory += size;
-                }
-                Condition moreMem = this.waiters.peekFirst();
-                if (moreMem != null)
-                    moreMem.signal();
+            if (size == this.poolableSize && size == buffer.capacity()) {
+                buffer.clear();
+                this.free.add(buffer);
+            } else {
+                this.availableMemory += size;
             }
+            Condition moreMem = this.waiters.peekFirst();
+            if (moreMem != null)
+                moreMem.signal();
         } finally {
             lock.unlock();
         }
+    }
+
+    public void deallocate(ByteBuffer buffer) {
+        deallocate(buffer, buffer.capacity());
     }
 
     /**

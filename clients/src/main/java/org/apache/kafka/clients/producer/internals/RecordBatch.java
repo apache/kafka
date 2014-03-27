@@ -17,7 +17,6 @@ import java.util.List;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,11 +53,11 @@ public final class RecordBatch {
      * 
      * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
      */
-    public FutureRecordMetadata tryAppend(byte[] key, byte[] value, CompressionType compression, Callback callback) {
+    public FutureRecordMetadata tryAppend(byte[] key, byte[] value, Callback callback) {
         if (!this.records.hasRoomFor(key, value)) {
             return null;
         } else {
-            this.records.append(0L, key, value, compression);
+            this.records.append(0L, key, value);
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount);
             if (callback != null)
                 thunks.add(new Thunk(callback, future));
@@ -71,7 +70,7 @@ public final class RecordBatch {
      * Complete the request
      * 
      * @param baseOffset The base offset of the messages assigned by the server
-     * @param errorCode The error code or 0 if no error
+     * @param exception The exception returned or null if no exception
      */
     public void done(long baseOffset, RuntimeException exception) {
         this.produceFuture.done(topicPartition, baseOffset, exception);

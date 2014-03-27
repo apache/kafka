@@ -92,30 +92,6 @@ public class Utils {
     }
 
     /**
-     * Compute the CRC32 of the byte array
-     * 
-     * @param bytes The array to compute the checksum for
-     * @return The CRC32
-     */
-    public static long crc32(byte[] bytes) {
-        return crc32(bytes, 0, bytes.length);
-    }
-
-    /**
-     * Compute the CRC32 of the segment of the byte array given by the specificed size and offset
-     * 
-     * @param bytes The bytes to checksum
-     * @param offset the offset at which to begin checksumming
-     * @param size the number of bytes to checksum
-     * @return The CRC32
-     */
-    public static long crc32(byte[] bytes, int offset, int size) {
-        Crc32 crc = new Crc32();
-        crc.update(bytes, offset, size);
-        return crc.getValue();
-    }
-
-    /**
      * Get the absolute value of the given number. If the number is Int.MinValue return 0. This is different from
      * java.lang.Math.abs or scala.math.abs in that they return Int.MinValue (!).
      */

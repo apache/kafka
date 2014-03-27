@@ -20,14 +20,16 @@ package org.apache.kafka.common.record;
  * The compression type to use
  */
 public enum CompressionType {
-    NONE(0, "none"), GZIP(1, "gzip"), SNAPPY(2, "snappy");
+    NONE(0, "none", 1.0f), GZIP(1, "gzip", 0.5f), SNAPPY(2, "snappy", 0.5f);
 
     public final int id;
     public final String name;
+    public final float rate;
 
-    private CompressionType(int id, String name) {
+    private CompressionType(int id, String name, float rate) {
         this.id = id;
         this.name = name;
+        this.rate = rate;
     }
 
     public static CompressionType forId(int id) {
@@ -53,4 +55,5 @@ public enum CompressionType {
         else
             throw new IllegalArgumentException("Unknown compression name: " + name);
     }
+
 }

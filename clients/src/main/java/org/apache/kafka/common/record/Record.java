@@ -18,6 +18,7 @@ package org.apache.kafka.common.record;
 
 import java.nio.ByteBuffer;
 
+import org.apache.kafka.common.utils.Crc32;
 import org.apache.kafka.common.utils.Utils;
 
 
@@ -40,13 +41,15 @@ public final class Record {
     public static final int KEY_OFFSET = KEY_SIZE_OFFSET + KEY_SIZE_LENGTH;
     public static final int VALUE_SIZE_LENGTH = 4;
 
-    /** The amount of overhead bytes in a record */
-    public static final int RECORD_OVERHEAD = KEY_OFFSET + VALUE_SIZE_LENGTH;
+    /**
+     * The size for the record header
+     */
+    public static final int HEADER_SIZE = CRC_LENGTH + MAGIC_LENGTH + ATTRIBUTE_LENGTH;
 
     /**
-     * The minimum valid size for the record header
+     * The amount of overhead bytes in a record
      */
-    public static final int MIN_HEADER_SIZE = CRC_LENGTH + MAGIC_LENGTH + ATTRIBUTE_LENGTH + KEY_SIZE_LENGTH + VALUE_SIZE_LENGTH;
+    public static final int RECORD_OVERHEAD = HEADER_SIZE + KEY_SIZE_LENGTH + VALUE_SIZE_LENGTH;
 
     /**
      * The current "magic" value
@@ -71,27 +74,29 @@ public final class Record {
     }
 
     /**
-     * A constructor to create a LogRecord
+     * A constructor to create a LogRecord. If the record's compression type is not none, then
+     * its value payload should be already compressed with the specified type; the constructor
+     * would always write the value payload as is and will not do the compression itself.
      * 
      * @param key The key of the record (null, if none)
      * @param value The record value
-     * @param codec The compression codec used on the contents of the record (if any)
+     * @param type The compression type used on the contents of the record (if any)
      * @param valueOffset The offset into the payload array used to extract payload
      * @param valueSize The size of the payload to use
      */
-    public Record(byte[] key, byte[] value, CompressionType codec, int valueOffset, int valueSize) {
-        this(ByteBuffer.allocate(recordSize(key == null ? 0 : key.length, value == null ? 0 : valueSize >= 0 ? valueSize
-                                                                                                            : value.length - valueOffset)));
-        write(this.buffer, key, value, codec, valueOffset, valueSize);
+    public Record(byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
+        this(ByteBuffer.allocate(recordSize(key == null ? 0 : key.length,
+            value == null ? 0 : valueSize >= 0 ? valueSize : value.length - valueOffset)));
+        write(this.buffer, key, value, type, valueOffset, valueSize);
         this.buffer.rewind();
     }
 
-    public Record(byte[] key, byte[] value, CompressionType codec) {
-        this(key, value, codec, 0, -1);
+    public Record(byte[] key, byte[] value, CompressionType type) {
+        this(key, value, type, 0, -1);
     }
 
-    public Record(byte[] value, CompressionType codec) {
-        this(null, value, codec);
+    public Record(byte[] value, CompressionType type) {
+        this(null, value, type);
     }
 
     public Record(byte[] key, byte[] value) {
@@ -102,40 +107,37 @@ public final class Record {
         this(null, value, CompressionType.NONE);
     }
 
-    public static void write(ByteBuffer buffer, byte[] key, byte[] value, CompressionType codec, int valueOffset, int valueSize) {
-        // skip crc, we will fill that in at the end
-        int pos = buffer.position();
-        buffer.position(pos + MAGIC_OFFSET);
-        buffer.put(CURRENT_MAGIC_VALUE);
-        byte attributes = 0;
-        if (codec.id > 0)
-            attributes = (byte) (attributes | (COMPRESSION_CODEC_MASK & codec.id));
-        buffer.put(attributes);
+    // Write a record to the buffer, if the record's compression type is none, then
+    // its value payload should be already compressed with the specified type
+    public static void write(ByteBuffer buffer, byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
+        // construct the compressor with compression type none since this function will not do any
+        //compression according to the input type, it will just write the record's payload as is
+        Compressor compressor = new Compressor(buffer, CompressionType.NONE, buffer.capacity());
+        compressor.putRecord(key, value, type, valueOffset, valueSize);
+    }
+
+    public static void write(Compressor compressor, long crc, byte attributes, byte[] key, byte[] value, int valueOffset, int valueSize) {
+        // write crc
+        compressor.putInt((int) (crc & 0xffffffffL));
+        // write magic value
+        compressor.putByte(CURRENT_MAGIC_VALUE);
+        // write attributes
+        compressor.putByte(attributes);
         // write the key
         if (key == null) {
-            buffer.putInt(-1);
+            compressor.putInt(-1);
         } else {
-            buffer.putInt(key.length);
-            buffer.put(key, 0, key.length);
+            compressor.putInt(key.length);
+            compressor.put(key, 0, key.length);
         }
         // write the value
         if (value == null) {
-            buffer.putInt(-1);
+            compressor.putInt(-1);
         } else {
             int size = valueSize >= 0 ? valueSize : (value.length - valueOffset);
-            buffer.putInt(size);
-            buffer.put(value, valueOffset, size);
+            compressor.putInt(size);
+            compressor.put(value, valueOffset, size);
         }
-
-        // now compute the checksum and fill it in
-        long crc = computeChecksum(buffer,
-                                   buffer.arrayOffset() + pos + MAGIC_OFFSET,
-                                   buffer.position() - pos - MAGIC_OFFSET - buffer.arrayOffset());
-        Utils.writeUnsignedInt(buffer, pos + CRC_OFFSET, crc);
-    }
-
-    public static void write(ByteBuffer buffer, byte[] key, byte[] value, CompressionType codec) {
-        write(buffer, key, value, codec, 0, -1);
     }
 
     public static int recordSize(byte[] key, byte[] value) {
@@ -150,12 +152,50 @@ public final class Record {
         return this.buffer;
     }
 
+    public static byte computeAttributes(CompressionType type) {
+        byte attributes = 0;
+        if (type.id > 0)
+            attributes = (byte) (attributes | (COMPRESSION_CODEC_MASK & type.id));
+        return attributes;
+    }
+
     /**
      * Compute the checksum of the record from the record contents
      */
     public static long computeChecksum(ByteBuffer buffer, int position, int size) {
-        return Utils.crc32(buffer.array(), buffer.arrayOffset() + position, size - buffer.arrayOffset());
+        Crc32 crc = new Crc32();
+        crc.update(buffer.array(), buffer.arrayOffset() + position, size);
+        return crc.getValue();
     }
+
+    /**
+     * Compute the checksum of the record from the attributes, key and value payloads
+     */
+    public static long computeChecksum(byte[] key, byte[] value, CompressionType type, int valueOffset, int valueSize) {
+        Crc32 crc = new Crc32();
+        crc.update(CURRENT_MAGIC_VALUE);
+        byte attributes = 0;
+        if (type.id > 0)
+            attributes = (byte) (attributes | (COMPRESSION_CODEC_MASK & type.id));
+        crc.update(attributes);
+        // update for the key
+        if (key == null) {
+            crc.updateInt(-1);
+        } else {
+            crc.updateInt(key.length);
+            crc.update(key, 0, key.length);
+        }
+        // update for the value
+        if (value == null) {
+            crc.updateInt(-1);
+        } else {
+            int size = valueSize >= 0 ? valueSize : (value.length - valueOffset);
+            crc.updateInt(size);
+            crc.update(value, valueOffset, size);
+        }
+        return crc.getValue();
+    }
+
 
     /**
      * Compute the checksum of the record from the record contents
@@ -239,7 +279,7 @@ public final class Record {
     }
 
     /**
-     * The compression codec used with this record
+     * The compression type used with this record
      */
     public CompressionType compressionType() {
         return CompressionType.forId(buffer.get(ATTRIBUTES_OFFSET) & COMPRESSION_CODEC_MASK);

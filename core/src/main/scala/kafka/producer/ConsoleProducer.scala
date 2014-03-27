@@ -255,8 +255,8 @@ object ConsoleProducer {
   class NewShinyProducer(producerConfig: ProducerConfig) extends Producer {
     val props = new Properties()
     props.put("metadata.broker.list", producerConfig.brokerList)
-    val codec = if(producerConfig.compress) DefaultCompressionCodec.codec else NoCompressionCodec.codec
-    props.put("compression.codec", codec.toString)
+    val compression = if(producerConfig.compress) DefaultCompressionCodec.name else NoCompressionCodec.name
+    props.put("compression.type", compression)
     props.put("send.buffer.bytes", producerConfig.socketBuffer.toString)
     props.put("metadata.fetch.backoff.ms", producerConfig.retryBackoffMs.toString)
     props.put("metadata.expiry.ms", producerConfig.metadataExpiryMs.toString)

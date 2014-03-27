@@ -212,6 +212,7 @@ object ProducerPerformance extends Logging {
     props.put("request.timeout.ms", config.producerRequestTimeoutMs.toString)
     props.put("request.retries", config.producerNumRetries.toString)
     props.put("retry.backoff.ms", config.producerRetryBackoffMs.toString)
+    props.put("compression.type", config.compressionCodec.name)
     val producer = new KafkaProducer(props)
 
     def send(topic: String, partition: Long, bytes: Array[Byte]) {

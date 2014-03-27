@@ -17,21 +17,20 @@
 
 package kafka.api.test
 
+import java.util.Properties
+import java.lang.{Integer, IllegalArgumentException}
+
+import org.apache.kafka.clients.producer._
+import org.scalatest.junit.JUnit3Suite
+import org.junit.Test
+import org.junit.Assert._
+
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Utils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.consumer.SimpleConsumer
 import kafka.api.FetchRequestBuilder
 import kafka.message.Message
-
-import org.apache.kafka.clients.producer._
-
-import org.scalatest.junit.JUnit3Suite
-import org.junit.Test
-import org.junit.Assert._
-
-import java.util.Properties
-import java.lang.{Integer, IllegalArgumentException}
 
 
 class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
@@ -76,15 +75,10 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
     super.tearDown()
   }
 
-  class PrintOffsetCallback extends Callback {
+  class CheckErrorCallback extends Callback {
     def onCompletion(metadata: RecordMetadata, exception: Exception) {
       if (exception != null)
         fail("Send callback returns the following exception", exception)
-      try {
-        System.out.println("The message we just sent is marked as [" + metadata.partition + "] : " + metadata.offset);
-      } catch {
-        case e: Throwable => fail("Should succeed sending the message", e)
-      }
     }
   }
 
@@ -100,7 +94,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
     props.put(ProducerConfig.BROKER_LIST_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
     var producer = new KafkaProducer(props)
 
-    val callback = new PrintOffsetCallback
+    val callback = new CheckErrorCallback
 
     try {
       // create topic

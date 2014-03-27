@@ -69,6 +69,7 @@ public class KafkaProducer implements Producer {
     private final Sender sender;
     private final Metrics metrics;
     private final Thread ioThread;
+    private final CompressionType compressionType;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -99,6 +100,7 @@ public class KafkaProducer implements Producer {
                                      config.getLong(ProducerConfig.METADATA_EXPIRY_CONFIG));
         this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
         this.totalMemorySize = config.getLong(ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG);
+        this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
         this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.MAX_PARTITION_SIZE_CONFIG),
                                                  this.totalMemorySize,
                                                  config.getLong(ProducerConfig.LINGER_MS_CONFIG),
@@ -224,7 +226,7 @@ public class KafkaProducer implements Producer {
             ensureValidSize(record.key(), record.value());
             TopicPartition tp = new TopicPartition(record.topic(), partition);
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
-            FutureRecordMetadata future = accumulator.append(tp, record.key(), record.value(), CompressionType.NONE, callback);
+            FutureRecordMetadata future = accumulator.append(tp, record.key(), record.value(), compressionType, callback);
             this.sender.wakeup();
             return future;
             // For API exceptions return them in the future;

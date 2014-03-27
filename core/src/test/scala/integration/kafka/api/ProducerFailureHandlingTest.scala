@@ -319,7 +319,6 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     producerProps.put(ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG, bufferSize.toString)
     producerProps.put(ProducerConfig.MAX_RETRIES_CONFIG, 10.toString)
     producerProps.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, 1000.toString)
-
     val producer = new KafkaProducer(producerProps)
 
     override def doWork(): Unit = {
@@ -334,6 +333,11 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
       } catch {
         case e : Exception => failed = true
       }
+    }
+
+    override def shutdown(){
+      super.shutdown()
+      producer.close
     }
   }
 }
