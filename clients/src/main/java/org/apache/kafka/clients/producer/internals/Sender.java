@@ -867,14 +867,16 @@ public class Sender implements Runnable {
 
         public void recordLatency(int node, long latency, long nowNs) {
             this.requestTimeSensor.record(latency, nowNs);
-            String nodeTimeName = "server." + node + ".latency";
-            Sensor nodeRequestTime = this.metrics.getSensor(nodeTimeName);
-            if (nodeRequestTime == null) {
-                nodeRequestTime = this.metrics.sensor(nodeTimeName);
-                nodeRequestTime.add("node-" + node + ".latency-avg", new Avg());
-                nodeRequestTime.add("node-" + node + ".latency-max", new Max());
+            if (node >= 0) {
+                String nodeTimeName = "server." + node + ".latency";
+                Sensor nodeRequestTime = this.metrics.getSensor(nodeTimeName);
+                if (nodeRequestTime == null) {
+                    nodeRequestTime = this.metrics.sensor(nodeTimeName);
+                    nodeRequestTime.add("node-" + node + ".latency-avg", new Avg());
+                    nodeRequestTime.add("node-" + node + ".latency-max", new Max());
+                }
+                nodeRequestTime.record(latency, nowNs);
             }
-            nodeRequestTime.record(latency, nowNs);
         }
     }
 

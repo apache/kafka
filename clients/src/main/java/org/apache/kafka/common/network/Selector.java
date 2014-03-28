@@ -447,7 +447,7 @@ public class Selector implements Selectable {
                     sensor.add("node-" + node + ".requests-sent-per-second",
                                "The average number of requests sent per second.",
                                new Rate(new Count()));
-                    sensor.add("connection-" + node + ".request-size-avg", "The average size of all requests in the window..", new Avg());
+                    sensor.add("node-" + node + ".request-size-avg", "The average size of all requests in the window..", new Avg());
                     sensor.add("node-" + node + ".request-size-max", "The maximum size of any request sent in the window.", new Max());
                 }
                 sensor.record(bytes);
