@@ -23,6 +23,7 @@ import collection.Set
 import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.api.{StopReplicaResponse, RequestOrResponse}
 import java.util.concurrent.locks.ReentrantLock
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * This manages the state machine for topic deletion.
@@ -76,7 +77,7 @@ class TopicDeletionManager(controller: KafkaController,
   var topicsIneligibleForDeletion: mutable.Set[String] = mutable.Set.empty[String] ++
     (initialTopicsIneligibleForDeletion & initialTopicsToBeDeleted)
   val deleteTopicsCond = deleteLock.newCondition()
-  var deleteTopicStateChanged: Boolean = false
+  var deleteTopicStateChanged: AtomicBoolean = new AtomicBoolean(false)
   var deleteTopicsThread: DeleteTopicsThread = null
   val isDeleteTopicEnabled = controller.config.deleteTopicEnable
 
@@ -86,7 +87,7 @@ class TopicDeletionManager(controller: KafkaController,
   def start() {
     if(isDeleteTopicEnabled) {
       deleteTopicsThread = new DeleteTopicsThread()
-      deleteTopicStateChanged = true
+      deleteTopicStateChanged.set(true)
       deleteTopicsThread.start()
     }
   }
@@ -198,12 +199,10 @@ class TopicDeletionManager(controller: KafkaController,
    */
   private def awaitTopicDeletionNotification() {
     inLock(deleteLock) {
-      while(!deleteTopicStateChanged) {
+      while(!deleteTopicStateChanged.compareAndSet(true, false)) {
         info("Waiting for signal to start or continue topic deletion")
-
         deleteTopicsCond.await()
       }
-      deleteTopicStateChanged = false
     }
   }
 
@@ -211,7 +210,7 @@ class TopicDeletionManager(controller: KafkaController,
    * Signals the delete-topic-thread to process topic deletion
    */
   private def resumeTopicDeletionThread() {
-    deleteTopicStateChanged = true
+    deleteTopicStateChanged.set(true)
     inLock(deleteLock) {
       deleteTopicsCond.signal()
     }
