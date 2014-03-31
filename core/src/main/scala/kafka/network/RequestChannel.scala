@@ -31,6 +31,9 @@ import org.apache.log4j.Logger
 
 object RequestChannel extends Logging {
   val AllDone = new Request(1, 2, getShutdownReceive(), 0)
+  val requestLogger = new RequestLogger("kafka.request.logger")
+
+  case class RequestLogger(override val loggerName: String) extends Logging
 
   def getShutdownReceive() = {
     val emptyProducerRequest = new ProducerRequest(0, 0, "", 0, 0, collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]())
@@ -49,7 +52,7 @@ object RequestChannel extends Logging {
     val requestId = buffer.getShort()
     val requestObj: RequestOrResponse = RequestKeys.deserializerForKey(requestId)(buffer)
     buffer = null
-    private val requestLogger = Logger.getLogger("kafka.request.logger")
+    private val requestLogger = RequestChannel.requestLogger
     trace("Processor %d received request : %s".format(processor, requestObj))
 
     def updateRequestMetrics() {
@@ -81,10 +84,10 @@ object RequestChannel extends Logging {
              m.responseSendTimeHist.update(responseSendTime)
              m.totalTimeHist.update(totalTime)
       }
-      if(requestLogger.isTraceEnabled)
+      if(requestLogger.logger.isTraceEnabled)
         requestLogger.trace("Completed request:%s from client %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
           .format(requestObj.describe(true), remoteAddress, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
-      else if(requestLogger.isDebugEnabled) {
+      else {
         requestLogger.debug("Completed request:%s from client %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
           .format(requestObj.describe(false), remoteAddress, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
       }
