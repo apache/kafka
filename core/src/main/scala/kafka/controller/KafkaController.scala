@@ -127,9 +127,11 @@ trait KafkaControllerMBean {
 
 object KafkaController extends Logging {
   val MBeanName = "kafka.controller:type=KafkaController,name=ControllerOps"
-  val stateChangeLogger = "state.change.logger"
+  val stateChangeLogger = new StateChangeLogger("state.change.logger")
   val InitialControllerEpoch = 1
   val InitialControllerEpochZkVersion = 1
+
+  case class StateChangeLogger(override val loggerName: String) extends Logging
 
   def parseControllerId(controllerInfoString: String): Int = {
     try {
@@ -156,7 +158,7 @@ object KafkaController extends Logging {
 class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logging with KafkaMetricsGroup with KafkaControllerMBean {
   this.logIdent = "[Controller " + config.brokerId + "]: "
   private var isRunning = true
-  private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
+  private val stateChangeLogger = KafkaController.stateChangeLogger
   val controllerContext = new ControllerContext(zkClient, config.zkSessionTimeoutMs)
   val partitionStateMachine = new PartitionStateMachine(this)
   val replicaStateMachine = new ReplicaStateMachine(this)

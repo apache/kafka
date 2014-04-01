@@ -114,7 +114,7 @@ class RequestSendThread(val controllerId: Int,
                         val channel: BlockingChannel)
   extends ShutdownableThread("Controller-%d-to-broker-%d-send-thread".format(controllerId, toBroker.id)) {
   private val lock = new Object()
-  private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
+  private val stateChangeLogger = KafkaController.stateChangeLogger
   connectToBroker(toBroker, channel)
 
   override def doWork(): Unit = {
@@ -188,7 +188,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
   val leaderAndIsrRequestMap = new mutable.HashMap[Int, mutable.HashMap[(String, Int), PartitionStateInfo]]
   val stopReplicaRequestMap = new mutable.HashMap[Int, Seq[StopReplicaRequestInfo]]
   val updateMetadataRequestMap = new mutable.HashMap[Int, mutable.HashMap[TopicAndPartition, PartitionStateInfo]]
-  private val stateChangeLogger = Logger.getLogger(KafkaController.stateChangeLogger)
+  private val stateChangeLogger = KafkaController.stateChangeLogger
 
   def newBatch() {
     // raise error if the previous batch is not empty
