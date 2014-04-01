@@ -40,7 +40,6 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
@@ -136,7 +135,6 @@ public class KafkaProducer implements Producer {
         this.ioThread.start();
 
         this.errors = this.metrics.sensor("errors");
-        this.errors.add("message-error-rate", "The average number of errors per second returned to the client.", new Rate());
 
         config.logUnused();
         log.debug("Kafka producer started");
@@ -263,15 +261,15 @@ public class KafkaProducer implements Producer {
      */
     private void ensureValidRecordSize(int size) {
         if (size > this.maxRequestSize)
-            throw new RecordTooLargeException("The message is " + size
-                                              + " bytes when serialized which is larger than the maximum request size you have configured with the "
-                                              + ProducerConfig.MAX_REQUEST_SIZE_CONFIG
-                                              + " configuration.");
+            throw new RecordTooLargeException("The message is " + size +
+                                              " bytes when serialized which is larger than the maximum request size you have configured with the " +
+                                              ProducerConfig.MAX_REQUEST_SIZE_CONFIG +
+                                              " configuration.");
         if (size > this.totalMemorySize)
-            throw new RecordTooLargeException("The message is " + size
-                                              + " bytes when serialized which is larger than the total memory buffer you have configured with the "
-                                              + ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG
-                                              + " configuration.");
+            throw new RecordTooLargeException("The message is " + size +
+                                              " bytes when serialized which is larger than the total memory buffer you have configured with the " +
+                                              ProducerConfig.TOTAL_BUFFER_MEMORY_CONFIG +
+                                              " configuration.");
     }
 
     public List<PartitionInfo> partitionsFor(String topic) {

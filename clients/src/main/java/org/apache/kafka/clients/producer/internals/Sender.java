@@ -506,10 +506,10 @@ public class Sender implements Runnable {
      */
     private void correlate(RequestHeader requestHeader, ResponseHeader responseHeader) {
         if (requestHeader.correlationId() != responseHeader.correlationId())
-            throw new IllegalStateException("Correlation id for response (" + responseHeader.correlationId()
-                                            + ") does not match request ("
-                                            + requestHeader.correlationId()
-                                            + ")");
+            throw new IllegalStateException("Correlation id for response (" + responseHeader.correlationId() +
+                                            ") does not match request (" +
+                                            requestHeader.correlationId() +
+                                            ")");
     }
 
     /**
@@ -793,7 +793,7 @@ public class Sender implements Runnable {
                                      new Max());
             this.errorSensor.add("record-error-rate", "The average per-second number of record sends that resulted in errors", new Rate());
             this.recordsPerRequestSensor.add("record-send-rate", "The average number of records sent per second.", new Rate());
-            this.recordsPerRequestSensor.add("records-per-request", "The average number of records per request.", new Avg());
+            this.recordsPerRequestSensor.add("records-per-request-avg", "The average number of records per request.", new Avg());
             this.maxRecordSizeSensor.add("record-size-max", "The maximum record size", new Max());
             this.metrics.addMetric("requests-in-flight", "The current number of in-flight requests awaiting a response.", new Measurable() {
                 public double measure(MetricConfig config, long now) {
