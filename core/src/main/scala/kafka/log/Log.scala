@@ -75,6 +75,9 @@ class Log(val dir: File,
 
   newGauge(name + "-" + "LogEndOffset",
            new Gauge[Long] { def value = logEndOffset })
+           
+  newGauge(name + "-" + "Size", 
+           new Gauge[Long] {def value = size})
 
   /** The name of this log */
   def name  = dir.getName()

@@ -17,6 +17,8 @@
 
 package kafka.utils;
 
+import kafka.metrics.KafkaMetricsGroup
+import java.util.concurrent.TimeUnit
 import java.util.Random
 import scala.math._
 
@@ -33,14 +35,18 @@ import scala.math._
 @threadsafe
 class Throttler(val desiredRatePerSec: Double, 
                 val checkIntervalMs: Long = 100L, 
-                val throttleDown: Boolean = true, 
-                val time: Time = SystemTime) extends Logging {
+                val throttleDown: Boolean = true,
+                metricName: String = "throttler",
+                units: String = "entries",
+                val time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
   
   private val lock = new Object
+  private val meter = newMeter(metricName, units, TimeUnit.SECONDS)
   private var periodStartNs: Long = time.nanoseconds
   private var observedSoFar: Double = 0.0
   
   def maybeThrottle(observed: Double) {
+    meter.mark(observed.toLong)
     lock synchronized {
       observedSoFar += observed
       val now = time.nanoseconds
@@ -72,7 +78,7 @@ object Throttler {
   
   def main(args: Array[String]) {
     val rand = new Random()
-    val throttler = new Throttler(100000, 100, true, SystemTime)
+    val throttler = new Throttler(100000, 100, true, time = SystemTime)
     val interval = 30000
     var start = System.currentTimeMillis
     var total = 0
