@@ -734,7 +734,8 @@ def start_entity_in_background(systemTestEnv, testcaseEnv, entityId):
     elif role == "broker":
         cmdList = ["ssh " + hostname,
                   "'JAVA_HOME=" + javaHome,
-                 "JMX_PORT=" + jmxPort,
+                  "JMX_PORT=" + jmxPort,
+                  "KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%s/config/log4j.properties" % kafkaHome,
                   kafkaHome + "/bin/kafka-run-class.sh kafka.Kafka",
                   configPathName + "/" + configFile + " >> ",
                   logPathName + "/" + logFile + " & echo pid:$! > ",
@@ -975,10 +976,12 @@ def start_producer_performance(systemTestEnv, testcaseEnv, kafka07Client):
         role              = producerConfig["role"] 
 
         thread.start_new_thread(start_producer_in_thread, (testcaseEnv, entityConfigList, producerConfig, kafka07Client))
+        logger.debug("calling testcaseEnv.lock.acquire()", extra=d)
         testcaseEnv.lock.acquire()
         testcaseEnv.numProducerThreadsRunning += 1
         logger.debug("testcaseEnv.numProducerThreadsRunning : " + str(testcaseEnv.numProducerThreadsRunning), extra=d)
         time.sleep(1)
+        logger.debug("calling testcaseEnv.lock.release()", extra=d)
         testcaseEnv.lock.release()
 
 def generate_topics_string(topicPrefix, numOfTopics):
@@ -1119,7 +1122,7 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
                        "--metrics-dir " + metricsDir,
                        boolArgumentsStr,
                        " >> " + producerLogPathName,
-                       " & echo pid:$! > " + producerLogPath + "/entity_" + entityId + "_pid'"]
+                       " & echo $! > " + producerLogPath + "/entity_" + entityId + "_pid'"]
 
             if kafka07Client:
                 cmdList[:] = []
@@ -1150,17 +1153,19 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
                        "--message-size " + messageSize,
                        "--vary-message-size --async",
                        " >> " + producerLogPathName,
-                       " & echo pid:$! > " + producerLogPath + "/entity_" + entityId + "_pid'"]
+                       " & echo $! > " + producerLogPath + "/entity_" + entityId + "_pid'"]
 
             cmdStr = " ".join(cmdList)
             logger.debug("executing command: [" + cmdStr + "]", extra=d)
 
             subproc = system_test_utils.sys_call_return_subproc(cmdStr)
-            for line in subproc.stdout.readlines():
-                pass    # dummy loop to wait until producer is completed
+            logger.debug("waiting for producer to finish", extra=d)
+            subproc.communicate()
+            logger.debug("producer finished", extra=d)
         else:
             testcaseEnv.numProducerThreadsRunning -= 1
             logger.debug("testcaseEnv.numProducerThreadsRunning : " + str(testcaseEnv.numProducerThreadsRunning), extra=d)
+            logger.debug("calling testcaseEnv.lock.release()", extra=d)
             testcaseEnv.lock.release()
             break
 
@@ -1172,14 +1177,17 @@ def start_producer_in_thread(testcaseEnv, entityConfigList, producerConfig, kafk
     # wait until other producer threads also stops and
     # let the main testcase know all producers have stopped
     while 1:
+        logger.debug("calling testcaseEnv.lock.acquire()", extra=d)
         testcaseEnv.lock.acquire()
         time.sleep(1)
         if testcaseEnv.numProducerThreadsRunning == 0:
             testcaseEnv.userDefinedEnvVarDict["backgroundProducerStopped"] = True
+            logger.debug("calling testcaseEnv.lock.release()", extra=d)
             testcaseEnv.lock.release()
             break
         else:
             logger.debug("waiting for TRUE of testcaseEnv.userDefinedEnvVarDict['backgroundProducerStopped']", extra=d)
+            logger.debug("calling testcaseEnv.lock.release()", extra=d)
             testcaseEnv.lock.release()
         time.sleep(1)
 
@@ -1617,8 +1625,10 @@ def stop_all_remote_running_processes(systemTestEnv, testcaseEnv):
         # =============================================
         # tell producer to stop
         # =============================================
+        logger.debug("calling testcaseEnv.lock.acquire()", extra=d)
         testcaseEnv.lock.acquire()
         testcaseEnv.userDefinedEnvVarDict["stopBackgroundProducer"] = True
+        logger.debug("calling testcaseEnv.lock.release()", extra=d)
         testcaseEnv.lock.release()
 
         # =============================================
@@ -1626,13 +1636,16 @@ def stop_all_remote_running_processes(systemTestEnv, testcaseEnv):
         # "backgroundProducerStopped" to be "True"
         # =============================================
         while 1:
+            logger.debug("calling testcaseEnv.lock.acquire()", extra=d)
             testcaseEnv.lock.acquire()
             logger.info("status of backgroundProducerStopped : [" + \
                 str(testcaseEnv.userDefinedEnvVarDict["backgroundProducerStopped"]) + "]", extra=d)
             if testcaseEnv.userDefinedEnvVarDict["backgroundProducerStopped"]:
+                logger.debug("calling testcaseEnv.lock.release()", extra=d)
                 testcaseEnv.lock.release()
                 logger.info("all producer threads completed", extra=d)
                 break
+            logger.debug("calling testcaseEnv.lock.release()", extra=d)
             testcaseEnv.lock.release()
     
         testcaseEnv.producerHostParentPidDict.clear()

@@ -54,9 +54,8 @@ The framework has the following levels:
   1. Update system_test/cluster_config.json for "kafka_home" & "java_home" specific to your environment
   2. Edit system_test/replication_testsuite/testcase_1/testcase_1_properties.json and update "broker-list" to the proper settings of your environment. (If this test is to be run in a single localhost, no change is required for this.)
   3. To run the test, go to <kafka_home>/system_test and run the following command:
-     $ python -B system_test_runner.py 
-  4. To turn on debugging, update system_test/system_test_runner.py and uncomment the following line:
-         namedLogger.setLevel(logging.DEBUG)
+     $ python -u -B system_test_runner.py 2>&1 | tee system_test_output.log
+  4. To turn on debugging, update system_test/logging.conf by changing the level in handlers session from INFO to DEBUG.
 
 # ==========================
 # Adding Test Case
