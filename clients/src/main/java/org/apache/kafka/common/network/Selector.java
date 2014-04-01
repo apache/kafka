@@ -114,6 +114,9 @@ public class Selector implements Selectable {
      */
     @Override
     public void connect(int id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
+        if (this.keys.containsKey(id))
+            throw new IllegalStateException("There is already a connection for id " + id);
+
         SocketChannel channel = SocketChannel.open();
         channel.configureBlocking(false);
         Socket socket = channel.socket();
@@ -132,8 +135,6 @@ public class Selector implements Selectable {
         }
         SelectionKey key = channel.register(this.selector, SelectionKey.OP_CONNECT);
         key.attach(new Transmissions(id));
-        if (this.keys.containsKey(key))
-            throw new IllegalStateException("There is already a connection for id " + id);
         this.keys.put(id, key);
     }
 

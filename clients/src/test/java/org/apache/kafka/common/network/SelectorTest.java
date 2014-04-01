@@ -205,6 +205,12 @@ public class SelectorTest {
         assertEquals("", blockingRequest(node, ""));
     }
 
+    @Test(expected = IllegalStateException.class)
+    public void testExistingConnectionId() throws IOException {
+        blockingConnect(0);
+        blockingConnect(0);
+    }
+
     private String blockingRequest(int node, String s) throws IOException {
         selector.poll(1000L, asList(createSend(node, s)));
         while (true) {
