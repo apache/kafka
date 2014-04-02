@@ -70,7 +70,11 @@ object ConsoleProducer {
       .describedAs("broker-list")
       .ofType(classOf[String])
     val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
-    val compressOpt = parser.accepts("compress", "If set, messages batches are sent compressed")
+    val compressionCodecOpt = parser.accepts("compression-codec", "The compression codec: either 'gzip' or 'snappy'." +
+                                                                  "If specified without value, than it defaults to 'gzip'")
+                                    .withOptionalArg()
+                                    .describedAs("compression-codec")
+                                    .ofType(classOf[String])
     val batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch if they are not being sent synchronously.")
       .withRequiredArg
       .describedAs("size")
@@ -178,7 +182,12 @@ object ConsoleProducer {
     val topic = options.valueOf(topicOpt)
     val brokerList = options.valueOf(brokerListOpt)
     val sync = options.has(syncOpt)
-    val compress = options.has(compressOpt)
+    val compressionCodecOptionValue = options.valueOf(compressionCodecOpt)
+    val compressionCodec = if (options.has(compressionCodecOpt))
+                             if (compressionCodecOptionValue == null || compressionCodecOptionValue.isEmpty)
+                               DefaultCompressionCodec.name
+                             else compressionCodecOptionValue
+                           else NoCompressionCodec.name
     val batchSize = options.valueOf(batchSizeOpt)
     val sendTimeout = options.valueOf(sendTimeoutOpt)
     val queueSize = options.valueOf(queueSizeOpt)
@@ -255,8 +264,7 @@ object ConsoleProducer {
   class NewShinyProducer(producerConfig: ProducerConfig) extends Producer {
     val props = new Properties()
     props.put("metadata.broker.list", producerConfig.brokerList)
-    val compression = if(producerConfig.compress) DefaultCompressionCodec.name else NoCompressionCodec.name
-    props.put("compression.type", compression)
+    props.put("compression.type", producerConfig.compressionCodec)
     props.put("send.buffer.bytes", producerConfig.socketBuffer.toString)
     props.put("metadata.fetch.backoff.ms", producerConfig.retryBackoffMs.toString)
     props.put("metadata.expiry.ms", producerConfig.metadataExpiryMs.toString)
@@ -287,8 +295,7 @@ object ConsoleProducer {
   class OldProducer(producerConfig: ConsoleProducer.ProducerConfig) extends Producer {
     val props = new Properties()
     props.put("metadata.broker.list", producerConfig.brokerList)
-    val codec = if(producerConfig.compress) DefaultCompressionCodec.codec else NoCompressionCodec.codec
-    props.put("compression.codec", codec.toString)
+    props.put("compression.codec", producerConfig.compressionCodec)
     props.put("producer.type", if(producerConfig.sync) "sync" else "async")
     props.put("batch.num.messages", producerConfig.batchSize.toString)
     props.put("message.send.max.retries", producerConfig.messageSendMaxRetries.toString)
