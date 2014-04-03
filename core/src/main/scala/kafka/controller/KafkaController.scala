@@ -1063,6 +1063,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
      */
     @throws(classOf[Exception])
     def handleNewSession() {
+      info("ZK expired; shut down all controller components and try to re-elect")
       inLock(controllerContext.controllerLock) {
         onControllerResignation()
         controllerElector.elect
