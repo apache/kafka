@@ -338,11 +338,16 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   def onControllerResignation() {
     inLock(controllerContext.controllerLock) {
       Utils.unregisterMBean(KafkaController.MBeanName)
-      deleteTopicManager.shutdown()
+
+      if(deleteTopicManager != null)
+        deleteTopicManager.shutdown()
+
       partitionStateMachine.shutdown()
       replicaStateMachine.shutdown()
+
       if(config.autoLeaderRebalanceEnable)
         autoRebalanceScheduler.shutdown()
+
       if(controllerContext.controllerChannelManager != null) {
         controllerContext.controllerChannelManager.shutdown()
         controllerContext.controllerChannelManager = null
@@ -1058,7 +1063,6 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
      */
     @throws(classOf[Exception])
     def handleNewSession() {
-      info("ZK expired; shut down all controller components and try to re-elect")
       inLock(controllerContext.controllerLock) {
         onControllerResignation()
         controllerElector.elect
