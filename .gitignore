@@ -1,6 +1,8 @@
 dist
 *classes
 target/
+build/
+.gradle/
 lib_managed/
 src_managed/
 project/boot/
