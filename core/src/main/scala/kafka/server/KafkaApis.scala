@@ -137,26 +137,20 @@ class KafkaApis(val requestChannel: RequestChannel,
       // cache the list of alive brokers in the cluster
       updateMetadataRequest.aliveBrokers.foreach(b => aliveBrokers.put(b.id, b))
       updateMetadataRequest.partitionStateInfos.foreach { partitionState =>
-        metadataCache.put(partitionState._1, partitionState._2)
-        stateChangeLogger.trace(("Broker %d cached leader info %s for partition %s in response to UpdateMetadata request " +
-          "sent by controller %d epoch %d with correlation id %d").format(brokerId, partitionState._2, partitionState._1,
-          updateMetadataRequest.controllerId, updateMetadataRequest.controllerEpoch, updateMetadataRequest.correlationId))
-      }
-      // remove the topics that don't exist in the UpdateMetadata request since those are the topics that are
-      // currently being deleted by the controller
-      val topicsKnownToThisBroker = metadataCache.map {
-        case(topicAndPartition, partitionStateInfo) => topicAndPartition.topic }.toSet
-      val topicsKnownToTheController = updateMetadataRequest.partitionStateInfos.map {
-        case(topicAndPartition, partitionStateInfo) => topicAndPartition.topic }.toSet
-      val deletedTopics = topicsKnownToThisBroker -- topicsKnownToTheController
-      val partitionsToBeDeleted = metadataCache.filter {
-        case(topicAndPartition, partitionStateInfo) => deletedTopics.contains(topicAndPartition.topic)
-      }.keySet
-      partitionsToBeDeleted.foreach { partition =>
-        metadataCache.remove(partition)
-        stateChangeLogger.trace(("Broker %d deleted partition %s from metadata cache in response to UpdateMetadata request " +
-          "sent by controller %d epoch %d with correlation id %d").format(brokerId, partition,
-          updateMetadataRequest.controllerId, updateMetadataRequest.controllerEpoch, updateMetadataRequest.correlationId))
+        if (partitionState._2.leaderIsrAndControllerEpoch.leaderAndIsr.leader == LeaderAndIsr.LeaderDuringDelete) {
+          val partition = partitionState._1
+          metadataCache.remove(partition)
+          stateChangeLogger.trace(("Broker %d deleted partition %s from metadata cache in response to UpdateMetadata request " +
+                                   "sent by controller %d epoch %d with correlation id %d")
+                                   .format(brokerId, partition, updateMetadataRequest.controllerId,
+                                           updateMetadataRequest.controllerEpoch, updateMetadataRequest.correlationId))
+        } else {
+          metadataCache.put(partitionState._1, partitionState._2)
+          stateChangeLogger.trace(("Broker %d cached leader info %s for partition %s in response to UpdateMetadata request " +
+                                   "sent by controller %d epoch %d with correlation id %d")
+                                   .format(brokerId, partitionState._2, partitionState._1, updateMetadataRequest.controllerId,
+                                           updateMetadataRequest.controllerEpoch, updateMetadataRequest.correlationId))
+        }
       }
     }
     val updateMetadataResponse = new UpdateMetadataResponse(updateMetadataRequest.correlationId)

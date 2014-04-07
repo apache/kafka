@@ -552,7 +552,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
         info("Removed partition %s from the list of reassigned partitions in zookeeper".format(topicAndPartition))
         controllerContext.partitionsBeingReassigned.remove(topicAndPartition)
         //12. After electing leader, the replicas and isr information changes, so resend the update metadata request to every broker
-        sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq)
+        sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicAndPartition))
         // signal delete topic thread if reassignment for some partitions belonging to topics being deleted just completed
         deleteTopicManager.resumeDeletionForTopics(Set(topicAndPartition.topic))
     }
@@ -933,9 +933,9 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
    * metadata requests
    * @param brokers The brokers that the update metadata request should be sent to
    */
-  def sendUpdateMetadataRequest(brokers: Seq[Int]) {
+  def sendUpdateMetadataRequest(brokers: Seq[Int], partitions: Set[TopicAndPartition] = Set.empty[TopicAndPartition]) {
     brokerRequestBatch.newBatch()
-    brokerRequestBatch.addUpdateMetadataRequestForBrokers(brokers)
+    brokerRequestBatch.addUpdateMetadataRequestForBrokers(brokers, partitions)
     brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement)
   }
 
@@ -967,7 +967,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
               "controller was elected with epoch %d. Aborting state change by this controller".format(controllerEpoch))
           if (leaderAndIsr.isr.contains(replicaId)) {
             // if the replica to be removed from the ISR is also the leader, set the new leader value to -1
-            val newLeader = if(replicaId == leaderAndIsr.leader) -1 else leaderAndIsr.leader
+            val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NoLeader else leaderAndIsr.leader
             var newIsr = leaderAndIsr.isr.filter(b => b != replicaId)
 
             // if the replica to be removed from the ISR is the last surviving member of the ISR and unclean leader election

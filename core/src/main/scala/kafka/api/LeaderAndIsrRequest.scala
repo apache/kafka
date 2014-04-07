@@ -32,6 +32,8 @@ import collection.Set
 object LeaderAndIsr {
   val initialLeaderEpoch: Int = 0
   val initialZKVersion: Int = 0
+  val NoLeader = -1
+  val LeaderDuringDelete = -2
 }
 
 case class LeaderAndIsr(var leader: Int, var leaderEpoch: Int, var isr: List[Int], var zkVersion: Int) {
