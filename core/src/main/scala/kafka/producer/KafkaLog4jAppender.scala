@@ -26,36 +26,40 @@ import java.util.{Properties, Date}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 
 class KafkaLog4jAppender extends AppenderSkeleton with Logging {
-  var topic:String = null
-  var brokerList:String = null
-  var compressionCodec:String = null
+  var topic: String = null
+  var brokerList: String = null
+  var compressionType: String = null
   var requiredNumAcks: Int = Int.MaxValue
+  var syncSend: Boolean = false
 
   private var producer: KafkaProducer = null
 
-  def getTopic:String = topic
+  def getTopic: String = topic
   def setTopic(topic: String) { this.topic = topic }
 
-  def getBrokerList:String = brokerList
+  def getBrokerList: String = brokerList
   def setBrokerList(brokerList: String) { this.brokerList = brokerList }
 
-  def getCompressionCodec:String = compressionCodec
-  def setCompressionCodec(compressionCodec:String) { this.compressionCodec = compressionCodec }
+  def getCompressionType: String = compressionType
+  def setCompressionType(compressionType: String) { this.compressionType = compressionType }
 
-  def getRequiredNumAcks:Int = requiredNumAcks
-  def setRequiredNumAcks(requiredNumAcks:Int) { this.requiredNumAcks = requiredNumAcks }
+  def getRequiredNumAcks: Int = requiredNumAcks
+  def setRequiredNumAcks(requiredNumAcks: Int) { this.requiredNumAcks = requiredNumAcks }
+
+  def getSyncSend: Boolean = syncSend
+  def setSyncSend(syncSend: Boolean) { this.syncSend = syncSend }
 
   override def activateOptions() {
     // check for config parameter validity
     val props = new Properties()
     if(brokerList != null)
-      props.put("metadata.broker.list", brokerList)
+      props.put(org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     if(props.isEmpty)
-      throw new MissingConfigException("The metadata.broker.list property should be specified")
+      throw new MissingConfigException("The bootstrap servers property should be specified")
     if(topic == null)
       throw new MissingConfigException("topic must be specified by the Kafka log4j appender")
-    if(compressionCodec != null) props.put("compression.codec", compressionCodec)
-    if(requiredNumAcks != Int.MaxValue) props.put("request.required.acks", requiredNumAcks.toString)
+    if(compressionType != null) props.put(org.apache.kafka.clients.producer.ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType)
+    if(requiredNumAcks != Int.MaxValue) props.put(org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG, requiredNumAcks.toString)
     producer = new KafkaProducer(props)
     LogLog.debug("Kafka producer connected to " +  brokerList)
     LogLog.debug("Logging for topic: " + topic)
@@ -64,7 +68,8 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
   override def append(event: LoggingEvent)  {
     val message = subAppend(event)
     LogLog.debug("[" + new Date(event.getTimeStamp).toString + "]" + message)
-    producer.send(new ProducerRecord(topic, message.getBytes()));
+    val response = producer.send(new ProducerRecord(topic, message.getBytes()))
+    if (syncSend) response.get
   }
 
   def subAppend(event: LoggingEvent): String = {

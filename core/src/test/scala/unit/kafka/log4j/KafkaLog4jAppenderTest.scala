@@ -55,7 +55,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     val logDirZkPath = propsZk.getProperty("log.dir")
     logDirZk = new File(logDirZkPath)
     config = new KafkaConfig(propsZk)
-    server = TestUtils.createServer(config);
+    server = TestUtils.createServer(config)
     simpleConsumerZk = new SimpleConsumer("localhost", portZk, 1000000, 64*1024, "")
   }
 
@@ -69,71 +69,36 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
 
   @Test
   def testKafkaLog4jConfigs() {
+    // host missing
     var props = new Properties()
     props.put("log4j.rootLogger", "INFO")
     props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
     props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
     props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
     props.put("log4j.appender.KAFKA.Topic", "test-topic")
-    props.put("log4j.appender.KAFKA.SerializerClass", "kafka.log4j.AppenderStringEncoder")
     props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
 
-    // port missing
     try {
       PropertyConfigurator.configure(props)
       fail("Missing properties exception was expected !")
     }catch {
       case e: MissingConfigException =>
     }
-
-    props = new Properties()
-    props.put("log4j.rootLogger", "INFO")
-    props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
-    props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
-    props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
-    props.put("log4j.appender.KAFKA.Topic", "test-topic")
-    props.put("log4j.appender.KAFKA.SerializerClass", "kafka.log4j.AppenderStringEncoder")
-    props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
-
-    // host missing
-    try {
-      PropertyConfigurator.configure(props)
-      fail("Missing properties exception was expected !")
-    }catch {
-      case e: MissingConfigException =>
-    }
-
-    props = new Properties()
-    props.put("log4j.rootLogger", "INFO")
-    props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
-    props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
-    props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
-    props.put("log4j.appender.KAFKA.SerializerClass", "kafka.log4j.AppenderStringEncoder")
-    props.put("log4j.appender.KAFKA.brokerList", TestUtils.getBrokerListStrFromConfigs(Seq(config)))
-    props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
 
     // topic missing
-    try {
-      PropertyConfigurator.configure(props)
-      fail("Missing properties exception was expected !")
-    }catch {
-      case e: MissingConfigException =>
-    }
-
     props = new Properties()
     props.put("log4j.rootLogger", "INFO")
     props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
     props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
     props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
     props.put("log4j.appender.KAFKA.brokerList", TestUtils.getBrokerListStrFromConfigs(Seq(config)))
-    props.put("log4j.appender.KAFKA.Topic", "test-topic")
     props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
 
-    // serializer missing
     try {
       PropertyConfigurator.configure(props)
+      fail("Missing properties exception was expected !")
     }catch {
-      case e: MissingConfigException => fail("should default to kafka.serializer.StringEncoder")
+      case e: MissingConfigException =>
     }
   }
 
@@ -156,15 +121,16 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
   }
 
   private def getLog4jConfig: Properties = {
-    var props = new Properties()
+    val props = new Properties()
     props.put("log4j.rootLogger", "INFO")
     props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
-    props.put("log4j.appender.KAFKA.layout","org.apache.log4j.PatternLayout")
-    props.put("log4j.appender.KAFKA.layout.ConversionPattern","%-5p: %c - %m%n")
-    props.put("log4j.appender.KAFKA.brokerList", TestUtils.getBrokerListStrFromConfigs(Seq(config)))
+    props.put("log4j.appender.KAFKA.layout", "org.apache.log4j.PatternLayout")
+    props.put("log4j.appender.KAFKA.layout.ConversionPattern", "%-5p: %c - %m%n")
+    props.put("log4j.appender.KAFKA.BrokerList", TestUtils.getBrokerListStrFromConfigs(Seq(config)))
     props.put("log4j.appender.KAFKA.Topic", "test-topic")
-    props.put("log4j.logger.kafka.log4j", "INFO,KAFKA")
-    props.put("log4j.appender.KAFKA.requiredNumAcks", "1")
+    props.put("log4j.appender.KAFKA.RequiredNumAcks", "1")
+    props.put("log4j.appender.KAFKA.SyncSend", "true")
+    props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
     props
   }
 }

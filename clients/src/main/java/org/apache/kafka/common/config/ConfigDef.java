@@ -182,7 +182,10 @@ public class ConfigDef {
                     if (value instanceof List)
                         return (List<?>) value;
                     else if (value instanceof String)
-                        return Arrays.asList(trimmed.split("\\s*,\\s*", -1));
+                        if (trimmed.isEmpty())
+                            return Collections.emptyList();
+                        else
+                            return Arrays.asList(trimmed.split("\\s*,\\s*", -1));
                     else
                         throw new ConfigException(name, value, "Expected a comma separated list.");
                 case CLASS:
