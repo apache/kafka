@@ -229,9 +229,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
     }
   }
 
-  /* Send UpdateMetadataRequest to the given brokers for all partitions except those being deleted as part of delete topic
-   *
-   */
+  /** Send UpdateMetadataRequest to the given brokers for the given partitions and partitions that are being deleted */
   def addUpdateMetadataRequestForBrokers(brokerIds: Seq[Int],
                                          partitions: collection.Set[TopicAndPartition] = Set.empty[TopicAndPartition],
                                          callback: (RequestOrResponse) => Unit = null) {
