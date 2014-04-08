@@ -90,7 +90,7 @@ class OffsetCheckpoint(val file: File) extends Logging {
               val topic = pieces(0)
               val partition = pieces(1).toInt
               val offset = pieces(2).toLong
-              offsets += (TopicAndPartition(pieces(0), partition) -> offset)
+              offsets += (TopicAndPartition(topic, partition) -> offset)
               line = reader.readLine()
             }
             if(offsets.size != expectedSize)

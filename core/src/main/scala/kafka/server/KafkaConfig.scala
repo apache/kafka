@@ -116,7 +116,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* the frequency in minutes that the log cleaner checks whether any log is eligible for deletion */
   val logCleanupIntervalMs = props.getLongInRange("log.retention.check.interval.ms", 5*60*1000, (1, Long.MaxValue))
   
-  /* the default cleanup policy for segments beyond the retention window, must be either "delete" or "dedupe" */
+  /* the default cleanup policy for segments beyond the retention window, must be either "delete" or "compact" */
   val logCleanupPolicy = props.getString("log.cleanup.policy", "delete")
   
   /* the number of background threads to use for log cleaning */

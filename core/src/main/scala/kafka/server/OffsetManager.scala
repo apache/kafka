@@ -159,7 +159,7 @@ class OffsetManager(val config: OffsetManagerConfig,
   def offsetsTopicConfig: Properties = {
     val props = new Properties
     props.put(LogConfig.SegmentBytesProp, config.offsetsTopicSegmentBytes.toString)
-    props.put(LogConfig.CleanupPolicyProp, "dedupe")
+    props.put(LogConfig.CleanupPolicyProp, "compact")
     props
   }
 
