@@ -97,7 +97,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
     } catch {
       case t: Throwable =>
         if (isRunning.get) {
-          error("Error in fetch %s".format(fetchRequest), t)
+          warn("Error in fetch %s. Possible cause: %s".format(fetchRequest, t.getMessage))
           partitionMapLock synchronized {
             partitionsWithError ++= partitionMap.keys
           }

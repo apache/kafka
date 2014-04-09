@@ -435,7 +435,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           }
           catch {
             case e: Exception =>
-              error("Error while fetching offsets from %s:%d.".format(offsetsChannel.host, offsetsChannel.port), e)
+              warn("Error while fetching offsets from %s:%d. Possible cause: %s".format(offsetsChannel.host, offsetsChannel.port, e.getMessage))
               offsetsChannel.disconnect()
               None // retry
           }
