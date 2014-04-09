@@ -29,18 +29,17 @@ import kafka.log.{LogManager, LogConfig, Log}
 
 class ReplicaManagerTest extends JUnit3Suite {
   @Test
-  def testHighwaterMarkDirectoryMapping() {
+  def testHighWaterMarkDirectoryMapping() {
     val props = TestUtils.createBrokerConfig(1)
-    val dir = "/tmp/kafka-logs/"
-    new File(dir).mkdir()
-    props.setProperty("log.dirs", dir)
+    val topic = "test-topic"
     val config = new KafkaConfig(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
     val mockLogMgr = EasyMock.createMock(classOf[LogManager])
     val time: MockTime = new MockTime()
     val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
-    val partition = rm.getOrCreatePartition("test-topic", 1, 1)
-    partition.addReplicaIfNotExists(new Replica(1, partition, time, 0L, Option(new Log(new File("/tmp/kafka-logs/test-topic-1"), new LogConfig(), 0L, null))))
+    val partition = rm.getOrCreatePartition(topic, 1, 1)
+    val logFilename = config.logDirs.head + File.separator + topic + "-1"
+    partition.addReplicaIfNotExists(new Replica(1, partition, time, 0L, Option(new Log(new File(logFilename), new LogConfig(), 0L, null))))
     rm.checkpointHighWatermarks()
   }
 }
