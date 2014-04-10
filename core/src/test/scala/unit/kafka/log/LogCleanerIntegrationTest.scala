@@ -92,7 +92,7 @@ class LogCleanerIntegrationTest extends JUnitSuite {
   def makeCleaner(parts: Int, 
                   minDirtyMessages: Int = 0, 
                   numThreads: Int = 1,
-                  defaultPolicy: String = "dedupe",
+                  defaultPolicy: String = "compact",
                   policyOverrides: Map[String, String] = Map()): LogCleaner = {
     
     // create partitions and add them to the pool
