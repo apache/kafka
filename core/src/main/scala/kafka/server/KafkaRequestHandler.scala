@@ -21,17 +21,34 @@ import kafka.network._
 import kafka.utils._
 import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.TimeUnit
+import com.yammer.metrics.core.Meter
 
 /**
  * A thread that answers kafka requests.
  */
-class KafkaRequestHandler(id: Int, brokerId: Int, val requestChannel: RequestChannel, apis: KafkaApis) extends Runnable with Logging {
+class KafkaRequestHandler(id: Int,
+                          brokerId: Int,
+                          val aggregateIdleMeter: Meter,
+                          val totalHandlerThreads: Int,
+                          val requestChannel: RequestChannel,
+                          apis: KafkaApis) extends Runnable with Logging {
   this.logIdent = "[Kafka Request Handler " + id + " on Broker " + brokerId + "], "
 
-  def run() { 
+  def run() {
     while(true) {
       try {
-        val req = requestChannel.receiveRequest()
+        var req : RequestChannel.Request = null
+        while (req == null) {
+          // We use a single meter for aggregate idle percentage for the thread pool.
+          // Since meter is calculated as total_recorded_value / time_window and
+          // time_window is independent of the number of threads, each recorded idle
+          // time should be discounted by # threads.
+          val startSelectTime = SystemTime.nanoseconds
+          req = requestChannel.receiveRequest(300)
+          val idleTime = SystemTime.nanoseconds - startSelectTime
+          aggregateIdleMeter.mark(idleTime / totalHandlerThreads)
+        }
+
         if(req eq RequestChannel.AllDone) {
           debug("Kafka request handler %d on broker %d received shut down command".format(
             id, brokerId))
@@ -52,12 +69,16 @@ class KafkaRequestHandler(id: Int, brokerId: Int, val requestChannel: RequestCha
 class KafkaRequestHandlerPool(val brokerId: Int,
                               val requestChannel: RequestChannel,
                               val apis: KafkaApis,
-                              numThreads: Int) extends Logging {
+                              numThreads: Int) extends Logging with KafkaMetricsGroup {
+
+  /* a meter to track the average free capacity of the request handlers */
+  private val aggregateIdleMeter = newMeter("RequestHandlerAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
+
   this.logIdent = "[Kafka Request Handler on Broker " + brokerId + "], "
   val threads = new Array[Thread](numThreads)
   val runnables = new Array[KafkaRequestHandler](numThreads)
   for(i <- 0 until numThreads) {
-    runnables(i) = new KafkaRequestHandler(i, brokerId, requestChannel, apis)
+    runnables(i) = new KafkaRequestHandler(i, brokerId, aggregateIdleMeter, numThreads, requestChannel, apis)
     threads(i) = Utils.daemonThread("kafka-request-handler-" + i, runnables(i))
     threads(i).start()
   }

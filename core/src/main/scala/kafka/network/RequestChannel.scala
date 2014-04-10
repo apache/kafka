@@ -156,6 +156,10 @@ class RequestChannel(val numProcessors: Int, val queueSize: Int) extends KafkaMe
       onResponse(processor)
   }
 
+  /** Get the next request or block until specified time has elapsed */
+  def receiveRequest(timeout: Long): RequestChannel.Request =
+    requestQueue.poll(timeout, TimeUnit.MILLISECONDS)
+
   /** Get the next request or block until there is one */
   def receiveRequest(): RequestChannel.Request =
     requestQueue.take()

@@ -24,7 +24,9 @@ import java.io._
 import java.nio.channels._
 
 import kafka.common.KafkaException
+import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
+import com.yammer.metrics.core.Meter
 
 /**
  * An NIO socket server. The threading model is
@@ -39,19 +41,24 @@ class SocketServer(val brokerId: Int,
                    val maxQueuedRequests: Int,
                    val sendBufferSize: Int,
                    val recvBufferSize: Int,
-                   val maxRequestSize: Int = Int.MaxValue) extends Logging {
+                   val maxRequestSize: Int = Int.MaxValue) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Socket Server on Broker " + brokerId + "], "
   private val time = SystemTime
   private val processors = new Array[Processor](numProcessorThreads)
   @volatile private var acceptor: Acceptor = null
   val requestChannel = new RequestChannel(numProcessorThreads, maxQueuedRequests)
 
+  /* a meter to track the average free capacity of the network processors */
+  private val aggregateIdleMeter = newMeter("NetworkProcessorAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
+
   /**
    * Start the socket server
    */
   def startup() {
     for(i <- 0 until numProcessorThreads) {
-      processors(i) = new Processor(i, time, maxRequestSize, requestChannel)
+      processors(i) = new Processor(i, time, maxRequestSize, aggregateIdleMeter,
+        newMeter("NetworkProcessor-" + i + "-IdlePercent", "percent", TimeUnit.NANOSECONDS),
+        numProcessorThreads, requestChannel)
       Utils.newThread("kafka-network-thread-%d-%d".format(port, i), processors(i), false).start()
     }
     // register the processor threads for notification of responses
@@ -219,9 +226,12 @@ private[kafka] class Acceptor(val host: String, val port: Int, private val proce
 private[kafka] class Processor(val id: Int,
                                val time: Time,
                                val maxRequestSize: Int,
+                               val aggregateIdleMeter: Meter,
+                               val idleMeter: Meter,
+                               val totalProcessorThreads: Int,
                                val requestChannel: RequestChannel) extends AbstractServerThread {
   
-  private val newConnections = new ConcurrentLinkedQueue[SocketChannel]();
+  private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
 
   override def run() {
     startupComplete()
@@ -230,9 +240,17 @@ private[kafka] class Processor(val id: Int,
       configureNewConnections()
       // register any new responses for writing
       processNewResponses()
-      val startSelectTime = SystemTime.milliseconds
+      val startSelectTime = SystemTime.nanoseconds
       val ready = selector.select(300)
-      trace("Processor id " + id + " selection time = " + (SystemTime.milliseconds - startSelectTime) + " ms")
+      val idleTime = SystemTime.nanoseconds - startSelectTime
+      idleMeter.mark(idleTime)
+      // We use a single meter for aggregate idle percentage for the thread pool.
+      // Since meter is calculated as total_recorded_value / time_window and
+      // time_window is independent of the number of threads, each recorded idle
+      // time should be discounted by # threads.
+      aggregateIdleMeter.mark(idleTime / totalProcessorThreads)
+
+      trace("Processor id " + id + " selection time = " + idleTime + " ns")
       if(ready > 0) {
         val keys = selector.selectedKeys()
         val iter = keys.iterator()
