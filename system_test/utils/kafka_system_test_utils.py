@@ -458,6 +458,7 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
 
                 elif ( clusterCfg["role"] == "mirror_maker"):
                     tcCfg["metadata.broker.list"] = testcaseEnv.userDefinedEnvVarDict["targetBrokerList"]
+                    tcCfg["bootstrap.servers"] = testcaseEnv.userDefinedEnvVarDict["targetBrokerList"] # for new producer
                     copy_file_with_dict_values(cfgTemplatePathname + "/mirror_producer.properties",
                         cfgDestPathname + "/" + tcCfg["mirror_producer_config_filename"], tcCfg, None)
 
