@@ -86,7 +86,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     val logManager = server.getLogManager
     assertTrue("Log for partition [topic,0] should be created",
-      waitUntilTrue(() => logManager.getLog(TopicAndPartition(topic, part)).isDefined, 1000))
+      waitUntilTrue(() => logManager.getLog(TopicAndPartition(topic, part)).isDefined, 5000))
     val log = logManager.getLog(TopicAndPartition(topic, part)).get
 
     val message = new Message(Integer.toString(42).getBytes())
@@ -97,7 +97,8 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), OffsetRequest.LatestTime, 10)
     assertEquals(Seq(20L, 16L, 12L, 8L, 4L, 0L), offsets)
 
-    waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
+    assertTrue("Leader should be elected",
+      waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 5000))
     val topicAndPartition = TopicAndPartition(topic, part)
     val offsetRequest = OffsetRequest(
       Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 10)),
@@ -161,7 +162,8 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val offsets = server.apis.fetchOffsets(logManager, TopicAndPartition(topic, part), now, 10)
     assertEquals(Seq(20L, 16L, 12L, 8L, 4L, 0L), offsets)
 
-    waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
+    assertTrue("Leader should be elected",
+      waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 5000))
     val topicAndPartition = TopicAndPartition(topic, part)
     val offsetRequest = OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(now, 10)), replicaId = 0)
     val consumerOffsets =
@@ -189,7 +191,8 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     assertEquals(Seq(0L), offsets)
 
-    waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 1000)
+    assertTrue("Leader should be elected",
+      waitUntilTrue(() => isLeaderLocalOnBroker(topic, part, server), 5000))
     val topicAndPartition = TopicAndPartition(topic, part)
     val offsetRequest =
       OffsetRequest(Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.EarliestTime, 10)))
