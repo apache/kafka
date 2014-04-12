@@ -129,8 +129,8 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(leader2.get, leader2FromZk)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 1, 1000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 2, 1000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 1, 5000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 2, 5000)
     val metadata = ClientUtils.fetchTopicMetadata(Set(topic1), brokers, "AddPartitionsTest-testIncrementPartitions",
       2000,0).topicsMetadata
     val metaDataForTopic1 = metadata.filter(p => p.topic.equals(topic1))
@@ -154,8 +154,8 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(leader2.get, leader2FromZk)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1, 1000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2, 1000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1, 5000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2, 5000)
     val metadata = ClientUtils.fetchTopicMetadata(Set(topic2), brokers, "AddPartitionsTest-testManualAssignmentOfReplicas",
       2000,0).topicsMetadata
     val metaDataForTopic2 = metadata.filter(p => p.topic.equals(topic2))
@@ -171,35 +171,14 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   def testReplicaPlacement {
     AdminUtils.addPartitions(zkClient, topic3, 7)
-    // wait until leader is elected
-    var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, 1, 500)
-    var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, 2, 500)
-    var leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, 3, 500)
-    var leader4 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, 4, 500)
-    var leader5 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, 5, 500)
-    var leader6 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, 6, 500)
-
-    val leader1FromZk = ZkUtils.getLeaderForPartition(zkClient, topic3, 1).get
-    val leader2FromZk = ZkUtils.getLeaderForPartition(zkClient, topic3, 2).get
-    val leader3FromZk = ZkUtils.getLeaderForPartition(zkClient, topic3, 3).get
-    val leader4FromZk = ZkUtils.getLeaderForPartition(zkClient, topic3, 4).get
-    val leader5FromZk = ZkUtils.getLeaderForPartition(zkClient, topic3, 5).get
-    val leader6FromZk = ZkUtils.getLeaderForPartition(zkClient, topic3, 6).get
-
-    assertEquals(leader1.get, leader1FromZk)
-    assertEquals(leader2.get, leader2FromZk)
-    assertEquals(leader3.get, leader3FromZk)
-    assertEquals(leader4.get, leader4FromZk)
-    assertEquals(leader5.get, leader5FromZk)
-    assertEquals(leader6.get, leader6FromZk)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 1, 1000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 2, 1000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 3, 1000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 4, 1000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 5, 1000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 6, 1000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 1, 5000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 2, 5000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 3, 5000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 4, 5000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 5, 5000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 6, 5000)
 
     val metadata = ClientUtils.fetchTopicMetadata(Set(topic3), brokers, "AddPartitionsTest-testReplicaPlacement",
       2000,0).topicsMetadata
