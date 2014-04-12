@@ -149,7 +149,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
       
     // give some time for follower 1 to record leader HW of 60
     assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 2000))
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 5000))
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(server => server.shutdown())
     producer.close()
@@ -180,7 +180,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     var hw = 20L
     // give some time for follower 1 to record leader HW of 600
     assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 1000))
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 5000))
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(server => server.shutdown())
     producer.close()
@@ -215,7 +215,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     
     // allow some time for the follower to get the leader HW
     assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 1000))
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 5000))
     // kill the server hosting the preferred replica
     server1.shutdown()
     server2.shutdown()
@@ -240,7 +240,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     
     // allow some time for the follower to get the leader HW
     assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server1.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 1000))
+      server1.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 5000))
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(server => server.shutdown())
     producer.close()
