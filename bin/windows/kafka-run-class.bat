@@ -17,76 +17,113 @@ rem limitations under the License.
 setlocal enabledelayedexpansion
 
 IF [%1] EQU [] (
-	echo "USAGE: $0 classname [opts]"
-	goto :eof
+	echo USAGE: %0 classname [opts]
+	EXIT /B 1
 )
 
-set BASE_DIR=%CD%\..
+rem Using pushd popd to set BASE_DIR to the absolute path
+pushd %~dp0..\..
+set BASE_DIR=%CD%
+popd
 set CLASSPATH=
-echo %BASE_DIR%
 
-set ivyPath=%USERPROFILE%\.ivy2\cache
+IF ["%SCALA_VERSION%"] EQU [""] (
+  set SCALA_VERSION=2.8.0
+)
 
-set snappy=%ivyPath%/org.xerial.snappy/snappy-java/bundles/snappy-java-1.0.5.jar
-	call :concat %snappy%
-
-set library=%ivyPath%/org.scala-lang/scala-library/jars/scala-library-2.8.0.jar
-	call :concat %library%
-
-set compiler=%ivyPath%/org.scala-lang/scala-compiler/jars/scala-compiler-2.8.0.jar
-	call :concat %compiler%
-
-set log4j=%ivyPath%/log4j/log4j/jars/log4j-1.2.15.jar
-	call :concat %log4j%
-
-set slf=%ivyPath%/org.slf4j/slf4j-api/jars/slf4j-api-1.6.4.jar
-	call :concat %slf%
-
-set zookeeper=%ivyPath%/org.apache.zookeeper/zookeeper/jars/zookeeper-3.3.4.jar
-	call :concat %zookeeper%
-
-set jopt=%ivyPath%/net.sf.jopt-simple/jopt-simple/jars/jopt-simple-3.2.jar
-	call :concat %jopt%
-
-for %%i in (%BASE_DIR%\core\target\scala-2.8.0\*.jar) do (
+rem Classpath addition for kafka-core dependencies
+for %%i in (%BASE_DIR%\core\build\dependant-libs-%SCALA_VERSION%\*.jar) do (
 	call :concat %%i
 )
 
-for %%i in (%BASE_DIR%\core\lib\*.jar) do (
+rem Classpath addition for kafka-perf dependencies
+for %%i in (%BASE_DIR%\perf\build\dependant-libs-%SCALA_VERSION%\*.jar) do (
 	call :concat %%i
 )
 
-for %%i in (%BASE_DIR%\perf\target\scala-2.8.0/kafka*.jar) do (
+rem Classpath addition for kafka-clients
+for %%i in (%BASE_DIR%\clients\build\libs\kafka-clients-*.jar) do (
 	call :concat %%i
 )
 
+rem Classpath addition for kafka-examples
+for %%i in (%BASE_DIR%\examples\build\libs\kafka-examples-*.jar) do (
+	call :concat %%i
+)
+
+rem Classpath addition for contrib/hadoop-consumer
+for %%i in (%BASE_DIR%\contrib\hadoop-consumer\build\libs\kafka-hadoop-consumer-*.jar) do (
+	call :concat %%i
+)
+
+rem Classpath addition for contrib/hadoop-producer
+for %%i in (%BASE_DIR%\contrib\hadoop-producer\build\libs\kafka-hadoop-producer-*.jar) do (
+	call :concat %%i
+)
+
+rem Classpath addition for release
+for %%i in (%BASE_DIR%\libs\*.jar) do (
+	call :concat %%i
+)
+
+rem Classpath addition for core
+for %%i in (%BASE_DIR%\core\build\libs\kafka_%SCALA_VERSION%*.jar) do (
+	call :concat %%i
+)
+
+rem JMX settings
 IF ["%KAFKA_JMX_OPTS%"] EQU [""] (
-	set KAFKA_JMX_OPTS=-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false
+	set KAFKA_JMX_OPTS=-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false
 )
 
-IF ["%KAFKA_OPTS%"] EQU [""] (
-	set KAFKA_OPTS=-Xmx512M -server -Dlog4j.configuration=file:"%BASE_DIR%\config\log4j.properties"
-)
-
+rem JMX port to use
 IF ["%JMX_PORT%"] NEQ [""] (
 	set KAFKA_JMX_OPTS=%KAFKA_JMX_OPTS% -Dcom.sun.management.jmxremote.port=%JMX_PORT%
 )
 
+rem Log4j settings
+IF ["%KAFKA_LOG4J_OPTS%"] EQU [""] (
+	set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%BASE_DIR%/config/tools-log4j.properties
+)
+
+rem Generic jvm settings you want to add
+IF ["%KAFKA_OPTS%"] EQU [""] (
+	set KAFKA_OPTS=
+)
+
+rem Which java to use
 IF ["%JAVA_HOME%"] EQU [""] (
 	set JAVA=java
 ) ELSE (
 	set JAVA="%JAVA_HOME%/bin/java"
 )
 
-set SEARCHTEXT=\bin\..
-set REPLACETEXT=
-set CLASSPATH=!CLASSPATH:%SEARCHTEXT%=%REPLACETEXT%!
-set COMMAND= %JAVA% %KAFKA_OPTS% %KAFKA_JMX_OPTS% -cp %CLASSPATH% %*
-set SEARCHTEXT=-cp ;
-set REPLACETEXT=-cp 
-set COMMAND=!COMMAND:%SEARCHTEXT%=%REPLACETEXT%!
+rem Memory options
+IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
+	set KAFKA_HEAP_OPTS=-Xmx256M
+)
+
+rem JVM performance options
+IF ["%KAFKA_JVM_PERFORMANCE_OPTS%"] EQU [""] (
+	set KAFKA_JVM_PERFORMANCE_OPTS=-server -XX:+UseCompressedOops -XX:+UseParNewGC -XX:+UseConcMarkSweepGC -XX:+CMSClassUnloadingEnabled -XX:+CMSScavengeBeforeRemark -XX:+DisableExplicitGC -Djava.awt.headless=true
+)
+
+IF ["%CLASSPATH%"] EQU [""] (
+	echo Classpath is empty. Please build the project first e.g. by running 'gradlew jarAll'
+	EXIT /B 2
+)
+
+set COMMAND=%JAVA% %KAFKA_HEAP_OPTS% %KAFKA_JVM_PERFORMANCE_OPTS% %KAFKA_JMX_OPTS% %KAFKA_LOG4J_OPTS% -cp %CLASSPATH% %KAFKA_OPTS% %*
+rem echo.
+rem echo %COMMAND%
+rem echo.
 
 %COMMAND%
 
+goto :eof
 :concat
-set CLASSPATH=%CLASSPATH%;"%1"
+IF ["%CLASSPATH%"] EQU [""] (
+  set CLASSPATH="%1"
+) ELSE (
+  set CLASSPATH=%CLASSPATH%;"%1"
+)

@@ -14,13 +14,4 @@ rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
-IF [%1] EQU [] (
-	echo USAGE: %0 server.properties
-	EXIT /B 1
-)
-
-SetLocal
-set KAFKA_LOG4J_OPTS=-Dlog4j.configuration=file:%~dp0../../config/log4j.properties
-set KAFKA_HEAP_OPTS=-Xmx1G -Xms1G
-%~dp0kafka-run-class.bat kafka.Kafka %*
-EndLocal
+%~dp0kafka-run-class.bat kafka.admin.TopicCommand %*
