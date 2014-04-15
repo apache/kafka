@@ -462,7 +462,7 @@ class ReplicaManager(val config: KafkaConfig,
    */
   def checkpointHighWatermarks() {
     val replicas = allPartitions.values.map(_.getReplica(config.brokerId)).collect{case Some(replica) => replica}
-    val replicasByDir = replicas.filter(_.log.isDefined).groupBy(_.log.get.dir.getParent)
+    val replicasByDir = replicas.filter(_.log.isDefined).groupBy(_.log.get.dir.getParentFile.getAbsolutePath)
     for((dir, reps) <- replicasByDir) {
       val hwms = reps.map(r => (new TopicAndPartition(r) -> r.highWatermark)).toMap
       try {
