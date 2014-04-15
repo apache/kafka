@@ -71,10 +71,10 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
 
 
     // wait until leader is elected
-    var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, partitionId, 500)
-    var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, partitionId, 500)
-    var leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, partitionId, 500)
-    var leader4 = waitUntilLeaderIsElectedOrChanged(zkClient, topic4, partitionId, 500)
+    var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, partitionId)
+    var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, partitionId)
+    var leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, partitionId)
+    var leader4 = waitUntilLeaderIsElectedOrChanged(zkClient, topic4, partitionId)
 
     debug("Leader for " + topic1  + " is elected to be: %s".format(leader1.getOrElse(-1)))
     debug("Leader for " + topic2 + " is elected to be: %s".format(leader1.getOrElse(-1)))
@@ -121,8 +121,8 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testIncrementPartitions {
     AdminUtils.addPartitions(zkClient, topic1, 3)
     // wait until leader is elected
-    var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 1, 500)
-    var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 2, 500)
+    var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 1)
+    var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 2)
     val leader1FromZk = ZkUtils.getLeaderForPartition(zkClient, topic1, 1).get
     val leader2FromZk = ZkUtils.getLeaderForPartition(zkClient, topic1, 2).get
     assertEquals(leader1.get, leader1FromZk)
@@ -146,8 +146,8 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testManualAssignmentOfReplicas {
     AdminUtils.addPartitions(zkClient, topic2, 3, "1:2,0:1,2:3")
     // wait until leader is elected
-    var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 1, 500)
-    var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 2, 500)
+    var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 1)
+    var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, 2)
     val leader1FromZk = ZkUtils.getLeaderForPartition(zkClient, topic2, 1).get
     val leader2FromZk = ZkUtils.getLeaderForPartition(zkClient, topic2, 2).get
     assertEquals(leader1.get, leader1FromZk)

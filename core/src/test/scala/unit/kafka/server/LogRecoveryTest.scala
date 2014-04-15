@@ -75,7 +75,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0,1)))
 
     // wait until leader is elected
-    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500)
+    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
     assertTrue("Leader should get elected", leader.isDefined)
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
@@ -108,7 +108,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0,1)))
 
     // wait until leader is elected
-    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500)
+    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
     assertTrue("Leader should get elected", leader.isDefined)
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
@@ -124,13 +124,13 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
 
     // check if leader moves to the other server
-    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500, leader)
+    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = leader)
     assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
 
     // bring the preferred replica back
     server1.startup()
 
-    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500)
+    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
     assertTrue("Leader must remain on broker 1, in case of zookeeper session expiration it can move to broker 0",
       leader.isDefined && (leader.get == 0 || leader.get == 1))
 
@@ -140,7 +140,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
 
     server2.startup()
-    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500, leader)
+    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = leader)
     assertTrue("Leader must remain on broker 0, in case of zookeeper session expiration it can move to broker 1",
       leader.isDefined && (leader.get == 0 || leader.get == 1))
 
@@ -172,7 +172,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0,1)))
 
     // wait until leader is elected
-    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500)
+    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
     assertTrue("Leader should get elected", leader.isDefined)
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
@@ -205,7 +205,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(server1.config.brokerId, server2.config.brokerId)))
 
     // wait until leader is elected
-    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500)
+    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
     assertTrue("Leader should get elected", leader.isDefined)
     // NOTE: this is to avoid transient test failures
     assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
@@ -224,7 +224,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     server2.startup()
     // check if leader moves to the other server
-    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 500, leader)
+    leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = leader)
     assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
 
     assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))

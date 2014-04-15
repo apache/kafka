@@ -56,7 +56,7 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
   override def setUp() {
     super.setUp
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0 -> Seq(configs.head.brokerId)))
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
     fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkClient)
     fetcher.stopConnections()
     fetcher.startConnections(topicInfos, cluster)

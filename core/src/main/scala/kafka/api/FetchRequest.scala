@@ -132,7 +132,7 @@ case class FetchRequest private[kafka] (versionId: Short = FetchRequest.CurrentV
     })
   }
 
-  def isFromFollower = Request.isReplicaIdFromFollower(replicaId)
+  def isFromFollower = Request.isValidBrokerId(replicaId)
 
   def isFromOrdinaryConsumer = replicaId == Request.OrdinaryConsumerId
 

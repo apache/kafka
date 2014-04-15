@@ -149,7 +149,7 @@ object TestUtils extends Logging {
     // wait until the update metadata request for new topic reaches all servers
     (0 until numPartitions).map { case i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i, 500)
-      i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i, 500)
+      i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
     }.toMap
   }
 
@@ -436,34 +436,49 @@ object TestUtils extends Logging {
     }
   }
 
-  def waitUntilLeaderIsElectedOrChanged(zkClient: ZkClient, topic: String, partition: Int, timeoutMs: Long, oldLeaderOpt: Option[Int] = None): Option[Int] = {
-    val leaderLock = new ReentrantLock()
-    val leaderExistsOrChanged = leaderLock.newCondition()
+  /**
+   *  If neither oldLeaderOpt nor newLeaderOpt is defined, wait until the leader of a partition is elected.
+   *  If oldLeaderOpt is defined, it waits until the new leader is different from the old leader.
+   *  If newLeaderOpt is defined, it waits until the new leader becomes the expected new leader.
+   * @return The new leader or assertion failure if timeout is reached.
+   */
+  def waitUntilLeaderIsElectedOrChanged(zkClient: ZkClient, topic: String, partition: Int, timeoutMs: Long = 5000L,
+                                        oldLeaderOpt: Option[Int] = None, newLeaderOpt: Option[Int] = None): Option[Int] = {
+    require(!(oldLeaderOpt.isDefined && newLeaderOpt.isDefined), "Can't define both the old and the new leader")
+    val startTime = System.currentTimeMillis()
+    var isLeaderElectedOrChanged = false;
 
-    if(oldLeaderOpt == None)
-      info("Waiting for leader to be elected for partition [%s,%d]".format(topic, partition))
-    else
-      info("Waiting for leader for partition [%s,%d] to be changed from old leader %d".format(topic, partition, oldLeaderOpt.get))
+    trace("Waiting for leader to be elected or changed for partition [%s,%d], older leader is %s, new leader is %s"
+          .format(topic, partition, oldLeaderOpt, newLeaderOpt))
 
-    leaderLock.lock()
-    try {
-      zkClient.subscribeDataChanges(ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition), new LeaderExistsOrChangedListener(topic, partition, leaderLock, leaderExistsOrChanged, oldLeaderOpt, zkClient))
-      leaderExistsOrChanged.await(timeoutMs, TimeUnit.MILLISECONDS)
+    var leader: Option[Int] = None
+    while (!isLeaderElectedOrChanged && System.currentTimeMillis() < startTime + timeoutMs) {
       // check if leader is elected
-      val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
+      leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
       leader match {
         case Some(l) =>
-          if(oldLeaderOpt == None)
-            info("Leader %d is elected for partition [%s,%d]".format(l, topic, partition))
-          else
-            info("Leader for partition [%s,%d] is changed from %d to %d".format(topic, partition, oldLeaderOpt.get, l))
-        case None => error("Timing out after %d ms since leader is not elected for partition [%s,%d]"
-                                   .format(timeoutMs, topic, partition))
+          if (newLeaderOpt.isDefined && newLeaderOpt.get == l) {
+            trace("Expected new leader %d is elected for partition [%s,%d]".format(l, topic, partition))
+            isLeaderElectedOrChanged = true
+          } else if (oldLeaderOpt.isDefined && oldLeaderOpt.get != l) {
+            trace("Leader for partition [%s,%d] is changed from %d to %d".format(topic, partition, oldLeaderOpt.get, l))
+            isLeaderElectedOrChanged = true
+          } else if (!oldLeaderOpt.isDefined) {
+            trace("Leader %d is elected for partition [%s,%d]".format(l, topic, partition))
+            isLeaderElectedOrChanged = true
+          } else {
+            trace("Current leader for partition [%s,%d] is %d".format(topic, partition, l))
+          }
+        case None =>
+          trace("Leader for partition [%s,%d] is not elected yet".format(topic, partition))
       }
-      leader
-    } finally {
-      leaderLock.unlock()
+      Thread.sleep(timeoutMs.min(100L))
     }
+    if (!isLeaderElectedOrChanged)
+      fail("Timing out after %d ms since leader is not elected or changed for partition [%s,%d]"
+           .format(timeoutMs, topic, partition))
+
+    return leader
   }
   
   /**

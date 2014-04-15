@@ -25,8 +25,8 @@ object Request {
   val OrdinaryConsumerId: Int = -1
   val DebuggingConsumerId: Int = -2
 
-  // Followers use broker id as the replica id, which are non-negative int.
-  def isReplicaIdFromFollower(replicaId: Int): Boolean = (replicaId >= 0)
+  // Broker ids are non-negative int.
+  def isValidBrokerId(brokerId: Int): Boolean = (brokerId >= 0)
 }
 
 

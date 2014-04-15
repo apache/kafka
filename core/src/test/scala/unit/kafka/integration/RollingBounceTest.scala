@@ -86,10 +86,10 @@ class RollingBounceTest extends JUnit3Suite with ZooKeeperTestHarness {
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic4, Map(0->Seq(0,3)))
 
     // wait until leader is elected
-    var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, partitionId, 500)
-    var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, partitionId, 500)
-    var leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, partitionId, 500)
-    var leader4 = waitUntilLeaderIsElectedOrChanged(zkClient, topic4, partitionId, 500)
+    var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, partitionId)
+    var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, partitionId)
+    var leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, partitionId)
+    var leader4 = waitUntilLeaderIsElectedOrChanged(zkClient, topic4, partitionId)
 
     debug("Leader for " + topic1  + " is elected to be: %s".format(leader1.getOrElse(-1)))
     debug("Leader for " + topic2 + " is elected to be: %s".format(leader1.getOrElse(-1)))
@@ -131,7 +131,7 @@ class RollingBounceTest extends JUnit3Suite with ZooKeeperTestHarness {
       servers((startIndex + 1) % 4).shutdown()
       prevLeader = (startIndex + 1) % 4
     }
-    var newleader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, 1500)
+    var newleader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
     // Ensure the new leader is different from the old
     assertTrue("Leader transition did not happen for " + topic, newleader.getOrElse(-1) != -1 && (newleader.getOrElse(-1) != prevLeader))
     // Start the server back up again

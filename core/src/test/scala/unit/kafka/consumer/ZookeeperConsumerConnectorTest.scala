@@ -94,8 +94,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
                         sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages)
 
     // wait to make sure the topic and partition have a leader for the successful case
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1, 500)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 1, 1000)
@@ -127,8 +127,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val sentMessages2 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages) ++
                         sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages)
 
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1, 500)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     val receivedMessages2 = getMessages(nMessages, topicMessageStreams1) ++ getMessages(nMessages, topicMessageStreams2)
     assertEquals(sentMessages2.sorted, receivedMessages2.sorted)
@@ -148,8 +148,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val sentMessages3 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages) ++
                         sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages)
 
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1, 500)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     val receivedMessages3 = getMessages(nMessages, topicMessageStreams1) ++ getMessages(nMessages, topicMessageStreams2)
     assertEquals(sentMessages3.sorted, receivedMessages3.sorted)
@@ -173,8 +173,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val sentMessages1 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages, GZIPCompressionCodec) ++
                         sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages, GZIPCompressionCodec)
 
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1, 500)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 1, 1000)
@@ -206,8 +206,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val sentMessages2 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages, GZIPCompressionCodec) ++
                         sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages, GZIPCompressionCodec)
 
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1, 500)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     val receivedMessages2 = getMessages(nMessages, topicMessageStreams1) ++ getMessages(nMessages, topicMessageStreams2)
     assertEquals(sentMessages2.sorted, receivedMessages2.sorted)
@@ -227,8 +227,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val sentMessages3 = sendMessagesToBrokerPartition(configs.head, topic, 0, nMessages, GZIPCompressionCodec) ++
                         sendMessagesToBrokerPartition(configs.last, topic, 1, nMessages, GZIPCompressionCodec)
 
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1, 500)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     val receivedMessages3 = getMessages(nMessages, topicMessageStreams1) ++ getMessages(nMessages, topicMessageStreams2)
     assertEquals(sentMessages3.sorted, receivedMessages3.sorted)
@@ -280,8 +280,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
 
     val consumerConfig = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer1))
 
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1, 500)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     val zkConsumerConnector =
       new ZookeeperConsumerConnector(consumerConfig, true)

@@ -93,7 +93,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     AdminUtils.createTopic(zkClient, "test", 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0)
 
     val message1 = new Message(new Array[Byte](configs(0).messageMaxBytes + 1))
     val messageSet1 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message1)
@@ -122,7 +122,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
     AdminUtils.createTopic(zkClient, "test", 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0)
 
     // This message will be dropped silently since message size too large.
     producer.send(TestUtils.produceRequest("test", 0,
@@ -163,9 +163,9 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
 
     // #2 - test that we get correct offsets when partition is owned by broker
     AdminUtils.createTopic(zkClient, "topic1", 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "topic1", 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "topic1", 0)
     AdminUtils.createTopic(zkClient, "topic3", 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "topic3", 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "topic3", 0)
 
     val response2 = producer.send(request)
     Assert.assertNotNull(response2)

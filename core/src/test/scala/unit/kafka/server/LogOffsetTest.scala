@@ -124,7 +124,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // setup brokers in zookeeper as owners of partitions for this test
     AdminUtils.createTopic(zkClient, topic, 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
 
     var offsetChanged = false
     for(i <- 1 to 14) {

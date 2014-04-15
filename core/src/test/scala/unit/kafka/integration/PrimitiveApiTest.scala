@@ -227,7 +227,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val newTopic = "new-topic"
     AdminUtils.createTopic(zkClient, newTopic, 1, 1)
     TestUtils.waitUntilMetadataIsPropagated(servers, newTopic, 0, 1000)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, newTopic, 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, newTopic, 0)
     val fetchResponse = consumer.fetch(new FetchRequestBuilder().addFetch(newTopic, 0, 0, 10000).build())
     assertFalse(fetchResponse.messageSet(newTopic, 0).iterator.hasNext)
   }
@@ -279,7 +279,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   private def createSimpleTopicsAndAwaitLeader(zkClient: ZkClient, topics: Iterable[String]) {
     for( topic <- topics ) {
       AdminUtils.createTopic(zkClient, topic, partitions = 1, replicationFactor = 1)
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition = 0, timeoutMs = 500)
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition = 0)
     }
   }
 }

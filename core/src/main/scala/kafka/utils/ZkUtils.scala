@@ -728,41 +728,6 @@ object ZkUtils extends Logging {
   }
 }
 
-class LeaderExistsOrChangedListener(topic: String,
-                                    partition: Int,
-                                    leaderLock: ReentrantLock,
-                                    leaderExistsOrChanged: Condition,
-                                    oldLeaderOpt: Option[Int] = None,
-                                    zkClient: ZkClient = null) extends IZkDataListener with Logging {
-  @throws(classOf[Exception])
-  def handleDataChange(dataPath: String, data: Object) {
-    val t = dataPath.split("/").takeRight(3).head
-    val p = dataPath.split("/").takeRight(2).head.toInt
-    inLock(leaderLock) {
-      if(t == topic && p == partition){
-        if(oldLeaderOpt == None){
-          trace("In leader existence listener on partition [%s, %d], leader has been created".format(topic, partition))
-          leaderExistsOrChanged.signal()
-        }
-        else {
-          val newLeaderOpt = ZkUtils.getLeaderForPartition(zkClient, t, p)
-          if(newLeaderOpt.isDefined && newLeaderOpt.get != oldLeaderOpt.get){
-            trace("In leader change listener on partition [%s, %d], leader has been moved from %d to %d".format(topic, partition, oldLeaderOpt.get, newLeaderOpt.get))
-            leaderExistsOrChanged.signal()
-          }
-        }
-      }
-    }
-  }
-
-  @throws(classOf[Exception])
-  def handleDataDeleted(dataPath: String) {
-    inLock(leaderLock) {
-      leaderExistsOrChanged.signal()
-    }
-  }
-}
-
 object ZKStringSerializer extends ZkSerializer {
 
   @throws(classOf[ZkMarshallingError])

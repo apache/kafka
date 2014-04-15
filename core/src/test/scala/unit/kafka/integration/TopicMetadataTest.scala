@@ -119,7 +119,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(0, topicsMetadata.head.partitionsMetadata.size)
 
     // wait for leader to be elected
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
     TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic, 0, 1000)
 
     // retry the metadata for the auto created topic

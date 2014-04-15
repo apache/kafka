@@ -89,7 +89,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     AdminUtils.createTopic(zkClient, topic, 1, 2)
     // wait until the update metadata request for new topic reaches all servers
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 500)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
 
     val props1 = new util.Properties()
     props1.put("metadata.broker.list", "localhost:80,localhost:81")
@@ -154,7 +154,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     // create topic with 1 partition and await leadership
     AdminUtils.createTopic(zkClient, topic, 1, 2)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
 
     val producer1 = new Producer[String, String](producerConfig1)
     val producer2 = new Producer[String, String](producerConfig2)
@@ -206,10 +206,10 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)))
     // waiting for 1 partition is enough
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1, 500)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 2, 500)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 3, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 2)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 3)
 
     val config = new ProducerConfig(props)
     val producer = new Producer[String, String](config)
@@ -236,7 +236,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     // restart server 1
     server1.startup()
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
 
     try {
       // cross check if broker 1 got the messages
@@ -268,7 +268,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     // create topics in ZK
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0,1)))
     TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 500)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
 
     // do a simple test to make sure plumbing is okay
     try {
@@ -320,7 +320,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
       AdminUtils.createTopic(zkClient, "new-topic", 2, 1)
       assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
         AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0, 500)
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0)
     
       producer.send(new KeyedMessage[String, String]("new-topic", "key", null))
     } finally {
