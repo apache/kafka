@@ -5,8 +5,8 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
- *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,30 +17,59 @@
 
 package kafka.server
 
-import org.scalatest.junit.JUnit3Suite
-import org.junit.Test
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
+import kafka.log.{CleanerConfig, LogManager, LogConfig}
+
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
+
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
-import kafka.cluster.Replica
-import kafka.log.{LogManager, LogConfig, Log}
+import org.scalatest.junit.JUnit3Suite
+import org.junit.Test
 
 class ReplicaManagerTest extends JUnit3Suite {
+
+  val topic = "test-topic"
+
   @Test
-  def testHighwaterMarkDirectoryMapping() {
+  def testHighWaterMarkDirectoryMapping() {
     val props = TestUtils.createBrokerConfig(1)
-    val dir = "/tmp/kafka-logs/"
-    new File(dir).mkdir()
-    props.setProperty("log.dirs", dir)
     val config = new KafkaConfig(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
-    val mockLogMgr = EasyMock.createMock(classOf[LogManager])
+    val mockLogMgr = createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
-    val partition = rm.getOrCreatePartition("test-topic", 1, 1)
-    partition.addReplicaIfNotExists(new Replica(1, partition, time, 0L, Option(new Log(new File("/tmp/kafka-logs/test-topic-1"), new LogConfig(), 0L, null))))
+    val partition = rm.getOrCreatePartition(topic, 1, 1)
+    partition.getOrCreateReplica(1)
     rm.checkpointHighWatermarks()
   }
+
+  @Test
+  def testHighwaterMarkRelativeDirectoryMapping() {
+    val props = TestUtils.createBrokerConfig(1)
+    props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
+    val config = new KafkaConfig(props)
+    val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val mockLogMgr = createLogManager(config.logDirs.map(new File(_)).toArray)
+    val time: MockTime = new MockTime()
+    val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
+    val partition = rm.getOrCreatePartition(topic, 1, 1)
+    partition.getOrCreateReplica(1)
+    rm.checkpointHighWatermarks()
+  }
+
+  private def createLogManager(logDirs: Array[File]): LogManager = {
+    val time = new MockTime()
+    return new LogManager(logDirs,
+      topicConfigs = Map(),
+      defaultConfig = new LogConfig(),
+      cleanerConfig = CleanerConfig(enableCleaner = false),
+      flushCheckMs = 1000L,
+      flushCheckpointMs = 100000L,
+      retentionCheckMs = 1000L,
+      scheduler = time.scheduler,
+      time = time)
+  }
+
 }

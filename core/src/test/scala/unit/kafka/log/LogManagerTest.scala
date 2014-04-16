@@ -201,6 +201,7 @@ class LogManagerTest extends JUnit3Suite {
   /**
    * Test that it is not possible to open two log managers using the same data directory
    */
+  @Test
   def testTwoLogManagersUsingSameDirFails() {
     try {
       new LogManager(Array(logDir), Map(), logConfig, cleanerConfig, 1000L, 10000L, 1000L, time.scheduler, time)
@@ -209,24 +210,75 @@ class LogManagerTest extends JUnit3Suite {
       case e: KafkaException => // this is good 
     }
   }
-  
+
   /**
    * Test that recovery points are correctly written out to disk
    */
+  @Test
   def testCheckpointRecoveryPoints() {
-    val topicA = TopicAndPartition("test-a", 1)
-    val topicB = TopicAndPartition("test-b", 1)
-    val logA = this.logManager.createLog(topicA, logConfig)
-    val logB = this.logManager.createLog(topicB, logConfig)
-    for(i <- 0 until 50) 
-      logA.append(TestUtils.singleMessageSet("test".getBytes()))
-    for(i <- 0 until 100)
-      logB.append(TestUtils.singleMessageSet("test".getBytes()))
-    logA.flush()
-    logB.flush()
+    verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1), TopicAndPartition("test-b", 1)), logManager)
+  }
+
+  /**
+   * Test that recovery points directory checking works with trailing slash
+   */
+  @Test
+  def testRecoveryDirectoryMappingWithTrailingSlash() {
+    logManager.shutdown()
+    logDir = TestUtils.tempDir()
+    logManager = new LogManager(logDirs = Array(new File(logDir.getAbsolutePath + File.separator)),
+      topicConfigs = Map(),
+      defaultConfig = logConfig,
+      cleanerConfig = cleanerConfig,
+      flushCheckMs = 1000L,
+      flushCheckpointMs = 100000L,
+      retentionCheckMs = 1000L,
+      scheduler = time.scheduler,
+      time = time)
+    logManager.startup
+    verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1)), logManager)
+  }
+
+  /**
+   * Test that recovery points directory checking works with relative directory
+   */
+  @Test
+  def testRecoveryDirectoryMappingWithRelativeDirectory() {
+    logManager.shutdown()
+    logDir = new File("data" + File.separator + logDir.getName)
+    logDir.mkdirs()
+    logDir.deleteOnExit()
+    logManager = new LogManager(logDirs = Array(logDir),
+      topicConfigs = Map(),
+      defaultConfig = logConfig,
+      cleanerConfig = cleanerConfig,
+      flushCheckMs = 1000L,
+      flushCheckpointMs = 100000L,
+      retentionCheckMs = 1000L,
+      scheduler = time.scheduler,
+      time = time)
+    logManager.startup
+    verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1)), logManager)
+  }
+
+
+  private def verifyCheckpointRecovery(topicAndPartitions: Seq[TopicAndPartition],
+                                       logManager: LogManager) {
+    val logs = topicAndPartitions.map(this.logManager.createLog(_, logConfig))
+    logs.foreach(log => {
+      for(i <- 0 until 50)
+        log.append(TestUtils.singleMessageSet("test".getBytes()))
+
+      log.flush()
+    })
+
     logManager.checkpointRecoveryPointOffsets()
     val checkpoints = new OffsetCheckpoint(new File(logDir, logManager.RecoveryPointCheckpointFile)).read()
-    assertEquals("Recovery point should equal checkpoint", checkpoints(topicA), logA.recoveryPoint)
-    assertEquals("Recovery point should equal checkpoint", checkpoints(topicB), logB.recoveryPoint)
+
+    topicAndPartitions.zip(logs).foreach {
+      case(tp, log) => {
+        assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
+      }
+    }
   }
 }

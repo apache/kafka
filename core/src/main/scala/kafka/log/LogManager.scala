@@ -52,7 +52,7 @@ class LogManager(val logDirs: Array[File],
   private val logs = new Pool[TopicAndPartition, Log]()
 
   createAndValidateLogDirs(logDirs)
-  private var dirLocks = lockLogDirs(logDirs)
+  private val dirLocks = lockLogDirs(logDirs)
   private val recoveryPointCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, RecoveryPointCheckpointFile)))).toMap
   loadLogs(logDirs)
   

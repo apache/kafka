@@ -85,6 +85,16 @@ object TestUtils extends Logging {
   }
 
   /**
+   * Create a temporary relative directory
+   */
+  def tempRelativeDir(parent: String): File = {
+    val f = new File(parent, "kafka-" + random.nextInt(1000000))
+    f.mkdirs()
+    f.deleteOnExit()
+    f
+  }
+
+  /**
    * Create a temporary file
    */
   def tempFile(): File = {
