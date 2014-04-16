@@ -774,27 +774,35 @@ public class Sender implements Runnable {
 
         public SenderMetrics(Metrics metrics) {
             this.metrics = metrics;
+
             this.batchSizeSensor = metrics.sensor("batch-size");
-            this.queueTimeSensor = metrics.sensor("queue-time");
-            this.requestTimeSensor = metrics.sensor("request-time");
-            this.recordsPerRequestSensor = metrics.sensor("records-per-request");
-            this.retrySensor = metrics.sensor("record-retries");
-            this.errorSensor = metrics.sensor("errors");
-            this.maxRecordSizeSensor = metrics.sensor("record-size-max");
             this.batchSizeSensor.add("batch-size-avg", "The average number of bytes sent per partition per-request.", new Avg());
-            this.retrySensor.add("record-retry-rate", "The average per-second number of retried record sends", new Rate());
+
+            this.queueTimeSensor = metrics.sensor("queue-time");
+            this.queueTimeSensor.add("record-queue-time-avg",
+                "The average time in ms record batches spent in the record accumulator.",
+                new Avg());
+            this.queueTimeSensor.add("record-queue-time-max",
+                "The maximum time in ms record batches spent in the record accumulator.",
+                new Max());
+
+            this.requestTimeSensor = metrics.sensor("request-time");
             this.requestTimeSensor.add("request-latency-avg", "The average request latency in ms", new Avg());
             this.requestTimeSensor.add("request-latency-max", "The maximum request latency in ms", new Max());
-            this.queueTimeSensor.add("record-queue-time-avg",
-                                     "The average time in ms record batches spent in the record accumulator.",
-                                     new Avg());
-            this.queueTimeSensor.add("record-queue-time-max",
-                                     "The maximum time in ms record batches spent in the record accumulator.",
-                                     new Max());
-            this.errorSensor.add("record-error-rate", "The average per-second number of record sends that resulted in errors", new Rate());
+
+            this.recordsPerRequestSensor = metrics.sensor("records-per-request");
             this.recordsPerRequestSensor.add("record-send-rate", "The average number of records sent per second.", new Rate());
             this.recordsPerRequestSensor.add("records-per-request-avg", "The average number of records per request.", new Avg());
+
+            this.retrySensor = metrics.sensor("record-retries");
+            this.retrySensor.add("record-retry-rate", "The average per-second number of retried record sends", new Rate());
+
+            this.errorSensor = metrics.sensor("errors");
+            this.errorSensor.add("record-error-rate", "The average per-second number of record sends that resulted in errors", new Rate());
+
+            this.maxRecordSizeSensor = metrics.sensor("record-size-max");
             this.maxRecordSizeSensor.add("record-size-max", "The maximum record size", new Max());
+
             this.metrics.addMetric("requests-in-flight", "The current number of in-flight requests awaiting a response.", new Measurable() {
                 public double measure(MetricConfig config, long now) {
                     return inFlightRequests.totalInFlightRequests();
@@ -807,32 +815,53 @@ public class Sender implements Runnable {
             });
         }
 
+        public void maybeRegisterTopicMetrics(String topic) {
+            // if one sensor of the metrics has been registered for the topic,
+            // then all other sensors should have been registered; and vice versa
+            String topicRecordsCountName = "topic." + topic + ".records-per-batch";
+            Sensor topicRecordCount = this.metrics.getSensor(topicRecordsCountName);
+            if (topicRecordCount == null) {
+                topicRecordCount = this.metrics.sensor(topicRecordsCountName);
+                topicRecordCount.add("topic." + topic + ".record-send-rate", new Rate());
+
+                String topicByteRateName = "topic." + topic + ".bytes";
+                Sensor topicByteRate = this.metrics.sensor(topicByteRateName);
+                topicByteRate.add("topic." + topic + ".byte-rate", new Rate());
+
+                String topicRetryName = "topic." + topic + ".record-retries";
+                Sensor topicRetrySensor = this.metrics.sensor(topicRetryName);
+                topicRetrySensor.add("topic." + topic + ".record-retry-rate", new Rate());
+
+                String topicErrorName = "topic." + topic + ".record-errors";
+                Sensor topicErrorSensor = this.metrics.sensor(topicErrorName);
+                topicErrorSensor.add("topic." + topic + ".record-error-rate", new Rate());
+            }
+        }
+
         public void updateProduceRequestMetrics(List<InFlightRequest> requests) {
             long ns = time.nanoseconds();
             for (int i = 0; i < requests.size(); i++) {
                 InFlightRequest request = requests.get(i);
                 int records = 0;
+
                 if (request.batches != null) {
                     for (RecordBatch batch : request.batches.values()) {
 
-                        // per-topic record count
-                        String topicRecordsCountName = "topic." + batch.topicPartition.topic() + ".records-per-batch";
-                        Sensor topicRecordCount = this.metrics.getSensor(topicRecordsCountName);
-                        if (topicRecordCount == null) {
-                            topicRecordCount = this.metrics.sensor(topicRecordsCountName);
-                            topicRecordCount.add("topic." + batch.topicPartition.topic() + ".record-send-rate", new Rate());
-                        }
+                        // register all per-topic metrics at once
+                        String topic = batch.topicPartition.topic();
+                        maybeRegisterTopicMetrics(topic);
+
+                        // per-topic record send rate
+                        String topicRecordsCountName = "topic." + topic + ".records-per-batch";
+                        Sensor topicRecordCount = Utils.notNull(this.metrics.getSensor(topicRecordsCountName));
                         topicRecordCount.record(batch.recordCount);
 
-                        // per-topic bytes-per-second
-                        String topicByteRateName = "topic." + batch.topicPartition.topic() + ".bytes";
-                        Sensor topicByteRate = this.metrics.getSensor(topicByteRateName);
-                        if (topicByteRate == null) {
-                            topicByteRate = this.metrics.sensor(topicByteRateName);
-                            topicByteRate.add("topic." + batch.topicPartition.topic() + ".byte-rate", new Rate());
-                        }
+                        // per-topic bytes send rate
+                        String topicByteRateName = "topic." + topic + ".bytes";
+                        Sensor topicByteRate = Utils.notNull(this.metrics.getSensor(topicByteRateName));
                         topicByteRate.record(batch.records.sizeInBytes());
 
+                        // global metrics
                         this.batchSizeSensor.record(batch.records.sizeInBytes(), ns);
                         this.queueTimeSensor.record(batch.drained - batch.created, ns);
                         this.maxRecordSizeSensor.record(batch.maxRecordSize, ns);
@@ -847,35 +876,22 @@ public class Sender implements Runnable {
             this.retrySensor.record(count);
             String topicRetryName = "topic." + topic + ".record-retries";
             Sensor topicRetrySensor = this.metrics.getSensor(topicRetryName);
-            if (topicRetrySensor == null) {
-                topicRetrySensor = this.metrics.sensor(topicRetryName);
-                topicRetrySensor.add("topic." + topic + ".record-retry-rate", new Rate());
-            }
-            topicRetrySensor.record(count);
+            if (topicRetrySensor != null) topicRetrySensor.record(count);
         }
 
         public void recordErrors(String topic, int count) {
             this.errorSensor.record(count);
             String topicErrorName = "topic." + topic + ".record-errors";
             Sensor topicErrorSensor = this.metrics.getSensor(topicErrorName);
-            if (topicErrorSensor == null) {
-                topicErrorSensor = this.metrics.sensor(topicErrorName);
-                topicErrorSensor.add("topic." + topic + ".record-error-rate", new Rate());
-            }
-            topicErrorSensor.record(count);
+            if (topicErrorSensor != null) topicErrorSensor.record(count);
         }
 
         public void recordLatency(int node, long latency, long nowNs) {
             this.requestTimeSensor.record(latency, nowNs);
             if (node >= 0) {
-                String nodeTimeName = "server." + node + ".latency";
+                String nodeTimeName = "node-" + node + ".latency";
                 Sensor nodeRequestTime = this.metrics.getSensor(nodeTimeName);
-                if (nodeRequestTime == null) {
-                    nodeRequestTime = this.metrics.sensor(nodeTimeName);
-                    nodeRequestTime.add("node-" + node + ".latency-avg", new Avg());
-                    nodeRequestTime.add("node-" + node + ".latency-max", new Max());
-                }
-                nodeRequestTime.record(latency, nowNs);
+                if (nodeRequestTime != null) nodeRequestTime.record(latency, nowNs);
             }
         }
     }

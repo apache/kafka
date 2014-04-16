@@ -221,6 +221,10 @@ public class Selector implements Selectable {
 
                 Transmissions transmissions = transmissions(key);
                 SocketChannel channel = channel(key);
+
+                // register all per-broker metrics at once
+                sensors.maybeRegisterNodeMetrics(transmissions.id);
+
                 try {
                     /* complete any connections that have finished their handshake */
                     if (key.isConnectable()) {
@@ -401,33 +405,41 @@ public class Selector implements Selectable {
 
         public SelectorMetrics(Metrics metrics) {
             this.metrics = metrics;
+
             this.connectionClosed = this.metrics.sensor("connections-closed");
+            this.connectionClosed.add("connection-close-rate", "Connections closed per second in the window.", new Rate());
+
             this.connectionCreated = this.metrics.sensor("connections-created");
+            this.connectionCreated.add("connection-creation-rate", "New connections established per second in the window.", new Rate());
+
             this.bytesTransferred = this.metrics.sensor("bytes-sent-received");
-            this.bytesSent = this.metrics.sensor("bytes-sent", bytesTransferred);
-            this.bytesReceived = this.metrics.sensor("bytes-received", bytesTransferred);
-            this.selectTime = this.metrics.sensor("select-time");
-            this.ioTime = this.metrics.sensor("io-time");
             bytesTransferred.add("network-io-rate",
-                                 "The average number of network operations (reads or writes) on all connections per second.",
-                                 new Rate(new Count()));
+                "The average number of network operations (reads or writes) on all connections per second.",
+                new Rate(new Count()));
+
+            this.bytesSent = this.metrics.sensor("bytes-sent", bytesTransferred);
             this.bytesSent.add("outgoing-byte-rate", "The average number of outgoing bytes sent per second to all servers.", new Rate());
             this.bytesSent.add("request-rate", "The average number of requests sent per second.", new Rate(new Count()));
             this.bytesSent.add("request-size-avg", "The average size of all requests in the window..", new Avg());
             this.bytesSent.add("request-size-max", "The maximum size of any request sent in the window.", new Max());
+
+            this.bytesReceived = this.metrics.sensor("bytes-received", bytesTransferred);
             this.bytesReceived.add("incoming-byte-rate", "Bytes/second read off all sockets", new Rate());
             this.bytesReceived.add("response-rate", "Responses received sent per second.", new Rate(new Count()));
-            this.connectionCreated.add("connection-creation-rate", "New connections established per second in the window.", new Rate());
-            this.connectionClosed.add("connection-close-rate", "Connections closed per second in the window.", new Rate());
+
+            this.selectTime = this.metrics.sensor("select-time");
             this.selectTime.add("select-rate",
-                                "Number of times the I/O layer checked for new I/O to perform per second",
-                                new Rate(new Count()));
+                "Number of times the I/O layer checked for new I/O to perform per second",
+                new Rate(new Count()));
             this.selectTime.add("io-wait-time-ns-avg",
-                                "The average length of time the I/O thread speant waiting for a socket ready for reads or writes in nanoseconds.",
-                                new Avg());
+                "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.",
+                new Avg());
             this.selectTime.add("io-wait-ratio", "The fraction of time the I/O thread spent waiting.", new Rate(TimeUnit.NANOSECONDS));
+
+            this.ioTime = this.metrics.sensor("io-time");
             this.ioTime.add("io-time-ns-avg", "The average length of time for I/O per select call in nanoseconds.", new Avg());
             this.ioTime.add("io-ratio", "The fraction of time the I/O thread spent doing I/O", new Rate(TimeUnit.NANOSECONDS));
+
             this.metrics.addMetric("connection-count", "The current number of active connections.", new Measurable() {
                 public double measure(MetricConfig config, long now) {
                     return keys.size();
@@ -435,35 +447,49 @@ public class Selector implements Selectable {
             });
         }
 
+        public void maybeRegisterNodeMetrics(int node) {
+            if (node >= 0) {
+                // if one sensor of the metrics has been registered for the node,
+                // then all other sensors should have been registered; and vice versa
+                String nodeRequestName = "node-" + node + ".bytes-sent";
+                Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
+                if (nodeRequest == null) {
+                    nodeRequest = this.metrics.sensor(nodeRequestName);
+                    nodeRequest.add("node-" + node + ".outgoing-byte-rate", new Rate());
+                    nodeRequest.add("node-" + node + ".request-rate", "The average number of requests sent per second.", new Rate(new Count()));
+                    nodeRequest.add("node-" + node + ".request-size-avg", "The average size of all requests in the window..", new Avg());
+                    nodeRequest.add("node-" + node + ".request-size-max", "The maximum size of any request sent in the window.", new Max());
+
+                    String nodeResponseName = "node-" + node + ".bytes-received";
+                    Sensor nodeResponse = this.metrics.sensor(nodeResponseName);
+                    nodeResponse.add("node-" + node + ".incoming-byte-rate", new Rate());
+                    nodeResponse.add("node-" + node + ".response-rate",
+                        "The average number of responses received per second.",
+                        new Rate(new Count()));
+
+                    String nodeTimeName = "node-" + node + ".latency";
+                    Sensor nodeRequestTime = this.metrics.sensor(nodeTimeName);
+                    nodeRequestTime.add("node-" + node + ".request-latency-avg", new Avg());
+                    nodeRequestTime.add("node-" + node + ".request-latency-max", new Max());
+                }
+            }
+        }
+
         public void recordBytesSent(int node, int bytes) {
             this.bytesSent.record(bytes);
             if (node >= 0) {
-                String name = "node-" + node + ".bytes-sent";
-                Sensor sensor = this.metrics.getSensor(name);
-                if (sensor == null) {
-                    sensor = this.metrics.sensor(name);
-                    sensor.add("node-" + node + ".outgoing-byte-rate", new Rate());
-                    sensor.add("node-" + node + ".request-rate", "The average number of requests sent per second.", new Rate(new Count()));
-                    sensor.add("node-" + node + ".request-size-avg", "The average size of all requests in the window..", new Avg());
-                    sensor.add("node-" + node + ".request-size-max", "The maximum size of any request sent in the window.", new Max());
-                }
-                sensor.record(bytes);
+                String nodeRequestName = "node-" + node + ".bytes-sent";
+                Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
+                if (nodeRequest != null) nodeRequest.record(bytes);
             }
         }
 
         public void recordBytesReceived(int node, int bytes) {
             this.bytesReceived.record(bytes);
             if (node >= 0) {
-                String name = "node-" + node + ".bytes-received";
-                Sensor sensor = this.metrics.getSensor(name);
-                if (sensor == null) {
-                    sensor = this.metrics.sensor(name);
-                    sensor.add("node-" + node + ".incoming-byte-rate", new Rate());
-                    sensor.add("node-" + node + ".response-rate",
-                               "The average number of responses received per second.",
-                               new Rate(new Count()));
-                }
-                sensor.record(bytes);
+                String nodeRequestName = "node-" + node + ".bytes-received";
+                Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
+                if (nodeRequest != null) nodeRequest.record(bytes);
             }
         }
     }
