@@ -138,23 +138,25 @@ class KafkaApis(val requestChannel: RequestChannel,
                     stateChangeLogger: StateChangeLogger) {
       inLock(partitionMetadataLock.writeLock()) {
         updateMetadataRequest.aliveBrokers.foreach(b => aliveBrokers.put(b.id, b))
+        val topicsToDelete = mutable.Set[String]()
         updateMetadataRequest.partitionStateInfos.foreach { partitionState =>
-          addPartitionInfoInternal(partitionState._1.topic, partitionState._1.partition, partitionState._2)
-          stateChangeLogger.trace(("Broker %d cached leader info %s for partition %s in response to UpdateMetadata request " +
-            "sent by controller %d epoch %d with correlation id %d").format(brokerId, partitionState._2, partitionState._1,
-              updateMetadataRequest.controllerId, updateMetadataRequest.controllerEpoch, updateMetadataRequest.correlationId))
+          if (partitionState._2.leaderIsrAndControllerEpoch.leaderAndIsr.leader == LeaderAndIsr.LeaderDuringDelete) {
+            topicsToDelete.add(partitionState._1.topic)
+          } else {
+            addPartitionInfoInternal(partitionState._1.topic, partitionState._1.partition, partitionState._2)
+            stateChangeLogger.trace(("Broker %d cached leader info %s for partition %s in response to " +
+                                     "UpdateMetadata request sent by controller %d epoch %d with correlation id %d")
+                                     .format(brokerId, partitionState._2, partitionState._1, updateMetadataRequest.controllerId,
+                                             updateMetadataRequest.controllerEpoch, updateMetadataRequest.correlationId))
+          }
         }
-        // remove the topics that don't exist in the UpdateMetadata request since those are the topics that are
-        // currently being deleted by the controller
-        val topicsKnownToThisBroker = cache.keySet
-        val topicsKnownToTheController = updateMetadataRequest.partitionStateInfos.map {
-          case(topicAndPartition, partitionStateInfo) => topicAndPartition.topic }.toSet
-        val deletedTopics = topicsKnownToThisBroker -- topicsKnownToTheController
-        deletedTopics.foreach { topic =>
+
+        topicsToDelete.foreach { topic =>
           cache.remove(topic)
-          stateChangeLogger.trace(("Broker %d deleted partitions for topic %s from metadata cache in response to UpdateMetadata request " +
-            "sent by controller %d epoch %d with correlation id %d").format(brokerId, topic,
-              updateMetadataRequest.controllerId, updateMetadataRequest.controllerEpoch, updateMetadataRequest.correlationId))
+          stateChangeLogger.trace(("Broker %d deleted partitions for topic %s from metadata cache in response to " +
+                                   "UpdateMetadata request  sent by controller %d epoch %d with correlation id %d")
+                                   .format(brokerId, topic, updateMetadataRequest.controllerId,
+                                           updateMetadataRequest.controllerEpoch, updateMetadataRequest.correlationId))
         }
       }
     }
