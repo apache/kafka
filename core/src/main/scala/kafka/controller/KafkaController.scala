@@ -34,7 +34,6 @@ import org.apache.zookeeper.Watcher.Event.KeeperState
 import org.I0Itec.zkclient.{IZkDataListener, IZkStateListener, ZkClient}
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
 import java.util.concurrent.atomic.AtomicInteger
-import org.apache.log4j.Logger
 import java.util.concurrent.locks.ReentrantLock
 import scala.Some
 import kafka.common.TopicAndPartition

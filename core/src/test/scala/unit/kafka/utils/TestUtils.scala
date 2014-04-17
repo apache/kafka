@@ -523,7 +523,7 @@ object TestUtils extends Logging {
   def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long) = {
     Assert.assertTrue("Partition [%s,%d] metadata not propagated after timeout".format(topic, partition),
       TestUtils.waitUntilTrue(() =>
-        servers.foldLeft(true)(_ && _.apis.metadataCache.keySet.contains(TopicAndPartition(topic, partition))), timeout))
+        servers.foldLeft(true)(_ && _.apis.metadataCache.containsTopicAndPartition(topic, partition)), timeout))
   }
   
   def writeNonsenseToFile(fileName: File, position: Long, size: Int) {
