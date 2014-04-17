@@ -26,7 +26,7 @@ import kafka.serializer._
 import kafka.utils._
 import kafka.log.FileMessageSet
 import kafka.log.Log
-import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer}
+import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer, ProducerConfig}
 
 /**
  * This is a torture test that runs against an existing broker. Here is how it works:
@@ -240,8 +240,8 @@ object TestLogCleaning {
                       dups: Int,
                       percentDeletes: Int): File = {
     val producerProps = new Properties
-    producerProps.setProperty("block.on.buffer.full", "true")
-    producerProps.setProperty("metadata.broker.list", brokerUrl)
+    producerProps.setProperty(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
+    producerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
     val producer = new KafkaProducer(producerProps)
     val rand = new Random(1)
     val keyCount = (messages / dups).toInt

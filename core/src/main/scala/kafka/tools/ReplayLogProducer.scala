@@ -23,7 +23,7 @@ import java.util.Properties
 import kafka.consumer._
 import kafka.utils.{CommandLineUtils, Logging, ZkUtils}
 import kafka.api.OffsetRequest
-import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer}
+import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer, ProducerConfig}
 
 object ReplayLogProducer extends Logging {
 
@@ -122,7 +122,7 @@ object ReplayLogProducer extends Logging {
     val isSync = options.has(syncOpt)
     import scala.collection.JavaConversions._
     val producerProps = CommandLineUtils.parseCommandLineArgs(options.valuesOf(propertyOpt))
-    producerProps.put("metadata.broker.list", brokerList)
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
   }
 
   class ZKConsumerThread(config: Config, stream: KafkaStream[Array[Byte], Array[Byte]]) extends Thread with Logging {

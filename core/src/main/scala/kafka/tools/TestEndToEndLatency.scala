@@ -19,7 +19,7 @@ package kafka.tools
 
 import java.util.Properties
 import kafka.consumer._
-import org.apache.kafka.clients.producer.{ProducerRecord, KafkaProducer}
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord, KafkaProducer}
 
 object TestEndToEndLatency {
   def main(args: Array[String]) {
@@ -46,9 +46,9 @@ object TestEndToEndLatency {
     val iter = stream.iterator
 
     val producerProps = new Properties()
-    producerProps.put("metadata.broker.list", brokerList)
-    producerProps.put("linger.ms", "0")
-    producerProps.put("block.on.buffer.full", "true")
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0")
+    producerProps.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
     val producer = new KafkaProducer(producerProps)
 
     val message = "hello there beautiful".getBytes

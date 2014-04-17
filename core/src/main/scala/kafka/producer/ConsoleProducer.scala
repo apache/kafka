@@ -32,7 +32,10 @@ object ConsoleProducer {
 
     val config = new ProducerConfig(args)
     val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[MessageReader]
-    reader.init(System.in, config.cmdLineProps)
+    val props = new Properties
+    props.put("topic", config.topic)
+    props.putAll(config.cmdLineProps)
+    reader.init(System.in, props)
 
     try {
         val producer =
@@ -201,7 +204,6 @@ object ConsoleProducer {
     val readerClass = options.valueOf(messageReaderOpt)
     val socketBuffer = options.valueOf(socketBufferSizeOpt)
     val cmdLineProps = CommandLineUtils.parseCommandLineArgs(options.valuesOf(propertyOpt))
-    cmdLineProps.put("topic", topic)
     /* new producer related configs */
     val maxMemoryBytes = options.valueOf(maxMemoryBytesOpt)
     val maxPartitionMemoryBytes = options.valueOf(maxPartitionMemoryBytesOpt)
@@ -262,22 +264,24 @@ object ConsoleProducer {
   }
 
   class NewShinyProducer(producerConfig: ProducerConfig) extends Producer {
+    import org.apache.kafka.clients.producer.ProducerConfig
     val props = new Properties()
-    props.put("metadata.broker.list", producerConfig.brokerList)
-    props.put("compression.type", producerConfig.compressionCodec)
-    props.put("send.buffer.bytes", producerConfig.socketBuffer.toString)
-    props.put("metadata.fetch.backoff.ms", producerConfig.retryBackoffMs.toString)
-    props.put("metadata.expiry.ms", producerConfig.metadataExpiryMs.toString)
-    props.put("metadata.fetch.timeout.ms", producerConfig.metadataFetchTimeoutMs.toString)
-    props.put("request.required.acks", producerConfig.requestRequiredAcks.toString)
-    props.put("request.timeout.ms", producerConfig.requestTimeoutMs.toString)
-    props.put("request.retries", producerConfig.messageSendMaxRetries.toString)
-    props.put("linger.ms", producerConfig.sendTimeout.toString)
+    props.putAll(producerConfig.cmdLineProps)
+    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, producerConfig.brokerList)
+    props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, producerConfig.compressionCodec)
+    props.put(ProducerConfig.SEND_BUFFER_CONFIG, producerConfig.socketBuffer.toString)
+    props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, producerConfig.retryBackoffMs.toString)
+    props.put(ProducerConfig.METADATA_MAX_AGE_CONFIG, producerConfig.metadataExpiryMs.toString)
+    props.put(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG, producerConfig.metadataFetchTimeoutMs.toString)
+    props.put(ProducerConfig.ACKS_CONFIG, producerConfig.requestRequiredAcks.toString)
+    props.put(ProducerConfig.TIMEOUT_CONFIG, producerConfig.requestTimeoutMs.toString)
+    props.put(ProducerConfig.RETRIES_CONFIG, producerConfig.messageSendMaxRetries.toString)
+    props.put(ProducerConfig.LINGER_MS_CONFIG, producerConfig.sendTimeout.toString)
     if(producerConfig.queueEnqueueTimeoutMs != -1)
-      props.put("block.on.buffer.full", "false")
-    props.put("total.memory.bytes", producerConfig.maxMemoryBytes.toString)
-    props.put("max.partition.bytes", producerConfig.maxPartitionMemoryBytes.toString)
-    props.put("client.id", "console-producer")
+      props.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "false")
+    props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, producerConfig.maxMemoryBytes.toString)
+    props.put(ProducerConfig.BATCH_SIZE_CONFIG, producerConfig.maxPartitionMemoryBytes.toString)
+    props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
     val producer = new KafkaProducer(props)
 
     def send(topic: String, key: Array[Byte], bytes: Array[Byte]) {
@@ -294,6 +298,7 @@ object ConsoleProducer {
 
   class OldProducer(producerConfig: ConsoleProducer.ProducerConfig) extends Producer {
     val props = new Properties()
+    props.putAll(producerConfig.cmdLineProps)
     props.put("metadata.broker.list", producerConfig.brokerList)
     props.put("compression.codec", producerConfig.compressionCodec)
     props.put("producer.type", if(producerConfig.sync) "sync" else "async")
