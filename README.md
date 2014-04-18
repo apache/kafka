@@ -7,6 +7,16 @@ See our [web site](http://kafka.apache.org) for details on the project.
 
 Follow instuctions in http://kafka.apache.org/documentation.html#quickstart
 
+### Building source jar ###
+    ./gradlew srcJar
+
+### Building javadocs and scaladocs ###
+    ./gradlew javadoc
+    ./gradlew javadocJar # builds a jar from the javadocs
+    ./gradlew scaladoc
+    ./gradlew scaladocJar # builds a jar from the scaladocs
+    ./gradlew docsJar # builds both javadoc and scaladoc jar
+
 ### Running unit tests ###
     ./gradlew test
 

@@ -124,14 +124,14 @@ class VerifiableProperties(val props: Properties) extends Logging {
    * Get a required argument as a double
    * @param name The property name
    * @return the value
-   * @throw IllegalArgumentException If the given property is not present
+   * @throws IllegalArgumentException If the given property is not present
    */
   def getDouble(name: String): Double = getString(name).toDouble
   
   /**
    * Get an optional argument as a double
    * @param name The property name
-   * @default The default value for the property if not present
+   * @param default The default value for the property if not present
    */
   def getDouble(name: String, default: Double): Double = {
     if(containsKey(name))

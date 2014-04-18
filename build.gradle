@@ -67,16 +67,68 @@ subprojects {
     }
   }
 
+  jar {
+    from '../LICENSE'
+    from '../NOTICE'
+  }
+
+  tasks.withType(Javadoc) {
+    task srcJar(type:Jar) {
+      classifier = 'sources'
+      from '../LICENSE'
+      from '../NOTICE'
+      from sourceSets.main.java
+    }
+
+    task javadocJar(type: Jar, dependsOn: javadoc) {
+      classifier 'javadoc'
+      from '../LICENSE'
+      from '../NOTICE'
+      from javadoc.destinationDir
+    }
+
+    task docsJar(type: Jar, dependsOn: javadocJar) { }
+
+    artifacts {
+      archives srcJar
+      archives javadocJar
+    }
+  }
+
   tasks.withType(ScalaCompile) {
+    task srcJar(type:Jar, overwrite: true) {
+      classifier = 'sources'
+      from '../LICENSE'
+      from '../NOTICE'
+      from sourceSets.main.scala
+      from sourceSets.main.java
+    }
+
     scalaCompileOptions.useAnt = false
+
     configure(scalaCompileOptions.forkOptions) {
       memoryMaximumSize = '1g'
       jvmArgs = ['-XX:MaxPermSize=512m']
     }
   }
+
+  tasks.withType(ScalaDoc) {
+    task scaladocJar(type:Jar) {
+      classifier = 'scaladoc'
+      from '../LICENSE'
+      from '../NOTICE'
+      from scaladoc
+    }
+
+    task docsJar(type: Jar, dependsOn: ['javadocJar', 'scaladocJar'], overwrite: true) { }
+
+    artifacts {
+      archives scaladocJar
+    }
+  }
 }
 
-for ( sv in ['2_8_0', '2_8_2', '2_9_1', '2_9_2', '2_10_1'] ) {
+for ( sv in ['2_8_0', '2_9_1', '2_9_2', '2_10_1'] ) {
   String svInDot = sv.replaceAll( "_", ".")
 
   tasks.create(name: "jar_core_${sv}", type: GradleBuild) {
@@ -88,6 +140,18 @@ for ( sv in ['2_8_0', '2_8_2', '2_9_1', '2_9_2', '2_10_1'] ) {
   tasks.create(name: "test_core_${sv}", type: GradleBuild) {
     buildFile = './build.gradle'
     tasks = ['core:test']
+    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
+  }
+
+  tasks.create(name: "srcJar_${sv}", type: GradleBuild) {
+    buildFile = './build.gradle'
+    tasks = ['core:srcJar']
+    startParameter.projectProperties = [scalaVersion: "${svInDot}"]
+  }
+
+  tasks.create(name: "docsJar_${sv}", type: GradleBuild) {
+    buildFile = './build.gradle'
+    tasks = ['core:docsJar']
     startParameter.projectProperties = [scalaVersion: "${svInDot}"]
   }
 
@@ -104,16 +168,20 @@ for ( sv in ['2_8_0', '2_8_2', '2_9_1', '2_9_2', '2_10_1'] ) {
   }
 }
 
-tasks.create(name: "jarAll", dependsOn: ['jar_core_2_8_0', 'jar_core_2_8_2', 'jar_core_2_9_1', 'jar_core_2_9_2', 'jar_core_2_10_1', 'clients:jar', 'perf:jar', 'examples:jar', 'contrib:hadoop-consumer:jar', 'contrib:hadoop-producer:jar']) {
+tasks.create(name: "jarAll", dependsOn: ['jar_core_2_8_0', 'jar_core_2_9_1', 'jar_core_2_9_2', 'jar_core_2_10_1', 'clients:jar', 'perf:jar', 'examples:jar', 'contrib:hadoop-consumer:jar', 'contrib:hadoop-producer:jar']) {
 }
 
-tasks.create(name: "testAll", dependsOn: ['test_core_2_8_0', 'test_core_2_8_2', 'test_core_2_9_1', 'test_core_2_9_2', 'test_core_2_10_1', 'clients:test']) {
+tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_8_0', 'srcJar_2_9_1', 'srcJar_2_9_2', 'srcJar_2_10_1', 'clients:srcJar', 'perf:srcJar', 'examples:srcJar', 'contrib:hadoop-consumer:srcJar', 'contrib:hadoop-producer:srcJar']) { }
+
+tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_8_0', 'docsJar_2_9_1', 'docsJar_2_9_2', 'docsJar_2_10_1', 'clients:docsJar', 'perf:docsJar', 'examples:docsJar', 'contrib:hadoop-consumer:docsJar', 'contrib:hadoop-producer:docsJar']) { }
+
+tasks.create(name: "testAll", dependsOn: ['test_core_2_8_0', 'test_core_2_9_1', 'test_core_2_9_2', 'test_core_2_10_1', 'clients:test']) {
 }
 
-tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_8_0', 'releaseTarGz_2_8_2', 'releaseTarGz_2_9_1', 'releaseTarGz_2_9_2', 'releaseTarGz_2_10_1']) {
+tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_8_0', 'releaseTarGz_2_9_1', 'releaseTarGz_2_9_2', 'releaseTarGz_2_10_1']) {
 }
 
-tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_8_0', 'uploadCoreArchives_2_8_2', 'uploadCoreArchives_2_9_1', 'uploadCoreArchives_2_9_2', 'uploadCoreArchives_2_10_1', 'perf:uploadArchives', 'examples:uploadArchives', 'contrib:hadoop-consumer:uploadArchives', 'contrib:hadoop-producer:uploadArchives']) {
+tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_8_0', 'uploadCoreArchives_2_9_1', 'uploadCoreArchives_2_9_2', 'uploadCoreArchives_2_10_1', 'perf:uploadArchives', 'examples:uploadArchives', 'contrib:hadoop-consumer:uploadArchives', 'contrib:hadoop-producer:uploadArchives']) {
 }
 
 project(':core') {
@@ -189,11 +257,9 @@ project(':core') {
     from(configurations.runtime) { into("libs/") }
     from(configurations.archives.artifacts.files) { into("libs/") }
   }
-  
+
   jar {
     dependsOn 'copyDependantLibs'
-    from '../LICENSE'
-    from '../NOTICE'
   }
 
   task testJar(type: Jar) {
@@ -207,6 +273,7 @@ project(':core') {
         exceptionFormat = 'full'
     }
   }
+
 }
 
 project(':perf') {
@@ -221,11 +288,6 @@ project(':perf') {
     compile 'net.sf.jopt-simple:jopt-simple:3.2'
 
     zinc 'com.typesafe.zinc:zinc:0.2.5'
-  }
-
-  jar {
-    from '../LICENSE'
-    from '../NOTICE'
   }
 }
 
@@ -252,11 +314,6 @@ project(':contrib:hadoop-consumer') {
     compile.exclude module: 'mail'
     compile.exclude module: 'netty'
   }
-
-  jar {
-    from '../LICENSE'
-    from '../NOTICE'
-  }
 }
 
 project(':contrib:hadoop-producer') {
@@ -282,11 +339,6 @@ project(':contrib:hadoop-producer') {
     compile.exclude module: 'mail'
     compile.exclude module: 'netty'
   }
-
-  jar {
-    from '../LICENSE'
-    from '../NOTICE'
-  }
 }
 
 project(':examples') {
@@ -296,10 +348,6 @@ project(':examples') {
     compile project(':core')
   }
 
-  jar {
-    from '../LICENSE'
-    from '../NOTICE'
-  }
 }
 
 project(':clients') {
@@ -307,11 +355,6 @@ project(':clients') {
 
   dependencies {
     testCompile 'com.novocode:junit-interface:0.9'
-  }
-
-  jar {
-    from '../LICENSE'
-    from '../NOTICE'
   }
 
   task testJar(type: Jar) {
