@@ -40,6 +40,7 @@ import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
  * To update a topic config we first update the topic config properties. Then we create a new sequential
  * znode under the change path which contains the name of the topic that was updated, say
  *   /brokers/config_changes/config_change_13321
+ * This is just a notification--the actual config change is stored only once under the /brokers/topics/<topic_name>/config path.
  *   
  * This will fire a watcher on all brokers. This watcher works as follows. It reads all the config change notifications.
  * It keeps track of the highest config change suffix number it has applied previously. For any previously applied change it finds
@@ -94,7 +95,7 @@ class TopicConfigManager(private val zkClient: ZkClient,
         val changeId = changeNumber(notification)
         if (changeId > lastExecutedChange) {
           val changeZnode = ZkUtils.TopicConfigChangesPath + "/" + notification
-          val (jsonOpt, stat) = ZkUtils.readDataMaybeNull(zkClient, ZkUtils.TopicConfigChangesPath + "/" + notification)
+          val (jsonOpt, stat) = ZkUtils.readDataMaybeNull(zkClient, changeZnode)
           if(jsonOpt.isDefined) {
             val json = jsonOpt.get
             val topic = json.substring(1, json.length - 1) // hacky way to dequote
@@ -116,8 +117,7 @@ class TopicConfigManager(private val zkClient: ZkClient,
   }
   
   private def purgeObsoleteNotifications(now: Long, notifications: Seq[String]) {
-    val eligible = notifications.sorted.dropRight(1) // never purge newest notification--we need it for the seq number
-    for(notification <- eligible) {
+    for(notification <- notifications.sorted) {
       val (jsonOpt, stat) = ZkUtils.readDataMaybeNull(zkClient, ZkUtils.TopicConfigChangesPath + "/" + notification)
       if(jsonOpt.isDefined) {
         val changeZnode = ZkUtils.TopicConfigChangesPath + "/" + notification
