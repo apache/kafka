@@ -19,7 +19,6 @@ package kafka.log
 
 import scala.collection._
 import scala.math
-import java.util.concurrent.TimeUnit
 import java.nio._
 import java.util.Date
 import java.io.File
@@ -215,6 +214,7 @@ class LogCleaner(val config: CleanerConfig,
      */
     def recordStats(id: Int, name: String, from: Long, to: Long, stats: CleanerStats) {
       this.lastStats = stats
+      cleaner.statsUnderlying.swap
       def mb(bytes: Double) = bytes / (1024*1024)
       val message = 
         "%n\tLog cleaner thread %d cleaned log %s (dirty section = [%d, %d])%n".format(id, name, from, to) + 
@@ -260,9 +260,10 @@ private[log] class Cleaner(val id: Int,
 
   this.logIdent = "Cleaner " + id + ": "
   
-  /* stats on this cleaning */
-  val stats = new CleanerStats(time)
-  
+  /* cleaning stats - one instance for the current (or next) cleaning cycle and one for the last completed cycle */
+  val statsUnderlying = (new CleanerStats(time), new CleanerStats(time))
+  def stats = statsUnderlying._1
+
   /* buffer used for read i/o */
   private var readBuffer = ByteBuffer.allocate(ioBufferSize)
   
@@ -304,6 +305,7 @@ private[log] class Cleaner(val id: Int,
     stats.bufferUtilization = offsetMap.utilization
     
     stats.allDone()
+
     endOffset
   }
 
