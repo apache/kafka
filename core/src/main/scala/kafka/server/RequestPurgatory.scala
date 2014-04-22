@@ -61,7 +61,7 @@ class DelayedRequest(val keys: Seq[Any], val request: RequestChannel.Request, de
  * this function handles delayed requests that have hit their time limit without being satisfied.
  *
  */
-abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purgeInterval: Int = 10000)
+abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purgeInterval: Int = 1000)
         extends Logging with KafkaMetricsGroup {
 
   /* a list of requests watching each key */
@@ -137,8 +137,7 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
    */
   private class Watchers {
 
-
-    private val requests = new util.ArrayList[T]
+    private val requests = new util.LinkedList[T]
 
     def numRequests = requests.size
 
@@ -217,6 +216,7 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
             }
           }
           if (requestCounter.get >= purgeInterval) { // see if we need to force a full purge
+            debug("Beginning purgatory purge")
             requestCounter.set(0)
             val purged = purgeSatisfied()
             debug("Purged %d requests from delay queue.".format(purged))

@@ -167,6 +167,10 @@ public class ProducerConfig extends AbstractConfig {
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
     private static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>MetricReporter</code> interface allows " + "plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
 
+    /** <code>max.in.flight.requests.per.connection</code> */
+    public static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION = "max.in.flight.requests.per.connection";
+    private static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC = "The maximum number of unacknowledged requests the client will send on a single connection before blocking.";
+
     static {
         config = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, BOOSTRAP_SERVERS_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
@@ -202,7 +206,13 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         METRICS_SAMPLE_WINDOW_MS_DOC)
-                                .define(METRICS_NUM_SAMPLES_CONFIG, Type.INT, 2, atLeast(1), Importance.LOW, METRICS_NUM_SAMPLES_DOC);
+                                .define(METRICS_NUM_SAMPLES_CONFIG, Type.INT, 2, atLeast(1), Importance.LOW, METRICS_NUM_SAMPLES_DOC)
+                                .define(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
+                                        Type.INT,
+                                        5,
+                                        atLeast(1),
+                                        Importance.LOW,
+                                        MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC);
     }
 
     ProducerConfig(Map<? extends Object, ? extends Object> props) {

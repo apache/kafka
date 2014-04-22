@@ -18,6 +18,7 @@
 package kafka.tools
 
 import java.util.Properties
+import java.util.Arrays
 import kafka.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord, KafkaProducer}
 
@@ -35,9 +36,10 @@ object TestEndToEndLatency {
 
     val consumerProps = new Properties()
     consumerProps.put("group.id", topic)
-    consumerProps.put("auto.commit.enable", "true")
+    consumerProps.put("auto.commit.enable", "false")
     consumerProps.put("auto.offset.reset", "largest")
     consumerProps.put("zookeeper.connect", zkConnect)
+    consumerProps.put("fetch.wait.max.ms", "1")
     consumerProps.put("socket.timeout.ms", 1201000.toString)
 
     val config = new ConsumerConfig(consumerProps)
@@ -53,19 +55,26 @@ object TestEndToEndLatency {
 
     val message = "hello there beautiful".getBytes
     var totalTime = 0.0
+    val latencies = new Array[Long](numMessages)
     for (i <- 0 until numMessages) {
       var begin = System.nanoTime
-      val response = producer.send(new ProducerRecord(topic, message))
-      response.get()
+      producer.send(new ProducerRecord(topic, message))
       val received = iter.next
       val elapsed = System.nanoTime - begin
       // poor man's progress bar
       if (i % 1000 == 0)
         println(i + "\t" + elapsed / 1000.0 / 1000.0)
       totalTime += elapsed
+      latencies(i) = (elapsed / 1000 / 1000)
     }
-    println("Avg latency: " + (totalTime / numMessages / 1000.0 / 1000.0) + "ms")
+    println("Avg latency: %.4f ms\n".format(totalTime / numMessages / 1000.0 / 1000.0))
+    Arrays.sort(latencies)
+    val p50 = latencies((latencies.length * 0.5).toInt)
+    val p99 = latencies((latencies.length * 0.99).toInt) 
+    val p999 = latencies((latencies.length * 0.999).toInt)
+    println("Percentiles: 50th = %d, 99th = %d, 99.9th = %d".format(p50, p99, p999))
     producer.close()
+    connector.commitOffsets(true)
     connector.shutdown()
     System.exit(0)
   }

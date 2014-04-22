@@ -215,10 +215,10 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val replicaHighWatermarkCheckpointIntervalMs = props.getLong("replica.high.watermark.checkpoint.interval.ms", 5000L)
 
   /* the purge interval (in number of requests) of the fetch request purgatory */
-  val fetchPurgatoryPurgeIntervalRequests = props.getInt("fetch.purgatory.purge.interval.requests", 10000)
+  val fetchPurgatoryPurgeIntervalRequests = props.getInt("fetch.purgatory.purge.interval.requests", 1000)
 
   /* the purge interval (in number of requests) of the producer request purgatory */
-  val producerPurgatoryPurgeIntervalRequests = props.getInt("producer.purgatory.purge.interval.requests", 10000)
+  val producerPurgatoryPurgeIntervalRequests = props.getInt("producer.purgatory.purge.interval.requests", 1000)
 
   /* Enables auto leader balancing. A background thread checks and triggers leader
    * balance if required at regular intervals */

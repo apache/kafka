@@ -131,6 +131,7 @@ public class KafkaProducer implements Producer {
                                  config.getInt(ProducerConfig.TIMEOUT_CONFIG),
                                  config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
                                  config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
+                                 config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
                                  this.metrics,
                                  new SystemTime());
         this.ioThread = new KafkaThread("kafka-producer-network-thread", this.sender, true);

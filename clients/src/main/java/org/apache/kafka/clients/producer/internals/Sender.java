@@ -120,6 +120,7 @@ public class Sender implements Runnable {
                   int requestTimeout,
                   int socketSendBuffer,
                   int socketReceiveBuffer,
+                  int maxInFlightRequestsPerConnection,
                   Metrics metrics,
                   Time time) {
         this.nodeStates = new NodeStates(reconnectBackoffMs);
@@ -134,7 +135,7 @@ public class Sender implements Runnable {
         this.retries = retries;
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
-        this.inFlightRequests = new InFlightRequests();
+        this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
         this.correlation = 0;
         this.metadataFetchInProgress = false;
         this.time = time;
@@ -678,7 +679,13 @@ public class Sender implements Runnable {
      * A set of outstanding request queues for each node that have not yet received responses
      */
     private static final class InFlightRequests {
-        private final Map<Integer, Deque<InFlightRequest>> requests = new HashMap<Integer, Deque<InFlightRequest>>();
+        private final int maxInFlightRequestsPerConnection;
+        private final Map<Integer, Deque<InFlightRequest>> requests;
+
+        public InFlightRequests(int maxInFlightRequestsPerConnection) {
+            this.requests = new HashMap<Integer, Deque<InFlightRequest>>();
+            this.maxInFlightRequestsPerConnection = maxInFlightRequestsPerConnection;
+        }
 
         /**
          * Add the given request to the queue for the node it was directed to
@@ -714,7 +721,8 @@ public class Sender implements Runnable {
          */
         public boolean canSendMore(int node) {
             Deque<InFlightRequest> queue = requests.get(node);
-            return queue == null || queue.isEmpty() || queue.peekFirst().request.complete();
+            return queue == null || queue.isEmpty() ||
+                   (queue.peekFirst().request.complete() && queue.size() < this.maxInFlightRequestsPerConnection);
         }
 
         /**
@@ -762,11 +770,11 @@ public class Sender implements Runnable {
 
             this.queueTimeSensor = metrics.sensor("queue-time");
             this.queueTimeSensor.add("record-queue-time-avg",
-                "The average time in ms record batches spent in the record accumulator.",
-                new Avg());
+                                     "The average time in ms record batches spent in the record accumulator.",
+                                     new Avg());
             this.queueTimeSensor.add("record-queue-time-max",
-                "The maximum time in ms record batches spent in the record accumulator.",
-                new Max());
+                                     "The maximum time in ms record batches spent in the record accumulator.",
+                                     new Max());
 
             this.requestTimeSensor = metrics.sensor("request-time");
             this.requestTimeSensor.add("request-latency-avg", "The average request latency in ms", new Avg());
@@ -859,7 +867,8 @@ public class Sender implements Runnable {
             this.retrySensor.record(count, nowMs);
             String topicRetryName = "topic." + topic + ".record-retries";
             Sensor topicRetrySensor = this.metrics.getSensor(topicRetryName);
-            if (topicRetrySensor != null) topicRetrySensor.record(count, nowMs);
+            if (topicRetrySensor != null)
+              topicRetrySensor.record(count, nowMs);
         }
 
         public void recordErrors(String topic, int count) {
@@ -867,7 +876,8 @@ public class Sender implements Runnable {
             this.errorSensor.record(count, nowMs);
             String topicErrorName = "topic." + topic + ".record-errors";
             Sensor topicErrorSensor = this.metrics.getSensor(topicErrorName);
-            if (topicErrorSensor != null) topicErrorSensor.record(count, nowMs);
+            if (topicErrorSensor != null) 
+              topicErrorSensor.record(count, nowMs);
         }
 
         public void recordLatency(int node, long latency) {
@@ -876,7 +886,8 @@ public class Sender implements Runnable {
             if (node >= 0) {
                 String nodeTimeName = "node-" + node + ".latency";
                 Sensor nodeRequestTime = this.metrics.getSensor(nodeTimeName);
-                if (nodeRequestTime != null) nodeRequestTime.record(latency, nowMs);
+                if (nodeRequestTime != null)
+                  nodeRequestTime.record(latency, nowMs);
             }
         }
     }

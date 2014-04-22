@@ -50,6 +50,7 @@ public class SenderTest {
     private static final int REQUEST_TIMEOUT_MS = 10000;
     private static final int SEND_BUFFER_SIZE = 64 * 1024;
     private static final int RECEIVE_BUFFER_SIZE = 64 * 1024;
+    private static final int MAX_IN_FLIGHT_REQS = Integer.MAX_VALUE;
 
     private TopicPartition tp = new TopicPartition("test", 0);
     private MockTime time = new MockTime();
@@ -70,6 +71,7 @@ public class SenderTest {
                                        REQUEST_TIMEOUT_MS,
                                        SEND_BUFFER_SIZE,
                                        RECEIVE_BUFFER_SIZE,
+                                       MAX_IN_FLIGHT_REQS,
                                        metrics,
                                        time);
 
@@ -115,6 +117,7 @@ public class SenderTest {
                                    REQUEST_TIMEOUT_MS,
                                    SEND_BUFFER_SIZE,
                                    RECEIVE_BUFFER_SIZE,
+                                   MAX_IN_FLIGHT_REQS,
                                    new Metrics(),
                                    time);
         Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), CompressionType.NONE, null);
