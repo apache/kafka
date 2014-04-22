@@ -356,42 +356,6 @@ class AsyncProducerTest extends JUnit3Suite {
   }
 
   @Test
-  def testBrokerListAndAsync() {
-    return
-    val props = TestUtils.getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs))
-    props.put("producer.type", "async")
-    props.put("batch.num.messages", "5")
-
-    val config = new ProducerConfig(props)
-
-    val topic = "topic1"
-    val topic1Metadata = getTopicMetadata(topic, 0, 0, "localhost", 9092)
-    val topicPartitionInfos = new collection.mutable.HashMap[String, TopicMetadata]
-    topicPartitionInfos.put("topic1", topic1Metadata)
-
-    val producerPool = new ProducerPool(config)
-
-    val msgs = TestUtils.getMsgStrings(10)
-
-    val handler = new DefaultEventHandler[String,String](config,
-                                                         partitioner = null.asInstanceOf[Partitioner],
-                                                         encoder = new StringEncoder,
-                                                         keyEncoder = new StringEncoder,
-                                                         producerPool = producerPool,
-                                                         topicPartitionInfos = topicPartitionInfos)
-
-    val producer = new Producer[String, String](config, handler)
-    try {
-      // send all 10 messages, should create 2 batches and 2 syncproducer calls
-      producer.send(msgs.map(m => new KeyedMessage[String,String](topic, m)): _*)
-      producer.close
-
-    } catch {
-      case e: Exception => fail("Not expected", e)
-    }
-  }
-
-  @Test
   def testFailedSendRetryLogic() {
     val props = new Properties()
     props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))

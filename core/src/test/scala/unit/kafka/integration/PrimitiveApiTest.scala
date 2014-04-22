@@ -94,7 +94,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   def testDefaultEncoderProducerAndFetchWithCompression() {
     val topic = "test-topic"
     val props = producer.config.props.props
-    props.put("compression", "true")
+    props.put("compression.codec", "gzip")
     val config = new ProducerConfig(props)
 
     val stringProducer1 = new Producer[String, String](config)
@@ -178,14 +178,6 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     produceAndMultiFetch(noCompressionProducer)
   }
 
-  def testProduceAndMultiFetchWithCompression() {
-    val props = producer.config.props.props
-    props.put("compression", "true")
-    val config = new ProducerConfig(props)
-    val producerWithCompression = new Producer[String, String](config)
-    produceAndMultiFetch(producerWithCompression)
-  }
-
   private def multiProduce(producer: Producer[String, String]) {
     val topics = Map("test4" -> 0, "test1" -> 0, "test2" -> 0, "test3" -> 0)
     createSimpleTopicsAndAwaitLeader(zkClient, topics.keys)
@@ -213,14 +205,6 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     val config = new ProducerConfig(props)
     val noCompressionProducer = new Producer[String, String](config)
     multiProduce(noCompressionProducer)
-  }
-
-  def testMultiProduceWithCompression() {
-    val props = producer.config.props.props
-    props.put("compression", "true")
-    val config = new ProducerConfig(props)
-    val producerWithCompression = new Producer[String, String](config)
-    multiProduce(producerWithCompression)
   }
 
   def testConsumerEmptyTopic() {
