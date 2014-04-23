@@ -96,7 +96,7 @@ class SimpleFetchTest extends JUnit3Suite {
     val apis = new KafkaApis(requestChannel, replicaManager, offsetManager, zkClient, configs.head.brokerId, configs.head, controller)
 
     val partitionStateInfo = EasyMock.createNiceMock(classOf[PartitionStateInfo])
-    apis.metadataCache.addPartitionInfo(topic, partitionId, partitionStateInfo)
+    apis.metadataCache.addOrUpdatePartitionInfo(topic, partitionId, partitionStateInfo)
     EasyMock.replay(partitionStateInfo)
     // This request (from a follower) wants to read up to 2*HW but should only get back up to HW bytes into the log
     val goodFetch = new FetchRequestBuilder()
@@ -169,7 +169,7 @@ class SimpleFetchTest extends JUnit3Suite {
     val requestChannel = new RequestChannel(2, 5)
     val apis = new KafkaApis(requestChannel, replicaManager, offsetManager, zkClient, configs.head.brokerId, configs.head, controller)
     val partitionStateInfo = EasyMock.createNiceMock(classOf[PartitionStateInfo])
-    apis.metadataCache.addPartitionInfo(topic, partitionId, partitionStateInfo)
+    apis.metadataCache.addOrUpdatePartitionInfo(topic, partitionId, partitionStateInfo)
     EasyMock.replay(partitionStateInfo)
 
     /**

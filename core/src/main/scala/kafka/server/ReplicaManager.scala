@@ -23,15 +23,13 @@ import kafka.utils._
 import kafka.log.LogManager
 import kafka.metrics.KafkaMetricsGroup
 import kafka.common._
-import kafka.api.{StopReplicaRequest, PartitionStateInfo, LeaderAndIsrRequest}
+import kafka.api.{UpdateMetadataRequest, StopReplicaRequest, PartitionStateInfo, LeaderAndIsrRequest}
 import kafka.controller.KafkaController
-import org.apache.log4j.Logger
 import org.I0Itec.zkclient.ZkClient
 import com.yammer.metrics.core.Gauge
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.{IOException, File}
 import java.util.concurrent.TimeUnit
-
 
 object ReplicaManager {
   val UnknownLogEndOffset = -1L
@@ -202,6 +200,22 @@ class ReplicaManager(val config: KafkaConfig,
     partitionOpt match {
       case None => None
       case Some(partition) => partition.getReplica(replicaId)
+    }
+  }
+
+  def maybeUpdateMetadataCache(updateMetadataRequest: UpdateMetadataRequest, metadataCache: MetadataCache) {
+    replicaStateChangeLock synchronized {
+      if(updateMetadataRequest.controllerEpoch < controllerEpoch) {
+        val stateControllerEpochErrorMessage = ("Broker %d received update metadata request with correlation id %d from an " +
+          "old controller %d with epoch %d. Latest known controller epoch is %d").format(localBrokerId,
+          updateMetadataRequest.correlationId, updateMetadataRequest.controllerId, updateMetadataRequest.controllerEpoch,
+          controllerEpoch)
+        stateChangeLogger.warn(stateControllerEpochErrorMessage)
+        throw new ControllerMovedException(stateControllerEpochErrorMessage)
+      } else {
+        metadataCache.updateCache(updateMetadataRequest, localBrokerId, stateChangeLogger)
+        controllerEpoch = updateMetadataRequest.controllerEpoch
+      }
     }
   }
 
