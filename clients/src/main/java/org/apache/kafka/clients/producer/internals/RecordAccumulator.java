@@ -93,27 +93,27 @@ public final class RecordAccumulator {
         metrics.addMetric("waiting-threads",
                           "The number of user threads blocked waiting for buffer memory to enqueue their records",
                           new Measurable() {
-                              public double measure(MetricConfig config, long now) {
+                              public double measure(MetricConfig config, long nowMs) {
                                   return free.queued();
                               }
                           });
         metrics.addMetric("buffer-total-bytes",
                           "The maximum amount of buffer memory the client can use (whether or not it is currently used).",
                           new Measurable() {
-                              public double measure(MetricConfig config, long now) {
+                              public double measure(MetricConfig config, long nowMs) {
                                   return free.totalMemory();
                               }
                           });
         metrics.addMetric("buffer-available-bytes",
                           "The total amount of buffer memory that is not being used (either unallocated or in the free list).",
                           new Measurable() {
-                              public double measure(MetricConfig config, long now) {
+                              public double measure(MetricConfig config, long nowMs) {
                                   return free.availableMemory();
                               }
                           });
         metrics.addMetric("ready-partitions", "The number of topic-partitions with buffered data ready to be sent.", new Measurable() {
-            public double measure(MetricConfig config, long now) {
-                return ready(now).size();
+            public double measure(MetricConfig config, long nowMs) {
+                return ready(nowMs).size();
             }
         });
     }
@@ -170,9 +170,9 @@ public final class RecordAccumulator {
     /**
      * Re-enqueue the given record batch in the accumulator to retry
      */
-    public void reenqueue(RecordBatch batch, long now) {
+    public void reenqueue(RecordBatch batch, long nowMs) {
         batch.attempts++;
-        batch.lastAttempt = now;
+        batch.lastAttemptMs = nowMs;
         Deque<RecordBatch> deque = dequeFor(batch.topicPartition);
         synchronized (deque) {
             deque.addFirst(batch);
@@ -191,7 +191,7 @@ public final class RecordAccumulator {
      * <li>The accumulator has been closed
      * </ol>
      */
-    public List<TopicPartition> ready(long now) {
+    public List<TopicPartition> ready(long nowMs) {
         List<TopicPartition> ready = new ArrayList<TopicPartition>();
         boolean exhausted = this.free.queued() > 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
@@ -199,9 +199,9 @@ public final class RecordAccumulator {
             synchronized (deque) {
                 RecordBatch batch = deque.peekFirst();
                 if (batch != null) {
-                    boolean backingOff = batch.attempts > 0 && batch.lastAttempt + retryBackoffMs > now;
+                    boolean backingOff = batch.attempts > 0 && batch.lastAttemptMs + retryBackoffMs > nowMs;
                     boolean full = deque.size() > 1 || batch.records.isFull();
-                    boolean expired = now - batch.created >= lingerMs;
+                    boolean expired = nowMs - batch.createdMs >= lingerMs;
                     boolean sendable = full || expired || exhausted || closed;
                     if (sendable && !backingOff)
                         ready.add(batch.topicPartition);
@@ -231,11 +231,11 @@ public final class RecordAccumulator {
      * 
      * @param partitions The list of partitions to drain
      * @param maxSize The maximum number of bytes to drain
-     * @param now The current unix time
+     * @param nowMs The current unix time in milliseconds
      * @return A list of {@link RecordBatch} for partitions specified with total size less than the requested maxSize.
      *         TODO: There may be a starvation issue due to iteration order
      */
-    public List<RecordBatch> drain(List<TopicPartition> partitions, int maxSize, long now) {
+    public List<RecordBatch> drain(List<TopicPartition> partitions, int maxSize, long nowMs) {
         if (partitions.isEmpty())
             return Collections.emptyList();
         int size = 0;
@@ -258,7 +258,7 @@ public final class RecordAccumulator {
                         batch.records.close();
                         size += batch.records.sizeInBytes();
                         ready.add(batch);
-                        batch.drained = now;
+                        batch.drainedMs = nowMs;
                     }
                 }
             }

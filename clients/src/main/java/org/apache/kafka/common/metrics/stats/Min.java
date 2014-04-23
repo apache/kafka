@@ -31,12 +31,12 @@ public class Min extends SampledStat {
     }
 
     @Override
-    protected void update(Sample sample, MetricConfig config, double value, long now) {
+    protected void update(Sample sample, MetricConfig config, double value, long timeMs) {
         sample.value = Math.min(sample.value, value);
     }
 
     @Override
-    public double combine(List<Sample> samples, MetricConfig config, long now) {
+    public double combine(List<Sample> samples, MetricConfig config, long nowMs) {
         double max = Double.MAX_VALUE;
         for (int i = 0; i < samples.size(); i++)
             max = Math.min(max, samples.get(i).value);

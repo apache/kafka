@@ -31,12 +31,12 @@ public final class Max extends SampledStat {
     }
 
     @Override
-    protected void update(Sample sample, MetricConfig config, double value, long now) {
+    protected void update(Sample sample, MetricConfig config, double value, long timeMs) {
         sample.value = Math.max(sample.value, value);
     }
 
     @Override
-    public double combine(List<Sample> samples, MetricConfig config, long now) {
+    public double combine(List<Sample> samples, MetricConfig config, long nowMs) {
         double max = Double.NEGATIVE_INFINITY;
         for (int i = 0; i < samples.size(); i++)
             max = Math.max(max, samples.get(i).value);

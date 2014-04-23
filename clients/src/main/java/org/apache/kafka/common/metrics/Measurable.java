@@ -24,9 +24,9 @@ public interface Measurable {
     /**
      * Measure this quantity and return the result as a double
      * @param config The configuration for this metric
-     * @param now The time the measurement is being taken
+     * @param nowMs The POSIX time in milliseconds the measurement is being taken
      * @return The measured value
      */
-    public double measure(MetricConfig config, long now);
+    public double measure(MetricConfig config, long nowMs);
 
 }

@@ -51,33 +51,33 @@ public class Rate implements MeasurableStat {
     }
 
     @Override
-    public void record(MetricConfig config, double value, long time) {
-        this.stat.record(config, value, time);
+    public void record(MetricConfig config, double value, long timeMs) {
+        this.stat.record(config, value, timeMs);
     }
 
     @Override
-    public double measure(MetricConfig config, long now) {
-        double value = stat.measure(config, now);
-        double elapsed = convert(now - stat.oldest(now).lastWindow);
+    public double measure(MetricConfig config, long nowMs) {
+        double value = stat.measure(config, nowMs);
+        double elapsed = convert(nowMs - stat.oldest(nowMs).lastWindowMs);
         return value / elapsed;
     }
 
     private double convert(long time) {
         switch (unit) {
             case NANOSECONDS:
-                return time;
+                return time * 1000.0 * 1000.0;
             case MICROSECONDS:
-                return time / 1000.0;
+                return time * 1000.0;
             case MILLISECONDS:
-                return time / (1000.0 * 1000.0);
+                return time;
             case SECONDS:
-                return time / (1000.0 * 1000.0 * 1000.0);
+                return time / (1000.0);
             case MINUTES:
-                return time / (60.0 * 1000.0 * 1000.0 * 1000.0);
+                return time / (60.0 * 1000.0);
             case HOURS:
-                return time / (60.0 * 60.0 * 1000.0 * 1000.0 * 1000.0);
+                return time / (60.0 * 60.0 * 1000.0);
             case DAYS:
-                return time / (24.0 * 60.0 * 60.0 * 1000.0 * 1000.0 * 1000.0);
+                return time / (24.0 * 60.0 * 60.0 * 1000.0);
             default:
                 throw new IllegalStateException("Unknown unit: " + unit);
         }
@@ -90,12 +90,12 @@ public class Rate implements MeasurableStat {
         }
 
         @Override
-        protected void update(Sample sample, MetricConfig config, double value, long now) {
+        protected void update(Sample sample, MetricConfig config, double value, long timeMs) {
             sample.value += value;
         }
 
         @Override
-        public double combine(List<Sample> samples, MetricConfig config, long now) {
+        public double combine(List<Sample> samples, MetricConfig config, long nowMs) {
             double total = 0.0;
             for (int i = 0; i < samples.size(); i++)
                 total += samples.get(i).value;

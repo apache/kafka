@@ -117,24 +117,24 @@ public class MetricsTest {
     public void testEventWindowing() {
         Count count = new Count();
         MetricConfig config = new MetricConfig().eventWindow(1).samples(2);
-        count.record(config, 1.0, time.nanoseconds());
-        count.record(config, 1.0, time.nanoseconds());
-        assertEquals(2.0, count.measure(config, time.nanoseconds()), EPS);
-        count.record(config, 1.0, time.nanoseconds()); // first event times out
-        assertEquals(2.0, count.measure(config, time.nanoseconds()), EPS);
+        count.record(config, 1.0, time.milliseconds());
+        count.record(config, 1.0, time.milliseconds());
+        assertEquals(2.0, count.measure(config, time.milliseconds()), EPS);
+        count.record(config, 1.0, time.milliseconds()); // first event times out
+        assertEquals(2.0, count.measure(config, time.milliseconds()), EPS);
     }
 
     @Test
     public void testTimeWindowing() {
         Count count = new Count();
         MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.MILLISECONDS).samples(2);
-        count.record(config, 1.0, time.nanoseconds());
+        count.record(config, 1.0, time.milliseconds());
         time.sleep(1);
-        count.record(config, 1.0, time.nanoseconds());
-        assertEquals(2.0, count.measure(config, time.nanoseconds()), EPS);
+        count.record(config, 1.0, time.milliseconds());
+        assertEquals(2.0, count.measure(config, time.milliseconds()), EPS);
         time.sleep(1);
-        count.record(config, 1.0, time.nanoseconds()); // oldest event times out
-        assertEquals(2.0, count.measure(config, time.nanoseconds()), EPS);
+        count.record(config, 1.0, time.milliseconds()); // oldest event times out
+        assertEquals(2.0, count.measure(config, time.milliseconds()), EPS);
     }
 
     @Test
@@ -143,9 +143,9 @@ public class MetricsTest {
         long windowMs = 100;
         int samples = 2;
         MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
-        max.record(config, 50, time.nanoseconds());
+        max.record(config, 50, time.milliseconds());
         time.sleep(samples * windowMs);
-        assertEquals(Double.NEGATIVE_INFINITY, max.measure(config, time.nanoseconds()), EPS);
+        assertEquals(Double.NEGATIVE_INFINITY, max.measure(config, time.milliseconds()), EPS);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -213,7 +213,7 @@ public class MetricsTest {
         public double value = 0.0;
 
         @Override
-        public double measure(MetricConfig config, long now) {
+        public double measure(MetricConfig config, long nowMs) {
             return value;
         }
 

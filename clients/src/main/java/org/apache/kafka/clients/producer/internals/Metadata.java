@@ -36,7 +36,7 @@ public final class Metadata {
 
     private final long refreshBackoffMs;
     private final long metadataExpireMs;
-    private long lastRefresh;
+    private long lastRefreshMs;
     private Cluster cluster;
     private boolean forceUpdate;
     private final Set<String> topics;
@@ -57,7 +57,7 @@ public final class Metadata {
     public Metadata(long refreshBackoffMs, long metadataExpireMs) {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
-        this.lastRefresh = 0L;
+        this.lastRefreshMs = 0L;
         this.cluster = Cluster.empty();
         this.forceUpdate = false;
         this.topics = new HashSet<String>();
@@ -105,8 +105,8 @@ public final class Metadata {
      * since our last update and either (1) an update has been requested or (2) the current metadata has expired (more
      * than metadataExpireMs has passed since the last refresh)
      */
-    public synchronized boolean needsUpdate(long now) {
-        long msSinceLastUpdate = now - this.lastRefresh;
+    public synchronized boolean needsUpdate(long nowMs) {
+        long msSinceLastUpdate = nowMs - this.lastRefreshMs;
         boolean updateAllowed = msSinceLastUpdate >= this.refreshBackoffMs;
         boolean updateNeeded = this.forceUpdate || msSinceLastUpdate >= this.metadataExpireMs;
         return updateAllowed && updateNeeded;
@@ -129,9 +129,9 @@ public final class Metadata {
     /**
      * Update the cluster metadata
      */
-    public synchronized void update(Cluster cluster, long now) {
+    public synchronized void update(Cluster cluster, long nowMs) {
         this.forceUpdate = false;
-        this.lastRefresh = now;
+        this.lastRefreshMs = nowMs;
         this.cluster = cluster;
         notifyAll();
         log.debug("Updated cluster metadata to {}", cluster);
@@ -141,7 +141,7 @@ public final class Metadata {
      * The last time metadata was updated.
      */
     public synchronized long lastUpdate() {
-        return this.lastRefresh;
+        return this.lastRefreshMs;
     }
 
 }

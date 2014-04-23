@@ -65,16 +65,16 @@ public class Percentiles extends SampledStat implements CompoundStat {
         for (Percentile percentile : this.percentiles) {
             final double pct = percentile.percentile();
             ms.add(new NamedMeasurable(percentile.name(), percentile.description(), new Measurable() {
-                public double measure(MetricConfig config, long now) {
-                    return value(config, now, pct / 100.0);
+                public double measure(MetricConfig config, long nowMs) {
+                    return value(config, nowMs, pct / 100.0);
                 }
             }));
         }
         return ms;
     }
 
-    public double value(MetricConfig config, long now, double quantile) {
-        purgeObsoleteSamples(config, now);
+    public double value(MetricConfig config, long nowMs, double quantile) {
+        purgeObsoleteSamples(config, nowMs);
         float count = 0.0f;
         for (Sample sample : this.samples)
             count += sample.eventCount;
@@ -94,17 +94,17 @@ public class Percentiles extends SampledStat implements CompoundStat {
         return Double.POSITIVE_INFINITY;
     }
 
-    public double combine(List<Sample> samples, MetricConfig config, long now) {
-        return value(config, now, 0.5);
+    public double combine(List<Sample> samples, MetricConfig config, long nowMs) {
+        return value(config, nowMs, 0.5);
     }
 
     @Override
-    protected HistogramSample newSample(long now) {
-        return new HistogramSample(this.binScheme, now);
+    protected HistogramSample newSample(long timeMs) {
+        return new HistogramSample(this.binScheme, timeMs);
     }
 
     @Override
-    protected void update(Sample sample, MetricConfig config, double value, long now) {
+    protected void update(Sample sample, MetricConfig config, double value, long timeMs) {
         HistogramSample hist = (HistogramSample) sample;
         hist.histogram.record(value);
     }

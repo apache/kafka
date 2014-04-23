@@ -55,12 +55,12 @@ public final class KafkaMetric implements Metric {
     @Override
     public double value() {
         synchronized (this.lock) {
-            return value(time.nanoseconds());
+            return value(time.milliseconds());
         }
     }
 
-    double value(long time) {
-        return this.measurable.measure(config, time);
+    double value(long timeMs) {
+        return this.measurable.measure(config, timeMs);
     }
 
     public void config(MetricConfig config) {

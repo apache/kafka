@@ -40,90 +40,90 @@ public abstract class SampledStat implements MeasurableStat {
     }
 
     @Override
-    public void record(MetricConfig config, double value, long now) {
-        Sample sample = current(now);
-        if (sample.isComplete(now, config))
-            sample = advance(config, now);
-        update(sample, config, value, now);
+    public void record(MetricConfig config, double value, long timeMs) {
+        Sample sample = current(timeMs);
+        if (sample.isComplete(timeMs, config))
+            sample = advance(config, timeMs);
+        update(sample, config, value, timeMs);
         sample.eventCount += 1;
     }
 
-    private Sample advance(MetricConfig config, long now) {
+    private Sample advance(MetricConfig config, long timeMs) {
         this.current = (this.current + 1) % config.samples();
         if (this.current >= samples.size()) {
-            Sample sample = newSample(now);
+            Sample sample = newSample(timeMs);
             this.samples.add(sample);
             return sample;
         } else {
-            Sample sample = current(now);
-            sample.reset(now);
+            Sample sample = current(timeMs);
+            sample.reset(timeMs);
             return sample;
         }
     }
 
-    protected Sample newSample(long now) {
-        return new Sample(this.initialValue, now);
+    protected Sample newSample(long timeMs) {
+        return new Sample(this.initialValue, timeMs);
     }
 
     @Override
-    public double measure(MetricConfig config, long now) {
-        purgeObsoleteSamples(config, now);
-        return combine(this.samples, config, now);
+    public double measure(MetricConfig config, long nowMs) {
+        purgeObsoleteSamples(config, nowMs);
+        return combine(this.samples, config, nowMs);
     }
 
-    public Sample current(long now) {
+    public Sample current(long timeMs) {
         if (samples.size() == 0)
-            this.samples.add(newSample(now));
+            this.samples.add(newSample(timeMs));
         return this.samples.get(this.current);
     }
 
-    public Sample oldest(long now) {
+    public Sample oldest(long nowMs) {
         if (samples.size() == 0)
-            this.samples.add(newSample(now));
+            this.samples.add(newSample(nowMs));
         Sample oldest = this.samples.get(0);
         for (int i = 1; i < this.samples.size(); i++) {
             Sample curr = this.samples.get(i);
-            if (curr.lastWindow < oldest.lastWindow)
+            if (curr.lastWindowMs < oldest.lastWindowMs)
                 oldest = curr;
         }
         return oldest;
     }
 
-    protected abstract void update(Sample sample, MetricConfig config, double value, long now);
+    protected abstract void update(Sample sample, MetricConfig config, double value, long timeMs);
 
-    public abstract double combine(List<Sample> samples, MetricConfig config, long now);
+    public abstract double combine(List<Sample> samples, MetricConfig config, long nowMs);
 
     /* Timeout any windows that have expired in the absence of any events */
-    protected void purgeObsoleteSamples(MetricConfig config, long now) {
-        long expireAge = config.samples() * config.timeWindowNs();
+    protected void purgeObsoleteSamples(MetricConfig config, long nowMs) {
+        long expireAge = config.samples() * config.timeWindowMs();
         for (int i = 0; i < samples.size(); i++) {
             Sample sample = this.samples.get(i);
-            if (now - sample.lastWindow >= expireAge)
-                sample.reset(now);
+            if (nowMs - sample.lastWindowMs >= expireAge)
+                sample.reset(nowMs);
         }
     }
 
     protected static class Sample {
         public double initialValue;
         public long eventCount;
-        public long lastWindow;
+        public long lastWindowMs;
         public double value;
 
         public Sample(double initialValue, long now) {
             this.initialValue = initialValue;
             this.eventCount = 0;
-            this.lastWindow = now;
+            this.lastWindowMs = now;
             this.value = initialValue;
         }
 
         public void reset(long now) {
             this.eventCount = 0;
-            this.lastWindow = now;
+            this.lastWindowMs = now;
             this.value = initialValue;
         }
 
-        public boolean isComplete(long now, MetricConfig config) {
-            return now - lastWindow >= config.timeWindowNs() || eventCount >= config.eventWindow();
+        public boolean isComplete(long timeMs, MetricConfig config) {
+            return timeMs - lastWindowMs >= config.timeWindowMs() || eventCount >= config.eventWindow();
         }
     }
 

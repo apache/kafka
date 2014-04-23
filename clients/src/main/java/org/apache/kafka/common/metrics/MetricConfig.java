@@ -26,7 +26,7 @@ public class MetricConfig {
     private Quota quota;
     private int samples;
     private long eventWindow;
-    private long timeWindowNs;
+    private long timeWindowMs;
     private TimeUnit unit;
 
     public MetricConfig() {
@@ -34,7 +34,7 @@ public class MetricConfig {
         this.quota = null;
         this.samples = 2;
         this.eventWindow = Long.MAX_VALUE;
-        this.timeWindowNs = TimeUnit.NANOSECONDS.convert(30, TimeUnit.SECONDS);
+        this.timeWindowMs = TimeUnit.MILLISECONDS.convert(30, TimeUnit.SECONDS);
         this.unit = TimeUnit.SECONDS;
     }
 
@@ -56,12 +56,12 @@ public class MetricConfig {
         return this;
     }
 
-    public long timeWindowNs() {
-        return timeWindowNs;
+    public long timeWindowMs() {
+        return timeWindowMs;
     }
 
     public MetricConfig timeWindow(long window, TimeUnit unit) {
-        this.timeWindowNs = TimeUnit.NANOSECONDS.convert(window, unit);
+        this.timeWindowMs = TimeUnit.MILLISECONDS.convert(window, unit);
         return this;
     }
 

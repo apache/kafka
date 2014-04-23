@@ -31,12 +31,12 @@ public class Count extends SampledStat {
     }
 
     @Override
-    protected void update(Sample sample, MetricConfig config, double value, long now) {
+    protected void update(Sample sample, MetricConfig config, double value, long timeMs) {
         sample.value += 1.0;
     }
 
     @Override
-    public double combine(List<Sample> samples, MetricConfig config, long now) {
+    public double combine(List<Sample> samples, MetricConfig config, long nowMs) {
         double total = 0.0;
         for (int i = 0; i < samples.size(); i++)
             total += samples.get(i).value;

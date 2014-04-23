@@ -34,17 +34,17 @@ public final class RecordBatch {
     public int recordCount = 0;
     public int maxRecordSize = 0;
     public volatile int attempts = 0;
-    public final long created;
-    public long drained;
-    public long lastAttempt;
+    public final long createdMs;
+    public long drainedMs;
+    public long lastAttemptMs;
     public final MemoryRecords records;
     public final TopicPartition topicPartition;
     private final ProduceRequestResult produceFuture;
     private final List<Thunk> thunks;
 
-    public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {
-        this.created = now;
-        this.lastAttempt = now;
+    public RecordBatch(TopicPartition tp, MemoryRecords records, long nowMs) {
+        this.createdMs = nowMs;
+        this.lastAttemptMs = nowMs;
         this.records = records;
         this.topicPartition = tp;
         this.produceFuture = new ProduceRequestResult();

@@ -210,7 +210,7 @@ public class Selector implements Selectable {
         long startSelect = time.nanoseconds();
         int readyKeys = select(timeout);
         long endSelect = time.nanoseconds();
-        this.sensors.selectTime.record(endSelect - startSelect, endSelect);
+        this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
 
         if (readyKeys > 0) {
             Set<SelectionKey> keys = this.selector.selectedKeys();
@@ -268,7 +268,7 @@ public class Selector implements Selectable {
             }
         }
         long endIo = time.nanoseconds();
-        this.sensors.ioTime.record(endIo - endSelect, endIo);
+        this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
     }
 
     @Override
@@ -441,7 +441,7 @@ public class Selector implements Selectable {
             this.ioTime.add("io-ratio", "The fraction of time the I/O thread spent doing I/O", new Rate(TimeUnit.NANOSECONDS));
 
             this.metrics.addMetric("connection-count", "The current number of active connections.", new Measurable() {
-                public double measure(MetricConfig config, long now) {
+                public double measure(MetricConfig config, long nowMs) {
                     return keys.size();
                 }
             });
@@ -476,20 +476,22 @@ public class Selector implements Selectable {
         }
 
         public void recordBytesSent(int node, int bytes) {
-            this.bytesSent.record(bytes);
+            long nowMs = time.milliseconds();
+            this.bytesSent.record(bytes, nowMs);
             if (node >= 0) {
                 String nodeRequestName = "node-" + node + ".bytes-sent";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
-                if (nodeRequest != null) nodeRequest.record(bytes);
+                if (nodeRequest != null) nodeRequest.record(bytes, nowMs);
             }
         }
 
         public void recordBytesReceived(int node, int bytes) {
-            this.bytesReceived.record(bytes);
+            long nowMs = time.milliseconds();
+            this.bytesReceived.record(bytes, nowMs);
             if (node >= 0) {
                 String nodeRequestName = "node-" + node + ".bytes-received";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
-                if (nodeRequest != null) nodeRequest.record(bytes);
+                if (nodeRequest != null) nodeRequest.record(bytes, nowMs);
             }
         }
     }

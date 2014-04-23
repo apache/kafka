@@ -84,7 +84,7 @@ public class Microbenchmarks {
                         counter++;
                     }
                 }
-                System.out.println("synchronized: " + ((System.nanoTime() - start) / iters));
+                System.out.println("synchronized: " + ((time.nanoseconds() - start) / iters));
                 System.out.println(counter);
                 done.set(true);
             }
@@ -121,7 +121,7 @@ public class Microbenchmarks {
                     counter++;
                     lock2.unlock();
                 }
-                System.out.println("lock: " + ((System.nanoTime() - start) / iters));
+                System.out.println("lock: " + ((time.nanoseconds() - start) / iters));
                 System.out.println(counter);
                 done.set(true);
             }
