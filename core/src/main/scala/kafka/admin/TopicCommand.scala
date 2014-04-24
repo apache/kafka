@@ -57,7 +57,7 @@ object TopicCommand {
       else if(opts.options.has(opts.describeOpt))
         describeTopic(zkClient, opts)
     } catch {
-      case e =>
+      case e: Throwable =>
         println("Error while executing topic command " + e.getMessage)
         println(Utils.stackTrace(e))
     } finally {

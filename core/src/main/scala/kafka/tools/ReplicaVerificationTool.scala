@@ -302,7 +302,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
             } else
               isMessageInAllReplicas = false
           } catch {
-            case t =>
+            case t: Throwable =>
               throw new RuntimeException("Error in processing replica %d in partition %s at offset %d."
               .format(replicaId, topicAndPartition, fetchOffsetMap.get(topicAndPartition)), t)
           }

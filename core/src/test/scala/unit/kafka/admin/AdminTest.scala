@@ -310,8 +310,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     val serverConfigs = TestUtils.createBrokerConfigs(3).map(new KafkaConfig(_))
     val servers = serverConfigs.reverse.map(s => TestUtils.createServer(s))
     // create the topic
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, partition, 1000)
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers)
 
     val controllerId = ZkUtils.getController(zkClient)
     val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController

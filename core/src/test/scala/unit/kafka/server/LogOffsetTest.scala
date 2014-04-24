@@ -22,7 +22,6 @@ import kafka.utils._
 import junit.framework.Assert._
 import java.util.{Random, Properties}
 import kafka.consumer.SimpleConsumer
-import org.junit.{After, Before, Test}
 import kafka.message.{NoCompressionCodec, ByteBufferMessageSet, Message}
 import kafka.zk.ZooKeeperTestHarness
 import org.scalatest.junit.JUnit3Suite
@@ -30,8 +29,6 @@ import kafka.admin.AdminUtils
 import kafka.api.{PartitionOffsetRequestInfo, FetchRequestBuilder, OffsetRequest}
 import kafka.utils.TestUtils._
 import kafka.common.{ErrorMapping, TopicAndPartition}
-import kafka.utils.nonthreadsafe
-import kafka.utils.threadsafe
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -123,8 +120,7 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     val topic = topicPartition.split("-").head
 
     // setup brokers in zookeeper as owners of partitions for this test
-    AdminUtils.createTopic(zkClient, topic, 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
 
     var offsetChanged = false
     for(i <- 1 to 14) {

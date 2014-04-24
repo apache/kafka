@@ -63,33 +63,11 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     servers ++= List(server1, server2, server3, server4)
     brokers = servers.map(s => new Broker(s.config.brokerId, s.config.hostName, s.config.port))
 
-    // create topics with 1 partition, 2 replicas, one on each broker
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic1, Map(0->Seq(0,1)))
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic2, Map(0->Seq(1,2)))
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic3, Map(0->Seq(2,3,0,1)))
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic4, Map(0->Seq(0,3)))
-
-
-    // wait until leader is elected
-    var leader1 = waitUntilLeaderIsElectedOrChanged(zkClient, topic1, partitionId)
-    var leader2 = waitUntilLeaderIsElectedOrChanged(zkClient, topic2, partitionId)
-    var leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic3, partitionId)
-    var leader4 = waitUntilLeaderIsElectedOrChanged(zkClient, topic4, partitionId)
-
-    debug("Leader for " + topic1  + " is elected to be: %s".format(leader1.getOrElse(-1)))
-    debug("Leader for " + topic2 + " is elected to be: %s".format(leader1.getOrElse(-1)))
-    debug("Leader for " + topic3 + "is elected to be: %s".format(leader1.getOrElse(-1)))
-    debug("Leader for " + topic4 + "is elected to be: %s".format(leader1.getOrElse(-1)))
-
-    assertTrue("Leader should get elected", leader1.isDefined)
-    assertTrue("Leader should get elected", leader2.isDefined)
-    assertTrue("Leader should get elected", leader3.isDefined)
-    assertTrue("Leader should get elected", leader4.isDefined)
-
-    assertTrue("Leader could be broker 0 or broker 1 for " + topic1, (leader1.getOrElse(-1) == 0) || (leader1.getOrElse(-1) == 1))
-    assertTrue("Leader could be broker 1 or broker 2 for " + topic2, (leader2.getOrElse(-1) == 1) || (leader1.getOrElse(-1) == 2))
-    assertTrue("Leader could be broker 2 or broker 3 for " + topic3, (leader3.getOrElse(-1) == 2) || (leader1.getOrElse(-1) == 3))
-    assertTrue("Leader could be broker 3 or broker 4 for " + topic4, (leader4.getOrElse(-1) == 0) || (leader1.getOrElse(-1) == 3))
+    // create topics first
+    createTopic(zkClient, topic1, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
+    createTopic(zkClient, topic2, partitionReplicaAssignment = Map(0->Seq(1,2)), servers = servers)
+    createTopic(zkClient, topic3, partitionReplicaAssignment = Map(0->Seq(2,3,0,1)), servers = servers)
+    createTopic(zkClient, topic4, partitionReplicaAssignment = Map(0->Seq(0,3)), servers = servers)
   }
 
   override def tearDown() {
@@ -129,8 +107,8 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(leader2.get, leader2FromZk)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 1, 5000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 2, 5000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 1)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 2)
     val metadata = ClientUtils.fetchTopicMetadata(Set(topic1), brokers, "AddPartitionsTest-testIncrementPartitions",
       2000,0).topicsMetadata
     val metaDataForTopic1 = metadata.filter(p => p.topic.equals(topic1))
@@ -154,8 +132,8 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(leader2.get, leader2FromZk)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1, 5000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2, 5000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 1)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic2, 2)
     val metadata = ClientUtils.fetchTopicMetadata(Set(topic2), brokers, "AddPartitionsTest-testManualAssignmentOfReplicas",
       2000,0).topicsMetadata
     val metaDataForTopic2 = metadata.filter(p => p.topic.equals(topic2))
@@ -173,12 +151,12 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     AdminUtils.addPartitions(zkClient, topic3, 7)
 
     // read metadata from a broker and verify the new topic partitions exist
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 1, 5000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 2, 5000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 3, 5000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 4, 5000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 5, 5000)
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 6, 5000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 1)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 2)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 3)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 4)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 5)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic3, 6)
 
     val metadata = ClientUtils.fetchTopicMetadata(Set(topic3), brokers, "AddPartitionsTest-testReplicaPlacement",
       2000,0).topicsMetadata

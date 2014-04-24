@@ -65,9 +65,8 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testBasicTopicMetadata {
     // create topic
     val topic = "test"
-    AdminUtils.createTopic(zkClient, topic, 1, 1)
-    TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic, 0, 1000)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
+    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
+
     var topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic),brokers,"TopicMetadataTest-testBasicTopicMetadata",
       2000,0).topicsMetadata
     assertEquals(ErrorMapping.NoError, topicsMetadata.head.errorCode)
@@ -84,12 +83,8 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     // create topic
     val topic1 = "testGetAllTopicMetadata1"
     val topic2 = "testGetAllTopicMetadata2"
-    AdminUtils.createTopic(zkClient, topic1, 1, 1)
-    AdminUtils.createTopic(zkClient, topic2, 1, 1)
-
-    // wait for leader to be elected for both topics
-    TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic1, 0, 1000)
-    TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic2, 0, 1000)
+    createTopic(zkClient, topic1, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
+    createTopic(zkClient, topic2, numPartitions = 1, replicationFactor = 1, servers = Seq(server1))
 
     // issue metadata request with empty list of topics
     var topicsMetadata = ClientUtils.fetchTopicMetadata(Set.empty, brokers, "TopicMetadataTest-testGetAllTopicMetadata",
@@ -120,7 +115,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // wait for leader to be elected
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
-    TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic, 0, 1000)
+    TestUtils.waitUntilMetadataIsPropagated(Seq(server1), topic, 0)
 
     // retry the metadata for the auto created topic
     topicsMetadata = ClientUtils.fetchTopicMetadata(Set(topic),brokers,"TopicMetadataTest-testBasicTopicMetadata",

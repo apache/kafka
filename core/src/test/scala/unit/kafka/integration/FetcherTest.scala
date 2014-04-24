@@ -30,7 +30,6 @@ import kafka.serializer._
 import kafka.producer.{KeyedMessage, Producer}
 import kafka.utils.TestUtils._
 import kafka.utils.TestUtils
-import kafka.admin.AdminUtils
 
 class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
 
@@ -55,8 +54,8 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
 
   override def setUp() {
     super.setUp
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0 -> Seq(configs.head.brokerId)))
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+    createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
+
     fetcher = new ConsumerFetcherManager("consumer1", new ConsumerConfig(TestUtils.createConsumerProperties("", "", "")), zkClient)
     fetcher.stopConnections()
     fetcher.startConnections(topicInfos, cluster)

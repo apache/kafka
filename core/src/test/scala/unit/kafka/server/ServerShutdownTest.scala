@@ -26,7 +26,6 @@ import kafka.zk.ZooKeeperTestHarness
 import kafka.producer._
 import kafka.utils.IntEncoder
 import kafka.utils.TestUtils._
-import kafka.admin.AdminUtils
 import kafka.api.FetchRequestBuilder
 import kafka.utils.{TestUtils, Utils}
 
@@ -49,8 +48,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     var producer = new Producer[Int, String](new ProducerConfig(producerConfig))
 
     // create topic
-    AdminUtils.createTopic(zkClient, topic, 1, 1)
-    TestUtils.waitUntilMetadataIsPropagated(Seq(server), topic, 0, 1000)
+    createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = Seq(server))
 
     // send some messages
     producer.send(sent1.map(m => new KeyedMessage[Int, String](topic, 0, m)):_*)
@@ -69,7 +67,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     server.startup()
 
     // wait for the broker to receive the update metadata request after startup
-    TestUtils.waitUntilMetadataIsPropagated(Seq(server), topic, 0, 1000)
+    TestUtils.waitUntilMetadataIsPropagated(Seq(server), topic, 0)
 
     producer = new Producer[Int, String](new ProducerConfig(producerConfig))
     val consumer = new SimpleConsumer(host, port, 1000000, 64*1024, "")

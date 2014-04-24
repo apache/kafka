@@ -169,7 +169,7 @@ class AsyncProducerTest extends JUnit3Suite {
     props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
     val broker1 = new Broker(0, "localhost", 9092)
     val broker2 = new Broker(1, "localhost", 9093)
-    broker1
+
     // form expected partitions metadata
     val partition1Metadata = new PartitionMetadata(0, Some(broker1), List(broker1, broker2))
     val partition2Metadata = new PartitionMetadata(1, Some(broker2), List(broker1, broker2))

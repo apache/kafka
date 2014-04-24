@@ -209,9 +209,8 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
   def testConsumerEmptyTopic() {
     val newTopic = "new-topic"
-    AdminUtils.createTopic(zkClient, newTopic, 1, 1)
-    TestUtils.waitUntilMetadataIsPropagated(servers, newTopic, 0, 1000)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, newTopic, 0)
+    TestUtils.createTopic(zkClient, newTopic, numPartitions = 1, replicationFactor = 1, servers = servers)
+
     val fetchResponse = consumer.fetch(new FetchRequestBuilder().addFetch(newTopic, 0, 0, 10000).build())
     assertFalse(fetchResponse.messageSet(newTopic, 0).iterator.hasNext)
   }

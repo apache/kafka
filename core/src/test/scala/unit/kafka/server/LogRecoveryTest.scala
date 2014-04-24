@@ -19,7 +19,6 @@ package kafka.server
 import org.scalatest.junit.JUnit3Suite
 import org.junit.Assert._
 import java.io.File
-import kafka.admin.AdminUtils
 import kafka.utils.TestUtils._
 import kafka.utils.IntEncoder
 import kafka.utils.{Utils, TestUtils}
@@ -72,13 +71,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0,1)))
-
-    // wait until leader is elected
-    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
-    assertTrue("Leader should get elected", leader.isDefined)
-    // NOTE: this is to avoid transient test failures
-    assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
+    createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
 
     val numMessages = 2L
     sendMessages(numMessages.toInt)
@@ -105,14 +98,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0,1)))
+    var leader = createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)(0)
 
-    // wait until leader is elected
-    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
-    assertTrue("Leader should get elected", leader.isDefined)
-    // NOTE: this is to avoid transient test failures
-    assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
-    
     assertEquals(0L, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
 
     sendMessages(1)
@@ -169,13 +156,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(0,1)))
+    createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
 
-    // wait until leader is elected
-    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
-    assertTrue("Leader should get elected", leader.isDefined)
-    // NOTE: this is to avoid transient test failures
-    assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
     sendMessages(20)
     var hw = 20L
     // give some time for follower 1 to record leader HW of 600
@@ -202,13 +184,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer = new Producer[Int, String](new ProducerConfig(producerProps))
 
     // create topic with 1 partition, 2 replicas, one on each broker
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(0->Seq(server1.config.brokerId, server2.config.brokerId)))
-
-    // wait until leader is elected
-    var leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
-    assertTrue("Leader should get elected", leader.isDefined)
-    // NOTE: this is to avoid transient test failures
-    assertTrue("Leader could be broker 0 or broker 1", (leader.getOrElse(-1) == 0) || (leader.getOrElse(-1) == 1))
+    var leader = createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(server1.config.brokerId, server2.config.brokerId)),
+                servers = servers)(0)
 
     sendMessages(2)
     var hw = 2L

@@ -109,7 +109,7 @@ kafka.integration.AutoOffsetResetTest > testResetToLatestWhenOffsetTooLow FAILED
     for(i <- 0 until numMessages)
       producer.send(new KeyedMessage[String, Array[Byte]](topic, topic, "test".getBytes))
 
-    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0, 1000)
+    TestUtils.waitUntilMetadataIsPropagated(servers, topic, 0)
 
     // update offset in zookeeper for consumer to jump "forward" in time
     val dirs = new ZKGroupTopicDirs(group, topic)

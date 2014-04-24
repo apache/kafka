@@ -22,7 +22,6 @@ import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils._
 import kafka.producer.KeyedMessage
 import kafka.serializer.StringEncoder
-import kafka.admin.AdminUtils
 import kafka.utils.TestUtils
 import junit.framework.Assert._
 import kafka.common._
@@ -51,8 +50,7 @@ class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
 
     // create a topic and partition and await leadership
     for (topic <- List(topic1,topic2)) {
-      AdminUtils.createTopic(zkClient, topic, 1, 2)
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+      createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
     }
 
     // send test messages to leader

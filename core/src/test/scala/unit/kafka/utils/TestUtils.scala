@@ -23,8 +23,6 @@ import java.nio._
 import java.nio.channels._
 import java.util.Random
 import java.util.Properties
-import java.util.concurrent.locks.ReentrantLock
-import java.util.concurrent.TimeUnit
 
 import collection.mutable.Map
 import collection.mutable.ListBuffer
@@ -150,15 +148,33 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Create a topic in zookeeper
+   * Create a topic in zookeeper.
+   * Wait until the leader is elected and the metadata is propagated to all brokers.
+   * Return the leader for each partition.
    */
   def createTopic(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicationFactor: Int = 1,
-                  servers: List[KafkaServer]) : scala.collection.immutable.Map[Int, Option[Int]] = {
+                  servers: Seq[KafkaServer]) : scala.collection.immutable.Map[Int, Option[Int]] = {
     // create topic
     AdminUtils.createTopic(zkClient, topic, numPartitions, replicationFactor)
     // wait until the update metadata request for new topic reaches all servers
     (0 until numPartitions).map { case i =>
-      TestUtils.waitUntilMetadataIsPropagated(servers, topic, i, 500)
+      TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
+      i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
+    }.toMap
+  }
+
+  /**
+   * Create a topic in zookeeper using a customized replica assignment.
+   * Wait until the leader is elected and the metadata is propagated to all brokers.
+   * Return the leader for each partition.
+   */
+  def createTopic(zkClient: ZkClient, topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
+                  servers: Seq[KafkaServer]) : scala.collection.immutable.Map[Int, Option[Int]] = {
+    // create topic
+    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, partitionReplicaAssignment)
+    // wait until the update metadata request for new topic reaches all servers
+    partitionReplicaAssignment.keySet.map { case i =>
+      TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
       i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
     }.toMap
   }
@@ -553,8 +569,8 @@ object TestUtils extends Logging {
     byteBuffer
   }
 
-  def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long) = {
-    assertTrue("Partition [%s,%d] metadata not propagated after timeout".format(topic, partition),
+  def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L) = {
+    assertTrue("Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
       TestUtils.waitUntilTrue(() =>
         servers.foldLeft(true)(_ && _.apis.metadataCache.containsTopicAndPartition(topic, partition)), timeout))
   }

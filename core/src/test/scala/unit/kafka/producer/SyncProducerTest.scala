@@ -92,8 +92,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
-    AdminUtils.createTopic(zkClient, "test", 1, 1)
-    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "test", 0)
+    TestUtils.createTopic(zkClient, "test", numPartitions = 1, replicationFactor = 1, servers = servers)
 
     val message1 = new Message(new Array[Byte](configs(0).messageMaxBytes + 1))
     val messageSet1 = new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = message1)

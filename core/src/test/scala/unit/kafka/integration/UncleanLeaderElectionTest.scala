@@ -173,7 +173,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     debug("Follower for " + topic  + " is: %s".format(followerId))
 
     produceMessage(topic, "first")
-    waitUntilMetadataIsPropagated(servers, topic, partitionId, 1000)
+    waitUntilMetadataIsPropagated(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic))
 
     // shutdown follower server
@@ -208,7 +208,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     debug("Follower for " + topic  + " is: %s".format(followerId))
 
     produceMessage(topic, "first")
-    waitUntilMetadataIsPropagated(servers, topic, partitionId, 1000)
+    waitUntilMetadataIsPropagated(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic))
 
     // shutdown follower server
@@ -235,7 +235,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, newLeaderOpt = Some(leaderId))
 
     produceMessage(topic, "third")
-    waitUntilMetadataIsPropagated(servers, topic, partitionId, 1000)
+    waitUntilMetadataIsPropagated(servers, topic, partitionId)
     servers.filter(server => server.config.brokerId == leaderId).map(server => shutdownServer(server))
 
     // verify clean leader transition to ISR follower

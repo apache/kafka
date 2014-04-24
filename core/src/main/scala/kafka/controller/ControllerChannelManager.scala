@@ -132,7 +132,7 @@ class RequestSendThread(val controllerId: Int,
             channel.send(request)
             isSendSuccessful = true
           } catch {
-            case e => // if the send was not successful, reconnect to broker and resend the message
+            case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
               error(("Controller %d epoch %d failed to send %s request with correlation id %s to broker %s. " +
                 "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
                 RequestKeys.nameForKey(request.requestId.get), request.correlationId, toBroker.toString()), e)
@@ -173,7 +173,7 @@ class RequestSendThread(val controllerId: Int,
       channel.connect()
       info("Controller %d connected to %s for sending state change requests".format(controllerId, broker.toString()))
     } catch {
-      case e => {
+      case e: Throwable => {
         channel.disconnect()
         error("Controller %d's connection to broker %s was unsuccessful".format(controllerId, broker.toString()), e)
       }
