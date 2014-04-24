@@ -253,7 +253,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
   private def produceMessage(topic: String, message: String) = {
     val props = new Properties()
     props.put("request.required.acks", String.valueOf(-1))
-	val producer: Producer[String, Array[Byte]] = createProducer(getBrokerListStrFromConfigs(configs),
+    val producer: Producer[String, Array[Byte]] = createProducer(getBrokerListStrFromConfigs(configs),
       new DefaultEncoder(), new StringEncoder(), props)
     producer.send(new KeyedMessage[String, Array[Byte]](topic, topic, message.getBytes))
     producer.close()

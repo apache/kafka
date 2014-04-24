@@ -74,6 +74,7 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config)))
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression)
     var producer = new KafkaProducer(props)
+    val consumer = new SimpleConsumer("localhost", port, 100, 1024*1024, "")
 
     try {
       // create topic
@@ -93,7 +94,6 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
       }
 
       // make sure the fetched message count match
-      val consumer = new SimpleConsumer("localhost", port, 100, 1024*1024, "")
       val fetchResponse = consumer.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
       val messageSet = fetchResponse.messageSet(topic, partition).iterator.toBuffer
       assertEquals("Should have fetched " + numRecords + " messages", numRecords, messageSet.size)
@@ -109,6 +109,8 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
         producer.close()
         producer = null
       }
+      if (consumer != null)
+        consumer.close()
     }
   }
 }

@@ -92,9 +92,6 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
   }
 
   override def tearDown() {
-    server1.shutdown; Utils.rm(server1.config.logDirs)
-    server2.shutdown; Utils.rm(server2.config.logDirs)
-
     consumer1.close
     consumer2.close
 
@@ -102,6 +99,9 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     if (producer2 != null) producer2.close
     if (producer3 != null) producer3.close
     if (producer4 != null) producer4.close
+
+    server1.shutdown; Utils.rm(server1.config.logDirs)
+    server2.shutdown; Utils.rm(server2.config.logDirs)
 
     super.tearDown()
   }

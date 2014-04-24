@@ -76,6 +76,12 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   override def tearDown() {
     // restore set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.ERROR)
+
+    if (consumer1 != null)
+      consumer1.close()
+    if (consumer2 != null)
+      consumer2.close()
+
     server1.shutdown
     server2.shutdown
     Utils.rm(server1.config.logDirs)
