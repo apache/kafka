@@ -132,7 +132,8 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
                                                       staleControllerEpoch, 0, "")
 
     controllerChannelManager.sendRequest(brokerId2, leaderAndIsrRequest, staleControllerEpochCallback)
-    TestUtils.waitUntilTrue(() => staleControllerEpochDetected == true, 1000)
+    TestUtils.waitUntilTrue(() => staleControllerEpochDetected == true,
+                            "Controller epoch should be stale")
     assertTrue("Stale controller epoch not detected by the broker", staleControllerEpochDetected)
 
     controllerChannelManager.shutdown()

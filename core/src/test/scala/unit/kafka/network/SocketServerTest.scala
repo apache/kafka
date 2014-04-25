@@ -119,10 +119,9 @@ class SocketServerTest extends JUnitSuite {
     server.requestChannel.sendResponse(new RequestChannel.Response(0, request, null))
 
     // After the response is sent to the client (which is async and may take a bit of time), the socket key should be available for reads.
-    Assert.assertTrue(
-      TestUtils.waitUntilTrue(
-        () => { (request.requestKey.asInstanceOf[SelectionKey].interestOps & SelectionKey.OP_READ) == SelectionKey.OP_READ },
-        5000))
+    TestUtils.waitUntilTrue(
+      () => { (request.requestKey.asInstanceOf[SelectionKey].interestOps & SelectionKey.OP_READ) == SelectionKey.OP_READ },
+      "Socket key should be available for reads")
   }
 
   @Test(expected = classOf[SocketException])

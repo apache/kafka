@@ -533,15 +533,15 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Wait until the given condition is true or the given wait time ellapses
+   * Wait until the given condition is true or throw an exception if the given wait time elapses.
    */
-  def waitUntilTrue(condition: () => Boolean, waitTime: Long): Boolean = {
+  def waitUntilTrue(condition: () => Boolean, msg: String, waitTime: Long = 5000L): Boolean = {
     val startTime = System.currentTimeMillis()
     while (true) {
       if (condition())
         return true
       if (System.currentTimeMillis() > startTime + waitTime)
-        return false
+        fail(msg)
       Thread.sleep(waitTime.min(100L))
     }
     // should never hit here
@@ -570,9 +570,10 @@ object TestUtils extends Logging {
   }
 
   def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L) = {
-    assertTrue("Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
-      TestUtils.waitUntilTrue(() =>
-        servers.foldLeft(true)(_ && _.apis.metadataCache.containsTopicAndPartition(topic, partition)), timeout))
+    TestUtils.waitUntilTrue(() =>
+      servers.foldLeft(true)(_ && _.apis.metadataCache.containsTopicAndPartition(topic, partition)),
+      "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
+      waitTime = timeout)
   }
   
   def writeNonsenseToFile(fileName: File, position: Long, size: Int) {
@@ -600,14 +601,22 @@ object TestUtils extends Logging {
 
   def ensureNoUnderReplicatedPartitions(zkClient: ZkClient, topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int],
                                                 servers: Seq[KafkaServer]) {
-    val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, topic, partitionToBeReassigned)
-    assertFalse("Reassigned partition [%s,%d] is underreplicated".format(topic, partitionToBeReassigned),
-      inSyncReplicas.size < assignedReplicas.size)
-    val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partitionToBeReassigned)
-    assertTrue("Reassigned partition [%s,%d] is unavailable".format(topic, partitionToBeReassigned), leader.isDefined)
-    val leaderBroker = servers.filter(s => s.config.brokerId == leader.get).head
-    assertTrue("Reassigned partition [%s,%d] is underreplicated as reported by the leader %d".format(topic, partitionToBeReassigned, leader.get),
-      leaderBroker.replicaManager.underReplicatedPartitionCount() == 0)
+    TestUtils.waitUntilTrue(() => {
+        val inSyncReplicas = ZkUtils.getInSyncReplicasForPartition(zkClient, topic, partitionToBeReassigned)
+        inSyncReplicas.size == assignedReplicas.size
+      },
+      "Reassigned partition [%s,%d] is under replicated".format(topic, partitionToBeReassigned))
+    var leader: Option[Int] = None
+    TestUtils.waitUntilTrue(() => {
+        leader = ZkUtils.getLeaderForPartition(zkClient, topic, partitionToBeReassigned)
+        leader.isDefined
+      },
+      "Reassigned partition [%s,%d] is unavailable".format(topic, partitionToBeReassigned))
+    TestUtils.waitUntilTrue(() => {
+        val leaderBroker = servers.filter(s => s.config.brokerId == leader.get).head
+        leaderBroker.replicaManager.underReplicatedPartitionCount() == 0
+      },
+      "Reassigned partition [%s,%d] is under-replicated as reported by the leader %d".format(topic, partitionToBeReassigned, leader.get))
   }
 
   def checkIfReassignPartitionPathExists(zkClient: ZkClient): Boolean = {

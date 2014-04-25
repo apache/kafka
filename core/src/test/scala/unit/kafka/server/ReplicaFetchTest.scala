@@ -71,6 +71,6 @@ class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
       }
       result
     }
-    assertTrue("Broker logs should be identical", waitUntilTrue(logsMatch, 6000))
+    waitUntilTrue(logsMatch, "Broker logs should be identical")
   }
 }

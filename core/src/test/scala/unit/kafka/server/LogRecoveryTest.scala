@@ -77,9 +77,9 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     sendMessages(numMessages.toInt)
 
     // give some time for the follower 1 to record leader HW
-    assertTrue("Failed to update highwatermark for follower after 1000 ms", 
-               TestUtils.waitUntilTrue(() =>
-                 server2.replicaManager.getReplica(topic, 0).get.highWatermark == numMessages, 10000))
+    TestUtils.waitUntilTrue(() =>
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == numMessages,
+      "Failed to update high watermark for follower after timeout")
 
     servers.foreach(server => server.replicaManager.checkpointHighWatermarks())
     producer.close()
@@ -135,8 +135,9 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     hw += 1
       
     // give some time for follower 1 to record leader HW of 60
-    assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 5000))
+    TestUtils.waitUntilTrue(() =>
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw,
+      "Failed to update high watermark for follower after timeout")
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(server => server.shutdown())
     producer.close()
@@ -161,8 +162,9 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     sendMessages(20)
     var hw = 20L
     // give some time for follower 1 to record leader HW of 600
-    assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 5000))
+    TestUtils.waitUntilTrue(() =>
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw,
+      "Failed to update high watermark for follower after timeout")
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(server => server.shutdown())
     producer.close()
@@ -191,8 +193,9 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     var hw = 2L
     
     // allow some time for the follower to get the leader HW
-    assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 5000))
+    TestUtils.waitUntilTrue(() =>
+      server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw,
+      "Failed to update high watermark for follower after timeout")
     // kill the server hosting the preferred replica
     server1.shutdown()
     server2.shutdown()
@@ -216,8 +219,9 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     hw += 2
     
     // allow some time for the follower to get the leader HW
-    assertTrue("Failed to update highwatermark for follower after 1000 ms", TestUtils.waitUntilTrue(() =>
-      server1.replicaManager.getReplica(topic, 0).get.highWatermark == hw, 5000))
+    TestUtils.waitUntilTrue(() =>
+      server1.replicaManager.getReplica(topic, 0).get.highWatermark == hw,
+      "Failed to update high watermark for follower after timeout")
     // shutdown the servers to allow the hw to be checkpointed
     servers.foreach(server => server.shutdown())
     producer.close()

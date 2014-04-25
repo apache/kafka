@@ -314,8 +314,10 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
       // create topic
       AdminUtils.createTopic(zkClient, "new-topic", 2, 1)
-      assertTrue("Topic new-topic not created after timeout", TestUtils.waitUntilTrue(() =>
-        AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode, zookeeper.tickTime))
+      TestUtils.waitUntilTrue(() =>
+        AdminUtils.fetchTopicMetadataFromZk("new-topic", zkClient).errorCode != ErrorMapping.UnknownTopicOrPartitionCode,
+        "Topic new-topic not created after timeout",
+        waitTime = zookeeper.tickTime)
       TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0)
     
       producer.send(new KeyedMessage[String, String]("new-topic", "key", null))
