@@ -16,22 +16,23 @@
  */
 package kafka.cluster
 
-import scala.collection._
+import kafka.common._
 import kafka.admin.AdminUtils
-import kafka.utils._
-import java.lang.Object
+import kafka.utils.{ZkUtils, Pool, Time, Logging}
+import kafka.utils.Utils.inLock
 import kafka.api.{PartitionStateInfo, LeaderAndIsr}
 import kafka.log.LogConfig
 import kafka.server.{OffsetManager, ReplicaManager}
-import com.yammer.metrics.core.Gauge
 import kafka.metrics.KafkaMetricsGroup
 import kafka.controller.KafkaController
-import org.apache.log4j.Logger
 import kafka.message.ByteBufferMessageSet
-import kafka.common.{NotAssignedReplicaException, NotLeaderForPartitionException, ErrorMapping}
+
 import java.io.IOException
+import java.util.concurrent.locks.ReentrantReadWriteLock
 import scala.Some
-import kafka.common.TopicAndPartition
+import scala.collection._
+
+import com.yammer.metrics.core.Gauge
 
 
 /**
@@ -48,7 +49,7 @@ class Partition(val topic: String,
   var leaderReplicaIdOpt: Option[Int] = None
   var inSyncReplicas: Set[Replica] = Set.empty[Replica]
   private val assignedReplicaMap = new Pool[Int,Replica]
-  private val leaderIsrUpdateLock = new Object
+  private val leaderIsrUpdateLock = new ReentrantReadWriteLock()
   private var zkVersion: Int = LeaderAndIsr.initialZKVersion
   private var leaderEpoch: Int = LeaderAndIsr.initialLeaderEpoch - 1
   /* Epoch of the controller that last changed the leader. This needs to be initialized correctly upon broker startup.
@@ -72,7 +73,7 @@ class Partition(val topic: String,
   )
 
   def isUnderReplicated(): Boolean = {
-    leaderIsrUpdateLock synchronized {
+    inLock(leaderIsrUpdateLock.readLock()) {
       leaderReplicaIfLocal() match {
         case Some(_) =>
           inSyncReplicas.size < assignedReplicas.size
@@ -114,7 +115,7 @@ class Partition(val topic: String,
   }
 
   def leaderReplicaIfLocal(): Option[Replica] = {
-    leaderIsrUpdateLock synchronized {
+    inLock(leaderIsrUpdateLock.readLock()) {
       leaderReplicaIdOpt match {
         case Some(leaderReplicaId) =>
           if (leaderReplicaId == localBrokerId)
@@ -140,7 +141,7 @@ class Partition(val topic: String,
 
   def delete() {
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
-    leaderIsrUpdateLock synchronized {
+    inLock(leaderIsrUpdateLock.writeLock()) {
       assignedReplicaMap.clear()
       inSyncReplicas = Set.empty[Replica]
       leaderReplicaIdOpt = None
@@ -155,7 +156,7 @@ class Partition(val topic: String,
   }
 
   def getLeaderEpoch(): Int = {
-    leaderIsrUpdateLock synchronized {
+    inLock(leaderIsrUpdateLock.readLock()) {
       return this.leaderEpoch
     }
   }
@@ -167,7 +168,7 @@ class Partition(val topic: String,
   def makeLeader(controllerId: Int,
                  partitionStateInfo: PartitionStateInfo, correlationId: Int,
                  offsetManager: OffsetManager): Boolean = {
-    leaderIsrUpdateLock synchronized {
+    inLock(leaderIsrUpdateLock.writeLock()) {
       val allReplicas = partitionStateInfo.allReplicas
       val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
@@ -200,7 +201,7 @@ class Partition(val topic: String,
   def makeFollower(controllerId: Int,
                    partitionStateInfo: PartitionStateInfo,
                    correlationId: Int, offsetManager: OffsetManager): Boolean = {
-    leaderIsrUpdateLock synchronized {
+    inLock(leaderIsrUpdateLock.writeLock()) {
       val allReplicas = partitionStateInfo.allReplicas
       val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
       val leaderAndIsr = leaderIsrAndControllerEpoch.leaderAndIsr
@@ -234,7 +235,7 @@ class Partition(val topic: String,
   }
 
   def updateLeaderHWAndMaybeExpandIsr(replicaId: Int, offset: Long) {
-    leaderIsrUpdateLock synchronized {
+    inLock(leaderIsrUpdateLock.writeLock()) {
       debug("Recording follower %d position %d for partition [%s,%d].".format(replicaId, offset, topic, partitionId))
       val replicaOpt = getReplica(replicaId)
       if(!replicaOpt.isDefined) {
@@ -270,7 +271,7 @@ class Partition(val topic: String,
   }
 
   def checkEnoughReplicasReachOffset(requiredOffset: Long, requiredAcks: Int): (Boolean, Short) = {
-    leaderIsrUpdateLock synchronized {
+    inLock(leaderIsrUpdateLock.readLock()) {
       leaderReplicaIfLocal() match {
         case Some(_) =>
           val numAcks = inSyncReplicas.count(r => {
@@ -314,7 +315,7 @@ class Partition(val topic: String,
   }
 
   def maybeShrinkIsr(replicaMaxLagTimeMs: Long,  replicaMaxLagMessages: Long) {
-    leaderIsrUpdateLock synchronized {
+    inLock(leaderIsrUpdateLock.writeLock()) {
       leaderReplicaIfLocal() match {
         case Some(leaderReplica) =>
           val outOfSyncReplicas = getOutOfSyncReplicas(leaderReplica, replicaMaxLagTimeMs, replicaMaxLagMessages)
@@ -356,7 +357,7 @@ class Partition(val topic: String,
   }
 
   def appendMessagesToLeader(messages: ByteBufferMessageSet) = {
-    leaderIsrUpdateLock synchronized {
+    inLock(leaderIsrUpdateLock.readLock()) {
       val leaderReplicaOpt = leaderReplicaIfLocal()
       leaderReplicaOpt match {
         case Some(leaderReplica) =>
@@ -402,7 +403,7 @@ class Partition(val topic: String,
   }
 
   override def toString(): String = {
-    leaderIsrUpdateLock synchronized {
+    inLock(leaderIsrUpdateLock.readLock()) {
       val partitionString = new StringBuilder
       partitionString.append("Topic: " + topic)
       partitionString.append("; Partition: " + partitionId)

@@ -17,15 +17,18 @@
 
 package kafka.log
 
-import java.io.{IOException, File}
-import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
-import java.util.concurrent.atomic._
 import kafka.utils._
-import scala.collection.JavaConversions
-import java.text.NumberFormat
 import kafka.message._
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
+import kafka.server.BrokerTopicStats
+
+import java.io.{IOException, File}
+import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
+import java.util.concurrent.atomic._
+import java.text.NumberFormat
+import scala.collection.JavaConversions
+
 import com.yammer.metrics.core.Gauge
 
 
@@ -235,7 +238,7 @@ class Log(val dir: File,
       return appendInfo
       
     // trim any invalid bytes or partial messages before appending it to the on-disk log
-    var validMessages = trimInvalidBytes(messages)
+    var validMessages = trimInvalidBytes(messages, appendInfo)
 
     try {
       // they are valid, insert them in the log
@@ -246,7 +249,7 @@ class Log(val dir: File,
         val segment = maybeRoll()
 
         if(assignOffsets) {
-          // assign offsets to the messageset
+          // assign offsets to the message set
           val offset = new AtomicLong(nextOffset.get)
           try {
             validMessages = validMessages.assignOffsets(offset, appendInfo.codec)
@@ -260,12 +263,16 @@ class Log(val dir: File,
             throw new IllegalArgumentException("Out of order offsets found in " + messages)
         }
 
-        // Check if the message sizes are valid. This check is done after assigning offsets to ensure the comparison
-        // happens with the new message size (after re-compression, if any)
+        // re-validate message sizes since after re-compression some may exceed the limit
         for(messageAndOffset <- validMessages.shallowIterator) {
-          if(MessageSet.entrySize(messageAndOffset.message) > config.maxMessageSize)
+          if(MessageSet.entrySize(messageAndOffset.message) > config.maxMessageSize) {
+            // we record the original message set size instead of trimmed size
+            // to be consistent with pre-compression bytesRejectedRate recording
+            BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesRejectedRate.mark(messages.sizeInBytes)
+            BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(messages.sizeInBytes)
             throw new MessageSizeTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
               .format(MessageSet.entrySize(messageAndOffset.message), config.maxMessageSize))
+          }
         }
 
         // now append to the log
@@ -287,18 +294,22 @@ class Log(val dir: File,
     }
   }
   
-  /** Struct to hold various quantities we compute about each message set before appending to the log
+  /**
+   * Struct to hold various quantities we compute about each message set before appending to the log
    * @param firstOffset The first offset in the message set
    * @param lastOffset The last offset in the message set
+   * @param shallowCount The number of shallow messages
+   * @param validBytes The number of valid bytes
    * @param codec The codec used in the message set
    * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
    */
-  case class LogAppendInfo(var firstOffset: Long, var lastOffset: Long, codec: CompressionCodec, shallowCount: Int, offsetsMonotonic: Boolean)
+  case class LogAppendInfo(var firstOffset: Long, var lastOffset: Long, codec: CompressionCodec, shallowCount: Int, validBytes: Int, offsetsMonotonic: Boolean)
   
   /**
    * Validate the following:
    * <ol>
    * <li> each message matches its CRC
+   * <li> each message size is valid
    * </ol>
    * 
    * Also compute the following quantities:
@@ -306,12 +317,14 @@ class Log(val dir: File,
    * <li> First offset in the message set
    * <li> Last offset in the message set
    * <li> Number of messages
+   * <li> Number of valid bytes
    * <li> Whether the offsets are monotonically increasing
    * <li> Whether any compression codec is used (if many are used, then the last one is given)
    * </ol>
    */
   private def analyzeAndValidateMessageSet(messages: ByteBufferMessageSet): LogAppendInfo = {
-    var messageCount = 0
+    var shallowMessageCount = 0
+    var validBytesCount = 0
     var firstOffset, lastOffset = -1L
     var codec: CompressionCodec = NoCompressionCodec
     var monotonic = true
@@ -325,25 +338,38 @@ class Log(val dir: File,
       // update the last offset seen
       lastOffset = messageAndOffset.offset
 
-      // check the validity of the message by checking CRC
       val m = messageAndOffset.message
+
+      // Check if the message sizes are valid.
+      val messageSize = MessageSet.entrySize(m)
+      if(messageSize > config.maxMessageSize) {
+        BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesRejectedRate.mark(messages.sizeInBytes)
+        BrokerTopicStats.getBrokerAllTopicsStats.bytesRejectedRate.mark(messages.sizeInBytes)
+        throw new MessageSizeTooLargeException("Message size is %d bytes which exceeds the maximum configured message size of %d."
+          .format(messageSize, config.maxMessageSize))
+      }
+
+      // check the validity of the message by checking CRC
       m.ensureValid()
-      messageCount += 1;
+
+      shallowMessageCount += 1
+      validBytesCount += messageSize
       
       val messageCodec = m.compressionCodec
       if(messageCodec != NoCompressionCodec)
         codec = messageCodec
     }
-    LogAppendInfo(firstOffset, lastOffset, codec, messageCount, monotonic)
+    LogAppendInfo(firstOffset, lastOffset, codec, shallowMessageCount, validBytesCount, monotonic)
   }
   
   /**
    * Trim any invalid bytes from the end of this message set (if there are any)
    * @param messages The message set to trim
+   * @param info The general information of the message set
    * @return A trimmed message set. This may be the same as what was passed in or it may not.
    */
-  private def trimInvalidBytes(messages: ByteBufferMessageSet): ByteBufferMessageSet = {
-    val messageSetValidBytes = messages.validBytes
+  private def trimInvalidBytes(messages: ByteBufferMessageSet, info: LogAppendInfo): ByteBufferMessageSet = {
+    val messageSetValidBytes = info.validBytes
     if(messageSetValidBytes < 0)
       throw new InvalidMessageSizeException("Illegal length of message set " + messageSetValidBytes + " Message set cannot be appended to log. Possible causes are corrupted produce requests")
     if(messageSetValidBytes == messages.sizeInBytes) {

@@ -17,19 +17,21 @@
 
 package kafka.server
 
-import kafka.admin.AdminUtils
 import kafka.api._
+import kafka.common._
+import kafka.log._
 import kafka.message._
 import kafka.network._
-import kafka.log._
-import scala.collection._
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic._
+import kafka.admin.AdminUtils
 import kafka.metrics.KafkaMetricsGroup
-import kafka.common._
-import kafka.utils.{Pool, SystemTime, Logging}
 import kafka.network.RequestChannel.Response
 import kafka.controller.KafkaController
+import kafka.utils.{Pool, SystemTime, Logging}
+
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic._
+import scala.collection._
+
 import org.I0Itec.zkclient.ZkClient
 
 /**
@@ -284,10 +286,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     val partitionAndData: Map[TopicAndPartition, MessageSet] = producerRequest.data
     trace("Append [%s] to local log ".format(partitionAndData.toString))
     partitionAndData.map {case (topicAndPartition, messages) =>
-      // update stats for incoming bytes rate
-      BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesInRate.mark(messages.sizeInBytes)
-      BrokerTopicStats.getBrokerAllTopicsStats.bytesInRate.mark(messages.sizeInBytes)
-
       try {
         val partitionOpt = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
         val info =
@@ -297,11 +295,12 @@ class KafkaApis(val requestChannel: RequestChannel,
               .format(topicAndPartition, brokerId))
 
           }
+
         val numAppendedMessages = if (info.firstOffset == -1L || info.lastOffset == -1L) 0 else (info.lastOffset - info.firstOffset + 1)
 
-        // update stats for successfully appended messages
-        BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).logBytesAppendRate.mark(messages.sizeInBytes)
-        BrokerTopicStats.getBrokerAllTopicsStats.logBytesAppendRate.mark(messages.sizeInBytes)
+        // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
+        BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesInRate.mark(messages.sizeInBytes)
+        BrokerTopicStats.getBrokerAllTopicsStats.bytesInRate.mark(messages.sizeInBytes)
         BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).messagesInRate.mark(numAppendedMessages)
         BrokerTopicStats.getBrokerAllTopicsStats.messagesInRate.mark(numAppendedMessages)
 
