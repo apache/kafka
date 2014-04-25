@@ -19,8 +19,10 @@ package kafka.integration
 
 import kafka.consumer.SimpleConsumer
 import org.scalatest.junit.JUnit3Suite
-import kafka.producer.{ProducerConfig, Producer}
-import kafka.utils.TestUtils
+import kafka.producer.Producer
+import kafka.utils.{StaticPartitioner, TestUtils}
+import kafka.serializer.StringEncoder
+
 trait ProducerConsumerTestHarness extends JUnit3Suite with KafkaServerTestHarness {
     val port: Int
     val host = "localhost"
@@ -29,8 +31,10 @@ trait ProducerConsumerTestHarness extends JUnit3Suite with KafkaServerTestHarnes
 
   override def setUp() {
       super.setUp
-      val props = TestUtils.getProducerConfig(TestUtils.getBrokerListStrFromConfigs(configs), "kafka.utils.StaticPartitioner")
-      producer = new Producer(new ProducerConfig(props))
+      producer = TestUtils.createProducer[String, String](TestUtils.getBrokerListStrFromConfigs(configs),
+        encoder = classOf[StringEncoder].getName,
+        keyEncoder = classOf[StringEncoder].getName,
+        partitioner = classOf[StaticPartitioner].getName)
       consumer = new SimpleConsumer(host, port, 1000000, 64*1024, "")
     }
 

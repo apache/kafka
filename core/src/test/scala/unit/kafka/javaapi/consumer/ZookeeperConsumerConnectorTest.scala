@@ -17,21 +17,23 @@
 
 package kafka.javaapi.consumer
 
-import junit.framework.Assert._
-import kafka.integration.KafkaServerTestHarness
 import kafka.server._
-import org.scalatest.junit.JUnit3Suite
-import scala.collection.JavaConversions
-import org.apache.log4j.{Level, Logger}
 import kafka.message._
 import kafka.serializer._
+import kafka.integration.KafkaServerTestHarness
 import kafka.producer.KeyedMessage
 import kafka.javaapi.producer.Producer
 import kafka.utils.IntEncoder
-import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.consumer.{KafkaStream, ConsumerConfig}
 import kafka.zk.ZooKeeperTestHarness
+
+import scala.collection.JavaConversions
+
+import org.scalatest.junit.JUnit3Suite
+import org.apache.log4j.{Level, Logger}
+import junit.framework.Assert._
+
 
 class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with ZooKeeperTestHarness with Logging {
 
@@ -52,13 +54,12 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   def testBasic() {
     val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
     requestHandlerLogger.setLevel(Level.FATAL)
-    var actualMessages: List[Message] = Nil
+
+    // create the topic
+    TestUtils.createTopic(zkClient, topic, numParts, 1, servers)
 
     // send some messages to each broker
     val sentMessages1 = sendMessages(nMessages, "batch1")
-
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
-    waitUntilLeaderIsElectedOrChanged(zkClient, topic, 1)
 
     // create a consumer
     val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zookeeperConnect, group, consumer1))
@@ -79,7 +80,9 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
                    compressed: CompressionCodec): List[String] = {
     var messages: List[String] = Nil
     val producer: kafka.producer.Producer[Int, String] = 
-      TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs), new StringEncoder(), new IntEncoder())
+      TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs),
+        encoder = classOf[StringEncoder].getName,
+        keyEncoder = classOf[IntEncoder].getName)
     val javaProducer: Producer[Int, String] = new kafka.javaapi.producer.Producer(producer)
     for (partition <- 0 until numParts) {
       val ms = 0.until(messagesPerNode).map(x => header + conf.brokerId + "-" + partition + "-" + x)

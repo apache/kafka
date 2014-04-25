@@ -334,30 +334,40 @@ object TestUtils extends Logging {
   }
 
   /**
-   * Create a producer for the given host and port
+   * Create a producer with a few pre-configured properties.
+   * If certain properties need to be overridden, they can be provided in producerProps.
    */
   def createProducer[K, V](brokerList: String, 
-                           encoder: Encoder[V] = new DefaultEncoder(), 
-                           keyEncoder: Encoder[K] = new DefaultEncoder(),
-                           props: Properties = new Properties()): Producer[K, V] = {
-    props.put("metadata.broker.list", brokerList)
-    props.put("send.buffer.bytes", "65536")
-    props.put("connect.timeout.ms", "100000")
-    props.put("reconnect.interval", "10000")
-    props.put("serializer.class", encoder.getClass.getCanonicalName)
-    props.put("key.serializer.class", keyEncoder.getClass.getCanonicalName)
+                           encoder: String = classOf[DefaultEncoder].getName,
+                           keyEncoder: String = classOf[DefaultEncoder].getName,
+                           partitioner: String = classOf[DefaultPartitioner].getName,
+                           producerProps: Properties = null): Producer[K, V] = {
+    val props: Properties =
+    if (producerProps == null) {
+      getProducerConfig(brokerList)
+    } else {
+      producerProps.put("metadata.broker.list", brokerList)
+      producerProps
+    }
+    props.put("serializer.class", encoder)
+    props.put("key.serializer.class", keyEncoder)
+    props.put("partitioner.class", partitioner)
     new Producer[K, V](new ProducerConfig(props))
   }
 
-  def getProducerConfig(brokerList: String, partitioner: String = "kafka.producer.DefaultPartitioner"): Properties = {
+  /**
+   * Create a default producer config properties map with the given metadata broker list
+   */
+  def getProducerConfig(brokerList: String): Properties = {
     val props = new Properties()
     props.put("metadata.broker.list", brokerList)
-    props.put("partitioner.class", partitioner)
     props.put("message.send.max.retries", "3")
     props.put("retry.backoff.ms", "1000")
     props.put("request.timeout.ms", "500")
     props.put("request.required.acks", "-1")
-    props.put("serializer.class", classOf[StringEncoder].getName.toString)
+    props.put("send.buffer.bytes", "65536")
+    props.put("connect.timeout.ms", "100000")
+    props.put("reconnect.interval", "10000")
 
     props
   }
@@ -368,7 +378,7 @@ object TestUtils extends Logging {
     props.put("port", port.toString)
     props.put("request.timeout.ms", "500")
     props.put("request.required.acks", "1")
-    props.put("serializer.class", classOf[StringEncoder].getName.toString)
+    props.put("serializer.class", classOf[StringEncoder].getName)
     props
   }
 

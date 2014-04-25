@@ -54,9 +54,9 @@ class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
     }
 
     // send test messages to leader
-    val producer = TestUtils.createProducer[String, String](TestUtils.getBrokerListStrFromConfigs(configs), 
-                                                            new StringEncoder(), 
-                                                            new StringEncoder())
+    val producer = TestUtils.createProducer[String, String](TestUtils.getBrokerListStrFromConfigs(configs),
+                                                            encoder = classOf[StringEncoder].getName,
+                                                            keyEncoder = classOf[StringEncoder].getName)
     val messages = testMessageList1.map(m => new KeyedMessage(topic1, m, m)) ++ testMessageList2.map(m => new KeyedMessage(topic2, m, m))
     producer.send(messages:_*)
     producer.close()
