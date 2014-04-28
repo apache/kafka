@@ -139,12 +139,18 @@ object Utils extends Logging {
    * Read a properties file from the given path
    * @param filename The path of the file to read
    */
-  def loadProps(filename: String): Properties = {
-    val propStream = new FileInputStream(filename)
-    val props = new Properties()
-    props.load(propStream)
-    props
-  }
+   def loadProps(filename: String): Properties = {
+     val props = new Properties()
+     var propStream: InputStream = null
+     try {
+       propStream = new FileInputStream(filename)
+       props.load(propStream)
+     } finally {
+       if(propStream != null)
+         propStream.close
+     }
+     props
+   }
 
   /**
    * Open a channel for the given file
