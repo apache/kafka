@@ -114,7 +114,9 @@ class SocketServerTest extends JUnitSuite {
 
     val request = server.requestChannel.receiveRequest
     // Since the response is not sent yet, the selection key should not be readable.
-    Assert.assertFalse((request.requestKey.asInstanceOf[SelectionKey].interestOps & SelectionKey.OP_READ) == SelectionKey.OP_READ)
+    TestUtils.waitUntilTrue(
+      () => { (request.requestKey.asInstanceOf[SelectionKey].interestOps & SelectionKey.OP_READ) != SelectionKey.OP_READ },
+      "Socket key shouldn't be available for read")
 
     server.requestChannel.sendResponse(new RequestChannel.Response(0, request, null))
 
