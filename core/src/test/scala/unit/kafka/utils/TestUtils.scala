@@ -581,7 +581,15 @@ object TestUtils extends Logging {
 
   def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L) = {
     TestUtils.waitUntilTrue(() =>
-      servers.foldLeft(true)(_ && _.apis.metadataCache.containsTopicAndPartition(topic, partition)),
+      servers.foldLeft(true) {
+        (result, server) =>
+          val partitionStateOpt = server.apis.metadataCache.getPartitionInfo(topic, partition)
+          partitionStateOpt match {
+            case None => false
+            case Some(partitionState) =>
+            result && Request.isValidBrokerId(partitionState.leaderIsrAndControllerEpoch.leaderAndIsr.leader)
+          }
+      },
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
       waitTime = timeout)
   }

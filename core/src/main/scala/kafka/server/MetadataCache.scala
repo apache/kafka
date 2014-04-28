@@ -96,18 +96,11 @@ private[server] class MetadataCache {
     }
   }
 
-  def getPartitionInfos(topic: String) = {
-    inLock(partitionMetadataLock.readLock()) {
-      cache(topic)
-    }
-  }
-
-  def containsTopicAndPartition(topic: String,
-                                partitionId: Int): Boolean = {
+  def getPartitionInfo(topic: String, partitionId: Int): Option[PartitionStateInfo] = {
     inLock(partitionMetadataLock.readLock()) {
       cache.get(topic) match {
-        case Some(partitionInfos) => partitionInfos.contains(partitionId)
-        case None => false
+        case Some(partitionInfos) => partitionInfos.get(partitionId)
+        case None => None
       }
     }
   }
