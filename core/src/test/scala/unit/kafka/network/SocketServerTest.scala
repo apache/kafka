@@ -126,7 +126,7 @@ class SocketServerTest extends JUnitSuite {
       "Socket key should be available for reads")
   }
 
-  @Test(expected = classOf[SocketException])
+  @Test(expected = classOf[IOException])
   def testSocketsCloseOnShutdown() {
     // open a connection and then shutdown the server
     val socket = connect()
