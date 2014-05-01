@@ -76,6 +76,9 @@ class Log(val dir: File,
   newGauge(name + "-" + "NumLogSegments",
            new Gauge[Int] { def value = numberOfSegments })
 
+  newGauge(name + "-" + "LogStartOffset",
+           new Gauge[Long] { def value = logStartOffset })
+
   newGauge(name + "-" + "LogEndOffset",
            new Gauge[Long] { def value = logEndOffset })
            
@@ -448,6 +451,11 @@ class Log(val dir: File,
    * The size of the log in bytes
    */
   def size: Long = logSegments.map(_.size).sum
+
+   /**
+   * The earliest message offset in the log
+   */
+  def logStartOffset: Long = logSegments.head.baseOffset
 
   /**
    *  The offset of the next message that will be appended to the log
