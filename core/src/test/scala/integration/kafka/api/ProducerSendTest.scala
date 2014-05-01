@@ -90,9 +90,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
    */
   @Test
   def testSendOffset() {
-    val props = new Properties()
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
-    var producer = new KafkaProducer(props)
+    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
 
     val callback = new CheckErrorCallback
 
@@ -148,9 +146,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
    */
   @Test
   def testClose() {
-    val props = new Properties()
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
-    var producer = new KafkaProducer(props)
+    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
 
     try {
       // create topic
@@ -186,10 +182,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
    */
   @Test
   def testSendToPartition() {
-    val props = new Properties()
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
-    props.put(ProducerConfig.ACKS_CONFIG, "-1")
-    var producer = new KafkaProducer(props)
+    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
 
     try {
       // create topic
@@ -244,9 +237,8 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
    */
   @Test
   def testAutoCreateTopic() {
-    val props = new Properties()
-    props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
-    var producer = new KafkaProducer(props)
+    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+                                            retries = 5)
 
     try {
       // Send a message to auto-create the topic

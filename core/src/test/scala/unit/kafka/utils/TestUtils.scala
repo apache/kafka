@@ -42,6 +42,7 @@ import kafka.producer.ProducerConfig
 
 import junit.framework.AssertionFailedError
 import junit.framework.Assert._
+import org.apache.kafka.clients.producer.KafkaProducer
 
 /**
  * Utility functions to help with testing
@@ -352,6 +353,28 @@ object TestUtils extends Logging {
     props.put("key.serializer.class", keyEncoder)
     props.put("partitioner.class", partitioner)
     new Producer[K, V](new ProducerConfig(props))
+  }
+
+  /**
+   * Create a (new) producer with a few pre-configured properties.
+   */
+  def createNewProducer(brokerList: String,
+                        acks: Int = -1,
+                        metadataFetchTimeout: Long = 3000L,
+                        blockOnBufferFull: Boolean = true,
+                        bufferSize: Long = 1024L * 1024L,
+                        retries: Int = 0) : KafkaProducer = {
+    import org.apache.kafka.clients.producer.ProducerConfig
+
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.ACKS_CONFIG, acks.toString)
+    producerProps.put(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG, metadataFetchTimeout.toString)
+    producerProps.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, blockOnBufferFull.toString)
+    producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
+    producerProps.put(ProducerConfig.RETRIES_CONFIG, retries.toString)
+    producerProps.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, "1000")
+    return new KafkaProducer(producerProps)
   }
 
   /**

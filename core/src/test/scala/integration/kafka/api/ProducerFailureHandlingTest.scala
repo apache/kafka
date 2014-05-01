@@ -63,18 +63,6 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
   private val topic1 = "topic-1"
   private val topic2 = "topic-2"
 
-  // TODO: move this function to TestUtils after we have server dependant on clients
-  private def makeProducer(brokerList: String, acks: Int, metadataFetchTimeout: Long,
-                           blockOnBufferFull: Boolean, bufferSize: Long) : KafkaProducer = {
-    val producerProps = new Properties()
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    producerProps.put(ProducerConfig.ACKS_CONFIG, acks.toString)
-    producerProps.put(ProducerConfig.METADATA_FETCH_TIMEOUT_CONFIG, metadataFetchTimeout.toString)
-    producerProps.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, blockOnBufferFull.toString)
-    producerProps.put(ProducerConfig.BUFFER_MEMORY_CONFIG, bufferSize.toString)
-    return new KafkaProducer(producerProps)
-  }
-
   override def setUp() {
     super.setUp()
     server1 = TestUtils.createServer(config1)
@@ -85,10 +73,11 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     consumer1 = new SimpleConsumer("localhost", port1, 100, 1024*1024, "")
     consumer2 = new SimpleConsumer("localhost", port2, 100, 1024*1024, "")
 
-    producer1 = makeProducer(brokerList, 0, 3000, false, bufferSize); // produce with ack=0
-    producer2 = makeProducer(brokerList, 1, 3000, false, bufferSize); // produce with ack=1
-    producer3 = makeProducer(brokerList, -1, 3000, false, bufferSize); // produce with ack=-1
-    producer4 = makeProducer("localhost:8686,localhost:4242", 1, 3000, false, bufferSize); // produce with incorrect broker list
+    producer1 = TestUtils.createNewProducer(brokerList, acks = 0, blockOnBufferFull = false, bufferSize = bufferSize);
+    producer2 = TestUtils.createNewProducer(brokerList, acks = 1, blockOnBufferFull = false, bufferSize = bufferSize)
+    producer3 = TestUtils.createNewProducer(brokerList, acks = -1, blockOnBufferFull = false, bufferSize = bufferSize)
+    // producer with incorrect broker list
+    producer4 = TestUtils.createNewProducer("localhost:8686,localhost:4242", acks = 1, blockOnBufferFull = false, bufferSize = bufferSize)
   }
 
   override def tearDown() {
