@@ -34,7 +34,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import kafka.common.{ErrorMapping, FailedToSendMessageException}
-
+import kafka.serializer.StringEncoder
 
 class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   private val brokerId1 = 0
@@ -94,26 +94,30 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     val topic = "new-topic"
     TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
-    val props1 = new util.Properties()
-    props1.put("metadata.broker.list", "localhost:80,localhost:81")
-    props1.put("serializer.class", "kafka.serializer.StringEncoder")
-    val producerConfig1 = new ProducerConfig(props1)
-    val producer1 = new Producer[String, String](producerConfig1)
+    val props = new Properties()
+    // no need to retry since the send will always fail
+    props.put("message.send.max.retries", "0")
+    val producer1 = TestUtils.createProducer[String, String](
+        brokerList = "localhost:80,localhost:81",
+        encoder = classOf[StringEncoder].getName,
+        keyEncoder = classOf[StringEncoder].getName,
+        producerProps = props)
+
     try{
       producer1.send(new KeyedMessage[String, String](topic, "test", "test1"))
       fail("Test should fail because the broker list provided are not valid")
     } catch {
-      case e: FailedToSendMessageException =>
+      case e: FailedToSendMessageException => // this is expected
       case oe: Throwable => fail("fails with exception", oe)
     } finally {
       producer1.close()
     }
 
-    val props2 = new util.Properties()
-    props2.put("metadata.broker.list", "localhost:80," + TestUtils.getBrokerListStrFromConfigs(Seq( config1)))
-    props2.put("serializer.class", "kafka.serializer.StringEncoder")
-    val producerConfig2= new ProducerConfig(props2)
-    val producer2 = new Producer[String, String](producerConfig2)
+    val producer2 = TestUtils.createProducer[String, String](
+      brokerList = "localhost:80," + TestUtils.getBrokerListStrFromConfigs(Seq(config1)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName)
+
     try{
       producer2.send(new KeyedMessage[String, String](topic, "test", "test1"))
     } catch {
@@ -122,11 +126,11 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
       producer2.close()
     }
 
-    val props3 = new util.Properties()
-    props3.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
-    props3.put("serializer.class", "kafka.serializer.StringEncoder")
-    val producerConfig3 = new ProducerConfig(props3)
-    val producer3 = new Producer[String, String](producerConfig3)
+    val producer3 =  TestUtils.createProducer[String, String](
+      brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName)
+
     try{
       producer3.send(new KeyedMessage[String, String](topic, "test", "test1"))
     } catch {
@@ -139,26 +143,19 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   @Test
   def testSendToNewTopic() {
     val props1 = new util.Properties()
-    props1.put("serializer.class", "kafka.serializer.StringEncoder")
-    props1.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props1.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
     props1.put("request.required.acks", "2")
-    props1.put("request.timeout.ms", "1000")
-
-    val props2 = new util.Properties()
-    props2.putAll(props1)
-    props2.put("request.required.acks", "3")
-    props2.put("request.timeout.ms", "1000")
-
-    val producerConfig1 = new ProducerConfig(props1)
-    val producerConfig2 = new ProducerConfig(props2)
 
     val topic = "new-topic"
     // create topic with 1 partition and await leadership
     TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
-    val producer1 = new Producer[String, String](producerConfig1)
-    val producer2 = new Producer[String, String](producerConfig2)
+    val producer1 = TestUtils.createProducer[String, String](
+      brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName,
+      partitioner = classOf[StaticPartitioner].getName,
+      producerProps = props1)
+
     // Available partition ids should be 0.
     producer1.send(new KeyedMessage[String, String](topic, "test", "test1"))
     producer1.send(new KeyedMessage[String, String](topic, "test", "test2"))
@@ -179,6 +176,18 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     assertEquals(new Message(bytes = "test2".getBytes, key = "test".getBytes), messageSet(1).message)
     producer1.close()
 
+    val props2 = new util.Properties()
+    props2.put("request.required.acks", "3")
+    // no need to retry since the send will always fail
+    props2.put("message.send.max.retries", "0")
+
+    val producer2 = TestUtils.createProducer[String, String](
+      brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName,
+      partitioner = classOf[StaticPartitioner].getName,
+      producerProps = props2)
+
     try {
       producer2.send(new KeyedMessage[String, String](topic, "test", "test2"))
       fail("Should have timed out for 3 acks.")
@@ -197,19 +206,23 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   @Test
   def testSendWithDeadBroker() {
     val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props.put("request.timeout.ms", "2000")
     props.put("request.required.acks", "1")
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    // No need to retry since the topic will be created beforehand and normal send will succeed on the first try.
+    // Reducing the retries will save the time on the subsequent failure test.
+    props.put("message.send.max.retries", "0")
 
     val topic = "new-topic"
     // create topic
     TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0), 1->Seq(0), 2->Seq(0), 3->Seq(0)),
                           servers = servers)
 
-    val config = new ProducerConfig(props)
-    val producer = new Producer[String, String](config)
+    val producer = TestUtils.createProducer[String, String](
+      brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName,
+      partitioner = classOf[StaticPartitioner].getName,
+      producerProps = props)
+
     try {
       // Available partition ids should be 0, 1, 2 and 3, all lead and hosted only
       // on broker 0
@@ -253,14 +266,16 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   def testAsyncSendCanCorrectlyFailWithTimeout() {
     val timeoutMs = 500
     val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
     props.put("request.timeout.ms", String.valueOf(timeoutMs))
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
     props.put("request.required.acks", "1")
+    props.put("message.send.max.retries", "0")
     props.put("client.id","ProducerTest-testAsyncSendCanCorrectlyFailWithTimeout")
-    val config = new ProducerConfig(props)
-    val producer = new Producer[String, String](config)
+    val producer = TestUtils.createProducer[String, String](
+      brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName,
+      partitioner = classOf[StaticPartitioner].getName,
+      producerProps = props)
 
     val topic = "new-topic"
     // create topics in ZK
@@ -296,20 +311,18 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     }
     val t2 = SystemTime.milliseconds
 
-    // make sure we don't wait fewer than numRetries*timeoutMs milliseconds
-    // we do this because the DefaultEventHandler retries a number of times
-    assertTrue((t2-t1) >= timeoutMs*config.messageSendMaxRetries)
+    // make sure we don't wait fewer than timeoutMs
+    assertTrue((t2-t1) >= timeoutMs)
   }
   
   @Test
   def testSendNullMessage() {
-    val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("partitioner.class", "kafka.utils.StaticPartitioner")
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
-    
-    val config = new ProducerConfig(props)
-    val producer = new Producer[String, String](config)
+    val producer = TestUtils.createProducer[String, String](
+      brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName,
+      partitioner = classOf[StaticPartitioner].getName)
+
     try {
 
       // create topic

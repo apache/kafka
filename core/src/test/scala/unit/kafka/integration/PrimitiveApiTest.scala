@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import junit.framework.Assert._
 import kafka.api.{PartitionFetchInfo, FetchRequest, FetchRequestBuilder}
 import kafka.server.{KafkaRequestHandler, KafkaConfig}
-import kafka.producer.{KeyedMessage, Producer, ProducerConfig}
+import kafka.producer.{KeyedMessage, Producer}
 import org.apache.log4j.{Level, Logger}
 import org.I0Itec.zkclient.ZkClient
 import kafka.zk.ZooKeeperTestHarness
@@ -29,7 +29,9 @@ import org.scalatest.junit.JUnit3Suite
 import scala.collection._
 import kafka.admin.AdminUtils
 import kafka.common.{TopicAndPartition, ErrorMapping, UnknownTopicOrPartitionException, OffsetOutOfRangeException}
-import kafka.utils.{TestUtils, Utils}
+import kafka.utils.{StaticPartitioner, TestUtils, Utils}
+import kafka.serializer.StringEncoder
+import java.util.Properties
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -67,11 +69,8 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
   def testDefaultEncoderProducerAndFetch() {
     val topic = "test-topic"
-    val props = producer.config.props.props
-    val config = new ProducerConfig(props)
 
-    val stringProducer1 = new Producer[String, String](config)
-    stringProducer1.send(new KeyedMessage[String, String](topic, "test-message"))
+    producer.send(new KeyedMessage[String, String](topic, "test-message"))
 
     val replica = servers.head.replicaManager.getReplica(topic, 0).get
     assertTrue("HighWatermark should equal logEndOffset with just 1 replica",
@@ -93,11 +92,16 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
   def testDefaultEncoderProducerAndFetchWithCompression() {
     val topic = "test-topic"
-    val props = producer.config.props.props
+    val props = new Properties()
     props.put("compression.codec", "gzip")
-    val config = new ProducerConfig(props)
 
-    val stringProducer1 = new Producer[String, String](config)
+    val stringProducer1 = TestUtils.createProducer[String, String](
+      TestUtils.getBrokerListStrFromConfigs(configs),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[StringEncoder].getName,
+      partitioner = classOf[StaticPartitioner].getName,
+      producerProps = props)
+
     stringProducer1.send(new KeyedMessage[String, String](topic, "test-message"))
 
     val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
@@ -172,10 +176,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   }
 
   def testProduceAndMultiFetch() {
-    val props = producer.config.props.props
-    val config = new ProducerConfig(props)
-    val noCompressionProducer = new Producer[String, String](config)
-    produceAndMultiFetch(noCompressionProducer)
+    produceAndMultiFetch(producer)
   }
 
   private def multiProduce(producer: Producer[String, String]) {
@@ -201,10 +202,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   }
 
   def testMultiProduce() {
-    val props = producer.config.props.props
-    val config = new ProducerConfig(props)
-    val noCompressionProducer = new Producer[String, String](config)
-    multiProduce(noCompressionProducer)
+    multiProduce(producer)
   }
 
   def testConsumerEmptyTopic() {
@@ -218,9 +216,15 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   def testPipelinedProduceRequests() {
     val topics = Map("test4" -> 0, "test1" -> 0, "test2" -> 0, "test3" -> 0)
     createSimpleTopicsAndAwaitLeader(zkClient, topics.keys)
-    val props = producer.config.props.props
+    val props = new Properties()
     props.put("request.required.acks", "0")
-    val pipelinedProducer: Producer[String, String] = new Producer(new ProducerConfig(props))
+    val pipelinedProducer: Producer[String, String] =
+      TestUtils.createProducer[String, String](
+        TestUtils.getBrokerListStrFromConfigs(configs),
+        encoder = classOf[StringEncoder].getName,
+        keyEncoder = classOf[StringEncoder].getName,
+        partitioner = classOf[StaticPartitioner].getName,
+        producerProps = props)
 
     // send some messages
     val messages = new mutable.HashMap[String, Seq[String]]

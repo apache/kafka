@@ -342,13 +342,12 @@ object TestUtils extends Logging {
                            keyEncoder: String = classOf[DefaultEncoder].getName,
                            partitioner: String = classOf[DefaultPartitioner].getName,
                            producerProps: Properties = null): Producer[K, V] = {
-    val props: Properties =
-    if (producerProps == null) {
-      getProducerConfig(brokerList)
-    } else {
-      producerProps.put("metadata.broker.list", brokerList)
-      producerProps
-    }
+    val props: Properties = getProducerConfig(brokerList)
+
+    //override any explicitly specified properties
+    if (producerProps != null)
+      props.putAll(producerProps)
+
     props.put("serializer.class", encoder)
     props.put("key.serializer.class", keyEncoder)
     props.put("partitioner.class", partitioner)
@@ -361,9 +360,9 @@ object TestUtils extends Logging {
   def getProducerConfig(brokerList: String): Properties = {
     val props = new Properties()
     props.put("metadata.broker.list", brokerList)
-    props.put("message.send.max.retries", "3")
+    props.put("message.send.max.retries", "5")
     props.put("retry.backoff.ms", "1000")
-    props.put("request.timeout.ms", "500")
+    props.put("request.timeout.ms", "2000")
     props.put("request.required.acks", "-1")
     props.put("send.buffer.bytes", "65536")
     props.put("connect.timeout.ms", "100000")

@@ -343,12 +343,14 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
                                     compression: CompressionCodec = NoCompressionCodec): List[String] = {
     val header = "test-%d-%d".format(config.brokerId, partition)
     val props = new Properties()
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
-    props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
     props.put("compression.codec", compression.codec.toString)
-    props.put("key.serializer.class", classOf[IntEncoder].getName.toString)
-    props.put("serializer.class", classOf[StringEncoder].getName.toString)
-    val producer: Producer[Int, String] = new Producer[Int, String](new ProducerConfig(props))
+    val producer: Producer[Int, String] =
+      createProducer(TestUtils.getBrokerListStrFromConfigs(configs),
+                     encoder = classOf[StringEncoder].getName,
+                     keyEncoder = classOf[IntEncoder].getName,
+                     partitioner = classOf[FixedValuePartitioner].getName,
+                     producerProps = props)
+
     val ms = 0.until(numMessages).map(x => header + config.brokerId + "-" + partition + "-" + x)
     producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)):_*)
     debug("Sent %d messages to broker %d for partition [%s,%d]".format(ms.size, config.brokerId, topic, partition))
@@ -363,11 +365,14 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
                    numParts: Int): List[String]= {
     var messages: List[String] = Nil
     val props = new Properties()
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
-    props.put("partitioner.class", "kafka.utils.FixedValuePartitioner")
-    props.put("key.serializer.class", classOf[IntEncoder].getName.toString)
-    props.put("serializer.class", classOf[StringEncoder].getName)
-    val producer: Producer[Int, String] = new Producer[Int, String](new ProducerConfig(props))
+    props.put("compression.codec", compression.codec.toString)
+    val producer: Producer[Int, String] =
+      createProducer(brokerList = TestUtils.getBrokerListStrFromConfigs(configs),
+                     encoder = classOf[StringEncoder].getName,
+                     keyEncoder = classOf[IntEncoder].getName,
+                     partitioner = classOf[FixedValuePartitioner].getName,
+                     producerProps = props)
+
     for (partition <- 0 until numParts) {
       val ms = 0.until(messagesPerNode).map(x => header + config.brokerId + "-" + partition + "-" + x)
       producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)):_*)
@@ -378,14 +383,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     messages
   }
 
-  def sendMessages(messagesPerNode: Int, header: String, compression: CompressionCodec = NoCompressionCodec): List[String]= {
-    var messages: List[String] = Nil
-    for(conf <- configs)
-      messages ++= sendMessages(conf, messagesPerNode, header, compression, numParts)
-    messages
-  }
-
-  def getMessages(nMessagesPerThread: Int, 
+  def getMessages(nMessagesPerThread: Int,
                   topicMessageStreams: Map[String,List[KafkaStream[String, String]]]): List[String]= {
     var messages: List[String] = Nil
     for((topic, messageStreams) <- topicMessageStreams) {

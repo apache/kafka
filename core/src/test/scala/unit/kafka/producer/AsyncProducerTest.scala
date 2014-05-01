@@ -84,15 +84,11 @@ class AsyncProducerTest extends JUnit3Suite {
 
   @Test
   def testProduceAfterClosed() {
-    val props = new Properties()
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
-    props.put("producer.type", "async")
-    props.put("batch.num.messages", "1")
-
-    val config = new ProducerConfig(props)
     val produceData = getProduceData(10)
-    val producer = new Producer[String, String](config)
+    val producer = createProducer[String, String](
+      getBrokerListStrFromConfigs(configs),
+      encoder = classOf[StringEncoder].getName)
+
     producer.close
 
     try {
@@ -303,10 +299,14 @@ class AsyncProducerTest extends JUnit3Suite {
   @Test
   def testIncompatibleEncoder() {
     val props = new Properties()
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
-    val config = new ProducerConfig(props)
+    // no need to retry since the send will always fail
+    props.put("message.send.max.retries", "0")
+    val producer= createProducer[String, String](
+      brokerList = getBrokerListStrFromConfigs(configs),
+      encoder = classOf[DefaultEncoder].getName,
+      keyEncoder = classOf[DefaultEncoder].getName,
+      producerProps = props)
 
-    val producer=new Producer[String, String](config)
     try {
       producer.send(getProduceData(1): _*)
       fail("Should fail with ClassCastException due to incompatible Encoder")
