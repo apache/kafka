@@ -747,7 +747,7 @@ def start_entity_in_background(systemTestEnv, testcaseEnv, entityId):
             cmdList = ["ssh " + hostname,
                       "'JAVA_HOME=" + javaHome,
                       "JMX_PORT=" + jmxPort,
-                      kafkaHome + "/bin/kafka-run-class.sh kafka.tools.newproducer.MirrorMaker",
+                      kafkaHome + "/bin/kafka-run-class.sh kafka.tools.MirrorMaker",
                       "--consumer.config " + configPathName + "/" + mmConsumerConfigFile,
                       "--producer.config " + configPathName + "/" + mmProducerConfigFile,
                       "--whitelist=\".*\" >> ",
