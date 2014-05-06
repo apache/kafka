@@ -23,6 +23,8 @@ import kafka.common.ErrorMapping
 
 object ConsumerMetadataResponse {
   val CurrentVersion = 0
+
+  private val NoBrokerOpt = Some(Broker(id = -1, host = "", port = -1))
   
   def readFrom(buffer: ByteBuffer) = {
     val correlationId = buffer.getInt
@@ -37,20 +39,18 @@ object ConsumerMetadataResponse {
   
 }
 
-case class ConsumerMetadataResponse (coordinator: Option[Broker], errorCode: Short, override val correlationId: Int = 0)
+case class ConsumerMetadataResponse (coordinatorOpt: Option[Broker], errorCode: Short, override val correlationId: Int = 0)
   extends RequestOrResponse(correlationId = correlationId) {
 
   def sizeInBytes =
     4 + /* correlationId */
     2 + /* error code */
-    coordinator.map(_.sizeInBytes).getOrElse(0)
+    coordinatorOpt.orElse(ConsumerMetadataResponse.NoBrokerOpt).get.sizeInBytes
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(correlationId)
     buffer.putShort(errorCode)
-    if (errorCode == ErrorMapping.NoError) {
-      coordinator.get.writeTo(buffer)
-    }
+    coordinatorOpt.orElse(ConsumerMetadataResponse.NoBrokerOpt).foreach(_.writeTo(buffer))
   }
 
   def describe(details: Boolean) = toString

@@ -200,6 +200,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
   private val offsetFetchResponse = SerializationTestUtils.createTestOffsetFetchResponse
   private val consumerMetadataRequest = SerializationTestUtils.createConsumerMetadataRequest
   private val consumerMetadataResponse = SerializationTestUtils.createConsumerMetadataResponse
+  private val consumerMetadataResponseNoCoordinator = ConsumerMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode)
 
   @Test
   def testSerializationAndDeserialization() {
@@ -213,7 +214,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
                                topicMetadataRequest, topicMetadataResponse,
                                offsetCommitRequest, offsetCommitResponse,
                                offsetFetchRequest, offsetFetchResponse,
-                               consumerMetadataRequest, consumerMetadataResponse)
+                               consumerMetadataRequest, consumerMetadataResponse, consumerMetadataResponseNoCoordinator)
 
     requestsAndResponses.foreach { original =>
       val buffer = ByteBuffer.allocate(original.sizeInBytes)

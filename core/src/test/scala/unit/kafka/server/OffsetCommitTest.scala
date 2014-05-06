@@ -54,7 +54,7 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
     val consumerMetadataRequest = ConsumerMetadataRequest(group)
     Stream.continually {
       val consumerMetadataResponse = simpleConsumer.send(consumerMetadataRequest)
-      consumerMetadataResponse.coordinator.isDefined
+      consumerMetadataResponse.coordinatorOpt.isDefined
     }.dropWhile(success => {
       if (!success) Thread.sleep(1000)
       !success

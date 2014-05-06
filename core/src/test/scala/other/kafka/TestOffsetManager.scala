@@ -119,7 +119,7 @@ object TestOffsetManager {
       val group = "group-" + id
       try {
         metadataChannel.send(ConsumerMetadataRequest(group))
-        val coordinatorId = ConsumerMetadataResponse.readFrom(metadataChannel.receive().buffer).coordinator.map(_.id).getOrElse(-1)
+        val coordinatorId = ConsumerMetadataResponse.readFrom(metadataChannel.receive().buffer).coordinatorOpt.map(_.id).getOrElse(-1)
 
         val channel = if (channels.contains(coordinatorId))
           channels(coordinatorId)

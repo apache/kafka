@@ -159,7 +159,7 @@ object ClientUtils extends Logging{
            val consumerMetadataResponse =  ConsumerMetadataResponse.readFrom(response.buffer)
            debug("Consumer metadata response: " + consumerMetadataResponse.toString)
            if (consumerMetadataResponse.errorCode == ErrorMapping.NoError)
-             coordinatorOpt = consumerMetadataResponse.coordinator
+             coordinatorOpt = consumerMetadataResponse.coordinatorOpt
          }
          catch {
            case ioe: IOException =>

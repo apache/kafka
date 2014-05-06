@@ -25,7 +25,7 @@ class ConsumerMetadataResponse(private val underlying: kafka.api.ConsumerMetadat
 
   def coordinator: Broker = {
     import kafka.javaapi.Implicits._
-    underlying.coordinator
+    underlying.coordinatorOpt
   }
 
   override def equals(other: Any) = canEqual(other) && {
