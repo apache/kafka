@@ -206,13 +206,17 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
   def addLeaderAndIsrRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int,
                                        leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
                                        replicas: Seq[Int], callback: (RequestOrResponse) => Unit = null) {
-    brokerIds.filter(b => b >= 0).foreach { brokerId =>
-      leaderAndIsrRequestMap.getOrElseUpdate(brokerId, new mutable.HashMap[(String, Int), PartitionStateInfo])
-      leaderAndIsrRequestMap(brokerId).put((topic, partition),
-        PartitionStateInfo(leaderIsrAndControllerEpoch, replicas.toSet))
+    val topicAndPartition: TopicAndPartition = TopicAndPartition(topic, partition)
+
+    brokerIds.filter(b => b >= 0).foreach {
+      brokerId =>
+        leaderAndIsrRequestMap.getOrElseUpdate(brokerId, new mutable.HashMap[(String, Int), PartitionStateInfo])
+        leaderAndIsrRequestMap(brokerId).put((topic, partition),
+          PartitionStateInfo(leaderIsrAndControllerEpoch, replicas.toSet))
     }
+
     addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq,
-                                       Set(TopicAndPartition(topic, partition)))
+                                       Set(topicAndPartition))
   }
 
   def addStopReplicaRequestForBrokers(brokerIds: Seq[Int], topic: String, partition: Int, deletePartition: Boolean,

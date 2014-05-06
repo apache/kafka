@@ -27,20 +27,29 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   val isRunning: AtomicBoolean = new AtomicBoolean(true)
   private val shutdownLatch = new CountDownLatch(1)
 
+  def shutdown() = {
+    initiateShutdown()
+    awaitShutdown()
+  }
 
-  def shutdown(): Unit = {
-    info("Shutting down")
-    isRunning.set(false)
-    if (isInterruptible)
-      interrupt()
-    shutdownLatch.await()
-    info("Shutdown completed")
+  def initiateShutdown(): Boolean = {
+    if(isRunning.compareAndSet(true, false)) {
+      info("Shutting down")
+      isRunning.set(false)
+      if (isInterruptible)
+        interrupt()
+      true
+    } else
+      false
   }
 
     /**
-   * After calling shutdown(), use this API to wait until the shutdown is complete
+   * After calling initiateShutdown(), use this API to wait until the shutdown is complete
    */
-  def awaitShutdown(): Unit = shutdownLatch.await()
+  def awaitShutdown(): Unit = {
+    shutdownLatch.await()
+    info("Shutdown completed")
+  }
 
   def doWork(): Unit
 

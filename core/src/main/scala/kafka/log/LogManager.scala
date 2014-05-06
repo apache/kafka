@@ -44,7 +44,6 @@ class LogManager(val logDirs: Array[File],
                  val retentionCheckMs: Long,
                  scheduler: Scheduler,
                  private val time: Time) extends Logging {
-
   val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
   val LockFile = ".lock"
   val InitialTaskDelayMs = 30*1000

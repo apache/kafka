@@ -87,7 +87,17 @@ object AdminUtils extends Logging {
     ret.toMap
   }
 
-  def addPartitions(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicaAssignmentStr: String = "") {
+
+ /**
+  * Add partitions to existing topic with optional replica assignment
+  *
+  * @param zkClient Zookeeper client
+  * @param topic Topic for adding partitions to
+  * @param numPartitions Number of partitions to be set
+  * @param replicaAssignmentStr Manual replica assignment
+  * @param checkBrokerAvailable Ignore checking if assigned replica broker is available. Only used for testing
+  */
+  def addPartitions(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicaAssignmentStr: String = "", checkBrokerAvailable: Boolean = true) {
     val existingPartitionsReplicaList = ZkUtils.getReplicaAssignmentForTopics(zkClient, List(topic))
     if (existingPartitionsReplicaList.size == 0)
       throw new AdminOperationException("The topic %s does not exist".format(topic))
@@ -102,7 +112,7 @@ object AdminUtils extends Logging {
     val newPartitionReplicaList = if (replicaAssignmentStr == null || replicaAssignmentStr == "")
       AdminUtils.assignReplicasToBrokers(brokerList, partitionsToAdd, existingReplicaList.size, existingReplicaList.head, existingPartitionsReplicaList.size)
     else
-      getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet, existingPartitionsReplicaList.size)
+      getManualReplicaAssignment(replicaAssignmentStr, brokerList.toSet, existingPartitionsReplicaList.size, checkBrokerAvailable)
 
     // check if manual assignment has the right replication factor
     val unmatchedRepFactorList = newPartitionReplicaList.values.filter(p => (p.size != existingReplicaList.size))
@@ -117,7 +127,7 @@ object AdminUtils extends Logging {
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, partitionReplicaList, update = true)
   }
 
-  def getManualReplicaAssignment(replicaAssignmentList: String, availableBrokerList: Set[Int], startPartitionId: Int): Map[Int, List[Int]] = {
+  def getManualReplicaAssignment(replicaAssignmentList: String, availableBrokerList: Set[Int], startPartitionId: Int, checkBrokerAvailable: Boolean = true): Map[Int, List[Int]] = {
     var partitionList = replicaAssignmentList.split(",")
     val ret = new mutable.HashMap[Int, List[Int]]()
     var partitionId = startPartitionId
@@ -128,7 +138,7 @@ object AdminUtils extends Logging {
         throw new AdminOperationException("replication factor must be larger than 0")
       if (brokerList.size != brokerList.toSet.size)
         throw new AdminOperationException("duplicate brokers in replica assignment: " + brokerList)
-      if (!brokerList.toSet.subsetOf(availableBrokerList))
+      if (checkBrokerAvailable && !brokerList.toSet.subsetOf(availableBrokerList))
         throw new AdminOperationException("some specified brokers not available. specified brokers: " + brokerList.toString +
           "available broker:" + availableBrokerList.toString)
       ret.put(partitionId, brokerList.toList)

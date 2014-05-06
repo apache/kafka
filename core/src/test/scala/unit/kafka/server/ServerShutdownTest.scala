@@ -101,7 +101,6 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     verifyNonDaemonThreadsStatus
   }
 
-  /* Temporarily disable the test until delete topic is fixed.
   @Test
   def testCleanShutdownWithDeleteTopicEnabled() {
     val newProps = TestUtils.createBrokerConfig(0, port)
@@ -114,7 +113,6 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     Utils.rm(server.config.logDirs)
     verifyNonDaemonThreadsStatus
   }
-  */
 
   def verifyNonDaemonThreadsStatus() {
     assertEquals(0, Thread.getAllStackTraces.keySet().toArray

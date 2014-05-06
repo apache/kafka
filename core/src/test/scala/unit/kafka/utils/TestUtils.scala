@@ -87,6 +87,8 @@ object TestUtils extends Logging {
     f
   }
 
+  def tempTopic(): String = "testTopic" + random.nextInt(1000000)
+
   /**
    * Create a temporary relative directory
    */

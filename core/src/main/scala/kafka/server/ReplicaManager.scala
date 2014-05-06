@@ -125,7 +125,16 @@ class ReplicaManager(val config: KafkaConfig,
           if (removedPartition != null)
             removedPartition.delete() // this will delete the local log
         }
-      case None => //do nothing if replica no longer exists. This can happen during delete topic retries
+      case None =>
+        // Delete log and corresponding folders in case replica manager doesn't hold them anymore.
+        // This could happen when topic is being deleted while broker is down and recovers.
+        if(deletePartition) {
+          val topicAndPartition = TopicAndPartition(topic, partitionId)
+
+          if(logManager.getLog(topicAndPartition).isDefined) {
+              logManager.deleteLog(topicAndPartition)
+          }
+        }
         stateChangeLogger.trace("Broker %d ignoring stop replica (delete=%s) for partition [%s,%d] as replica doesn't exist on broker"
           .format(localBrokerId, deletePartition, topic, partitionId))
     }

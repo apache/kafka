@@ -233,8 +233,10 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
                   case Some(updatedLeaderIsrAndControllerEpoch) =>
                     // send the shrunk ISR state change request to all the remaining alive replicas of the partition.
                     val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition)
-                    brokerRequestBatch.addLeaderAndIsrRequestForBrokers(currentAssignedReplicas.filterNot(_ == replicaId),
-                      topic, partition, updatedLeaderIsrAndControllerEpoch, replicaAssignment)
+                    if (!controller.deleteTopicManager.isPartitionToBeDeleted(topicAndPartition)) {
+                      brokerRequestBatch.addLeaderAndIsrRequestForBrokers(currentAssignedReplicas.filterNot(_ == replicaId),
+                        topic, partition, updatedLeaderIsrAndControllerEpoch, replicaAssignment)
+                    }
                     replicaState.put(partitionAndReplica, OfflineReplica)
                     stateChangeLogger.trace("Controller %d epoch %d changed state of replica %d for partition %s from %s to %s"
                       .format(controllerId, controller.epoch, replicaId, topicAndPartition, currState, targetState))
@@ -273,6 +275,10 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
 
   def replicasInState(topic: String, state: ReplicaState): Set[PartitionAndReplica] = {
     replicaState.filter(r => r._1.topic.equals(topic) && r._2 == state).keySet
+  }
+
+  def isAnyReplicaInState(topic: String, state: ReplicaState): Boolean = {
+    replicaState.exists(r => r._1.topic.equals(topic) && r._2 == state)
   }
 
   def replicasInDeletionStates(topic: String): Set[PartitionAndReplica] = {

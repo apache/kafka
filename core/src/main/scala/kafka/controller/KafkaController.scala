@@ -337,11 +337,13 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
    * required to clean up internal controller data structures
    */
   def onControllerResignation() {
+    if (deleteTopicManager != null)
+      deleteTopicManager.shutdown()
+
     inLock(controllerContext.controllerLock) {
       if (config.autoLeaderRebalanceEnable)
         autoRebalanceScheduler.shutdown()
-      if (deleteTopicManager != null)
-        deleteTopicManager.shutdown()
+
       Utils.unregisterMBean(KafkaController.MBeanName)
       partitionStateMachine.shutdown()
       replicaStateMachine.shutdown()
@@ -644,8 +646,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient) extends Logg
   def shutdown() = {
     inLock(controllerContext.controllerLock) {
       isRunning = false
-      onControllerResignation()
     }
+    onControllerResignation()
   }
 
   def sendRequest(brokerId : Int, request : RequestOrResponse, callback: (RequestOrResponse) => Unit = null) = {

@@ -17,14 +17,12 @@
 package kafka.server
 
 import junit.framework.Assert._
-import java.util.Properties
-import java.io.File
-import org.junit.{After, Before, Test}
+import org.junit.Test
 import kafka.integration.KafkaServerTestHarness
 import kafka.utils._
 import kafka.common._
 import kafka.log.LogConfig
-import kafka.admin.AdminUtils
+import kafka.admin.{AdminOperationException, AdminUtils}
 import org.scalatest.junit.JUnit3Suite
 
 class DynamicConfigChangeTest extends JUnit3Suite with KafkaServerTestHarness {
@@ -45,6 +43,17 @@ class DynamicConfigChangeTest extends JUnit3Suite with KafkaServerTestHarness {
     AdminUtils.changeTopicConfig(zkClient, tp.topic, LogConfig(flushInterval = newVal).toProps)
     TestUtils.retry(10000) {
       assertEquals(newVal, this.servers(0).logManager.getLog(tp).get.config.flushInterval)
+    }
+  }
+
+  @Test
+  def testConfigChangeOnNonExistingTopic() {
+    val topic = TestUtils.tempTopic
+    try {
+      AdminUtils.changeTopicConfig(zkClient, topic, LogConfig(flushInterval = 10000).toProps)
+      fail("Should fail with AdminOperationException for topic doesn't exist")
+    } catch {
+      case e: AdminOperationException => // expected
     }
   }
 
