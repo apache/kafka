@@ -40,6 +40,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
                                                          flushCheckpointMs = 10000L,
                                                          retentionCheckMs = 30000,
                                                          scheduler = new KafkaScheduler(1),
+                                                         brokerState = new BrokerState(),
                                                          time = new MockTime))
     
   @After

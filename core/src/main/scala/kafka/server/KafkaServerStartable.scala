@@ -52,6 +52,14 @@ class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
     }
   }
 
+  /**
+   * Allow setting broker state from the startable.
+   * This is needed when a custom kafka server startable want to emit new states that it introduces.
+   */
+  def setServerState(newState: Byte) {
+    server.brokerState.newState(newState)
+  }
+
   def awaitShutdown() = 
     server.awaitShutdown
 

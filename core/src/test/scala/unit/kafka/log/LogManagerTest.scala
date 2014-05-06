@@ -21,10 +21,9 @@ import java.io._
 import junit.framework.Assert._
 import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
-import kafka.server.KafkaConfig
+import kafka.server.{BrokerState, OffsetCheckpoint}
 import kafka.common._
 import kafka.utils._
-import kafka.server.OffsetCheckpoint
 
 class LogManagerTest extends JUnit3Suite {
 
@@ -49,7 +48,8 @@ class LogManagerTest extends JUnit3Suite {
                                 flushCheckpointMs = 100000L, 
                                 retentionCheckMs = 1000L, 
                                 scheduler = time.scheduler, 
-                                time = time)
+                                time = time,
+                                brokerState = new BrokerState())
     logManager.startup
     logDir = logManager.logDirs(0)
   }
@@ -125,7 +125,18 @@ class LogManagerTest extends JUnit3Suite {
     logManager.shutdown()
 
     val config = logConfig.copy(segmentSize = 10 * (setSize - 1), retentionSize = 5L * 10L * setSize + 10L)
-    logManager = new LogManager(Array(logDir), Map(), config, cleanerConfig, 1000L, 100000L, 1000L, time.scheduler, time)
+    logManager = new LogManager(
+      logDirs = Array(logDir),
+      topicConfigs = Map(),
+      defaultConfig = config,
+      cleanerConfig = cleanerConfig,
+      flushCheckMs = 1000L,
+      flushCheckpointMs = 100000L,
+      retentionCheckMs = 1000L,
+      scheduler = time.scheduler,
+      brokerState = new BrokerState(),
+      time = time
+    )
     logManager.startup
 
     // create a log
@@ -165,7 +176,18 @@ class LogManagerTest extends JUnit3Suite {
   def testTimeBasedFlush() {
     logManager.shutdown()
     val config = logConfig.copy(flushMs = 1000)
-    logManager = new LogManager(Array(logDir), Map(), config, cleanerConfig, 1000L, 10000L, 1000L, time.scheduler, time)
+    logManager = new LogManager(
+      logDirs = Array(logDir),
+      topicConfigs = Map(),
+      defaultConfig = config,
+      cleanerConfig = cleanerConfig,
+      flushCheckMs = 1000L,
+      flushCheckpointMs = 10000L,
+      retentionCheckMs = 1000L,
+      scheduler = time.scheduler,
+      brokerState = new BrokerState(),
+      time = time
+    )
     logManager.startup
     val log = logManager.createLog(TopicAndPartition(name, 0), config)
     val lastFlush = log.lastFlushTime
@@ -187,7 +209,18 @@ class LogManagerTest extends JUnit3Suite {
                      TestUtils.tempDir(), 
                      TestUtils.tempDir())
     logManager.shutdown()
-    logManager = new LogManager(dirs, Map(), logConfig, cleanerConfig, 1000L, 10000L, 1000L, time.scheduler, time)
+    logManager = new LogManager(
+      logDirs = dirs,
+      topicConfigs = Map(),
+      defaultConfig = logConfig,
+      cleanerConfig = cleanerConfig,
+      flushCheckMs = 1000L,
+      flushCheckpointMs = 10000L,
+      retentionCheckMs = 1000L,
+      scheduler = time.scheduler,
+      brokerState = new BrokerState(),
+      time = time
+    )
     
     // verify that logs are always assigned to the least loaded partition
     for(partition <- 0 until 20) {
@@ -204,7 +237,18 @@ class LogManagerTest extends JUnit3Suite {
   @Test
   def testTwoLogManagersUsingSameDirFails() {
     try {
-      new LogManager(Array(logDir), Map(), logConfig, cleanerConfig, 1000L, 10000L, 1000L, time.scheduler, time)
+      new LogManager(
+        logDirs = Array(logDir),
+        topicConfigs = Map(),
+        defaultConfig = logConfig,
+        cleanerConfig = cleanerConfig,
+        flushCheckMs = 1000L,
+        flushCheckpointMs = 10000L,
+        retentionCheckMs = 1000L,
+        scheduler = time.scheduler,
+        brokerState = new BrokerState(),
+        time = time
+      )
       fail("Should not be able to create a second log manager instance with the same data directory")
     } catch {
       case e: KafkaException => // this is good 
@@ -234,7 +278,8 @@ class LogManagerTest extends JUnit3Suite {
       flushCheckpointMs = 100000L,
       retentionCheckMs = 1000L,
       scheduler = time.scheduler,
-      time = time)
+      time = time,
+      brokerState = new BrokerState())
     logManager.startup
     verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1)), logManager)
   }
@@ -256,7 +301,8 @@ class LogManagerTest extends JUnit3Suite {
       flushCheckpointMs = 100000L,
       retentionCheckMs = 1000L,
       scheduler = time.scheduler,
-      time = time)
+      time = time,
+      brokerState = new BrokerState())
     logManager.startup
     verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1)), logManager)
   }

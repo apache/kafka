@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import kafka.utils._
 import scala.collection._
 import kafka.common.{TopicAndPartition, KafkaException}
-import kafka.server.OffsetCheckpoint
+import kafka.server.{RecoveringFromUncleanShutdown, BrokerState, OffsetCheckpoint}
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
@@ -43,6 +43,7 @@ class LogManager(val logDirs: Array[File],
                  val flushCheckpointMs: Long,
                  val retentionCheckMs: Long,
                  scheduler: Scheduler,
+                 val brokerState: BrokerState,
                  private val time: Time) extends Logging {
   val RecoveryPointCheckpointFile = "recovery-point-offset-checkpoint"
   val LockFile = ".lock"
@@ -109,6 +110,9 @@ class LogManager(val logDirs: Array[File],
         val cleanShutDownFile = new File(dir, Log.CleanShutdownFile)
         if(cleanShutDownFile.exists())
           info("Found clean shutdown file. Skipping recovery for all logs in data directory '%s'".format(dir.getAbsolutePath))
+        else
+          brokerState.newState(RecoveringFromUncleanShutdown)
+
         for(dir <- subDirs) {
           if(dir.isDirectory) {
             info("Loading log '" + dir.getName + "'")

@@ -69,6 +69,7 @@ class ReplicaManagerTest extends JUnit3Suite {
       flushCheckpointMs = 100000L,
       retentionCheckMs = 1000L,
       scheduler = time.scheduler,
+      brokerState = new BrokerState(),
       time = time)
   }
 
