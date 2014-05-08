@@ -2,10 +2,11 @@
 
 import argparse
 import sys
-import os 
+import os
 import time
 import datetime
 import tempfile
+import commands
 from jira.client import JIRA
 
 def get_jira():
@@ -17,7 +18,11 @@ def get_jira():
   home=home.rstrip('/')
   jira_config = dict(line.strip().split('=') for line in open(home + '/jira.ini'))
   jira = JIRA(options,basic_auth=(jira_config['user'], jira_config['password']))
-  return jira 
+  return jira
+
+def cmd_exists(cmd):
+  status, result = commands.getstatusoutput(cmd)
+  return status
 
 def main():
   ''' main(), shut up, pylint '''
@@ -30,6 +35,15 @@ def main():
   popt.add_argument('-t', '--testing-done', action='store', dest='testing', required=False, help='Text for the Testing Done section of the reviewboard')
   popt.add_argument('-db', '--debug', action='store_true', required=False, help='Enable debug mode')
   opt = popt.parse_args()
+
+  post_review_tool = None
+  if (cmd_exists("post-review") == 0):
+    post_review_tool = "post-review"
+  elif (cmd_exists("rbt") == 0):
+    post_review_tool = "rbt post"
+  else:
+    print "please install RBTools"
+    sys.exit(1)
 
   patch_file=tempfile.gettempdir() + "/" + opt.jira + ".patch"
   if opt.reviewboard:
@@ -62,9 +76,9 @@ def main():
   p=os.popen(git_remote_update)
   p.close()
 
-  rb_command="post-review --publish --tracking-branch " + opt.branch + " --target-groups=kafka --bugs-closed=" + opt.jira
+  rb_command= post_review_tool + " --publish --tracking-branch " + opt.branch + " --target-groups=kafka --bugs-closed=" + opt.jira
   if opt.debug:
-    rb_command=rb_command + " --debug" 
+    rb_command=rb_command + " --debug"
   summary="Patch for " + opt.jira
   if opt.summary:
     summary=opt.summary
@@ -92,9 +106,9 @@ def main():
       p.close()
       sys.exit(1)
   p.close()
-  if opt.debug: 
+  if opt.debug:
     print 'rb url=',rb_url
- 
+
   git_command="git diff " + opt.branch + " > " + patch_file
   if opt.debug:
     print git_command
@@ -108,16 +122,15 @@ def main():
   jira.add_attachment(issue,attachment)
   attachment.close()
 
-  comment="Created reviewboard " 
+  comment="Created reviewboard "
   if not opt.reviewboard:
-    print 'Created a new reviewboard ',rb_url,
+    print 'Created a new reviewboard',rb_url,
   else:
-    print 'Updated reviewboard'
+    print 'Updated reviewboard',rb_url
     comment="Updated reviewboard "
 
-  comment = comment + rb_url + ' against branch ' + opt.branch 
+  comment = comment + rb_url + ' against branch ' + opt.branch
   jira.add_comment(opt.jira, comment)
 
 if __name__ == '__main__':
   sys.exit(main())
-
