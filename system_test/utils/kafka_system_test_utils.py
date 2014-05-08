@@ -750,6 +750,7 @@ def start_entity_in_background(systemTestEnv, testcaseEnv, entityId):
                       kafkaHome + "/bin/kafka-run-class.sh kafka.tools.MirrorMaker",
                       "--consumer.config " + configPathName + "/" + mmConsumerConfigFile,
                       "--producer.config " + configPathName + "/" + mmProducerConfigFile,
+                      "--new.producer",
                       "--whitelist=\".*\" >> ",
                       logPathName + "/" + logFile + " & echo pid:$! > ",
                       logPathName + "/entity_" + entityId + "_pid'"]
