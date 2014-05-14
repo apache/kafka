@@ -246,7 +246,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
       assertEquals("Should have offset 0", 0L, producer.send(record).get.offset)
 
       // double check that the topic is created with leader elected
-     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
+      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0)
 
     } finally {
       if (producer != null) {

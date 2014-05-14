@@ -506,7 +506,7 @@ object TestUtils extends Logging {
                                         oldLeaderOpt: Option[Int] = None, newLeaderOpt: Option[Int] = None): Option[Int] = {
     require(!(oldLeaderOpt.isDefined && newLeaderOpt.isDefined), "Can't define both the old and the new leader")
     val startTime = System.currentTimeMillis()
-    var isLeaderElectedOrChanged = false;
+    var isLeaderElectedOrChanged = false
 
     trace("Waiting for leader to be elected or changed for partition [%s,%d], older leader is %s, new leader is %s"
           .format(topic, partition, oldLeaderOpt, newLeaderOpt))
@@ -603,7 +603,18 @@ object TestUtils extends Logging {
     byteBuffer
   }
 
-  def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L) = {
+
+  /**
+   * Wait until a valid leader is propagated to the metadata cache in each broker.
+   * It assumes that the leader propagated to each broker is the same.
+   * @param servers The list of servers that the metadata should reach to
+   * @param topic The topic name
+   * @param partition The partition Id
+   * @param timeout The amount of time waiting on this condition before assert to fail
+   * @return The leader of the partition.
+   */
+  def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int, timeout: Long = 5000L): Int = {
+    var leader: Int = -1
     TestUtils.waitUntilTrue(() =>
       servers.foldLeft(true) {
         (result, server) =>
@@ -611,11 +622,14 @@ object TestUtils extends Logging {
           partitionStateOpt match {
             case None => false
             case Some(partitionState) =>
-            result && Request.isValidBrokerId(partitionState.leaderIsrAndControllerEpoch.leaderAndIsr.leader)
+              leader = partitionState.leaderIsrAndControllerEpoch.leaderAndIsr.leader
+              result && Request.isValidBrokerId(leader)
           }
       },
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
       waitTime = timeout)
+
+    leader
   }
   
   def writeNonsenseToFile(fileName: File, position: Long, size: Int) {
