@@ -81,7 +81,7 @@ public final class Metadata {
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
         do {
-            partitions = cluster.partitionsFor(topic);
+            partitions = cluster.partitionsForTopic(topic);
             if (partitions == null) {
                 topics.add(topic);
                 forceUpdate = true;

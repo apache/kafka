@@ -12,6 +12,8 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -28,6 +30,7 @@ public final class Cluster {
     private final List<Node> nodes;
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
+    private final Map<Integer, List<PartitionInfo>> partitionsByNode;
 
     /**
      * Create a new cluster with the given nodes and partitions
@@ -45,18 +48,32 @@ public final class Cluster {
         for (PartitionInfo p : partitions)
             this.partitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
 
-        // index the partitions by topic and make the lists unmodifiable so we can handle them out in
-        // user-facing apis without risk of the client modifying the contents
-        HashMap<String, List<PartitionInfo>> parts = new HashMap<String, List<PartitionInfo>>();
-        for (PartitionInfo p : partitions) {
-            if (!parts.containsKey(p.topic()))
-                parts.put(p.topic(), new ArrayList<PartitionInfo>());
-            List<PartitionInfo> ps = parts.get(p.topic());
-            ps.add(p);
+        // index the partitions by topic and node respectively, and make the lists
+        // unmodifiable so we can hand them out in user-facing apis without risk
+        // of the client modifying the contents
+        HashMap<String, List<PartitionInfo>> partsForTopic = new HashMap<String, List<PartitionInfo>>();
+        HashMap<Integer, List<PartitionInfo>> partsForNode = new HashMap<Integer, List<PartitionInfo>>();
+        for (Node n : this.nodes) {
+            partsForNode.put(n.id(), new ArrayList<PartitionInfo>());
         }
-        this.partitionsByTopic = new HashMap<String, List<PartitionInfo>>(parts.size());
-        for (Map.Entry<String, List<PartitionInfo>> entry : parts.entrySet())
+        for (PartitionInfo p : partitions) {
+            if (!partsForTopic.containsKey(p.topic()))
+                partsForTopic.put(p.topic(), new ArrayList<PartitionInfo>());
+            List<PartitionInfo> psTopic = partsForTopic.get(p.topic());
+            psTopic.add(p);
+
+            if (p.leader() != null) {
+                List<PartitionInfo> psNode = Utils.notNull(partsForNode.get(p.leader().id()));
+                psNode.add(p);
+            }
+        }
+        this.partitionsByTopic = new HashMap<String, List<PartitionInfo>>(partsForTopic.size());
+        for (Map.Entry<String, List<PartitionInfo>> entry : partsForTopic.entrySet())
             this.partitionsByTopic.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
+        this.partitionsByNode = new HashMap<Integer, List<PartitionInfo>>(partsForNode.size());
+        for (Map.Entry<Integer, List<PartitionInfo>> entry : partsForNode.entrySet())
+            this.partitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
+
     }
 
     /**
@@ -113,8 +130,17 @@ public final class Cluster {
      * @param topic The topic name
      * @return A list of partitions
      */
-    public List<PartitionInfo> partitionsFor(String topic) {
+    public List<PartitionInfo> partitionsForTopic(String topic) {
         return this.partitionsByTopic.get(topic);
+    }
+
+    /**
+     * Get the list of partitions whose leader is this node
+     * @param nodeId The node id
+     * @return A list of partitions
+     */
+    public List<PartitionInfo> partitionsForNode(int nodeId) {
+        return this.partitionsByNode.get(nodeId);
     }
 
     @Override

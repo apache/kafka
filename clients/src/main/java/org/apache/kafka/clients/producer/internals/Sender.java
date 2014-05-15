@@ -15,15 +15,7 @@ package org.apache.kafka.clients.producer.internals;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -192,18 +184,18 @@ public class Sender implements Runnable {
     public void run(long nowMs) {
         Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
-        List<TopicPartition> ready = this.accumulator.ready(nowMs);
+        Set<Node> ready = this.accumulator.ready(cluster, nowMs);
 
         // should we update our metadata?
         List<NetworkSend> sends = new ArrayList<NetworkSend>();
         maybeUpdateMetadata(cluster, sends, nowMs);
 
-        // prune the list of ready topics to eliminate any that we aren't ready to send yet
-        List<TopicPartition> sendable = processReadyPartitions(cluster, ready, nowMs);
+        // prune the list of ready nodes to eliminate any that we aren't ready to send yet
+        Set<Node> sendable = processReadyNode(ready, nowMs);
 
         // create produce requests
-        List<RecordBatch> batches = this.accumulator.drain(sendable, this.maxRequestSize, nowMs);
-        List<InFlightRequest> requests = collate(cluster, batches, nowMs);
+        Map<Integer, List<RecordBatch>> batches = this.accumulator.drain(cluster, sendable, this.maxRequestSize, nowMs);
+        List<InFlightRequest> requests = generateProduceRequests(batches, nowMs);
         sensors.updateProduceRequestMetrics(requests);
 
         if (ready.size() > 0) {
@@ -310,19 +302,21 @@ public class Sender implements Runnable {
     }
 
     /**
-     * Process the set of topic-partitions with data ready to send. If we have a connection to the appropriate node, add
-     * it to the returned set. For any partitions we have no connection to either make one, fetch the appropriate
-     * metadata to be able to do so
+     * Process the set of destination nodes with data ready to send.
+     *
+     * 1) If we have an unknown leader node, force refresh the metadata.
+     * 2) If we have a connection to the appropriate node, add
+     *    it to the returned set;
+     * 3) If we have not a connection yet, initialize one
      */
-    private List<TopicPartition> processReadyPartitions(Cluster cluster, List<TopicPartition> ready, long nowMs) {
-        List<TopicPartition> sendable = new ArrayList<TopicPartition>(ready.size());
-        for (TopicPartition tp : ready) {
-            Node node = cluster.leaderFor(tp);
+    private Set<Node> processReadyNode(Set<Node> ready, long nowMs) {
+        Set<Node> sendable = new HashSet<Node>(ready.size());
+        for (Node node : ready) {
             if (node == null) {
                 // we don't know about this topic/partition or it has no leader, re-fetch metadata
                 metadata.forceUpdate();
             } else if (nodeStates.isConnected(node.id()) && inFlightRequests.canSendMore(node.id())) {
-                sendable.add(tp);
+                sendable.add(node);
             } else if (nodeStates.canConnect(node.id(), nowMs)) {
                 // we don't have a connection to this node right now, make one
                 initiateConnect(node, nowMs);
@@ -520,19 +514,9 @@ public class Sender implements Runnable {
     }
 
     /**
-     * Collate the record batches into a list of produce requests on a per-node basis
+     * Transfer the record batches into a list of produce requests on a per-node basis
      */
-    private List<InFlightRequest> collate(Cluster cluster, List<RecordBatch> batches, long nowMs) {
-        Map<Integer, List<RecordBatch>> collated = new HashMap<Integer, List<RecordBatch>>();
-        for (RecordBatch batch : batches) {
-            Node node = cluster.leaderFor(batch.topicPartition);
-            List<RecordBatch> found = collated.get(node.id());
-            if (found == null) {
-                found = new ArrayList<RecordBatch>();
-                collated.put(node.id(), found);
-            }
-            found.add(batch);
-        }
+    private List<InFlightRequest> generateProduceRequests(Map<Integer, List<RecordBatch>> collated, long nowMs) {
         List<InFlightRequest> requests = new ArrayList<InFlightRequest>(collated.size());
         for (Map.Entry<Integer, List<RecordBatch>> entry : collated.entrySet())
             requests.add(produceRequest(nowMs, entry.getKey(), acks, requestTimeout, entry.getValue()));

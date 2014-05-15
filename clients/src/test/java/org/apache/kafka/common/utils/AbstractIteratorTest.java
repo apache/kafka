@@ -20,13 +20,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NoSuchElementException;
+import java.util.*;
 
-import org.apache.kafka.common.utils.AbstractIterator;
 import org.junit.Test;
 
 public class AbstractIteratorTest {
@@ -49,7 +44,7 @@ public class AbstractIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void testEmptyIterator() {
-        Iterator<Object> iter = new ListIterator<Object>(Arrays.asList());
+        Iterator<Object> iter = new ListIterator<Object>(Collections.emptyList());
         iter.next();
     }
 

@@ -102,7 +102,7 @@ public class MockProducer implements Producer {
     @Override
     public synchronized Future<RecordMetadata> send(ProducerRecord record, Callback callback) {
         int partition = 0;
-        if (this.cluster.partitionsFor(record.topic()) != null)
+        if (this.cluster.partitionsForTopic(record.topic()) != null)
             partition = partitioner.partition(record, this.cluster);
         ProduceRequestResult result = new ProduceRequestResult();
         FutureRecordMetadata future = new FutureRecordMetadata(result, 0);
@@ -133,7 +133,7 @@ public class MockProducer implements Producer {
     }
 
     public List<PartitionInfo> partitionsFor(String topic) {
-        return this.cluster.partitionsFor(topic);
+        return this.cluster.partitionsForTopic(topic);
     }
 
     public Map<String, Metric> metrics() {

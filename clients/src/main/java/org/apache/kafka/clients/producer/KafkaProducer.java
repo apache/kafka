@@ -283,7 +283,7 @@ public class KafkaProducer implements Producer {
     }
 
     public List<PartitionInfo> partitionsFor(String topic) {
-        return this.metadata.fetch(topic, this.metadataFetchTimeoutMs).partitionsFor(topic);
+        return this.metadata.fetch(topic, this.metadataFetchTimeoutMs).partitionsForTopic(topic);
     }
 
     @Override

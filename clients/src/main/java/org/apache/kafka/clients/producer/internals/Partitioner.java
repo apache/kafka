@@ -41,10 +41,10 @@ public class Partitioner {
      * Compute the partition for the given record.
      * 
      * @param record The record being sent
-     * @param numPartitions The total number of partitions for the given topic
+     * @param cluster The current cluster metadata
      */
     public int partition(ProducerRecord record, Cluster cluster) {
-        List<PartitionInfo> partitions = cluster.partitionsFor(record.topic());
+        List<PartitionInfo> partitions = cluster.partitionsForTopic(record.topic());
         int numPartitions = partitions.size();
         if (record.partition() != null) {
             // they have given us a partition, use it

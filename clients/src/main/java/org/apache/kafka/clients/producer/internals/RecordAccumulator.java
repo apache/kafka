@@ -13,15 +13,13 @@
 package org.apache.kafka.clients.producer.internals;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Deque;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentMap;
 
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -111,11 +109,6 @@ public final class RecordAccumulator {
                                   return free.availableMemory();
                               }
                           });
-        metrics.addMetric("ready-partitions", "The number of topic-partitions with buffered data ready to be sent.", new Measurable() {
-            public double measure(MetricConfig config, long nowMs) {
-                return ready(nowMs).size();
-            }
-        });
     }
 
     /**
@@ -180,9 +173,10 @@ public final class RecordAccumulator {
     }
 
     /**
-     * Get a list of topic-partitions which are ready to be sent.
+     * Get a list of nodes whose partitions are ready to be sent.
      * <p>
-     * A partition is ready if ANY of the following are true:
+     * A destination node is ready to send data if ANY one of its partition is not backing off the send
+     * and ANY of the following are true :
      * <ol>
      * <li>The record set is full
      * <li>The record set has sat in the accumulator for at least lingerMs milliseconds
@@ -191,24 +185,31 @@ public final class RecordAccumulator {
      * <li>The accumulator has been closed
      * </ol>
      */
-    public List<TopicPartition> ready(long nowMs) {
-        List<TopicPartition> ready = new ArrayList<TopicPartition>();
+    public Set<Node> ready(Cluster cluster, long nowMs) {
+        Set<Node> readyNodes = new HashSet<Node>();
         boolean exhausted = this.free.queued() > 0;
+
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
+            TopicPartition part = entry.getKey();
             Deque<RecordBatch> deque = entry.getValue();
-            synchronized (deque) {
-                RecordBatch batch = deque.peekFirst();
-                if (batch != null) {
-                    boolean backingOff = batch.attempts > 0 && batch.lastAttemptMs + retryBackoffMs > nowMs;
-                    boolean full = deque.size() > 1 || batch.records.isFull();
-                    boolean expired = nowMs - batch.createdMs >= lingerMs;
-                    boolean sendable = full || expired || exhausted || closed;
-                    if (sendable && !backingOff)
-                        ready.add(batch.topicPartition);
+            // if the leader is unknown use an Unknown node placeholder
+            Node leader = cluster.leaderFor(part);
+            if (!readyNodes.contains(leader)) {
+                synchronized (deque) {
+                    RecordBatch batch = deque.peekFirst();
+                    if (batch != null) {
+                        boolean backingOff = batch.attempts > 0 && batch.lastAttemptMs + retryBackoffMs > nowMs;
+                        boolean full = deque.size() > 1 || batch.records.isFull();
+                        boolean expired = nowMs - batch.createdMs >= lingerMs;
+                        boolean sendable = full || expired || exhausted || closed;
+                        if (sendable && !backingOff)
+                            readyNodes.add(leader);
+                    }
                 }
             }
         }
-        return ready;
+
+        return readyNodes;
     }
 
     /**
@@ -226,45 +227,55 @@ public final class RecordAccumulator {
     }
 
     /**
-     * Drain all the data for the given topic-partitions that will fit within the specified size. This method attempts
-     * to avoid choosing the same topic-partitions over and over.
+     * Drain all the data for the given nodes and collate them into a list of
+     * batches that will fit within the specified size on a per-node basis.
+     * This method attempts to avoid choosing the same topic-node over and over.
      * 
-     * @param partitions The list of partitions to drain
+     * @param cluster The current cluster metadata
+     * @param nodes The list of node to drain
      * @param maxSize The maximum number of bytes to drain
      * @param nowMs The current unix time in milliseconds
-     * @return A list of {@link RecordBatch} for partitions specified with total size less than the requested maxSize.
+     * @return A list of {@link RecordBatch} for each node specified with total size less than the requested maxSize.
      *         TODO: There may be a starvation issue due to iteration order
      */
-    public List<RecordBatch> drain(List<TopicPartition> partitions, int maxSize, long nowMs) {
-        if (partitions.isEmpty())
-            return Collections.emptyList();
-        int size = 0;
-        List<RecordBatch> ready = new ArrayList<RecordBatch>();
-        /* to make starvation less likely this loop doesn't start at 0 */
-        int start = drainIndex = drainIndex % partitions.size();
-        do {
-            TopicPartition tp = partitions.get(drainIndex);
-            Deque<RecordBatch> deque = dequeFor(tp);
-            if (deque != null) {
-                synchronized (deque) {
-                    RecordBatch first = deque.peekFirst();
-                    if (size + first.records.sizeInBytes() > maxSize && !ready.isEmpty()) {
-                        // there is a rare case that a single batch size is larger than the request size due
-                        // to compression; in this case we will still eventually send this batch in a single
-                        // request
-                        return ready;
-                    } else {
-                        RecordBatch batch = deque.pollFirst();
-                        batch.records.close();
-                        size += batch.records.sizeInBytes();
-                        ready.add(batch);
-                        batch.drainedMs = nowMs;
+    public Map<Integer, List<RecordBatch>> drain(Cluster cluster, Set<Node> nodes, int maxSize, long nowMs) {
+        if (nodes.isEmpty())
+            return Collections.emptyMap();
+
+        Map<Integer, List<RecordBatch>> batches = new HashMap<Integer, List<RecordBatch>>();
+        for (Node node : nodes) {
+            int size = 0;
+            List<PartitionInfo> parts = cluster.partitionsForNode(node.id());
+            List<RecordBatch> ready = new ArrayList<RecordBatch>();
+            /* to make starvation less likely this loop doesn't start at 0 */
+            int start = drainIndex = drainIndex % parts.size();
+            do {
+                PartitionInfo part = parts.get(drainIndex);
+                Deque<RecordBatch> deque = dequeFor(new TopicPartition(part.topic(), part.partition()));
+                if (deque != null) {
+                    synchronized (deque) {
+                        RecordBatch first = deque.peekFirst();
+                        if (first != null) {
+                            if (size + first.records.sizeInBytes() > maxSize && !ready.isEmpty()) {
+                                // there is a rare case that a single batch size is larger than the request size due
+                                // to compression; in this case we will still eventually send this batch in a single
+                                // request
+                                break;
+                            } else {
+                                RecordBatch batch = deque.pollFirst();
+                                batch.records.close();
+                                size += batch.records.sizeInBytes();
+                                ready.add(batch);
+                                batch.drainedMs = nowMs;
+                            }
+                        }
                     }
                 }
-            }
-            this.drainIndex = (this.drainIndex + 1) % partitions.size();
-        } while (start != drainIndex);
-        return ready;
+                this.drainIndex = (this.drainIndex + 1) % parts.size();
+            } while (start != drainIndex);
+            batches.put(node.id(), ready);
+        }
+        return batches;
     }
 
     /**
