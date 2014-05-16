@@ -117,7 +117,9 @@ object MirrorMaker extends Logging {
     val producerProps = Utils.loadProps(options.valueOf(producerConfigOpt))
 
     // create producer threads
-    val producers = (1 to numProducers).map(_ => {
+    val clientId = producerProps.getProperty("client.id", "")
+    val producers = (1 to numProducers).map(i => {
+      producerProps.setProperty("client.id", clientId + "-" + i)
       if (useNewProducer)
         new NewShinyProducer(producerProps)
       else
