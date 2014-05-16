@@ -129,31 +129,31 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   if (config.autoCommitEnable) {
     scheduler.startup
     info("starting auto committer every " + config.autoCommitIntervalMs + " ms")
-    scheduler.schedule("kafka-consumer-autocommit", 
-                       autoCommit, 
+    scheduler.schedule("kafka-consumer-autocommit",
+                       autoCommit,
                        delay = config.autoCommitIntervalMs,
-                       period = config.autoCommitIntervalMs, 
+                       period = config.autoCommitIntervalMs,
                        unit = TimeUnit.MILLISECONDS)
   }
 
   KafkaMetricsReporter.startReporters(config.props)
 
   def this(config: ConsumerConfig) = this(config, true)
-  
-  def createMessageStreams(topicCountMap: Map[String,Int]): Map[String, List[KafkaStream[Array[Byte],Array[Byte]]]] = 
+
+  def createMessageStreams(topicCountMap: Map[String,Int]): Map[String, List[KafkaStream[Array[Byte],Array[Byte]]]] =
     createMessageStreams(topicCountMap, new DefaultDecoder(), new DefaultDecoder())
 
   def createMessageStreams[K,V](topicCountMap: Map[String,Int], keyDecoder: Decoder[K], valueDecoder: Decoder[V])
       : Map[String, List[KafkaStream[K,V]]] = {
     if (messageStreamCreated.getAndSet(true))
-      throw new RuntimeException(this.getClass.getSimpleName +
-                                   " can create message streams at most once")
+      throw new MessageStreamsExistException(this.getClass.getSimpleName +
+                                   " can create message streams at most once",null)
     consume(topicCountMap, keyDecoder, valueDecoder)
   }
 
-  def createMessageStreamsByFilter[K,V](topicFilter: TopicFilter, 
-                                        numStreams: Int, 
-                                        keyDecoder: Decoder[K] = new DefaultDecoder(), 
+  def createMessageStreamsByFilter[K,V](topicFilter: TopicFilter,
+                                        numStreams: Int,
+                                        keyDecoder: Decoder[K] = new DefaultDecoder(),
                                         valueDecoder: Decoder[V] = new DefaultDecoder()) = {
     val wildcardStreamsHandler = new WildcardStreamsHandler[K,V](topicFilter, numStreams, keyDecoder, valueDecoder)
     wildcardStreamsHandler.streams
@@ -921,10 +921,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     private val wildcardQueuesAndStreams = (1 to numStreams)
       .map(e => {
         val queue = new LinkedBlockingQueue[FetchedDataChunk](config.queuedMaxMessages)
-        val stream = new KafkaStream[K,V](queue, 
-                                          config.consumerTimeoutMs, 
-                                          keyDecoder, 
-                                          valueDecoder, 
+        val stream = new KafkaStream[K,V](queue,
+                                          config.consumerTimeoutMs,
+                                          keyDecoder,
+                                          valueDecoder,
                                           config.clientId)
         (queue, stream)
     }).toList
@@ -978,4 +978,3 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       wildcardQueuesAndStreams.map(_._2)
   }
 }
-

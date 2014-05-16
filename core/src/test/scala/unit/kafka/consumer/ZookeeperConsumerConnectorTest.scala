@@ -1,4 +1,3 @@
-
 /**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
@@ -6,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -31,6 +30,7 @@ import kafka.producer.{ProducerConfig, KeyedMessage, Producer}
 import java.util.{Collections, Properties}
 import org.apache.log4j.{Logger, Level}
 import kafka.utils.TestUtils._
+import kafka.common.MessageStreamsExistException
 
 class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
@@ -157,12 +157,21 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val actual_3 = getZKChildrenValues(dirs.consumerOwnerDir)
     assertEquals(expected_2, actual_3)
 
+    // call createMesssageStreams twice should throw MessageStreamsExistException
+    try {
+      val topicMessageStreams4 = zkConsumerConnector3.createMessageStreams(new mutable.HashMap[String, Int]())
+      fail("Should fail with MessageStreamsExistException")
+    } catch {
+      case e: MessageStreamsExistException => // expected
+    }
+
     zkConsumerConnector1.shutdown
     zkConsumerConnector2.shutdown
     zkConsumerConnector3.shutdown
     info("all consumer connectors stopped")
     requestHandlerLogger.setLevel(Level.ERROR)
   }
+
 
   def testCompression() {
     val requestHandlerLogger = Logger.getLogger(classOf[kafka.server.KafkaRequestHandler])
@@ -358,10 +367,10 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     ms.toList
   }
 
-  def sendMessages(config: KafkaConfig, 
-                   messagesPerNode: Int, 
-                   header: String, 
-                   compression: CompressionCodec, 
+  def sendMessages(config: KafkaConfig,
+                   messagesPerNode: Int,
+                   header: String,
+                   compression: CompressionCodec,
                    numParts: Int): List[String]= {
     var messages: List[String] = Nil
     val props = new Properties()
@@ -412,5 +421,3 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   }
 
 }
-
-

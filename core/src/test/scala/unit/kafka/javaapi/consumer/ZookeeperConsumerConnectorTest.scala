@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -27,6 +27,7 @@ import kafka.utils.IntEncoder
 import kafka.utils.{Logging, TestUtils}
 import kafka.consumer.{KafkaStream, ConsumerConfig}
 import kafka.zk.ZooKeeperTestHarness
+import kafka.common.MessageStreamsExistException
 
 import scala.collection.JavaConversions
 
@@ -69,17 +70,24 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val receivedMessages1 = getMessages(nMessages*2, topicMessageStreams1)
     assertEquals(sentMessages1.sorted, receivedMessages1.sorted)
 
+    // call createMesssageStreams twice should throw MessageStreamsExistException
+    try {
+      val topicMessageStreams2 = zkConsumerConnector1.createMessageStreams(toJavaMap(Map(topic -> numNodes*numParts/2)), new StringDecoder(), new StringDecoder())
+      fail("Should fail with MessageStreamsExistException")
+    } catch {
+      case e: MessageStreamsExistException => // expected
+    }
     zkConsumerConnector1.shutdown
     info("all consumer connectors stopped")
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
-  def sendMessages(conf: KafkaConfig, 
-                   messagesPerNode: Int, 
-                   header: String, 
+  def sendMessages(conf: KafkaConfig,
+                   messagesPerNode: Int,
+                   header: String,
                    compressed: CompressionCodec): List[String] = {
     var messages: List[String] = Nil
-    val producer: kafka.producer.Producer[Int, String] = 
+    val producer: kafka.producer.Producer[Int, String] =
       TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs),
         encoder = classOf[StringEncoder].getName,
         keyEncoder = classOf[IntEncoder].getName)
@@ -94,8 +102,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     messages
   }
 
-  def sendMessages(messagesPerNode: Int, 
-                   header: String, 
+  def sendMessages(messagesPerNode: Int,
+                   header: String,
                    compressed: CompressionCodec = NoCompressionCodec): List[String] = {
     var messages: List[String] = Nil
     for(conf <- configs)
@@ -103,7 +111,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     messages
   }
 
-  def getMessages(nMessagesPerThread: Int, 
+  def getMessages(nMessagesPerThread: Int,
                   jTopicMessageStreams: java.util.Map[String, java.util.List[KafkaStream[String, String]]]): List[String] = {
     var messages: List[String] = Nil
     import scala.collection.JavaConversions._
@@ -126,5 +134,5 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val javaMap = new java.util.HashMap[String, java.lang.Integer]()
     scalaMap.foreach(m => javaMap.put(m._1, m._2.asInstanceOf[java.lang.Integer]))
     javaMap
-  }  
+  }
 }
