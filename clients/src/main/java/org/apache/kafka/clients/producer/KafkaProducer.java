@@ -13,7 +13,6 @@
 package org.apache.kafka.clients.producer;
 
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +43,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.utils.ClientUtils;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -118,7 +118,7 @@ public class KafkaProducer implements Producer {
                                                  config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG),
                                                  metrics,
                                                  time);
-        List<InetSocketAddress> addresses = parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+        List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
         this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
         this.sender = new Sender(new Selector(this.metrics, time),
                                  this.metadata,
@@ -148,28 +148,6 @@ public class KafkaProducer implements Producer {
         } catch (NumberFormatException e) {
             throw new ConfigException("Invalid configuration value for 'acks': " + acksString);
         }
-    }
-
-    private static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
-        List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
-        for (String url : urls) {
-            if (url != null && url.length() > 0) {
-                String[] pieces = url.split(":");
-                if (pieces.length != 2)
-                    throw new ConfigException("Invalid url in " + ProducerConfig.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
-                try {
-                    InetSocketAddress address = new InetSocketAddress(pieces[0], Integer.parseInt(pieces[1]));
-                    if (address.isUnresolved())
-                        throw new ConfigException("DNS resolution failed for metadata bootstrap url: " + url);
-                    addresses.add(address);
-                } catch (NumberFormatException e) {
-                    throw new ConfigException("Invalid port in metadata.broker.list: " + url);
-                }
-            }
-        }
-        if (addresses.size() < 1)
-            throw new ConfigException("No bootstrap urls given in metadata.broker.list.");
-        return addresses;
     }
 
     /**
