@@ -53,9 +53,8 @@ public class ConsumerExampleTest {
 
     /**
      * This example demonstrates how to use the consumer to leverage Kafka's group management functionality for automatic consumer load 
-     * balancing and failure detection. This example assumes that the offsets are stored in Kafka and are manually committed using 
-     * either the commit() or commitAsync() APIs. This example also demonstrates rewinding the consumer's offsets if processing of consumed
-     * messages fails.
+     * balancing and failure detection. This example assumes that the offsets are stored in Kafka and are manually committed using the 
+     * commit() API. This example also demonstrates rewinding the consumer's offsets if processing of consumed messages fails.
      */
 //     @Test
 //     public void testConsumerGroupManagementWithManualOffsetCommit() {
