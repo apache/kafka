@@ -106,6 +106,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   // useful for tracking migration of consumers to store offsets in kafka
   private val kafkaCommitMeter = newMeter(config.clientId + "-KafkaCommitsPerSec", "commits", TimeUnit.SECONDS)
   private val zkCommitMeter = newMeter(config.clientId + "-ZooKeeperCommitsPerSec", "commits", TimeUnit.SECONDS)
+  private val rebalanceTimer = new KafkaTimer(newTimer(config.clientId + "-RebalanceRateAndTime", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
 
   val consumerIdString = {
     var consumerUuid : String = null
@@ -575,35 +576,37 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
     def syncedRebalance() {
       rebalanceLock synchronized {
-        if(isShuttingDown.get())  {
-          return
-        } else {
-          for (i <- 0 until config.rebalanceMaxRetries) {
-            info("begin rebalancing consumer " + consumerIdString + " try #" + i)
-            var done = false
-            var cluster: Cluster = null
-            try {
-              cluster = getCluster(zkClient)
-              done = rebalance(cluster)
-            } catch {
-              case e: Throwable =>
-                /** occasionally, we may hit a ZK exception because the ZK state is changing while we are iterating.
-                 * For example, a ZK node can disappear between the time we get all children and the time we try to get
-                 * the value of a child. Just let this go since another rebalance will be triggered.
-                 **/
-                info("exception during rebalance ", e)
+        rebalanceTimer.time {
+          if(isShuttingDown.get())  {
+            return
+          } else {
+            for (i <- 0 until config.rebalanceMaxRetries) {
+              info("begin rebalancing consumer " + consumerIdString + " try #" + i)
+              var done = false
+              var cluster: Cluster = null
+              try {
+                cluster = getCluster(zkClient)
+                done = rebalance(cluster)
+              } catch {
+                case e: Throwable =>
+                  /** occasionally, we may hit a ZK exception because the ZK state is changing while we are iterating.
+                    * For example, a ZK node can disappear between the time we get all children and the time we try to get
+                    * the value of a child. Just let this go since another rebalance will be triggered.
+                    **/
+                  info("exception during rebalance ", e)
+              }
+              info("end rebalancing consumer " + consumerIdString + " try #" + i)
+              if (done) {
+                return
+              } else {
+                /* Here the cache is at a risk of being stale. To take future rebalancing decisions correctly, we should
+                 * clear the cache */
+                info("Rebalancing attempt failed. Clearing the cache before the next rebalancing operation is triggered")
+              }
+              // stop all fetchers and clear all the queues to avoid data duplication
+              closeFetchersForQueues(cluster, kafkaMessageAndMetadataStreams, topicThreadIdAndQueues.map(q => q._2))
+              Thread.sleep(config.rebalanceBackoffMs)
             }
-            info("end rebalancing consumer " + consumerIdString + " try #" + i)
-            if (done) {
-              return
-            } else {
-              /* Here the cache is at a risk of being stale. To take future rebalancing decisions correctly, we should
-               * clear the cache */
-              info("Rebalancing attempt failed. Clearing the cache before the next rebalancing operation is triggered")
-            }
-            // stop all fetchers and clear all the queues to avoid data duplication
-            closeFetchersForQueues(cluster, kafkaMessageAndMetadataStreams, topicThreadIdAndQueues.map(q => q._2))
-            Thread.sleep(config.rebalanceBackoffMs)
           }
         }
       }
