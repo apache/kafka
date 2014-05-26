@@ -54,10 +54,10 @@ object Message {
   val CurrentMagicValue: Byte = 0
 
   /**
-   * Specifies the mask for the compression code. 2 bits to hold the compression codec.
+   * Specifies the mask for the compression code. 3 bits to hold the compression codec.
    * 0 is reserved to indicate no compression
    */
-  val CompressionCodeMask: Int = 0x03 
+  val CompressionCodeMask: Int = 0x07
 
   /**
    * Compression code for uncompressed messages

@@ -20,7 +20,7 @@ package org.apache.kafka.common.record;
  * The compression type to use
  */
 public enum CompressionType {
-    NONE(0, "none", 1.0f), GZIP(1, "gzip", 0.5f), SNAPPY(2, "snappy", 0.5f);
+    NONE(0, "none", 1.0f), GZIP(1, "gzip", 0.5f), SNAPPY(2, "snappy", 0.5f), LZ4(3, "lz4", 0.5f), LZ4HC(4, "lz4hc", 0.5f);
 
     public final int id;
     public final String name;
@@ -40,6 +40,10 @@ public enum CompressionType {
                 return GZIP;
             case 2:
                 return SNAPPY;
+            case 3:
+                return LZ4;
+            case 4:
+                return LZ4HC;
             default:
                 throw new IllegalArgumentException("Unknown compression type id: " + id);
         }
@@ -52,6 +56,10 @@ public enum CompressionType {
             return GZIP;
         else if (SNAPPY.name.equals(name))
             return SNAPPY;
+        else if (LZ4.name.equals(name))
+            return LZ4;
+        else if (LZ4HC.name.equals(name))
+            return LZ4HC;
         else
             throw new IllegalArgumentException("Unknown compression name: " + name);
     }

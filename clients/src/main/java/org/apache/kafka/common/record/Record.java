@@ -57,10 +57,10 @@ public final class Record {
     public static final byte CURRENT_MAGIC_VALUE = 0;
 
     /**
-     * Specifies the mask for the compression code. 2 bits to hold the compression codec. 0 is reserved to indicate no
+     * Specifies the mask for the compression code. 3 bits to hold the compression codec. 0 is reserved to indicate no
      * compression
      */
-    public static final int COMPRESSION_CODEC_MASK = 0x03;
+    public static final int COMPRESSION_CODEC_MASK = 0x07;
 
     /**
      * Compression code for uncompressed records

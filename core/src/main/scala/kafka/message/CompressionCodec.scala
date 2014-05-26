@@ -23,6 +23,8 @@ object CompressionCodec {
       case NoCompressionCodec.codec => NoCompressionCodec
       case GZIPCompressionCodec.codec => GZIPCompressionCodec
       case SnappyCompressionCodec.codec => SnappyCompressionCodec
+      case LZ4CompressionCodec.codec => LZ4CompressionCodec
+      case LZ4HCCompressionCodec.codec => LZ4HCCompressionCodec
       case _ => throw new kafka.common.UnknownCodecException("%d is an unknown compression codec".format(codec))
     }
   }
@@ -31,6 +33,8 @@ object CompressionCodec {
       case NoCompressionCodec.name => NoCompressionCodec
       case GZIPCompressionCodec.name => GZIPCompressionCodec
       case SnappyCompressionCodec.name => SnappyCompressionCodec
+      case LZ4CompressionCodec.name => LZ4CompressionCodec
+      case LZ4HCCompressionCodec.name => LZ4HCCompressionCodec
       case _ => throw new kafka.common.UnknownCodecException("%s is an unknown compression codec".format(name))
     }
   }
@@ -51,6 +55,16 @@ case object GZIPCompressionCodec extends CompressionCodec {
 case object SnappyCompressionCodec extends CompressionCodec {
   val codec = 2
   val name = "snappy"
+}
+
+case object LZ4CompressionCodec extends CompressionCodec {
+  val codec = 3
+  val name = "lz4"
+}
+
+case object LZ4HCCompressionCodec extends CompressionCodec {
+  val codec = 4
+  val name = "lz4hc"
 }
 
 case object NoCompressionCodec extends CompressionCodec {
