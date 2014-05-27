@@ -44,6 +44,8 @@ class TopicMetadata(private val underlying: kafka.api.TopicMetadata) {
   def errorCode: Short = underlying.errorCode
 
   def sizeInBytes: Int = underlying.sizeInBytes
+
+  override def toString = underlying.toString
 }
 
 
@@ -68,5 +70,6 @@ class PartitionMetadata(private val underlying: kafka.api.PartitionMetadata) {
   def errorCode: Short = underlying.errorCode
 
   def sizeInBytes: Int = underlying.sizeInBytes
-}
 
+  override def toString = underlying.toString
+}
