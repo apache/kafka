@@ -178,7 +178,7 @@ object ConsumerOffsetChecker extends Logging {
           } catch {
             case z: ZkNoNodeException =>
               if(ZkUtils.pathExists(zkClient,topicDirs.consumerOffsetDir))
-                offsetMap.put(topicAndPartition,0)
+                offsetMap.put(topicAndPartition,-1)
               else
                 throw z
           }
