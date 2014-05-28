@@ -48,7 +48,7 @@ The framework has the following levels:
 # ==========================
 
 * Please note that the following commands should be executed after downloading the kafka source code to build all the required binaries:
-  1. <kafka install dir>/ $ ./sbt update package
+  1. <kafka install dir>/ $ ./gradlew jar
 
   Now you are ready to follow the steps below.
   1. Update system_test/cluster_config.json for "kafka_home" & "java_home" specific to your environment
