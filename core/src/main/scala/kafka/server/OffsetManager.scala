@@ -30,7 +30,7 @@ import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 import scala.Some
 import kafka.common.TopicAndPartition
-import kafka.consumer.MessageFormatter
+import kafka.tools.MessageFormatter
 import java.io.PrintStream
 import org.apache.kafka.common.protocol.types.{Struct, Schema, Field}
 import org.apache.kafka.common.protocol.types.Type.STRING
@@ -247,7 +247,7 @@ class OffsetManager(val config: OffsetManagerConfig,
    * Asynchronously read the partition from the offsets topic and populate the cache
    */
   def loadOffsetsFromLog(offsetsPartition: Int) {
-    
+
     val topicPartition = TopicAndPartition(OffsetManager.OffsetsTopicName, offsetsPartition)
 
     loadingPartitions synchronized {
@@ -477,4 +477,3 @@ case class GroupTopicPartition(group: String, topicPartition: TopicAndPartition)
     "[%s,%s,%d]".format(group, topicPartition.topic, topicPartition.partition)
 
 }
-

@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.perf
+package kafka.tools
 
 import kafka.metrics.KafkaMetricsReporter
 import kafka.producer.{OldProducer, NewShinyProducer}

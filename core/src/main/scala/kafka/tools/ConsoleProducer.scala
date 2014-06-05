@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -15,12 +15,13 @@
  * limitations under the License.
  */
 
-package kafka.producer
+package kafka.tools
 
 import kafka.common._
 import kafka.message._
 import kafka.serializer._
 import kafka.utils.CommandLineUtils
+import kafka.producer.{NewShinyProducer,OldProducer,KeyedMessage}
 
 import java.util.Properties
 import java.io._
@@ -29,7 +30,7 @@ import joptsimple._
 
 object ConsoleProducer {
 
-  def main(args: Array[String]) { 
+  def main(args: Array[String]) {
 
     val config = new ProducerConfig(args)
     val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[MessageReader]

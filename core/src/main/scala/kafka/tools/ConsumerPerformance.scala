@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.perf
+package kafka.tools
 
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicLong

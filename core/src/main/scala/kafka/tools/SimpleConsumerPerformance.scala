@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.perf
+package kafka.tools
 
 import java.net.URI
 import java.text.SimpleDateFormat
@@ -74,17 +74,17 @@ object SimpleConsumerPerformance {
         messagesRead += 1
         bytesRead += message.message.payloadSize
       }
-      
+
       if(messagesRead == 0 || totalMessagesRead > config.numMessages)
         done = true
       else
         // we only did one fetch so we find the offset for the first (head) messageset
         offset += messageSet.validBytes
-      
+
       totalBytesRead += bytesRead
       totalMessagesRead += messagesRead
       consumedInterval += messagesRead
-      
+
       if(consumedInterval > config.reportingInterval) {
         if(config.showDetailedStats) {
           val reportTime = System.currentTimeMillis

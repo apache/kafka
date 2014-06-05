@@ -5,9 +5,9 @@
 # The ASF licenses this file to You under the Apache License, Version 2.0
 # (the "License"); you may not use this file except in compliance with
 # the License.  You may obtain a copy of the License at
-# 
+#
 #    http://www.apache.org/licenses/LICENSE-2.0
-# 
+#
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -17,7 +17,7 @@
 # ===========
 # run-test.sh
 # ===========
- 
+
 # ====================================
 # Do not change the followings
 # (keep this section at the beginning
@@ -52,9 +52,9 @@ readonly source_console_consumer_grp=source
 readonly target_console_consumer_grp=target
 readonly message_size=100
 readonly console_consumer_timeout_ms=15000
-readonly num_kafka_source_server=4                   # requires same no. of property files such as: 
+readonly num_kafka_source_server=4                   # requires same no. of property files such as:
                                                      # $base_dir/config/server_source{1..4}.properties
-readonly num_kafka_target_server=3                   # requires same no. of property files such as: 
+readonly num_kafka_target_server=3                   # requires same no. of property files such as:
                                                      # $base_dir/config/server_target{1..3}.properties
 readonly num_kafka_mirror_maker=3                    # any values greater than 0
 readonly wait_time_after_killing_broker=0            # wait after broker is stopped but before starting again
@@ -65,8 +65,8 @@ readonly wait_time_after_restarting_broker=10
 # ====================================
 num_msg_per_batch=500                                # no. of msg produced in each calling of ProducerPerformance
 num_producer_threads=5                               # no. of producer threads to send msg
-producer_sleep_min=5                                 # min & max sleep time (in sec) between each 
-producer_sleep_max=5                                 # batch of messages sent from producer 
+producer_sleep_min=5                                 # min & max sleep time (in sec) between each
+producer_sleep_max=5                                 # batch of messages sent from producer
 
 # ====================================
 # zookeeper
@@ -255,7 +255,7 @@ create_topic() {
         --topic $this_topic_to_create \
         --zookeeper $this_zk_conn_str \
         --replica $this_replica_factor \
-        2> $kafka_topic_creation_log_file 
+        2> $kafka_topic_creation_log_file
 }
 
 # =========================================
@@ -281,7 +281,7 @@ start_zk() {
 start_source_servers_cluster() {
     info "starting source cluster"
 
-    for ((i=1; i<=$num_kafka_source_server; i++)) 
+    for ((i=1; i<=$num_kafka_source_server; i++))
     do
         start_source_server $i
     done
@@ -367,13 +367,13 @@ start_console_consumer() {
 
     info "starting console consumers for $this_consumer_grp"
 
-    $base_dir/bin/kafka-run-class.sh kafka.consumer.ConsoleConsumer \
+    $base_dir/bin/kafka-run-class.sh kafka.tools.ConsoleConsumer \
         --zookeeper localhost:$this_consumer_zk_port \
         --topic $test_topic \
         --group $this_consumer_grp \
         --from-beginning \
         --consumer-timeout-ms $console_consumer_timeout_ms \
-        --formatter "kafka.consumer.ConsoleConsumer\$${this_msg_formatter}" \
+        --formatter "kafka.tools.ConsoleConsumer\$${this_msg_formatter}" \
         2>&1 > ${this_consumer_log} &
     console_consumer_pid=$!
 
@@ -448,7 +448,7 @@ start_background_producer() {
 
         info "producing $num_msg_per_batch messages on topic '$topic'"
         $base_dir/bin/kafka-run-class.sh \
-            kafka.perf.ProducerPerformance \
+            kafka.tools.ProducerPerformance \
             --brokerinfo zk.connect=localhost:2181 \
             --topics $topic \
             --messages $num_msg_per_batch \
@@ -499,7 +499,7 @@ cmp_checksum() {
 
     crc_only_in_producer=`comm -23 $producer_performance_mid_sorted_uniq_log $console_consumer_source_mid_sorted_uniq_log`
 
-    duplicate_mirror_mid=`comm -23 $console_consumer_target_mid_sorted_log $console_consumer_target_mid_sorted_uniq_log` 
+    duplicate_mirror_mid=`comm -23 $console_consumer_target_mid_sorted_log $console_consumer_target_mid_sorted_uniq_log`
     no_of_duplicate_msg=$(( $msg_count_from_mirror_consumer - $uniq_msg_count_from_mirror_consumer \
                           + $msg_count_from_source_consumer - $uniq_msg_count_from_source_consumer - \
                           2*$duplicate_msg_in_producer ))
@@ -521,19 +521,19 @@ cmp_checksum() {
     echo ""
 
     echo "========================================================" >> $checksum_diff_log
-    echo "crc only in producer"                                     >> $checksum_diff_log 
+    echo "crc only in producer"                                     >> $checksum_diff_log
     echo "========================================================" >> $checksum_diff_log
-    echo "${crc_only_in_producer}"                                  >> $checksum_diff_log 
+    echo "${crc_only_in_producer}"                                  >> $checksum_diff_log
     echo ""                                                         >> $checksum_diff_log
     echo "========================================================" >> $checksum_diff_log
-    echo "crc only in source consumer"                              >> $checksum_diff_log 
+    echo "crc only in source consumer"                              >> $checksum_diff_log
     echo "========================================================" >> $checksum_diff_log
-    echo "${crc_only_in_source_consumer}"                           >> $checksum_diff_log 
+    echo "${crc_only_in_source_consumer}"                           >> $checksum_diff_log
     echo ""                                                         >> $checksum_diff_log
     echo "========================================================" >> $checksum_diff_log
     echo "crc only in mirror consumer"                              >> $checksum_diff_log
     echo "========================================================" >> $checksum_diff_log
-    echo "${crc_only_in_mirror_consumer}"                           >> $checksum_diff_log   
+    echo "${crc_only_in_mirror_consumer}"                           >> $checksum_diff_log
     echo ""                                                         >> $checksum_diff_log
     echo "========================================================" >> $checksum_diff_log
     echo "duplicate crc in mirror consumer"                         >> $checksum_diff_log
@@ -583,8 +583,8 @@ start_test() {
 
     info "Started background producer pid [${background_producer_pid}]"
     sleep 5
-   
-    # loop for no. of iterations specified in $num_iterations 
+
+    # loop for no. of iterations specified in $num_iterations
     while [ $num_iterations -ge $iter ]
     do
         # if $svr_to_bounce is '0', it means no bouncing

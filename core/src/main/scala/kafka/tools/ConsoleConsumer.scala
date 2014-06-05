@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.consumer
+package kafka.tools
 
 import scala.collection.JavaConversions._
 import org.I0Itec.zkclient._
@@ -27,7 +27,7 @@ import kafka.message._
 import kafka.serializer._
 import kafka.utils._
 import kafka.metrics.KafkaMetricsReporter
-
+import kafka.consumer.{Blacklist,Whitelist,ConsumerConfig,Consumer}
 
 /**
  * Consumer that dumps messages out to standard out.
