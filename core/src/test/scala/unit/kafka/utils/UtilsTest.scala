@@ -64,6 +64,15 @@ class UtilsTest extends JUnitSuite {
       assertTrue(Arrays.equals(bytes, Utils.readBytes(ByteBuffer.wrap(bytes))))
     }
   }
+
+  @Test
+  def testAbs() {
+    assertEquals(0, Utils.abs(Integer.MIN_VALUE))
+    assertEquals(1, Utils.abs(-1))
+    assertEquals(0, Utils.abs(0))
+    assertEquals(1, Utils.abs(1))
+    assertEquals(Integer.MAX_VALUE, Utils.abs(Integer.MAX_VALUE))
+  }
   
   @Test
   def testReplaceSuffix() {
