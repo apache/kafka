@@ -122,6 +122,16 @@ public class MemoryRecords implements Records {
     public int sizeInBytes() {
         return compressor.buffer().position();
     }
+    
+    /**
+     * The compression rate of this record set
+     */
+    public double compressionRate() {
+        if (compressor == null)
+            return 1.0;
+        else
+            return compressor.compressionRate();
+    }
 
     /**
      * Return the capacity of the buffer

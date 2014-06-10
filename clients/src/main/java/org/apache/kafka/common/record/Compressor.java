@@ -80,6 +80,14 @@ public class Compressor {
     public ByteBuffer buffer() {
         return bufferStream.buffer();
     }
+    
+    public double compressionRate() {
+        ByteBuffer buffer = bufferStream.buffer();
+        if (this.writtenUncompressed == 0)
+            return 1.0;
+        else
+            return (double) buffer.position() / this.writtenUncompressed;
+    }
 
     public void close() {
         try {
