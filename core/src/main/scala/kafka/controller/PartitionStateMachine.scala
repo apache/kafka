@@ -22,7 +22,7 @@ import collection.mutable.Buffer
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.api.LeaderAndIsr
 import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateChangeFailedException, NoReplicaOnlineException}
-import kafka.utils.{Logging, ZkUtils}
+import kafka.utils.{Logging, ZkUtils, ReplicationUtils}
 import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.apache.log4j.Logger
@@ -336,7 +336,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         val (leaderAndIsr, replicas) = leaderSelector.selectLeader(topicAndPartition, currentLeaderAndIsr)
         val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(zkClient,
           ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
-          ZkUtils.leaderAndIsrZkData(leaderAndIsr, controller.epoch), currentLeaderAndIsr.zkVersion)
+          ZkUtils.leaderAndIsrZkData(leaderAndIsr, controller.epoch), currentLeaderAndIsr.zkVersion,Some(ReplicationUtils.checkLeaderAndIsrZkData))
         newLeaderAndIsr = leaderAndIsr
         newLeaderAndIsr.zkVersion = newVersion
         zookeeperPathUpdateSucceeded = updateSucceeded
@@ -521,5 +521,3 @@ case object NewPartition extends PartitionState { val state: Byte = 0 }
 case object OnlinePartition extends PartitionState { val state: Byte = 1 }
 case object OfflinePartition extends PartitionState { val state: Byte = 2 }
 case object NonExistentPartition extends PartitionState { val state: Byte = 3 }
-
-

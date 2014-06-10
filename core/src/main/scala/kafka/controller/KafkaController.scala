@@ -983,7 +983,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
               zkClient,
               ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
               ZkUtils.leaderAndIsrZkData(newLeaderAndIsr, epoch),
-              leaderAndIsr.zkVersion)
+              leaderAndIsr.zkVersion,Some(ReplicationUtils.checkLeaderAndIsrZkData))
             newLeaderAndIsr.zkVersion = newVersion
 
             finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(newLeaderAndIsr, epoch))
@@ -1037,7 +1037,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
             zkClient,
             ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition),
             ZkUtils.leaderAndIsrZkData(newLeaderAndIsr, epoch),
-            leaderAndIsr.zkVersion)
+            leaderAndIsr.zkVersion,Some(ReplicationUtils.checkLeaderAndIsrZkData))
           newLeaderAndIsr.zkVersion = newVersion
           finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(newLeaderAndIsr, epoch))
           if (updateSucceeded)
@@ -1334,6 +1334,16 @@ case class LeaderIsrAndControllerEpoch(val leaderAndIsr: LeaderAndIsr, controlle
     leaderAndIsrInfo.append(",LeaderEpoch:" + leaderAndIsr.leaderEpoch)
     leaderAndIsrInfo.append(",ControllerEpoch:" + controllerEpoch + ")")
     leaderAndIsrInfo.toString()
+  }
+
+  override def equals(obj: Any): Boolean = {
+    obj match {
+      case null => false
+      case n: LeaderIsrAndControllerEpoch =>
+        leaderAndIsr.leader == n.leaderAndIsr.leader && leaderAndIsr.isr.sorted == n.leaderAndIsr.isr.sorted &&
+        leaderAndIsr.leaderEpoch == n.leaderAndIsr.leaderEpoch && controllerEpoch == n.controllerEpoch
+      case _ => false
+    }
   }
 }
 

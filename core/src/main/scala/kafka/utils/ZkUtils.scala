@@ -20,7 +20,8 @@ package kafka.utils
 import kafka.cluster.{Broker, Cluster}
 import kafka.consumer.TopicCount
 import org.I0Itec.zkclient.{IZkDataListener, ZkClient}
-import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException, ZkMarshallingError}
+import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException,
+  ZkMarshallingError, ZkBadVersionException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
 import collection._
 import kafka.api.LeaderAndIsr
@@ -58,7 +59,7 @@ object ZkUtils extends Logging {
     getTopicPath(topic) + "/partitions"
   }
 
-  def getTopicConfigPath(topic: String): String = 
+  def getTopicConfigPath(topic: String): String =
     TopicConfigPath + "/" + topic
 
   def getDeleteTopicPath(topic: String): String =
@@ -91,7 +92,7 @@ object ZkUtils extends Logging {
     val leaderAndIsrOpt = leaderAndIsrInfo._1
     val stat = leaderAndIsrInfo._2
     leaderAndIsrOpt match {
-      case Some(leaderAndIsrStr) => parseLeaderAndIsr(leaderAndIsrStr, topic, partition, stat)
+      case Some(leaderAndIsrStr) => ReplicationUtils.parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat)
       case None => None
     }
   }
@@ -99,27 +100,10 @@ object ZkUtils extends Logging {
   def getLeaderAndIsrForPartition(zkClient: ZkClient, topic: String, partition: Int):Option[LeaderAndIsr] = {
     getLeaderIsrAndEpochForPartition(zkClient, topic, partition).map(_.leaderAndIsr)
   }
-  
+
   def setupCommonPaths(zkClient: ZkClient) {
     for(path <- Seq(ConsumersPath, BrokerIdsPath, BrokerTopicsPath, TopicConfigChangesPath, TopicConfigPath, DeleteTopicsPath))
       makeSurePersistentPathExists(zkClient, path)
-  }
-
-  def parseLeaderAndIsr(leaderAndIsrStr: String, topic: String, partition: Int, stat: Stat)
-  : Option[LeaderIsrAndControllerEpoch] = {
-    Json.parseFull(leaderAndIsrStr) match {
-      case Some(m) =>
-        val leaderIsrAndEpochInfo = m.asInstanceOf[Map[String, Any]]
-        val leader = leaderIsrAndEpochInfo.get("leader").get.asInstanceOf[Int]
-        val epoch = leaderIsrAndEpochInfo.get("leader_epoch").get.asInstanceOf[Int]
-        val isr = leaderIsrAndEpochInfo.get("isr").get.asInstanceOf[List[Int]]
-        val controllerEpoch = leaderIsrAndEpochInfo.get("controller_epoch").get.asInstanceOf[Int]
-        val zkPathVersion = stat.getVersion
-        debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for partition [%s,%d]".format(leader, epoch,
-          isr.toString(), zkPathVersion, topic, partition))
-        Some(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, zkPathVersion), controllerEpoch))
-      case None => None
-    }
   }
 
   def getLeaderForPartition(zkClient: ZkClient, topic: String, partition: Int): Option[Int] = {
@@ -380,16 +364,26 @@ object ZkUtils extends Logging {
    * Conditional update the persistent path data, return (true, newVersion) if it succeeds, otherwise (the path doesn't
    * exist, the current version is not the expected version, etc.) return (false, -1)
    */
-  def conditionalUpdatePersistentPath(client: ZkClient, path: String, data: String, expectVersion: Int): (Boolean, Int) = {
+  def conditionalUpdatePersistentPath(client: ZkClient, path: String, data: String, expectVersion: Int,
+    optionalChecker:Option[(ZkClient, String,String,Int) => (Boolean,Int)] = None): (Boolean, Int) = {
     try {
       val stat = client.writeDataReturnStat(path, data, expectVersion)
       debug("Conditional update of path %s with value %s and expected version %d succeeded, returning the new version: %d"
         .format(path, data, expectVersion, stat.getVersion))
       (true, stat.getVersion)
     } catch {
-      case e: Exception =>
+      case e1: ZkBadVersionException => {
+        optionalChecker match {
+          case Some(checker) => return checker(client,path,data,expectVersion)
+          case _ => debug("Checker method is not passed skipping zkData match")
+        }
         error("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
-          expectVersion, e.getMessage))
+          expectVersion, e1.getMessage))
+        (false, -1)
+      }
+      case e2: Exception =>
+        error("Conditional update of path %s with data %s and expected version %d failed due to %s".format(path, data,
+          expectVersion, e2.getMessage))
         (false, -1)
     }
   }
@@ -428,7 +422,7 @@ object ZkUtils extends Logging {
       case e2: Throwable => throw e2
     }
   }
-  
+
   def deletePath(client: ZkClient, path: String): Boolean = {
     try {
       client.delete(path)
@@ -451,7 +445,7 @@ object ZkUtils extends Logging {
       case e2: Throwable => throw e2
     }
   }
-  
+
   def maybeDeletePath(zkUrl: String, dir: String) {
     try {
       val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)

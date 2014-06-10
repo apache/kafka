@@ -18,7 +18,7 @@ package kafka.cluster
 
 import kafka.common._
 import kafka.admin.AdminUtils
-import kafka.utils.{ZkUtils, Pool, Time, Logging}
+import kafka.utils.{ZkUtils, ReplicationUtils, Pool, Time, Logging}
 import kafka.utils.Utils.inLock
 import kafka.api.{PartitionStateInfo, LeaderAndIsr}
 import kafka.log.LogConfig
@@ -216,7 +216,7 @@ class Partition(val topic: String,
       inSyncReplicas = Set.empty[Replica]
       leaderEpoch = leaderAndIsr.leaderEpoch
       zkVersion = leaderAndIsr.zkVersion
-      
+
       leaderReplicaIdOpt.foreach { leaderReplica =>
         if (topic == OffsetManager.OffsetsTopicName &&
            /* if we are making a leader->follower transition */
@@ -261,7 +261,15 @@ class Partition(val topic: String,
             info("Expanding ISR for partition [%s,%d] from %s to %s"
                  .format(topic, partitionId, inSyncReplicas.map(_.brokerId).mkString(","), newInSyncReplicas.map(_.brokerId).mkString(",")))
             // update ISR in ZK and cache
-            updateIsr(newInSyncReplicas)
+            val (updateSucceeded,newVersion) = ReplicationUtils.updateIsr(zkClient, topic, partitionId, localBrokerId,
+              leaderEpoch, controllerEpoch, zkVersion, newInSyncReplicas)
+            if(updateSucceeded) {
+              inSyncReplicas = newInSyncReplicas
+              zkVersion = newVersion
+              trace("ISR updated to [%s] and zkVersion updated to [%d]".format(newInSyncReplicas.mkString(","), zkVersion))
+            } else {
+              info("Cached zkVersion [%d] not equal to that in zookeeper, skip updating ISR".format(zkVersion))
+            }
             replicaManager.isrExpandRate.mark()
           }
           maybeIncrementLeaderHW(leaderReplica)
@@ -325,7 +333,15 @@ class Partition(val topic: String,
             info("Shrinking ISR for partition [%s,%d] from %s to %s".format(topic, partitionId,
               inSyncReplicas.map(_.brokerId).mkString(","), newInSyncReplicas.map(_.brokerId).mkString(",")))
             // update ISR in zk and in cache
-            updateIsr(newInSyncReplicas)
+            val (updateSucceeded,newVersion) = ReplicationUtils.updateIsr(zkClient, topic, partitionId, localBrokerId,
+              leaderEpoch, controllerEpoch, zkVersion, newInSyncReplicas)
+            if(updateSucceeded) {
+              inSyncReplicas = newInSyncReplicas
+              zkVersion = newVersion
+              trace("ISR updated to [%s] and zkVersion updated to [%d]".format(newInSyncReplicas.mkString(","), zkVersion))
+            } else {
+              info("Cached zkVersion [%d] not equal to that in zookeeper, skip updating ISR".format(zkVersion))
+            }
             // we may need to increment high watermark since ISR could be down to 1
             maybeIncrementLeaderHW(leaderReplica)
             replicaManager.isrShrinkRate.mark()
@@ -370,22 +386,6 @@ class Partition(val topic: String,
           throw new NotLeaderForPartitionException("Leader not local for partition [%s,%d] on broker %d"
             .format(topic, partitionId, localBrokerId))
       }
-    }
-  }
-
-  private def updateIsr(newIsr: Set[Replica]) {
-    debug("Updated ISR for partition [%s,%d] to %s".format(topic, partitionId, newIsr.mkString(",")))
-    val newLeaderAndIsr = new LeaderAndIsr(localBrokerId, leaderEpoch, newIsr.map(r => r.brokerId).toList, zkVersion)
-    // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
-    val (updateSucceeded, newVersion) = ZkUtils.conditionalUpdatePersistentPath(zkClient,
-      ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partitionId),
-      ZkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch), zkVersion)
-    if (updateSucceeded){
-      inSyncReplicas = newIsr
-      zkVersion = newVersion
-      trace("ISR updated to [%s] and zkVersion updated to [%d]".format(newIsr.mkString(","), zkVersion))
-    } else {
-      info("Cached zkVersion [%d] not equal to that in zookeeper, skip updating ISR".format(zkVersion))
     }
   }
 
