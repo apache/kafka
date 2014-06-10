@@ -34,8 +34,8 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
   val port1 = TestUtils.choosePort()
   val port2 = TestUtils.choosePort()
 
-  val configProps1 = TestUtils.createBrokerConfig(brokerId1, port1)
-  val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2)
+  val configProps1 = TestUtils.createBrokerConfig(brokerId1, port1, false)
+  val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2, false)
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 
   var staleControllerEpochDetected = false

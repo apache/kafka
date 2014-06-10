@@ -249,22 +249,24 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
           // Move leadership serially to relinquish lock.
           inLock(controllerContext.controllerLock) {
             controllerContext.partitionLeadershipInfo.get(topicAndPartition).foreach { currLeaderIsrAndControllerEpoch =>
-              if (currLeaderIsrAndControllerEpoch.leaderAndIsr.leader == id && replicationFactor > 1) {
-                // If the broker leads the topic partition, transition the leader and update isr. Updates zk and
-                // notifies all affected brokers
-                partitionStateMachine.handleStateChanges(Set(topicAndPartition), OnlinePartition,
-                  controlledShutdownPartitionLeaderSelector)
-              } else {
-                // Stop the replica first. The state change below initiates ZK changes which should take some time
-                // before which the stop replica request should be completed (in most cases)
-                brokerRequestBatch.newBatch()
-                brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topicAndPartition.topic,
-                  topicAndPartition.partition, deletePartition = false)
-                brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement)
+              if (replicationFactor > 1) {
+                if (currLeaderIsrAndControllerEpoch.leaderAndIsr.leader == id) {
+                  // If the broker leads the topic partition, transition the leader and update isr. Updates zk and
+                  // notifies all affected brokers
+                  partitionStateMachine.handleStateChanges(Set(topicAndPartition), OnlinePartition,
+                    controlledShutdownPartitionLeaderSelector)
+                } else {
+                  // Stop the replica first. The state change below initiates ZK changes which should take some time
+                  // before which the stop replica request should be completed (in most cases)
+                  brokerRequestBatch.newBatch()
+                  brokerRequestBatch.addStopReplicaRequestForBrokers(Seq(id), topicAndPartition.topic,
+                    topicAndPartition.partition, deletePartition = false)
+                  brokerRequestBatch.sendRequestsToBrokers(epoch, controllerContext.correlationId.getAndIncrement)
 
-                // If the broker is a follower, updates the isr in ZK and notifies the current leader
-                replicaStateMachine.handleStateChanges(Set(PartitionAndReplica(topicAndPartition.topic,
-                  topicAndPartition.partition, id)), OfflineReplica)
+                  // If the broker is a follower, updates the isr in ZK and notifies the current leader
+                  replicaStateMachine.handleStateChanges(Set(PartitionAndReplica(topicAndPartition.topic,
+                    topicAndPartition.partition, id)), OfflineReplica)
+                }
               }
             }
           }

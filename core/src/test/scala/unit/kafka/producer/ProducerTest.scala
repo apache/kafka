@@ -48,10 +48,10 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   private val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
   private var servers = List.empty[KafkaServer]
 
-  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1)
+  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1, false)
   props1.put("num.partitions", "4")
   private val config1 = new KafkaConfig(props1)
-  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2)
+  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2, false)
   props2.put("num.partitions", "4")
   private val config2 = new KafkaConfig(props2)
 
@@ -314,7 +314,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     // make sure we don't wait fewer than timeoutMs
     assertTrue((t2-t1) >= timeoutMs)
   }
-  
+
   @Test
   def testSendNullMessage() {
     val producer = TestUtils.createProducer[String, String](
@@ -332,7 +332,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
         "Topic new-topic not created after timeout",
         waitTime = zookeeper.tickTime)
       TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, "new-topic", 0)
-    
+
       producer.send(new KeyedMessage[String, String]("new-topic", "key", null))
     } finally {
       producer.close()

@@ -31,7 +31,8 @@ import kafka.common.{TopicAndPartition, ErrorMapping}
 
 class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
   private var messageBytes =  new Array[Byte](2);
-  val configs = List(new KafkaConfig(TestUtils.createBrokerConfigs(1).head))
+  // turning off controlled shutdown since testProducerCanTimeout() explicitly shuts down request handler pool.
+  val configs = List(new KafkaConfig(TestUtils.createBrokerConfigs(1, false).head))
   val zookeeperConnect = TestZKUtils.zookeeperConnect
 
   @Test

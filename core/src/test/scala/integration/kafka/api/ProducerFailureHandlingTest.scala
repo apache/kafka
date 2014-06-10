@@ -50,8 +50,8 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
   private var producer3: KafkaProducer = null
   private var producer4: KafkaProducer = null
 
-  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1)
-  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2)
+  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1, false)
+  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2, false)
   props1.put("auto.create.topics.enable", "false")
   props2.put("auto.create.topics.enable", "false")
   private val config1 = new KafkaConfig(props1)

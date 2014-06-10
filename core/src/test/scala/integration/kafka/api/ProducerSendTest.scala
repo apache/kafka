@@ -45,8 +45,8 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null
 
-  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1)
-  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2)
+  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1, false)
+  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2, false)
   props1.put("num.partitions", "4")
   props2.put("num.partitions", "4")
   private val config1 = new KafkaConfig(props1)

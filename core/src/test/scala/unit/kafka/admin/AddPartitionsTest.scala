@@ -37,10 +37,10 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
   val port3 = TestUtils.choosePort()
   val port4 = TestUtils.choosePort()
 
-  val configProps1 = TestUtils.createBrokerConfig(brokerId1, port1)
-  val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2)
-  val configProps3 = TestUtils.createBrokerConfig(brokerId3, port3)
-  val configProps4 = TestUtils.createBrokerConfig(brokerId4, port4)
+  val configProps1 = TestUtils.createBrokerConfig(brokerId1, port1, false)
+  val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2, false)
+  val configProps3 = TestUtils.createBrokerConfig(brokerId3, port3, false)
+  val configProps4 = TestUtils.createBrokerConfig(brokerId4, port4, false)
 
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
   var brokers: Seq[Broker] = Seq.empty[Broker]

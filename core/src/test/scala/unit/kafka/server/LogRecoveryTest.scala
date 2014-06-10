@@ -31,7 +31,7 @@ import org.junit.Assert._
 
 class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
-  val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
+  val configs = TestUtils.createBrokerConfigs(2, false).map(new KafkaConfig(_) {
     override val replicaLagTimeMaxMs = 5000L
     override val replicaLagMaxMessages = 10L
     override val replicaFetchWaitMaxMs = 1000
@@ -52,7 +52,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   var hwFile1: OffsetCheckpoint = new OffsetCheckpoint(new File(configProps1.logDirs(0), ReplicaManager.HighWatermarkFilename))
   var hwFile2: OffsetCheckpoint = new OffsetCheckpoint(new File(configProps2.logDirs(0), ReplicaManager.HighWatermarkFilename))
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
-  
+
   override def setUp() {
     super.setUp()
 
@@ -131,7 +131,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     sendMessages(1)
     hw += 1
-      
+
     // give some time for follower 1 to record leader HW of 60
     TestUtils.waitUntilTrue(() =>
       server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw,
@@ -162,7 +162,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     sendMessages(2)
     var hw = 2L
-    
+
     // allow some time for the follower to get the leader HW
     TestUtils.waitUntilTrue(() =>
       server2.replicaManager.getReplica(topic, 0).get.highWatermark == hw,
@@ -188,7 +188,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     sendMessages(2)
     hw += 2
-    
+
     // allow some time for the follower to get the leader HW
     TestUtils.waitUntilTrue(() =>
       server1.replicaManager.getReplica(topic, 0).get.highWatermark == hw,
