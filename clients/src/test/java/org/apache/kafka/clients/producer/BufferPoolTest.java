@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.clients.producer;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import org.apache.kafka.clients.producer.internals.BufferPool;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestUtils;
+import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -26,13 +28,11 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-
-import org.apache.kafka.clients.producer.BufferExhaustedException;
-import org.apache.kafka.clients.producer.internals.BufferPool;
-import org.apache.kafka.test.TestUtils;
-import org.junit.Test;
+import static org.junit.Assert.*;
 
 public class BufferPoolTest {
+    private MockTime time = new MockTime();
+    private Metrics metrics = new Metrics(time);
 
     /**
      * Test the simple non-blocking allocation paths
@@ -41,7 +41,7 @@ public class BufferPoolTest {
     public void testSimple() throws Exception {
         int totalMemory = 64 * 1024;
         int size = 1024;
-        BufferPool pool = new BufferPool(totalMemory, size, false);
+        BufferPool pool = new BufferPool(totalMemory, size, false, metrics, time);
         ByteBuffer buffer = pool.allocate(size);
         assertEquals("Buffer size should equal requested size.", size, buffer.limit());
         assertEquals("Unallocated memory should have shrunk", totalMemory - size, pool.unallocatedMemory());
@@ -68,7 +68,7 @@ public class BufferPoolTest {
      */
     @Test(expected = IllegalArgumentException.class)
     public void testCantAllocateMoreMemoryThanWeHave() throws Exception {
-        BufferPool pool = new BufferPool(1024, 512, true);
+        BufferPool pool = new BufferPool(1024, 512, true, metrics, time);
         ByteBuffer buffer = pool.allocate(1024);
         assertEquals(1024, buffer.limit());
         pool.deallocate(buffer);
@@ -77,7 +77,7 @@ public class BufferPoolTest {
 
     @Test
     public void testNonblockingMode() throws Exception {
-        BufferPool pool = new BufferPool(2, 1, false);
+        BufferPool pool = new BufferPool(2, 1, false, metrics, time);
         pool.allocate(1);
         try {
             pool.allocate(2);
@@ -92,7 +92,7 @@ public class BufferPoolTest {
      */
     @Test
     public void testDelayedAllocation() throws Exception {
-        BufferPool pool = new BufferPool(5 * 1024, 1024, true);
+        BufferPool pool = new BufferPool(5 * 1024, 1024, true, metrics, time);
         ByteBuffer buffer = pool.allocate(1024);
         CountDownLatch doDealloc = asyncDeallocate(pool, buffer);
         CountDownLatch allocation = asyncAllocate(pool, 5 * 1024);
@@ -141,7 +141,7 @@ public class BufferPoolTest {
         final int iterations = 50000;
         final int poolableSize = 1024;
         final int totalMemory = numThreads / 2 * poolableSize;
-        final BufferPool pool = new BufferPool(totalMemory, poolableSize, true);
+        final BufferPool pool = new BufferPool(totalMemory, poolableSize, true, metrics, time);
         List<StressTestThread> threads = new ArrayList<StressTestThread>();
         for (int i = 0; i < numThreads; i++)
             threads.add(new StressTestThread(pool, iterations));

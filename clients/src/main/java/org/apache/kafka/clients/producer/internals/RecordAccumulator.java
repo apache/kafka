@@ -82,7 +82,7 @@ public final class RecordAccumulator {
         this.lingerMs = lingerMs;
         this.retryBackoffMs = retryBackoffMs;
         this.batches = new CopyOnWriteMap<TopicPartition, Deque<RecordBatch>>();
-        this.free = new BufferPool(totalSize, batchSize, blockOnBufferFull);
+        this.free = new BufferPool(totalSize, batchSize, blockOnBufferFull, metrics, time);
         this.time = time;
         registerMetrics(metrics);
     }
