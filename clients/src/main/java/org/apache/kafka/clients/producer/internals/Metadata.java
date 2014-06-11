@@ -105,8 +105,8 @@ public final class Metadata {
      * since our last update and either (1) an update has been requested or (2) the current metadata has expired (more
      * than metadataExpireMs has passed since the last refresh)
      */
-    public synchronized boolean needsUpdate(long nowMs) {
-        long msSinceLastUpdate = nowMs - this.lastRefreshMs;
+    public synchronized boolean needsUpdate(long now) {
+        long msSinceLastUpdate = now - this.lastRefreshMs;
         boolean updateAllowed = msSinceLastUpdate >= this.refreshBackoffMs;
         boolean updateNeeded = this.forceUpdate || msSinceLastUpdate >= this.metadataExpireMs;
         return updateAllowed && updateNeeded;
@@ -129,9 +129,9 @@ public final class Metadata {
     /**
      * Update the cluster metadata
      */
-    public synchronized void update(Cluster cluster, long nowMs) {
+    public synchronized void update(Cluster cluster, long now) {
         this.forceUpdate = false;
-        this.lastRefreshMs = nowMs;
+        this.lastRefreshMs = now;
         this.cluster = cluster;
         notifyAll();
         log.debug("Updated cluster metadata to {}", cluster);

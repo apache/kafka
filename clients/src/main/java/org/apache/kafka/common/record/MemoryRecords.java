@@ -1,18 +1,14 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.common.record;
 
@@ -88,14 +84,14 @@ public class MemoryRecords implements Records {
 
     /**
      * Check if we have room for a new record containing the given key/value pair
-     *
-     * Note that the return value is based on the estimate of the bytes written to the compressor,
-     * which may not be accurate if compression is really used. When this happens, the following
-     * append may cause dynamic buffer re-allocation in the underlying byte buffer stream.
+     * 
+     * Note that the return value is based on the estimate of the bytes written to the compressor, which may not be
+     * accurate if compression is really used. When this happens, the following append may cause dynamic buffer
+     * re-allocation in the underlying byte buffer stream.
      */
     public boolean hasRoomFor(byte[] key, byte[] value) {
-        return this.writable &&
-            this.capacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value);
+        return this.writable && this.capacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD +
+                                                 Record.recordSize(key, value);
     }
 
     public boolean isFull() {
@@ -169,10 +165,10 @@ public class MemoryRecords implements Records {
 
         /*
          * Read the next record from the buffer.
-         *
-         * Note that in the compressed message set, each message value size is set as the size
-         * of the un-compressed version of the message value, so when we do de-compression
-         * allocating an array of the specified size for reading compressed value data is sufficient.
+         * 
+         * Note that in the compressed message set, each message value size is set as the size of the un-compressed
+         * version of the message value, so when we do de-compression allocating an array of the specified size for
+         * reading compressed value data is sufficient.
          */
         @Override
         protected LogEntry makeNext() {

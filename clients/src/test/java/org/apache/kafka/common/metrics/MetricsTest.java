@@ -213,7 +213,7 @@ public class MetricsTest {
         public double value = 0.0;
 
         @Override
-        public double measure(MetricConfig config, long nowMs) {
+        public double measure(MetricConfig config, long now) {
             return value;
         }
 

@@ -66,9 +66,9 @@ public abstract class SampledStat implements MeasurableStat {
     }
 
     @Override
-    public double measure(MetricConfig config, long nowMs) {
-        purgeObsoleteSamples(config, nowMs);
-        return combine(this.samples, config, nowMs);
+    public double measure(MetricConfig config, long now) {
+        purgeObsoleteSamples(config, now);
+        return combine(this.samples, config, now);
     }
 
     public Sample current(long timeMs) {
@@ -77,9 +77,9 @@ public abstract class SampledStat implements MeasurableStat {
         return this.samples.get(this.current);
     }
 
-    public Sample oldest(long nowMs) {
+    public Sample oldest(long now) {
         if (samples.size() == 0)
-            this.samples.add(newSample(nowMs));
+            this.samples.add(newSample(now));
         Sample oldest = this.samples.get(0);
         for (int i = 1; i < this.samples.size(); i++) {
             Sample curr = this.samples.get(i);
@@ -91,15 +91,15 @@ public abstract class SampledStat implements MeasurableStat {
 
     protected abstract void update(Sample sample, MetricConfig config, double value, long timeMs);
 
-    public abstract double combine(List<Sample> samples, MetricConfig config, long nowMs);
+    public abstract double combine(List<Sample> samples, MetricConfig config, long now);
 
     /* Timeout any windows that have expired in the absence of any events */
-    protected void purgeObsoleteSamples(MetricConfig config, long nowMs) {
+    protected void purgeObsoleteSamples(MetricConfig config, long now) {
         long expireAge = config.samples() * config.timeWindowMs();
         for (int i = 0; i < samples.size(); i++) {
             Sample sample = this.samples.get(i);
-            if (nowMs - sample.lastWindowMs >= expireAge)
-                sample.reset(nowMs);
+            if (now - sample.lastWindowMs >= expireAge)
+                sample.reset(now);
         }
     }
 

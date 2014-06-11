@@ -13,7 +13,15 @@
 package org.apache.kafka.clients.producer.internals;
 
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
 import org.apache.kafka.clients.producer.Callback;
@@ -91,21 +99,21 @@ public final class RecordAccumulator {
         metrics.addMetric("waiting-threads",
                           "The number of user threads blocked waiting for buffer memory to enqueue their records",
                           new Measurable() {
-                              public double measure(MetricConfig config, long nowMs) {
+                              public double measure(MetricConfig config, long now) {
                                   return free.queued();
                               }
                           });
         metrics.addMetric("buffer-total-bytes",
                           "The maximum amount of buffer memory the client can use (whether or not it is currently used).",
                           new Measurable() {
-                              public double measure(MetricConfig config, long nowMs) {
+                              public double measure(MetricConfig config, long now) {
                                   return free.totalMemory();
                               }
                           });
         metrics.addMetric("buffer-available-bytes",
                           "The total amount of buffer memory that is not being used (either unallocated or in the free list).",
                           new Measurable() {
-                              public double measure(MetricConfig config, long nowMs) {
+                              public double measure(MetricConfig config, long now) {
                                   return free.availableMemory();
                               }
                           });
@@ -163,9 +171,9 @@ public final class RecordAccumulator {
     /**
      * Re-enqueue the given record batch in the accumulator to retry
      */
-    public void reenqueue(RecordBatch batch, long nowMs) {
+    public void reenqueue(RecordBatch batch, long now) {
         batch.attempts++;
-        batch.lastAttemptMs = nowMs;
+        batch.lastAttemptMs = now;
         Deque<RecordBatch> deque = dequeFor(batch.topicPartition);
         synchronized (deque) {
             deque.addFirst(batch);
@@ -175,8 +183,8 @@ public final class RecordAccumulator {
     /**
      * Get a list of nodes whose partitions are ready to be sent.
      * <p>
-     * A destination node is ready to send data if ANY one of its partition is not backing off the send
-     * and ANY of the following are true :
+     * A destination node is ready to send data if ANY one of its partition is not backing off the send and ANY of the
+     * following are true :
      * <ol>
      * <li>The record set is full
      * <li>The record set has sat in the accumulator for at least lingerMs milliseconds
@@ -185,7 +193,7 @@ public final class RecordAccumulator {
      * <li>The accumulator has been closed
      * </ol>
      */
-    public Set<Node> ready(Cluster cluster, long nowMs) {
+    public Set<Node> ready(Cluster cluster, long now) {
         Set<Node> readyNodes = new HashSet<Node>();
         boolean exhausted = this.free.queued() > 0;
 
@@ -198,9 +206,9 @@ public final class RecordAccumulator {
                 synchronized (deque) {
                     RecordBatch batch = deque.peekFirst();
                     if (batch != null) {
-                        boolean backingOff = batch.attempts > 0 && batch.lastAttemptMs + retryBackoffMs > nowMs;
+                        boolean backingOff = batch.attempts > 0 && batch.lastAttemptMs + retryBackoffMs > now;
                         boolean full = deque.size() > 1 || batch.records.isFull();
-                        boolean expired = nowMs - batch.createdMs >= lingerMs;
+                        boolean expired = now - batch.createdMs >= lingerMs;
                         boolean sendable = full || expired || exhausted || closed;
                         if (sendable && !backingOff)
                             readyNodes.add(leader);
@@ -227,18 +235,17 @@ public final class RecordAccumulator {
     }
 
     /**
-     * Drain all the data for the given nodes and collate them into a list of
-     * batches that will fit within the specified size on a per-node basis.
-     * This method attempts to avoid choosing the same topic-node over and over.
+     * Drain all the data for the given nodes and collate them into a list of batches that will fit within the specified
+     * size on a per-node basis. This method attempts to avoid choosing the same topic-node over and over.
      * 
      * @param cluster The current cluster metadata
      * @param nodes The list of node to drain
      * @param maxSize The maximum number of bytes to drain
-     * @param nowMs The current unix time in milliseconds
+     * @param now The current unix time in milliseconds
      * @return A list of {@link RecordBatch} for each node specified with total size less than the requested maxSize.
      *         TODO: There may be a starvation issue due to iteration order
      */
-    public Map<Integer, List<RecordBatch>> drain(Cluster cluster, Set<Node> nodes, int maxSize, long nowMs) {
+    public Map<Integer, List<RecordBatch>> drain(Cluster cluster, Set<Node> nodes, int maxSize, long now) {
         if (nodes.isEmpty())
             return Collections.emptyMap();
 
@@ -266,7 +273,7 @@ public final class RecordAccumulator {
                                 batch.records.close();
                                 size += batch.records.sizeInBytes();
                                 ready.add(batch);
-                                batch.drainedMs = nowMs;
+                                batch.drainedMs = now;
                             }
                         }
                     }

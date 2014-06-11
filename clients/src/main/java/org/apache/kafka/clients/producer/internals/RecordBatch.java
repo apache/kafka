@@ -42,9 +42,9 @@ public final class RecordBatch {
     private final ProduceRequestResult produceFuture;
     private final List<Thunk> thunks;
 
-    public RecordBatch(TopicPartition tp, MemoryRecords records, long nowMs) {
-        this.createdMs = nowMs;
-        this.lastAttemptMs = nowMs;
+    public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {
+        this.createdMs = now;
+        this.lastAttemptMs = now;
         this.records = records;
         this.topicPartition = tp;
         this.produceFuture = new ProduceRequestResult();

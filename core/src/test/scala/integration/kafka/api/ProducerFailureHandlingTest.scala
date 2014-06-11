@@ -127,7 +127,7 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
    * With non-exist-topic the future metadata should return ExecutionException caused by TimeoutException
    */
   @Test
-  def testNonExistTopic() {
+  def testNonExistentTopic() {
     // send a record with non-exist topic
     val record = new ProducerRecord(topic2, null, "key".getBytes, "value".getBytes)
     intercept[ExecutionException] {

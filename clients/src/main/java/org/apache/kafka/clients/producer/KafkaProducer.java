@@ -21,6 +21,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.Metadata;
 import org.apache.kafka.clients.producer.internals.Partitioner;
@@ -119,19 +120,22 @@ public class KafkaProducer implements Producer {
                                                  metrics,
                                                  time);
         List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
-        this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
-        this.sender = new Sender(new Selector(this.metrics, time),
+        this.metadata.update(Cluster.bootstrap(addresses), 0);
+
+        NetworkClient client = new NetworkClient(new Selector(this.metrics, time),
+                                                 this.metadata,
+                                                 clientId,
+                                                 config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
+                                                 config.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
+                                                 config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
+                                                 config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG));
+        this.sender = new Sender(client,
                                  this.metadata,
                                  this.accumulator,
-                                 clientId,
                                  config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG),
-                                 config.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                                  (short) parseAcks(config.getString(ProducerConfig.ACKS_CONFIG)),
                                  config.getInt(ProducerConfig.RETRIES_CONFIG),
                                  config.getInt(ProducerConfig.TIMEOUT_CONFIG),
-                                 config.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
-                                 config.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
-                                 config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
                                  this.metrics,
                                  new SystemTime());
         this.ioThread = new KafkaThread("kafka-producer-network-thread", this.sender, true);

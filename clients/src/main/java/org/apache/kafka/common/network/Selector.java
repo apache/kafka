@@ -414,8 +414,8 @@ public class Selector implements Selectable {
 
             this.bytesTransferred = this.metrics.sensor("bytes-sent-received");
             bytesTransferred.add("network-io-rate",
-                "The average number of network operations (reads or writes) on all connections per second.",
-                new Rate(new Count()));
+                                 "The average number of network operations (reads or writes) on all connections per second.",
+                                 new Rate(new Count()));
 
             this.bytesSent = this.metrics.sensor("bytes-sent", bytesTransferred);
             this.bytesSent.add("outgoing-byte-rate", "The average number of outgoing bytes sent per second to all servers.", new Rate());
@@ -429,11 +429,11 @@ public class Selector implements Selectable {
 
             this.selectTime = this.metrics.sensor("select-time");
             this.selectTime.add("select-rate",
-                "Number of times the I/O layer checked for new I/O to perform per second",
-                new Rate(new Count()));
+                                "Number of times the I/O layer checked for new I/O to perform per second",
+                                new Rate(new Count()));
             this.selectTime.add("io-wait-time-ns-avg",
-                "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.",
-                new Avg());
+                                "The average length of time the I/O thread spent waiting for a socket ready for reads or writes in nanoseconds.",
+                                new Avg());
             this.selectTime.add("io-wait-ratio", "The fraction of time the I/O thread spent waiting.", new Rate(TimeUnit.NANOSECONDS));
 
             this.ioTime = this.metrics.sensor("io-time");
@@ -441,7 +441,7 @@ public class Selector implements Selectable {
             this.ioTime.add("io-ratio", "The fraction of time the I/O thread spent doing I/O", new Rate(TimeUnit.NANOSECONDS));
 
             this.metrics.addMetric("connection-count", "The current number of active connections.", new Measurable() {
-                public double measure(MetricConfig config, long nowMs) {
+                public double measure(MetricConfig config, long now) {
                     return keys.size();
                 }
             });
@@ -456,7 +456,9 @@ public class Selector implements Selectable {
                 if (nodeRequest == null) {
                     nodeRequest = this.metrics.sensor(nodeRequestName);
                     nodeRequest.add("node-" + node + ".outgoing-byte-rate", new Rate());
-                    nodeRequest.add("node-" + node + ".request-rate", "The average number of requests sent per second.", new Rate(new Count()));
+                    nodeRequest.add("node-" + node + ".request-rate",
+                                    "The average number of requests sent per second.",
+                                    new Rate(new Count()));
                     nodeRequest.add("node-" + node + ".request-size-avg", "The average size of all requests in the window..", new Avg());
                     nodeRequest.add("node-" + node + ".request-size-max", "The maximum size of any request sent in the window.", new Max());
 
@@ -464,8 +466,8 @@ public class Selector implements Selectable {
                     Sensor nodeResponse = this.metrics.sensor(nodeResponseName);
                     nodeResponse.add("node-" + node + ".incoming-byte-rate", new Rate());
                     nodeResponse.add("node-" + node + ".response-rate",
-                        "The average number of responses received per second.",
-                        new Rate(new Count()));
+                                     "The average number of responses received per second.",
+                                     new Rate(new Count()));
 
                     String nodeTimeName = "node-" + node + ".latency";
                     Sensor nodeRequestTime = this.metrics.sensor(nodeTimeName);
@@ -476,22 +478,24 @@ public class Selector implements Selectable {
         }
 
         public void recordBytesSent(int node, int bytes) {
-            long nowMs = time.milliseconds();
-            this.bytesSent.record(bytes, nowMs);
+            long now = time.milliseconds();
+            this.bytesSent.record(bytes, now);
             if (node >= 0) {
                 String nodeRequestName = "node-" + node + ".bytes-sent";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
-                if (nodeRequest != null) nodeRequest.record(bytes, nowMs);
+                if (nodeRequest != null)
+                    nodeRequest.record(bytes, now);
             }
         }
 
         public void recordBytesReceived(int node, int bytes) {
-            long nowMs = time.milliseconds();
-            this.bytesReceived.record(bytes, nowMs);
+            long now = time.milliseconds();
+            this.bytesReceived.record(bytes, now);
             if (node >= 0) {
                 String nodeRequestName = "node-" + node + ".bytes-received";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
-                if (nodeRequest != null) nodeRequest.record(bytes, nowMs);
+                if (nodeRequest != null)
+                    nodeRequest.record(bytes, now);
             }
         }
     }

@@ -10,34 +10,22 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.apache.kafka.common.metrics.stats;
-
-import org.apache.kafka.common.metrics.MeasurableStat;
-import org.apache.kafka.common.metrics.MetricConfig;
+package org.apache.kafka.clients;
 
 /**
- * An un-windowed cumulative total maintained over all time.
+ * The state of our connection to a node
  */
-public class Total implements MeasurableStat {
+final class NodeConnectionState {
 
-    private double total;
+    ConnectionState state;
+    long lastConnectAttemptMs;
 
-    public Total() {
-        this.total = 0.0;
+    public NodeConnectionState(ConnectionState state, long lastConnectAttempt) {
+        this.state = state;
+        this.lastConnectAttemptMs = lastConnectAttempt;
     }
 
-    public Total(double value) {
-        this.total = value;
+    public String toString() {
+        return "NodeState(" + state + ", " + lastConnectAttemptMs + ")";
     }
-
-    @Override
-    public void record(MetricConfig config, double value, long now) {
-        this.total += value;
-    }
-
-    @Override
-    public double measure(MetricConfig config, long now) {
-        return this.total;
-    }
-
 }

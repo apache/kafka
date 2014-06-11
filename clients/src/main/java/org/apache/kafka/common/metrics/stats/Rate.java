@@ -56,9 +56,9 @@ public class Rate implements MeasurableStat {
     }
 
     @Override
-    public double measure(MetricConfig config, long nowMs) {
-        double value = stat.measure(config, nowMs);
-        double elapsed = convert(nowMs - stat.oldest(nowMs).lastWindowMs);
+    public double measure(MetricConfig config, long now) {
+        double value = stat.measure(config, now);
+        double elapsed = convert(now - stat.oldest(now).lastWindowMs);
         return value / elapsed;
     }
 
@@ -95,7 +95,7 @@ public class Rate implements MeasurableStat {
         }
 
         @Override
-        public double combine(List<Sample> samples, MetricConfig config, long nowMs) {
+        public double combine(List<Sample> samples, MetricConfig config, long now) {
             double total = 0.0;
             for (int i = 0; i < samples.size(); i++)
                 total += samples.get(i).value;
