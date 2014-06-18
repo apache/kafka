@@ -105,13 +105,9 @@ object ReplayLogProducer extends Logging {
     val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
 
     val options = parser.parse(args : _*)
-    for(arg <- List(brokerListOpt, inputTopicOpt)) {
-      if(!options.has(arg)) {
-        System.err.println("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    
+    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, inputTopicOpt)
+
     val zkConnect = options.valueOf(zkConnectOpt)
     val brokerList = options.valueOf(brokerListOpt)
     val numMessages = options.valueOf(numMessagesOpt).intValue
@@ -121,7 +117,7 @@ object ReplayLogProducer extends Logging {
     val reportingInterval = options.valueOf(reportingIntervalOpt).intValue
     val isSync = options.has(syncOpt)
     import scala.collection.JavaConversions._
-    val producerProps = CommandLineUtils.parseCommandLineArgs(options.valuesOf(propertyOpt))
+    val producerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt))
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
   }
 

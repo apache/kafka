@@ -25,37 +25,49 @@ import scala.collection.Set
  */
 object CommandLineUtils extends Logging {
 
+  /**
+   * Check that all the listed options are present
+   */
   def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
     for(arg <- required) {
-      if(!options.has(arg)) {
-        System.err.println("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
+      if(!options.has(arg))
+        printUsageAndDie(parser, "Missing required argument \"" + arg + "\"")
+    }
+  }
+  
+  /**
+   * Check that none of the listed options are present
+   */
+  def checkInvalidArgs(parser: OptionParser, options: OptionSet, usedOption: OptionSpec[_], invalidOptions: Set[OptionSpec[_]]) {
+    if(options.has(usedOption)) {
+      for(arg <- invalidOptions) {
+        if(options.has(arg))
+          printUsageAndDie(parser, "Option \"" + usedOption + "\" can't be used with option\"" + arg + "\"")
       }
     }
   }
   
-  def checkInvalidArgs(parser: OptionParser, options: OptionSet, usedOption: OptionSpec[_], invalidOptions: Set[OptionSpec[_]]) {
-    if(options.has(usedOption)) {
-      for(arg <- invalidOptions) {
-        if(options.has(arg)) {
-          System.err.println("Option \"" + usedOption + "\" can't be used with option\"" + arg + "\"")
-          parser.printHelpOn(System.err)
-          System.exit(1)
-        }
-      }
-    }
+  /**
+   * Print usage and exit
+   */
+  def printUsageAndDie(parser: OptionParser, message: String) {
+    System.err.println(message)
+    parser.printHelpOn(System.err)
+    System.exit(1)
   }
 
-   def parseCommandLineArgs(args: Iterable[String]): Properties = {
-     val splits = args.map(_ split "=").filterNot(_ == null).filterNot(_.length == 0)
-     if(!splits.forall(_.length == 2)) {
-       System.err.println("Invalid command line properties: " + args.mkString(" "))
-       System.exit(1)
-     }
-     val props = new Properties
-     for(a <- splits)
-       props.put(a(0), a(1))
-     props
-   }
- }
+  /**
+   * Parse key-value pairs in the form key=value
+   */
+  def parseKeyValueArgs(args: Iterable[String]): Properties = {
+    val splits = args.map(_ split "=").filterNot(_ == null).filterNot(_.length == 0)
+    if(!splits.forall(_.length == 2)) {
+      System.err.println("Invalid command line properties: " + args.mkString(" "))
+      System.exit(1)
+    }
+    val props = new Properties
+    for(a <- splits)
+      props.put(a(0), a(1))
+    props
+  }
+}

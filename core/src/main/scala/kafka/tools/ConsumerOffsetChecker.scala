@@ -123,6 +123,9 @@ object ConsumerOffsetChecker extends Logging {
 
     parser.accepts("broker-info", "Print broker info")
     parser.accepts("help", "Print this message.")
+    
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "Check the offset of your consumers.")
 
     val options = parser.parse(args : _*)
 
@@ -131,12 +134,7 @@ object ConsumerOffsetChecker extends Logging {
        System.exit(0)
     }
 
-    for (opt <- List(groupOpt, zkConnectOpt))
-      if (!options.has(opt)) {
-        System.err.println("Missing required argument: %s".format(opt))
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
+    CommandLineUtils.checkRequiredArgs(parser, options, groupOpt, zkConnectOpt)
 
     val zkConnect = options.valueOf(zkConnectOpt)
 

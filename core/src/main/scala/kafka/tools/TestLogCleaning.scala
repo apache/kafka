@@ -87,15 +87,15 @@ object TestLogCleaning {
     
     val options = parser.parse(args:_*)
     
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "An integration test for log cleaning.")
+    
     if(options.has(dumpOpt)) {
       dumpLog(new File(options.valueOf(dumpOpt)))
       System.exit(0)
     }
     
-    if(!options.has(brokerOpt) || !options.has(zkConnectOpt) || !options.has(numMessagesOpt)) {
-      parser.printHelpOn(System.err)
-      System.exit(1)
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, brokerOpt, zkConnectOpt, numMessagesOpt)
     
     // parse options
     val messages = options.valueOf(numMessagesOpt).longValue

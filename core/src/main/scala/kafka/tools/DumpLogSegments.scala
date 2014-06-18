@@ -41,13 +41,13 @@ object DumpLogSegments {
                                   .ofType(classOf[java.lang.Integer])
                                   .defaultsTo(5 * 1024 * 1024)
     val deepIterationOpt = parser.accepts("deep-iteration", "if set, uses deep instead of shallow iteration")
+    
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "Parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
 
     val options = parser.parse(args : _*)
-    if(!options.has(filesOpt)) {
-      System.err.println("Missing required argument \"" + filesOpt + "\"")
-      parser.printHelpOn(System.err)
-      System.exit(1)
-    }
+    
+    CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
 
     val print = if(options.has(printOpt)) true else false
     val verifyOnly = if(options.has(verifyOpt)) true else false

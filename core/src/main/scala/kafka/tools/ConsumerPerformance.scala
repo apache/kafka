@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
 import org.apache.log4j.Logger
 import kafka.message.Message
-import kafka.utils.ZkUtils
+import kafka.utils.{ZkUtils, CommandLineUtils}
 import java.util.{ Random, Properties }
 import kafka.consumer._
 import java.text.SimpleDateFormat
@@ -120,13 +120,7 @@ object ConsumerPerformance {
 
     val options = parser.parse(args: _*)
 
-    for (arg <- List(topicOpt, zkConnectOpt)) {
-      if (!options.has(arg)) {
-        System.err.println("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, zkConnectOpt)
 
     val props = new Properties
     props.put("group.id", options.valueOf(groupIdOpt))

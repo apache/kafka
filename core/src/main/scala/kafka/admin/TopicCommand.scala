@@ -35,13 +35,13 @@ object TopicCommand {
     
     val opts = new TopicCommandOptions(args)
     
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(opts.parser, "Create, delete, describe, or change a topic.")
+    
     // should have exactly one action
     val actions = Seq(opts.createOpt, opts.listOpt, opts.alterOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has _)
-    if(actions != 1) {
-      System.err.println("Command must include exactly one action: --list, --describe, --create, --alter or --delete")
-      opts.parser.printHelpOn(System.err)
-      System.exit(1)
-    }
+    if(actions != 1) 
+      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete")
 
     opts.checkArgs()
 

@@ -141,13 +141,8 @@ object SimpleConsumerPerformance {
 
     val options = parser.parse(args : _*)
 
-    for(arg <- List(topicOpt, urlOpt)) {
-      if(!options.has(arg)) {
-        System.err.println("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, urlOpt)
+
     val url = new URI(options.valueOf(urlOpt))
     val fetchSize = options.valueOf(fetchSizeOpt).intValue
     val fromLatest = options.has(resetBeginningOffsetOpt)

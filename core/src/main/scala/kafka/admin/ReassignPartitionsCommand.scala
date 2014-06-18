@@ -31,10 +31,8 @@ object ReassignPartitionsCommand extends Logging {
 
     // should have exactly one action
     val actions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt).count(opts.options.has _)
-    if(actions != 1) {
-      opts.parser.printHelpOn(System.err)
-      Utils.croak("Command must include exactly one action: --generate, --execute or --verify")
-    }
+    if(actions != 1)
+      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --generate, --execute or --verify")
 
     CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.zkConnectOpt)
 
@@ -58,10 +56,8 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def verifyAssignment(zkClient: ZkClient, opts: ReassignPartitionsCommandOptions) {
-    if(!opts.options.has(opts.reassignmentJsonFileOpt)) {
-      opts.parser.printHelpOn(System.err)
-      Utils.croak("If --verify option is used, command must include --reassignment-json-file that was used during the --execute option")
-    }
+    if(!opts.options.has(opts.reassignmentJsonFileOpt))
+      CommandLineUtils.printUsageAndDie(opts.parser, "If --verify option is used, command must include --reassignment-json-file that was used during the --execute option")
     val jsonFile = opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val jsonString = Utils.readFileAsString(jsonFile)
     val partitionsToBeReassigned = ZkUtils.parsePartitionReassignmentData(jsonString)
@@ -81,10 +77,8 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def generateAssignment(zkClient: ZkClient, opts: ReassignPartitionsCommandOptions) {
-    if(!(opts.options.has(opts.topicsToMoveJsonFileOpt) && opts.options.has(opts.brokerListOpt))) {
-      opts.parser.printHelpOn(System.err)
-      Utils.croak("If --generate option is used, command must include both --topics-to-move-json-file and --broker-list options")
-    }
+    if(!(opts.options.has(opts.topicsToMoveJsonFileOpt) && opts.options.has(opts.brokerListOpt)))
+      CommandLineUtils.printUsageAndDie(opts.parser, "If --generate option is used, command must include both --topics-to-move-json-file and --broker-list options")
     val topicsToMoveJsonFile = opts.options.valueOf(opts.topicsToMoveJsonFileOpt)
     val brokerListToReassign = opts.options.valueOf(opts.brokerListOpt).split(',').map(_.toInt)
     val topicsToMoveJsonString = Utils.readFileAsString(topicsToMoveJsonFile)
@@ -105,11 +99,8 @@ object ReassignPartitionsCommand extends Logging {
   }
 
   def executeAssignment(zkClient: ZkClient, opts: ReassignPartitionsCommandOptions) {
-    if(!opts.options.has(opts.reassignmentJsonFileOpt)) {
-      opts.parser.printHelpOn(System.err)
-      Utils.croak("If --execute option is used, command must include --reassignment-json-file that was output " +
-        "during the --generate option")
-    }
+    if(!opts.options.has(opts.reassignmentJsonFileOpt))
+      CommandLineUtils.printUsageAndDie(opts.parser, "If --execute option is used, command must include --reassignment-json-file that was output " + "during the --generate option")
     val reassignmentJsonFile =  opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val reassignmentJsonString = Utils.readFileAsString(reassignmentJsonFile)
     val partitionsToBeReassigned = ZkUtils.parsePartitionReassignmentData(reassignmentJsonString)
@@ -185,6 +176,9 @@ object ReassignPartitionsCommand extends Logging {
                       .withRequiredArg
                       .describedAs("brokerlist")
                       .ofType(classOf[String])
+                      
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "This command moves topic partitions between replicas.")
 
     val options = parser.parse(args : _*)
   }

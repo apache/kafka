@@ -19,7 +19,7 @@ package kafka.tools
 
 import kafka.metrics.KafkaMetricsReporter
 import kafka.producer.{OldProducer, NewShinyProducer}
-import kafka.utils.{VerifiableProperties, Logging}
+import kafka.utils.{VerifiableProperties, Logging, CommandLineUtils}
 import kafka.message.CompressionCodec
 import kafka.serializer._
 
@@ -123,13 +123,8 @@ object ProducerPerformance extends Logging {
     val useNewProducerOpt = parser.accepts("new-producer", "Use the new producer implementation.")
 
     val options = parser.parse(args: _*)
-    for (arg <- List(topicsOpt, brokerListOpt, numMessagesOpt)) {
-      if (!options.has(arg)) {
-        System.err.println("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, topicsOpt, brokerListOpt, numMessagesOpt)
+
     val topicsStr = options.valueOf(topicsOpt)
     val topics = topicsStr.split(",")
     val numMessages = options.valueOf(numMessagesOpt).longValue

@@ -57,6 +57,9 @@ object GetOffsetShell {
                            .describedAs("ms")
                            .ofType(classOf[java.lang.Integer])
                            .defaultsTo(1000)
+                           
+   if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "An interactive shell for getting consumer offsets.")
 
     val options = parser.parse(args : _*)
 

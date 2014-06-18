@@ -84,15 +84,15 @@ object ConsoleConsumer extends Logging {
       .describedAs("metrics dictory")
       .ofType(classOf[java.lang.String])
 
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
+      
     var groupIdPassed = true
     val options: OptionSet = tryParse(parser, args)
     CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
     val topicOrFilterOpt = List(topicIdOpt, whitelistOpt, blacklistOpt).filter(options.has)
-    if (topicOrFilterOpt.size != 1) {
-      error("Exactly one of whitelist/blacklist/topic is required.")
-      parser.printHelpOn(System.err)
-      System.exit(1)
-    }
+    if (topicOrFilterOpt.size != 1)
+      CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/blacklist/topic is required.")
     val topicArg = options.valueOf(topicOrFilterOpt.head)
     val filterSpec = if (options.has(blacklistOpt))
       new Blacklist(topicArg)
@@ -144,7 +144,7 @@ object ConsoleConsumer extends Logging {
     val config = new ConsumerConfig(consumerProps)
     val skipMessageOnError = if (options.has(skipMessageOnErrorOpt)) true else false
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
-    val formatterArgs = MessageFormatter.tryParseFormatterArgs(options.valuesOf(messageFormatterArgOpt))
+    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
     val maxMessages = if(options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
     val connector = Consumer.create(config)
 
@@ -214,20 +214,6 @@ object ConsoleConsumer extends Logging {
     } catch {
       case _: Throwable => false
     }
-  }
-}
-
-object MessageFormatter {
-  def tryParseFormatterArgs(args: Iterable[String]): Properties = {
-    val splits = args.map(_ split "=").filterNot(_ == null).filterNot(_.length == 0)
-    if(!splits.forall(_.length == 2)) {
-      System.err.println("Invalid parser arguments: " + args.mkString(" "))
-      System.exit(1)
-    }
-    val props = new Properties
-    for(a <- splits)
-      props.put(a(0), a(1))
-    props
   }
 }
 

@@ -83,13 +83,7 @@ object TestLinearWriteSpeed {
                           
     val options = parser.parse(args : _*)
     
-    for(arg <- List(bytesOpt, sizeOpt, filesOpt)) {
-      if(!options.has(arg)) {
-        System.err.println("Missing required argument \"" + arg + "\"") 
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, bytesOpt, sizeOpt, filesOpt)
 
     var bytesToWrite = options.valueOf(bytesOpt).longValue
     val bufferSize = options.valueOf(sizeOpt).intValue

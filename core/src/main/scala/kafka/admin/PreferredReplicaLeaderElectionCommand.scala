@@ -40,6 +40,10 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
+      
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "This tool causes leadership for each partition to be transferred back to the 'preferred replica'," + 
+                                                " it can be used to balance leadership among the servers.")
 
     val options = parser.parse(args : _*)
 

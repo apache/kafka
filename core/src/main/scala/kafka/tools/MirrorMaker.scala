@@ -95,6 +95,9 @@ object MirrorMaker extends Logging {
             .ofType(classOf[String])
 
     val helpOpt = parser.accepts("help", "Print this message.")
+    
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "Continuously copy data between two Kafka clusters.")
 
     val options = parser.parse(args : _*)
 

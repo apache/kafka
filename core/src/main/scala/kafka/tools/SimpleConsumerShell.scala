@@ -93,15 +93,12 @@ object SimpleConsumerShell extends Logging {
         "skip it instead of halt.")
     val noWaitAtEndOfLogOpt = parser.accepts("no-wait-at-logend",
         "If set, when the simple consumer reaches the end of the Log, it will stop, not waiting for new produced messages")
+        
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "A low-level tool for fetching data directly from a particular replica.")
 
     val options = parser.parse(args : _*)
-    for(arg <- List(brokerListOpt, topicOpt, partitionIdOpt)) {
-      if(!options.has(arg)) {
-        error("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    CommandLineUtils.checkRequiredArgs(parser, options, brokerListOpt, topicOpt, partitionIdOpt)
 
     val topic = options.valueOf(topicOpt)
     val partitionId = options.valueOf(partitionIdOpt).intValue()
@@ -117,7 +114,7 @@ object SimpleConsumerShell extends Logging {
     val noWaitAtEndOfLog = options.has(noWaitAtEndOfLogOpt)
 
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
-    val formatterArgs = MessageFormatter.tryParseFormatterArgs(options.valuesOf(messageFormatterArgOpt))
+    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
 
     val fetchRequestBuilder = new FetchRequestBuilder()
                        .clientId(clientId)

@@ -212,13 +212,9 @@ object ConsoleProducer {
     val useNewProducerOpt = parser.accepts("new-producer", "Use the new producer implementation.")
 
     val options = parser.parse(args : _*)
-    for(arg <- List(topicOpt, brokerListOpt)) {
-      if(!options.has(arg)) {
-        System.err.println("Missing required argument \"" + arg + "\"")
-        parser.printHelpOn(System.err)
-        System.exit(1)
-      }
-    }
+    if(args.length == 0)
+      CommandLineUtils.printUsageAndDie(parser, "Read data from standard input and publish it to Kafka.")
+    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
 
     import scala.collection.JavaConversions._
     val useNewProducer = options.has(useNewProducerOpt)
@@ -243,7 +239,7 @@ object ConsoleProducer {
     val valueEncoderClass = options.valueOf(valueEncoderOpt)
     val readerClass = options.valueOf(messageReaderOpt)
     val socketBuffer = options.valueOf(socketBufferSizeOpt)
-    val cmdLineProps = CommandLineUtils.parseCommandLineArgs(options.valuesOf(propertyOpt))
+    val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt))
     /* new producer related configs */
     val maxMemoryBytes = options.valueOf(maxMemoryBytesOpt)
     val maxPartitionMemoryBytes = options.valueOf(maxPartitionMemoryBytesOpt)
