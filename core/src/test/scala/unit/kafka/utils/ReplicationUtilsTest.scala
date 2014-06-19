@@ -17,22 +17,17 @@
 
 package kafka.utils
 
-import kafka.cluster.{Replica, Partition}
 import kafka.server.{ReplicaFetcherManager, KafkaConfig}
-import kafka.utils.TestUtils._
+import kafka.api.LeaderAndIsr
 import kafka.zk.ZooKeeperTestHarness
-import kafka.log.Log
 import kafka.common.TopicAndPartition
 import org.scalatest.junit.JUnit3Suite
 import org.junit.Assert._
 import org.junit.Test
-import org.I0Itec.zkclient.ZkClient
 import org.easymock.EasyMock
-import org.apache.log4j.Logger
 
 
 class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
-  private val logger = Logger.getLogger(classOf[UtilsTest])
   val topic = "my-topic-test"
   val partitionId = 0
   val brokerId = 1
@@ -43,7 +38,7 @@ class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
   val topicData = Json.encode(Map("controller_epoch" -> 1, "leader" -> 1,
     "versions" -> 1, "leader_epoch" -> 1,"isr" -> List(1,2)))
   val topicDataVersionMismatch = Json.encode(Map("controller_epoch" -> 1, "leader" -> 1,
-    "versions" -> 2, "leader_epoch" -> 1,"isr" -> List(2,1)))
+    "versions" -> 2, "leader_epoch" -> 1,"isr" -> List(1,2)))
   val topicDataMismatch = Json.encode(Map("controller_epoch" -> 1, "leader" -> 1,
     "versions" -> 2, "leader_epoch" -> 2,"isr" -> List(1,2)))
 
@@ -53,58 +48,48 @@ class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
     ZkUtils.createPersistentPath(zkClient,topicPath,topicData)
   }
 
-  def testCheckLeaderAndIsrZkData() {
-    //mismatched zkVersion with the same data
-    val(dataMatched1,newZkVersion1) = ReplicationUtils.checkLeaderAndIsrZkData(zkClient,topicPath,topicDataVersionMismatch,1)
-    assertTrue(dataMatched1)
-    assertEquals(newZkVersion1,0)
+  @Test
+  def testUpdateLeaderAndIsr() {
+    val configs = TestUtils.createBrokerConfigs(1).map(new KafkaConfig(_))
+    val log = EasyMock.createMock(classOf[kafka.log.Log])
+    EasyMock.expect(log.logEndOffset).andReturn(20).anyTimes()
+    EasyMock.expect(log)
+    EasyMock.replay(log)
 
-    //mismatched zkVersion and leaderEpoch
-    val(dataMatched2,newZkVersion2) = ReplicationUtils.checkLeaderAndIsrZkData(zkClient,topicPath,topicDataMismatch,1)
-    assertFalse(dataMatched2)
-    assertEquals(newZkVersion2,-1)
+    val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
+    EasyMock.expect(logManager.getLog(TopicAndPartition(topic, partitionId))).andReturn(Some(log)).anyTimes()
+    EasyMock.replay(logManager)
+
+    val replicaManager = EasyMock.createMock(classOf[kafka.server.ReplicaManager])
+    EasyMock.expect(replicaManager.config).andReturn(configs.head)
+    EasyMock.expect(replicaManager.logManager).andReturn(logManager)
+    EasyMock.expect(replicaManager.replicaFetcherManager).andReturn(EasyMock.createMock(classOf[ReplicaFetcherManager]))
+    EasyMock.expect(replicaManager.zkClient).andReturn(zkClient)
+    EasyMock.replay(replicaManager)
+
+    val replicas = List(0,1)
+
+    // regular update
+    val newLeaderAndIsr1 = new LeaderAndIsr(brokerId, leaderEpoch, replicas, 0)
+    val (updateSucceeded1,newZkVersion1) = ReplicationUtils.updateLeaderAndIsr(zkClient,
+      "my-topic-test", partitionId, newLeaderAndIsr1, controllerEpoch, 0)
+    assertTrue(updateSucceeded1)
+    assertEquals(newZkVersion1, 1)
+
+    // mismatched zkVersion with the same data
+    val newLeaderAndIsr2 = new LeaderAndIsr(brokerId, leaderEpoch, replicas, zkVersion + 1)
+    val (updateSucceeded2,newZkVersion2) = ReplicationUtils.updateLeaderAndIsr(zkClient,
+      "my-topic-test", partitionId, newLeaderAndIsr2, controllerEpoch, zkVersion + 1)
+    assertTrue(updateSucceeded2)
+    // returns true with existing zkVersion
+    assertEquals(newZkVersion2,1)
+
+    // mismatched zkVersion and leaderEpoch
+    val newLeaderAndIsr3 = new LeaderAndIsr(brokerId, leaderEpoch + 1, replicas, zkVersion + 1)
+    val (updateSucceeded3,newZkVersion3) = ReplicationUtils.updateLeaderAndIsr(zkClient,
+      "my-topic-test", partitionId, newLeaderAndIsr3, controllerEpoch, zkVersion + 1)
+    assertFalse(updateSucceeded3)
+    assertEquals(newZkVersion3,-1)
   }
-
- def testUpdateIsr() {
-   val configs = TestUtils.createBrokerConfigs(1).map(new KafkaConfig(_))
-
-   val log = EasyMock.createMock(classOf[kafka.log.Log])
-   EasyMock.expect(log.logEndOffset).andReturn(20).anyTimes()
-   EasyMock.expect(log)
-   EasyMock.replay(log)
-
-   val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
-   EasyMock.expect(logManager.getLog(TopicAndPartition(topic, partitionId))).andReturn(Some(log)).anyTimes()
-   EasyMock.replay(logManager)
-
-   val replicaManager = EasyMock.createMock(classOf[kafka.server.ReplicaManager])
-   EasyMock.expect(replicaManager.config).andReturn(configs.head)
-   EasyMock.expect(replicaManager.logManager).andReturn(logManager)
-   EasyMock.expect(replicaManager.replicaFetcherManager).andReturn(EasyMock.createMock(classOf[ReplicaFetcherManager]))
-   EasyMock.expect(replicaManager.zkClient).andReturn(zkClient)
-   EasyMock.replay(replicaManager)
-
-   val partition = new Partition(topic,0,1,new MockTime,replicaManager)
-   val replicas = Set(new Replica(1,partition),new Replica(2,partition))
-
-   // regular update
-   val (updateSucceeded1,newZkVersion1) = ReplicationUtils.updateIsr(zkClient,
-     "my-topic-test", partitionId, brokerId, leaderEpoch, controllerEpoch, 0, replicas)
-   assertTrue(updateSucceeded1)
-   assertEquals(newZkVersion1,1)
-
-   // mismatched zkVersion with the same data
-   val (updateSucceeded2,newZkVersion2) = ReplicationUtils.updateIsr(zkClient,
-     "my-topic-test", partitionId, brokerId, leaderEpoch, controllerEpoch, zkVersion + 1, replicas)
-   assertTrue(updateSucceeded2)
-   // returns true with existing zkVersion
-   assertEquals(newZkVersion2,1)
-
-   // mismatched zkVersion and leaderEpoch
-   val (updateSucceeded3,newZkVersion3) = ReplicationUtils.updateIsr(zkClient,
-     "my-topic-test", partitionId, brokerId, leaderEpoch + 1, controllerEpoch, zkVersion + 1, replicas)
-   assertFalse(updateSucceeded3)
-   assertEquals(newZkVersion3,-1)
- }
 
 }
