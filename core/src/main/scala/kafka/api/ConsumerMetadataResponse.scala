@@ -29,8 +29,9 @@ object ConsumerMetadataResponse {
   def readFrom(buffer: ByteBuffer) = {
     val correlationId = buffer.getInt
     val errorCode = buffer.getShort
+    val broker = Broker.readFrom(buffer)
     val coordinatorOpt = if (errorCode == ErrorMapping.NoError)
-      Some(Broker.readFrom(buffer))
+      Some(broker)
     else
       None
 

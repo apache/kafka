@@ -160,6 +160,11 @@ object ClientUtils extends Logging{
            debug("Consumer metadata response: " + consumerMetadataResponse.toString)
            if (consumerMetadataResponse.errorCode == ErrorMapping.NoError)
              coordinatorOpt = consumerMetadataResponse.coordinatorOpt
+           else {
+             debug("Query to %s:%d to locate offset manager for %s failed - will retry in %d milliseconds."
+                  .format(queryChannel.host, queryChannel.port, group, retryBackOffMs))
+             Thread.sleep(retryBackOffMs)
+           }
          }
          catch {
            case ioe: IOException =>
