@@ -40,7 +40,8 @@ class SocketServerTest extends JUnitSuite {
                                               maxQueuedRequests = 50,
                                               sendBufferSize = 300000,
                                               recvBufferSize = 300000,
-                                              maxRequestSize = 50)
+                                              maxRequestSize = 50,
+                                              maxConnectionsPerIp = 5)
   server.startup()
 
   def sendRequest(socket: Socket, id: Short, request: Array[Byte]) {
@@ -75,7 +76,7 @@ class SocketServerTest extends JUnitSuite {
   def cleanup() {
     server.shutdown()
   }
-
+  
   @Test
   def simpleRequest() {
     val socket = connect()
@@ -138,5 +139,20 @@ class SocketServerTest extends JUnitSuite {
     server.shutdown()
     // doing a subsequent send should throw an exception as the connection should be closed.
     sendRequest(socket, 0, bytes)
+  }
+  
+  @Test
+  def testMaxConnectionsPerIp() {
+    // make the maximum allowable number of connections and then leak them
+    val conns = (0 until server.maxConnectionsPerIp).map(i => connect())
+    
+    // now try one more (should fail)
+    try {
+      val conn = connect()
+      sendRequest(conn, 100, "hello".getBytes)
+      assertEquals(-1, conn.getInputStream().read())
+    } catch {
+      case e: IOException => // this is good
+    }
   }
 }
