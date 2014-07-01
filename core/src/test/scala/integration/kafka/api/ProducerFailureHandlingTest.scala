@@ -21,7 +21,7 @@ import org.scalatest.junit.JUnit3Suite
 import org.junit.Test
 import org.junit.Assert._
 
-import java.util.Properties
+import java.util.{Random, Properties}
 import java.lang.Integer
 import java.util.concurrent.{TimeoutException, TimeUnit, ExecutionException}
 
@@ -76,8 +76,6 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     producer1 = TestUtils.createNewProducer(brokerList, acks = 0, blockOnBufferFull = false, bufferSize = bufferSize);
     producer2 = TestUtils.createNewProducer(brokerList, acks = 1, blockOnBufferFull = false, bufferSize = bufferSize)
     producer3 = TestUtils.createNewProducer(brokerList, acks = -1, blockOnBufferFull = false, bufferSize = bufferSize)
-    // producer with incorrect broker list
-    producer4 = TestUtils.createNewProducer("localhost:8686,localhost:4242", acks = 1, blockOnBufferFull = false, bufferSize = bufferSize)
   }
 
   override def tearDown() {
@@ -150,6 +148,9 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     // create topic
     TestUtils.createTopic(zkClient, topic1, 1, 2, servers)
 
+    // producer with incorrect broker list
+    producer4 = TestUtils.createNewProducer("localhost:8686,localhost:4242", acks = 1, blockOnBufferFull = false, bufferSize = bufferSize)
+
     // send a record with incorrect broker list
     val record = new ProducerRecord(topic1, null, "key".getBytes, "value".getBytes)
     intercept[ExecutionException] {
@@ -168,28 +169,32 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     TestUtils.createTopic(zkClient, topic1, 1, 2, servers)
 
     // first send a message to make sure the metadata is refreshed
-    val record = new ProducerRecord(topic1, null, "key".getBytes, "value".getBytes)
-    producer1.send(record).get
-    producer2.send(record).get
+    val record1 = new ProducerRecord(topic1, null, "key".getBytes, "value".getBytes)
+    producer1.send(record1).get
+    producer2.send(record1).get
 
     // stop IO threads and request handling, but leave networking operational
     // any requests should be accepted and queue up, but not handled
     server1.requestHandlerPool.shutdown()
     server2.requestHandlerPool.shutdown()
 
-    producer1.send(record).get(5000, TimeUnit.MILLISECONDS)
+    producer1.send(record1).get(5000, TimeUnit.MILLISECONDS)
 
     intercept[TimeoutException] {
-      producer2.send(record).get(5000, TimeUnit.MILLISECONDS)
+      producer2.send(record1).get(5000, TimeUnit.MILLISECONDS)
     }
 
     // TODO: expose producer configs after creating them
     // send enough messages to get buffer full
-    val tooManyRecords = bufferSize / ("key".getBytes.length + "value".getBytes.length)
+    val msgSize = 10000
+    val value = new Array[Byte](msgSize)
+    new Random().nextBytes(value)
+    val record2 = new ProducerRecord(topic1, null, "key".getBytes, value)
+    val tooManyRecords = bufferSize / ("key".getBytes.length + value.length)
 
     intercept[KafkaException] {
       for (i <- 1 to tooManyRecords)
-        producer2.send(record)
+        producer2.send(record2)
     }
 
     // do not close produce2 since it will block

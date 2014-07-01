@@ -29,13 +29,15 @@ public class MemoryRecords implements Records {
 
     private final Compressor compressor;
     private final int capacity;
+    private final int sizeLimit;
     private ByteBuffer buffer;
     private boolean writable;
 
     // Construct a writable memory records
-    private MemoryRecords(ByteBuffer buffer, CompressionType type, boolean writable) {
+    private MemoryRecords(ByteBuffer buffer, CompressionType type, boolean writable, int sizeLimit) {
         this.writable = writable;
         this.capacity = buffer.capacity();
+        this.sizeLimit = sizeLimit;
         if (this.writable) {
             this.buffer = null;
             this.compressor = new Compressor(buffer, type);
@@ -45,12 +47,16 @@ public class MemoryRecords implements Records {
         }
     }
 
+    public static MemoryRecords emptyRecords(ByteBuffer buffer, CompressionType type, int capacity) {
+        return new MemoryRecords(buffer, type, true, capacity);
+    }
+
     public static MemoryRecords emptyRecords(ByteBuffer buffer, CompressionType type) {
-        return new MemoryRecords(buffer, type, true);
+        return emptyRecords(buffer, type, buffer.capacity());
     }
 
     public static MemoryRecords iterableRecords(ByteBuffer buffer) {
-        return new MemoryRecords(buffer, CompressionType.NONE, false);
+        return new MemoryRecords(buffer, CompressionType.NONE, false, buffer.capacity());
     }
 
     /**
@@ -88,14 +94,22 @@ public class MemoryRecords implements Records {
      * Note that the return value is based on the estimate of the bytes written to the compressor, which may not be
      * accurate if compression is really used. When this happens, the following append may cause dynamic buffer
      * re-allocation in the underlying byte buffer stream.
+     *
+     * Also note that besides the records' capacity, there is also a size limit for the batch. This size limit may be
+     * smaller than the capacity (e.g. when appending a single message whose size is larger than the batch size, the
+     * capacity will be the message size, but the size limit will still be the batch size), and when the records' size has
+     * exceed this limit we also mark this record as full.
      */
     public boolean hasRoomFor(byte[] key, byte[] value) {
-        return this.writable && this.capacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD +
-                                                 Record.recordSize(key, value);
+        return this.writable &&
+            this.capacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value) &&
+            this.sizeLimit >= this.compressor.estimatedBytesWritten();
     }
 
     public boolean isFull() {
-        return !this.writable || this.capacity <= this.compressor.estimatedBytesWritten();
+        return !this.writable ||
+            this.capacity <= this.compressor.estimatedBytesWritten() ||
+            this.sizeLimit <= this.compressor.estimatedBytesWritten();
     }
 
     /**

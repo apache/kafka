@@ -17,7 +17,6 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -123,13 +122,13 @@ public class Sender implements Runnable {
         // okay we stopped accepting requests but there may still be
         // requests in the accumulator or waiting for acknowledgment,
         // wait until these are completed.
-        do {
+        while (this.accumulator.hasUnsent() || this.client.inFlightRequestCount() > 0) {
             try {
                 run(time.milliseconds());
             } catch (Exception e) {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
-        } while (this.accumulator.hasUnsent() || this.client.inFlightRequestCount() > 0);
+        }
 
         this.client.close();
 
@@ -144,10 +143,14 @@ public class Sender implements Runnable {
     public void run(long now) {
         Cluster cluster = metadata.fetch();
         // get the list of partitions with data ready to send
-        Set<Node> ready = this.accumulator.ready(cluster, now);
+        RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(cluster, now);
+
+        // if there are any partitions whose leaders are not known yet, force metadata update
+        if (result.unknownLeadersExist)
+            this.metadata.forceUpdate();
 
         // remove any nodes we aren't ready to send to
-        Iterator<Node> iter = ready.iterator();
+        Iterator<Node> iter = result.readyNodes.iterator();
         while (iter.hasNext()) {
             Node node = iter.next();
             if (!this.client.ready(node, now))
@@ -155,16 +158,20 @@ public class Sender implements Runnable {
         }
 
         // create produce requests
-        Map<Integer, List<RecordBatch>> batches = this.accumulator.drain(cluster, ready, this.maxRequestSize, now);
+        Map<Integer, List<RecordBatch>> batches = this.accumulator.drain(cluster, result.readyNodes, this.maxRequestSize, now);
         List<ClientRequest> requests = createProduceRequests(batches, now);
         sensors.updateProduceRequestMetrics(requests);
 
-        if (ready.size() > 0) {
-            log.trace("Nodes with data ready to send: {}", ready);
+        if (result.readyNodes.size() > 0) {
+            log.trace("Nodes with data ready to send: {}", result.readyNodes);
             log.trace("Created {} produce requests: {}", requests.size(), requests);
         }
 
-        List<ClientResponse> responses = this.client.poll(requests, 100L, now);
+        // if some partitions are already ready to be sent, the select time would be 0;
+        // otherwise if some partition already has some data accumulated but not ready yet,
+        // the select time will be the time difference between now and its linger expiry time;
+        // otherwise the select time will be the time difference between now and the metadata expiry time;
+        List<ClientResponse> responses = this.client.poll(requests, result.nextReadyCheckDelayMs, now);
         for (ClientResponse response : responses) {
             if (response.wasDisconnected())
                 handleDisconnect(response, now);
@@ -307,6 +314,7 @@ public class Sender implements Runnable {
 
             this.batchSizeSensor = metrics.sensor("batch-size");
             this.batchSizeSensor.add("batch-size-avg", "The average number of bytes sent per partition per-request.", new Avg());
+            this.batchSizeSensor.add("batch-size-max", "The max number of bytes sent per partition per-request.", new Max());
 
             this.compressionRateSensor = metrics.sensor("compression-rate");
             this.compressionRateSensor.add("compression-rate-avg", "The average compression rate of record batches.", new Avg());

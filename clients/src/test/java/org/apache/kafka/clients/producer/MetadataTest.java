@@ -30,11 +30,11 @@ public class MetadataTest {
     public void testMetadata() throws Exception {
         long time = 0;
         metadata.update(Cluster.empty(), time);
-        assertFalse("No update needed.", metadata.needsUpdate(time));
+        assertFalse("No update needed.", metadata.timeToNextUpdate(time) == 0);
         metadata.forceUpdate();
-        assertFalse("Still no updated needed due to backoff", metadata.needsUpdate(time));
+        assertFalse("Still no updated needed due to backoff", metadata.timeToNextUpdate(time) == 0);
         time += refreshBackoffMs;
-        assertTrue("Update needed now that backoff time expired", metadata.needsUpdate(time));
+        assertTrue("Update needed now that backoff time expired", metadata.timeToNextUpdate(time) == 0);
         String topic = "my-topic";
         Thread t1 = asyncFetch(topic);
         Thread t2 = asyncFetch(topic);
@@ -43,9 +43,9 @@ public class MetadataTest {
         metadata.update(TestUtils.singletonCluster(topic, 1), time);
         t1.join();
         t2.join();
-        assertFalse("No update needed.", metadata.needsUpdate(time));
+        assertFalse("No update needed.", metadata.timeToNextUpdate(time) == 0);
         time += metadataExpireMs;
-        assertTrue("Update needed due to stale metadata.", metadata.needsUpdate(time));
+        assertTrue("Update needed due to stale metadata.", metadata.timeToNextUpdate(time) == 0);
     }
 
     private Thread asyncFetch(final String topic) {

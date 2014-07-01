@@ -128,11 +128,15 @@ class SocketServerTest extends JUnitSuite {
 
   @Test(expected = classOf[IOException])
   def testSocketsCloseOnShutdown() {
-    // open a connection and then shutdown the server
+    // open a connection
     val socket = connect()
+    val bytes = new Array[Byte](40)
+    // send a request first to make sure the connection has been picked up by the socket server
+    sendRequest(socket, 0, bytes)
+    processRequest(server.requestChannel)
+    // then shutdown the server
     server.shutdown()
     // doing a subsequent send should throw an exception as the connection should be closed.
-    val bytes = new Array[Byte](10)
     sendRequest(socket, 0, bytes)
   }
 }

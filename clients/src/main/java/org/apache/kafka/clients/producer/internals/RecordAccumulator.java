@@ -120,27 +120,29 @@ public final class RecordAccumulator {
     }
 
     /**
-     * Add a record to the accumulator.
+     * Add a record to the accumulator, return the append result
      * <p>
-     * This method will block if sufficient memory isn't available for the record unless blocking has been disabled.
-     * 
+     * The append result will contain the future metadata, and flag for whether the appended batch is full or a new batch is created
+     * <p>
+     *
      * @param tp The topic/partition to which this record is being sent
      * @param key The key for the record
      * @param value The value for the record
      * @param compression The compression codec for the record
      * @param callback The user-supplied callback to execute when the request is complete
      */
-    public FutureRecordMetadata append(TopicPartition tp, byte[] key, byte[] value, CompressionType compression, Callback callback) throws InterruptedException {
+    public RecordAppendResult append(TopicPartition tp, byte[] key, byte[] value, CompressionType compression, Callback callback) throws InterruptedException {
         if (closed)
             throw new IllegalStateException("Cannot send after the producer is closed.");
         // check if we have an in-progress batch
         Deque<RecordBatch> dq = dequeFor(tp);
         synchronized (dq) {
-            RecordBatch batch = dq.peekLast();
-            if (batch != null) {
-                FutureRecordMetadata future = batch.tryAppend(key, value, callback);
-                if (future != null)
-                    return future;
+            RecordBatch last = dq.peekLast();
+            if (last != null) {
+                FutureRecordMetadata future = last.tryAppend(key, value, callback);
+                if (future != null) {
+                    return new RecordAppendResult(future, dq.size() > 1 || last.records.isFull(), false);
+                }
             }
         }
 
@@ -156,15 +158,15 @@ public final class RecordAccumulator {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen
                     // often...
                     free.deallocate(buffer);
-                    return future;
+                    return new RecordAppendResult(future, dq.size() > 1 || last.records.isFull(), false);
                 }
             }
-            MemoryRecords records = MemoryRecords.emptyRecords(buffer, compression);
+            MemoryRecords records = MemoryRecords.emptyRecords(buffer, compression, this.batchSize);
             RecordBatch batch = new RecordBatch(tp, records, time.milliseconds());
             FutureRecordMetadata future = Utils.notNull(batch.tryAppend(key, value, callback));
 
             dq.addLast(batch);
-            return future;
+            return new RecordAppendResult(future, dq.size() > 1 || batch.records.isFull(), true);
         }
     }
 
@@ -181,7 +183,9 @@ public final class RecordAccumulator {
     }
 
     /**
-     * Get a list of nodes whose partitions are ready to be sent.
+     * Get a list of nodes whose partitions are ready to be sent, and the time to when any partition will be ready if no
+     * partitions are ready yet; If the ready nodes list is non-empty, the timeout value will be 0. Also return the flag
+     * for whether there are any unknown leaders for the accumulated partition batches.
      * <p>
      * A destination node is ready to send data if ANY one of its partition is not backing off the send and ANY of the
      * following are true :
@@ -193,31 +197,39 @@ public final class RecordAccumulator {
      * <li>The accumulator has been closed
      * </ol>
      */
-    public Set<Node> ready(Cluster cluster, long now) {
+    public ReadyCheckResult ready(Cluster cluster, long nowMs) {
         Set<Node> readyNodes = new HashSet<Node>();
-        boolean exhausted = this.free.queued() > 0;
+        long nextReadyCheckDelayMs = Long.MAX_VALUE;
+        boolean unknownLeadersExist = false;
 
+        boolean exhausted = this.free.queued() > 0;
         for (Map.Entry<TopicPartition, Deque<RecordBatch>> entry : this.batches.entrySet()) {
             TopicPartition part = entry.getKey();
             Deque<RecordBatch> deque = entry.getValue();
-            // if the leader is unknown use an Unknown node placeholder
+
             Node leader = cluster.leaderFor(part);
-            if (!readyNodes.contains(leader)) {
+            if (leader == null) {
+                unknownLeadersExist = true;
+            } else if (!readyNodes.contains(leader)) {
                 synchronized (deque) {
                     RecordBatch batch = deque.peekFirst();
                     if (batch != null) {
-                        boolean backingOff = batch.attempts > 0 && batch.lastAttemptMs + retryBackoffMs > now;
+                        boolean backingOff = batch.attempts > 0 && batch.lastAttemptMs + retryBackoffMs > nowMs;
+                        long waitedTimeMs = nowMs - batch.lastAttemptMs;
+                        long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
+                        long timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, 0);
                         boolean full = deque.size() > 1 || batch.records.isFull();
-                        boolean expired = now - batch.createdMs >= lingerMs;
+                        boolean expired = waitedTimeMs >= lingerMs;
                         boolean sendable = full || expired || exhausted || closed;
                         if (sendable && !backingOff)
                             readyNodes.add(leader);
+                        nextReadyCheckDelayMs = Math.min(timeLeftMs, nextReadyCheckDelayMs);
                     }
                 }
             }
         }
 
-        return readyNodes;
+        return new ReadyCheckResult(readyNodes, nextReadyCheckDelayMs, unknownLeadersExist);
     }
 
     /**
@@ -311,4 +323,28 @@ public final class RecordAccumulator {
         this.closed = true;
     }
 
+
+    public final static class RecordAppendResult {
+        public final FutureRecordMetadata future;
+        public final boolean batchIsFull;
+        public final boolean newBatchCreated;
+
+        public RecordAppendResult(FutureRecordMetadata future, boolean batchIsFull, boolean newBatchCreated) {
+            this.future = future;
+            this.batchIsFull = batchIsFull;
+            this.newBatchCreated = newBatchCreated;
+        }
+    }
+
+    public final static class ReadyCheckResult {
+        public final Set<Node> readyNodes;
+        public final long nextReadyCheckDelayMs;
+        public final boolean unknownLeadersExist;
+
+        public ReadyCheckResult(Set<Node> readyNodes, long nextReadyCheckDelayMs, boolean unknownLeadersExist) {
+            this.readyNodes = readyNodes;
+            this.nextReadyCheckDelayMs = nextReadyCheckDelayMs;
+            this.unknownLeadersExist = unknownLeadersExist;
+        }
+    }
 }

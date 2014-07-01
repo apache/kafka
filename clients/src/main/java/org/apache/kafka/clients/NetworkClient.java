@@ -116,7 +116,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Check if the node with the given id is ready to send more requests.
-     * @param nodeId The node id
+     * @param node The given node id
      * @param now The current time in ms
      * @return true if the node is ready
      */
@@ -126,8 +126,8 @@ public class NetworkClient implements KafkaClient {
     }
 
     private boolean isReady(int node, long now) {
-        if (this.metadata.needsUpdate(now))
-            // if we need to update our metadata declare all requests unready to metadata requests first priority
+        if (!this.metadataFetchInProgress && this.metadata.timeToNextUpdate(now) == 0)
+            // if we need to update our metadata now declare all requests unready to make metadata requests first priority
             return false;
         else
             // otherwise we are ready if we are connected and can send more requests
@@ -144,9 +144,12 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public List<ClientResponse> poll(List<ClientRequest> requests, long timeout, long now) {
-        // should we update our metadata?
         List<NetworkSend> sends = new ArrayList<NetworkSend>();
-        maybeUpdateMetadata(sends, now);
+
+        // should we update our metadata?
+        long metadataTimeout = metadata.timeToNextUpdate(now);
+        if (!this.metadataFetchInProgress && metadataTimeout == 0)
+            maybeUpdateMetadata(sends, now);
 
         for (int i = 0; i < requests.size(); i++) {
             ClientRequest request = requests.get(i);
@@ -160,7 +163,7 @@ public class NetworkClient implements KafkaClient {
 
         // do the I/O
         try {
-            this.selector.poll(timeout, sends);
+            this.selector.poll(Math.min(timeout, metadataTimeout), sends);
         } catch (IOException e) {
             log.error("Unexpected error during I/O in producer network thread", e);
         }
@@ -340,12 +343,9 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Add a metadata request to the list of sends if we need to make one
+     * Add a metadata request to the list of sends if we can make one
      */
     private void maybeUpdateMetadata(List<NetworkSend> sends, long now) {
-        if (this.metadataFetchInProgress || !metadata.needsUpdate(now))
-            return;
-
         Node node = this.leastLoadedNode(now);
         if (node == null)
             return;

@@ -21,22 +21,22 @@ import kafka.utils.{SystemTime, Utils, CommandLineUtils, Logging}
 import kafka.consumer._
 import kafka.serializer._
 import kafka.producer.{OldProducer, NewShinyProducer, BaseProducer}
+import kafka.metrics.KafkaMetricsGroup
+
 import org.apache.kafka.clients.producer.ProducerRecord
 
-import scala.collection.mutable.ListBuffer
 import scala.collection.JavaConversions._
 
-import java.util.concurrent.{TimeUnit, BlockingQueue, ArrayBlockingQueue, CountDownLatch}
-
 import joptsimple.OptionParser
-import kafka.metrics.KafkaMetricsGroup
-import com.yammer.metrics.core.Gauge
+import java.util.Random
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{TimeUnit, BlockingQueue, ArrayBlockingQueue, CountDownLatch}
 
 object MirrorMaker extends Logging {
 
   private var connectors: Seq[ZookeeperConsumerConnector] = null
   private var consumerThreads: Seq[ConsumerThread] = null
-  private var producerThreads: ListBuffer[ProducerThread] = null
+  private var producerThreads: Seq[ProducerThread] = null
 
   private val shutdownMessage : ProducerRecord = new ProducerRecord("shutdown", "shutdown".getBytes)
 
@@ -138,13 +138,7 @@ object MirrorMaker extends Logging {
     // create a data channel btw the consumers and the producers
     val mirrorDataChannel = new DataChannel(bufferSize, numConsumers, numProducers)
 
-    producerThreads = new ListBuffer[ProducerThread]()
-    var producerIndex: Int = 1
-    for(producer <- producers) {
-      val producerThread = new ProducerThread(mirrorDataChannel, producer, producerIndex)
-      producerThreads += producerThread
-      producerIndex += 1
-    }
+    producerThreads = producers.zipWithIndex.map(producerAndIndex => new ProducerThread(mirrorDataChannel, producerAndIndex._1, producerAndIndex._2))
 
     val filterSpec = if (options.has(whitelistOpt))
       new Whitelist(options.valueOf(whitelistOpt))
@@ -190,14 +184,11 @@ object MirrorMaker extends Logging {
 
   class DataChannel(capacity: Int, numProducers: Int, numConsumers: Int) extends KafkaMetricsGroup {
 
-    val queue = new ArrayBlockingQueue[ProducerRecord](capacity)
+    val queues = new Array[BlockingQueue[ProducerRecord]](numConsumers)
+    for (i <- 0 until numConsumers)
+      queues(i) = new ArrayBlockingQueue[ProducerRecord](capacity)
 
-    newGauge(
-      "MirrorMaker-DataChannel-Size",
-      new Gauge[Int] {
-        def value = queue.size
-      }
-    )
+    private val counter = new AtomicInteger(new Random().nextInt())
 
     // We use a single meter for aggregated wait percentage for the data channel.
     // Since meter is calculated as total_recorded_value / time_window and
@@ -205,23 +196,37 @@ object MirrorMaker extends Logging {
     // time should be discounted by # threads.
     private val waitPut = newMeter("MirrorMaker-DataChannel-WaitOnPut", "percent", TimeUnit.NANOSECONDS)
     private val waitTake = newMeter("MirrorMaker-DataChannel-WaitOnTake", "percent", TimeUnit.NANOSECONDS)
+    private val channelSizeHist = newHistogram("MirrorMaker-DataChannel-Size")
 
     def put(record: ProducerRecord) {
+      // If the key of the message is empty, use round-robin to select the queue
+      // Otherwise use the queue based on the key value so that same key-ed messages go to the same queue
+      val queueId =
+        if(record.key() != null) {
+          Utils.abs(java.util.Arrays.hashCode(record.key())) % numConsumers
+        } else {
+          Utils.abs(counter.getAndIncrement()) % numConsumers
+        }
+      val queue = queues(queueId)
+
       var putSucceed = false
       while (!putSucceed) {
         val startPutTime = SystemTime.nanoseconds
         putSucceed = queue.offer(record, 500, TimeUnit.MILLISECONDS)
         waitPut.mark((SystemTime.nanoseconds - startPutTime) / numProducers)
       }
+      channelSizeHist.update(queue.size)
     }
 
-    def take(): ProducerRecord = {
+    def take(queueId: Int): ProducerRecord = {
+      val queue = queues(queueId)
       var data: ProducerRecord = null
       while (data == null) {
         val startTakeTime = SystemTime.nanoseconds
         data = queue.poll(500, TimeUnit.MILLISECONDS)
         waitTake.mark((SystemTime.nanoseconds - startTakeTime) / numConsumers)
       }
+      channelSizeHist.update(queue.size)
       data
     }
   }
@@ -242,18 +247,8 @@ object MirrorMaker extends Logging {
       info("Starting mirror maker consumer thread " + threadName)
       try {
         for (msgAndMetadata <- stream) {
-          // If the key of the message is empty, put it into the universal channel
-          // Otherwise use a pre-assigned producer to send the message
-          if (msgAndMetadata.key == null) {
-            trace("Send the non-keyed message the producer channel.")
-            val data = new ProducerRecord(msgAndMetadata.topic, msgAndMetadata.message)
-            mirrorDataChannel.put(data)
-          } else {
-            val producerId = Utils.abs(java.util.Arrays.hashCode(msgAndMetadata.key)) % producers.size()
-            trace("Send message with key %s to producer %d.".format(java.util.Arrays.toString(msgAndMetadata.key), producerId))
-            val producer = producers(producerId)
-            producer.send(msgAndMetadata.topic, msgAndMetadata.key, msgAndMetadata.message)
-          }
+          val data = new ProducerRecord(msgAndMetadata.topic, msgAndMetadata.message)
+          mirrorDataChannel.put(data)
         }
       } catch {
         case e: Throwable =>
@@ -287,7 +282,7 @@ object MirrorMaker extends Logging {
       info("Starting mirror maker producer thread " + threadName)
       try {
         while (true) {
-          val data: ProducerRecord = dataChannel.take
+          val data: ProducerRecord = dataChannel.take(threadId)
           trace("Sending message with value size %d".format(data.value().size))
           if(data eq shutdownMessage) {
             info("Received shutdown message")

@@ -22,7 +22,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.Metadata;
 import org.apache.kafka.clients.producer.internals.Partitioner;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
@@ -232,10 +231,14 @@ public class KafkaProducer implements Producer {
             ensureValidRecordSize(serializedSize);
             TopicPartition tp = new TopicPartition(record.topic(), partition);
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
-            FutureRecordMetadata future = accumulator.append(tp, record.key(), record.value(), compressionType, callback);
-            this.sender.wakeup();
-            return future;
-            // For API exceptions return them in the future;
+            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, record.key(), record.value(), compressionType, callback);
+            if (result.batchIsFull || result.newBatchCreated) {
+                log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
+                this.sender.wakeup();
+            }
+            return result.future;
+            // Handling exceptions and record the errors;
+            // For API exceptions return them in the future,
             // for other exceptions throw directly
         } catch (ApiException e) {
             log.debug("Exception occurred during message send:", e);
@@ -246,6 +249,9 @@ public class KafkaProducer implements Producer {
         } catch (InterruptedException e) {
             this.errors.record();
             throw new KafkaException(e);
+        } catch (KafkaException e) {
+            this.errors.record();
+            throw e;
         }
     }
 

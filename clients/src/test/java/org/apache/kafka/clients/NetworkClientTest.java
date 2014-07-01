@@ -54,7 +54,7 @@ public class NetworkClientTest {
         client.poll(reqs, 1, time.milliseconds());
         selector.clear();
         assertFalse("After we forced the disconnection the client is no longer ready.", client.ready(node, time.milliseconds()));
-        assertTrue("Metadata should get updated.", metadata.needsUpdate(time.milliseconds()));
+        assertTrue("Metadata should get updated.", metadata.timeToNextUpdate(time.milliseconds()) == 0);
     }
 
     @Test(expected = IllegalStateException.class)

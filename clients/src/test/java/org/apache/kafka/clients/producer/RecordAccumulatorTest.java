@@ -62,10 +62,10 @@ public class RecordAccumulatorTest {
         int appends = 1024 / msgSize;
         for (int i = 0; i < appends; i++) {
             accum.append(tp1, key, value, CompressionType.NONE, null);
-            assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).size());
+            assertEquals("No partitions should be ready.", 0, accum.ready(cluster, now).readyNodes.size());
         }
         accum.append(tp1, key, value, CompressionType.NONE, null);
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node), accum.ready(cluster, time.milliseconds()));
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node), accum.ready(cluster, time.milliseconds()).readyNodes);
         List<RecordBatch> batches = accum.drain(cluster, Collections.singleton(node), Integer.MAX_VALUE, 0).get(node.id());
         assertEquals(1, batches.size());
         RecordBatch batch = batches.get(0);
@@ -83,7 +83,7 @@ public class RecordAccumulatorTest {
         int batchSize = 512;
         RecordAccumulator accum = new RecordAccumulator(batchSize, 10 * 1024, 0L, 100L, false, metrics, time);
         accum.append(tp1, key, new byte[2 * batchSize], CompressionType.NONE, null);
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node), accum.ready(cluster, time.milliseconds()));
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node), accum.ready(cluster, time.milliseconds()).readyNodes);
     }
 
     @Test
@@ -91,9 +91,9 @@ public class RecordAccumulatorTest {
         long lingerMs = 10L;
         RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, lingerMs, 100L, false, metrics, time);
         accum.append(tp1, key, value, CompressionType.NONE, null);
-        assertEquals("No partitions should be ready", 0, accum.ready(cluster, time.milliseconds()).size());
+        assertEquals("No partitions should be ready", 0, accum.ready(cluster, time.milliseconds()).readyNodes.size());
         time.sleep(10);
-        assertEquals("Our partition's leader should be ready", Collections.singleton(node), accum.ready(cluster, time.milliseconds()));
+        assertEquals("Our partition's leader should be ready", Collections.singleton(node), accum.ready(cluster, time.milliseconds()).readyNodes);
         List<RecordBatch> batches = accum.drain(cluster, Collections.singleton(node), Integer.MAX_VALUE, 0).get(node.id());
         assertEquals(1, batches.size());
         RecordBatch batch = batches.get(0);
@@ -113,7 +113,7 @@ public class RecordAccumulatorTest {
             for (int i = 0; i < appends; i++)
                 accum.append(tp, key, value, CompressionType.NONE, null);
         }
-        assertEquals("Partition's leader should be ready", Collections.singleton(node), accum.ready(cluster, time.milliseconds()));
+        assertEquals("Partition's leader should be ready", Collections.singleton(node), accum.ready(cluster, time.milliseconds()).readyNodes);
 
         List<RecordBatch> batches = accum.drain(cluster, Collections.singleton(node), 1024, 0).get(node.id());
         assertEquals("But due to size bound only one partition should have been retrieved", 1, batches.size());
@@ -144,7 +144,7 @@ public class RecordAccumulatorTest {
         int read = 0;
         long now = time.milliseconds();
         while (read < numThreads * msgs) {
-            Set<Node> nodes = accum.ready(cluster, now);
+            Set<Node> nodes = accum.ready(cluster, now).readyNodes;
             List<RecordBatch> batches = accum.drain(cluster, nodes, 5 * 1024, 0).get(node.id());
             if (batches != null) {
                 for (RecordBatch batch : batches) {

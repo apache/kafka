@@ -101,15 +101,14 @@ public final class Metadata {
     }
 
     /**
-     * Does the current cluster info need to be updated? An update is needed if it has been at least refreshBackoffMs
-     * since our last update and either (1) an update has been requested or (2) the current metadata has expired (more
-     * than metadataExpireMs has passed since the last refresh)
+     * The next time to update the cluster info is the maximum of the time the current info will expire
+     * and the time the current info can be updated (i.e. backoff time has elapsed); If an update has
+     * been request then the expiry time is now
      */
-    public synchronized boolean needsUpdate(long now) {
-        long msSinceLastUpdate = now - this.lastRefreshMs;
-        boolean updateAllowed = msSinceLastUpdate >= this.refreshBackoffMs;
-        boolean updateNeeded = this.forceUpdate || msSinceLastUpdate >= this.metadataExpireMs;
-        return updateAllowed && updateNeeded;
+    public synchronized long timeToNextUpdate(long nowMs) {
+        long timeToExpire = forceUpdate ? 0 : Math.max(this.lastRefreshMs + this.metadataExpireMs - nowMs, 0);
+        long timeToAllowUpdate = this.lastRefreshMs + this.refreshBackoffMs - nowMs;
+        return Math.max(timeToExpire, timeToAllowUpdate);
     }
 
     /**
