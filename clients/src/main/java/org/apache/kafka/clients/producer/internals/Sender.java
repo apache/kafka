@@ -343,6 +343,7 @@ public class Sender implements Runnable {
 
             this.maxRecordSizeSensor = metrics.sensor("record-size-max");
             this.maxRecordSizeSensor.add("record-size-max", "The maximum record size", new Max());
+            this.maxRecordSizeSensor.add("record-size-avg", "The average record size", new Avg());
 
             this.metrics.addMetric("requests-in-flight", "The current number of in-flight requests awaiting a response.", new Measurable() {
                 public double measure(MetricConfig config, long now) {
