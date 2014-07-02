@@ -39,6 +39,11 @@ object ConsoleProducer {
                            .ofType(classOf[String])
     val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
     val compressOpt = parser.accepts("compress", "If set, messages batches are sent compressed")
+    val compressionCodecOpt = parser.accepts("compression-codec", "The compression codec: either 'gzip' or 'snappy'." +
+                                                                  "Defaults to 'gzip' value.")
+                                    .withOptionalArg()
+                                    .describedAs("compression-codec")
+                                    .ofType(classOf[String])
     val batchSizeOpt = parser.accepts("batch-size", "Number of messages to send in a single batch if they are not being sent synchronously.")
                              .withRequiredArg
                              .describedAs("size")
@@ -52,13 +57,13 @@ object ConsoleProducer {
                              .withRequiredArg
                              .ofType(classOf[java.lang.Long])
                              .defaultsTo(100)
-    val sendTimeoutOpt = parser.accepts("timeout", "If set and the producer is running in asynchronous mode, this gives the maximum amount of time" + 
+    val sendTimeoutOpt = parser.accepts("timeout", "If set and the producer is running in asynchronous mode, this gives the maximum amount of time" +
                                                    " a message will queue awaiting suffient batch size. The value is given in ms.")
                                .withRequiredArg
                                .describedAs("timeout_ms")
                                .ofType(classOf[java.lang.Long])
                                .defaultsTo(1000)
-    val queueSizeOpt = parser.accepts("queue-size", "If set and the producer is running in asynchronous mode, this gives the maximum amount of " + 
+    val queueSizeOpt = parser.accepts("queue-size", "If set and the producer is running in asynchronous mode, this gives the maximum amount of " +
                                                    " messages will queue awaiting suffient batch size.")
                                .withRequiredArg
                                .describedAs("queue_size")
@@ -89,7 +94,7 @@ object ConsoleProducer {
                                  .describedAs("encoder_class")
                                  .ofType(classOf[java.lang.String])
                                  .defaultsTo(classOf[StringEncoder].getName)
-    val messageReaderOpt = parser.accepts("line-reader", "The class name of the class to use for reading lines from standard in. " + 
+    val messageReaderOpt = parser.accepts("line-reader", "The class name of the class to use for reading lines from standard in. " +
                                                           "By default each line is read as a separate message.")
                                   .withRequiredArg
                                   .describedAs("reader_class")
@@ -105,7 +110,7 @@ object ConsoleProducer {
                             .withRequiredArg
                             .describedAs("prop")
                             .ofType(classOf[String])
-                            
+
 
     val options = parser.parse(args : _*)
     for(arg <- List(topicOpt, brokerListOpt)) {
@@ -120,6 +125,7 @@ object ConsoleProducer {
     val brokerList = options.valueOf(brokerListOpt)
     val sync = options.has(syncOpt)
     val compress = options.has(compressOpt)
+    val compressionCodec = options.valueOf(compressionCodecOpt)
     val batchSize = options.valueOf(batchSizeOpt)
     val sendTimeout = options.valueOf(sendTimeoutOpt)
     val queueSize = options.valueOf(queueSizeOpt)
@@ -135,7 +141,10 @@ object ConsoleProducer {
 
     val props = new Properties()
     props.put("metadata.broker.list", brokerList)
-    val codec = if(compress) DefaultCompressionCodec.codec else NoCompressionCodec.codec
+    val codec = if(compress)
+                    if (compressionCodec == null || compressionCodec.isEmpty) DefaultCompressionCodec.name
+                    else compressionCodec
+                else NoCompressionCodec.name
     props.put("compression.codec", codec.toString)
     props.put("producer.type", if(sync) "sync" else "async")
     if(options.has(batchSizeOpt))
