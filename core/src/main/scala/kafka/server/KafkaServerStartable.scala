@@ -21,13 +21,7 @@ import kafka.utils.Logging
 
 
 class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
-  private var server : KafkaServer = null
-
-  init
-
-  private def init() {
-    server = new KafkaServer(serverConfig)
-  }
+  private val server = new KafkaServer(serverConfig)
 
   def startup() {
     try {
