@@ -83,7 +83,8 @@ class OfflinePartitionLeaderSelector(controllerContext: ControllerContext, confi
                 new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, List(newLeader), currentLeaderIsrZkPathVersion + 1)
             }
           case false =>
-            val newLeader = liveBrokersInIsr.head
+            val liveReplicasInIsr = liveAssignedReplicas.filter(r => liveBrokersInIsr.contains(r))
+            val newLeader = liveReplicasInIsr.head
             debug("Some broker in ISR is alive for %s. Select %d from ISR %s to be the leader."
                   .format(topicAndPartition, newLeader, liveBrokersInIsr.mkString(",")))
             new LeaderAndIsr(newLeader, currentLeaderEpoch + 1, liveBrokersInIsr.toList, currentLeaderIsrZkPathVersion + 1)
