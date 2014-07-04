@@ -60,14 +60,17 @@ object CommandLineUtils extends Logging {
    * Parse key-value pairs in the form key=value
    */
   def parseKeyValueArgs(args: Iterable[String]): Properties = {
-    val splits = args.map(_ split "=").filterNot(_ == null).filterNot(_.length == 0)
-    if(!splits.forall(_.length == 2)) {
-      System.err.println("Invalid command line properties: " + args.mkString(" "))
-      System.exit(1)
-    }
+    val splits = args.map(_ split "=").filterNot(_.length == 0)
+
     val props = new Properties
-    for(a <- splits)
-      props.put(a(0), a(1))
+    for(a <- splits) {
+      if (a.length == 1) props.put(a(0), "")
+      else if (a.length == 2) props.put(a(0), a(1))
+      else {
+        System.err.println("Invalid command line properties: " + args.mkString(" "))
+        System.exit(1)
+      }
+    }
     props
   }
 }
