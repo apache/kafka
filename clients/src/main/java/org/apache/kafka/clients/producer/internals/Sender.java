@@ -147,7 +147,7 @@ public class Sender implements Runnable {
 
         // if there are any partitions whose leaders are not known yet, force metadata update
         if (result.unknownLeadersExist)
-            this.metadata.forceUpdate();
+            this.metadata.requestUpdate();
 
         // remove any nodes we aren't ready to send to
         Iterator<Node> iter = result.readyNodes.iterator();
@@ -252,7 +252,7 @@ public class Sender implements Runnable {
                 this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
         }
         if (error.exception() instanceof InvalidMetadataException)
-            metadata.forceUpdate();
+            metadata.requestUpdate();
     }
 
     /**

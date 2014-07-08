@@ -34,6 +34,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -73,6 +74,7 @@ public class KafkaProducer implements Producer {
     private final Thread ioThread;
     private final CompressionType compressionType;
     private final Sensor errors;
+    private final Time time;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -94,7 +96,7 @@ public class KafkaProducer implements Producer {
 
     private KafkaProducer(ProducerConfig config) {
         log.trace("Starting the Kafka producer");
-        Time time = new SystemTime();
+        this.time = new SystemTime();
         MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
                                                       .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                                                                   TimeUnit.MILLISECONDS);
@@ -119,7 +121,7 @@ public class KafkaProducer implements Producer {
                                                  metrics,
                                                  time);
         List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
-        this.metadata.update(Cluster.bootstrap(addresses), 0);
+        this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
 
         NetworkClient client = new NetworkClient(new Selector(this.metrics, time),
                                                  this.metadata,
@@ -225,8 +227,9 @@ public class KafkaProducer implements Producer {
     @Override
     public Future<RecordMetadata> send(ProducerRecord record, Callback callback) {
         try {
-            Cluster cluster = metadata.fetch(record.topic(), this.metadataFetchTimeoutMs);
-            int partition = partitioner.partition(record, cluster);
+            // first make sure the metadata for the topic is available
+            waitOnMetadata(record.topic(), this.metadataFetchTimeoutMs);
+            int partition = partitioner.partition(record, metadata.fetch());
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(record.key(), record.value());
             ensureValidRecordSize(serializedSize);
             TopicPartition tp = new TopicPartition(record.topic(), partition);
@@ -256,6 +259,31 @@ public class KafkaProducer implements Producer {
     }
 
     /**
+     * Wait for cluster metadata including partitions for the given topic to be available.
+     * @param topic The topic we want metadata for
+     * @param maxWaitMs The maximum time in ms for waiting on the metadata
+     */
+    private void waitOnMetadata(String topic, long maxWaitMs) {
+        if (metadata.fetch().partitionsForTopic(topic) != null) {
+            return;
+        } else {
+            long begin = time.milliseconds();
+            long remainingWaitMs = maxWaitMs;
+            while (metadata.fetch().partitionsForTopic(topic) == null) {
+                log.trace("Requesting metadata update for topic {}.", topic);
+                int version = metadata.requestUpdate();
+                metadata.add(topic);
+                sender.wakeup();
+                metadata.awaitUpdate(version, remainingWaitMs);
+                long elapsed = time.milliseconds() - begin;
+                if (elapsed >= maxWaitMs)
+                    throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
+                remainingWaitMs = maxWaitMs - elapsed;
+            }
+        }
+    }
+
+    /**
      * Validate that the record size isn't too large
      */
     private void ensureValidRecordSize(int size) {
@@ -271,8 +299,10 @@ public class KafkaProducer implements Producer {
                                               " configuration.");
     }
 
+    @Override
     public List<PartitionInfo> partitionsFor(String topic) {
-        return this.metadata.fetch(topic, this.metadataFetchTimeoutMs).partitionsForTopic(topic);
+        waitOnMetadata(topic, this.metadataFetchTimeoutMs);
+        return this.metadata.fetch().partitionsForTopic(topic);
     }
 
     @Override

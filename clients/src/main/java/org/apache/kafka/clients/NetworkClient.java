@@ -309,7 +309,7 @@ public class NetworkClient implements KafkaClient {
         }
         // we got a disconnect so we should probably refresh our metadata and see if that broker is dead
         if (this.selector.disconnected().size() > 0)
-            this.metadata.forceUpdate();
+            this.metadata.requestUpdate();
     }
 
     /**
@@ -375,7 +375,7 @@ public class NetworkClient implements KafkaClient {
             /* attempt failed, we'll try again after the backoff */
             connectionStates.disconnected(node.id());
             /* maybe the problem is our metadata, update it */
-            metadata.forceUpdate();
+            metadata.requestUpdate();
             log.debug("Error connecting to node {} at {}:{}:", node.id(), node.host(), node.port(), e);
         }
     }

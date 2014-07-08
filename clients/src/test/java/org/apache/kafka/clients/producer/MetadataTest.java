@@ -31,7 +31,7 @@ public class MetadataTest {
         long time = 0;
         metadata.update(Cluster.empty(), time);
         assertFalse("No update needed.", metadata.timeToNextUpdate(time) == 0);
-        metadata.forceUpdate();
+        metadata.requestUpdate();
         assertFalse("Still no updated needed due to backoff", metadata.timeToNextUpdate(time) == 0);
         time += refreshBackoffMs;
         assertTrue("Update needed now that backoff time expired", metadata.timeToNextUpdate(time) == 0);
@@ -40,7 +40,9 @@ public class MetadataTest {
         Thread t2 = asyncFetch(topic);
         assertTrue("Awaiting update", t1.isAlive());
         assertTrue("Awaiting update", t2.isAlive());
-        metadata.update(TestUtils.singletonCluster(topic, 1), time);
+        // keep updating the metadata until no need to
+        while (metadata.timeToNextUpdate(time) == 0)
+            metadata.update(TestUtils.singletonCluster(topic, 1), time);
         t1.join();
         t2.join();
         assertFalse("No update needed.", metadata.timeToNextUpdate(time) == 0);
@@ -51,7 +53,8 @@ public class MetadataTest {
     private Thread asyncFetch(final String topic) {
         Thread thread = new Thread() {
             public void run() {
-                metadata.fetch(topic, Integer.MAX_VALUE);
+                while (metadata.fetch().partitionsForTopic(topic) == null)
+                    metadata.awaitUpdate(metadata.requestUpdate(), Long.MAX_VALUE);
             }
         };
         thread.start();

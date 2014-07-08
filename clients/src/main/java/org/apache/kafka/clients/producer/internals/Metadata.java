@@ -13,11 +13,9 @@
 package org.apache.kafka.clients.producer.internals;
 
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,9 +34,10 @@ public final class Metadata {
 
     private final long refreshBackoffMs;
     private final long metadataExpireMs;
+    private int version;
     private long lastRefreshMs;
     private Cluster cluster;
-    private boolean forceUpdate;
+    private boolean needUpdate;
     private final Set<String> topics;
 
     /**
@@ -58,8 +57,9 @@ public final class Metadata {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
         this.lastRefreshMs = 0L;
+        this.version = 0;
         this.cluster = Cluster.empty();
-        this.forceUpdate = false;
+        this.needUpdate = false;
         this.topics = new HashSet<String>();
     }
 
@@ -71,33 +71,10 @@ public final class Metadata {
     }
 
     /**
-     * Fetch cluster metadata including partitions for the given topic. If there is no metadata for the given topic,
-     * block waiting for an update.
-     * @param topic The topic we want metadata for
-     * @param maxWaitMs The maximum amount of time to block waiting for metadata
+     * Add the topic to maintain in the metadata
      */
-    public synchronized Cluster fetch(String topic, long maxWaitMs) {
-        List<PartitionInfo> partitions = null;
-        long begin = System.currentTimeMillis();
-        long remainingWaitMs = maxWaitMs;
-        do {
-            partitions = cluster.partitionsForTopic(topic);
-            if (partitions == null) {
-                topics.add(topic);
-                forceUpdate = true;
-                try {
-                    log.trace("Requesting metadata update for topic {}.", topic);
-                    wait(remainingWaitMs);
-                } catch (InterruptedException e) { /* this is fine, just try again */
-                }
-                long elapsed = System.currentTimeMillis() - begin;
-                if (elapsed >= maxWaitMs)
-                    throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
-                remainingWaitMs = maxWaitMs - elapsed;
-            } else {
-                return cluster;
-            }
-        } while (true);
+    public synchronized void add(String topic) {
+        topics.add(topic);
     }
 
     /**
@@ -106,16 +83,35 @@ public final class Metadata {
      * been request then the expiry time is now
      */
     public synchronized long timeToNextUpdate(long nowMs) {
-        long timeToExpire = forceUpdate ? 0 : Math.max(this.lastRefreshMs + this.metadataExpireMs - nowMs, 0);
+        long timeToExpire = needUpdate ? 0 : Math.max(this.lastRefreshMs + this.metadataExpireMs - nowMs, 0);
         long timeToAllowUpdate = this.lastRefreshMs + this.refreshBackoffMs - nowMs;
         return Math.max(timeToExpire, timeToAllowUpdate);
     }
 
     /**
-     * Force an update of the current cluster info
+     * Request an update of the current cluster metadata info, return the current version before the update
      */
-    public synchronized void forceUpdate() {
-        this.forceUpdate = true;
+    public synchronized int requestUpdate() {
+        this.needUpdate = true;
+        return this.version;
+    }
+
+    /**
+     * Wait for metadata update until the current version is larger than the last version we know of
+     */
+    public synchronized void awaitUpdate(int lastVerison, long maxWaitMs) {
+        long begin = System.currentTimeMillis();
+        long remainingWaitMs = maxWaitMs;
+        while (this.version <= lastVerison) {
+            try {
+                wait(remainingWaitMs);
+            } catch (InterruptedException e) { /* this is fine */
+            }
+            long elapsed = System.currentTimeMillis() - begin;
+            if (elapsed >= maxWaitMs)
+                throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
+            remainingWaitMs = maxWaitMs - elapsed;
+        }
     }
 
     /**
@@ -129,8 +125,9 @@ public final class Metadata {
      * Update the cluster metadata
      */
     public synchronized void update(Cluster cluster, long now) {
-        this.forceUpdate = false;
+        this.needUpdate = false;
         this.lastRefreshMs = now;
+        this.version += 1;
         this.cluster = cluster;
         notifyAll();
         log.debug("Updated cluster metadata to {}", cluster);
@@ -142,5 +139,4 @@ public final class Metadata {
     public synchronized long lastUpdate() {
         return this.lastRefreshMs;
     }
-
 }
