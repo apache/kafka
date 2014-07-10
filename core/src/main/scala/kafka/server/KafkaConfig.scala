@@ -35,14 +35,29 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   private def getLogRetentionTimeMillis(): Long = {
     val millisInMinute = 60L * 1000L
     val millisInHour = 60L * millisInMinute
-    if(props.containsKey("log.retention.minutes")){
+    
+    if(props.containsKey("log.retention.ms")){
+       props.getIntInRange("log.retention.ms", (1, Int.MaxValue))
+    }
+    else if(props.containsKey("log.retention.minutes")){
        millisInMinute * props.getIntInRange("log.retention.minutes", (1, Int.MaxValue))
-    } else {
+    } 
+    else {
        millisInHour * props.getIntInRange("log.retention.hours", 24*7, (1, Int.MaxValue))
     }
-
   }
 
+  private def getLogRollTimeMillis(): Long = {
+    val millisInHour = 60L * 60L * 1000L
+    
+    if(props.containsKey("log.roll.ms")){
+       props.getIntInRange("log.roll.ms", (1, Int.MaxValue))
+    }
+    else {
+       millisInHour * props.getIntInRange("log.roll.hours", 24*7, (1, Int.MaxValue))
+    }
+  }
+  
   /*********** General Configuration ***********/
 
   /* the broker id for this server */
@@ -105,7 +120,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val logSegmentBytes = props.getIntInRange("log.segment.bytes", 1*1024*1024*1024, (Message.MinHeaderSize, Int.MaxValue))
 
   /* the maximum time before a new log segment is rolled out */
-  val logRollHours = props.getIntInRange("log.roll.hours", 24*7, (1, Int.MaxValue))
+  val logRollTimeMillis = getLogRollTimeMillis
 
   /* the number of hours to keep a log file before deleting it */
   val logRetentionTimeMillis = getLogRetentionTimeMillis

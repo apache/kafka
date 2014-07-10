@@ -45,6 +45,16 @@ class KafkaConfigTest extends JUnit3Suite {
   }
   
   @Test
+  def testLogRetentionTimeMsProvided() {
+    val props = TestUtils.createBrokerConfig(0, 8181)
+    props.put("log.retention.ms", "1800000")
+
+    val cfg = new KafkaConfig(props)
+    assertEquals(30 * 60L * 1000L, cfg.logRetentionTimeMillis)
+
+  }
+  
+  @Test
   def testLogRetentionTimeNoConfigProvided() {
     val props = TestUtils.createBrokerConfig(0, 8181)
 
@@ -58,6 +68,17 @@ class KafkaConfigTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, 8181)
     props.put("log.retention.minutes", "30")
     props.put("log.retention.hours", "1")
+
+    val cfg = new KafkaConfig(props)
+    assertEquals( 30 * 60L * 1000L, cfg.logRetentionTimeMillis)
+
+  }
+  
+  @Test
+  def testLogRetentionTimeBothMinutesAndMsProvided() {
+    val props = TestUtils.createBrokerConfig(0, 8181)
+    props.put("log.retention.ms", "1800000")
+    props.put("log.retention.minutes", "10")
 
     val cfg = new KafkaConfig(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRetentionTimeMillis)
@@ -129,4 +150,36 @@ class KafkaConfigTest extends JUnit3Suite {
       new KafkaConfig(props)
     }
   }
+  
+  @Test
+  def testLogRollTimeMsProvided() {
+    val props = TestUtils.createBrokerConfig(0, 8181)
+    props.put("log.roll.ms", "1800000")
+
+    val cfg = new KafkaConfig(props)
+    assertEquals(30 * 60L * 1000L, cfg.logRollTimeMillis)
+
+  }
+  
+  @Test
+  def testLogRollTimeBothMsAndHoursProvided() {
+    val props = TestUtils.createBrokerConfig(0, 8181)
+    props.put("log.roll.ms", "1800000")
+    props.put("log.roll.hours", "1")
+
+    val cfg = new KafkaConfig(props)
+    assertEquals( 30 * 60L * 1000L, cfg.logRollTimeMillis)
+
+  }
+    
+  @Test
+  def testLogRollTimeNoConfigProvided() {
+    val props = TestUtils.createBrokerConfig(0, 8181)
+
+    val cfg = new KafkaConfig(props)
+    assertEquals(24 * 7 * 60L * 60L * 1000L, cfg.logRollTimeMillis																									)
+
+  }
+  
+
 }
