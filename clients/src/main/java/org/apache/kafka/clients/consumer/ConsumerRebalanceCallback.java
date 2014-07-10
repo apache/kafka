@@ -21,8 +21,8 @@ import org.apache.kafka.common.TopicPartition;
  * every rebalance operation. This callback will execute in the user thread as part of the 
  * {@link Consumer#poll(long) poll(long)} API on every rebalance attempt.
  * Default implementation of the callback will {@link Consumer#seek(java.util.Map) seek(offsets)} to the last committed offsets in the
- * {@link #onPartitionsAssigned(Consumer, TopicPartition...) onPartitionsAssigned()} callback. And will commit offsets synchronously 
- * for the specified list of partitions to Kafka in the {@link #onPartitionsRevoked(Consumer, TopicPartition...) onPartitionsRevoked()} 
+ * {@link #onPartitionsAssigned(Consumer, Collection) onPartitionsAssigned()} callback. And will commit offsets synchronously
+ * for the specified list of partitions to Kafka in the {@link #onPartitionsRevoked(Consumer, Collection) onPartitionsRevoked()}
  * callback.
  */
 public interface ConsumerRebalanceCallback {

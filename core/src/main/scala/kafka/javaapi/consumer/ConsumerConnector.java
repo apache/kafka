@@ -29,7 +29,8 @@ public interface ConsumerConnector {
    *  Create a list of MessageStreams of type T for each topic.
    *
    *  @param topicCountMap  a map of (topic, #streams) pair
-   *  @param decoder a decoder that converts from Message to T
+   *  @param keyDecoder a decoder that decodes the message key
+   *  @param valueDecoder a decoder that decodes the message itself
    *  @return a map of (topic, list of  KafkaStream) pairs.
    *          The number of items in the list is #streams. Each stream supports
    *          an iterator over message/metadata pairs.

@@ -494,7 +494,7 @@ object Utils extends Logging {
   /**
    * Create a file with the given path
    * @param path The path to create
-   * @throw KafkaStorageException If the file create fails
+   * @throws KafkaStorageException If the file create fails
    * @return The created file
    */
   def createFile(path: String): File = {

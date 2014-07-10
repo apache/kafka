@@ -60,23 +60,23 @@ public interface Selectable {
     public void poll(long timeout, List<NetworkSend> sends) throws IOException;
 
     /**
-     * The list of sends that completed on the last {@link #poll(long, List<NetworkSend>) poll()} call.
+     * The list of sends that completed on the last {@link #poll(long, List) poll()} call.
      */
     public List<NetworkSend> completedSends();
 
     /**
-     * The list of receives that completed on the last {@link #poll(long, List<NetworkSend>) poll()} call.
+     * The list of receives that completed on the last {@link #poll(long, List) poll()} call.
      */
     public List<NetworkReceive> completedReceives();
 
     /**
-     * The list of connections that finished disconnecting on the last {@link #poll(long, List<NetworkSend>) poll()}
+     * The list of connections that finished disconnecting on the last {@link #poll(long, List) poll()}
      * call.
      */
     public List<Integer> disconnected();
 
     /**
-     * The list of connections that completed their connection on the last {@link #poll(long, List<NetworkSend>) poll()}
+     * The list of connections that completed their connection on the last {@link #poll(long, List) poll()}
      * call.
      */
     public List<Integer> connected();

@@ -346,7 +346,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   
   /**
    * Do a basic sanity check on this index to detect obvious problems
-   * @throw IllegalArgumentException if any problems are found
+   * @throws IllegalArgumentException if any problems are found
    */
   def sanityCheck() {
     require(entries == 0 || lastOffset > baseOffset,
