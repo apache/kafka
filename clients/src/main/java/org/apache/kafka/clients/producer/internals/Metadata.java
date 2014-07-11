@@ -130,7 +130,7 @@ public final class Metadata {
         this.version += 1;
         this.cluster = cluster;
         notifyAll();
-        log.debug("Updated cluster metadata to {}", cluster);
+        log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
     }
 
     /**

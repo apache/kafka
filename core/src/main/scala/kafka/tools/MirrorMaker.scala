@@ -116,19 +116,6 @@ object MirrorMaker extends Logging {
     val numStreams = options.valueOf(numStreamsOpt).intValue()
     val bufferSize = options.valueOf(bufferSizeOpt).intValue()
 
-    val useNewProducer = options.has(useNewProducerOpt)
-    val producerProps = Utils.loadProps(options.valueOf(producerConfigOpt))
-
-    // create producer threads
-    val clientId = producerProps.getProperty("client.id", "")
-    val producers = (1 to numProducers).map(i => {
-      producerProps.setProperty("client.id", clientId + "-" + i)
-      if (useNewProducer)
-        new NewShinyProducer(producerProps)
-      else
-        new OldProducer(producerProps)
-    })
-
     // create consumer streams
     connectors = options.valuesOf(consumerConfigOpt).toList
       .map(cfg => new ConsumerConfig(Utils.loadProps(cfg)))
@@ -138,8 +125,21 @@ object MirrorMaker extends Logging {
     // create a data channel btw the consumers and the producers
     val mirrorDataChannel = new DataChannel(bufferSize, numConsumers, numProducers)
 
-    producerThreads = producers.zipWithIndex.map(producerAndIndex => new ProducerThread(mirrorDataChannel, producerAndIndex._1, producerAndIndex._2))
+    // create producer threads
+    val useNewProducer = options.has(useNewProducerOpt)
+    val producerProps = Utils.loadProps(options.valueOf(producerConfigOpt))
+    val clientId = producerProps.getProperty("client.id", "")
+    producerThreads = (0 until numProducers).map(i => {
+      producerProps.setProperty("client.id", clientId + "-" + i)
+      val producer =
+      if (useNewProducer)
+        new NewShinyProducer(producerProps)
+      else
+        new OldProducer(producerProps)
+      new ProducerThread(mirrorDataChannel, producer, i)
+    })
 
+    // create consumer threads
     val filterSpec = if (options.has(whitelistOpt))
       new Whitelist(options.valueOf(whitelistOpt))
     else
@@ -153,7 +153,7 @@ object MirrorMaker extends Logging {
         fatal("Unable to create stream - shutting down mirror maker.")
         connectors.foreach(_.shutdown)
     }
-    consumerThreads = streams.zipWithIndex.map(streamAndIndex => new ConsumerThread(streamAndIndex._1, mirrorDataChannel, producers, streamAndIndex._2))
+    consumerThreads = streams.zipWithIndex.map(streamAndIndex => new ConsumerThread(streamAndIndex._1, mirrorDataChannel, streamAndIndex._2))
     assert(consumerThreads.size == numConsumers)
 
     Runtime.getRuntime.addShutdownHook(new Thread() {
@@ -233,7 +233,6 @@ object MirrorMaker extends Logging {
 
   class ConsumerThread(stream: KafkaStream[Array[Byte], Array[Byte]],
                        mirrorDataChannel: DataChannel,
-                       producers: Seq[BaseProducer],
                        threadId: Int)
           extends Thread with Logging with KafkaMetricsGroup {
 

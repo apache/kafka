@@ -122,16 +122,21 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public boolean isReady(Node node, long now) {
-        return isReady(node.id(), now);
-    }
-
-    private boolean isReady(int node, long now) {
+        int nodeId = node.id();
         if (!this.metadataFetchInProgress && this.metadata.timeToNextUpdate(now) == 0)
             // if we need to update our metadata now declare all requests unready to make metadata requests first priority
             return false;
         else
             // otherwise we are ready if we are connected and can send more requests
-            return connectionStates.isConnected(node) && inFlightRequests.canSendMore(node);
+            return isSendable(nodeId);
+    }
+
+    /**
+     * Are we connected and ready and able to send more requests to the given node?
+     * @param node The node
+     */
+    private boolean isSendable(int node) {
+        return connectionStates.isConnected(node) && inFlightRequests.canSendMore(node);
     }
 
     /**
@@ -146,20 +151,20 @@ public class NetworkClient implements KafkaClient {
     public List<ClientResponse> poll(List<ClientRequest> requests, long timeout, long now) {
         List<NetworkSend> sends = new ArrayList<NetworkSend>();
 
-        // should we update our metadata?
-        long metadataTimeout = metadata.timeToNextUpdate(now);
-        if (!this.metadataFetchInProgress && metadataTimeout == 0)
-            maybeUpdateMetadata(sends, now);
-
         for (int i = 0; i < requests.size(); i++) {
             ClientRequest request = requests.get(i);
             int nodeId = request.request().destination();
-            if (!isReady(nodeId, now))
+            if (!isSendable(nodeId))
                 throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
 
             this.inFlightRequests.add(request);
             sends.add(request.request());
         }
+
+        // should we update our metadata?
+        long metadataTimeout = metadata.timeToNextUpdate(now);
+        if (!this.metadataFetchInProgress && metadataTimeout == 0)
+            maybeUpdateMetadata(sends, now);
 
         // do the I/O
         try {
@@ -347,9 +352,12 @@ public class NetworkClient implements KafkaClient {
      */
     private void maybeUpdateMetadata(List<NetworkSend> sends, long now) {
         Node node = this.leastLoadedNode(now);
-        if (node == null)
+        if (node == null) {
+            log.debug("Give up sending metadata request since no node is available");
             return;
+        }
 
+        log.debug("Trying to send metadata request to node {}", node.id());
         if (connectionStates.isConnected(node.id()) && inFlightRequests.canSendMore(node.id())) {
             Set<String> topics = metadata.topics();
             this.metadataFetchInProgress = true;
@@ -359,6 +367,7 @@ public class NetworkClient implements KafkaClient {
             this.inFlightRequests.add(metadataRequest);
         } else if (connectionStates.canConnect(node.id(), now)) {
             // we don't have a connection to this node right now, make one
+            log.debug("Give up sending metadata request to node {} since it is either not connected or cannot have more in flight requests", node.id());
             initiateConnect(node, now);
         }
     }
