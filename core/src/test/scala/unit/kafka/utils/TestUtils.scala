@@ -84,6 +84,13 @@ object TestUtils extends Logging {
     val f = new File(IoTmpDir, "kafka-" + random.nextInt(1000000))
     f.mkdirs()
     f.deleteOnExit()
+
+    Runtime.getRuntime().addShutdownHook(new Thread() {
+      override def run() = {
+        Utils.rm(f)
+      }
+    })
+    
     f
   }
 
