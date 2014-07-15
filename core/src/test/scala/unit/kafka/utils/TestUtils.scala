@@ -39,6 +39,7 @@ import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
 import kafka.common.TopicAndPartition
 import kafka.admin.AdminUtils
 import kafka.producer.ProducerConfig
+import kafka.log._
 
 import junit.framework.AssertionFailedError
 import junit.framework.Assert._
@@ -688,6 +689,30 @@ object TestUtils extends Logging {
 
   def checkIfReassignPartitionPathExists(zkClient: ZkClient): Boolean = {
     ZkUtils.pathExists(zkClient, ZkUtils.ReassignPartitionsPath)
+  }
+
+
+  /**
+   * Create new LogManager instance with default configuration for testing
+   */
+  def createLogManager(
+    logDirs: Array[File] = Array.empty[File],
+    defaultConfig: LogConfig = LogConfig(),
+    cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
+    time: MockTime = new MockTime()) =
+  {
+    new LogManager(
+      logDirs = logDirs,
+      topicConfigs = Map(),
+      defaultConfig = defaultConfig,
+      cleanerConfig = cleanerConfig,
+      ioThreads = 4,
+      flushCheckMs = 1000L,
+      flushCheckpointMs = 10000L,
+      retentionCheckMs = 1000L,
+      scheduler = time.scheduler,
+      time = time,
+      brokerState = new BrokerState())
   }
 }
 

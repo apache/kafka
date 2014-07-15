@@ -35,21 +35,11 @@ class LogManagerTest extends JUnit3Suite {
   var logManager: LogManager = null
   val name = "kafka"
   val veryLargeLogFlushInterval = 10000000L
-  val cleanerConfig = CleanerConfig(enableCleaner = false)
 
   override def setUp() {
     super.setUp()
     logDir = TestUtils.tempDir()
-    logManager = new LogManager(logDirs = Array(logDir), 
-                                topicConfigs = Map(), 
-                                defaultConfig = logConfig, 
-                                cleanerConfig = cleanerConfig, 
-                                flushCheckMs = 1000L, 
-                                flushCheckpointMs = 100000L, 
-                                retentionCheckMs = 1000L, 
-                                scheduler = time.scheduler, 
-                                time = time,
-                                brokerState = new BrokerState())
+    logManager = createLogManager()
     logManager.startup
     logDir = logManager.logDirs(0)
   }
@@ -125,18 +115,7 @@ class LogManagerTest extends JUnit3Suite {
     logManager.shutdown()
 
     val config = logConfig.copy(segmentSize = 10 * (setSize - 1), retentionSize = 5L * 10L * setSize + 10L)
-    logManager = new LogManager(
-      logDirs = Array(logDir),
-      topicConfigs = Map(),
-      defaultConfig = config,
-      cleanerConfig = cleanerConfig,
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 100000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      brokerState = new BrokerState(),
-      time = time
-    )
+    logManager = createLogManager()
     logManager.startup
 
     // create a log
@@ -176,18 +155,7 @@ class LogManagerTest extends JUnit3Suite {
   def testTimeBasedFlush() {
     logManager.shutdown()
     val config = logConfig.copy(flushMs = 1000)
-    logManager = new LogManager(
-      logDirs = Array(logDir),
-      topicConfigs = Map(),
-      defaultConfig = config,
-      cleanerConfig = cleanerConfig,
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 10000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      brokerState = new BrokerState(),
-      time = time
-    )
+    logManager = createLogManager()
     logManager.startup
     val log = logManager.createLog(TopicAndPartition(name, 0), config)
     val lastFlush = log.lastFlushTime
@@ -209,19 +177,8 @@ class LogManagerTest extends JUnit3Suite {
                      TestUtils.tempDir(), 
                      TestUtils.tempDir())
     logManager.shutdown()
-    logManager = new LogManager(
-      logDirs = dirs,
-      topicConfigs = Map(),
-      defaultConfig = logConfig,
-      cleanerConfig = cleanerConfig,
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 10000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      brokerState = new BrokerState(),
-      time = time
-    )
-    
+    logManager = createLogManager()
+
     // verify that logs are always assigned to the least loaded partition
     for(partition <- 0 until 20) {
       logManager.createLog(TopicAndPartition("test", partition), logConfig)
@@ -237,18 +194,7 @@ class LogManagerTest extends JUnit3Suite {
   @Test
   def testTwoLogManagersUsingSameDirFails() {
     try {
-      new LogManager(
-        logDirs = Array(logDir),
-        topicConfigs = Map(),
-        defaultConfig = logConfig,
-        cleanerConfig = cleanerConfig,
-        flushCheckMs = 1000L,
-        flushCheckpointMs = 10000L,
-        retentionCheckMs = 1000L,
-        scheduler = time.scheduler,
-        brokerState = new BrokerState(),
-        time = time
-      )
+      createLogManager()
       fail("Should not be able to create a second log manager instance with the same data directory")
     } catch {
       case e: KafkaException => // this is good 
@@ -270,16 +216,8 @@ class LogManagerTest extends JUnit3Suite {
   def testRecoveryDirectoryMappingWithTrailingSlash() {
     logManager.shutdown()
     logDir = TestUtils.tempDir()
-    logManager = new LogManager(logDirs = Array(new File(logDir.getAbsolutePath + File.separator)),
-      topicConfigs = Map(),
-      defaultConfig = logConfig,
-      cleanerConfig = cleanerConfig,
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 100000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      time = time,
-      brokerState = new BrokerState())
+    logManager = TestUtils.createLogManager(
+      logDirs = Array(new File(logDir.getAbsolutePath + File.separator)))
     logManager.startup
     verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1)), logManager)
   }
@@ -293,16 +231,7 @@ class LogManagerTest extends JUnit3Suite {
     logDir = new File("data" + File.separator + logDir.getName)
     logDir.mkdirs()
     logDir.deleteOnExit()
-    logManager = new LogManager(logDirs = Array(logDir),
-      topicConfigs = Map(),
-      defaultConfig = logConfig,
-      cleanerConfig = cleanerConfig,
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 100000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      time = time,
-      brokerState = new BrokerState())
+    logManager = createLogManager()
     logManager.startup
     verifyCheckpointRecovery(Seq(TopicAndPartition("test-a", 1)), logManager)
   }
@@ -326,5 +255,13 @@ class LogManagerTest extends JUnit3Suite {
         assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
       }
     }
+  }
+
+
+  private def createLogManager(logDirs: Array[File] = Array(this.logDir)): LogManager = {
+    TestUtils.createLogManager(
+      defaultConfig = logConfig,
+      logDirs = logDirs,
+      time = this.time)
   }
 }
