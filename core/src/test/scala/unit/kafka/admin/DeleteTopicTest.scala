@@ -203,37 +203,6 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   @Test
-  def testAutoCreateAfterDeleteTopic() {
-    val topicAndPartition = TopicAndPartition("test", 0)
-    val topic = topicAndPartition.topic
-    val servers = createTestTopicAndCluster(topic)
-    // start topic deletion
-    AdminUtils.deleteTopic(zkClient, topic)
-    verifyTopicDeletion(topic, servers)
-    // test if first produce request after topic deletion auto creates the topic
-    val props = new Properties()
-    props.put("metadata.broker.list", servers.map(s => s.config.hostName + ":" + s.config.port).mkString(","))
-    props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("producer.type", "sync")
-    props.put("request.required.acks", "1")
-    props.put("message.send.max.retries", "1")
-    val producerConfig = new ProducerConfig(props)
-    val producer = new Producer[String, String](producerConfig)
-    try {
-      producer.send(new KeyedMessage[String, String](topic, "test", "test1"))
-    } catch {
-      case e: FailedToSendMessageException => fail("Topic should have been auto created")
-      case oe: Throwable => fail("fails with exception", oe)
-    }
-    // test the topic path exists
-    assertTrue("Topic not auto created", ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic)))
-    // wait until leader is elected
-    val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
-    assertTrue("New leader should be elected after re-creating topic test", leaderIdOpt.isDefined)
-    servers.foreach(_.shutdown())
-  }
-
-  @Test
   def testDeleteNonExistingTopic() {
     val topicAndPartition = TopicAndPartition("test", 0)
     val topic = topicAndPartition.topic
