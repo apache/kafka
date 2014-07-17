@@ -79,7 +79,7 @@ case class TopicMetadataRequest(val versionId: Short,
     val topicMetadata = topics.map {
       topic => TopicMetadata(topic, Nil, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
     }
-    val errorResponse = TopicMetadataResponse(topicMetadata, correlationId)
+    val errorResponse = TopicMetadataResponse(Seq(), topicMetadata, correlationId)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
   }
 

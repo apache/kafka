@@ -143,7 +143,7 @@ object SerializationTestUtils {
   }
 
   def createTestTopicMetadataResponse: TopicMetadataResponse = {
-    new TopicMetadataResponse(Seq(topicmetaData1, topicmetaData2), 1)
+    new TopicMetadataResponse(brokers, Seq(topicmetaData1, topicmetaData2), 1)
   }
 
   def createTestOffsetCommitRequest: OffsetCommitRequest = {

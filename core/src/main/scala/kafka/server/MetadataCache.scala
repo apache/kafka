@@ -81,6 +81,12 @@ private[server] class MetadataCache {
     topicResponses
   }
 
+  def getAliveBrokers = {
+    inLock(partitionMetadataLock.readLock()) {
+      aliveBrokers.values.toList
+    }
+  }
+
   def addOrUpdatePartitionInfo(topic: String,
                                partitionId: Int,
                                stateInfo: PartitionStateInfo) {
