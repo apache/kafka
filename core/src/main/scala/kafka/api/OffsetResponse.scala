@@ -51,9 +51,9 @@ case class PartitionOffsetsResponse(error: Short, offsets: Seq[Long]) {
 }
 
 
-case class OffsetResponse(override val correlationId: Int,
+case class OffsetResponse(correlationId: Int,
                           partitionErrorAndOffsets: Map[TopicAndPartition, PartitionOffsetsResponse])
-    extends RequestOrResponse(correlationId = correlationId) {
+    extends RequestOrResponse() {
 
   lazy val offsetsGroupedByTopic = partitionErrorAndOffsets.groupBy(_._1.topic)
 

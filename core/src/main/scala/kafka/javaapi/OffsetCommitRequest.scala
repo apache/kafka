@@ -21,7 +21,6 @@ import kafka.common.{OffsetAndMetadata, TopicAndPartition}
 
 class OffsetCommitRequest(groupId: String,
                           requestInfo: java.util.Map[TopicAndPartition, OffsetAndMetadata],
-                          versionId: Short,
                           correlationId: Int,
                           clientId: String) {
   val underlying = {
@@ -33,7 +32,6 @@ class OffsetCommitRequest(groupId: String,
     kafka.api.OffsetCommitRequest(
       groupId = groupId,
       requestInfo = scalaMap,
-      versionId = versionId,
       correlationId = correlationId,
       clientId = clientId
     )

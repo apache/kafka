@@ -12,41 +12,36 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
-public class MetadataRequest extends AbstractRequestResponse {
-    public static Schema curSchema = ProtoUtils.currentRequestSchema(ApiKeys.METADATA.id);
-    private static String TOPICS_KEY_NAME = "topics";
+import java.nio.ByteBuffer;
 
-    private final List<String> topics;
+public class ConsumerMetadataRequest extends AbstractRequestResponse {
+    public static Schema curSchema = ProtoUtils.currentRequestSchema(ApiKeys.CONSUMER_METADATA.id);
+    private static String GROUP_ID_KEY_NAME = "group_id";
 
-    public MetadataRequest(List<String> topics) {
+    private final String groupId;
+
+    public ConsumerMetadataRequest(String groupId) {
         super(new Struct(curSchema));
-        struct.set(TOPICS_KEY_NAME, topics.toArray());
-        this.topics = topics;
+
+        struct.set(GROUP_ID_KEY_NAME, groupId);
+        this.groupId = groupId;
     }
 
-    public MetadataRequest(Struct struct) {
+    public ConsumerMetadataRequest(Struct struct) {
         super(struct);
-        Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
-        topics = new ArrayList<String>();
-        for (Object topicObj: topicArray) {
-            topics.add((String) topicObj);
-        }
+        groupId = struct.getString(GROUP_ID_KEY_NAME);
     }
 
-    public List<String> topics() {
-        return topics;
+    public String groupId() {
+        return groupId;
     }
 
-    public static MetadataRequest parse(ByteBuffer buffer) {
-        return new MetadataRequest(((Struct) curSchema.read(buffer)));
+    public static ConsumerMetadataRequest parse(ByteBuffer buffer) {
+        return new ConsumerMetadataRequest(((Struct) curSchema.read(buffer)));
     }
 }

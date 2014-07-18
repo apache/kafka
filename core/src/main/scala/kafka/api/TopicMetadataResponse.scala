@@ -35,8 +35,8 @@ object TopicMetadataResponse {
 
 case class TopicMetadataResponse(brokers: Seq[Broker],
                                  topicsMetadata: Seq[TopicMetadata],
-                                 override val correlationId: Int)
-    extends RequestOrResponse(correlationId = correlationId) {
+                                 correlationId: Int)
+    extends RequestOrResponse() {
   val sizeInBytes: Int = {
     4 + 4 + brokers.map(_.sizeInBytes).sum + 4 + topicsMetadata.map(_.sizeInBytes).sum
   }

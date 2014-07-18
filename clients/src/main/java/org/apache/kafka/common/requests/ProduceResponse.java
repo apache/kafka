@@ -12,67 +12,83 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ProtoUtils;
+import org.apache.kafka.common.protocol.types.Schema;
+import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.CollectionUtils;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.protocol.types.Struct;
+public class ProduceResponse extends AbstractRequestResponse {
+    private static Schema curSchema = ProtoUtils.currentResponseSchema(ApiKeys.PRODUCE.id);
+    private static String RESPONSES_KEY_NAME = "responses";
 
-public class ProduceResponse {
+    // topic level field names
+    private static String TOPIC_KEY_NAME = "topic";
+    private static String PARTITION_RESPONSES_KEY_NAME = "partition_responses";
+
+    // partition level field names
+    private static String PARTITION_KEY_NAME = "partition";
+    private static String ERROR_CODE_KEY_NAME = "error_code";
+    private static String BASE_OFFSET_KEY_NAME = "base_offset";
 
     private final Map<TopicPartition, PartitionResponse> responses;
 
-    public ProduceResponse() {
-        this.responses = new HashMap<TopicPartition, PartitionResponse>();
+    public ProduceResponse(Map<TopicPartition, PartitionResponse> responses) {
+        super(new Struct(curSchema));
+        Map<String, Map<Integer, PartitionResponse>> responseByTopic = CollectionUtils.groupDataByTopic(responses);
+        List<Struct> topicDatas = new ArrayList<Struct>(responseByTopic.size());
+        for (Map.Entry<String, Map<Integer, PartitionResponse>> entry : responseByTopic.entrySet()) {
+            Struct topicData = struct.instance(RESPONSES_KEY_NAME);
+            topicData.set(TOPIC_KEY_NAME, entry.getKey());
+            List<Struct> partitionArray = new ArrayList<Struct>();
+            for (Map.Entry<Integer, PartitionResponse> partitionEntry : entry.getValue().entrySet()) {
+                PartitionResponse part = partitionEntry.getValue();
+                Struct partStruct = topicData.instance(PARTITION_RESPONSES_KEY_NAME)
+                                       .set(PARTITION_KEY_NAME, partitionEntry.getKey())
+                                       .set(ERROR_CODE_KEY_NAME, part.errorCode)
+                                       .set(BASE_OFFSET_KEY_NAME, part.baseOffset);
+                partitionArray.add(partStruct);
+            }
+            topicData.set(PARTITION_RESPONSES_KEY_NAME, partitionArray.toArray());
+            topicDatas.add(topicData);
+        }
+        struct.set(RESPONSES_KEY_NAME, topicDatas.toArray());
+        this.responses = responses;
     }
 
     public ProduceResponse(Struct struct) {
+        super(struct);
         responses = new HashMap<TopicPartition, PartitionResponse>();
-        for (Object topicResponse : (Object[]) struct.get("responses")) {
+        for (Object topicResponse : struct.getArray("responses")) {
             Struct topicRespStruct = (Struct) topicResponse;
-            String topic = (String) topicRespStruct.get("topic");
-            for (Object partResponse : (Object[]) topicRespStruct.get("partition_responses")) {
+            String topic = topicRespStruct.getString("topic");
+            for (Object partResponse : topicRespStruct.getArray("partition_responses")) {
                 Struct partRespStruct = (Struct) partResponse;
-                int partition = (Integer) partRespStruct.get("partition");
-                short errorCode = (Short) partRespStruct.get("error_code");
-                long offset = (Long) partRespStruct.get("base_offset");
+                int partition = partRespStruct.getInt("partition");
+                short errorCode = partRespStruct.getShort("error_code");
+                long offset = partRespStruct.getLong("base_offset");
                 TopicPartition tp = new TopicPartition(topic, partition);
-                responses.put(tp, new PartitionResponse(partition, errorCode, offset));
+                responses.put(tp, new PartitionResponse(errorCode, offset));
             }
         }
-    }
-
-    public void addResponse(TopicPartition tp, int partition, short error, long baseOffset) {
-        this.responses.put(tp, new PartitionResponse(partition, error, baseOffset));
     }
 
     public Map<TopicPartition, PartitionResponse> responses() {
         return this.responses;
     }
 
-    @Override
-    public String toString() {
-        StringBuilder b = new StringBuilder();
-        b.append('{');
-        boolean isFirst = true;
-        for (Map.Entry<TopicPartition, PartitionResponse> entry : responses.entrySet()) {
-            if (isFirst)
-                isFirst = false;
-            else
-                b.append(',');
-            b.append(entry.getKey() + " : " + entry.getValue());
-        }
-        b.append('}');
-        return b.toString();
-    }
-
-    public static class PartitionResponse {
-        public int partitionId;
+    public static final class PartitionResponse {
         public short errorCode;
         public long baseOffset;
 
-        public PartitionResponse(int partitionId, short errorCode, long baseOffset) {
-            this.partitionId = partitionId;
+        public PartitionResponse(short errorCode, long baseOffset) {
             this.errorCode = errorCode;
             this.baseOffset = baseOffset;
         }
@@ -81,14 +97,16 @@ public class ProduceResponse {
         public String toString() {
             StringBuilder b = new StringBuilder();
             b.append('{');
-            b.append("pid: ");
-            b.append(partitionId);
-            b.append(",error: ");
+            b.append("error: ");
             b.append(errorCode);
             b.append(",offset: ");
             b.append(baseOffset);
             b.append('}');
             return b.toString();
         }
+    }
+
+    public static ProduceResponse parse(ByteBuffer buffer) {
+        return new ProduceResponse(((Struct) curSchema.read(buffer)));
     }
 }

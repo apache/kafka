@@ -12,41 +12,34 @@
  */
 package org.apache.kafka.common.requests;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
-
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
-public class MetadataRequest extends AbstractRequestResponse {
-    public static Schema curSchema = ProtoUtils.currentRequestSchema(ApiKeys.METADATA.id);
-    private static String TOPICS_KEY_NAME = "topics";
+import java.nio.ByteBuffer;
 
-    private final List<String> topics;
+public class HeartbeatResponse extends AbstractRequestResponse {
+    private static Schema curSchema = ProtoUtils.currentResponseSchema(ApiKeys.HEARTBEAT.id);
+    private static String ERROR_CODE_KEY_NAME = "error_code";
 
-    public MetadataRequest(List<String> topics) {
+    private final short errorCode;
+    public HeartbeatResponse(short errorCode) {
         super(new Struct(curSchema));
-        struct.set(TOPICS_KEY_NAME, topics.toArray());
-        this.topics = topics;
+        struct.set(ERROR_CODE_KEY_NAME, errorCode);
+        this.errorCode = errorCode;
     }
 
-    public MetadataRequest(Struct struct) {
+    public HeartbeatResponse(Struct struct) {
         super(struct);
-        Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
-        topics = new ArrayList<String>();
-        for (Object topicObj: topicArray) {
-            topics.add((String) topicObj);
-        }
+        errorCode = struct.getShort(ERROR_CODE_KEY_NAME);
     }
 
-    public List<String> topics() {
-        return topics;
+    public short errorCode() {
+        return errorCode;
     }
 
-    public static MetadataRequest parse(ByteBuffer buffer) {
-        return new MetadataRequest(((Struct) curSchema.read(buffer)));
+    public static HeartbeatResponse parse(ByteBuffer buffer) {
+        return new HeartbeatResponse(((Struct) curSchema.read(buffer)));
     }
 }

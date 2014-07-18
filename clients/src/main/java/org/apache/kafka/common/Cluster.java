@@ -15,12 +15,7 @@ package org.apache.kafka.common;
 import org.apache.kafka.common.utils.Utils;
 
 import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * A representation of a subset of the nodes, topics, and partitions in the Kafka cluster.
@@ -141,6 +136,14 @@ public final class Cluster {
      */
     public List<PartitionInfo> partitionsForNode(int nodeId) {
         return this.partitionsByNode.get(nodeId);
+    }
+
+    /**
+     * Get all topics.
+     * @return a set of all topics
+     */
+    public Set<String> topics() {
+        return this.partitionsByTopic.keySet();
     }
 
     @Override

@@ -32,6 +32,8 @@ object RequestKeys {
   val OffsetCommitKey: Short = 8
   val OffsetFetchKey: Short = 9
   val ConsumerMetadataKey: Short = 10
+  val JoinGroupKey: Short = 11
+  val HeartbeatKey: Short = 12
 
   val keyToNameAndDeserializerMap: Map[Short, (String, (ByteBuffer) => RequestOrResponse)]=
     Map(ProduceKey -> ("Produce", ProducerRequest.readFrom),
@@ -44,7 +46,10 @@ object RequestKeys {
         ControlledShutdownKey -> ("ControlledShutdown", ControlledShutdownRequest.readFrom),
         OffsetCommitKey -> ("OffsetCommit", OffsetCommitRequest.readFrom),
         OffsetFetchKey -> ("OffsetFetch", OffsetFetchRequest.readFrom),
-        ConsumerMetadataKey -> ("ConsumerMetadata", ConsumerMetadataRequest.readFrom))
+        ConsumerMetadataKey -> ("ConsumerMetadata", ConsumerMetadataRequest.readFrom),
+        JoinGroupKey -> ("JoinGroup", JoinGroupRequestAndHeader.readFrom),
+        HeartbeatKey -> ("Heartbeat", HeartbeatRequestAndHeader.readFrom)
+    )
 
   def nameForKey(key: Short): String = {
     keyToNameAndDeserializerMap.get(key) match {

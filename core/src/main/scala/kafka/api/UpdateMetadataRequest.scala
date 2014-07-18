@@ -55,13 +55,13 @@ object UpdateMetadataRequest {
 }
 
 case class UpdateMetadataRequest (versionId: Short,
-                                  override val correlationId: Int,
+                                  correlationId: Int,
                                   clientId: String,
                                   controllerId: Int,
                                   controllerEpoch: Int,
                                   partitionStateInfos: Map[TopicAndPartition, PartitionStateInfo],
                                   aliveBrokers: Set[Broker])
-  extends RequestOrResponse(Some(RequestKeys.UpdateMetadataKey), correlationId) {
+  extends RequestOrResponse(Some(RequestKeys.UpdateMetadataKey)) {
 
   def this(controllerId: Int, controllerEpoch: Int, correlationId: Int, clientId: String,
            partitionStateInfos: Map[TopicAndPartition, PartitionStateInfo], aliveBrokers: Set[Broker]) = {

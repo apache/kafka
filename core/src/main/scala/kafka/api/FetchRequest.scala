@@ -60,13 +60,13 @@ object FetchRequest {
 }
 
 case class FetchRequest private[kafka] (versionId: Short = FetchRequest.CurrentVersion,
-                                        override val correlationId: Int = FetchRequest.DefaultCorrelationId,
+                                        correlationId: Int = FetchRequest.DefaultCorrelationId,
                                         clientId: String = ConsumerConfig.DefaultClientId,
                                         replicaId: Int = Request.OrdinaryConsumerId,
                                         maxWait: Int = FetchRequest.DefaultMaxWait,
                                         minBytes: Int = FetchRequest.DefaultMinBytes,
                                         requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
-        extends RequestOrResponse(Some(RequestKeys.FetchKey), correlationId) {
+        extends RequestOrResponse(Some(RequestKeys.FetchKey)) {
 
   /**
    * Partitions the request info into a map of maps (one for each topic).

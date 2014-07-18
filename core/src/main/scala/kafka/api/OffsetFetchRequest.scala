@@ -52,9 +52,9 @@ object OffsetFetchRequest extends Logging {
 case class OffsetFetchRequest(groupId: String,
                               requestInfo: Seq[TopicAndPartition],
                               versionId: Short = OffsetFetchRequest.CurrentVersion,
-                              override val correlationId: Int = 0,
+                              correlationId: Int = 0,
                               clientId: String = OffsetFetchRequest.DefaultClientId)
-    extends RequestOrResponse(Some(RequestKeys.OffsetFetchKey), correlationId) {
+    extends RequestOrResponse(Some(RequestKeys.OffsetFetchKey)) {
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_.topic)
   

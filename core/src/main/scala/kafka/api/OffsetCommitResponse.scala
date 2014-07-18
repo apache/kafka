@@ -42,8 +42,8 @@ object OffsetCommitResponse extends Logging {
 }
 
 case class OffsetCommitResponse(commitStatus: Map[TopicAndPartition, Short],
-                               override val correlationId: Int = 0)
-    extends RequestOrResponse(correlationId=correlationId) {
+                                correlationId: Int = 0)
+    extends RequestOrResponse() {
 
   lazy val commitStatusGroupedByTopic = commitStatus.groupBy(_._1.topic)
 

@@ -26,7 +26,7 @@ import kafka.network.RequestChannel.Response
 import scala.collection._
 
 object OffsetCommitRequest extends Logging {
-  val CurrentVersion: Short = 0
+  val CurrentVersion: Short = 1
   val DefaultClientId = ""
 
   def readFrom(buffer: ByteBuffer): OffsetCommitRequest = {
@@ -34,11 +34,23 @@ object OffsetCommitRequest extends Logging {
 
     // Read values from the envelope
     val versionId = buffer.getShort
+    assert(versionId == 0 || versionId == 1,
+           "Version " + versionId + " is invalid for OffsetCommitRequest. Valid versions are 0 or 1.")
+
     val correlationId = buffer.getInt
     val clientId = readShortString(buffer)
 
     // Read the OffsetRequest 
     val consumerGroupId = readShortString(buffer)
+
+    // version 1 specific fields
+    var groupGenerationId: Int = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_GENERATION_ID
+    var consumerId: String = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_CONSUMER_ID
+    if (versionId == 1) {
+      groupGenerationId = buffer.getInt
+      consumerId = readShortString(buffer)
+    }
+
     val topicCount = buffer.getInt
     val pairs = (1 to topicCount).flatMap(_ => {
       val topic = readShortString(buffer)
@@ -54,16 +66,20 @@ object OffsetCommitRequest extends Logging {
         (TopicAndPartition(topic, partitionId), OffsetAndMetadata(offset, metadata, timestamp))
       })
     })
-    OffsetCommitRequest(consumerGroupId, immutable.Map(pairs:_*), versionId, correlationId, clientId)
+    OffsetCommitRequest(consumerGroupId, immutable.Map(pairs:_*), versionId, correlationId, clientId, groupGenerationId, consumerId)
   }
 }
 
 case class OffsetCommitRequest(groupId: String,
                                requestInfo: immutable.Map[TopicAndPartition, OffsetAndMetadata],
                                versionId: Short = OffsetCommitRequest.CurrentVersion,
-                               override val correlationId: Int = 0,
-                               clientId: String = OffsetCommitRequest.DefaultClientId)
-    extends RequestOrResponse(Some(RequestKeys.OffsetCommitKey), correlationId) {
+                               correlationId: Int = 0,
+                               clientId: String = OffsetCommitRequest.DefaultClientId,
+                               groupGenerationId: Int = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_GENERATION_ID,
+                               consumerId: String =  org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_CONSUMER_ID)
+    extends RequestOrResponse(Some(RequestKeys.OffsetCommitKey)) {
+  assert(versionId == 0 || versionId == 1,
+         "Version " + versionId + " is invalid for OffsetCommitRequest. Valid versions are 0 or 1.")
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
 
@@ -84,7 +100,6 @@ case class OffsetCommitRequest(groupId: String,
     OffsetCommitResponse(commitStatus, correlationId)
   }
 
-
   def writeTo(buffer: ByteBuffer) {
     // Write envelope
     buffer.putShort(versionId)
@@ -93,6 +108,12 @@ case class OffsetCommitRequest(groupId: String,
 
     // Write OffsetCommitRequest
     writeShortString(buffer, groupId)             // consumer group
+
+    // version 1 specific data
+    if (versionId == 1) {
+      buffer.putInt(groupGenerationId)
+      writeShortString(buffer, consumerId)
+    }
     buffer.putInt(requestInfoGroupedByTopic.size) // number of topics
     requestInfoGroupedByTopic.foreach( t1 => { // topic -> Map[TopicAndPartition, OffsetMetadataAndError]
       writeShortString(buffer, t1._1) // topic
@@ -110,7 +131,8 @@ case class OffsetCommitRequest(groupId: String,
     2 + /* versionId */
     4 + /* correlationId */
     shortStringLength(clientId) +
-    shortStringLength(groupId) + 
+    shortStringLength(groupId) +
+    (if (versionId == 1) 4 /* group generation id */ + shortStringLength(consumerId) else 0) +
     4 + /* topic count */
     requestInfoGroupedByTopic.foldLeft(0)((count, topicAndOffsets) => {
       val (topic, offsets) = topicAndOffsets
@@ -139,6 +161,8 @@ case class OffsetCommitRequest(groupId: String,
     offsetCommitRequest.append("; CorrelationId: " + correlationId)
     offsetCommitRequest.append("; ClientId: " + clientId)
     offsetCommitRequest.append("; GroupId: " + groupId)
+    offsetCommitRequest.append("; GroupGenerationId: " + groupGenerationId)
+    offsetCommitRequest.append("; ConsumerId: " + consumerId)
     if(details)
       offsetCommitRequest.append("; RequestInfo: " + requestInfo.mkString(","))
     offsetCommitRequest.toString()

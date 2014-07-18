@@ -38,9 +38,9 @@ object ControlledShutdownRequest extends Logging {
 }
 
 case class ControlledShutdownRequest(val versionId: Short,
-                                     override val correlationId: Int,
+                                     val correlationId: Int,
                                      val brokerId: Int)
-  extends RequestOrResponse(Some(RequestKeys.ControlledShutdownKey), correlationId){
+  extends RequestOrResponse(Some(RequestKeys.ControlledShutdownKey)){
 
   def this(correlationId: Int, brokerId: Int) =
     this(ControlledShutdownRequest.CurrentVersion, correlationId, brokerId)

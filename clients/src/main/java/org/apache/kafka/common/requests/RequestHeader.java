@@ -24,18 +24,24 @@ import org.apache.kafka.common.protocol.types.Struct;
 /**
  * The header for a request in the Kafka protocol
  */
-public class RequestHeader {
+public class RequestHeader extends AbstractRequestResponse {
 
     private static Field API_KEY_FIELD = REQUEST_HEADER.get("api_key");
     private static Field API_VERSION_FIELD = REQUEST_HEADER.get("api_version");
     private static Field CLIENT_ID_FIELD = REQUEST_HEADER.get("client_id");
     private static Field CORRELATION_ID_FIELD = REQUEST_HEADER.get("correlation_id");
 
-    private final Struct header;
+    private final short apiKey;
+    private final short apiVersion;
+    private final String clientId;
+    private final int correlationId;
 
     public RequestHeader(Struct header) {
-        super();
-        this.header = header;
+        super(header);
+        apiKey = struct.getShort(API_KEY_FIELD);
+        apiVersion = struct.getShort(API_VERSION_FIELD);
+        clientId = struct.getString(CLIENT_ID_FIELD);
+        correlationId = struct.getInt(CORRELATION_ID_FIELD);
     }
 
     public RequestHeader(short apiKey, String client, int correlation) {
@@ -43,43 +49,34 @@ public class RequestHeader {
     }
 
     public RequestHeader(short apiKey, short version, String client, int correlation) {
-        this(new Struct(Protocol.REQUEST_HEADER));
-        this.header.set(API_KEY_FIELD, apiKey);
-        this.header.set(API_VERSION_FIELD, version);
-        this.header.set(CLIENT_ID_FIELD, client);
-        this.header.set(CORRELATION_ID_FIELD, correlation);
+        super(new Struct(Protocol.REQUEST_HEADER));
+        struct.set(API_KEY_FIELD, apiKey);
+        struct.set(API_VERSION_FIELD, version);
+        struct.set(CLIENT_ID_FIELD, client);
+        struct.set(CORRELATION_ID_FIELD, correlation);
+        this.apiKey = apiKey;
+        this.apiVersion = version;
+        this.clientId = client;
+        this.correlationId = correlation;
     }
 
     public short apiKey() {
-        return (Short) this.header.get(API_KEY_FIELD);
+        return apiKey;
     }
 
     public short apiVersion() {
-        return (Short) this.header.get(API_VERSION_FIELD);
+        return apiVersion;
     }
 
     public String clientId() {
-        return (String) this.header.get(CLIENT_ID_FIELD);
+        return clientId;
     }
 
     public int correlationId() {
-        return (Integer) this.header.get(CORRELATION_ID_FIELD);
+        return correlationId;
     }
 
     public static RequestHeader parse(ByteBuffer buffer) {
         return new RequestHeader((Struct) Protocol.REQUEST_HEADER.read(buffer));
-    }
-
-    public void writeTo(ByteBuffer buffer) {
-        header.writeTo(buffer);
-    }
-
-    public int sizeOf() {
-        return header.sizeOf();
-    }
-
-    @Override
-    public String toString() {
-        return header.toString();
     }
 }

@@ -30,8 +30,11 @@ public enum ApiKeys {
     METADATA(3, "metadata"),
     LEADER_AND_ISR(4, "leader_and_isr"),
     STOP_REPLICA(5, "stop_replica"),
-    OFFSET_COMMIT(6, "offset_commit"),
-    OFFSET_FETCH(7, "offset_fetch");
+    OFFSET_COMMIT(8, "offset_commit"),
+    OFFSET_FETCH(9, "offset_fetch"),
+    CONSUMER_METADATA(10, "consumer_metadata"),
+    JOIN_GROUP(11, "join_group"),
+    HEARTBEAT(12, "heartbeat");
 
     private static ApiKeys[] codeToType;
     public static int MAX_API_KEY = -1;

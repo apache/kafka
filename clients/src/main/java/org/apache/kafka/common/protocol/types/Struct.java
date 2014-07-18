@@ -83,6 +83,15 @@ public class Struct {
         return getFieldOrDefault(field);
     }
 
+    /**
+     * Check if the struct contains a field.
+     * @param name
+     * @return
+     */
+    public boolean hasField(String name) {
+        return schema.get(name) != null;
+    }
+
     public Struct getStruct(Field field) {
         return (Struct) get(field);
     }
@@ -105,6 +114,22 @@ public class Struct {
 
     public Integer getInt(String name) {
         return (Integer) get(name);
+    }
+
+    public Long getLong(Field field) {
+        return (Long) get(field);
+    }
+
+    public Long getLong(String name) {
+        return (Long) get(name);
+    }
+
+    public ByteBuffer getBytes(Field field) {
+        return (ByteBuffer) get(field);
+    }
+
+    public ByteBuffer getBytes(String name) {
+        return (ByteBuffer) get(name);
     }
 
     public Object[] getArray(Field field) {
@@ -251,6 +276,48 @@ public class Struct {
         }
         b.append('}');
         return b.toString();
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        for (int i = 0; i < this.values.length; i++) {
+            Field f = this.schema.get(i);
+            if (f.type() instanceof ArrayOf) {
+                Object[] arrayObject = (Object []) this.get(f);
+                for (Object arrayItem: arrayObject)
+                    result = prime * result + arrayItem.hashCode();
+            } else {
+                result = prime * result + this.get(f).hashCode();
+            }
+        }
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        Struct other = (Struct) obj;
+        if (schema != other.schema)
+            return false;
+        for (int i = 0; i < this.values.length; i++) {
+            Field f = this.schema.get(i);
+            Boolean result;
+            if (f.type() instanceof ArrayOf) {
+                result = Arrays.equals((Object []) this.get(f), (Object []) other.get(f));
+            } else {
+                result = this.get(f).equals(other.get(f));
+            }
+            if (!result)
+                return false;
+        }
+        return true;
     }
 
 }

@@ -23,9 +23,14 @@ import junit.framework.Assert._
 import java.nio.ByteBuffer
 import kafka.message.{Message, ByteBufferMessageSet}
 import kafka.cluster.Broker
-import kafka.common.{OffsetAndMetadata, TopicAndPartition, ErrorMapping, OffsetMetadataAndError}
-import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.common.{OffsetAndMetadata, ErrorMapping, OffsetMetadataAndError}
 import kafka.utils.SystemTime
+import org.apache.kafka.common.requests._
+import org.apache.kafka.common.protocol.ApiKeys
+import scala.Some
+import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.common.TopicAndPartition
+import org.apache.kafka.common.TopicPartition
 
 
 object SerializationTestUtils {
@@ -146,11 +151,21 @@ object SerializationTestUtils {
     new TopicMetadataResponse(brokers, Seq(topicmetaData1, topicmetaData2), 1)
   }
 
-  def createTestOffsetCommitRequest: OffsetCommitRequest = {
+  def createTestOffsetCommitRequestV1: OffsetCommitRequest = {
     new OffsetCommitRequest("group 1", collection.immutable.Map(
       TopicAndPartition(topic1, 0) -> OffsetAndMetadata(offset=42L, metadata="some metadata", timestamp=SystemTime.milliseconds),
       TopicAndPartition(topic1, 1) -> OffsetAndMetadata(offset=100L, metadata=OffsetAndMetadata.NoMetadata, timestamp=SystemTime.milliseconds)
     ))
+  }
+
+  def createTestOffsetCommitRequestV0: OffsetCommitRequest = {
+    new OffsetCommitRequest(
+      versionId = 0,
+      groupId = "group 1",
+      requestInfo = collection.immutable.Map(
+        TopicAndPartition(topic1, 0) -> OffsetAndMetadata(offset=42L, metadata="some metadata", timestamp=SystemTime.milliseconds),
+        TopicAndPartition(topic1, 1) -> OffsetAndMetadata(offset=100L, metadata=OffsetAndMetadata.NoMetadata, timestamp=SystemTime.milliseconds)
+      ))
   }
 
   def createTestOffsetCommitResponse: OffsetCommitResponse = {
@@ -180,6 +195,31 @@ object SerializationTestUtils {
     ConsumerMetadataResponse(Some(brokers.head), ErrorMapping.NoError)
   }
 
+  def createHeartbeatRequestAndHeader: HeartbeatRequestAndHeader = {
+    val header = new RequestHeader(ApiKeys.HEARTBEAT.id, 0.asInstanceOf[Short], "", 1)
+    val body = new HeartbeatRequest("group1", 1, "consumer1")
+    HeartbeatRequestAndHeader(header, body)
+  }
+
+  def createHeartbeatResponseAndHeader: HeartbeatResponseAndHeader = {
+    val header = new ResponseHeader(1)
+    val body = new HeartbeatResponse(0.asInstanceOf[Short])
+    HeartbeatResponseAndHeader(header, body)
+  }
+
+  def createJoinGroupRequestAndHeader: JoinGroupRequestAndHeader = {
+    import scala.collection.JavaConversions._
+    val header = new RequestHeader(ApiKeys.JOIN_GROUP.id, 0.asInstanceOf[Short], "", 1)
+    val body = new JoinGroupRequest("group1", 30000, List("topic1"), "consumer1", "strategy1");
+    JoinGroupRequestAndHeader(header, body)
+  }
+
+  def createJoinGroupResponseAndHeader: JoinGroupResponseAndHeader = {
+    import scala.collection.JavaConversions._
+    val header = new ResponseHeader(1)
+    val body = new JoinGroupResponse(0.asInstanceOf[Short], 1, "consumer1", List(new TopicPartition("test11", 1)))
+    JoinGroupResponseAndHeader(header, body)
+  }
 }
 
 class RequestResponseSerializationTest extends JUnitSuite {
@@ -194,27 +234,31 @@ class RequestResponseSerializationTest extends JUnitSuite {
   private val offsetResponse = SerializationTestUtils.createTestOffsetResponse
   private val topicMetadataRequest = SerializationTestUtils.createTestTopicMetadataRequest
   private val topicMetadataResponse = SerializationTestUtils.createTestTopicMetadataResponse
-  private val offsetCommitRequest = SerializationTestUtils.createTestOffsetCommitRequest
+  private val offsetCommitRequestV0 = SerializationTestUtils.createTestOffsetCommitRequestV0
+  private val offsetCommitRequestV1 = SerializationTestUtils.createTestOffsetCommitRequestV1
   private val offsetCommitResponse = SerializationTestUtils.createTestOffsetCommitResponse
   private val offsetFetchRequest = SerializationTestUtils.createTestOffsetFetchRequest
   private val offsetFetchResponse = SerializationTestUtils.createTestOffsetFetchResponse
   private val consumerMetadataRequest = SerializationTestUtils.createConsumerMetadataRequest
   private val consumerMetadataResponse = SerializationTestUtils.createConsumerMetadataResponse
   private val consumerMetadataResponseNoCoordinator = ConsumerMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode)
+  private val heartbeatRequest = SerializationTestUtils.createHeartbeatRequestAndHeader
+  private val heartbeatResponse = SerializationTestUtils.createHeartbeatResponseAndHeader
+  private val joinGroupRequest = SerializationTestUtils.createJoinGroupRequestAndHeader
+  private val joinGroupResponse = SerializationTestUtils.createJoinGroupResponseAndHeader
 
   @Test
   def testSerializationAndDeserialization() {
 
     val requestsAndResponses =
-      collection.immutable.Seq(leaderAndIsrRequest, leaderAndIsrResponse,
-                               stopReplicaRequest, stopReplicaResponse,
-                               producerRequest, producerResponse,
-                               fetchRequest,
-                               offsetRequest, offsetResponse,
-                               topicMetadataRequest, topicMetadataResponse,
-                               offsetCommitRequest, offsetCommitResponse,
-                               offsetFetchRequest, offsetFetchResponse,
-                               consumerMetadataRequest, consumerMetadataResponse, consumerMetadataResponseNoCoordinator)
+      collection.immutable.Seq(leaderAndIsrRequest, leaderAndIsrResponse, stopReplicaRequest,
+                               stopReplicaResponse, producerRequest, producerResponse,
+                               fetchRequest, offsetRequest, offsetResponse, topicMetadataRequest,
+                               topicMetadataResponse, offsetCommitRequestV0, offsetCommitRequestV1,
+                               offsetCommitResponse, offsetFetchRequest, offsetFetchResponse,
+                               consumerMetadataRequest, consumerMetadataResponse,
+                               consumerMetadataResponseNoCoordinator, heartbeatRequest,
+                               heartbeatResponse, joinGroupRequest, joinGroupResponse)
 
     requestsAndResponses.foreach { original =>
       val buffer = ByteBuffer.allocate(original.sizeInBytes)
@@ -222,7 +266,9 @@ class RequestResponseSerializationTest extends JUnitSuite {
       buffer.rewind()
       val deserializer = original.getClass.getDeclaredMethod("readFrom", classOf[ByteBuffer])
       val deserialized = deserializer.invoke(null, buffer)
-      assertEquals("The original and deserialized request/response should be the same.", original, deserialized)
+      assertFalse("All serialized bytes in " + original.getClass.getSimpleName + " should have been consumed",
+                  buffer.hasRemaining)
+      assertEquals("The original and deserialized for " + original.getClass.getSimpleName + " should be the same.", original, deserialized)
     }
   }
 }

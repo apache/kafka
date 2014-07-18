@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -276,13 +277,16 @@ public class Sender implements Runnable {
      * Create a produce request from the given record batches
      */
     private ClientRequest produceRequest(long now, int destination, short acks, int timeout, List<RecordBatch> batches) {
-        ProduceRequest request = new ProduceRequest(acks, timeout);
+        Map<TopicPartition, ByteBuffer> produceRecordsByPartition = new HashMap<TopicPartition, ByteBuffer>(batches.size());
         Map<TopicPartition, RecordBatch> recordsByPartition = new HashMap<TopicPartition, RecordBatch>(batches.size());
         for (RecordBatch batch : batches) {
-            batch.records.buffer().flip();
-            request.add(batch.topicPartition, batch.records);
-            recordsByPartition.put(batch.topicPartition, batch);
+            TopicPartition tp = batch.topicPartition;
+            ByteBuffer recordsBuffer = batch.records.buffer();
+            recordsBuffer.flip();
+            produceRecordsByPartition.put(tp, recordsBuffer);
+            recordsByPartition.put(tp, batch);
         }
+        ProduceRequest request = new ProduceRequest(acks, timeout, produceRecordsByPartition);
         RequestSend send = new RequestSend(destination, this.client.nextRequestHeader(ApiKeys.PRODUCE), request.toStruct());
         return new ClientRequest(now, acks != 0, send, recordsByPartition);
     }

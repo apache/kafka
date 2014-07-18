@@ -129,13 +129,13 @@ object LeaderAndIsrRequest {
 }
 
 case class LeaderAndIsrRequest (versionId: Short,
-                                override val correlationId: Int,
+                                correlationId: Int,
                                 clientId: String,
                                 controllerId: Int,
                                 controllerEpoch: Int,
                                 partitionStateInfos: Map[(String, Int), PartitionStateInfo],
                                 leaders: Set[Broker])
-    extends RequestOrResponse(Some(RequestKeys.LeaderAndIsrKey), correlationId) {
+    extends RequestOrResponse(Some(RequestKeys.LeaderAndIsrKey)) {
 
   def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo], leaders: Set[Broker], controllerId: Int,
            controllerEpoch: Int, correlationId: Int, clientId: String) = {

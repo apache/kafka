@@ -133,9 +133,9 @@ class RequestSendThread(val controllerId: Int,
             isSendSuccessful = true
           } catch {
             case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
-              error(("Controller %d epoch %d failed to send %s request with correlation id %s to broker %s. " +
+              error(("Controller %d epoch %d failed to send request %s to broker %s. " +
                 "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
-                RequestKeys.nameForKey(request.requestId.get), request.correlationId, toBroker.toString()), e)
+                request.toString, toBroker.toString()), e)
               channel.disconnect()
               connectToBroker(toBroker, channel)
               isSendSuccessful = false
@@ -153,8 +153,8 @@ class RequestSendThread(val controllerId: Int,
           case RequestKeys.UpdateMetadataKey =>
             response = UpdateMetadataResponse.readFrom(receive.buffer)
         }
-        stateChangeLogger.trace("Controller %d epoch %d received response correlationId %d for a request sent to broker %s"
-                                  .format(controllerId, controllerContext.epoch, response.correlationId, toBroker.toString()))
+        stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
+                                  .format(controllerId, controllerContext.epoch, response.toString, toBroker.toString))
 
         if(callback != null) {
           callback(response)

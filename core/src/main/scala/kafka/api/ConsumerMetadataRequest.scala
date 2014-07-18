@@ -41,9 +41,9 @@ object ConsumerMetadataRequest {
 
 case class ConsumerMetadataRequest(group: String,
                                    versionId: Short = ConsumerMetadataRequest.CurrentVersion,
-                                   override val correlationId: Int = 0,
+                                   correlationId: Int = 0,
                                    clientId: String = ConsumerMetadataRequest.DefaultClientId)
-  extends RequestOrResponse(Some(RequestKeys.ConsumerMetadataKey), correlationId) {
+  extends RequestOrResponse(Some(RequestKeys.ConsumerMetadataKey)) {
 
   def sizeInBytes =
     2 + /* versionId */
