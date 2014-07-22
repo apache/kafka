@@ -21,26 +21,31 @@ import org.scalatest.junit.JUnit3Suite
 import org.junit.Test
 import org.junit.Assert._
 
-import java.util.{Random, Properties}
+import java.util.Random
 import java.lang.Integer
 import java.util.concurrent.{TimeoutException, TimeUnit, ExecutionException}
 
-import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.{ShutdownableThread, Utils, TestUtils}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.KafkaConfig
+import kafka.utils.{TestZKUtils, ShutdownableThread, TestUtils}
+import kafka.integration.KafkaServerTestHarness
 import kafka.consumer.SimpleConsumer
 
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.clients.producer._
 
-class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness {
-  private val brokerId1 = 0
-  private val brokerId2 = 1
-  private val ports = TestUtils.choosePorts(2)
-  private val (port1, port2) = (ports(0), ports(1))
-  private var server1: KafkaServer = null
-  private var server2: KafkaServer = null
-  private var servers = List.empty[KafkaServer]
+class ProducerFailureHandlingTest extends JUnit3Suite with KafkaServerTestHarness {
+  private val producerBufferSize = 30000
+  private val serverMessageMaxBytes =  producerBufferSize/2
+
+  val numServers = 2
+  val configs =
+    for(props <- TestUtils.createBrokerConfigs(numServers, false))
+    yield new KafkaConfig(props) {
+      override val zkConnect = TestZKUtils.zookeeperConnect
+      override val autoCreateTopicsEnable = false
+      override val messageMaxBytes = serverMessageMaxBytes
+    }
+
 
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null
@@ -50,32 +55,19 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
   private var producer3: KafkaProducer = null
   private var producer4: KafkaProducer = null
 
-  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1, false)
-  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2, false)
-  props1.put("auto.create.topics.enable", "false")
-  props2.put("auto.create.topics.enable", "false")
-  private val config1 = new KafkaConfig(props1)
-  private val config2 = new KafkaConfig(props2)
-  private val brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2))
-
-  private val bufferSize = 2 * config1.messageMaxBytes
-
   private val topic1 = "topic-1"
   private val topic2 = "topic-2"
 
   override def setUp() {
     super.setUp()
-    server1 = TestUtils.createServer(config1)
-    server2 = TestUtils.createServer(config2)
-    servers = List(server1,server2)
 
     // TODO: we need to migrate to new consumers when 0.9 is final
-    consumer1 = new SimpleConsumer("localhost", port1, 100, 1024*1024, "")
-    consumer2 = new SimpleConsumer("localhost", port2, 100, 1024*1024, "")
+    consumer1 = new SimpleConsumer("localhost", configs(0).port, 100, 1024*1024, "")
+    consumer2 = new SimpleConsumer("localhost", configs(1).port, 100, 1024*1024, "")
 
-    producer1 = TestUtils.createNewProducer(brokerList, acks = 0, blockOnBufferFull = false, bufferSize = bufferSize);
-    producer2 = TestUtils.createNewProducer(brokerList, acks = 1, blockOnBufferFull = false, bufferSize = bufferSize)
-    producer3 = TestUtils.createNewProducer(brokerList, acks = -1, blockOnBufferFull = false, bufferSize = bufferSize)
+    producer1 = TestUtils.createNewProducer(brokerList, acks = 0, blockOnBufferFull = false, bufferSize = producerBufferSize);
+    producer2 = TestUtils.createNewProducer(brokerList, acks = 1, blockOnBufferFull = false, bufferSize = producerBufferSize)
+    producer3 = TestUtils.createNewProducer(brokerList, acks = -1, blockOnBufferFull = false, bufferSize = producerBufferSize)
   }
 
   override def tearDown() {
@@ -86,9 +78,6 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     if (producer2 != null) producer2.close
     if (producer3 != null) producer3.close
     if (producer4 != null) producer4.close
-
-    server1.shutdown; Utils.rm(server1.config.logDirs)
-    server2.shutdown; Utils.rm(server2.config.logDirs)
 
     super.tearDown()
   }
@@ -102,7 +91,7 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     TestUtils.createTopic(zkClient, topic1, 1, 2, servers)
 
     // send a too-large record
-    val record = new ProducerRecord(topic1, null, "key".getBytes, new Array[Byte](config1.messageMaxBytes + 1))
+    val record = new ProducerRecord(topic1, null, "key".getBytes, new Array[Byte](serverMessageMaxBytes + 1))
     assertEquals("Returned metadata should have offset -1", producer1.send(record).get.offset, -1L)
   }
 
@@ -115,7 +104,7 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     TestUtils.createTopic(zkClient, topic1, 1, 2, servers)
 
     // send a too-large record
-    val record = new ProducerRecord(topic1, null, "key".getBytes, new Array[Byte](config1.messageMaxBytes + 1))
+    val record = new ProducerRecord(topic1, null, "key".getBytes, new Array[Byte](serverMessageMaxBytes + 1))
     intercept[ExecutionException] {
       producer2.send(record).get
     }
@@ -149,7 +138,7 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     TestUtils.createTopic(zkClient, topic1, 1, 2, servers)
 
     // producer with incorrect broker list
-    producer4 = TestUtils.createNewProducer("localhost:8686,localhost:4242", acks = 1, blockOnBufferFull = false, bufferSize = bufferSize)
+    producer4 = TestUtils.createNewProducer("localhost:8686,localhost:4242", acks = 1, blockOnBufferFull = false, bufferSize = producerBufferSize)
 
     // send a record with incorrect broker list
     val record = new ProducerRecord(topic1, null, "key".getBytes, "value".getBytes)
@@ -175,8 +164,7 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
 
     // stop IO threads and request handling, but leave networking operational
     // any requests should be accepted and queue up, but not handled
-    server1.requestHandlerPool.shutdown()
-    server2.requestHandlerPool.shutdown()
+    servers.foreach(server => server.requestHandlerPool.shutdown())
 
     producer1.send(record1).get(5000, TimeUnit.MILLISECONDS)
 
@@ -186,11 +174,11 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
 
     // TODO: expose producer configs after creating them
     // send enough messages to get buffer full
-    val msgSize = 10000
+    val tooManyRecords = 10
+    val msgSize = producerBufferSize / tooManyRecords
     val value = new Array[Byte](msgSize)
     new Random().nextBytes(value)
     val record2 = new ProducerRecord(topic1, null, "key".getBytes, value)
-    val tooManyRecords = bufferSize / ("key".getBytes.length + value.length)
 
     intercept[KafkaException] {
       for (i <- 1 to tooManyRecords)
@@ -269,17 +257,13 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
 
     // rolling bounce brokers
     for (i <- 0 until 2) {
-      server1.shutdown()
-      server1.awaitShutdown()
-      server1.startup
+      for (server <- servers) {
+        server.shutdown()
+        server.awaitShutdown()
+        server.startup
 
-      Thread.sleep(2000)
-
-      server2.shutdown()
-      server2.awaitShutdown()
-      server2.startup
-
-      Thread.sleep(2000)
+        Thread.sleep(2000)
+      }
 
       // Make sure the producer do not see any exception
       // in returned metadata due to broker failures
@@ -298,7 +282,7 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     // double check that the leader info has been propagated after consecutive bounces
     val leader = TestUtils.waitUntilMetadataIsPropagated(servers, topic1, partition)
 
-    val fetchResponse = if(leader == server1.config.brokerId) {
+    val fetchResponse = if(leader == configs(0).brokerId) {
       consumer1.fetch(new FetchRequestBuilder().addFetch(topic1, partition, 0, Int.MaxValue).build()).messageSet(topic1, partition)
     } else {
       consumer2.fetch(new FetchRequestBuilder().addFetch(topic1, partition, 0, Int.MaxValue).build()).messageSet(topic1, partition)
@@ -317,7 +301,7 @@ class ProducerFailureHandlingTest extends JUnit3Suite with ZooKeeperTestHarness 
     var sent = 0
     var failed = false
 
-    val producer = TestUtils.createNewProducer(brokerList, bufferSize = bufferSize, retries = 10)
+    val producer = TestUtils.createNewProducer(brokerList, bufferSize = producerBufferSize, retries = 10)
 
     override def doWork(): Unit = {
       val responses =

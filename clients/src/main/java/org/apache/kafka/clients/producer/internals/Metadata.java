@@ -139,4 +139,11 @@ public final class Metadata {
     public synchronized long lastUpdate() {
         return this.lastRefreshMs;
     }
+
+    /**
+     * The metadata refresh backoff in ms
+     */
+    public long refreshBackoff() {
+        return refreshBackoffMs;
+    }
 }

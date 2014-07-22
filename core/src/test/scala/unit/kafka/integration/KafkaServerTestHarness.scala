@@ -30,11 +30,13 @@ trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
 
   val configs: List[KafkaConfig]
   var servers: List[KafkaServer] = null
+  var brokerList: String = null
 
   override def setUp() {
     super.setUp
     if(configs.size <= 0)
       throw new KafkaException("Must suply at least one server config.")
+    brokerList = TestUtils.getBrokerListStrFromConfigs(configs)
     servers = configs.map(TestUtils.createServer(_))
   }
 

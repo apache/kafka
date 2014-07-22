@@ -77,6 +77,9 @@ public class NetworkClient implements KafkaClient {
     /* true iff there is a metadata request that has been sent and for which we have not yet received a response */
     private boolean metadataFetchInProgress;
 
+    /* the last timestamp when no broker node is available to connect */
+    private long lastNoNodeAvailableMs;
+
     public NetworkClient(Selectable selector,
                          Metadata metadata,
                          String clientId,
@@ -94,6 +97,7 @@ public class NetworkClient implements KafkaClient {
         this.correlation = 0;
         this.nodeIndexOffset = new Random().nextInt(Integer.MAX_VALUE);
         this.metadataFetchInProgress = false;
+        this.lastNoNodeAvailableMs = 0;
     }
 
     /**
@@ -162,7 +166,10 @@ public class NetworkClient implements KafkaClient {
         }
 
         // should we update our metadata?
-        long metadataTimeout = metadata.timeToNextUpdate(now);
+        long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
+        long timeToNextReconnectAttempt = this.lastNoNodeAvailableMs + metadata.refreshBackoff() - now;
+        // if there is no node available to connect, back off refreshing metadata
+        long metadataTimeout = Math.max(timeToNextMetadataUpdate, timeToNextReconnectAttempt);
         if (!this.metadataFetchInProgress && metadataTimeout == 0)
             maybeUpdateMetadata(sends, now);
 
@@ -354,6 +361,8 @@ public class NetworkClient implements KafkaClient {
         Node node = this.leastLoadedNode(now);
         if (node == null) {
             log.debug("Give up sending metadata request since no node is available");
+            // mark the timestamp for no node available to connect
+            this.lastNoNodeAvailableMs = now;
             return;
         }
 
@@ -367,7 +376,7 @@ public class NetworkClient implements KafkaClient {
             this.inFlightRequests.add(metadataRequest);
         } else if (connectionStates.canConnect(node.id(), now)) {
             // we don't have a connection to this node right now, make one
-            log.debug("Give up sending metadata request to node {} since it is either not connected or cannot have more in flight requests", node.id());
+            log.debug("Init connection to node {} for sending metadata request in the next iteration", node.id());
             initiateConnect(node, now);
         }
     }

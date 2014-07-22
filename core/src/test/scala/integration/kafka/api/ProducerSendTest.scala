@@ -17,7 +17,6 @@
 
 package kafka.api.test
 
-import java.util.Properties
 import java.lang.{Integer, IllegalArgumentException}
 
 import org.apache.kafka.clients.producer._
@@ -25,53 +24,41 @@ import org.scalatest.junit.JUnit3Suite
 import org.junit.Test
 import org.junit.Assert._
 
-import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.{Utils, TestUtils}
-import kafka.zk.ZooKeeperTestHarness
+import kafka.server.KafkaConfig
+import kafka.utils.{TestZKUtils, TestUtils}
 import kafka.consumer.SimpleConsumer
 import kafka.api.FetchRequestBuilder
 import kafka.message.Message
+import kafka.integration.KafkaServerTestHarness
 
 
-class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
-  private val brokerId1 = 0
-  private val brokerId2 = 1
-  private val ports = TestUtils.choosePorts(2)
-  private val (port1, port2) = (ports(0), ports(1))
-  private var server1: KafkaServer = null
-  private var server2: KafkaServer = null
-  private var servers = List.empty[KafkaServer]
+class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
+  val numServers = 2
+  val configs =
+    for(props <- TestUtils.createBrokerConfigs(numServers, false))
+    yield new KafkaConfig(props) {
+      override val zkConnect = TestZKUtils.zookeeperConnect
+      override val numPartitions = 4
+    }
 
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null
-
-  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1, false)
-  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2, false)
-  props1.put("num.partitions", "4")
-  props2.put("num.partitions", "4")
-  private val config1 = new KafkaConfig(props1)
-  private val config2 = new KafkaConfig(props2)
 
   private val topic = "topic"
   private val numRecords = 100
 
   override def setUp() {
     super.setUp()
-    // set up 2 brokers with 4 partitions each
-    server1 = TestUtils.createServer(config1)
-    server2 = TestUtils.createServer(config2)
-    servers = List(server1,server2)
 
     // TODO: we need to migrate to new consumers when 0.9 is final
-    consumer1 = new SimpleConsumer("localhost", port1, 100, 1024*1024, "")
-    consumer2 = new SimpleConsumer("localhost", port2, 100, 1024*1024, "")
+    consumer1 = new SimpleConsumer("localhost", configs(0).port, 100, 1024*1024, "")
+    consumer2 = new SimpleConsumer("localhost", configs(1).port, 100, 1024*1024, "")
   }
 
   override def tearDown() {
-    server1.shutdown
-    server2.shutdown
-    Utils.rm(server1.config.logDirs)
-    Utils.rm(server2.config.logDirs)
+    consumer1.close()
+    consumer2.close()
+
     super.tearDown()
   }
 
@@ -90,7 +77,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
    */
   @Test
   def testSendOffset() {
-    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    var producer = TestUtils.createNewProducer(brokerList)
 
     val callback = new CheckErrorCallback
 
@@ -146,7 +133,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
    */
   @Test
   def testClose() {
-    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    var producer = TestUtils.createNewProducer(brokerList)
 
     try {
       // create topic
@@ -182,7 +169,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
    */
   @Test
   def testSendToPartition() {
-    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)))
+    var producer = TestUtils.createNewProducer(brokerList)
 
     try {
       // create topic
@@ -209,7 +196,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
       }
 
       // make sure the fetched messages also respect the partitioning and ordering
-      val fetchResponse1 = if(leader1.get == server1.config.brokerId) {
+      val fetchResponse1 = if(leader1.get == configs(0).brokerId) {
         consumer1.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
       } else {
         consumer2.fetch(new FetchRequestBuilder().addFetch(topic, partition, 0, Int.MaxValue).build())
@@ -237,8 +224,7 @@ class ProducerSendTest extends JUnit3Suite with ZooKeeperTestHarness {
    */
   @Test
   def testAutoCreateTopic() {
-    var producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
-                                            retries = 5)
+    var producer = TestUtils.createNewProducer(brokerList, retries = 5)
 
     try {
       // Send a message to auto-create the topic
