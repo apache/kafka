@@ -12,17 +12,17 @@
  */
 package kafka.api
 
-import org.apache.kafka.common.requests.{JoinGroupResponse, ResponseHeader}
+import org.apache.kafka.common.requests.JoinGroupResponse
 import java.nio.ByteBuffer
 
 object JoinGroupResponseAndHeader {
   def readFrom(buffer: ByteBuffer): JoinGroupResponseAndHeader = {
-    val header = ResponseHeader.parse(buffer)
+    val correlationId = buffer.getInt
     val body = JoinGroupResponse.parse(buffer)
-    new JoinGroupResponseAndHeader(header, body)
+    new JoinGroupResponseAndHeader(correlationId, body)
   }
 }
 
-case class JoinGroupResponseAndHeader(override val header: ResponseHeader, override val body: JoinGroupResponse)
-  extends GenericRequestOrResponseAndHeader(header, body, RequestKeys.nameForKey(RequestKeys.JoinGroupKey), None) {
+case class JoinGroupResponseAndHeader(override val correlationId: Int, override val body: JoinGroupResponse)
+  extends GenericResponseAndHeader(correlationId, body, RequestKeys.nameForKey(RequestKeys.JoinGroupKey), None) {
 }

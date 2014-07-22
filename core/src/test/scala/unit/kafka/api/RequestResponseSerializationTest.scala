@@ -196,29 +196,25 @@ object SerializationTestUtils {
   }
 
   def createHeartbeatRequestAndHeader: HeartbeatRequestAndHeader = {
-    val header = new RequestHeader(ApiKeys.HEARTBEAT.id, 0.asInstanceOf[Short], "", 1)
     val body = new HeartbeatRequest("group1", 1, "consumer1")
-    HeartbeatRequestAndHeader(header, body)
+    HeartbeatRequestAndHeader(0.asInstanceOf[Short], 1, "", body)
   }
 
   def createHeartbeatResponseAndHeader: HeartbeatResponseAndHeader = {
-    val header = new ResponseHeader(1)
     val body = new HeartbeatResponse(0.asInstanceOf[Short])
-    HeartbeatResponseAndHeader(header, body)
+    HeartbeatResponseAndHeader(1, body)
   }
 
   def createJoinGroupRequestAndHeader: JoinGroupRequestAndHeader = {
     import scala.collection.JavaConversions._
-    val header = new RequestHeader(ApiKeys.JOIN_GROUP.id, 0.asInstanceOf[Short], "", 1)
     val body = new JoinGroupRequest("group1", 30000, List("topic1"), "consumer1", "strategy1");
-    JoinGroupRequestAndHeader(header, body)
+    JoinGroupRequestAndHeader(0.asInstanceOf[Short], 1, "", body)
   }
 
   def createJoinGroupResponseAndHeader: JoinGroupResponseAndHeader = {
     import scala.collection.JavaConversions._
-    val header = new ResponseHeader(1)
     val body = new JoinGroupResponse(0.asInstanceOf[Short], 1, "consumer1", List(new TopicPartition("test11", 1)))
-    JoinGroupResponseAndHeader(header, body)
+    JoinGroupResponseAndHeader(1, body)
   }
 }
 

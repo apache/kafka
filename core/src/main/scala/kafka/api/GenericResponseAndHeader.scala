@@ -16,19 +16,20 @@ package kafka.api
 import java.nio.ByteBuffer
 import org.apache.kafka.common.requests.AbstractRequestResponse
 
-private[kafka] abstract class GenericRequestOrResponseAndHeader(val header: AbstractRequestResponse,
-                                                                val body: AbstractRequestResponse,
-                                                                val name: String,
-                                                                override val requestId: Option[Short] = None)
+private[kafka] abstract class GenericResponseAndHeader(val correlationId: Int,
+                                                       val body: AbstractRequestResponse,
+                                                       val name: String,
+                                                       override val requestId: Option[Short] = None)
   extends RequestOrResponse(requestId) {
 
   def writeTo(buffer: ByteBuffer) {
-    header.writeTo(buffer)
+    buffer.putInt(correlationId)
     body.writeTo(buffer)
   }
 
   def sizeInBytes(): Int = {
-    header.sizeOf() + body.sizeOf();
+    4 /* correlation id */ +
+    body.sizeOf();
   }
 
   override def toString(): String = {
@@ -38,8 +39,8 @@ private[kafka] abstract class GenericRequestOrResponseAndHeader(val header: Abst
   override def describe(details: Boolean): String = {
     val strBuffer = new StringBuilder
     strBuffer.append("Name: " + name)
-    strBuffer.append("; header: " + header.toString)
-    strBuffer.append("; body: " + body.toString)
+    strBuffer.append("; CorrelationId: " + correlationId)
+    strBuffer.append("; Body: " + body.toString)
     strBuffer.toString()
   }
 }

@@ -17,24 +17,29 @@ import java.nio.ByteBuffer
 import kafka.network.{BoundedByteBufferSend, RequestChannel}
 import kafka.common.ErrorMapping
 import org.apache.kafka.common.requests._
+import kafka.api.ApiUtils._
 import kafka.network.RequestChannel.Response
 import scala.Some
 
 object JoinGroupRequestAndHeader {
   def readFrom(buffer: ByteBuffer): JoinGroupRequestAndHeader = {
-    val header = RequestHeader.parse(buffer)
+    val versionId = buffer.getShort
+    val correlationId = buffer.getInt
+    val clientId = readShortString(buffer)
     val body = JoinGroupRequest.parse(buffer)
-    new JoinGroupRequestAndHeader(header, body)
+    new JoinGroupRequestAndHeader(versionId, correlationId, clientId, body)
   }
 }
 
-case class JoinGroupRequestAndHeader(override val header: RequestHeader, override val body: JoinGroupRequest)
-  extends GenericRequestOrResponseAndHeader(header, body, RequestKeys.nameForKey(RequestKeys.JoinGroupKey), Some(RequestKeys.JoinGroupKey)) {
+case class JoinGroupRequestAndHeader(override val versionId: Short,
+                                     override val correlationId: Int,
+                                     override val clientId: String,
+                                     override val body: JoinGroupRequest)
+  extends GenericRequestAndHeader(versionId, correlationId, clientId, body, RequestKeys.nameForKey(RequestKeys.JoinGroupKey), Some(RequestKeys.JoinGroupKey)) {
 
   override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val errorResponseHeader = new ResponseHeader(header.correlationId)
     val errorResponseBody = new JoinGroupResponse(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
-    val errorHeartBeatResponseAndHeader = new JoinGroupResponseAndHeader(errorResponseHeader, errorResponseBody)
+    val errorHeartBeatResponseAndHeader = new JoinGroupResponseAndHeader(correlationId, errorResponseBody)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorHeartBeatResponseAndHeader)))
   }
 }

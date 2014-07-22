@@ -16,24 +16,30 @@ package kafka.api
 import java.nio.ByteBuffer
 import kafka.network.{BoundedByteBufferSend, RequestChannel}
 import kafka.common.ErrorMapping
+import org.apache.kafka.common.requests.{HeartbeatResponse, HeartbeatRequest}
+import kafka.api.ApiUtils._
 import kafka.network.RequestChannel.Response
-import org.apache.kafka.common.requests.{HeartbeatResponse, ResponseHeader, HeartbeatRequest, RequestHeader}
+import scala.Some
 
 object HeartbeatRequestAndHeader {
   def readFrom(buffer: ByteBuffer): HeartbeatRequestAndHeader = {
-    val header = RequestHeader.parse(buffer)
+    val versionId = buffer.getShort
+    val correlationId = buffer.getInt
+    val clientId = readShortString(buffer)
     val body = HeartbeatRequest.parse(buffer)
-    new HeartbeatRequestAndHeader(header, body)
+    new HeartbeatRequestAndHeader(versionId, correlationId, clientId, body)
   }
 }
 
-case class HeartbeatRequestAndHeader(override val header: RequestHeader, override  val body: HeartbeatRequest)
-  extends GenericRequestOrResponseAndHeader(header, body, RequestKeys.nameForKey(RequestKeys.HeartbeatKey), Some(RequestKeys.HeartbeatKey)) {
+case class HeartbeatRequestAndHeader(override val versionId: Short,
+                                     override val correlationId: Int,
+                                     override val clientId: String,
+                                     override val body: HeartbeatRequest)
+  extends GenericRequestAndHeader(versionId, correlationId, clientId, body, RequestKeys.nameForKey(RequestKeys.HeartbeatKey), Some(RequestKeys.HeartbeatKey)) {
 
   override def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
-    val errorResponseHeader = new ResponseHeader(header.correlationId)
     val errorResponseBody = new HeartbeatResponse(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
-    val errorHeartBeatResponseAndHeader = new HeartbeatResponseAndHeader(errorResponseHeader, errorResponseBody)
+    val errorHeartBeatResponseAndHeader = new HeartbeatResponseAndHeader(correlationId, errorResponseBody)
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorHeartBeatResponseAndHeader)))
   }
 }

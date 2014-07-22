@@ -12,17 +12,17 @@
  */
 package kafka.api
 
-import org.apache.kafka.common.requests.{ResponseHeader, HeartbeatResponse}
+import org.apache.kafka.common.requests.HeartbeatResponse
 import java.nio.ByteBuffer
 
 object HeartbeatResponseAndHeader {
   def readFrom(buffer: ByteBuffer): HeartbeatResponseAndHeader = {
-    val header = ResponseHeader.parse(buffer)
+    val correlationId = buffer.getInt
     val body = HeartbeatResponse.parse(buffer)
-    new HeartbeatResponseAndHeader(header, body)
+    new HeartbeatResponseAndHeader(correlationId, body)
   }
 }
 
-case class HeartbeatResponseAndHeader(override val header: ResponseHeader, override val body: HeartbeatResponse)
-  extends GenericRequestOrResponseAndHeader(header, body, RequestKeys.nameForKey(RequestKeys.HeartbeatKey), None) {
+case class HeartbeatResponseAndHeader(override val correlationId: Int, override val body: HeartbeatResponse)
+  extends GenericResponseAndHeader(correlationId, body, RequestKeys.nameForKey(RequestKeys.HeartbeatKey), None) {
 }
