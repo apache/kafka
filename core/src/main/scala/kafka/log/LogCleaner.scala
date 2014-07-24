@@ -28,6 +28,8 @@ import kafka.utils._
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 import java.lang.IllegalStateException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * The cleaner is responsible for removing obsolete records from logs which have the dedupe retention strategy.
@@ -173,7 +175,8 @@ class LogCleaner(val config: CleanerConfig,
                               checkDone = checkDone)
     
     @volatile var lastStats: CleanerStats = new CleanerStats()
-    
+    private val backOffWaitLatch = new CountDownLatch(1)
+
     private def checkDone(topicAndPartition: TopicAndPartition) {
       if (!isRunning.get())
         throw new ThreadShutdownException
@@ -187,6 +190,13 @@ class LogCleaner(val config: CleanerConfig,
       cleanOrSleep()
     }
     
+    
+    override def shutdown() = {
+    	 initiateShutdown()
+    	 backOffWaitLatch.countDown()
+    	 awaitShutdown()
+     }
+     
     /**
      * Clean a log if there is a dirty log available, otherwise sleep for a bit
      */
@@ -194,7 +204,7 @@ class LogCleaner(val config: CleanerConfig,
       cleanerManager.grabFilthiestLog() match {
         case None =>
           // there are no cleanable logs, sleep a while
-          time.sleep(config.backOffMs)
+          backOffWaitLatch.await(config.backOffMs, TimeUnit.MILLISECONDS)
         case Some(cleanable) =>
           // there's a log, clean it
           var endOffset = cleanable.firstDirtyOffset
