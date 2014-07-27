@@ -262,7 +262,7 @@ public class Selector implements Selectable {
                     if (!key.isValid())
                         close(key);
                 } catch (IOException e) {
-                    log.error("Error in I/O: ", e);
+                    log.warn("Error in I/O with {}",channel.socket().getInetAddress().getHostAddress() , e);
                     close(key);
                 }
             }
