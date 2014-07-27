@@ -49,9 +49,9 @@ object Utils extends Logging {
    * @param fun A function
    * @return A Runnable that just executes the function
    */
-  def runnable(fun: () => Unit): Runnable = 
-    new Runnable() {
-      def run() = fun()
+  def runnable(fun: => Unit): Runnable =
+    new Runnable {
+      def run() = fun
     }
 
   /**

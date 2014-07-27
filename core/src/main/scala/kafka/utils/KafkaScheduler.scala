@@ -93,16 +93,14 @@ class KafkaScheduler(val threads: Int,
     debug("Scheduling task %s with initial delay %d ms and period %d ms."
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
     ensureStarted
-    val runnable = new Runnable {
-      def run() = {
-        try {
-          trace("Begining execution of scheduled task '%s'.".format(name))
-          fun()
-        } catch {
-          case t: Throwable => error("Uncaught exception in scheduled task '" + name +"'", t)
-        } finally {
-          trace("Completed execution of scheduled task '%s'.".format(name))
-        }
+    val runnable = Utils.runnable {
+      try {
+        trace("Begining execution of scheduled task '%s'.".format(name))
+        fun()
+      } catch {
+        case t: Throwable => error("Uncaught exception in scheduled task '" + name +"'", t)
+      } finally {
+        trace("Completed execution of scheduled task '%s'.".format(name))
       }
     }
     if(period >= 0)

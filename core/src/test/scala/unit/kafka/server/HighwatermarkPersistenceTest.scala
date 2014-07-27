@@ -32,16 +32,11 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
 
   val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_))
   val topic = "foo"
-  val logManagers = configs.map(config => new LogManager(logDirs = config.logDirs.map(new File(_)).toArray,
-                                                         topicConfigs = Map(),
-                                                         defaultConfig = LogConfig(),
-                                                         cleanerConfig = CleanerConfig(),
-                                                         flushCheckMs = 30000,
-                                                         flushCheckpointMs = 10000L,
-                                                         retentionCheckMs = 30000,
-                                                         scheduler = new KafkaScheduler(1),
-                                                         brokerState = new BrokerState(),
-                                                         time = new MockTime))
+  val logManagers = configs map { config =>
+    TestUtils.createLogManager(
+      logDirs = config.logDirs.map(new File(_)).toArray,
+      cleanerConfig = CleanerConfig())
+  }
     
   @After
   def teardown() {

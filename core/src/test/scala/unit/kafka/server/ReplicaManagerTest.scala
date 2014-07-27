@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
-import kafka.log.{CleanerConfig, LogManager, LogConfig}
 
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
@@ -37,7 +36,7 @@ class ReplicaManagerTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(1)
     val config = new KafkaConfig(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
-    val mockLogMgr = createLogManager(config.logDirs.map(new File(_)).toArray)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
     val partition = rm.getOrCreatePartition(topic, 1, 1)
@@ -51,26 +50,11 @@ class ReplicaManagerTest extends JUnit3Suite {
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = new KafkaConfig(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
-    val mockLogMgr = createLogManager(config.logDirs.map(new File(_)).toArray)
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
     val time: MockTime = new MockTime()
     val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
     val partition = rm.getOrCreatePartition(topic, 1, 1)
     partition.getOrCreateReplica(1)
     rm.checkpointHighWatermarks()
   }
-
-  private def createLogManager(logDirs: Array[File]): LogManager = {
-    val time = new MockTime()
-    return new LogManager(logDirs,
-      topicConfigs = Map(),
-      defaultConfig = new LogConfig(),
-      cleanerConfig = CleanerConfig(enableCleaner = false),
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 100000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      brokerState = new BrokerState(),
-      time = time)
-  }
-
 }
