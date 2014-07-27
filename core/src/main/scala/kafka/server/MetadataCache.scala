@@ -25,7 +25,6 @@ import kafka.utils.Utils._
 import kafka.common.{ErrorMapping, ReplicaNotAvailableException, LeaderNotAvailableException}
 import kafka.common.TopicAndPartition
 import kafka.controller.KafkaController.StateChangeLogger
-import scala.Some
 
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
@@ -34,14 +33,14 @@ import scala.Some
 private[server] class MetadataCache {
   private val cache: mutable.Map[String, mutable.Map[Int, PartitionStateInfo]] =
     new mutable.HashMap[String, mutable.Map[Int, PartitionStateInfo]]()
-  private val aliveBrokers: mutable.Map[Int, Broker] = new mutable.HashMap[Int, Broker]()
+  private var aliveBrokers: Map[Int, Broker] = Map()
   private val partitionMetadataLock = new ReentrantReadWriteLock()
 
   def getTopicMetadata(topics: Set[String]) = {
     val isAllTopics = topics.isEmpty
     val topicsRequested = if(isAllTopics) cache.keySet else topics
     val topicResponses: mutable.ListBuffer[TopicMetadata] = new mutable.ListBuffer[TopicMetadata]
-    inLock(partitionMetadataLock.readLock()) {
+    inReadLock(partitionMetadataLock) {
       for (topic <- topicsRequested) {
         if (isAllTopics || cache.contains(topic)) {
           val partitionStateInfos = cache(topic)
@@ -82,15 +81,15 @@ private[server] class MetadataCache {
   }
 
   def getAliveBrokers = {
-    inLock(partitionMetadataLock.readLock()) {
-      aliveBrokers.values.toList
+    inReadLock(partitionMetadataLock) {
+      aliveBrokers.values.toSeq
     }
   }
 
   def addOrUpdatePartitionInfo(topic: String,
                                partitionId: Int,
                                stateInfo: PartitionStateInfo) {
-    inLock(partitionMetadataLock.writeLock()) {
+    inWriteLock(partitionMetadataLock) {
       cache.get(topic) match {
         case Some(infos) => infos.put(partitionId, stateInfo)
         case None => {
@@ -103,7 +102,7 @@ private[server] class MetadataCache {
   }
 
   def getPartitionInfo(topic: String, partitionId: Int): Option[PartitionStateInfo] = {
-    inLock(partitionMetadataLock.readLock()) {
+    inReadLock(partitionMetadataLock) {
       cache.get(topic) match {
         case Some(partitionInfos) => partitionInfos.get(partitionId)
         case None => None
@@ -114,8 +113,8 @@ private[server] class MetadataCache {
   def updateCache(updateMetadataRequest: UpdateMetadataRequest,
                   brokerId: Int,
                   stateChangeLogger: StateChangeLogger) {
-    inLock(partitionMetadataLock.writeLock()) {
-      updateMetadataRequest.aliveBrokers.foreach(b => aliveBrokers.put(b.id, b))
+    inWriteLock(partitionMetadataLock) {
+      aliveBrokers = updateMetadataRequest.aliveBrokers.map(b => (b.id, b)).toMap
       updateMetadataRequest.partitionStateInfos.foreach { case(tp, info) =>
         if (info.leaderIsrAndControllerEpoch.leaderAndIsr.leader == LeaderAndIsr.LeaderDuringDelete) {
           removePartitionInfo(tp.topic, tp.partition)

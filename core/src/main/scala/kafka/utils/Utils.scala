@@ -21,7 +21,7 @@ import java.io._
 import java.nio._
 import charset.Charset
 import java.nio.channels._
-import java.util.concurrent.locks.Lock
+import java.util.concurrent.locks.{ReadWriteLock, Lock}
 import java.lang.management._
 import javax.management._
 import scala.collection._
@@ -540,13 +540,18 @@ object Utils extends Logging {
   def inLock[T](lock: Lock)(fun: => T): T = {
     lock.lock()
     try {
-       return fun
+      fun
     } finally {
       lock.unlock()
     }
   }
 
-    //JSON strings need to be escaped based on ECMA-404 standard http://json.org
+  def inReadLock[T](lock: ReadWriteLock)(fun: => T): T = inLock[T](lock.readLock)(fun)
+
+  def inWriteLock[T](lock: ReadWriteLock)(fun: => T): T = inLock[T](lock.writeLock)(fun)
+
+
+  //JSON strings need to be escaped based on ECMA-404 standard http://json.org
   def JSONEscapeString (s : String) : String = {
     s.map {
       case '"'  => "\\\""
