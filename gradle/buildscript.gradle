@@ -1,12 +1,10 @@
 repositories {
   repositories {
     // For license plugin.
-    maven {
-      url 'http://dl.bintray.com/content/netflixoss/external-gradle-plugins/'
-    }
+    mavenCentral()
   }
 }
 
 dependencies {
-  classpath 'nl.javadude.gradle.plugins:license-gradle-plugin:0.6.1'
+  classpath 'nl.javadude.gradle.plugins:license-gradle-plugin:0.10.0'
 }
