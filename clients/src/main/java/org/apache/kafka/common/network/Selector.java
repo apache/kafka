@@ -13,6 +13,7 @@
 package org.apache.kafka.common.network;
 
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.CancelledKeyException;
@@ -262,7 +263,11 @@ public class Selector implements Selectable {
                     if (!key.isValid())
                         close(key);
                 } catch (IOException e) {
-                    log.warn("Error in I/O with {}",channel.socket().getInetAddress().getHostAddress() , e);
+                    InetAddress remoteAddress = null;
+                    Socket socket = channel.socket();
+                    if (socket != null)
+                        remoteAddress = socket.getInetAddress();
+                    log.warn("Error in I/O with {}", remoteAddress , e);
                     close(key);
                 }
             }
