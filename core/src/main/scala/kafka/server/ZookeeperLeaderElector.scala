@@ -50,9 +50,27 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
     }
   }
 
+  private def getControllerID(): Int = {
+    readDataMaybeNull(controllerContext.zkClient, electionPath)._1 match {
+       case Some(controller) => KafkaController.parseControllerId(controller)
+       case None => -1
+    }
+  }
+    
   def elect: Boolean = {
     val timestamp = SystemTime.milliseconds.toString
     val electString = Json.encode(Map("version" -> 1, "brokerid" -> brokerId, "timestamp" -> timestamp))
+   
+   leaderId = getControllerID 
+    /* 
+     * We can get here during the initial startup and the handleDeleted ZK callback. Because of the potential race condition, 
+     * it's possible that the controller has already been elected when we get here. This check will prevent the following 
+     * createEphemeralPath method from getting into an infinite loop if this broker is already the controller.
+     */
+    if(leaderId != -1) {
+       debug("Broker %d has been elected as leader, so stopping the election process.".format(leaderId))
+       return amILeader
+    }
 
     try {
       createEphemeralPathExpectConflictHandleZKBug(controllerContext.zkClient, electionPath, electString, brokerId,
@@ -64,15 +82,13 @@ class ZookeeperLeaderElector(controllerContext: ControllerContext,
     } catch {
       case e: ZkNodeExistsException =>
         // If someone else has written the path, then
-        leaderId = readDataMaybeNull(controllerContext.zkClient, electionPath)._1 match {
-          case Some(controller) => KafkaController.parseControllerId(controller)
-          case None => {
-            warn("A leader has been elected but just resigned, this will result in another round of election")
-            -1
-          }
-        }
+        leaderId = getControllerID 
+
         if (leaderId != -1)
           debug("Broker %d was elected as leader instead of broker %d".format(leaderId, brokerId))
+        else
+          warn("A leader has been elected but just resigned, this will result in another round of election")
+
       case e2: Throwable =>
         error("Error while electing or becoming leader on broker %d".format(brokerId), e2)
         resign()
