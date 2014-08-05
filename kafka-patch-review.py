@@ -105,11 +105,13 @@ def main():
       print 'ERROR: Your reviewboard was not created/updated. Please run the script with the --debug option to troubleshoot the problem'
       p.close()
       sys.exit(1)
-  p.close()
+  if p.close() != None:
+    print 'ERROR: reviewboard update failed. Exiting.'
+    sys.exit(1)
   if opt.debug:
     print 'rb url=',rb_url
 
-  git_command="git diff " + opt.branch + " > " + patch_file
+  git_command="git format-patch " + opt.branch + " --stdout > " + patch_file
   if opt.debug:
     print git_command
   p=os.popen(git_command)
