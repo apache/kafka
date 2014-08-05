@@ -86,7 +86,7 @@ public class Struct {
     /**
      * Check if the struct contains a field.
      * @param name
-     * @return
+     * @return Whether a field exists.
      */
     public boolean hasField(String name) {
         return schema.get(name) != null;
