@@ -46,17 +46,17 @@ class RequestPurgatoryTest extends JUnit3Suite {
   def testRequestSatisfaction() {
     val r1 = new DelayedRequest(Array("test1"), null, 100000L)
     val r2 = new DelayedRequest(Array("test2"), null, 100000L)
-    assertEquals("With no waiting requests, nothing should be satisfied", 0, purgatory.update("test1", producerRequest1).size)
-    purgatory.watch(r1)
-    assertEquals("Still nothing satisfied", 0, purgatory.update("test1", producerRequest1).size)
-    purgatory.watch(r2)
-    assertEquals("Still nothing satisfied", 0, purgatory.update("test2", producerRequest2).size)
+    assertEquals("With no waiting requests, nothing should be satisfied", 0, purgatory.update("test1").size)
+    assertFalse("r1 not satisfied and hence watched", purgatory.checkAndMaybeWatch(r1))
+    assertEquals("Still nothing satisfied", 0, purgatory.update("test1").size)
+    assertFalse("r2 not satisfied and hence watched", purgatory.checkAndMaybeWatch(r2))
+    assertEquals("Still nothing satisfied", 0, purgatory.update("test2").size)
     purgatory.satisfied += r1
-    assertEquals("r1 satisfied", mutable.ArrayBuffer(r1), purgatory.update("test1", producerRequest1))
-    assertEquals("Nothing satisfied", 0, purgatory.update("test1", producerRequest2).size)
+    assertEquals("r1 satisfied", mutable.ArrayBuffer(r1), purgatory.update("test1"))
+    assertEquals("Nothing satisfied", 0, purgatory.update("test1").size)
     purgatory.satisfied += r2
-    assertEquals("r2 satisfied", mutable.ArrayBuffer(r2), purgatory.update("test2", producerRequest2))
-    assertEquals("Nothing satisfied", 0, purgatory.update("test2", producerRequest2).size)
+    assertEquals("r2 satisfied", mutable.ArrayBuffer(r2), purgatory.update("test2"))
+    assertEquals("Nothing satisfied", 0, purgatory.update("test2").size)
   }
 
   @Test
@@ -65,8 +65,8 @@ class RequestPurgatoryTest extends JUnit3Suite {
     val r1 = new DelayedRequest(Array("test1"), null, expiration)
     val r2 = new DelayedRequest(Array("test1"), null, 200000L)
     val start = System.currentTimeMillis
-    purgatory.watch(r1)
-    purgatory.watch(r2)
+    assertFalse("r1 not satisfied and hence watched", purgatory.checkAndMaybeWatch(r1))
+    assertFalse("r2 not satisfied and hence watched", purgatory.checkAndMaybeWatch(r2))
     purgatory.awaitExpiration(r1)
     val elapsed = System.currentTimeMillis - start
     assertTrue("r1 expired", purgatory.expired.contains(r1))
@@ -74,7 +74,7 @@ class RequestPurgatoryTest extends JUnit3Suite {
     assertTrue("Time for expiration %d should at least %d".format(elapsed, expiration), elapsed >= expiration)
   }
   
-  class MockRequestPurgatory extends RequestPurgatory[DelayedRequest, ProducerRequest] {
+  class MockRequestPurgatory extends RequestPurgatory[DelayedRequest] {
     val satisfied = mutable.Set[DelayedRequest]()
     val expired = mutable.Set[DelayedRequest]()
     def awaitExpiration(delayed: DelayedRequest) = {
@@ -82,7 +82,7 @@ class RequestPurgatoryTest extends JUnit3Suite {
         delayed.wait()
       }
     }
-    def checkSatisfied(request: ProducerRequest, delayed: DelayedRequest): Boolean = satisfied.contains(delayed)
+    def checkSatisfied(delayed: DelayedRequest): Boolean = satisfied.contains(delayed)
     def expire(delayed: DelayedRequest) {
       expired += delayed
       delayed synchronized {

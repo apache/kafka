@@ -19,6 +19,7 @@ package kafka.api
 
 import java.nio.ByteBuffer
 import java.nio.channels.GatheringByteChannel
+
 import kafka.common.{TopicAndPartition, ErrorMapping}
 import kafka.message.{MessageSet, ByteBufferMessageSet}
 import kafka.network.{MultiSend, Send}
@@ -151,7 +152,7 @@ object FetchResponse {
 
 
 case class FetchResponse(correlationId: Int,
-                         data: Map[TopicAndPartition, FetchResponsePartitionData])  {
+                         data: Map[TopicAndPartition, FetchResponsePartitionData]) {
 
   /**
    * Partitions the data into a map of maps (one for each topic).

@@ -17,15 +17,17 @@
 
 package kafka.tools
 
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord, KafkaProducer}
+
+import kafka.consumer._
+
 import java.util.Properties
 import java.util.Arrays
-import kafka.consumer._
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord, KafkaProducer}
 
 object TestEndToEndLatency {
   def main(args: Array[String]) {
-    if (args.length != 4) {
-      System.err.println("USAGE: java " + getClass().getName + " broker_list zookeeper_connect topic num_messages")
+    if (args.length != 6) {
+      System.err.println("USAGE: java " + getClass().getName + " broker_list zookeeper_connect topic num_messages consumer_fetch_max_wait producer_acks")
       System.exit(1)
     }
 
@@ -33,31 +35,38 @@ object TestEndToEndLatency {
     val zkConnect = args(1)
     val topic = args(2)
     val numMessages = args(3).toInt
+    val consumerFetchMaxWait = args(4).toInt
+    val producerAcks = args(5).toInt
 
     val consumerProps = new Properties()
     consumerProps.put("group.id", topic)
     consumerProps.put("auto.commit.enable", "false")
     consumerProps.put("auto.offset.reset", "largest")
     consumerProps.put("zookeeper.connect", zkConnect)
-    consumerProps.put("fetch.wait.max.ms", "1")
+    consumerProps.put("fetch.wait.max.ms", consumerFetchMaxWait.toString)
     consumerProps.put("socket.timeout.ms", 1201000.toString)
 
     val config = new ConsumerConfig(consumerProps)
     val connector = Consumer.create(config)
-    var stream = connector.createMessageStreams(Map(topic -> 1)).get(topic).head.head
+    val stream = connector.createMessageStreams(Map(topic -> 1)).get(topic).head.head
     val iter = stream.iterator
 
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0")
     producerProps.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
+    producerProps.put(ProducerConfig.ACKS_CONFIG, producerAcks.toString)
     val producer = new KafkaProducer(producerProps)
+
+    // make sure the consumer fetcher has started before sending data since otherwise
+    // the consumption from the tail will skip the first message and hence be blocked
+    Thread.sleep(5000)
 
     val message = "hello there beautiful".getBytes
     var totalTime = 0.0
     val latencies = new Array[Long](numMessages)
     for (i <- 0 until numMessages) {
-      var begin = System.nanoTime
+      val begin = System.nanoTime
       producer.send(new ProducerRecord(topic, message))
       val received = iter.next
       val elapsed = System.nanoTime - begin

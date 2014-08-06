@@ -17,26 +17,29 @@
 
 package kafka.server
 
-import kafka.utils._
-import kafka.common._
-import java.nio.ByteBuffer
-import java.util.Properties
-import kafka.log.{FileMessageSet, LogConfig}
-import org.I0Itec.zkclient.ZkClient
-import scala.collection._
-import kafka.message._
-import java.util.concurrent.TimeUnit
-import kafka.metrics.KafkaMetricsGroup
-import com.yammer.metrics.core.Gauge
-import scala.Some
-import kafka.common.TopicAndPartition
-import kafka.tools.MessageFormatter
-import java.io.PrintStream
 import org.apache.kafka.common.protocol.types.{Struct, Schema, Field}
 import org.apache.kafka.common.protocol.types.Type.STRING
 import org.apache.kafka.common.protocol.types.Type.INT32
 import org.apache.kafka.common.protocol.types.Type.INT64
+
+import kafka.utils._
+import kafka.common._
+import kafka.log.{FileMessageSet, LogConfig}
+import kafka.message._
+import kafka.metrics.KafkaMetricsGroup
+import kafka.common.TopicAndPartition
+import kafka.tools.MessageFormatter
+
+import scala.Some
+import scala.collection._
+import java.io.PrintStream
 import java.util.concurrent.atomic.AtomicBoolean
+import java.nio.ByteBuffer
+import java.util.Properties
+import java.util.concurrent.TimeUnit
+
+import com.yammer.metrics.core.Gauge
+import org.I0Itec.zkclient.ZkClient
 
 
 /**
@@ -271,7 +274,7 @@ class OffsetManager(val config: OffsetManagerConfig,
             // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
             while (currOffset < getHighWatermark(offsetsPartition) && !shuttingDown.get()) {
               buffer.clear()
-              val messages = log.read(currOffset, config.loadBufferSize).asInstanceOf[FileMessageSet]
+              val messages = log.read(currOffset, config.loadBufferSize).messageSet.asInstanceOf[FileMessageSet]
               messages.readInto(buffer, 0)
               val messageSet = new ByteBufferMessageSet(buffer)
               messageSet.foreach { msgAndOffset =>
@@ -312,7 +315,7 @@ class OffsetManager(val config: OffsetManagerConfig,
     val partitionOpt = replicaManager.getPartition(OffsetManager.OffsetsTopicName, partitionId)
 
     val hw = partitionOpt.map { partition =>
-      partition.leaderReplicaIfLocal().map(_.highWatermark).getOrElse(-1L)
+      partition.leaderReplicaIfLocal().map(_.highWatermark.messageOffset).getOrElse(-1L)
     }.getOrElse(-1L)
 
     hw

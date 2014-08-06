@@ -91,7 +91,7 @@ object StressTestLog {
     @volatile var offset = 0
     override def work() {
       try {
-        log.read(offset, 1024, Some(offset+1)) match {
+        log.read(offset, 1024, Some(offset+1)).messageSet match {
           case read: FileMessageSet if read.sizeInBytes > 0 => {
             val first = read.head
             require(first.offset == offset, "We should either read nothing or the message we asked for.")

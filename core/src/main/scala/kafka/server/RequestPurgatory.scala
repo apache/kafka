@@ -17,13 +17,15 @@
 
 package kafka.server
 
-import scala.collection._
-import java.util.concurrent._
-import java.util.concurrent.atomic._
 import kafka.network._
 import kafka.utils._
 import kafka.metrics.KafkaMetricsGroup
+
 import java.util
+import java.util.concurrent._
+import java.util.concurrent.atomic._
+import scala.collection._
+
 import com.yammer.metrics.core.Gauge
 
 
@@ -45,8 +47,10 @@ class DelayedRequest(val keys: Seq[Any], val request: RequestChannel.Request, de
  *
  * For us the key is generally a (topic, partition) pair.
  * By calling 
- *   watch(delayedRequest) 
- * we will add triggers for each of the given keys. It is up to the user to then call
+ *   val isSatisfiedByMe = checkAndMaybeWatch(delayedRequest)
+ * we will check if a request is satisfied already, and if not add the request for watch on all its keys.
+ *
+ * It is up to the user to then call
  *   val satisfied = update(key, request) 
  * when a request relevant to the given key occurs. This triggers bookeeping logic and returns back any requests satisfied by this
  * new request.
@@ -61,18 +65,23 @@ class DelayedRequest(val keys: Seq[Any], val request: RequestChannel.Request, de
  * this function handles delayed requests that have hit their time limit without being satisfied.
  *
  */
-abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purgeInterval: Int = 1000)
+abstract class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInterval: Int = 1000)
         extends Logging with KafkaMetricsGroup {
 
   /* a list of requests watching each key */
   private val watchersForKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers))
 
-  private val requestCounter = new AtomicInteger(0)
+  /* the number of requests being watched, duplicates added on different watchers are also counted */
+  private val watched = new AtomicInteger(0)
+
+  /* background thread expiring requests that have been waiting too long */
+  private val expiredRequestReaper = new ExpiredRequestReaper
+  private val expirationThread = Utils.newThread(name="request-expiration-task", runnable=expiredRequestReaper, daemon=false)
 
   newGauge(
     "PurgatorySize",
     new Gauge[Int] {
-      def value = watchersForKey.values.map(_.numRequests).sum + expiredRequestReaper.numRequests
+      def value = watched.get() + expiredRequestReaper.numRequests
     }
   )
 
@@ -83,41 +92,50 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
     }
   )
 
-  /* background thread expiring requests that have been waiting too long */
-  private val expiredRequestReaper = new ExpiredRequestReaper
-  private val expirationThread = Utils.newThread(name="request-expiration-task", runnable=expiredRequestReaper, daemon=false)
   expirationThread.start()
 
   /**
-   * Add a new delayed request watching the contained keys
+   * Try to add the request for watch on all keys. Return true iff the request is
+   * satisfied and the satisfaction is done by the caller.
+   *
+   * Requests can be watched on only a few of the keys if it is found satisfied when
+   * trying to add it to each one of the keys. In this case the request is still treated as satisfied
+   * and hence no longer watched. Those already added elements will be later purged by the expire reaper.
    */
-  def watch(delayedRequest: T) {
-    requestCounter.getAndIncrement()
-
+  def checkAndMaybeWatch(delayedRequest: T): Boolean = {
     for(key <- delayedRequest.keys) {
-      var lst = watchersFor(key)
-      lst.add(delayedRequest)
+      val lst = watchersFor(key)
+      if(!lst.checkAndMaybeAdd(delayedRequest)) {
+        if(delayedRequest.satisfied.compareAndSet(false, true))
+          return true
+        else
+          return false
+      }
     }
+
+    // if it is indeed watched, add to the expire queue also
     expiredRequestReaper.enqueue(delayedRequest)
+
+    false
   }
 
   /**
    * Update any watchers and return a list of newly satisfied requests.
    */
-  def update(key: Any, request: R): Seq[T] = {
+  def update(key: Any): Seq[T] = {
     val w = watchersForKey.get(key)
     if(w == null)
       Seq.empty
     else
-      w.collectSatisfiedRequests(request)
+      w.collectSatisfiedRequests()
   }
 
   private def watchersFor(key: Any) = watchersForKey.getAndMaybePut(key)
   
   /**
-   * Check if this request satisfied this delayed request
+   * Check if this delayed request is already satisfied
    */
-  protected def checkSatisfied(request: R, delayed: T): Boolean
+  protected def checkSatisfied(request: T): Boolean
 
   /**
    * Handle an expired delayed request
@@ -125,7 +143,7 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
   protected def expire(delayed: T)
 
   /**
-   * Shutdown the expirey thread
+   * Shutdown the expire reaper thread
    */
   def shutdown() {
     expiredRequestReaper.shutdown()
@@ -136,17 +154,26 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
    * bookkeeping logic.
    */
   private class Watchers {
+    private val requests = new util.ArrayList[T]
 
-    private val requests = new util.LinkedList[T]
-
-    def numRequests = requests.size
-
-    def add(t: T) {
+    // potentially add the element to watch if it is not satisfied yet
+    def checkAndMaybeAdd(t: T): Boolean = {
       synchronized {
+        // if it is already satisfied, do not add to the watch list
+        if (t.satisfied.get)
+          return false
+        // synchronize on the delayed request to avoid any race condition
+        // with expire and update threads on client-side.
+        if(t synchronized checkSatisfied(t)) {
+          return false
+        }
         requests.add(t)
+        watched.getAndIncrement()
+        return true
       }
     }
 
+    // traverse the list and purge satisfied elements
     def purgeSatisfied(): Int = {
       synchronized {
         val iter = requests.iterator()
@@ -155,6 +182,7 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
           val curr = iter.next
           if(curr.satisfied.get()) {
             iter.remove()
+            watched.getAndDecrement()
             purged += 1
           }
         }
@@ -162,7 +190,8 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
       }
     }
 
-    def collectSatisfiedRequests(request: R): Seq[T] = {
+    // traverse the list and try to satisfy watched elements
+    def collectSatisfiedRequests(): Seq[T] = {
       val response = new mutable.ArrayBuffer[T]
       synchronized {
         val iter = requests.iterator()
@@ -174,9 +203,10 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
           } else {
             // synchronize on curr to avoid any race condition with expire
             // on client-side.
-            val satisfied = curr synchronized checkSatisfied(request, curr)
+            val satisfied = curr synchronized checkSatisfied(curr)
             if(satisfied) {
               iter.remove()
+              watched.getAndDecrement()
               val updated = curr.satisfied.compareAndSet(false, true)
               if(updated == true) {
                 response += curr
@@ -215,13 +245,12 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
               expire(curr)
             }
           }
-          if (requestCounter.get >= purgeInterval) { // see if we need to force a full purge
+          if (watched.get + numRequests >= purgeInterval) { // see if we need to force a full purge
             debug("Beginning purgatory purge")
-            requestCounter.set(0)
             val purged = purgeSatisfied()
             debug("Purged %d requests from delay queue.".format(purged))
             val numPurgedFromWatchers = watchersForKey.values.map(_.purgeSatisfied()).sum
-            debug("Purged %d (watcher) requests.".format(numPurgedFromWatchers))
+            debug("Purged %d requests from watch lists.".format(numPurgedFromWatchers))
           }
         } catch {
           case e: Exception =>
@@ -266,10 +295,12 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
     }
 
     /**
-     * Delete all expired events from the delay queue
+     * Delete all satisfied events from the delay queue and the watcher lists
      */
     private def purgeSatisfied(): Int = {
       var purged = 0
+
+      // purge the delayed queue
       val iter = delayed.iterator()
       while(iter.hasNext) {
         val curr = iter.next()
@@ -278,6 +309,7 @@ abstract class RequestPurgatory[T <: DelayedRequest, R](brokerId: Int = 0, purge
           purged += 1
         }
       }
+
       purged
     }
   }

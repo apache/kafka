@@ -18,21 +18,22 @@
 package kafka.server
 
 import kafka.cluster.Broker
-import collection.mutable
-import scala.collection.Set
-import scala.collection.Map
-import kafka.message.{InvalidMessageException, ByteBufferMessageSet, MessageAndOffset}
-import kafka.metrics.KafkaMetricsGroup
-import com.yammer.metrics.core.Gauge
 import kafka.utils.{Pool, ShutdownableThread}
 import kafka.consumer.{PartitionTopicInfo, SimpleConsumer}
 import kafka.api.{FetchRequest, FetchResponse, FetchResponsePartitionData, FetchRequestBuilder}
 import kafka.common.{KafkaException, ClientIdAndBroker, TopicAndPartition, ErrorMapping}
 import kafka.utils.Utils.inLock
+import kafka.message.{InvalidMessageException, ByteBufferMessageSet, MessageAndOffset}
+import kafka.metrics.KafkaMetricsGroup
+
+import scala.collection.mutable
+import scala.collection.Set
+import scala.collection.Map
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.atomic.AtomicLong
 
+import com.yammer.metrics.core.Gauge
 
 /**
  *  Abstract class for fetching data from multiple partitions from the same broker.
@@ -92,12 +93,12 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
     val partitionsWithError = new mutable.HashSet[TopicAndPartition]
     var response: FetchResponse = null
     try {
-      trace("issuing to broker %d of fetch request %s".format(sourceBroker.id, fetchRequest))
+      trace("Issuing to broker %d of fetch request %s".format(sourceBroker.id, fetchRequest))
       response = simpleConsumer.fetch(fetchRequest)
     } catch {
       case t: Throwable =>
         if (isRunning.get) {
-          warn("Error in fetch %s. Possible cause: %s".format(fetchRequest, t.getMessage))
+          warn("Error in fetch %s. Possible cause: %s".format(fetchRequest, t.toString))
           partitionMapLock synchronized {
             partitionsWithError ++= partitionMap.keys
           }

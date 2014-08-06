@@ -14,15 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package kafka.log
+package kafka.log
 
-import scala.math._
-import java.io.File
 import kafka.message._
 import kafka.common._
 import kafka.utils._
+import kafka.server.{LogOffsetMetadata, FetchDataInfo}
 
-/**
+import scala.math._
+import java.io.File
+
+
+ /**
  * A segment of the log. Each segment has two components: a log and an index. The log is a FileMessageSet containing
  * the actual messages. The index is an OffsetIndex that maps from logical offsets to physical file positions. Each 
  * segment has a base offset which is an offset <= the least offset of any message in this segment and > any offset in
@@ -86,7 +89,7 @@ class LogSegment(val log: FileMessageSet,
    * Find the physical file position for the first message with offset >= the requested offset.
    * 
    * The lowerBound argument is an optimization that can be used if we already know a valid starting position
-   * in the file higher than the greast-lower-bound from the index.
+   * in the file higher than the greatest-lower-bound from the index.
    * 
    * @param offset The offset we want to translate
    * @param startingFilePosition A lower bound on the file position from which to begin the search. This is purely an optimization and
@@ -99,7 +102,7 @@ class LogSegment(val log: FileMessageSet,
     val mapping = index.lookup(offset)
     log.searchFor(offset, max(mapping.position, startingFilePosition))
   }
-  
+
   /**
    * Read a message set from this segment beginning with the first offset >= startOffset. The message set will include
    * no more than maxSize bytes and will end before maxOffset if a maxOffset is specified.
@@ -108,22 +111,27 @@ class LogSegment(val log: FileMessageSet,
    * @param maxSize The maximum number of bytes to include in the message set we read
    * @param maxOffset An optional maximum offset for the message set we read
    * 
-   * @return The message set read or null if the startOffset is larger than the largest offset in this log.
+   * @return The fetched data and the offset metadata of the first message whose offset is >= startOffset,
+   *         or null if the startOffset is larger than the largest offset in this log
    */
   @threadsafe
-  def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int): MessageSet = {
+  def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int): FetchDataInfo = {
     if(maxSize < 0)
       throw new IllegalArgumentException("Invalid max size for log read (%d)".format(maxSize))
-    if(maxSize == 0)
-      return MessageSet.Empty
-    
+
     val logSize = log.sizeInBytes // this may change, need to save a consistent copy
     val startPosition = translateOffset(startOffset)
-    
+
     // if the start position is already off the end of the log, return null
     if(startPosition == null)
       return null
-    
+
+    val offsetMetadata = new LogOffsetMetadata(startOffset, this.baseOffset, startPosition.position)
+
+    // if the size is zero, still return a log segment but with zero size
+    if(maxSize == 0)
+      return FetchDataInfo(offsetMetadata, MessageSet.Empty)
+
     // calculate the length of the message set to read based on whether or not they gave us a maxOffset
     val length = 
       maxOffset match {
@@ -143,7 +151,7 @@ class LogSegment(val log: FileMessageSet,
           min(endPosition - startPosition.position, maxSize) 
         }
       }
-    log.read(startPosition.position, length)
+    FetchDataInfo(offsetMetadata, log.read(startPosition.position, length))
   }
   
   /**
@@ -222,7 +230,7 @@ class LogSegment(val log: FileMessageSet,
     if(ms == null) {
       baseOffset
     } else {
-      ms.lastOption match {
+      ms.messageSet.lastOption match {
         case None => baseOffset
         case Some(last) => last.nextOffset
       }

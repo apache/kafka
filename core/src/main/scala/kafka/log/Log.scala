@@ -21,7 +21,7 @@ import kafka.utils._
 import kafka.message._
 import kafka.common._
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.BrokerTopicStats
+import kafka.server.{LogOffsetMetadata, FetchDataInfo, BrokerTopicStats}
 
 import java.io.{IOException, File}
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap}
@@ -51,11 +51,11 @@ import com.yammer.metrics.core.Gauge
 class Log(val dir: File,
           @volatile var config: LogConfig,
           @volatile var recoveryPoint: Long = 0L,
-          val scheduler: Scheduler,
+          scheduler: Scheduler,
           time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
 
   import kafka.log.Log._
-  
+
   /* A lock that guards all modifications to the log */
   private val lock = new Object
 
@@ -67,7 +67,7 @@ class Log(val dir: File,
   loadSegments()
   
   /* Calculate the offset of the next message */
-  private val nextOffset: AtomicLong = new AtomicLong(activeSegment.nextOffset())
+  @volatile var nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset, activeSegment.size.toInt)
 
   val topicAndPartition: TopicAndPartition = Log.parseTopicPartitionName(name)
 
@@ -167,6 +167,10 @@ class Log(val dir: File,
     for (s <- logSegments)
       s.index.sanityCheck()
   }
+
+  private def updateLogEndOffset(messageOffset: Long) {
+    nextOffsetMetadata = new LogOffsetMetadata(messageOffset, activeSegment.baseOffset, activeSegment.size.toInt)
+  }
   
   private def recoverLog() {
     // if we have the clean shutdown marker, skip recovery
@@ -246,14 +250,14 @@ class Log(val dir: File,
     try {
       // they are valid, insert them in the log
       lock synchronized {
-        appendInfo.firstOffset = nextOffset.get
+        appendInfo.firstOffset = nextOffsetMetadata.messageOffset
 
         // maybe roll the log if this segment is full
         val segment = maybeRoll()
 
         if(assignOffsets) {
           // assign offsets to the message set
-          val offset = new AtomicLong(nextOffset.get)
+          val offset = new AtomicLong(nextOffsetMetadata.messageOffset)
           try {
             validMessages = validMessages.assignOffsets(offset, appendInfo.codec)
           } catch {
@@ -262,7 +266,7 @@ class Log(val dir: File,
           appendInfo.lastOffset = offset.get - 1
         } else {
           // we are taking the offsets we are given
-          if(!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffset.get)
+          if(!appendInfo.offsetsMonotonic || appendInfo.firstOffset < nextOffsetMetadata.messageOffset)
             throw new IllegalArgumentException("Out of order offsets found in " + messages)
         }
 
@@ -282,10 +286,10 @@ class Log(val dir: File,
         segment.append(appendInfo.firstOffset, validMessages)
 
         // increment the log end offset
-        nextOffset.set(appendInfo.lastOffset + 1)
+        updateLogEndOffset(appendInfo.lastOffset + 1)
 
         trace("Appended message set to log %s with first offset: %d, next offset: %d, and messages: %s"
-                .format(this.name, appendInfo.firstOffset, nextOffset.get(), validMessages))
+                .format(this.name, appendInfo.firstOffset, nextOffsetMetadata.messageOffset, validMessages))
 
         if(unflushedMessages >= config.flushInterval)
           flush()
@@ -307,7 +311,7 @@ class Log(val dir: File,
    * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
    */
   case class LogAppendInfo(var firstOffset: Long, var lastOffset: Long, codec: CompressionCodec, shallowCount: Int, validBytes: Int, offsetsMonotonic: Boolean)
-  
+
   /**
    * Validate the following:
    * <ol>
@@ -387,20 +391,21 @@ class Log(val dir: File,
 
   /**
    * Read messages from the log
+   *
    * @param startOffset The offset to begin reading at
    * @param maxLength The maximum number of bytes to read
    * @param maxOffset -The offset to read up to, exclusive. (i.e. the first offset NOT included in the resulting message set).
    * 
    * @throws OffsetOutOfRangeException If startOffset is beyond the log end offset or before the base offset of the first segment.
-   * @return The messages read
+   * @return The fetch data information including fetch starting offset metadata and messages read
    */
-  def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None): MessageSet = {
+  def read(startOffset: Long, maxLength: Int, maxOffset: Option[Long] = None): FetchDataInfo = {
     trace("Reading %d bytes from offset %d in log %s of length %d bytes".format(maxLength, startOffset, name, size))
 
     // check if the offset is valid and in range
-    val next = nextOffset.get
+    val next = nextOffsetMetadata.messageOffset
     if(startOffset == next)
-      return MessageSet.Empty
+      return FetchDataInfo(nextOffsetMetadata, MessageSet.Empty)
     
     var entry = segments.floorEntry(startOffset)
       
@@ -412,15 +417,31 @@ class Log(val dir: File,
     // but if that segment doesn't contain any messages with an offset greater than that
     // continue to read from successive segments until we get some messages or we reach the end of the log
     while(entry != null) {
-      val messages = entry.getValue.read(startOffset, maxOffset, maxLength)
-      if(messages == null)
+      val fetchInfo = entry.getValue.read(startOffset, maxOffset, maxLength)
+      if(fetchInfo == null) {
         entry = segments.higherEntry(entry.getKey)
-      else
-        return messages
+      } else {
+        return fetchInfo
+      }
     }
     
-    // okay we are beyond the end of the last segment but less than the log end offset
-    MessageSet.Empty
+    // okay we are beyond the end of the last segment with no data fetched although the start offset is in range,
+    // this can happen when all messages with offset larger than start offsets have been deleted.
+    // In this case, we will return the empty set with log end offset metadata
+    FetchDataInfo(nextOffsetMetadata, MessageSet.Empty)
+  }
+
+  /**
+   * Given a message offset, find its corresponding offset metadata in the log.
+   * If the message offset is out of range, return unknown offset metadata
+   */
+  def convertToOffsetMetadata(offset: Long): LogOffsetMetadata = {
+    try {
+      val fetchDataInfo = read(offset, 1)
+      fetchDataInfo.fetchOffset
+    } catch {
+      case e: OffsetOutOfRangeException => LogOffsetMetadata.UnknownOffsetMetadata
+    }
   }
 
   /**
@@ -433,7 +454,7 @@ class Log(val dir: File,
     // find any segments that match the user-supplied predicate UNLESS it is the final segment 
     // and it is empty (since we would just end up re-creating it
     val lastSegment = activeSegment
-    var deletable = logSegments.takeWhile(s => predicate(s) && (s.baseOffset != lastSegment.baseOffset || s.size > 0))
+    val deletable = logSegments.takeWhile(s => predicate(s) && (s.baseOffset != lastSegment.baseOffset || s.size > 0))
     val numToDelete = deletable.size
     if(numToDelete > 0) {
       lock synchronized {
@@ -458,9 +479,14 @@ class Log(val dir: File,
   def logStartOffset: Long = logSegments.head.baseOffset
 
   /**
+   * The offset metadata of the next message that will be appended to the log
+   */
+  def logEndOffsetMetadata: LogOffsetMetadata = nextOffsetMetadata
+
+  /**
    *  The offset of the next message that will be appended to the log
    */
-  def logEndOffset: Long = nextOffset.get
+  def logEndOffset: Long = nextOffsetMetadata.messageOffset
 
   /**
    * Roll the log over to a new empty log segment if necessary
@@ -582,7 +608,7 @@ class Log(val dir: File,
         val deletable = logSegments.filter(segment => segment.baseOffset > targetOffset)
         deletable.foreach(deleteSegment(_))
         activeSegment.truncateTo(targetOffset)
-        this.nextOffset.set(targetOffset)
+        updateLogEndOffset(targetOffset)
         this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
       }
     }
@@ -602,7 +628,7 @@ class Log(val dir: File,
                                 indexIntervalBytes = config.indexInterval, 
                                 maxIndexSize = config.maxIndexSize,
                                 time = time))
-      this.nextOffset.set(newOffset)
+      updateLogEndOffset(newOffset)
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
     }
   }

@@ -17,16 +17,16 @@
 
 package kafka.api
 
-import java.nio.ByteBuffer
 import kafka.utils.nonthreadsafe
 import kafka.api.ApiUtils._
-import scala.collection.immutable.Map
 import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.consumer.ConsumerConfig
-import java.util.concurrent.atomic.AtomicInteger
 import kafka.network.RequestChannel
 import kafka.message.MessageSet
 
+import java.util.concurrent.atomic.AtomicInteger
+import java.nio.ByteBuffer
+import scala.collection.immutable.Map
 
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
 

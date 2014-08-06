@@ -46,7 +46,7 @@ class IsrExpirationTest extends JUnit3Suite {
     val leaderReplica = partition0.getReplica(configs.head.brokerId).get
 
     // let the follower catch up to 10
-    (partition0.assignedReplicas() - leaderReplica).foreach(r => r.logEndOffset = 10)
+    (partition0.assignedReplicas() - leaderReplica).foreach(r => r.logEndOffset = new LogOffsetMetadata(10L))
     var partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs, configs.head.replicaLagMaxMessages)
     assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR.map(_.brokerId))
 
@@ -69,7 +69,7 @@ class IsrExpirationTest extends JUnit3Suite {
     assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas.map(_.brokerId))
     val leaderReplica = partition0.getReplica(configs.head.brokerId).get
     // set remote replicas leo to something low, like 4
-    (partition0.assignedReplicas() - leaderReplica).foreach(r => r.logEndOffset = 4L)
+    (partition0.assignedReplicas() - leaderReplica).foreach(r => r.logEndOffset = new LogOffsetMetadata(4L))
 
     // now follower (broker id 1) has caught up to only 4, while the leader is at 15. Since the gap it larger than
     // replicaMaxLagBytes, the follower is out of sync.
@@ -83,7 +83,7 @@ class IsrExpirationTest extends JUnit3Suite {
                                                localLog: Log): Partition = {
     val leaderId=config.brokerId
     val replicaManager = new ReplicaManager(config, time, null, null, null, new AtomicBoolean(false))
-    val partition = replicaManager.getOrCreatePartition(topic, partitionId, 1)
+    val partition = replicaManager.getOrCreatePartition(topic, partitionId)
     val leaderReplica = new Replica(leaderId, partition, time, 0, Some(localLog))
 
     val allReplicas = getFollowerReplicas(partition, leaderId, time) :+ leaderReplica
@@ -97,7 +97,7 @@ class IsrExpirationTest extends JUnit3Suite {
 
   private def getLogWithLogEndOffset(logEndOffset: Long, expectedCalls: Int): Log = {
     val log1 = EasyMock.createMock(classOf[kafka.log.Log])
-    EasyMock.expect(log1.logEndOffset).andReturn(logEndOffset).times(expectedCalls)
+    EasyMock.expect(log1.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(logEndOffset)).times(expectedCalls)
     EasyMock.replay(log1)
 
     log1

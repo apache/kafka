@@ -131,11 +131,11 @@ class LogTest extends JUnitSuite {
     for(i <- 0 until messages.length)
       log.append(new ByteBufferMessageSet(NoCompressionCodec, messages = messages(i)))
     for(i <- 0 until messages.length) {
-      val read = log.read(i, 100, Some(i+1)).head
+      val read = log.read(i, 100, Some(i+1)).messageSet.head
       assertEquals("Offset read should match order appended.", i, read.offset)
       assertEquals("Message should match appended.", messages(i), read.message)
     }
-    assertEquals("Reading beyond the last message returns nothing.", 0, log.read(messages.length, 100, None).size)
+    assertEquals("Reading beyond the last message returns nothing.", 0, log.read(messages.length, 100, None).messageSet.size)
   }
   
   /**
@@ -153,7 +153,7 @@ class LogTest extends JUnitSuite {
       log.append(new ByteBufferMessageSet(NoCompressionCodec, new AtomicLong(messageIds(i)), messages = messages(i)), assignOffsets = false)
     for(i <- 50 until messageIds.max) {
       val idx = messageIds.indexWhere(_ >= i)
-      val read = log.read(i, 100, None).head
+      val read = log.read(i, 100, None).messageSet.head
       assertEquals("Offset read should match message id.", messageIds(idx), read.offset)
       assertEquals("Message should match appended.", messages(idx), read.message)
     }
@@ -176,7 +176,7 @@ class LogTest extends JUnitSuite {
     // now manually truncate off all but one message from the first segment to create a gap in the messages
     log.logSegments.head.truncateTo(1)
     
-    assertEquals("A read should now return the last message in the log", log.logEndOffset-1, log.read(1, 200, None).head.offset)
+    assertEquals("A read should now return the last message in the log", log.logEndOffset-1, log.read(1, 200, None).messageSet.head.offset)
   }
   
   /**
@@ -188,7 +188,7 @@ class LogTest extends JUnitSuite {
   def testReadOutOfRange() {
     createEmptyLogs(logDir, 1024)
     val log = new Log(logDir, logConfig.copy(segmentSize = 1024), recoveryPoint = 0L, time.scheduler, time = time)
-    assertEquals("Reading just beyond end of log should produce 0 byte read.", 0, log.read(1024, 1000).sizeInBytes)
+    assertEquals("Reading just beyond end of log should produce 0 byte read.", 0, log.read(1024, 1000).messageSet.sizeInBytes)
     try {
       log.read(0, 1024)
       fail("Expected exception on invalid read.")
@@ -219,12 +219,12 @@ class LogTest extends JUnitSuite {
     /* do successive reads to ensure all our messages are there */
     var offset = 0L
     for(i <- 0 until numMessages) {
-      val messages = log.read(offset, 1024*1024)
+      val messages = log.read(offset, 1024*1024).messageSet
       assertEquals("Offsets not equal", offset, messages.head.offset)
       assertEquals("Messages not equal at offset " + offset, messageSets(i).head.message, messages.head.message)
       offset = messages.head.offset + 1
     }
-    val lastRead = log.read(startOffset = numMessages, maxLength = 1024*1024, maxOffset = Some(numMessages + 1))
+    val lastRead = log.read(startOffset = numMessages, maxLength = 1024*1024, maxOffset = Some(numMessages + 1)).messageSet
     assertEquals("Should be no more messages", 0, lastRead.size)
     
     // check that rolling the log forced a flushed the log--the flush is asyn so retry in case of failure
@@ -245,7 +245,7 @@ class LogTest extends JUnitSuite {
     log.append(new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes)))
     log.append(new ByteBufferMessageSet(DefaultCompressionCodec, new Message("alpha".getBytes), new Message("beta".getBytes)))
     
-    def read(offset: Int) = ByteBufferMessageSet.decompress(log.read(offset, 4096).head.message)
+    def read(offset: Int) = ByteBufferMessageSet.decompress(log.read(offset, 4096).messageSet.head.message)
     
     /* we should always get the first message in the compressed set when reading any offset in the set */
     assertEquals("Read at offset 0 should produce 0", 0, read(0).head.offset)
@@ -363,7 +363,7 @@ class LogTest extends JUnitSuite {
     log = new Log(logDir, config, recoveryPoint = 0L, time.scheduler, time)    
     assertEquals("Should have %d messages when log is reopened".format(numMessages), numMessages, log.logEndOffset)
     for(i <- 0 until numMessages)
-      assertEquals(i, log.read(i, 100, None).head.offset)
+      assertEquals(i, log.read(i, 100, None).messageSet.head.offset)
     log.close()
   }
 
@@ -575,15 +575,15 @@ class LogTest extends JUnitSuite {
   
   @Test
   def testAppendMessageWithNullPayload() {
-    var log = new Log(logDir,
+    val log = new Log(logDir,
                       LogConfig(),
                       recoveryPoint = 0L,
                       time.scheduler,
                       time)
     log.append(new ByteBufferMessageSet(new Message(bytes = null)))
-    val ms = log.read(0, 4096, None)
-    assertEquals(0, ms.head.offset)
-    assertTrue("Message payload should be null.", ms.head.message.isNull)
+    val messageSet = log.read(0, 4096, None).messageSet
+    assertEquals(0, messageSet.head.offset)
+    assertTrue("Message payload should be null.", messageSet.head.message.isNull)
   }
   
   @Test

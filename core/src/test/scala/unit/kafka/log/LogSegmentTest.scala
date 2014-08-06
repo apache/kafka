@@ -78,7 +78,7 @@ class LogSegmentTest extends JUnit3Suite {
     val seg = createSegment(40)
     val ms = messages(50, "hello", "there", "little", "bee")
     seg.append(50, ms)
-    val read = seg.read(startOffset = 41, maxSize = 300, maxOffset = None)
+    val read = seg.read(startOffset = 41, maxSize = 300, maxOffset = None).messageSet
     assertEquals(ms.toList, read.toList)
   }
   
@@ -94,7 +94,7 @@ class LogSegmentTest extends JUnit3Suite {
     seg.append(baseOffset, ms)
     def validate(offset: Long) = 
       assertEquals(ms.filter(_.offset == offset).toList, 
-                   seg.read(startOffset = offset, maxSize = 1024, maxOffset = Some(offset+1)).toList)
+                   seg.read(startOffset = offset, maxSize = 1024, maxOffset = Some(offset+1)).messageSet.toList)
     validate(50)
     validate(51)
     validate(52)
@@ -109,7 +109,7 @@ class LogSegmentTest extends JUnit3Suite {
     val ms = messages(50, "hello", "there")
     seg.append(50, ms)
     val read = seg.read(startOffset = 52, maxSize = 200, maxOffset = None)
-    assertNull("Read beyond the last offset in the segment should give null", null)
+    assertNull("Read beyond the last offset in the segment should give null", read)
   }
   
   /**
@@ -124,7 +124,7 @@ class LogSegmentTest extends JUnit3Suite {
     val ms2 = messages(60, "alpha", "beta")
     seg.append(60, ms2)
     val read = seg.read(startOffset = 55, maxSize = 200, maxOffset = None)
-    assertEquals(ms2.toList, read.toList)
+    assertEquals(ms2.toList, read.messageSet.toList)
   }
   
   /**
@@ -142,12 +142,12 @@ class LogSegmentTest extends JUnit3Suite {
       seg.append(offset+1, ms2)
       // check that we can read back both messages
       val read = seg.read(offset, None, 10000)
-      assertEquals(List(ms1.head, ms2.head), read.toList)
+      assertEquals(List(ms1.head, ms2.head), read.messageSet.toList)
       // now truncate off the last message
       seg.truncateTo(offset + 1)
       val read2 = seg.read(offset, None, 10000)
-      assertEquals(1, read2.size)
-      assertEquals(ms1.head, read2.head)
+      assertEquals(1, read2.messageSet.size)
+      assertEquals(ms1.head, read2.messageSet.head)
       offset += 1
     }
   }
@@ -204,7 +204,7 @@ class LogSegmentTest extends JUnit3Suite {
     TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(64*1024)
     for(i <- 0 until 100)
-      assertEquals(i, seg.read(i, Some(i+1), 1024).head.offset)
+      assertEquals(i, seg.read(i, Some(i+1), 1024).messageSet.head.offset)
   }
   
   /**

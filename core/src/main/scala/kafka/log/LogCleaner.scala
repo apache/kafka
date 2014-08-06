@@ -17,19 +17,21 @@
 
 package kafka.log
 
+import kafka.common._
+import kafka.message._
+import kafka.utils._
+import kafka.metrics.KafkaMetricsGroup
+
 import scala.collection._
 import scala.math
 import java.nio._
 import java.util.Date
 import java.io.File
-import kafka.common._
-import kafka.message._
-import kafka.utils._
-import kafka.metrics.KafkaMetricsGroup
-import com.yammer.metrics.core.Gauge
 import java.lang.IllegalStateException
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+
+import com.yammer.metrics.core.Gauge
 
 /**
  * The cleaner is responsible for removing obsolete records from logs which have the dedupe retention strategy.
@@ -325,7 +327,6 @@ private[log] class Cleaner(val id: Int,
    * @param log The log being cleaned
    * @param segments The group of segments being cleaned
    * @param map The offset map to use for cleaning segments
-   * @param expectedTruncateCount A count used to check if the log is being truncated and rewritten under our feet
    * @param deleteHorizonMs The time to retain delete tombstones
    */
   private[log] def cleanSegments(log: Log,
