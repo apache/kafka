@@ -48,11 +48,14 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   private val controllerContext = controller.controllerContext
   private val controllerId = controller.config.brokerId
   private val zkClient = controllerContext.zkClient
-  var replicaState: mutable.Map[PartitionAndReplica, ReplicaState] = mutable.Map.empty
-  val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
+  private val replicaState: mutable.Map[PartitionAndReplica, ReplicaState] = mutable.Map.empty
+  private val brokerChangeListener = new BrokerChangeListener()
+  private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
   private val hasStarted = new AtomicBoolean(false)
-  this.logIdent = "[Replica state machine on controller " + controller.config.brokerId + "]: "
   private val stateChangeLogger = KafkaController.stateChangeLogger
+
+  this.logIdent = "[Replica state machine on controller " + controller.config.brokerId + "]: "
+
 
   /**
    * Invoked on successful controller election. First registers a broker change listener since that triggers all
@@ -62,23 +65,38 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   def startup() {
     // initialize replica state
     initializeReplicaState()
+    // set started flag
     hasStarted.set(true)
     // move all Online replicas to Online
     handleStateChanges(controllerContext.allLiveReplicas(), OnlineReplica)
+
     info("Started replica state machine with initial state -> " + replicaState.toString())
   }
 
-  // register broker change listener
+  // register ZK listeners of the replica state machine
   def registerListeners() {
+    // register broker change listener
     registerBrokerChangeListener()
+  }
+
+  // de-register ZK listeners of the replica state machine
+  def deregisterListeners() {
+    // de-register broker change listener
+    deregisterBrokerChangeListener()
   }
 
   /**
    * Invoked on controller shutdown.
    */
   def shutdown() {
+    // reset started flag
     hasStarted.set(false)
+    // reset replica state
     replicaState.clear()
+    // de-register all ZK listeners
+    deregisterListeners()
+
+    info("Stopped replica state machine")
   }
 
   /**
@@ -295,7 +313,11 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
   }
 
   private def registerBrokerChangeListener() = {
-    zkClient.subscribeChildChanges(ZkUtils.BrokerIdsPath, new BrokerChangeListener())
+    zkClient.subscribeChildChanges(ZkUtils.BrokerIdsPath, brokerChangeListener)
+  }
+
+  private def deregisterBrokerChangeListener() = {
+    zkClient.unsubscribeChildChanges(ZkUtils.BrokerIdsPath, brokerChangeListener)
   }
 
   /**

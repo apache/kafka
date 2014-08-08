@@ -45,15 +45,16 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   private val controllerContext = controller.controllerContext
   private val controllerId = controller.config.brokerId
   private val zkClient = controllerContext.zkClient
-  var partitionState: mutable.Map[TopicAndPartition, PartitionState] = mutable.Map.empty
-  val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
+  private val partitionState: mutable.Map[TopicAndPartition, PartitionState] = mutable.Map.empty
+  private val brokerRequestBatch = new ControllerBrokerRequestBatch(controller)
   private val hasStarted = new AtomicBoolean(false)
   private val noOpPartitionLeaderSelector = new NoOpLeaderSelector(controllerContext)
-  this.logIdent = "[Partition state machine on Controller " + controllerId + "]: "
+  private val topicChangeListener = new TopicChangeListener()
+  private val deleteTopicsListener = new DeleteTopicsListener()
+  private val addPartitionsListener: mutable.Map[String, AddPartitionsListener] = mutable.Map.empty
   private val stateChangeLogger = KafkaController.stateChangeLogger
-  private var topicChangeListener: TopicChangeListener = null
-  private var deleteTopicsListener: DeleteTopicsListener = null
-  private var addPartitionsListener: mutable.Map[String, AddPartitionsListener] = mutable.Map.empty
+
+  this.logIdent = "[Partition state machine on Controller " + controllerId + "]: "
 
   /**
    * Invoked on successful controller election. First registers a topic change listener since that triggers all
@@ -63,9 +64,11 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   def startup() {
     // initialize partition state
     initializePartitionState()
+    // set started flag
     hasStarted.set(true)
     // try to move partitions to online state
     triggerOnlinePartitionStateChange()
+
     info("Started partition state machine with initial state -> " + partitionState.toString())
   }
 
@@ -76,12 +79,30 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       registerDeleteTopicListener()
   }
 
+  // de-register topic and partition change listeners
+  def deregisterListeners() {
+    deregisterTopicChangeListener()
+    addPartitionsListener.foreach {
+      case (topic, listener) =>
+        zkClient.unsubscribeDataChanges(ZkUtils.getTopicPath(topic), listener)
+    }
+    addPartitionsListener.clear()
+    if(controller.config.deleteTopicEnable)
+      deregisterDeleteTopicListener()
+  }
+
   /**
    * Invoked on controller shutdown.
    */
   def shutdown() {
+    // reset started flag
     hasStarted.set(false)
+    // clear partition state
     partitionState.clear()
+    // de-register all ZK listeners
+    deregisterListeners()
+
+    info("Stopped partition state machine")
   }
 
   /**
@@ -362,8 +383,11 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
   }
 
   private def registerTopicChangeListener() = {
-    topicChangeListener = new TopicChangeListener()
     zkClient.subscribeChildChanges(ZkUtils.BrokerTopicsPath, topicChangeListener)
+  }
+
+  private def deregisterTopicChangeListener() = {
+    zkClient.unsubscribeChildChanges(ZkUtils.BrokerTopicsPath, topicChangeListener)
   }
 
   def registerPartitionChangeListener(topic: String) = {
@@ -373,11 +397,15 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
 
   def deregisterPartitionChangeListener(topic: String) = {
     zkClient.unsubscribeDataChanges(ZkUtils.getTopicPath(topic), addPartitionsListener(topic))
+    addPartitionsListener.remove(topic)
   }
 
   private def registerDeleteTopicListener() = {
-    deleteTopicsListener = new DeleteTopicsListener()
     zkClient.subscribeChildChanges(ZkUtils.DeleteTopicsPath, deleteTopicsListener)
+  }
+
+  private def deregisterDeleteTopicListener() = {
+    zkClient.unsubscribeChildChanges(ZkUtils.DeleteTopicsPath, deleteTopicsListener)
   }
 
   private def getLeaderIsrAndEpochOrThrowException(topic: String, partition: Int): LeaderIsrAndControllerEpoch = {

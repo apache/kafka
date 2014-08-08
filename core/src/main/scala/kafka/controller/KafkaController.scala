@@ -169,6 +169,10 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
   private val preferredReplicaPartitionLeaderSelector = new PreferredReplicaPartitionLeaderSelector(controllerContext)
   private val controlledShutdownPartitionLeaderSelector = new ControlledShutdownLeaderSelector(controllerContext)
   private val brokerRequestBatch = new ControllerBrokerRequestBatch(this)
+
+  private val partitionReassignedListener = new PartitionsReassignedListener(this)
+  private val preferredReplicaElectionListener = new PreferredReplicaElectionListener(this)
+
   newGauge(
     "ActiveControllerCount",
     new Gauge[Int] {
@@ -333,19 +337,30 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
    * required to clean up internal controller data structures
    */
   def onControllerResignation() {
+    // de-register listeners
+    deregisterReassignedPartitionsListener()
+    deregisterPreferredReplicaElectionListener()
+
+    // shutdown delete topic manager
     if (deleteTopicManager != null)
       deleteTopicManager.shutdown()
 
     inLock(controllerContext.controllerLock) {
+      // de-register partition ISR listener for on-going partition reassignment task
+      deregisterReassignedPartitionsIsrChangeListeners()
+      // shutdown leader rebalance scheduler
       if (config.autoLeaderRebalanceEnable)
         autoRebalanceScheduler.shutdown()
-
+      // shutdown partition state machine
       partitionStateMachine.shutdown()
+      // shutdown replica state machine
       replicaStateMachine.shutdown()
+      // shutdown controller channel manager
       if(controllerContext.controllerChannelManager != null) {
         controllerContext.controllerChannelManager.shutdown()
         controllerContext.controllerChannelManager = null
       }
+      // reset controller context
       controllerContext.epoch=0
       controllerContext.epochZkVersion=0
       brokerState.newState(RunningAsBroker)
@@ -870,11 +885,27 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
   }
 
   private def registerReassignedPartitionsListener() = {
-    zkClient.subscribeDataChanges(ZkUtils.ReassignPartitionsPath, new PartitionsReassignedListener(this))
+    zkClient.subscribeDataChanges(ZkUtils.ReassignPartitionsPath, partitionReassignedListener)
+  }
+
+  private def deregisterReassignedPartitionsListener() = {
+    zkClient.unsubscribeDataChanges(ZkUtils.ReassignPartitionsPath, partitionReassignedListener)
   }
 
   private def registerPreferredReplicaElectionListener() {
-    zkClient.subscribeDataChanges(ZkUtils.PreferredReplicaLeaderElectionPath, new PreferredReplicaElectionListener(this))
+    zkClient.subscribeDataChanges(ZkUtils.PreferredReplicaLeaderElectionPath, preferredReplicaElectionListener)
+  }
+
+  private def deregisterPreferredReplicaElectionListener() {
+    zkClient.unsubscribeDataChanges(ZkUtils.PreferredReplicaLeaderElectionPath, preferredReplicaElectionListener)
+  }
+
+  private def deregisterReassignedPartitionsIsrChangeListeners() {
+    controllerContext.partitionsBeingReassigned.foreach {
+      case (topicAndPartition, reassignedPartitionsContext) =>
+        val zkPartitionPath = ZkUtils.getTopicPartitionLeaderAndIsrPath(topicAndPartition.topic, topicAndPartition.partition)
+        zkClient.unsubscribeDataChanges(zkPartitionPath, reassignedPartitionsContext.isrChangeListener)
+    }
   }
 
   private def readControllerEpochFromZookeeper() {
