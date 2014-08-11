@@ -1,5 +1,11 @@
 if (!hasProperty('scalaVersion')) {
-  ext.scalaVersion = '2.8.0'
+  ext.scalaVersion = '2.10.1'
 }
-ext.defaultScalaVersion = '2.8.0'
-ext.baseScalaVersion = (scalaVersion.startsWith('2.10')) ? '2.10' : scalaVersion
+ext.defaultScalaVersion = '2.10.1'
+if (scalaVersion.startsWith('2.10')) {
+    ext.baseScalaVersion = '2.10'
+} else if (scalaVersion.startsWith('2.11')) {
+    ext.baseScalaVersion = '2.11'
+} else {
+    ext.baseScalaVersion = scalaVersion
+}

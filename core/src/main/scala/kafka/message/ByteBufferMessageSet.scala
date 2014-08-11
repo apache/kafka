@@ -17,7 +17,6 @@
 
 package kafka.message
 
-import scala.reflect.BeanProperty
 import kafka.utils.Logging
 import java.nio.ByteBuffer
 import java.nio.channels._
@@ -95,7 +94,7 @@ object ByteBufferMessageSet {
  * Option 2: Give it a list of messages along with instructions relating to serialization format. Producers will use this method.
  * 
  */
-class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends MessageSet with Logging {
+class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Logging {
   private var shallowValidByteCount = -1
 
   def this(compressionCodec: CompressionCodec, messages: Message*) {
@@ -109,6 +108,8 @@ class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends Message
   def this(messages: Message*) {
     this(NoCompressionCodec, new AtomicLong(0), messages: _*)
   }
+
+  def getBuffer = buffer
 
   private def shallowValidBytes: Int = {
     if(shallowValidByteCount < 0) {

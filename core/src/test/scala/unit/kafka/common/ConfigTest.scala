@@ -29,7 +29,7 @@ class ConfigTest {
   @Test
   def testInvalidClientIds() {
     val invalidClientIds = new ArrayBuffer[String]()
-    val badChars = Array('/', '\\', ',', '\0', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
+    val badChars = Array('/', '\\', ',', '\u0000', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
     for (weirdChar <- badChars) {
       invalidClientIds += "Is" + weirdChar + "illegal"
     }
@@ -59,7 +59,7 @@ class ConfigTest {
   @Test
   def testInvalidGroupIds() {
     val invalidGroupIds = new ArrayBuffer[String]()
-    val badChars = Array('/', '\\', ',', '\0', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
+    val badChars = Array('/', '\\', ',', '\u0000', ':', "\"", '\'', ';', '*', '?', ' ', '\t', '\r', '\n', '=')
     for (weirdChar <- badChars) {
       invalidGroupIds += "Is" + weirdChar + "illegal"
     }

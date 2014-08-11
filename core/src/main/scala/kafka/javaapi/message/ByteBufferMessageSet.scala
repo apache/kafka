@@ -17,12 +17,11 @@
 package kafka.javaapi.message
 
 import java.util.concurrent.atomic.AtomicLong
-import scala.reflect.BeanProperty
 import java.nio.ByteBuffer
 import kafka.message._
 import kafka.javaapi.Implicits.javaListToScalaBuffer
 
-class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends MessageSet {
+class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet {
   private val underlying: kafka.message.ByteBufferMessageSet = new kafka.message.ByteBufferMessageSet(buffer)
   
   def this(compressionCodec: CompressionCodec, messages: java.util.List[Message]) {
@@ -35,6 +34,8 @@ class ByteBufferMessageSet(@BeanProperty val buffer: ByteBuffer) extends Message
   }
 
   def validBytes: Int = underlying.validBytes
+
+  def getBuffer = buffer
 
   override def iterator: java.util.Iterator[MessageAndOffset] = new java.util.Iterator[MessageAndOffset] {
     val underlyingIterator = underlying.iterator

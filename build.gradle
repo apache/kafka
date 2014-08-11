@@ -130,7 +130,7 @@ subprojects {
   }
 }
 
-for ( sv in ['2_8_0', '2_9_1', '2_9_2', '2_10_1'] ) {
+for ( sv in ['2_9_1', '2_9_2', '2_10_1', '2_11'] ) {
   String svInDot = sv.replaceAll( "_", ".")
 
   tasks.create(name: "jar_core_${sv}", type: GradleBuild) {
@@ -170,20 +170,20 @@ for ( sv in ['2_8_0', '2_9_1', '2_9_2', '2_10_1'] ) {
   }
 }
 
-tasks.create(name: "jarAll", dependsOn: ['jar_core_2_8_0', 'jar_core_2_9_1', 'jar_core_2_9_2', 'jar_core_2_10_1', 'clients:jar', 'perf:jar', 'examples:jar', 'contrib:hadoop-consumer:jar', 'contrib:hadoop-producer:jar']) {
+tasks.create(name: "jarAll", dependsOn: ['jar_core_2_9_1', 'jar_core_2_9_2', 'jar_core_2_10_1', 'jar_core_2_11', 'clients:jar', 'perf:jar', 'examples:jar', 'contrib:hadoop-consumer:jar', 'contrib:hadoop-producer:jar']) {
 }
 
-tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_8_0', 'srcJar_2_9_1', 'srcJar_2_9_2', 'srcJar_2_10_1', 'clients:srcJar', 'perf:srcJar', 'examples:srcJar', 'contrib:hadoop-consumer:srcJar', 'contrib:hadoop-producer:srcJar']) { }
+tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_9_1', 'srcJar_2_9_2', 'srcJar_2_10_1', 'srcJar_2_11', 'clients:srcJar', 'perf:srcJar', 'examples:srcJar', 'contrib:hadoop-consumer:srcJar', 'contrib:hadoop-producer:srcJar']) { }
 
-tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_8_0', 'docsJar_2_9_1', 'docsJar_2_9_2', 'docsJar_2_10_1', 'clients:docsJar', 'perf:docsJar', 'examples:docsJar', 'contrib:hadoop-consumer:docsJar', 'contrib:hadoop-producer:docsJar']) { }
+tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_9_1', 'docsJar_2_9_2', 'docsJar_2_10_1', 'docsJar_2_11', 'clients:docsJar', 'perf:docsJar', 'examples:docsJar', 'contrib:hadoop-consumer:docsJar', 'contrib:hadoop-producer:docsJar']) { }
 
-tasks.create(name: "testAll", dependsOn: ['test_core_2_8_0', 'test_core_2_9_1', 'test_core_2_9_2', 'test_core_2_10_1', 'clients:test']) {
+tasks.create(name: "testAll", dependsOn: ['test_core_2_9_1', 'test_core_2_9_2', 'test_core_2_10_1', 'test_core_2_11', 'clients:test']) {
 }
 
-tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_8_0', 'releaseTarGz_2_9_1', 'releaseTarGz_2_9_2', 'releaseTarGz_2_10_1']) {
+tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_9_1', 'releaseTarGz_2_9_2', 'releaseTarGz_2_10_1', 'releaseTarGz_2_11']) {
 }
 
-tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_8_0', 'uploadCoreArchives_2_9_1', 'uploadCoreArchives_2_9_2', 'uploadCoreArchives_2_10_1', 'perf:uploadArchives', 'examples:uploadArchives', 'contrib:hadoop-consumer:uploadArchives', 'contrib:hadoop-producer:uploadArchives']) {
+tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_9_1', 'uploadCoreArchives_2_9_2', 'uploadCoreArchives_2_10_1', 'uploadCoreArchives_2_11', 'clients:uploadArchives', 'perf:uploadArchives', 'examples:uploadArchives', 'contrib:hadoop-consumer:uploadArchives', 'contrib:hadoop-producer:uploadArchives']) {
 }
 
 project(':core') {
@@ -193,24 +193,6 @@ project(':core') {
   archivesBaseName = "kafka_${baseScalaVersion}"
 
   def (major, minor, trivial) = scalaVersion.tokenize('.')
-
-  if(major.toInteger() >= 2 && minor.toInteger() >= 9) {
-     sourceSets {
-       main {
-         scala {
-           exclude 'kafka/utils/Annotations_2.8.scala'
-         }
-       }
-     }
-  } else {
-     sourceSets {
-       main {
-         scala {
-           exclude 'kafka/utils/Annotations_2.9+.scala'
-         }
-       }
-     }
-  }
 
   dependencies {
     compile project(':clients')
@@ -224,16 +206,18 @@ project(':core') {
     testCompile 'org.easymock:easymock:3.0'
     testCompile 'org.objenesis:objenesis:1.2'
     testCompile project(':clients')
-    if (scalaVersion.startsWith('2.8')) {
-      testCompile 'org.scalatest:scalatest:1.2'
-    } else if (scalaVersion.startsWith('2.10')) {
+    if (scalaVersion.startsWith('2.10')) {
       testCompile 'org.scalatest:scalatest_2.10:1.9.1'
+    } else if (scalaVersion.startsWith('2.11')) {
+      compile 'org.scala-lang.modules:scala-xml_2.11:1.0.2'
+      compile 'org.scala-lang.modules:scala-parser-combinators_2.11:1.0.2'
+      testCompile "org.scalatest:scalatest_2.11:2.2.0"
     } else {
       testCompile "org.scalatest:scalatest_$scalaVersion:1.8"
-    }   
+    }
     testRuntime "$slf4jlog4j"
 
-    zinc 'com.typesafe.zinc:zinc:0.2.5'
+    zinc 'com.typesafe.zinc:zinc:0.3.1'
   }
 
   configurations {
@@ -299,7 +283,7 @@ project(':perf') {
     compile "org.scala-lang:scala-library:$scalaVersion"
     compile 'net.sf.jopt-simple:jopt-simple:3.2'
 
-    zinc 'com.typesafe.zinc:zinc:0.2.5'
+    zinc 'com.typesafe.zinc:zinc:0.3.1'
   }
 }
 
