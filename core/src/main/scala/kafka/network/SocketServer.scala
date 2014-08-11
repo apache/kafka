@@ -102,7 +102,7 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
   protected val selector = Selector.open();
   private val startupLatch = new CountDownLatch(1)
   private val shutdownLatch = new CountDownLatch(1)
-  private val alive = new AtomicBoolean(false)
+  private val alive = new AtomicBoolean(true)
 
   /**
    * Initiates a graceful shutdown by signaling to stop and waiting for the shutdown to complete
@@ -122,7 +122,6 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
    * Record that the thread startup is complete
    */
   protected def startupComplete() = {
-    alive.set(true)
     startupLatch.countDown
   }
 
