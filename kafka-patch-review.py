@@ -9,14 +9,19 @@ import tempfile
 import commands
 from jira.client import JIRA
 
-def get_jira():
-  options = {
-    'server': 'https://issues.apache.org/jira'
-  }
+def get_jira_config():
   # read the config file
   home=jira_home=os.getenv('HOME')
   home=home.rstrip('/')
   jira_config = dict(line.strip().split('=') for line in open(home + '/jira.ini'))
+  return jira_config
+
+def get_jira():
+  options = {
+    'server': 'https://issues.apache.org/jira'
+  }
+
+  jira_config = get_jira_config()
   jira = JIRA(options,basic_auth=(jira_config['user'], jira_config['password']))
   return jira
 
@@ -133,6 +138,19 @@ def main():
 
   comment = comment + rb_url + ' against branch ' + opt.branch
   jira.add_comment(opt.jira, comment)
+
+  #update the JIRA status to PATCH AVAILABLE
+  transitions = jira.transitions(issue)
+  transitionsMap ={}
+  
+  for t in transitions:
+    transitionsMap[t['name']] = t['id']
+
+  jira_config = get_jira_config()
+
+  if('Submit Patch' in transitionsMap):
+     jira.transition_issue(issue, transitionsMap['Submit Patch'] , assignee={'name': jira_config['user']} )
+
 
 if __name__ == '__main__':
   sys.exit(main())
