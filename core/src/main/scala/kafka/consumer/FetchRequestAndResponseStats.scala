@@ -17,10 +17,11 @@
 
 package kafka.consumer
 
-import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
-import kafka.utils.Pool
 import java.util.concurrent.TimeUnit
+
 import kafka.common.ClientIdAndBroker
+import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
+import kafka.utils.Pool
 
 class FetchRequestAndResponseMetrics(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
   val requestTimer = new KafkaTimer(newTimer(metricId + "FetchRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
@@ -52,6 +53,17 @@ object FetchRequestAndResponseStatsRegistry {
 
   def getFetchRequestAndResponseStats(clientId: String) = {
     globalStats.getAndMaybePut(clientId)
+  }
+
+  def removeConsumerFetchRequestAndResponseStats(clientId: String) {
+    val pattern = (clientId + "-ConsumerFetcherThread.*").r
+    val keys = globalStats.keys
+    for (key <- keys) {
+      pattern.findFirstIn(key) match {
+        case Some(_) => globalStats.remove(key)
+        case _ =>
+      }
+    }
   }
 }
 

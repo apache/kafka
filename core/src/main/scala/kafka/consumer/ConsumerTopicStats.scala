@@ -54,4 +54,8 @@ object ConsumerTopicStatsRegistry {
   def getConsumerTopicStat(clientId: String) = {
     globalStats.getAndMaybePut(clientId)
   }
+
+  def removeConsumerTopicStat(clientId: String) {
+    globalStats.remove(clientId)
+  }
 }

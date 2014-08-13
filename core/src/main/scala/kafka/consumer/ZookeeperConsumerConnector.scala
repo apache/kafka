@@ -17,28 +17,28 @@
 
 package kafka.consumer
 
+import java.net.InetAddress
+import java.util.UUID
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import locks.ReentrantLock
-import collection._
-import kafka.cluster._
-import kafka.utils._
-import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import java.net.InetAddress
-import org.I0Itec.zkclient.{IZkDataListener, IZkStateListener, IZkChildListener, ZkClient}
-import org.apache.zookeeper.Watcher.Event.KeeperState
-import java.util.UUID
-import kafka.serializer._
-import kafka.utils.ZkUtils._
-import kafka.utils.Utils.inLock
-import kafka.common._
+import java.util.concurrent.locks.ReentrantLock
+
 import com.yammer.metrics.core.Gauge
+import kafka.api._
+import kafka.client.ClientUtils
+import kafka.cluster._
+import kafka.common._
 import kafka.metrics._
 import kafka.network.BlockingChannel
-import kafka.client.ClientUtils
-import kafka.api._
-import scala.Some
-import kafka.common.TopicAndPartition
+import kafka.serializer._
+import kafka.utils.Utils.inLock
+import kafka.utils.ZkUtils._
+import kafka.utils._
+import org.I0Itec.zkclient.exception.ZkNodeExistsException
+import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient}
+import org.apache.zookeeper.Watcher.Event.KeeperState
+
+import scala.collection._
 
 
 /**
@@ -184,7 +184,8 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     val canShutdown = isShuttingDown.compareAndSet(false, true)
     if (canShutdown) {
       info("ZKConsumerConnector shutting down")
-
+      val startTime = System.nanoTime()
+      KafkaMetricsGroup.removeAllConsumerMetrics(config.clientId)
       rebalanceLock synchronized {
         if (wildcardTopicWatcher != null)
           wildcardTopicWatcher.shutdown()
@@ -208,7 +209,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           case e: Throwable =>
             fatal("error during consumer connector shutdown", e)
         }
-        info("ZKConsumerConnector shut down completed")
+        info("ZKConsumerConnector shutdown completed in " + (System.nanoTime() - startTime) / 1000000 + " ms")
       }
     }
   }

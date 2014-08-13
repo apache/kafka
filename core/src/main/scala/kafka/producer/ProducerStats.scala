@@ -36,4 +36,8 @@ object ProducerStatsRegistry {
   def getProducerStats(clientId: String) = {
     statsRegistry.getAndMaybePut(clientId)
   }
+
+  def removeProducerStats(clientId: String) {
+    statsRegistry.remove(clientId)
+  }
 }
