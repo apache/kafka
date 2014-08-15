@@ -160,7 +160,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
     val sTime = SystemTime.milliseconds
-    val localProduceResults = appendToLocalLog(produceRequest)
+    val localProduceResults = appendToLocalLog(produceRequest, offsetCommitRequestOpt.nonEmpty)
     debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
 
     val firstErrorCode = localProduceResults.find(_.errorCode != ErrorMapping.NoError).map(_.errorCode).getOrElse(ErrorMapping.NoError)
@@ -236,11 +236,15 @@ class KafkaApis(val requestChannel: RequestChannel,
   /**
    * Helper method for handling a parsed producer request
    */
-  private def appendToLocalLog(producerRequest: ProducerRequest): Iterable[ProduceResult] = {
+  private def appendToLocalLog(producerRequest: ProducerRequest, isOffsetCommit: Boolean): Iterable[ProduceResult] = {
     val partitionAndData: Map[TopicAndPartition, MessageSet] = producerRequest.data
     trace("Append [%s] to local log ".format(partitionAndData.toString))
     partitionAndData.map {case (topicAndPartition, messages) =>
       try {
+        if (Topic.InternalTopics.contains(topicAndPartition.topic) &&
+            !(isOffsetCommit && topicAndPartition.topic == OffsetManager.OffsetsTopicName)) {
+          throw new InvalidTopicException("Cannot append to internal topic %s".format(topicAndPartition.topic))
+        }
         val partitionOpt = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
         val info = partitionOpt match {
           case Some(partition) =>
@@ -268,6 +272,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           fatal("Halting due to unrecoverable I/O error while handling produce request: ", e)
           Runtime.getRuntime.halt(1)
           null
+        case ite: InvalidTopicException =>
+          warn("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
+            producerRequest.correlationId, producerRequest.clientId, topicAndPartition, ite.getMessage))
+          new ProduceResult(topicAndPartition, ite)
         case utpe: UnknownTopicOrPartitionException =>
           warn("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
                producerRequest.correlationId, producerRequest.clientId, topicAndPartition, utpe.getMessage))

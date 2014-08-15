@@ -17,6 +17,8 @@
 
 package kafka.api
 
+import kafka.common.Topic
+import org.apache.kafka.common.errors.InvalidTopicException
 import org.scalatest.junit.JUnit3Suite
 import org.junit.Test
 import org.junit.Assert._
@@ -65,7 +67,7 @@ class ProducerFailureHandlingTest extends JUnit3Suite with KafkaServerTestHarnes
     consumer1 = new SimpleConsumer("localhost", configs(0).port, 100, 1024*1024, "")
     consumer2 = new SimpleConsumer("localhost", configs(1).port, 100, 1024*1024, "")
 
-    producer1 = TestUtils.createNewProducer(brokerList, acks = 0, blockOnBufferFull = false, bufferSize = producerBufferSize);
+    producer1 = TestUtils.createNewProducer(brokerList, acks = 0, blockOnBufferFull = false, bufferSize = producerBufferSize)
     producer2 = TestUtils.createNewProducer(brokerList, acks = 1, blockOnBufferFull = false, bufferSize = producerBufferSize)
     producer3 = TestUtils.createNewProducer(brokerList, acks = -1, blockOnBufferFull = false, bufferSize = producerBufferSize)
   }
@@ -293,6 +295,11 @@ class ProducerFailureHandlingTest extends JUnit3Suite with KafkaServerTestHarnes
     val uniqueMessageSize = uniqueMessages.size
 
     assertEquals("Should have fetched " + scheduler.sent + " unique messages", scheduler.sent, uniqueMessageSize)
+  }
+
+  @Test(expected = classOf[InvalidTopicException])
+  def testCannotSendToInternalTopic() {
+    producer1.send(new ProducerRecord(Topic.InternalTopics.head, "test".getBytes, "test".getBytes)).get
   }
 
   private class ProducerScheduler extends ShutdownableThread("daemon-producer", false)

@@ -46,6 +46,7 @@ object ErrorMapping {
   val OffsetsLoadInProgressCode: Short = 14
   val ConsumerCoordinatorNotAvailableCode: Short = 15
   val NotCoordinatorForConsumerCode: Short = 16
+  val InvalidTopicCode : Short = 17
 
   private val exceptionToCode = 
     Map[Class[Throwable], Short](
@@ -63,7 +64,8 @@ object ErrorMapping {
       classOf[OffsetMetadataTooLargeException].asInstanceOf[Class[Throwable]] -> OffsetMetadataTooLargeCode,
       classOf[OffsetsLoadInProgressException].asInstanceOf[Class[Throwable]] -> OffsetsLoadInProgressCode,
       classOf[ConsumerCoordinatorNotAvailableException].asInstanceOf[Class[Throwable]] -> ConsumerCoordinatorNotAvailableCode,
-      classOf[NotCoordinatorForConsumerException].asInstanceOf[Class[Throwable]] -> NotCoordinatorForConsumerCode
+      classOf[NotCoordinatorForConsumerException].asInstanceOf[Class[Throwable]] -> NotCoordinatorForConsumerCode,
+      classOf[InvalidTopicException].asInstanceOf[Class[Throwable]] -> InvalidTopicCode
     ).withDefaultValue(UnknownCode)
   
   /* invert the mapping */

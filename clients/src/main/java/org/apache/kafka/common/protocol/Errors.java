@@ -19,17 +19,7 @@ package org.apache.kafka.common.protocol;
 import java.util.HashMap;
 import java.util.Map;
 
-import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.CorruptRecordException;
-import org.apache.kafka.common.errors.LeaderNotAvailableException;
-import org.apache.kafka.common.errors.NetworkException;
-import org.apache.kafka.common.errors.NotLeaderForPartitionException;
-import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
-import org.apache.kafka.common.errors.OffsetOutOfRangeException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.UnknownServerException;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.*;
 
 
 /**
@@ -51,7 +41,9 @@ public enum Errors {
     // TODO: errorCode 8, 9, 11
     MESSAGE_TOO_LARGE(10, new RecordTooLargeException("The request included a message larger than the max message size the server will accept.")),
     OFFSET_METADATA_TOO_LARGE(12, new OffsetMetadataTooLarge("The metadata field of the offset request was too large.")),
-    NETWORK_EXCEPTION(13, new NetworkException("The server disconnected before a response was received."));
+    NETWORK_EXCEPTION(13, new NetworkException("The server disconnected before a response was received.")),
+    // TODO: errorCode 14, 15, 16
+    INVALID_TOPIC_EXCEPTION(17, new InvalidTopicException("The request attempted to perform an operation on an invalid topic."));
 
     private static Map<Class<?>, Errors> classToError = new HashMap<Class<?>, Errors>();
     private static Map<Short, Errors> codeToError = new HashMap<Short, Errors>();
