@@ -22,7 +22,7 @@ def get_jira():
   }
 
   jira_config = get_jira_config()
-  jira = JIRA(options,basic_auth=(jira_config['user'], jira_config['password']))
+  jira = JIRA(options=options,basic_auth=(jira_config['user'], jira_config['password']))
   return jira
 
 def cmd_exists(cmd):
