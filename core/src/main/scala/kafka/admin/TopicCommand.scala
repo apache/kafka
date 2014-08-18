@@ -19,8 +19,10 @@ package kafka.admin
 
 import joptsimple._
 import java.util.Properties
+import kafka.admin.AdminOperationException
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
+import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import scala.collection._
 import scala.collection.JavaConversions._
 import kafka.cluster.Broker
@@ -121,14 +123,31 @@ object TopicCommand {
   
   def listTopics(zkClient: ZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
-    for(topic <- topics)
+    for(topic <- topics) {
+      if (ZkUtils.pathExists(zkClient,ZkUtils.getDeleteTopicPath(topic))) {
+        println("%s - marked for deletion".format(topic))
+      } else {
         println(topic)
+      }
+    }
   }
 
   def deleteTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
+    if (topics.length == 0) {
+      println("Topic %s does not exist".format(opts.options.valueOf(opts.topicOpt)))
+    }
     topics.foreach { topic =>
-      ZkUtils.createPersistentPath(zkClient, ZkUtils.getDeleteTopicPath(topic))
+      try {
+        ZkUtils.createPersistentPath(zkClient, ZkUtils.getDeleteTopicPath(topic))
+        println("Topic %s is marked for deletion.".format(topic))
+        println("Note: This will have no impact if delete.topic.enable is not set to true.")
+      } catch {
+        case e: ZkNodeExistsException =>
+          println("Topic %s is already marked for deletion.".format(topic))
+        case e2: Throwable =>
+          throw new AdminOperationException("Error while deleting topic %s".format(topic))
+      }    
     }
   }
 
