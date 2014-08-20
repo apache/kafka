@@ -246,7 +246,7 @@ object MirrorMaker extends Logging {
       info("Starting mirror maker consumer thread " + threadName)
       try {
         for (msgAndMetadata <- stream) {
-          val data = new ProducerRecord(msgAndMetadata.topic, msgAndMetadata.message)
+          val data = new ProducerRecord(msgAndMetadata.topic, msgAndMetadata.key, msgAndMetadata.message)
           mirrorDataChannel.put(data)
         }
       } catch {
