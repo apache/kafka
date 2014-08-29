@@ -334,7 +334,7 @@ private[kafka] class Processor(val id: Int,
       }
     }
     debug("Closing selector.")
-    closeAll()
+    swallowError(closeAll())
     swallowError(selector.close())
     shutdownComplete()
   }
