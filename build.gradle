@@ -74,47 +74,31 @@ subprojects {
     from '../NOTICE'
   }
 
-  tasks.withType(Javadoc) {
-    task srcJar(type:Jar) {
-      classifier = 'sources'
-      from '../LICENSE'
-      from '../NOTICE'
-      from sourceSets.main.java
-    }
-
-    task javadocJar(type: Jar, dependsOn: javadoc) {
-      classifier 'javadoc'
-      from '../LICENSE'
-      from '../NOTICE'
-      from javadoc.destinationDir
-    }
-
-    task docsJar(type: Jar, dependsOn: javadocJar) { }
-
-    artifacts {
-      archives srcJar
-      archives javadocJar
-    }
+  task srcJar(type:Jar) {
+    classifier = 'sources'
+    from '../LICENSE'
+    from '../NOTICE'
+    from sourceSets.main.java
   }
 
-  tasks.withType(ScalaCompile) {
-    task srcJar(type:Jar, overwrite: true) {
-      classifier = 'sources'
-      from '../LICENSE'
-      from '../NOTICE'
-      from sourceSets.main.scala
-      from sourceSets.main.java
-    }
-
-    scalaCompileOptions.useAnt = false
-
-    configure(scalaCompileOptions.forkOptions) {
-      memoryMaximumSize = '1g'
-      jvmArgs = ['-XX:MaxPermSize=512m']
-    }
+  task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier 'javadoc'
+    from '../LICENSE'
+    from '../NOTICE'
+    from javadoc.destinationDir
   }
 
-  tasks.withType(ScalaDoc) {
+  task docsJar(dependsOn: javadocJar)
+
+  artifacts {
+    archives srcJar
+    archives javadocJar
+  }
+  
+  plugins.withType(ScalaPlugin) {
+    //source jar should also contain scala source:
+    srcJar.from sourceSets.main.scala
+
     task scaladocJar(type:Jar) {
       classifier = 'scaladoc'
       from '../LICENSE'
@@ -122,10 +106,20 @@ subprojects {
       from scaladoc
     }
 
-    task docsJar(type: Jar, dependsOn: ['javadocJar', 'scaladocJar'], overwrite: true) { }
+    //documentation task should also trigger building scala doc jar
+    docsJar.dependsOn scaladocJar
 
     artifacts {
       archives scaladocJar
+    }
+  }
+
+  tasks.withType(ScalaCompile) {
+    scalaCompileOptions.useAnt = false
+
+    configure(scalaCompileOptions.forkOptions) {
+      memoryMaximumSize = '1g'
+      jvmArgs = ['-XX:MaxPermSize=512m']
     }
   }
 }
