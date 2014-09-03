@@ -49,6 +49,7 @@ object ConsumerConfig extends Config {
   val MirrorTopicsWhitelistProp = "mirror.topics.whitelist"
   val MirrorTopicsBlacklistProp = "mirror.topics.blacklist"
   val ExcludeInternalTopics = true
+  val DefaultPartitionAssignmentStrategy = "range" /* select between "range", and "roundrobin" */
   val MirrorConsumerNumThreadsProp = "mirror.consumer.numthreads"
   val DefaultClientId = ""
 
@@ -175,6 +176,9 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
   /** Whether messages from internal topics (such as offsets) should be exposed to the consumer. */
   val excludeInternalTopics = props.getBoolean("exclude.internal.topics", ExcludeInternalTopics)
 
+  /** Select a strategy for assigning partitions to consumer streams. Possible values: range, roundrobin */
+  val partitionAssignmentStrategy = props.getString("partition.assignment.strategy", DefaultPartitionAssignmentStrategy)
+  
   validate(this)
 }
 
