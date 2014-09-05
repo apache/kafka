@@ -34,7 +34,7 @@ class RequestPurgatoryTest extends JUnit3Suite {
   
   override def setUp() {
     super.setUp()
-    purgatory = new MockRequestPurgatory()
+    purgatory = new MockRequestPurgatory(5)
   }
   
   override def tearDown() {
@@ -73,8 +73,37 @@ class RequestPurgatoryTest extends JUnit3Suite {
     assertTrue("r2 hasn't expired", !purgatory.expired.contains(r2))
     assertTrue("Time for expiration %d should at least %d".format(elapsed, expiration), elapsed >= expiration)
   }
+
+  @Test
+  def testRequestPurge() {
+    val r1 = new DelayedRequest(Array("test1"), null, 100000L)
+    val r12 = new DelayedRequest(Array("test1", "test2"), null, 100000L)
+    val r23 = new DelayedRequest(Array("test2", "test3"), null, 100000L)
+    purgatory.checkAndMaybeWatch(r1)
+    purgatory.checkAndMaybeWatch(r12)
+    purgatory.checkAndMaybeWatch(r23)
+
+    assertEquals("Purgatory should have 5 watched elements", 5, purgatory.watched())
+    assertEquals("Purgatory should have 3 total delayed requests", 3, purgatory.delayed())
+
+    // satisfy one of the requests, it should then be purged from the watch list with purge interval 5
+    r12.satisfied.set(true)
+    TestUtils.waitUntilTrue(() => purgatory.watched() == 3,
+      "Purgatory should have 3 watched elements instead of " +  + purgatory.watched(), 1000L)
+    TestUtils.waitUntilTrue(() => purgatory.delayed() == 3,
+      "Purgatory should still have 3 total delayed requests instead of " + purgatory.delayed(), 1000L)
+
+    // add two more requests, then the satisfied request should be purged from the delayed queue with purge interval 5
+    purgatory.checkAndMaybeWatch(r1)
+    purgatory.checkAndMaybeWatch(r1)
+
+    TestUtils.waitUntilTrue(() => purgatory.watched() == 5,
+      "Purgatory should have 5 watched elements instead of " + purgatory.watched(), 1000L)
+    TestUtils.waitUntilTrue(() => purgatory.delayed() == 4,
+      "Purgatory should have 4 total delayed requests instead of " + purgatory.delayed(), 1000L)
+  }
   
-  class MockRequestPurgatory extends RequestPurgatory[DelayedRequest] {
+  class MockRequestPurgatory(purge: Int) extends RequestPurgatory[DelayedRequest](purgeInterval = purge) {
     val satisfied = mutable.Set[DelayedRequest]()
     val expired = mutable.Set[DelayedRequest]()
     def awaitExpiration(delayed: DelayedRequest) = {
