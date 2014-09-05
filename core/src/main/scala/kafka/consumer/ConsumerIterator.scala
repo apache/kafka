@@ -104,10 +104,8 @@ class ConsumerIterator[K, V](private val channel: BlockingQueue[FetchedDataChunk
   }
 
   def clearCurrentChunk() {
-    try {
-      debug("Clearing the current data chunk for this consumer iterator")
-      current.set(null)
-    }
+    debug("Clearing the current data chunk for this consumer iterator")
+    current.set(null)
   }
 }
 

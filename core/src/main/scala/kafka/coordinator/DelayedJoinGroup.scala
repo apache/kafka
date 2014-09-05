@@ -28,7 +28,7 @@ import kafka.server.DelayedOperation
  */
 class DelayedJoinGroup(sessionTimeout: Long,
                        consumerRegistry: ConsumerRegistry,
-                       responseCallback: () => Unit) extends DelayedOperation(sessionTimeout) {
+                       responseCallback: => Unit) extends DelayedOperation(sessionTimeout) {
 
   /* always successfully complete the operation once called */
   override def tryComplete(): Boolean = {
