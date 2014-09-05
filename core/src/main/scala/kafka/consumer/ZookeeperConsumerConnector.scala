@@ -89,7 +89,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   private var fetcher: Option[ConsumerFetcherManager] = None
   private var zkClient: ZkClient = null
   private var topicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]]
-  private val checkpointedOffsets = new Pool[TopicAndPartition, Long]
+  private val checkpointedZkOffsets = new Pool[TopicAndPartition, Long]
   private val topicThreadIdAndQueues = new Pool[(String, ConsumerThreadId), BlockingQueue[FetchedDataChunk]]
   private val scheduler = new KafkaScheduler(threads = 1, threadNamePrefix = "kafka-consumer-scheduler-")
   private val messageStreamCreated = new AtomicBoolean(false)
@@ -277,9 +277,12 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   }
 
   def commitOffsetToZooKeeper(topicPartition: TopicAndPartition, offset: Long) {
-    val topicDirs = new ZKGroupTopicDirs(config.groupId, topicPartition.topic)
-    updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + topicPartition.partition, offset.toString)
-    zkCommitMeter.mark()
+    if (checkpointedZkOffsets.get(topicPartition) != offset) {
+      val topicDirs = new ZKGroupTopicDirs(config.groupId, topicPartition.topic)
+      updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" + topicPartition.partition, offset.toString)
+      checkpointedZkOffsets.put(topicPartition, offset)
+      zkCommitMeter.mark()
+    }
   }
 
   def commitOffsets(isAutoCommit: Boolean = true) {
@@ -289,10 +292,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     while (!done) {
       val committed = offsetsChannelLock synchronized { // committed when we receive either no error codes or only MetadataTooLarge errors
         val offsetsToCommit = immutable.Map(topicRegistry.flatMap { case (topic, partitionTopicInfos) =>
-          partitionTopicInfos.filterNot { case (partition, info) =>
-            val newOffset = info.getConsumeOffset()
-            newOffset == checkpointedOffsets.get(TopicAndPartition(topic, info.partitionId))
-          }.map { case (partition, info) =>
+          partitionTopicInfos.map { case (partition, info) =>
             TopicAndPartition(info.topic, info.partitionId) -> OffsetAndMetadata(info.getConsumeOffset())
           }
         }.toSeq:_*)
@@ -301,7 +301,6 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           if (config.offsetsStorage == "zookeeper") {
             offsetsToCommit.foreach { case(topicAndPartition, offsetAndMetadata) =>
               commitOffsetToZooKeeper(topicAndPartition, offsetAndMetadata.offset)
-              checkpointedOffsets.put(topicAndPartition, offsetAndMetadata.offset)
             }
             true
           } else {
@@ -316,12 +315,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
               val (commitFailed, retryableIfFailed, shouldRefreshCoordinator, errorCount) = {
                 offsetCommitResponse.commitStatus.foldLeft(false, false, false, 0) { case(folded, (topicPartition, errorCode)) =>
 
-                  if (errorCode == ErrorMapping.NoError) {
-                    val offset = offsetsToCommit(topicPartition).offset
-                    checkpointedOffsets.put(topicPartition, offset)
-                    if (config.dualCommitEnabled) {
+                  if (errorCode == ErrorMapping.NoError && config.dualCommitEnabled) {
+                      val offset = offsetsToCommit(topicPartition).offset
                       commitOffsetToZooKeeper(topicPartition, offset)
-                    }
                   }
 
                   (folded._1 || // update commitFailed
@@ -808,7 +804,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
                                                  config.clientId)
       partTopicInfoMap.put(partition, partTopicInfo)
       debug(partTopicInfo + " selected new offset " + offset)
-      checkpointedOffsets.put(TopicAndPartition(topic, partition), offset)
+      checkpointedZkOffsets.put(TopicAndPartition(topic, partition), offset)
     }
   }
 
