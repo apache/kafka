@@ -213,8 +213,10 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* If the lag in messages between a leader and a follower exceeds this number, the leader will remove the follower from isr */
   val replicaLagMaxMessages = props.getLong("replica.lag.max.messages", 4000)
 
-  /* the socket timeout for network requests */
+  /* the socket timeout for network requests. Its value should be at least replica.fetch.wait.max.ms. */
   val replicaSocketTimeoutMs = props.getInt("replica.socket.timeout.ms", ConsumerConfig.SocketTimeout)
+  require(replicaFetchWaitMaxMs <= replicaSocketTimeoutMs, "replica.socket.timeout.ms should always be at least replica.fetch.wait.max.ms" +
+    " to prevent unnecessary socket timeouts")
 
   /* the socket receive buffer for network requests */
   val replicaSocketReceiveBufferBytes = props.getInt("replica.socket.receive.buffer.bytes", ConsumerConfig.SocketBufferSize)

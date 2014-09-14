@@ -102,8 +102,10 @@ class ConsumerConfig private (val props: VerifiableProperties) extends ZKConfig(
    *  Set this explicitly for only testing purpose. */
   val consumerId: Option[String] = Option(props.getString("consumer.id", null))
 
-  /** the socket timeout for network requests. The actual timeout set will be max.fetch.wait + socket.timeout.ms. */
+  /** the socket timeout for network requests. Its value should be at least fetch.wait.max.ms. */
   val socketTimeoutMs = props.getInt("socket.timeout.ms", SocketTimeout)
+  require(fetchWaitMaxMs <= socketTimeoutMs, "socket.timeout.ms should always be at least fetch.wait.max.ms" +
+    " to prevent unnecessary socket timeouts")
   
   /** the socket receive buffer for network requests */
   val socketReceiveBufferBytes = props.getInt("socket.receive.buffer.bytes", SocketBufferSize)
