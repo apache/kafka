@@ -32,7 +32,11 @@ if [ ! -d "$LOG_DIR" ]; then
 fi
 
 if [ -z "$SCALA_VERSION" ]; then
-	SCALA_VERSION=2.10
+	SCALA_VERSION=2.10.1
+fi
+
+if [ -z "$SCALA_BINARY_VERSION" ]; then
+	SCALA_BINARY_VERSION=2.10
 fi
 
 # run ./gradlew copyDependantLibs to get all dependant jars in a local dir
@@ -67,7 +71,7 @@ do
   CLASSPATH=$CLASSPATH:$file
 done
 
-for file in $base_dir/core/build/libs/kafka_${SCALA_VERSION}*.jar;
+for file in $base_dir/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
   CLASSPATH=$CLASSPATH:$file
 done

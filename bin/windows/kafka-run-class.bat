@@ -28,7 +28,11 @@ popd
 set CLASSPATH=
 
 IF ["%SCALA_VERSION%"] EQU [""] (
-  set SCALA_VERSION=2.8.0
+  set SCALA_VERSION=2.10.1
+)
+
+IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
+  set SCALA_BINARY_VERSION=2.10
 )
 
 rem Classpath addition for kafka-core dependencies
@@ -67,7 +71,7 @@ for %%i in (%BASE_DIR%\libs\*.jar) do (
 )
 
 rem Classpath addition for core
-for %%i in (%BASE_DIR%\core\build\libs\kafka_%SCALA_VERSION%*.jar) do (
+for %%i in (%BASE_DIR%\core\build\libs\kafka_%SCALA_BINARY_VERSION%*.jar) do (
 	call :concat %%i
 )
 
