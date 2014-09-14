@@ -48,7 +48,7 @@ The release file can be found inside ./core/build/distributions/.
     ./gradlew -PscalaVersion=2.9.1 releaseTarGz
 
 ### Running a task for a specific project ###
-This is for 'core', 'perf', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'examples' and 'clients'
+This is for 'core', 'contrib:hadoop-consumer', 'contrib:hadoop-producer', 'examples' and 'clients'
     ./gradlew core:jar
     ./gradlew core:test
 
@@ -88,7 +88,7 @@ Please note for this to work you should create/update `~/.gradle/gradle.properti
 
 ### Contribution ###
 
-Apache Kafka interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).
+Apache Kafka is interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).
 
 To contribute follow the instructions here:
  * http://kafka.apache.org/contributing.html
