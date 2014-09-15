@@ -122,7 +122,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
 
   def serialize(events: Seq[KeyedMessage[K,V]]): Seq[KeyedMessage[K,Message]] = {
     val serializedMessages = new ArrayBuffer[KeyedMessage[K,Message]](events.size)
-    events.map{e =>
+    events.foreach{e =>
       try {
         if(e.hasKey)
           serializedMessages += new KeyedMessage[K,Message](topic = e.topic, key = e.key, partKey = e.partKey, message = new Message(key = keyEncoder.toBytes(e.key), bytes = encoder.toBytes(e.message)))
