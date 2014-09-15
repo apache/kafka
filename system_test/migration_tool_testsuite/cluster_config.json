@@ -69,7 +69,7 @@
             "role": "producer_performance",
             "cluster_name":"source",
             "kafka_home": "system_test/migration_tool_testsuite/0.7",
-            "java_home": "/export/apps/jdk/JDK-1_6_0_27",
+            "java_home": "default",
             "jmx_port": "9997"
         },
         {
