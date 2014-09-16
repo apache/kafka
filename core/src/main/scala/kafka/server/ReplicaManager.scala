@@ -392,7 +392,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /*
-   * Make the current broker to become follower for a given set of partitions by:
+   * Make the current broker to become leader for a given set of partitions by:
    *
    * 1. Stop fetchers for these partitions
    * 2. Update the partition metadata in cache
