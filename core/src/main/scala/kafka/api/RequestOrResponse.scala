@@ -30,7 +30,7 @@ object Request {
 }
 
 
-private[kafka] abstract class RequestOrResponse(val requestId: Option[Short] = None) extends Logging {
+abstract class RequestOrResponse(val requestId: Option[Short] = None) extends Logging {
 
   def sizeInBytes: Int
   

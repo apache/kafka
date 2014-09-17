@@ -26,7 +26,7 @@ import kafka.common.{KafkaException, BrokerNotAvailableException}
 /**
  * A Kafka broker
  */
-private[kafka] object Broker {
+object Broker {
 
   def createBroker(id: Int, brokerInfoString: String): Broker = {
     if(brokerInfoString == null)
@@ -54,7 +54,7 @@ private[kafka] object Broker {
   }
 }
 
-private[kafka] case class Broker(val id: Int, val host: String, val port: Int) {
+case class Broker(val id: Int, val host: String, val port: Int) {
   
   override def toString(): String = new String("id:" + id + ",host:" + host + ",port:" + port)
 

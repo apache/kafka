@@ -59,13 +59,13 @@ object FetchRequest {
   }
 }
 
-case class FetchRequest private[kafka] (versionId: Short = FetchRequest.CurrentVersion,
-                                        correlationId: Int = FetchRequest.DefaultCorrelationId,
-                                        clientId: String = ConsumerConfig.DefaultClientId,
-                                        replicaId: Int = Request.OrdinaryConsumerId,
-                                        maxWait: Int = FetchRequest.DefaultMaxWait,
-                                        minBytes: Int = FetchRequest.DefaultMinBytes,
-                                        requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
+case class FetchRequest(versionId: Short = FetchRequest.CurrentVersion,
+                        correlationId: Int = FetchRequest.DefaultCorrelationId,
+                        clientId: String = ConsumerConfig.DefaultClientId,
+                        replicaId: Int = Request.OrdinaryConsumerId,
+                        maxWait: Int = FetchRequest.DefaultMaxWait,
+                        minBytes: Int = FetchRequest.DefaultMinBytes,
+                        requestInfo: Map[TopicAndPartition, PartitionFetchInfo])
         extends RequestOrResponse(Some(RequestKeys.FetchKey)) {
 
   /**
