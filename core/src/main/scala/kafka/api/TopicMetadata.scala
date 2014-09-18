@@ -21,8 +21,8 @@ import kafka.cluster.Broker
 import java.nio.ByteBuffer
 import kafka.api.ApiUtils._
 import kafka.utils.Logging
-import collection.mutable.ArrayBuffer
 import kafka.common._
+import org.apache.kafka.common.utils.Utils._
 
 object TopicMetadata {
   
@@ -149,7 +149,7 @@ case class PartitionMetadata(partitionId: Int,
     partitionMetadataString.toString()
   }
 
-  private def formatBroker(broker: Broker) = broker.id + " (" + broker.host + ":" + broker.port + ")"
+  private def formatBroker(broker: Broker) = broker.id + " (" + formatAddress(broker.host, broker.port) + ")"
 }
 
 

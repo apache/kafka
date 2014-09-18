@@ -22,6 +22,8 @@ import kafka.network.{BlockingChannel, BoundedByteBufferSend, Receive}
 import kafka.utils._
 import java.util.Random
 
+import org.apache.kafka.common.utils.Utils._
+
 object SyncProducer {
   val RequestKey: Short = 0
   val randomGenerator = new Random
@@ -126,7 +128,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
    */
   private def disconnect() {
     try {
-      info("Disconnecting from " + config.host + ":" + config.port)
+      info("Disconnecting from " + formatAddress(config.host, config.port))
       blockingChannel.disconnect()
     } catch {
       case e: Exception => error("Error on disconnect: ", e)
@@ -137,11 +139,11 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     if (!blockingChannel.isConnected && !shutdown) {
       try {
         blockingChannel.connect()
-        info("Connected to " + config.host + ":" + config.port + " for producing")
+        info("Connected to " + formatAddress(config.host, config.port) + " for producing")
       } catch {
         case e: Exception => {
           disconnect()
-          error("Producer connection to " +  config.host + ":" + config.port + " unsuccessful", e)
+          error("Producer connection to " + formatAddress(config.host, config.port) + " unsuccessful", e)
           throw e
         }
       }

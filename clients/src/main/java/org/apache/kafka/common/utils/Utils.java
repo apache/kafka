@@ -14,10 +14,14 @@ package org.apache.kafka.common.utils;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.apache.kafka.common.KafkaException;
 
 public class Utils {
+
+    private static final Pattern HOST_PORT_PATTERN = Pattern.compile("\\[?(.+?)\\]?:(\\d+)");
 
     public static String NL = System.getProperty("line.separator");
 
@@ -217,4 +221,36 @@ public class Utils {
         return h;
     }
 
+    /**
+     * Extracts the hostname from a "host:port" address string.
+     * @param address address string to parse
+     * @return hostname or null if the given address is incorrect
+     */
+    public static String getHost(String address) {
+        Matcher matcher = HOST_PORT_PATTERN.matcher(address);
+        return matcher.matches() ? matcher.group(1) : null;
+    }
+
+    /**
+     * Extracts the port number from a "host:port" address string.
+     * @param address address string to parse
+     * @return port number or null if the given address is incorrect
+     */
+    public static Integer getPort(String address) {
+        Matcher matcher = HOST_PORT_PATTERN.matcher(address);
+        return matcher.matches() ? Integer.parseInt(matcher.group(2)) : null;
+    }
+
+    /**
+     * Formats hostname and port number as a "host:port" address string,
+     * surrounding IPv6 addresses with braces '[', ']'
+     * @param host hostname
+     * @param port port number
+     * @return address string
+     */
+    public static String formatAddress(String host, Integer port) {
+        return host.contains(":")
+                ? "[" + host + "]:" + port // IPv6
+                : host + ":" + port;
+    }
 }

@@ -395,21 +395,13 @@ object Utils extends Logging {
   }
 
   /**
-   * Parse a host and port out of a string
-   */
-  def parseHostPort(hostport: String) : (String, Int) = {
-    val splits = hostport.split(":")
-    (splits(0), splits(1).toInt)
-  }
-
-  /**
    * Get the stack trace from an exception as a string
    */
   def stackTrace(e: Throwable): String = {
-    val sw = new StringWriter;
-    val pw = new PrintWriter(sw);
-    e.printStackTrace(pw);
-    sw.toString();
+    val sw = new StringWriter
+    val pw = new PrintWriter(sw)
+    e.printStackTrace(pw)
+    sw.toString()
   }
 
   /**

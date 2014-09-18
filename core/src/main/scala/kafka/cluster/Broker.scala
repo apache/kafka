@@ -22,6 +22,7 @@ import kafka.utils.Json
 import kafka.api.ApiUtils._
 import java.nio.ByteBuffer
 import kafka.common.{KafkaException, BrokerNotAvailableException}
+import org.apache.kafka.common.utils.Utils._
 
 /**
  * A Kafka broker
@@ -54,11 +55,11 @@ object Broker {
   }
 }
 
-case class Broker(val id: Int, val host: String, val port: Int) {
+case class Broker(id: Int, host: String, port: Int) {
   
-  override def toString(): String = new String("id:" + id + ",host:" + host + ",port:" + port)
+  override def toString: String = "id:" + id + ",host:" + host + ",port:" + port
 
-  def getConnectionString(): String = host + ":" + port
+  def connectionString: String = formatAddress(host, port)
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(id)

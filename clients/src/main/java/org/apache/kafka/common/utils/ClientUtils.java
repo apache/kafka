@@ -19,26 +19,31 @@ import java.util.List;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigException;
 
+import static org.apache.kafka.common.utils.Utils.getHost;
+import static org.apache.kafka.common.utils.Utils.getPort;
+
 public class ClientUtils {
+
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
         List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
         for (String url : urls) {
             if (url != null && url.length() > 0) {
-                String[] pieces = url.split(":");
-                if (pieces.length != 2)
+                String host = getHost(url);
+                Integer port = getPort(url);
+                if (host == null || port == null)
                     throw new ConfigException("Invalid url in " + ProducerConfig.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 try {
-                    InetSocketAddress address = new InetSocketAddress(pieces[0], Integer.parseInt(pieces[1]));
+                    InetSocketAddress address = new InetSocketAddress(host, port);
                     if (address.isUnresolved())
-                        throw new ConfigException("DNS resolution failed for metadata bootstrap url: " + url);
+                        throw new ConfigException("DNS resolution failed for url in " + ProducerConfig.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                     addresses.add(address);
                 } catch (NumberFormatException e) {
-                    throw new ConfigException("Invalid port in metadata.broker.list: " + url);
+                    throw new ConfigException("Invalid port in " + ProducerConfig.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 }
             }
         }
         if (addresses.size() < 1)
-            throw new ConfigException("No bootstrap urls given in metadata.broker.list.");
+            throw new ConfigException("No bootstrap urls given in " + ProducerConfig.BOOTSTRAP_SERVERS_CONFIG);
         return addresses;
     }
 }

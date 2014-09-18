@@ -21,6 +21,7 @@ import kafka.api._
 import kafka.network._
 import kafka.utils._
 import kafka.common.{ErrorMapping, TopicAndPartition}
+import org.apache.kafka.common.utils.Utils._
 
 /**
  * A consumer of kafka messages
@@ -46,7 +47,7 @@ class SimpleConsumer(val host: String,
   }
 
   private def disconnect() = {
-    debug("Disconnecting from " + host + ":" + port)
+    debug("Disconnecting from " + formatAddress(host, port))
     blockingChannel.disconnect()
   }
 

@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -14,30 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.utils;
 
-package kafka.zk
+import org.apache.kafka.common.config.ConfigException;
+import org.junit.Test;
 
-import org.apache.zookeeper.server.ZooKeeperServer
-import org.apache.zookeeper.server.NIOServerCnxnFactory
-import kafka.utils.TestUtils
-import java.net.InetSocketAddress
-import kafka.utils.Utils
-import org.apache.kafka.common.utils.Utils.getPort
+import java.util.Arrays;
 
-class EmbeddedZookeeper(val connectString: String) {
-  val snapshotDir = TestUtils.tempDir()
-  val logDir = TestUtils.tempDir()
-  val tickTime = 500
-  val zookeeper = new ZooKeeperServer(snapshotDir, logDir, tickTime)
-  val factory = new NIOServerCnxnFactory()
-  factory.configure(new InetSocketAddress("127.0.0.1", getPort(connectString)), 0)
-  factory.startup(zookeeper)
+public class ClientUtilsTest {
 
-  def shutdown() {
-    Utils.swallow(zookeeper.shutdown())
-    Utils.swallow(factory.shutdown())
-    Utils.rm(logDir)
-    Utils.rm(snapshotDir)
-  }
-  
+    @Test
+    public void testParseAndValidateAddresses() {
+        check("127.0.0.1:8000");
+        check("mydomain.com:8080");
+        check("[::1]:8000");
+        check("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "mydomain.com:10000");
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testNoPort() {
+        check("127.0.0.1");
+    }
+
+    private void check(String... url) {
+        ClientUtils.parseAndValidateAddresses(Arrays.asList(url));
+    }
 }

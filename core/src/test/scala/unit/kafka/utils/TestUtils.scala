@@ -24,6 +24,8 @@ import java.nio.channels._
 import java.util.Random
 import java.util.Properties
 
+import org.apache.kafka.common.utils.Utils._
+
 import collection.mutable.Map
 import collection.mutable.ListBuffer
 
@@ -142,7 +144,7 @@ object TestUtils extends Logging {
   }
 
   def getBrokerListStrFromConfigs(configs: Seq[KafkaConfig]): String = {
-    configs.map(c => c.hostName + ":" + c.port).mkString(",")
+    configs.map(c => formatAddress(c.hostName, c.port)).mkString(",")
   }
 
   /**

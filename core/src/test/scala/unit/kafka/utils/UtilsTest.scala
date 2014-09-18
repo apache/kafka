@@ -20,7 +20,6 @@ package kafka.utils
 import java.util.Arrays
 import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
-import java.io._
 import org.apache.log4j.Logger
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
@@ -73,7 +72,7 @@ class UtilsTest extends JUnitSuite {
     assertEquals(1, Utils.abs(1))
     assertEquals(Integer.MAX_VALUE, Utils.abs(Integer.MAX_VALUE))
   }
-  
+
   @Test
   def testReplaceSuffix() {
     assertEquals("blah.foo.text", Utils.replaceSuffix("blah.foo.txt", ".txt", ".text"))
@@ -81,7 +80,7 @@ class UtilsTest extends JUnitSuite {
     assertEquals("txt.txt", Utils.replaceSuffix("txt.txt.txt", ".txt", ""))
     assertEquals("foo.txt", Utils.replaceSuffix("foo", "", ".txt"))
   }
-  
+
   @Test
   def testReadInt() {
     val values = Array(0, 1, -1, Byte.MaxValue, Short.MaxValue, 2 * Short.MaxValue, Int.MaxValue/2, Int.MinValue/2, Int.MaxValue, Int.MinValue, Int.MaxValue)
@@ -90,7 +89,6 @@ class UtilsTest extends JUnitSuite {
       buffer.putInt(i*4, values(i))
       assertEquals("Written value should match read value.", values(i), Utils.readInt(buffer.array, i*4))
     }
-
   }
 
   @Test
@@ -105,7 +103,7 @@ class UtilsTest extends JUnitSuite {
     assertTrue(emptyStringList.equals(emptyListFromNullString))
     assertTrue(emptyStringList.equals(emptyList))
   }
-  
+
   @Test
   def testInLock() {
     val lock = new ReentrantLock()
@@ -115,6 +113,5 @@ class UtilsTest extends JUnitSuite {
     }
     assertEquals(2, result)
     assertFalse("Should be unlocked", lock.isLocked)
-    
   }
 }

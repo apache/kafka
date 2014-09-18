@@ -19,7 +19,6 @@ package kafka.admin
 
 import joptsimple._
 import java.util.Properties
-import kafka.admin.AdminOperationException
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
@@ -29,6 +28,7 @@ import kafka.cluster.Broker
 import kafka.log.LogConfig
 import kafka.consumer.Whitelist
 import kafka.server.OffsetManager
+import org.apache.kafka.common.utils.Utils.formatAddress
 
 
 object TopicCommand {
@@ -193,7 +193,7 @@ object TopicCommand {
     }
   }
   
-  def formatBroker(broker: Broker) = broker.id + " (" + broker.host + ":" + broker.port + ")"
+  def formatBroker(broker: Broker) = broker.id + " (" + formatAddress(broker.host, broker.port) + ")"
   
   def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
     val configsToBeAdded = opts.options.valuesOf(opts.configOpt).map(_.split("""\s*=\s*"""))
