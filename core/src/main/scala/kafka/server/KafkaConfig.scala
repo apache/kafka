@@ -113,6 +113,9 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* per-ip or hostname overrides to the default maximum number of connections */
   val maxConnectionsPerIpOverrides = props.getMap("max.connections.per.ip.overrides").map(entry => (entry._1, entry._2.toInt))
 
+  /* idle connections timeout: the server socket processor threads close the connections that idle more than this */
+  val connectionsMaxIdleMs = props.getLong("connections.max.idle.ms", 10*60*1000L)
+
   /*********** Log Configuration ***********/
 
   /* the default number of log partitions per topic */

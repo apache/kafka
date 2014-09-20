@@ -41,7 +41,8 @@ class SocketServerTest extends JUnitSuite {
                                               sendBufferSize = 300000,
                                               recvBufferSize = 300000,
                                               maxRequestSize = 50,
-                                              maxConnectionsPerIp = 5)
+                                              maxConnectionsPerIp = 5,
+                                              connectionsMaxIdleMs = 60*1000)
   server.startup()
 
   def sendRequest(socket: Socket, id: Short, request: Array[Byte]) {
