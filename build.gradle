@@ -29,6 +29,10 @@ allprojects {
   }
 }
 
+def isVerificationRequired(project) {
+    project.gradle.startParameter.taskNames.contains("uploadArchives")
+}
+
 apply from: file('gradle/license.gradle')
 apply from: file('scala.gradle')
 
@@ -38,33 +42,37 @@ subprojects {
   apply plugin: 'maven'
   apply plugin: 'signing'
 
+  licenseTest.onlyIf { isVerificationRequired(project) }
+
   uploadArchives {
     repositories {
       signing {
-        sign configurations.archives
+          if (isVerificationRequired(project)) {
+              sign configurations.archives
 
-        // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
-        mavenDeployer {
-          beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-          repository(url: "${mavenUrl}") {
-            authentication(userName: "${mavenUsername}", password: "${mavenPassword}")
-          }
-          afterEvaluate {
-            pom.artifactId = "${archivesBaseName}"
-            pom.project {
-              name 'Apache Kafka'
-              packaging 'jar'
-              url 'http://kafka.apache.org'
-              licenses {
-                license {
-                  name 'The Apache Software License, Version 2.0'
-                  url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                  distribution 'repo'
-                }
+              // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
+              mavenDeployer {
+                  beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+                  repository(url: "${mavenUrl}") {
+                      authentication(userName: "${mavenUsername}", password: "${mavenPassword}")
+                  }
+                  afterEvaluate {
+                      pom.artifactId = "${archivesBaseName}"
+                      pom.project {
+                          name 'Apache Kafka'
+                          packaging 'jar'
+                          url 'http://kafka.apache.org'
+                          licenses {
+                              license {
+                                  name 'The Apache Software License, Version 2.0'
+                                  url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                                  distribution 'repo'
+                              }
+                          }
+                      }
+                  }
               }
-            }
           }
-        }
       }
     }
   }
