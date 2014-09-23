@@ -2,6 +2,13 @@ Apache Kafka
 =================
 See our [web site](http://kafka.apache.org) for details on the project.
 
+You need to have [gradle](http://www.gradle.org/installation) installed.
+
+### First bootstrap and download the wrapper ###
+    gradle
+
+Now everything else will work
+
 ### Building a jar and running it ###
     ./gradlew jar  
 

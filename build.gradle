@@ -29,10 +29,15 @@ allprojects {
   }
 }
 
+ext {
+    gradleVersion = "2.0"
+}
+
 def isVerificationRequired(project) {
     project.gradle.startParameter.taskNames.contains("uploadArchives")
 }
 
+apply from: file('wrapper.gradle')
 apply from: file('gradle/license.gradle')
 apply from: file('scala.gradle')
 
