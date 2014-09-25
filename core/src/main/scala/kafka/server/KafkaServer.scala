@@ -25,6 +25,7 @@ import kafka.utils._
 import java.util.concurrent._
 import atomic.{AtomicInteger, AtomicBoolean}
 import java.io.File
+import java.net.BindException
 import org.I0Itec.zkclient.ZkClient
 import kafka.controller.{ControllerStats, KafkaController}
 import kafka.cluster.Broker
@@ -126,13 +127,30 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     startupComplete.set(true)
     info("started")
   }
-  
+
   private def initZk(): ZkClient = {
     info("Connecting to zookeeper on " + config.zkConnect)
+
+    val chroot = {
+      if (config.zkConnect.indexOf("/") > 0)
+        config.zkConnect.substring(config.zkConnect.indexOf("/"))
+      else
+        ""
+    }
+
+    if (chroot.length > 1) {
+      val zkConnForChrootCreation = config.zkConnect.substring(0, config.zkConnect.indexOf("/"))
+      val zkClientForChrootCreation = new ZkClient(zkConnForChrootCreation, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
+      ZkUtils.makeSurePersistentPathExists(zkClientForChrootCreation, chroot)
+      info("Created zookeeper path " + chroot)
+      zkClientForChrootCreation.close()
+    }
+
     val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
     ZkUtils.setupCommonPaths(zkClient)
     zkClient
   }
+
 
   /**
    *  Forces some dynamic jmx beans to be registered on server startup.
