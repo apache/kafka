@@ -290,7 +290,6 @@ project(':contrib:hadoop-consumer') {
     compile "org.codehaus.jackson:jackson-core-asl:1.5.5"
     compile "org.codehaus.jackson:jackson-mapper-asl:1.5.5"
     compile "org.apache.hadoop:hadoop-core:0.20.2"
-    compile files('lib/piggybank.jar')
   }
 
   configurations {
@@ -309,13 +308,13 @@ project(':contrib:hadoop-producer') {
 
   dependencies {
     compile project(':core')
-    compile "org.apache.avro:avro:1.4.0"
+    compile("org.apache.avro:avro:1.4.0") { force = true }
     compile "org.apache.pig:pig:0.8.0"
     compile "commons-logging:commons-logging:1.0.4"
     compile "org.codehaus.jackson:jackson-core-asl:1.5.5"
     compile "org.codehaus.jackson:jackson-mapper-asl:1.5.5"
     compile "org.apache.hadoop:hadoop-core:0.20.2"
-    compile files('lib/piggybank.jar')
+    compile "org.apache.pig:piggybank:0.12.0"
   }
 
   configurations {

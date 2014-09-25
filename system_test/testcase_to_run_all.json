@@ -121,14 +121,6 @@
         "testcase_9051"
     ],
 
-    "MigrationToolTest"  : [
-        "testcase_9001",
-        "testcase_9003",
-        "testcase_9004",
-        "testcase_9005",
-        "testcase_9006"
-    ],
-
     "MirrorMakerTest"  : [
         "testcase_5001",
         "testcase_5002",
