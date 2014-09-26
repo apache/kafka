@@ -19,7 +19,7 @@ package kafka.tools
 
 import kafka.metrics.KafkaMetricsReporter
 import kafka.producer.{OldProducer, NewShinyProducer}
-import kafka.utils.{VerifiableProperties, Logging, CommandLineUtils}
+import kafka.utils.{ToolsUtils, VerifiableProperties, Logging, CommandLineUtils}
 import kafka.message.CompressionCodec
 import kafka.serializer._
 
@@ -132,6 +132,7 @@ object ProducerPerformance extends Logging {
     val dateFormat = new SimpleDateFormat(options.valueOf(dateFormatOpt))
     val hideHeader = options.has(hideHeaderOpt)
     val brokerList = options.valueOf(brokerListOpt)
+    ToolsUtils.validatePortOrDie(parser,brokerList)
     val messageSize = options.valueOf(messageSizeOpt).intValue
     var isFixedSize = !options.has(varyMessageSizeOpt)
     var isSync = options.has(syncOpt)

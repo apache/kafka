@@ -116,7 +116,9 @@ object ReplicaVerificationTool extends Logging {
     val reportInterval = options.valueOf(reportIntervalOpt).longValue
     // getting topic metadata
     info("Getting topic metatdata...")
-    val metadataTargetBrokers = ClientUtils.parseBrokerList(options.valueOf(brokerListOpt))
+    val brokerList = options.valueOf(brokerListOpt)
+    ToolsUtils.validatePortOrDie(parser,brokerList)
+    val metadataTargetBrokers = ClientUtils.parseBrokerList(brokerList)
     val topicsMetadataResponse = ClientUtils.fetchTopicMetadata(Set[String](), metadataTargetBrokers, clientId, maxWaitMs)
     val brokerMap = topicsMetadataResponse.brokers.map(b => (b.id, b)).toMap
     val filteredTopicMetadata = topicsMetadataResponse.topicsMetadata.filter(

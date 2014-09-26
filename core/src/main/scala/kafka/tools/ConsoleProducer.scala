@@ -20,7 +20,7 @@ package kafka.tools
 import kafka.common._
 import kafka.message._
 import kafka.serializer._
-import kafka.utils.CommandLineUtils
+import kafka.utils.{ToolsUtils, CommandLineUtils}
 import kafka.producer.{NewShinyProducer,OldProducer,KeyedMessage}
 
 import java.util.Properties
@@ -129,24 +129,24 @@ object ConsoleProducer {
       .defaultsTo(3)
     val retryBackoffMsOpt = parser.accepts("retry-backoff-ms", "Before each retry, the producer refreshes the metadata of relevant topics. Since leader election takes a bit of time, this property specifies the amount of time that the producer waits before refreshing the metadata.")
       .withRequiredArg
-      .ofType(classOf[java.lang.Long])
+      .ofType(classOf[java.lang.Integer])
       .defaultsTo(100)
     val sendTimeoutOpt = parser.accepts("timeout", "If set and the producer is running in asynchronous mode, this gives the maximum amount of time" +
       " a message will queue awaiting suffient batch size. The value is given in ms.")
       .withRequiredArg
       .describedAs("timeout_ms")
-      .ofType(classOf[java.lang.Long])
+      .ofType(classOf[java.lang.Integer])
       .defaultsTo(1000)
     val queueSizeOpt = parser.accepts("queue-size", "If set and the producer is running in asynchronous mode, this gives the maximum amount of " +
       " messages will queue awaiting suffient batch size.")
       .withRequiredArg
       .describedAs("queue_size")
-      .ofType(classOf[java.lang.Long])
+      .ofType(classOf[java.lang.Integer])
       .defaultsTo(10000)
     val queueEnqueueTimeoutMsOpt = parser.accepts("queue-enqueuetimeout-ms", "Timeout for event enqueue")
       .withRequiredArg
       .describedAs("queue enqueuetimeout ms")
-      .ofType(classOf[java.lang.Long])
+      .ofType(classOf[java.lang.Integer])
       .defaultsTo(Int.MaxValue)
     val requestRequiredAcksOpt = parser.accepts("request-required-acks", "The required acks of the producer requests")
       .withRequiredArg
@@ -220,6 +220,7 @@ object ConsoleProducer {
     val useNewProducer = options.has(useNewProducerOpt)
     val topic = options.valueOf(topicOpt)
     val brokerList = options.valueOf(brokerListOpt)
+    ToolsUtils.validatePortOrDie(parser,brokerList)
     val sync = options.has(syncOpt)
     val compressionCodecOptionValue = options.valueOf(compressionCodecOpt)
     val compressionCodec = if (options.has(compressionCodecOpt))
