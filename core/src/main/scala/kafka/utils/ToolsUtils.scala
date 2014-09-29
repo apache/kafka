@@ -17,19 +17,17 @@
 package kafka.utils
 
 import joptsimple.OptionParser
-import scala.util.matching.Regex
 
 object ToolsUtils {
 
   def validatePortOrDie(parser: OptionParser, hostPort: String) = {
-    val regex = new Regex(":[0-9]")
     val hostPorts: Array[String] = if(hostPort.contains(','))
       hostPort.split(",")
     else
       Array(hostPort)
     val validHostPort = hostPorts.filter {
       hostPortData =>
-        regex.findAllMatchIn(hostPortData).size > 0
+        org.apache.kafka.common.utils.Utils.getPort(hostPortData) != null
     }
     val isValid = !(validHostPort.isEmpty) && validHostPort.size == hostPorts.length
     if(!isValid)
