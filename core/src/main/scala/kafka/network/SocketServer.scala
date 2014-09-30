@@ -172,6 +172,8 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
    * Close all open connections
    */
   def closeAll() {
+    // removes cancelled keys from selector.keys set
+    this.selector.selectNow() 
     val iter = this.selector.keys().iterator()
     while (iter.hasNext) {
       val key = iter.next()
@@ -359,7 +361,7 @@ private[kafka] class Processor(val id: Int,
       maybeCloseOldestConnection
     }
     debug("Closing selector.")
-    swallowError(closeAll())
+    closeAll()
     swallowError(selector.close())
     shutdownComplete()
   }
