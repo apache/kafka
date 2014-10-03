@@ -166,7 +166,7 @@ abstract class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInt
    * bookkeeping logic.
    */
   private class Watchers {
-    private val requests = new util.ArrayList[T]
+    private val requests = new util.LinkedList[T]
 
     // return the size of the watch list
     def watched() = requests.size()
