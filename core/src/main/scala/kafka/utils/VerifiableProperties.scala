@@ -35,7 +35,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
   def getProperty(name: String): String = {
     val value = props.getProperty(name)
     referenceSet.add(name)
-    return value
+    if(value == null) value else value.trim()
   }
 
   /**
