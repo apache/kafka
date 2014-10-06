@@ -125,14 +125,11 @@ public final class BufferPool {
                 // loop over and over until we have a buffer or have reserved
                 // enough memory to allocate one
                 while (accumulated < size) {
-                    try {
-                        long startWait = time.nanoseconds();
-                        moreMemory.await(300, TimeUnit.MILLISECONDS);
-                        long endWait = time.nanoseconds();
-                        this.waitTime.record(endWait - startWait, time.milliseconds());
-                     } catch (InterruptedException e) {
-                        // This should never happen. Just let it go.
-                    }
+                    long startWait = time.nanoseconds();
+                    moreMemory.await();
+                    long endWait = time.nanoseconds();
+                    this.waitTime.record(endWait - startWait, time.milliseconds());
+
                     // check if we can satisfy this request from the free list,
                     // otherwise allocate memory
                     if (accumulated == 0 && size == this.poolableSize && !this.free.isEmpty()) {
