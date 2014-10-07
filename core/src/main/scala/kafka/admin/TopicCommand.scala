@@ -96,6 +96,9 @@ object TopicCommand {
 
   def alterTopic(zkClient: ZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
+    if (topics.length == 0) {
+      println("Topic %s does not exist".format(opts.options.valueOf(opts.topicOpt)))
+    }
     topics.foreach { topic =>
       val configs = AdminUtils.fetchTopicConfig(zkClient, topic)
       if(opts.options.has(opts.configOpt) || opts.options.has(opts.deleteConfigOpt)) {
