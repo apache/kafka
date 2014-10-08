@@ -152,7 +152,8 @@ object FetchResponse {
 
 
 case class FetchResponse(correlationId: Int,
-                         data: Map[TopicAndPartition, FetchResponsePartitionData]) {
+                         data: Map[TopicAndPartition, FetchResponsePartitionData])
+    extends RequestOrResponse() {
 
   /**
    * Partitions the data into a map of maps (one for each topic).
@@ -167,6 +168,16 @@ case class FetchResponse(correlationId: Int,
       })
       folded + topicData.sizeInBytes
     })
+
+  /*
+   * FetchResponse uses [sendfile](http://man7.org/linux/man-pages/man2/sendfile.2.html)
+   * api for data transfer, so `writeTo` aren't actually being used.
+   * It is implemented as an empty function to comform to `RequestOrResponse.writeTo`
+   * abstract method signature.
+   */
+  def writeTo(buffer: ByteBuffer): Unit = throw new UnsupportedOperationException
+
+  override def describe(details: Boolean): String = toString
 
   private def partitionDataFor(topic: String, partition: Int): FetchResponsePartitionData = {
     val topicAndPartition = TopicAndPartition(topic, partition)
