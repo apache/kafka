@@ -87,7 +87,7 @@ private object PartitionAssignorTest extends Logging {
   private val MaxConsumerCount = 10
   private val MaxStreamCount = 8
   private val MaxTopicCount = 100
-  private val MinTopicCount = 20
+  private val MinTopicCount = 0
   private val MaxPartitionCount = 120
   private val MinPartitionCount = 8
 
