@@ -252,9 +252,6 @@ class Log(val dir: File,
       lock synchronized {
         appendInfo.firstOffset = nextOffsetMetadata.messageOffset
 
-        // maybe roll the log if this segment is full
-        val segment = maybeRoll()
-
         if(assignOffsets) {
           // assign offsets to the message set
           val offset = new AtomicLong(nextOffsetMetadata.messageOffset)
@@ -281,6 +278,16 @@ class Log(val dir: File,
               .format(MessageSet.entrySize(messageAndOffset.message), config.maxMessageSize))
           }
         }
+
+        // check messages set size may be exceed config.segmentSize
+        if(validMessages.sizeInBytes > config.segmentSize) {
+          throw new MessageSetSizeTooLargeException("Message set size is %d bytes which exceeds the maximum configured segment size of %d."
+            .format(validMessages.sizeInBytes, config.segmentSize))
+        }
+
+
+        // maybe roll the log if this segment is full
+        val segment = maybeRoll(validMessages.sizeInBytes)
 
         // now append to the log
         segment.append(appendInfo.firstOffset, validMessages)
@@ -489,12 +496,20 @@ class Log(val dir: File,
   def logEndOffset: Long = nextOffsetMetadata.messageOffset
 
   /**
-   * Roll the log over to a new empty log segment if necessary
+   * Roll the log over to a new empty log segment if necessary.
+   *
+   * @param messagesSize The messages set size in bytes
+   * logSegment will be rolled if one of the following conditions met
+   * <ol>
+   * <li> The logSegment is full
+   * <li> The maxTime has elapsed
+   * <li> The index is full
+   * </ol>
    * @return The currently active segment after (perhaps) rolling to a new segment
    */
-  private def maybeRoll(): LogSegment = {
+  private def maybeRoll(messagesSize: Int): LogSegment = {
     val segment = activeSegment
-    if (segment.size > config.segmentSize || 
+    if (segment.size > config.segmentSize - messagesSize ||
         segment.size > 0 && time.milliseconds - segment.created > config.segmentMs ||
         segment.index.isFull) {
       debug("Rolling new log segment in %s (log_size = %d/%d, index_size = %d/%d, age_ms = %d/%d)."
