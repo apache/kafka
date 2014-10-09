@@ -484,8 +484,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         topicsToBeDeleted --= nonExistentTopics
         if(topicsToBeDeleted.size > 0) {
           info("Starting topic deletion for topics " + topicsToBeDeleted.mkString(","))
-          // add topic to deletion list
-          controller.deleteTopicManager.enqueueTopicsForDeletion(topicsToBeDeleted)
           // mark topic ineligible for deletion if other state changes are in progress
           topicsToBeDeleted.foreach { topic =>
             val preferredReplicaElectionInProgress =
@@ -495,6 +493,8 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
             if(preferredReplicaElectionInProgress || partitionReassignmentInProgress)
               controller.deleteTopicManager.markTopicIneligibleForDeletion(Set(topic))
           }
+          // add topic to deletion list
+          controller.deleteTopicManager.enqueueTopicsForDeletion(topicsToBeDeleted)
         }
       }
     }

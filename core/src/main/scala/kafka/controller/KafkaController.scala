@@ -1300,8 +1300,7 @@ class PreferredReplicaElectionListener(controller: KafkaController) extends IZkD
         error("Skipping preferred replica election for partitions %s since the respective topics are being deleted"
           .format(partitionsForTopicsToBeDeleted))
       }
-      else
-        controller.onPreferredReplicaElection(partitions -- partitionsForTopicsToBeDeleted)
+      controller.onPreferredReplicaElection(partitions -- partitionsForTopicsToBeDeleted)
     }
   }
 
