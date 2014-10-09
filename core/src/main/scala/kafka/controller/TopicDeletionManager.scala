@@ -89,7 +89,6 @@ class TopicDeletionManager(controller: KafkaController,
   def start() {
     if (isDeleteTopicEnabled) {
       deleteTopicsThread = new DeleteTopicsThread()
-      deleteTopicStateChanged.set(true)
       deleteTopicsThread.start()
     }
   }
@@ -214,7 +213,7 @@ class TopicDeletionManager(controller: KafkaController,
    */
   private def awaitTopicDeletionNotification() {
     inLock(deleteLock) {
-      while(!deleteTopicsThread.isRunning.get() && !deleteTopicStateChanged.compareAndSet(true, false)) {
+      while(deleteTopicsThread.isRunning.get() && !deleteTopicStateChanged.compareAndSet(true, false)) {
         debug("Waiting for signal to start or continue topic deletion")
         deleteTopicsCond.await()
       }
@@ -429,4 +428,3 @@ class TopicDeletionManager(controller: KafkaController,
     }
   }
 }
-
