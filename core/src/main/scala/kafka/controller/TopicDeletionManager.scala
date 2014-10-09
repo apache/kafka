@@ -89,6 +89,8 @@ class TopicDeletionManager(controller: KafkaController,
   def start() {
     if (isDeleteTopicEnabled) {
       deleteTopicsThread = new DeleteTopicsThread()
+      if (topicsToBeDeleted.size > 0)
+        deleteTopicStateChanged.set(true)
       deleteTopicsThread.start()
     }
   }
