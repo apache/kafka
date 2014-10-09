@@ -19,7 +19,6 @@ package kafka.common
 
 import kafka.message.InvalidMessageException
 import java.nio.ByteBuffer
-import java.lang.Throwable
 import scala.Predef._
 
 /**
@@ -47,6 +46,7 @@ object ErrorMapping {
   val ConsumerCoordinatorNotAvailableCode: Short = 15
   val NotCoordinatorForConsumerCode: Short = 16
   val InvalidTopicCode : Short = 17
+  val MessageSetSizeTooLargeCode: Short = 18
 
   private val exceptionToCode = 
     Map[Class[Throwable], Short](
@@ -65,7 +65,8 @@ object ErrorMapping {
       classOf[OffsetsLoadInProgressException].asInstanceOf[Class[Throwable]] -> OffsetsLoadInProgressCode,
       classOf[ConsumerCoordinatorNotAvailableException].asInstanceOf[Class[Throwable]] -> ConsumerCoordinatorNotAvailableCode,
       classOf[NotCoordinatorForConsumerException].asInstanceOf[Class[Throwable]] -> NotCoordinatorForConsumerCode,
-      classOf[InvalidTopicException].asInstanceOf[Class[Throwable]] -> InvalidTopicCode
+      classOf[InvalidTopicException].asInstanceOf[Class[Throwable]] -> InvalidTopicCode,
+      classOf[MessageSetSizeTooLargeException].asInstanceOf[Class[Throwable]] -> MessageSetSizeTooLargeCode
     ).withDefaultValue(UnknownCode)
   
   /* invert the mapping */
