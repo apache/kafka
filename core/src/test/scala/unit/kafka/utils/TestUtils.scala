@@ -168,10 +168,14 @@ object TestUtils extends Logging {
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
    */
-  def createTopic(zkClient: ZkClient, topic: String, numPartitions: Int = 1, replicationFactor: Int = 1,
-                  servers: Seq[KafkaServer]) : scala.collection.immutable.Map[Int, Option[Int]] = {
+  def createTopic(zkClient: ZkClient,
+                  topic: String,
+                  numPartitions: Int = 1,
+                  replicationFactor: Int = 1,
+                  servers: Seq[KafkaServer],
+                  topicConfig: Properties = new Properties) : scala.collection.immutable.Map[Int, Option[Int]] = {
     // create topic
-    AdminUtils.createTopic(zkClient, topic, numPartitions, replicationFactor)
+    AdminUtils.createTopic(zkClient, topic, numPartitions, replicationFactor, topicConfig)
     // wait until the update metadata request for new topic reaches all servers
     (0 until numPartitions).map { case i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)

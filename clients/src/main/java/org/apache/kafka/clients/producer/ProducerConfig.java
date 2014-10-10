@@ -14,7 +14,10 @@ package org.apache.kafka.clients.producer;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.common.config.AbstractConfig;
@@ -77,7 +80,8 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>acks</code> */
     public static final String ACKS_CONFIG = "acks";
-    private static final String ACKS_DOC = "The number of acknowledgments the producer requires the leader to have received before considering a request complete. This controls the " + " durability of records that are sent. The following settings are common: "
+    private static final String ACKS_DOC = "The number of acknowledgments the producer requires the leader to have received before considering a request complete. This controls the "
+                                           + " durability of records that are sent. The following settings are common: "
                                            + " <ul>"
                                            + " <li><code>acks=0</code> If set to zero then the producer will not wait for any acknowledgment from the"
                                            + " server at all. The record will be immediately added to the socket buffer and considered sent. No guarantee can be"
@@ -89,9 +93,7 @@ public class ProducerConfig extends AbstractConfig {
                                            + " acknowledging the record but before the followers have replicated it then the record will be lost."
                                            + " <li><code>acks=all</code> This means the leader will wait for the full set of in-sync replicas to"
                                            + " acknowledge the record. This guarantees that the record will not be lost as long as at least one in-sync replica"
-                                           + " remains alive. This is the strongest available guarantee."
-                                           + " <li>Other settings such as <code>acks=2</code> are also possible, and will require the given number of"
-                                           + " acknowledgements but this is generally less useful.";
+                                           + " remains alive. This is the strongest available guarantee.";
 
     /** <code>timeout.ms</code> */
     public static final String TIMEOUT_CONFIG = "timeout.ms";
@@ -175,7 +177,12 @@ public class ProducerConfig extends AbstractConfig {
         config = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, BOOSTRAP_SERVERS_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
                                 .define(RETRIES_CONFIG, Type.INT, 0, between(0, Integer.MAX_VALUE), Importance.HIGH, RETRIES_DOC)
-                                .define(ACKS_CONFIG, Type.STRING, "1", Importance.HIGH, ACKS_DOC)
+                                .define(ACKS_CONFIG,
+                                        Type.STRING,
+                                        "1",
+                                        in(Arrays.asList("all","-1", "0", "1")),
+                                        Importance.HIGH,
+                                        ACKS_DOC)
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", Importance.HIGH, COMPRESSION_TYPE_DOC)
                                 .define(BATCH_SIZE_CONFIG, Type.INT, 16384, atLeast(0), Importance.MEDIUM, BATCH_SIZE_DOC)
                                 .define(TIMEOUT_CONFIG, Type.INT, 30 * 1000, atLeast(0), Importance.MEDIUM, TIMEOUT_DOC)

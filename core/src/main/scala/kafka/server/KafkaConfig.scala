@@ -199,6 +199,11 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* enable auto creation of topic on the server */
   val autoCreateTopicsEnable = props.getBoolean("auto.create.topics.enable", true)
 
+  /* define the minimum number of replicas in ISR needed to satisfy a produce request with required.acks=-1 (or all) */
+  val minInSyncReplicas = props.getIntInRange("min.insync.replicas",1,(1,Int.MaxValue))
+
+
+
   /*********** Replication configuration ***********/
 
   /* the socket timeout for controller-to-broker channels */
