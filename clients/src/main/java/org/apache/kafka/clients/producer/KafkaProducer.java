@@ -139,7 +139,8 @@ public class KafkaProducer implements Producer {
                                  config.getInt(ProducerConfig.TIMEOUT_CONFIG),
                                  this.metrics,
                                  new SystemTime());
-        this.ioThread = new KafkaThread("kafka-producer-network-thread", this.sender, true);
+        String ioThreadName = "kafka-producer-network-thread" + (clientId.length() > 0 ? " | " + clientId : "");
+        this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
         this.ioThread.start();
 
         this.errors = this.metrics.sensor("errors");
