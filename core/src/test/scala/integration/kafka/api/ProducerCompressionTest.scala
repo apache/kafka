@@ -121,8 +121,11 @@ object ProducerCompressionTest {
   @Parameters
   def parameters: Collection[Array[String]] = {
     val list = new ArrayList[Array[String]]()
+    list.add(Array("none"))
     list.add(Array("gzip"))
     list.add(Array("snappy"))
+    list.add(Array("lz4"))
+    list.add(Array("lz4hc"))
     list
   }
 }

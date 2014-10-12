@@ -113,8 +113,8 @@ object ConsoleProducer {
       .describedAs("broker-list")
       .ofType(classOf[String])
     val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
-    val compressionCodecOpt = parser.accepts("compression-codec", "The compression codec: either 'gzip' or 'snappy'." +
-                                                                  "If specified without value, than it defaults to 'gzip'")
+    val compressionCodecOpt = parser.accepts("compression-codec", "The compression codec: either 'none', 'gzip', 'snappy', 'lz4', or 'lz4hc'." +
+                                                                  "If specified without value, then it defaults to 'gzip'")
                                     .withOptionalArg()
                                     .describedAs("compression-codec")
                                     .ofType(classOf[String])
