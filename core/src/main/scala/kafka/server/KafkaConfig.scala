@@ -210,7 +210,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val controllerSocketTimeoutMs = props.getInt("controller.socket.timeout.ms", 30000)
 
   /* the buffer size for controller-to-broker-channels */
-  val controllerMessageQueueSize= props.getInt("controller.message.queue.size", 10)
+  val controllerMessageQueueSize= props.getInt("controller.message.queue.size", Int.MaxValue)
 
   /* default replication factors for automatically created topics */
   val defaultReplicationFactor = props.getInt("default.replication.factor", 1)
@@ -256,7 +256,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
 
   /* Enables auto leader balancing. A background thread checks and triggers leader
    * balance if required at regular intervals */
-  val autoLeaderRebalanceEnable = props.getBoolean("auto.leader.rebalance.enable", false)
+  val autoLeaderRebalanceEnable = props.getBoolean("auto.leader.rebalance.enable", true)
 
   /* the ratio of leader imbalance allowed per broker. The controller would trigger a leader balance if it goes above
    * this value per broker. The value is specified in percentage. */
