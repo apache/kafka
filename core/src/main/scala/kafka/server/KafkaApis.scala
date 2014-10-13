@@ -248,7 +248,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val partitionOpt = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
         val info = partitionOpt match {
           case Some(partition) =>
-            partition.appendMessagesToLeader(messages.asInstanceOf[ByteBufferMessageSet])
+            partition.appendMessagesToLeader(messages.asInstanceOf[ByteBufferMessageSet],producerRequest.requiredAcks)
           case None => throw new UnknownTopicOrPartitionException("Partition %s doesn't exist on %d"
             .format(topicAndPartition, brokerId))
         }
@@ -284,6 +284,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           warn("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
                producerRequest.correlationId, producerRequest.clientId, topicAndPartition, nle.getMessage))
           new ProduceResult(topicAndPartition, nle)
+        case nere: NotEnoughReplicasException =>
+          warn("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
+            producerRequest.correlationId, producerRequest.clientId, topicAndPartition, nere.getMessage))
+          new ProduceResult(topicAndPartition, nere)
         case e: Throwable =>
           BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).failedProduceRequestRate.mark()
           BrokerTopicStats.getBrokerAllTopicsStats.failedProduceRequestRate.mark()

@@ -42,11 +42,15 @@ trait SyncProducerConfigShared {
   val clientId = props.getString("client.id", SyncProducerConfig.DefaultClientId)
 
   /*
-   * The required acks of the producer requests - negative value means ack
-   * after the replicas in ISR have caught up to the leader's offset
-   * corresponding to this produce request.
+   * The number of acknowledgments the producer requires the leader to have received before considering a request complete.
+   * This controls the durability of the messages sent by the producer.
+   *
+   * request.required.acks = 0 - means the producer will not wait for any acknowledgement from the leader.
+   * request.required.acks = 1 - means the leader will write the message to its local log and immediately acknowledge
+   * request.required.acks = -1 - means the leader will wait for acknowledgement from all in-sync replicas before acknowledging the write
    */
-  val requestRequiredAcks = props.getShort("request.required.acks", SyncProducerConfig.DefaultRequiredAcks)
+
+  val requestRequiredAcks = props.getShortInRange("request.required.acks", SyncProducerConfig.DefaultRequiredAcks,(-1,1))
 
   /*
    * The ack timeout of the producer requests. Value must be non-negative and non-zero

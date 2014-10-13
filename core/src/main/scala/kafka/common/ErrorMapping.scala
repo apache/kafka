@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import scala.Predef._
 
 /**
- * A bi-directional mapping between error codes and exceptions x  
+ * A bi-directional mapping between error codes and exceptions
  */
 object ErrorMapping {
   val EmptyByteBuffer = ByteBuffer.allocate(0)
@@ -47,8 +47,10 @@ object ErrorMapping {
   val NotCoordinatorForConsumerCode: Short = 16
   val InvalidTopicCode : Short = 17
   val MessageSetSizeTooLargeCode: Short = 18
+  val NotEnoughReplicasCode : Short = 19
+  val NotEnoughReplicasAfterAppendCode: Short = 20
 
-  private val exceptionToCode = 
+  private val exceptionToCode =
     Map[Class[Throwable], Short](
       classOf[OffsetOutOfRangeException].asInstanceOf[Class[Throwable]] -> OffsetOutOfRangeCode,
       classOf[InvalidMessageException].asInstanceOf[Class[Throwable]] -> InvalidMessageCode,
@@ -66,15 +68,17 @@ object ErrorMapping {
       classOf[ConsumerCoordinatorNotAvailableException].asInstanceOf[Class[Throwable]] -> ConsumerCoordinatorNotAvailableCode,
       classOf[NotCoordinatorForConsumerException].asInstanceOf[Class[Throwable]] -> NotCoordinatorForConsumerCode,
       classOf[InvalidTopicException].asInstanceOf[Class[Throwable]] -> InvalidTopicCode,
-      classOf[MessageSetSizeTooLargeException].asInstanceOf[Class[Throwable]] -> MessageSetSizeTooLargeCode
+      classOf[MessageSetSizeTooLargeException].asInstanceOf[Class[Throwable]] -> MessageSetSizeTooLargeCode,
+      classOf[NotEnoughReplicasException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasCode,
+      classOf[NotEnoughReplicasAfterAppendException].asInstanceOf[Class[Throwable]] -> NotEnoughReplicasAfterAppendCode
     ).withDefaultValue(UnknownCode)
-  
+
   /* invert the mapping */
-  private val codeToException = 
+  private val codeToException =
     (Map[Short, Class[Throwable]]() ++ exceptionToCode.iterator.map(p => (p._2, p._1))).withDefaultValue(classOf[UnknownException])
-  
+
   def codeFor(exception: Class[Throwable]): Short = exceptionToCode(exception)
-  
+
   def maybeThrowException(code: Short) =
     if(code != 0)
       throw codeToException(code).newInstance()

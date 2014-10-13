@@ -18,6 +18,7 @@
 package kafka.producer
 
 import java.net.SocketTimeoutException
+import java.util.Properties
 import junit.framework.Assert
 import kafka.admin.AdminUtils
 import kafka.integration.KafkaServerTestHarness
@@ -112,6 +113,7 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     Assert.assertEquals(ErrorMapping.NoError, response2.status(TopicAndPartition("test", 0)).error)
     Assert.assertEquals(0, response2.status(TopicAndPartition("test", 0)).offset)
   }
+
 
   @Test
   def testMessageSizeTooLargeWithAckZero() {
@@ -224,5 +226,25 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     val producer = new SyncProducer(new SyncProducerConfig(props))
     val response = producer.send(emptyRequest)
     Assert.assertTrue(response == null)
+  }
+
+  @Test
+  def testNotEnoughReplicas()  {
+    val topicName = "minisrtest"
+    val server = servers.head
+
+    val props = TestUtils.getSyncProducerConfig(server.socketServer.port)
+    props.put("request.required.acks", "-1")
+
+    val producer = new SyncProducer(new SyncProducerConfig(props))
+    val topicProps = new Properties();
+    topicProps.put("min.insync.replicas","2");
+    AdminUtils.createTopic(zkClient, topicName, 1, 1,topicProps)
+    TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topicName, 0)
+
+    val response = producer.send(TestUtils.produceRequest(topicName, 0,
+      new ByteBufferMessageSet(compressionCodec = NoCompressionCodec, messages = new Message(messageBytes)),-1))
+
+    Assert.assertEquals(ErrorMapping.NotEnoughReplicasCode, response.status(TopicAndPartition(topicName, 0)).error)
   }
 }

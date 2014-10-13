@@ -269,14 +269,26 @@ class Partition(val topic: String,
           else
             true /* also count the local (leader) replica */
         })
+        val minIsr = leaderReplica.log.get.config.minInSyncReplicas
+
         trace("%d/%d acks satisfied for %s-%d".format(numAcks, requiredAcks, topic, partitionId))
-        if ((requiredAcks < 0 && leaderReplica.highWatermark.messageOffset >= requiredOffset) ||
-          (requiredAcks > 0 && numAcks >= requiredAcks)) {
+        if (requiredAcks < 0 && leaderReplica.highWatermark.messageOffset >= requiredOffset ) {
           /*
           * requiredAcks < 0 means acknowledge after all replicas in ISR
           * are fully caught up to the (local) leader's offset
           * corresponding to this produce request.
+          *
+          * minIsr means that the topic is configured not to accept messages
+          * if there are not enough replicas in ISR
+          * in this scenario the request was already appended locally and
+          * then added to the purgatory before the ISR was shrunk
           */
+          if (minIsr <= curInSyncReplicas.size) {
+            (true, ErrorMapping.NoError)
+          } else {
+            (true, ErrorMapping.NotEnoughReplicasAfterAppendCode)
+          }
+        } else if (requiredAcks > 0 && numAcks >= requiredAcks) {
           (true, ErrorMapping.NoError)
         } else
           (false, ErrorMapping.NoError)
@@ -350,12 +362,21 @@ class Partition(val topic: String,
     stuckReplicas ++ slowReplicas
   }
 
-  def appendMessagesToLeader(messages: ByteBufferMessageSet) = {
+  def appendMessagesToLeader(messages: ByteBufferMessageSet, requiredAcks: Int=0) = {
     inReadLock(leaderIsrUpdateLock) {
       val leaderReplicaOpt = leaderReplicaIfLocal()
       leaderReplicaOpt match {
         case Some(leaderReplica) =>
           val log = leaderReplica.log.get
+          val minIsr = log.config.minInSyncReplicas
+          val inSyncSize = inSyncReplicas.size
+
+          // Avoid writing to leader if there are not enough insync replicas to make it safe
+          if (inSyncSize < minIsr && requiredAcks == -1) {
+            throw new NotEnoughReplicasException("Number of insync replicas for partition [%s,%d] is [%d], below required minimum [%d]"
+              .format(topic,partitionId,minIsr,inSyncSize))
+          }
+
           val info = log.append(messages, assignOffsets = true)
           // probably unblock some follower fetch requests since log end offset has been updated
           replicaManager.unblockDelayedFetchRequests(new TopicPartitionRequestKey(this.topic, this.partitionId))

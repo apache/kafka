@@ -18,12 +18,12 @@
 package kafka.api
 
 import kafka.common.Topic
-import org.apache.kafka.common.errors.InvalidTopicException
+import org.apache.kafka.common.errors.{InvalidTopicException,NotEnoughReplicasException}
 import org.scalatest.junit.JUnit3Suite
 import org.junit.Test
 import org.junit.Assert._
 
-import java.util.Random
+import java.util.{Properties, Random}
 import java.lang.Integer
 import java.util.concurrent.{TimeoutException, TimeUnit, ExecutionException}
 
@@ -300,6 +300,59 @@ class ProducerFailureHandlingTest extends JUnit3Suite with KafkaServerTestHarnes
   @Test(expected = classOf[InvalidTopicException])
   def testCannotSendToInternalTopic() {
     producer1.send(new ProducerRecord(Topic.InternalTopics.head, "test".getBytes, "test".getBytes)).get
+  }
+
+  @Test
+  def testNotEnoughReplicas() {
+    val topicName = "minisrtest"
+    val topicProps = new Properties();
+    topicProps.put("min.insync.replicas","3");
+
+
+    TestUtils.createTopic(zkClient, topicName, 1, 2, servers,topicProps)
+
+
+    val record = new ProducerRecord(topicName, null, "key".getBytes, "value".getBytes)
+    try {
+      producer3.send(record).get
+      fail("Expected exception when producing to topic with fewer brokers than min.insync.replicas")
+    } catch {
+      case e: ExecutionException =>
+        if (!e.getCause.isInstanceOf[NotEnoughReplicasException]) {
+          fail("Expected NotEnoughReplicasException when producing to topic with fewer brokers than min.insync.replicas")
+        }
+    }
+  }
+
+  @Test
+  def testNotEnoughReplicasAfterBrokerShutdown() {
+    val topicName = "minisrtest2"
+    val topicProps = new Properties();
+    topicProps.put("min.insync.replicas","2");
+
+
+    TestUtils.createTopic(zkClient, topicName, 1, 2, servers,topicProps)
+
+
+    val record = new ProducerRecord(topicName, null, "key".getBytes, "value".getBytes)
+    // This should work
+    producer3.send(record).get
+
+    //shut down one broker
+    servers.head.shutdown()
+    servers.head.awaitShutdown()
+    try {
+      producer3.send(record).get
+      fail("Expected exception when producing to topic with fewer brokers than min.insync.replicas")
+    } catch {
+      case e: ExecutionException =>
+        if (!e.getCause.isInstanceOf[NotEnoughReplicasException]) {
+          fail("Expected NotEnoughReplicasException when producing to topic with fewer brokers than min.insync.replicas")
+        }
+    }
+
+    servers.head.startup()
+
   }
 
   private class ProducerScheduler extends ShutdownableThread("daemon-producer", false)

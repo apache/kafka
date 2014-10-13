@@ -36,6 +36,7 @@ object Defaults {
   val MinCleanableDirtyRatio = 0.5
   val Compact = false
   val UncleanLeaderElectionEnable = true
+  val MinInSyncReplicas = 1
 }
 
 /**
@@ -53,7 +54,9 @@ object Defaults {
  * @param minCleanableRatio The ratio of bytes that are available for cleaning to the bytes already cleaned
  * @param compact Should old segments in this log be deleted or deduplicated?
  * @param uncleanLeaderElectionEnable Indicates whether unclean leader election is enabled; actually a controller-level property
- *   but included here for topic-specific configuration validation purposes
+ *                                    but included here for topic-specific configuration validation purposes
+ * @param minInSyncReplicas If number of insync replicas drops below this number, we stop accepting writes with -1 (or all) required acks
+ *
  */
 case class LogConfig(val segmentSize: Int = Defaults.SegmentSize,
                      val segmentMs: Long = Defaults.SegmentMs,
@@ -68,8 +71,9 @@ case class LogConfig(val segmentSize: Int = Defaults.SegmentSize,
                      val deleteRetentionMs: Long = Defaults.DeleteRetentionMs,
                      val minCleanableRatio: Double = Defaults.MinCleanableDirtyRatio,
                      val compact: Boolean = Defaults.Compact,
-                     val uncleanLeaderElectionEnable: Boolean = Defaults.UncleanLeaderElectionEnable) {
-  
+                     val uncleanLeaderElectionEnable: Boolean = Defaults.UncleanLeaderElectionEnable,
+                     val minInSyncReplicas: Int = Defaults.MinInSyncReplicas) {
+
   def toProps: Properties = {
     val props = new Properties()
     import LogConfig._
@@ -87,9 +91,9 @@ case class LogConfig(val segmentSize: Int = Defaults.SegmentSize,
     props.put(MinCleanableDirtyRatioProp, minCleanableRatio.toString)
     props.put(CleanupPolicyProp, if(compact) "compact" else "delete")
     props.put(UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)
+    props.put(MinInSyncReplicasProp, minInSyncReplicas.toString)
     props
   }
-  
 }
 
 object LogConfig {
@@ -107,13 +111,14 @@ object LogConfig {
   val MinCleanableDirtyRatioProp = "min.cleanable.dirty.ratio"
   val CleanupPolicyProp = "cleanup.policy"
   val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
-  
-  val ConfigNames = Set(SegmentBytesProp, 
-                        SegmentMsProp, 
-                        SegmentIndexBytesProp, 
-                        FlushMessagesProp, 
-                        FlushMsProp, 
-                        RetentionBytesProp, 
+  val MinInSyncReplicasProp = "min.insync.replicas"
+
+  val ConfigNames = Set(SegmentBytesProp,
+                        SegmentMsProp,
+                        SegmentIndexBytesProp,
+                        FlushMessagesProp,
+                        FlushMsProp,
+                        RetentionBytesProp,
                         RententionMsProp,
                         MaxMessageBytesProp,
                         IndexIntervalBytesProp,
@@ -121,9 +126,9 @@ object LogConfig {
                         DeleteRetentionMsProp,
                         MinCleanableDirtyRatioProp,
                         CleanupPolicyProp,
-                        UncleanLeaderElectionEnableProp)
-    
-  
+                        UncleanLeaderElectionEnableProp,
+                        MinInSyncReplicasProp)
+
   /**
    * Parse the given properties instance into a LogConfig object
    */
@@ -144,9 +149,10 @@ object LogConfig {
                   compact = props.getProperty(CleanupPolicyProp, if(Defaults.Compact) "compact" else "delete")
                     .trim.toLowerCase != "delete",
                   uncleanLeaderElectionEnable = props.getProperty(UncleanLeaderElectionEnableProp,
-                    Defaults.UncleanLeaderElectionEnable.toString).toBoolean)
+                    Defaults.UncleanLeaderElectionEnable.toString).toBoolean,
+                  minInSyncReplicas = props.getProperty(MinInSyncReplicasProp,Defaults.MinInSyncReplicas.toString).toInt)
   }
-  
+
   /**
    * Create a log config instance using the given properties and defaults
    */
@@ -155,7 +161,7 @@ object LogConfig {
     props.putAll(overrides)
     fromProps(props)
   }
-  
+
   /**
    * Check that property names are valid
    */
@@ -164,15 +170,27 @@ object LogConfig {
     for(name <- props.keys)
       require(LogConfig.ConfigNames.contains(name), "Unknown configuration \"%s\".".format(name))
   }
-  
+
   /**
    * Check that the given properties contain only valid log config names, and that all values can be parsed.
    */
   def validate(props: Properties) {
     validateNames(props)
+    validateMinInSyncReplicas(props)
     LogConfig.fromProps(LogConfig().toProps, props) // check that we can parse the values
   }
-  
+
+  /**
+   * Check that MinInSyncReplicas is reasonable
+   * Unfortunately, we can't validate its smaller than number of replicas
+   * since we don't have this information here
+   */
+  private def validateMinInSyncReplicas(props: Properties) {
+    val minIsr = props.getProperty(MinInSyncReplicasProp)
+    if (minIsr != null && minIsr.toInt < 1) {
+      throw new InvalidConfigException("Wrong value " + minIsr + " of min.insync.replicas in topic configuration; " +
+        " Valid values are at least 1")
+    }
+  }
+
 }
-                      
-                     

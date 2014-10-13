@@ -17,6 +17,7 @@
 
 package kafka.producer
 
+import org.apache.kafka.common.config.ConfigException
 import org.scalatest.TestFailedException
 import org.scalatest.junit.JUnit3Suite
 import kafka.consumer.SimpleConsumer
@@ -143,7 +144,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   @Test
   def testSendToNewTopic() {
     val props1 = new util.Properties()
-    props1.put("request.required.acks", "2")
+    props1.put("request.required.acks", "-1")
 
     val topic = "new-topic"
     // create topic with 1 partition and await leadership
@@ -181,24 +182,20 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     // no need to retry since the send will always fail
     props2.put("message.send.max.retries", "0")
 
-    val producer2 = TestUtils.createProducer[String, String](
-      brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
-      encoder = classOf[StringEncoder].getName,
-      keyEncoder = classOf[StringEncoder].getName,
-      partitioner = classOf[StaticPartitioner].getName,
-      producerProps = props2)
-
     try {
-      producer2.send(new KeyedMessage[String, String](topic, "test", "test2"))
-      fail("Should have timed out for 3 acks.")
+      val producer2 = TestUtils.createProducer[String, String](
+        brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+        encoder = classOf[StringEncoder].getName,
+        keyEncoder = classOf[StringEncoder].getName,
+        partitioner = classOf[StaticPartitioner].getName,
+        producerProps = props2)
+        producer2.close
+        fail("we don't support request.required.acks greater than 1")
     }
     catch {
-      case se: FailedToSendMessageException =>
-        // this is expected
+      case iae: IllegalArgumentException =>  // this is expected
       case e: Throwable => fail("Not expected", e)
-    }
-    finally {
-      producer2.close()
+
     }
   }
 
