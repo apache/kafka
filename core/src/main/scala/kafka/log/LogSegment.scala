@@ -44,18 +44,20 @@ class LogSegment(val log: FileMessageSet,
                  val index: OffsetIndex, 
                  val baseOffset: Long, 
                  val indexIntervalBytes: Int,
+                 val rollJitterMs: Long,
                  time: Time) extends Logging {
   
   var created = time.milliseconds
-  
+
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0
   
-  def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, time: Time) = 
+  def this(dir: File, startOffset: Long, indexIntervalBytes: Int, maxIndexSize: Int, rollJitterMs: Long, time: Time) =
     this(new FileMessageSet(file = Log.logFilename(dir, startOffset)), 
          new OffsetIndex(file = Log.indexFilename(dir, startOffset), baseOffset = startOffset, maxIndexSize = maxIndexSize),
          startOffset,
          indexIntervalBytes,
+         rollJitterMs,
          time)
     
   /* Return the size in bytes of this log segment */
