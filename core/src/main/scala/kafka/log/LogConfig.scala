@@ -18,12 +18,15 @@
 package kafka.log
 
 import java.util.Properties
+import org.apache.kafka.common.utils.Utils
+
 import scala.collection._
 import kafka.common._
 
 object Defaults {
   val SegmentSize = 1024 * 1024
   val SegmentMs = Long.MaxValue
+  val SegmentJitterMs = 0L
   val FlushInterval = Long.MaxValue
   val FlushMs = Long.MaxValue
   val RetentionSize = Long.MaxValue
@@ -43,6 +46,7 @@ object Defaults {
  * Configuration settings for a log
  * @param segmentSize The soft maximum for the size of a segment file in the log
  * @param segmentMs The soft maximum on the amount of time before a new log segment is rolled
+ * @param segmentJitterMs The maximum random jitter subtracted from segmentMs to avoid thundering herds of segment rolling
  * @param flushInterval The number of messages that can be written to the log before a flush is forced
  * @param flushMs The amount of time the log can have dirty data before a flush is forced
  * @param retentionSize The approximate total number of bytes this log can use
@@ -60,6 +64,7 @@ object Defaults {
  */
 case class LogConfig(val segmentSize: Int = Defaults.SegmentSize,
                      val segmentMs: Long = Defaults.SegmentMs,
+                     val segmentJitterMs: Long = Defaults.SegmentJitterMs,
                      val flushInterval: Long = Defaults.FlushInterval,
                      val flushMs: Long = Defaults.FlushMs,
                      val retentionSize: Long = Defaults.RetentionSize,
@@ -79,6 +84,7 @@ case class LogConfig(val segmentSize: Int = Defaults.SegmentSize,
     import LogConfig._
     props.put(SegmentBytesProp, segmentSize.toString)
     props.put(SegmentMsProp, segmentMs.toString)
+    props.put(SegmentJitterMsProp, segmentJitterMs.toString)
     props.put(SegmentIndexBytesProp, maxIndexSize.toString)
     props.put(FlushMessagesProp, flushInterval.toString)
     props.put(FlushMsProp, flushMs.toString)
@@ -94,11 +100,15 @@ case class LogConfig(val segmentSize: Int = Defaults.SegmentSize,
     props.put(MinInSyncReplicasProp, minInSyncReplicas.toString)
     props
   }
+
+  def randomSegmentJitter: Long =
+    if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
 }
 
 object LogConfig {
   val SegmentBytesProp = "segment.bytes"
   val SegmentMsProp = "segment.ms"
+  val SegmentJitterMsProp = "segment.jitter.ms"
   val SegmentIndexBytesProp = "segment.index.bytes"
   val FlushMessagesProp = "flush.messages"
   val FlushMsProp = "flush.ms"
@@ -115,6 +125,7 @@ object LogConfig {
 
   val ConfigNames = Set(SegmentBytesProp,
                         SegmentMsProp,
+                        SegmentJitterMsProp,
                         SegmentIndexBytesProp,
                         FlushMessagesProp,
                         FlushMsProp,
@@ -135,6 +146,7 @@ object LogConfig {
   def fromProps(props: Properties): LogConfig = {
     new LogConfig(segmentSize = props.getProperty(SegmentBytesProp, Defaults.SegmentSize.toString).toInt,
                   segmentMs = props.getProperty(SegmentMsProp, Defaults.SegmentMs.toString).toLong,
+                  segmentJitterMs = props.getProperty(SegmentJitterMsProp, Defaults.SegmentJitterMs.toString).toLong,
                   maxIndexSize = props.getProperty(SegmentIndexBytesProp, Defaults.MaxIndexSize.toString).toInt,
                   flushInterval = props.getProperty(FlushMessagesProp, Defaults.FlushInterval.toString).toLong,
                   flushMs = props.getProperty(FlushMsProp, Defaults.FlushMs.toString).toLong,

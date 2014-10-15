@@ -141,6 +141,7 @@ class Log(val dir: File,
                                      startOffset = start,
                                      indexIntervalBytes = config.indexInterval, 
                                      maxIndexSize = config.maxIndexSize,
+                                     rollJitterMs = config.randomSegmentJitter,
                                      time = time)
         if(!hasIndex) {
           error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
@@ -156,6 +157,7 @@ class Log(val dir: File,
                                      startOffset = 0,
                                      indexIntervalBytes = config.indexInterval, 
                                      maxIndexSize = config.maxIndexSize,
+                                     rollJitterMs = config.randomSegmentJitter,
                                      time = time))
     } else {
       recoverLog()
@@ -510,7 +512,7 @@ class Log(val dir: File,
   private def maybeRoll(messagesSize: Int): LogSegment = {
     val segment = activeSegment
     if (segment.size > config.segmentSize - messagesSize ||
-        segment.size > 0 && time.milliseconds - segment.created > config.segmentMs ||
+        segment.size > 0 && time.milliseconds - segment.created > config.segmentMs - segment.rollJitterMs ||
         segment.index.isFull) {
       debug("Rolling new log segment in %s (log_size = %d/%d, index_size = %d/%d, age_ms = %d/%d)."
             .format(name,
@@ -519,7 +521,7 @@ class Log(val dir: File,
                     segment.index.entries,
                     segment.index.maxEntries,
                     time.milliseconds - segment.created,
-                    config.segmentMs))
+                    config.segmentMs - segment.rollJitterMs))
       roll()
     } else {
       segment
@@ -550,6 +552,7 @@ class Log(val dir: File,
                                    startOffset = newOffset,
                                    indexIntervalBytes = config.indexInterval, 
                                    maxIndexSize = config.maxIndexSize,
+                                   rollJitterMs = config.randomSegmentJitter,
                                    time = time)
       val prev = addSegment(segment)
       if(prev != null)
@@ -642,6 +645,7 @@ class Log(val dir: File,
                                 newOffset,
                                 indexIntervalBytes = config.indexInterval, 
                                 maxIndexSize = config.maxIndexSize,
+                                rollJitterMs = config.randomSegmentJitter,
                                 time = time))
       updateLogEndOffset(newOffset)
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)

@@ -39,7 +39,7 @@ class LogSegmentTest extends JUnit3Suite {
     val idxFile = TestUtils.tempFile()
     idxFile.delete()
     val idx = new OffsetIndex(idxFile, offset, 1000)
-    val seg = new LogSegment(ms, idx, offset, 10, SystemTime)
+    val seg = new LogSegment(ms, idx, offset, 10, 0, SystemTime)
     segments += seg
     seg
   }

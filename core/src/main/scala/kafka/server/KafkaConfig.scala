@@ -57,7 +57,18 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
        millisInHour * props.getIntInRange("log.roll.hours", 24*7, (1, Int.MaxValue))
     }
   }
-  
+
+  private def getLogRollTimeJitterMillis(): Long = {
+    val millisInHour = 60L * 60L * 1000L
+
+    if(props.containsKey("log.roll.jitter.ms")) {
+      props.getIntInRange("log.roll.jitter.ms", (0, Int.MaxValue))
+    }
+    else {
+      millisInHour * props.getIntInRange("log.roll.jitter.hours", 0, (0, Int.MaxValue))
+    }
+  }
+
   /*********** General Configuration ***********/
 
   /* the broker id for this server */
@@ -130,6 +141,9 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
 
   /* the maximum time before a new log segment is rolled out */
   val logRollTimeMillis = getLogRollTimeMillis
+
+  /* the maximum jitter to subtract from logRollTimeMillis */
+  val logRollTimeJitterMillis = getLogRollTimeJitterMillis
 
   /* the number of hours to keep a log file before deleting it */
   val logRetentionTimeMillis = getLogRetentionTimeMillis

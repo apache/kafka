@@ -88,6 +88,32 @@ class LogTest extends JUnitSuite {
   }
 
   /**
+   * Test for jitter s for time based log roll. This test appends messages then changes the time
+   * using the mock clock to force the log to roll and checks the number of segments.
+   */
+  @Test
+  def testTimeBasedLogRollJitter() {
+    val set = TestUtils.singleMessageSet("test".getBytes())
+    val maxJitter = 20 * 60L
+
+    // create a log
+    val log = new Log(logDir,
+      logConfig.copy(segmentMs = 1 * 60 * 60L, segmentJitterMs = maxJitter),
+      recoveryPoint = 0L,
+      scheduler = time.scheduler,
+      time = time)
+    assertEquals("Log begins with a single empty segment.", 1, log.numberOfSegments)
+    log.append(set)
+
+    time.sleep(log.config.segmentMs - maxJitter)
+    log.append(set)
+    assertEquals("Log does not roll on this append because it occurs earlier than max jitter", 1, log.numberOfSegments);
+    time.sleep(maxJitter - log.activeSegment.rollJitterMs + 1)
+    log.append(set)
+    assertEquals("Log should roll after segmentMs adjusted by random jitter", 2, log.numberOfSegments)
+  }
+
+  /**
    * Test that appending more than the maximum segment size rolls the log
    */
   @Test
