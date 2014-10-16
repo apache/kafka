@@ -505,13 +505,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleOffsetFetchRequest(request: RequestChannel.Request) {
     val offsetFetchRequest = request.requestObj.asInstanceOf[OffsetFetchRequest]
 
-    // Missing
-    val (missingTopicPartitions, availableTopicPartitions) = offsetFetchRequest.requestInfo.partition(topicAndPartition =>
-      replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition).isEmpty
-    )
-    val missingStatus = missingTopicPartitions.map(topicAndPartition => (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)).toMap
-    val availableStatus = offsetManager.getOffsets(offsetFetchRequest.groupId, availableTopicPartitions).toMap
-    val status = missingStatus ++ availableStatus
+    val status = offsetManager.getOffsets(offsetFetchRequest.groupId, offsetFetchRequest.requestInfo).toMap
 
     val response = OffsetFetchResponse(status, offsetFetchRequest.correlationId)
 
