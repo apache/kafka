@@ -218,23 +218,9 @@ public class Compressor {
                     }
                 case LZ4:
                     try {
-                        Class LZ4BlockOutputStream = Class.forName("net.jpountz.lz4.LZ4BlockOutputStream");
-                        OutputStream stream = (OutputStream) LZ4BlockOutputStream.getConstructor(OutputStream.class)
+                        Class outputStreamClass = Class.forName("org.apache.kafka.common.message.KafkaLZ4BlockOutputStream");
+                        OutputStream stream = (OutputStream) outputStreamClass.getConstructor(OutputStream.class)
                             .newInstance(buffer);
-                        return new DataOutputStream(stream);
-                    } catch (Exception e) {
-                        throw new KafkaException(e);
-                    }
-                case LZ4HC:
-                    try {
-                        Class<?> factoryClass = Class.forName("net.jpountz.lz4.LZ4Factory");
-                        Class<?> compressorClass = Class.forName("net.jpountz.lz4.LZ4Compressor");
-                        Class<?> lz4BlockOutputStream = Class.forName("net.jpountz.lz4.LZ4BlockOutputStream");
-                        Object factory = factoryClass.getMethod("fastestInstance").invoke(null);
-                        Object compressor = factoryClass.getMethod("highCompressor").invoke(factory);
-                        OutputStream stream = (OutputStream) lz4BlockOutputStream
-                            .getConstructor(OutputStream.class, Integer.TYPE, compressorClass)
-                            .newInstance(buffer, 1 << 16, compressor);
                         return new DataOutputStream(stream);
                     } catch (Exception e) {
                         throw new KafkaException(e);
@@ -266,10 +252,9 @@ public class Compressor {
                         throw new KafkaException(e);
                     }
                 case LZ4:
-                case LZ4HC:
                     // dynamically load LZ4 class to avoid runtime dependency
                     try {
-                        Class inputStreamClass = Class.forName("net.jpountz.lz4.LZ4BlockInputStream");
+                        Class inputStreamClass = Class.forName("org.apache.kafka.common.message.KafkaLZ4BlockInputStream");
                         InputStream stream = (InputStream) inputStreamClass.getConstructor(InputStream.class)
                             .newInstance(buffer);
                         return new DataInputStream(stream);

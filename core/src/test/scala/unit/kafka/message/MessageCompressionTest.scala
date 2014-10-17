@@ -32,8 +32,6 @@ class MessageCompressionTest extends JUnitSuite {
       codecs += SnappyCompressionCodec
     if(isLZ4Available)
       codecs += LZ4CompressionCodec
-    if (izLZ4HCAvailable)
-      codecs += LZ4HCCompressionCodec
     for(codec <- codecs)
       testSimpleCompressDecompress(codec)
   }
@@ -69,16 +67,6 @@ class MessageCompressionTest extends JUnitSuite {
   def isLZ4Available(): Boolean = {
     try {
       val lz4 = new net.jpountz.lz4.LZ4BlockOutputStream(new ByteArrayOutputStream())
-      true
-    } catch {
-      case e: UnsatisfiedLinkError => false
-    }
-  }
-
-  def izLZ4HCAvailable(): Boolean = {
-    try {
-      val lz4hc = new net.jpountz.lz4.LZ4BlockOutputStream(new ByteArrayOutputStream(), 1 << 16, 
-        net.jpountz.lz4.LZ4Factory.fastestInstance().highCompressor())
       true
     } catch {
       case e: UnsatisfiedLinkError => false

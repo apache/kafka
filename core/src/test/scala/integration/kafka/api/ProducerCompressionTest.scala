@@ -47,7 +47,7 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
   private val config = new KafkaConfig(props)
 
   private val topic = "topic"
-  private val numRecords = 100
+  private val numRecords = 2000
 
   @Before
   override def setUp() {
@@ -73,6 +73,8 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
     val props = new Properties()
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromConfigs(Seq(config)))
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression)
+    props.put(ProducerConfig.BATCH_SIZE_CONFIG, "66000")
+    props.put(ProducerConfig.LINGER_MS_CONFIG, "200")
     var producer = new KafkaProducer(props)
     val consumer = new SimpleConsumer("localhost", port, 100, 1024*1024, "")
 
@@ -125,7 +127,6 @@ object ProducerCompressionTest {
     list.add(Array("gzip"))
     list.add(Array("snappy"))
     list.add(Array("lz4"))
-    list.add(Array("lz4hc"))
     list
   }
 }
