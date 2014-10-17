@@ -220,7 +220,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
               channel.send(request)
 
               response = channel.receive()
-
               val shutdownResponse = ControlledShutdownResponse.readFrom(response.buffer)
               if (shutdownResponse.errorCode == ErrorMapping.NoError && shutdownResponse.partitionsRemaining != null &&
                   shutdownResponse.partitionsRemaining.size == 0) {
@@ -236,6 +235,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
               case ioe: java.io.IOException =>
                 channel.disconnect()
                 channel = null
+                warn("Error during controlled shutdown, possibly because leader movement took longer than the configured socket.timeout.ms: %s".format(ioe.getMessage))
                 // ignore and try again
             }
           }
