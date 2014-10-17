@@ -34,7 +34,7 @@ ext {
 }
 
 def isVerificationRequired(project) {
-    project.gradle.startParameter.taskNames.contains("uploadArchives")
+    project.gradle.startParameter.taskNames.any { it.contains("upload") }
 }
 
 apply from: file('wrapper.gradle')
