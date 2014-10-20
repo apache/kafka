@@ -235,6 +235,7 @@ project(':core') {
     compile.exclude module: 'jmxri'
     compile.exclude module: 'jmxtools'
     compile.exclude module: 'mail'
+    compile.exclude module: 'netty'
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
