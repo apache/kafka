@@ -16,12 +16,15 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
 import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Validator;
 import org.apache.kafka.common.config.ConfigDef.Range;
+import org.apache.kafka.common.config.ConfigDef.ValidString;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.junit.Test;
 
@@ -92,6 +95,44 @@ public class ConfigDefTest {
             try {
                 def.parse(m);
                 fail("Expected a config exception on bad input for value " + value);
+            } catch (ConfigException e) {
+                // this is good
+            }
+        }
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testInvalidDefaultRange() {
+        ConfigDef def = new ConfigDef().define("name", Type.INT, -1, Range.between(0,10), Importance.HIGH, "docs");
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testInvalidDefaultString() {
+        ConfigDef def = new ConfigDef().define("name", Type.STRING, "bad", ValidString.in(Arrays.asList("valid", "values")), Importance.HIGH, "docs");
+    }
+
+    @Test
+    public void testValidators() {
+        testValidators(Type.INT, Range.between(0,10), 5, new Object[]{1, 5, 9}, new Object[]{-1, 11});
+        testValidators(Type.STRING, ValidString.in(Arrays.asList("good", "values", "default")), "default",
+                new Object[]{"good", "values", "default"}, new Object[]{"bad", "inputs"});
+    }
+
+    private void testValidators(Type type, Validator validator, Object defaultVal, Object[] okValues, Object[] badValues) {
+        ConfigDef def = new ConfigDef().define("name", type, defaultVal, validator, Importance.HIGH, "docs");
+
+        for (Object value : okValues) {
+            Map<String, Object> m = new HashMap<String, Object>();
+            m.put("name", value);
+            def.parse(m);
+        }
+
+        for (Object value : badValues) {
+            Map<String, Object> m = new HashMap<String, Object>();
+            m.put("name", value);
+            try {
+                def.parse(m);
+                fail("Expected a config exception due to invalid value " + value);
             } catch (ConfigException e) {
                 // this is good
             }

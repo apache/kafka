@@ -124,6 +124,8 @@ public class ConfigDef {
                 throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
             else
                 value = key.defaultValue;
+            if (key.validator != null)
+                key.validator.ensureValid(key.name, value);
             values.put(key.name, value);
         }
         return values;
