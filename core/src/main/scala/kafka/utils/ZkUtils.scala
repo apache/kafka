@@ -575,23 +575,28 @@ object ZkUtils extends Logging {
     }
   }
 
-  def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] = {
-    val reassignedPartitions: mutable.Map[TopicAndPartition, Seq[Int]] = mutable.Map()
+  // Parses without deduplicating keys so the the data can be checked before allowing reassignment to proceed
+  def parsePartitionReassignmentDataWithoutDedup(jsonData: String): Seq[(TopicAndPartition, Seq[Int])] = {
     Json.parseFull(jsonData) match {
       case Some(m) =>
         m.asInstanceOf[Map[String, Any]].get("partitions") match {
           case Some(partitionsSeq) =>
-            partitionsSeq.asInstanceOf[Seq[Map[String, Any]]].foreach(p => {
+            partitionsSeq.asInstanceOf[Seq[Map[String, Any]]].map(p => {
               val topic = p.get("topic").get.asInstanceOf[String]
               val partition = p.get("partition").get.asInstanceOf[Int]
               val newReplicas = p.get("replicas").get.asInstanceOf[Seq[Int]]
-              reassignedPartitions += TopicAndPartition(topic, partition) -> newReplicas
+              TopicAndPartition(topic, partition) -> newReplicas
             })
           case None =>
+            Seq.empty
         }
       case None =>
+        Seq.empty
     }
-    reassignedPartitions
+  }
+
+  def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] = {
+    parsePartitionReassignmentDataWithoutDedup(jsonData).toMap
   }
 
   def parseTopicsData(jsonData: String): Seq[String] = {
