@@ -19,6 +19,7 @@ package kafka.admin
 
 import joptsimple._
 import java.util.Properties
+import kafka.common.AdminCommandFailedException
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
@@ -225,6 +226,9 @@ object TopicCommand {
     val ret = new mutable.HashMap[Int, List[Int]]()
     for (i <- 0 until partitionList.size) {
       val brokerList = partitionList(i).split(":").map(s => s.trim().toInt)
+      val duplicateBrokers = Utils.duplicates(brokerList)
+      if (duplicateBrokers.nonEmpty)
+        throw new AdminCommandFailedException("Partition replica lists may not contain duplicate entries: %s".format(duplicateBrokers.mkString(",")))
       ret.put(i, brokerList.toList)
       if (ret(i).size != ret(0).size)
         throw new AdminOperationException("Partition " + i + " has different replication factor: " + brokerList)

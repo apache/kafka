@@ -22,7 +22,7 @@ import scala.util.matching.Regex
 import collection.mutable
 import java.util.Date
 import java.text.SimpleDateFormat
-import kafka.utils.{Logging, CommandLineUtils}
+import kafka.utils.{Utils, Logging, CommandLineUtils}
 import kafka.common.Topic
 import java.io.{BufferedOutputStream, OutputStream}
 
@@ -115,6 +115,11 @@ object StateChangeLogMerger extends Logging {
     }
     if (options.has(partitionsOpt)) {
       partitions = options.valueOf(partitionsOpt).split(",").toList.map(_.toInt)
+      val duplicatePartitions = Utils.duplicates(partitions)
+      if (duplicatePartitions.nonEmpty) {
+        System.err.println("The list of partitions contains repeated entries: %s".format(duplicatePartitions.mkString(",")))
+        System.exit(1)
+      }
     }
     startDate = dateFormat.parse(options.valueOf(startTimeOpt).replace('\"', ' ').trim)
     endDate = dateFormat.parse(options.valueOf(endTimeOpt).replace('\"', ' ').trim)

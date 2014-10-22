@@ -78,12 +78,17 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       case Some(m) =>
         m.asInstanceOf[Map[String, Any]].get("partitions") match {
           case Some(partitionsList) =>
-            val partitions = partitionsList.asInstanceOf[List[Map[String, Any]]]
-            partitions.map { p =>
+            val partitionsRaw = partitionsList.asInstanceOf[List[Map[String, Any]]]
+            val partitions = partitionsRaw.map { p =>
               val topic = p.get("topic").get.asInstanceOf[String]
               val partition = p.get("partition").get.asInstanceOf[Int]
               TopicAndPartition(topic, partition)
-            }.toSet
+            }
+            val duplicatePartitions = Utils.duplicates(partitions)
+            val partitionsSet = partitions.toSet
+            if (duplicatePartitions.nonEmpty)
+              throw new AdminOperationException("Preferred replica election data contains duplicate partitions: %s".format(duplicatePartitions.mkString(",")))
+            partitionsSet
           case None => throw new AdminOperationException("Preferred replica election data is empty")
         }
       case None => throw new AdminOperationException("Preferred replica election data is empty")
