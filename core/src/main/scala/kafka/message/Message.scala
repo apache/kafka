@@ -70,7 +70,7 @@ object Message {
  * A message. The format of an N byte message is the following:
  *
  * 1. 4 byte CRC32 of the message
- * 2. 1 byte "magic" identifier to allow format changes, value is 2 currently
+ * 2. 1 byte "magic" identifier to allow format changes, value is 0 currently
  * 3. 1 byte "attributes" identifier to allow annotations on the message independent of the version (e.g. compression enabled, type of codec used)
  * 4. 4 byte key length, containing length K
  * 5. K byte key
