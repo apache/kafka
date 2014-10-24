@@ -106,6 +106,8 @@ def ensure_valid_headers(headers, attributes):
                         " headers: {0}".format(",".join(headers)))
         
 def plot_graphs(inputCsvFiles, labels, title, xLabel, yLabel, attribute, outputGraphFile):
+    if not inputCsvFiles: return
+
     # create empty plot
     fig=plt.figure()
     fig.subplots_adjust(bottom=0.2)
