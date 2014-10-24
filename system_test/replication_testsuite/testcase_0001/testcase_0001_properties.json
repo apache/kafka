@@ -5,7 +5,7 @@
                   "04":"At the end it verifies the log size and contents",
                   "05":"Use a consumer to verify no message loss.",
                   "06":"Producer dimensions : mode:sync, acks:-1, comp:0",
-                  "07":"Log segment size    : 20480
+                  "07":"Log segment size    : 20480"
   },
   "testcase_args": {
     "broker_type": "leader",
