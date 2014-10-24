@@ -1,0 +1,178 @@
+{
+  "description": {"01":"Replication with Mirror Maker => Bounce Mirror Maker",
+                  "02":"Set up 2 clusters such as : SOURCE => MirrorMaker => TARGET",
+                  "03":"Set up 2-node Zk cluster for both SOURCE & TARGET",
+                  "04":"Produce and consume messages to 2 topics - 2 partitions.",
+                  "05":"This test sends messages to 3 replicas",
+                  "06":"At the end it verifies the log size and contents",
+                  "07":"Use a consumer to verify no message loss in TARGET cluster.",
+                  "08":"Producer dimensions : mode:async, acks:1, comp:1",
+                  "09":"Log segment size    : 20480"
+  },
+  "testcase_args": {
+    "bounce_leader": "false",
+    "bounce_mirror_maker": "true",
+    "bounced_entity_downtime_sec": "30",
+    "replica_factor": "3",
+    "num_partition": "2",
+    "num_iteration": "1",
+    "sleep_seconds_between_producer_calls": "1",
+    "message_producing_free_time_sec": "15",
+    "num_messages_to_produce_per_producer_call": "50"
+  },
+  "entities": [
+    {
+      "entity_id": "0",
+      "clientPort": "2108",
+      "dataDir": "/tmp/zookeeper_0",
+      "log_filename": "zookeeper_0.log",
+      "config_filename": "zookeeper_0.properties"
+    },
+    {
+      "entity_id": "1",
+      "clientPort": "2118",
+      "dataDir": "/tmp/zookeeper_1",
+      "log_filename": "zookeeper_1.log",
+      "config_filename": "zookeeper_1.properties"
+    },
+
+    {
+      "entity_id": "2",
+      "clientPort": "2128",
+      "dataDir": "/tmp/zookeeper_2",
+      "log_filename": "zookeeper_2.log",
+      "config_filename": "zookeeper_2.properties"
+    },
+    {
+      "entity_id": "3",
+      "clientPort": "2138",
+      "dataDir": "/tmp/zookeeper_3",
+      "log_filename": "zookeeper_3.log",
+      "config_filename": "zookeeper_3.properties"
+    },
+
+    {
+      "entity_id": "4",
+      "port": "9091",
+      "broker.id": "1",
+      "log.segment.bytes": "20480",
+      "log.dir": "/tmp/kafka_server_4_logs",
+      "default.replication.factor": "3",
+      "num.partitions": "5",
+      "log_filename": "kafka_server_4.log",
+      "config_filename": "kafka_server_4.properties"
+    },
+    {
+      "entity_id": "5",
+      "port": "9092",
+      "broker.id": "2",
+      "log.segment.bytes": "20480",
+      "log.dir": "/tmp/kafka_server_5_logs",
+      "default.replication.factor": "3",
+      "num.partitions": "5",
+      "log_filename": "kafka_server_5.log",
+      "config_filename": "kafka_server_5.properties"
+    },
+    {
+      "entity_id": "6",
+      "port": "9093",
+      "broker.id": "3",
+      "log.segment.bytes": "20480",
+      "log.dir": "/tmp/kafka_server_6_logs",
+      "default.replication.factor": "3",
+      "num.partitions": "5",
+      "log_filename": "kafka_server_6.log",
+      "config_filename": "kafka_server_6.properties"
+    },
+    {
+      "entity_id": "7",
+      "port": "9094",
+      "broker.id": "4",
+      "log.segment.bytes": "20480",
+      "log.dir": "/tmp/kafka_server_7_logs",
+      "default.replication.factor": "3",
+      "num.partitions": "5",
+      "log_filename": "kafka_server_7.log",
+      "config_filename": "kafka_server_7.properties"
+    },
+    {
+      "entity_id": "8",
+      "port": "9095",
+      "broker.id": "5",
+      "log.segment.bytes": "20480",
+      "log.dir": "/tmp/kafka_server_8_logs",
+      "default.replication.factor": "3",
+      "num.partitions": "5",
+      "log_filename": "kafka_server_8.log",
+      "config_filename": "kafka_server_8.properties"
+    },
+    {
+      "entity_id": "9",
+      "port": "9096",
+      "broker.id": "6",
+      "log.segment.bytes": "20480",
+      "log.dir": "/tmp/kafka_server_9_logs",
+      "default.replication.factor": "3",
+      "num.partitions": "5",
+      "log_filename": "kafka_server_9.log",
+      "config_filename": "kafka_server_9.properties"
+    },
+
+    {
+      "entity_id": "10",
+      "topic": "test_1",
+      "threads": "5",
+      "compression-codec": "1",
+      "message-size": "500",
+      "message": "100",
+      "request-num-acks": "1",
+      "sync":"false",
+      "producer-num-retries":"5",
+      "log_filename": "producer_performance_10.log",
+      "config_filename": "producer_performance_10.properties"
+    },
+    {
+      "entity_id": "11",
+      "topic": "test_2",
+      "threads": "5",
+      "compression-codec": "1",
+      "message-size": "500",
+      "message": "100",
+      "request-num-acks": "1",
+      "sync":"false",
+      "producer-num-retries":"5",
+      "log_filename": "producer_performance_11.log",
+      "config_filename": "producer_performance_11.properties"
+    },
+
+    {
+      "entity_id": "12",
+      "topic": "test_1",
+      "group.id": "mytestgroup",
+      "consumer-timeout-ms": "10000",
+      "log_filename": "console_consumer_12.log",
+      "config_filename": "console_consumer_12.properties"
+    },
+    {
+      "entity_id": "13",
+      "topic": "test_2",
+      "group.id": "mytestgroup",
+      "consumer-timeout-ms": "10000",
+      "log_filename": "console_consumer_13.log",
+      "config_filename": "console_consumer_13.properties"
+    },
+
+    {
+      "entity_id": "14",
+      "log_filename": "mirror_maker_14.log",
+      "mirror_consumer_config_filename": "mirror_consumer_14.properties",
+      "mirror_producer_config_filename": "mirror_producer_14.properties"
+    },
+    {
+      "entity_id": "15",
+      "log_filename": "mirror_maker_15.log",
+      "mirror_consumer_config_filename": "mirror_consumer_15.properties",
+      "mirror_producer_config_filename": "mirror_producer_15.properties"
+    }
+   ]
+}
