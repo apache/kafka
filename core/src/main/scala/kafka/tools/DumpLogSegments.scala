@@ -104,8 +104,7 @@ object DumpLogSegments {
                         misMatchesForIndexFilesMap: mutable.HashMap[String, List[(Long, Long)]],
                         maxMessageSize: Int) {
     val startOffset = file.getName().split("\\.")(0).toLong
-    val logFileName = file.getAbsolutePath.split("\\.")(0) + Log.LogFileSuffix
-    val logFile = new File(logFileName)
+    val logFile = new File(file.getAbsoluteFile.getParent, file.getName.split("\\.")(0) + Log.LogFileSuffix)
     val messageSet = new FileMessageSet(logFile, false)
     val index = new OffsetIndex(file = file, baseOffset = startOffset)
     for(i <- 0 until index.entries) {
