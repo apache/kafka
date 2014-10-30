@@ -47,8 +47,8 @@ case class PartitionDataAndOffset(data: FetchResponsePartitionData, offset: LogO
 
 
 class ReplicaManager(val config: KafkaConfig, 
-                     time: Time, 
-                     val zkClient: ZkClient, 
+                     time: Time,
+                     val zkClient: ZkClient,
                      scheduler: Scheduler,
                      val logManager: LogManager,
                      val isShuttingDown: AtomicBoolean ) extends Logging with KafkaMetricsGroup {
@@ -482,6 +482,7 @@ class ReplicaManager(val config: KafkaConfig,
         val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
         val newLeaderBrokerId = leaderIsrAndControllerEpoch.leaderAndIsr.leader
         leaders.find(_.id == newLeaderBrokerId) match {
+          // Only change partition state when the leader is available
           case Some(leaderBroker) =>
             if (partition.makeFollower(controllerId, partitionStateInfo, correlationId, offsetManager))
               partitionsToMakeFollower += partition
@@ -493,10 +494,13 @@ class ReplicaManager(val config: KafkaConfig,
           case None =>
             // The leader broker should always be present in the leaderAndIsrRequest.
             // If not, we should record the error message and abort the transition process for this partition
-            stateChangeLogger.error(("Broker %d aborted the become-follower state change with correlation id %d from " +
-              "controller %d epoch %d for partition [%s,%d] since new leader %d is not currently available")
+            stateChangeLogger.error(("Broker %d received LeaderAndIsrRequest with correlation id %d from controller" +
+              " %d epoch %d for partition [%s,%d] but cannot become follower since the new leader %d is unavailable.")
               .format(localBrokerId, correlationId, controllerId, leaderIsrAndControllerEpoch.controllerEpoch,
               partition.topic, partition.partitionId, newLeaderBrokerId))
+            // Create the local replica even if the leader is unavailable. This is required to ensure that we include
+            // the partition's high watermark in the checkpoint file (see KAFKA-1647)
+            partition.getOrCreateReplica()
         }
       }
 
