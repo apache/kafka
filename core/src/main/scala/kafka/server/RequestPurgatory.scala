@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.network._
 import kafka.utils._
 import kafka.metrics.KafkaMetricsGroup
 
@@ -30,50 +29,75 @@ import com.yammer.metrics.core.Gauge
 
 
 /**
- * A request whose processing needs to be delayed for at most the given delayMs
- * The associated keys are used for bookeeping, and represent the "trigger" that causes this request to check if it is satisfied,
- * for example a key could be a (topic, partition) pair.
+ * An operation whose processing needs to be delayed for at most the given delayMs. For example
+ * a delayed produce operation could be waiting for specified number of acks; or
+ * a delayed fetch operation could be waiting for a given number of bytes to accumulate.
+ *
+ * The logic upon completing a delayed operation is defined in onComplete() and will be called exactly once.
+ * Once an operation is completed, isCompleted() will return true. onComplete() can be triggered by either
+ * forceComplete(), which forces calling onComplete() after delayMs if the operation is not yet completed,
+ * or tryComplete(), which first checks if the operation can be completed or not now, and if yes calls
+ * forceComplete().
+ *
+ * A subclass of DelayedRequest needs to provide an implementation of both onComplete() and tryComplete().
  */
-class DelayedRequest(val keys: Seq[Any], val request: RequestChannel.Request, delayMs: Long) extends DelayedItem[RequestChannel.Request](request, delayMs) {
-  val satisfied = new AtomicBoolean(false)
+abstract class DelayedRequest(delayMs: Long) extends DelayedItem(delayMs) {
+  private val completed = new AtomicBoolean(false)
+
+  /*
+   * Force completing the delayed operation, if not already completed.
+   * This function can be triggered when
+   *
+   * 1. The operation has been verified to be completable inside tryComplete()
+   * 2. The operation has expired and hence needs to be completed right now
+   *
+   * Return true iff the operation is completed by the caller
+   */
+  def forceComplete(): Boolean = {
+    if (completed.compareAndSet(false, true)) {
+      onComplete()
+      true
+    } else {
+      false
+    }
+  }
+
+  /**
+   * Check if the delayed operation is already completed
+   */
+  def isCompleted(): Boolean = completed.get()
+
+  /**
+   * Process for completing an operation; This function needs to be defined in subclasses
+   * and will be called exactly once in forceComplete()
+   */
+  def onComplete(): Unit
+
+  /*
+   * Try to complete the delayed operation by first checking if the operation
+   * can be completed by now. If yes execute the completion logic by calling
+   * forceComplete() and return true iff forceComplete returns true; otherwise return false
+   *
+   * Note that concurrent threads can check if an operation can be completed or not,
+   * but only the first thread will succeed in completing the operation and return
+   * true, others will still return false
+   *
+   * this function needs to be defined in subclasses
+   */
+  def tryComplete(): Boolean
 }
 
 /**
- * A helper class for dealing with asynchronous requests with a timeout. A DelayedRequest has a request to delay
- * and also a list of keys that can trigger the action. Implementations can add customized logic to control what it means for a given
- * request to be satisfied. For example it could be that we are waiting for user-specified number of acks on a given (topic, partition)
- * to be able to respond to a request or it could be that we are waiting for a given number of bytes to accumulate on a given request
- * to be able to respond to that request (in the simple case we might wait for at least one byte to avoid busy waiting).
- *
- * For us the key is generally a (topic, partition) pair.
- * By calling 
- *   val isSatisfiedByMe = checkAndMaybeWatch(delayedRequest)
- * we will check if a request is satisfied already, and if not add the request for watch on all its keys.
- *
- * It is up to the user to then call
- *   val satisfied = update(key, request) 
- * when a request relevant to the given key occurs. This triggers bookeeping logic and returns back any requests satisfied by this
- * new request.
- *
- * An implementation provides extends two helper functions
- *   def checkSatisfied(request: R, delayed: T): Boolean
- * this function returns true if the given request (in combination with whatever previous requests have happened) satisfies the delayed
- * request delayed. This method will likely also need to do whatever bookkeeping is necessary.
- *
- * The second function is
- *   def expire(delayed: T)
- * this function handles delayed requests that have hit their time limit without being satisfied.
- *
+ * A helper purgatory class for bookkeeping delayed operations with a timeout, and expiring timed out operations.
  */
-abstract class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInterval: Int = 1000)
+class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInterval: Int = 1000)
         extends Logging with KafkaMetricsGroup {
 
   /* a list of requests watching each key */
   private val watchersForKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers))
 
   /* background thread expiring requests that have been waiting too long */
-  private val expiredRequestReaper = new ExpiredRequestReaper
-  private val expirationThread = Utils.newThread(name="request-expiration-task", runnable=expiredRequestReaper, daemon=false)
+  private val expirationReaper = new ExpiredOperationReaper
 
   newGauge(
     "PurgatorySize",
@@ -89,230 +113,182 @@ abstract class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInt
     }
   )
 
-  expirationThread.start()
+  expirationReaper.start()
 
   /**
-   * Try to add the request for watch on all keys. Return true iff the request is
-   * satisfied and the satisfaction is done by the caller.
+   * Check if the operation can be completed, if not watch it based on the given watch keys
    *
-   * Requests can be watched on only a few of the keys if it is found satisfied when
-   * trying to add it to each one of the keys. In this case the request is still treated as satisfied
-   * and hence no longer watched. Those already added elements will be later purged by the expire reaper.
+   * Note that a delayed operation can be watched on multiple keys. It is possible that
+   * an operation is completed after it has been added to the watch list for some, but
+   * not all of the keys. In this case, the operation is considered completed and won't
+   * be added to the watch list of the remaining keys. The expiration reaper thread will
+   * remove this operation from any watcher list in which the operation exists.
+   *
+   * @param operation the delayed operation to be checked
+   * @param watchKeys keys for bookkeeping the operation
+   * @return true iff the delayed operations can be completed by the caller
    */
-  def checkAndMaybeWatch(delayedRequest: T): Boolean = {
-    for(key <- delayedRequest.keys) {
-      val lst = watchersFor(key)
-      if(!lst.checkAndMaybeAdd(delayedRequest)) {
-        if(delayedRequest.satisfied.compareAndSet(false, true))
-          return true
-        else
-          return false
+  def tryCompleteElseWatch(operation: T, watchKeys: Seq[Any]): Boolean = {
+    for(key <- watchKeys) {
+      // if the operation is already completed, stopping adding it to
+      // any further lists and return false
+      if (operation.isCompleted())
+        return false
+      val watchers = watchersFor(key)
+      // if the operation can by completed by myself, stop adding it to
+      // any further lists and return true immediately
+      if(operation synchronized operation.tryComplete()) {
+        return true
+      } else {
+        watchers.watch(operation)
       }
     }
 
-    // if it is indeed watched, add to the expire queue also
-    expiredRequestReaper.enqueue(delayedRequest)
+    // if it cannot be completed by now and hence is watched, add to the expire queue also
+    if (! operation.isCompleted()) {
+      expirationReaper.enqueue(operation)
+    }
 
     false
   }
 
   /**
-   * Update any watchers and return a list of newly satisfied requests.
+   * Check if some some delayed requests can be completed with the given watch key,
+   * and if yes complete them.
+   *
+   * @return the number of completed requests during this process
    */
-  def update(key: Any): Seq[T] = {
-    val w = watchersForKey.get(key)
-    if(w == null)
-      Seq.empty
+  def checkAndComplete(key: Any): Int = {
+    val watchers = watchersForKey.get(key)
+    if(watchers == null)
+      0
     else
-      w.collectSatisfiedRequests()
+      watchers.tryCompleteWatched()
   }
 
-  /*
-   * Return the size of the watched lists in the purgatory, which is the size of watch lists.
-   * Since an operation may still be in the watch lists even when it has been completed,
-   * this number may be larger than the number of real operations watched
+  /**
+   * Return the total size of watch lists the purgatory. Since an operation may be watched
+   * on multiple lists, and some of its watched entries may still be in the watch lists
+   * even when it has been completed, this number may be larger than the number of real operations watched
    */
   def watched() = watchersForKey.values.map(_.watched).sum
 
-  /*
-   * Return the number of requests in the expiry reaper's queue
+  /**
+   * Return the number of delayed operations in the expiry queue
    */
-  def delayed() = expiredRequestReaper.delayed()
+  def delayed() = expirationReaper.delayed
 
   /*
-   * Return the watch list for the given watch key
+   * Return the watch list of the given key
    */
   private def watchersFor(key: Any) = watchersForKey.getAndMaybePut(key)
-  
-  /**
-   * Check if this delayed request is already satisfied
-   */
-  protected def checkSatisfied(request: T): Boolean
-
-  /**
-   * Handle an expired delayed request
-   */
-  protected def expire(delayed: T)
 
   /**
    * Shutdown the expire reaper thread
    */
   def shutdown() {
-    expiredRequestReaper.shutdown()
+    expirationReaper.shutdown()
   }
 
   /**
-   * A linked list of DelayedRequests watching some key with some associated
-   * bookkeeping logic.
+   * A linked list of watched delayed operations based on some key
    */
   private class Watchers {
     private val requests = new util.LinkedList[T]
 
-    // return the size of the watch list
-    def watched() = requests.size()
+    def watched = requests.size()
 
-    // potentially add the element to watch if it is not satisfied yet
-    def checkAndMaybeAdd(t: T): Boolean = {
+    // add the element to watch
+    def watch(t: T) {
       synchronized {
-        // if it is already satisfied, do not add to the watch list
-        if (t.satisfied.get)
-          return false
-        // synchronize on the delayed request to avoid any race condition
-        // with expire and update threads on client-side.
-        if(t synchronized checkSatisfied(t)) {
-          return false
-        }
         requests.add(t)
-        return true
       }
     }
 
-    // traverse the list and purge satisfied elements
-    def purgeSatisfied(): Int = {
+    // traverse the list and try to complete some watched elements
+    def tryCompleteWatched(): Int = {
+      var completed = 0
       synchronized {
         val iter = requests.iterator()
-        var purged = 0
         while(iter.hasNext) {
           val curr = iter.next
-          if(curr.satisfied.get()) {
+          if (curr.isCompleted()) {
+            // another thread has completed this request, just remove it
+            iter.remove()
+          } else {
+            if(curr synchronized curr.tryComplete()) {
+              iter.remove()
+              completed += 1
+            }
+          }
+        }
+      }
+      completed
+    }
+
+    // traverse the list and purge elements that are already completed by others
+    def purgeCompleted(): Int = {
+      var purged = 0
+      synchronized {
+        val iter = requests.iterator()
+        while (iter.hasNext) {
+          val curr = iter.next
+          if(curr.isCompleted()) {
             iter.remove()
             purged += 1
           }
         }
-        purged
       }
-    }
-
-    // traverse the list and try to satisfy watched elements
-    def collectSatisfiedRequests(): Seq[T] = {
-      val response = new mutable.ArrayBuffer[T]
-      synchronized {
-        val iter = requests.iterator()
-        while(iter.hasNext) {
-          val curr = iter.next
-          if(curr.satisfied.get) {
-            // another thread has satisfied this request, remove it
-            iter.remove()
-          } else {
-            // synchronize on curr to avoid any race condition with expire
-            // on client-side.
-            val satisfied = curr synchronized checkSatisfied(curr)
-            if(satisfied) {
-              iter.remove()
-              val updated = curr.satisfied.compareAndSet(false, true)
-              if(updated == true) {
-                response += curr
-              }
-            }
-          }
-        }
-      }
-      response
+      purged
     }
   }
 
   /**
-   * Runnable to expire requests that have sat unfullfilled past their deadline
+   * A background reaper to expire delayed operations that have timed out
    */
-  private class ExpiredRequestReaper extends Runnable with Logging {
-    this.logIdent = "ExpiredRequestReaper-%d ".format(brokerId)
-    private val running = new AtomicBoolean(true)
-    private val shutdownLatch = new CountDownLatch(1)
+  private class ExpiredOperationReaper extends ShutdownableThread(
+    "ExpirationReaper-%d".format(brokerId),
+    false) {
 
+    /* The queue storing all delayed operations */
     private val delayedQueue = new DelayQueue[T]
 
+    /*
+     * Return the number of delayed operations kept by the reaper
+     */
     def delayed() = delayedQueue.size()
-    
-    /** Main loop for the expiry thread */
-    def run() {
-      while(running.get) {
-        try {
-          val curr = pollExpired()
-          if (curr != null) {
-            curr synchronized {
-              expire(curr)
-            }
-          }
-          // see if we need to purge the watch lists
-          if (RequestPurgatory.this.watched() >= purgeInterval) {
-            debug("Begin purging watch lists")
-            val numPurgedFromWatchers = watchersForKey.values.map(_.purgeSatisfied()).sum
-            debug("Purged %d elements from watch lists.".format(numPurgedFromWatchers))
-          }
-          // see if we need to purge the delayed request queue
-          if (delayed() >= purgeInterval) {
-            debug("Begin purging delayed queue")
-            val purged = purgeSatisfied()
-            debug("Purged %d requests from delayed queue.".format(purged))
-          }
-        } catch {
-          case e: Exception =>
-            error("Error in long poll expiry thread: ", e)
-        }
-      }
-      shutdownLatch.countDown()
-    }
 
-    /** Add a request to be expired */
+    /*
+     * Add an operation to be expired
+     */
     def enqueue(t: T) {
       delayedQueue.add(t)
     }
 
-    /** Shutdown the expiry thread*/
-    def shutdown() {
-      debug("Shutting down.")
-      running.set(false)
-      shutdownLatch.await()
-      debug("Shut down complete.")
-    }
-
     /**
-     * Get the next expired event
+     * Try to get the next expired event and force completing it
      */
-    private def pollExpired(): T = {
-      while(true) {
-        val curr = delayedQueue.poll(200L, TimeUnit.MILLISECONDS)
-        if (curr == null)
-          return null.asInstanceOf[T]
-        val updated = curr.satisfied.compareAndSet(false, true)
-        if(updated) {
-          return curr
+    private def expireNext() {
+      val curr = delayedQueue.poll(200L, TimeUnit.MILLISECONDS)
+      if (curr != null.asInstanceOf[T]) {
+        // if there is an expired operation, try to force complete it
+        if (curr synchronized curr.forceComplete()) {
+          debug("Force complete expired delayed operation %s".format(curr))
         }
       }
-      throw new RuntimeException("This should not happen")
     }
 
     /**
      * Delete all satisfied events from the delay queue and the watcher lists
      */
-    private def purgeSatisfied(): Int = {
+    private def purgeCompleted(): Int = {
       var purged = 0
 
       // purge the delayed queue
       val iter = delayedQueue.iterator()
-      while(iter.hasNext) {
+      while (iter.hasNext) {
         val curr = iter.next()
-        if(curr.satisfied.get) {
+        if (curr.isCompleted()) {
           iter.remove()
           purged += 1
         }
@@ -320,6 +296,22 @@ abstract class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInt
 
       purged
     }
-  }
 
+    override def doWork() {
+      // try to get the next expired operation and force completing it
+      expireNext()
+      // see if we need to purge the watch lists
+      if (RequestPurgatory.this.watched() >= purgeInterval) {
+        debug("Begin purging watch lists")
+        val purged = watchersForKey.values.map(_.purgeCompleted()).sum
+        debug("Purged %d elements from watch lists.".format(purged))
+      }
+      // see if we need to purge the delayed request queue
+      if (delayed() >= purgeInterval) {
+        debug("Begin purging delayed queue")
+        val purged = purgeCompleted()
+        debug("Purged %d operations from delayed queue.".format(purged))
+      }
+    }
+  }
 }

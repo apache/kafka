@@ -43,8 +43,7 @@ object ProducerResponse {
 
 case class ProducerResponseStatus(var error: Short, offset: Long)
 
-case class ProducerResponse(correlationId: Int,
-                            status: Map[TopicAndPartition, ProducerResponseStatus])
+case class ProducerResponse(correlationId: Int, status: Map[TopicAndPartition, ProducerResponseStatus])
     extends RequestOrResponse() {
 
   /**

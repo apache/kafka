@@ -42,6 +42,9 @@ class ReplicaManagerTest extends JUnit3Suite {
     val partition = rm.getOrCreatePartition(topic, 1)
     partition.getOrCreateReplica(1)
     rm.checkpointHighWatermarks()
+
+    // shutdown the replica manager upon test completion
+    rm.shutdown(false)
   }
 
   @Test
@@ -56,5 +59,8 @@ class ReplicaManagerTest extends JUnit3Suite {
     val partition = rm.getOrCreatePartition(topic, 1)
     partition.getOrCreateReplica(1)
     rm.checkpointHighWatermarks()
+
+    // shutdown the replica manager upon test completion
+    rm.shutdown(false)
   }
 }

@@ -31,6 +31,21 @@ import scala.collection.JavaConversions
 
 import com.yammer.metrics.core.Gauge
 
+object LogAppendInfo {
+  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, NoCompressionCodec, -1, -1, false)
+}
+
+/**
+ * Struct to hold various quantities we compute about each message set before appending to the log
+ * @param firstOffset The first offset in the message set
+ * @param lastOffset The last offset in the message set
+ * @param shallowCount The number of shallow messages
+ * @param validBytes The number of valid bytes
+ * @param codec The codec used in the message set
+ * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
+ */
+case class LogAppendInfo(var firstOffset: Long, var lastOffset: Long, codec: CompressionCodec, shallowCount: Int, validBytes: Int, offsetsMonotonic: Boolean)
+
 
 /**
  * An append-only log for storing messages.
@@ -310,17 +325,6 @@ class Log(val dir: File,
     }
   }
   
-  /**
-   * Struct to hold various quantities we compute about each message set before appending to the log
-   * @param firstOffset The first offset in the message set
-   * @param lastOffset The last offset in the message set
-   * @param shallowCount The number of shallow messages
-   * @param validBytes The number of valid bytes
-   * @param codec The codec used in the message set
-   * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
-   */
-  case class LogAppendInfo(var firstOffset: Long, var lastOffset: Long, codec: CompressionCodec, shallowCount: Int, validBytes: Int, offsetsMonotonic: Boolean)
-
   /**
    * Validate the following:
    * <ol>

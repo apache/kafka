@@ -17,75 +17,110 @@
 
 package kafka.server
 
-import kafka.network.RequestChannel
-import kafka.api.{FetchResponse, FetchRequest}
-import kafka.common.{UnknownTopicOrPartitionException, NotLeaderForPartitionException, TopicAndPartition}
+import kafka.api.FetchResponsePartitionData
+import kafka.api.PartitionFetchInfo
+import kafka.common.UnknownTopicOrPartitionException
+import kafka.common.NotLeaderForPartitionException
+import kafka.common.TopicAndPartition
 
-import scala.collection.immutable.Map
-import scala.collection.Seq
+import scala.collection._
+
+case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionFetchInfo) {
+
+  override def toString = "[startOffsetMetadata: " + startOffsetMetadata + ", " +
+                          "fetchInfo: " + fetchInfo + "]"
+}
 
 /**
- * A delayed fetch request, which is satisfied (or more
- * accurately, unblocked) -- if:
- * Case A: This broker is no longer the leader for some partitions it tries to fetch
- *   - should return whatever data is available for the rest partitions.
- * Case B: This broker is does not know of some partitions it tries to fetch
- *   - should return whatever data is available for the rest partitions.
- * Case C: The fetch offset locates not on the last segment of the log
- *   - should return all the data on that segment.
- * Case D: The accumulated bytes from all the fetching partitions exceeds the minimum bytes
- *   - should return whatever data is available.
+ * The fetch metadata maintained by the delayed produce request
  */
+case class FetchMetadata(fetchMinBytes: Int,
+                         fetchOnlyLeader: Boolean,
+                         fetchOnlyCommitted: Boolean,
+                         fetchPartitionStatus: Map[TopicAndPartition, FetchPartitionStatus]) {
 
-class DelayedFetch(override val keys: Seq[TopicPartitionRequestKey],
-                   override val request: RequestChannel.Request,
-                   override val delayMs: Long,
-                   val fetch: FetchRequest,
-                   private val partitionFetchOffsets: Map[TopicAndPartition, LogOffsetMetadata])
-  extends DelayedRequest(keys, request, delayMs) {
+  override def toString = "[minBytes: " + fetchMinBytes + ", " +
+                          "onlyLeader:" + fetchOnlyLeader + ", "
+                          "onlyCommitted: " + fetchOnlyCommitted + ", "
+                          "partitionStatus: " + fetchPartitionStatus + "]"
+}
 
-  def isSatisfied(replicaManager: ReplicaManager) : Boolean = {
+/**
+ * A delayed fetch request that can be created by the replica manager and watched
+ * in the fetch request purgatory
+ */
+class DelayedFetch(delayMs: Long,
+                   fetchMetadata: FetchMetadata,
+                   replicaManager: ReplicaManager,
+                   responseCallback: Map[TopicAndPartition, FetchResponsePartitionData] => Unit)
+  extends DelayedRequest(delayMs) {
+
+  /**
+   * The request can be completed if:
+   *
+   * Case A: This broker is no longer the leader for some partitions it tries to fetch
+   * Case B: This broker does not know of some partitions it tries to fetch
+   * Case C: The fetch offset locates not on the last segment of the log
+   * Case D: The accumulated bytes from all the fetching partitions exceeds the minimum bytes
+   *
+   * Upon completion, should return whatever data is available for each valid partition
+   */
+  override def tryComplete() : Boolean = {
     var accumulatedSize = 0
-    val fromFollower = fetch.isFromFollower
-    partitionFetchOffsets.foreach {
-      case (topicAndPartition, fetchOffset) =>
+    fetchMetadata.fetchPartitionStatus.foreach {
+      case (topicAndPartition, fetchStatus) =>
+        val fetchOffset = fetchStatus.startOffsetMetadata
         try {
           if (fetchOffset != LogOffsetMetadata.UnknownOffsetMetadata) {
             val replica = replicaManager.getLeaderReplicaIfLocal(topicAndPartition.topic, topicAndPartition.partition)
             val endOffset =
-              if (fromFollower)
-                replica.logEndOffset
-              else
+              if (fetchMetadata.fetchOnlyCommitted)
                 replica.highWatermark
+              else
+                replica.logEndOffset
 
             if (endOffset.offsetOnOlderSegment(fetchOffset)) {
-              // Case C, this can happen when the new follower replica fetching on a truncated leader
-              debug("Satisfying fetch request %s since it is fetching later segments of partition %s.".format(fetch, topicAndPartition))
-              return true
+              // Case C, this can happen when the new fetch operation is on a truncated leader
+              debug("Satisfying fetch %s since it is fetching later segments of partition %s.".format(fetchMetadata, topicAndPartition))
+              return forceComplete()
             } else if (fetchOffset.offsetOnOlderSegment(endOffset)) {
-              // Case C, this can happen when the folloer replica is lagging too much
-              debug("Satisfying fetch request %s immediately since it is fetching older segments.".format(fetch))
-              return true
+              // Case C, this can happen when the fetch operation is falling behind the current segment
+              // or the partition has just rolled a new segment
+              debug("Satisfying fetch %s immediately since it is fetching older segments.".format(fetchMetadata))
+              return forceComplete()
             } else if (fetchOffset.precedes(endOffset)) {
-              accumulatedSize += endOffset.positionDiff(fetchOffset)
+              // we need take the partition fetch size as upper bound when accumulating the bytes
+              accumulatedSize += math.min(endOffset.positionDiff(fetchOffset), fetchStatus.fetchInfo.fetchSize)
             }
           }
         } catch {
-          case utpe: UnknownTopicOrPartitionException => // Case A
-            debug("Broker no longer know of %s, satisfy %s immediately".format(topicAndPartition, fetch))
-            return true
-          case nle: NotLeaderForPartitionException =>  // Case B
-            debug("Broker is no longer the leader of %s, satisfy %s immediately".format(topicAndPartition, fetch))
-            return true
+          case utpe: UnknownTopicOrPartitionException => // Case B
+            debug("Broker no longer know of %s, satisfy %s immediately".format(topicAndPartition, fetchMetadata))
+            return forceComplete()
+          case nle: NotLeaderForPartitionException =>  // Case A
+            debug("Broker is no longer the leader of %s, satisfy %s immediately".format(topicAndPartition, fetchMetadata))
+            return forceComplete()
         }
     }
 
     // Case D
-    accumulatedSize >= fetch.minBytes
+    if (accumulatedSize >= fetchMetadata.fetchMinBytes)
+      forceComplete()
+    else
+      false
   }
 
-  def respond(replicaManager: ReplicaManager): FetchResponse = {
-    val topicData = replicaManager.readMessageSets(fetch)
-    FetchResponse(fetch.correlationId, topicData.mapValues(_.data))
+  /**
+   * Upon completion, read whatever data is available and pass to the complete callback
+   */
+  override def onComplete() {
+    val logReadResults = replicaManager.readFromLocalLog(fetchMetadata.fetchOnlyLeader,
+      fetchMetadata.fetchOnlyCommitted,
+      fetchMetadata.fetchPartitionStatus.mapValues(status => status.fetchInfo))
+
+    val fetchPartitionData = logReadResults.mapValues(result =>
+      FetchResponsePartitionData(result.errorCode, result.hw, result.info.messageSet))
+
+    responseCallback(fetchPartitionData)
   }
 }

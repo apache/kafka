@@ -305,12 +305,10 @@ class ProducerFailureHandlingTest extends JUnit3Suite with KafkaServerTestHarnes
   @Test
   def testNotEnoughReplicas() {
     val topicName = "minisrtest"
-    val topicProps = new Properties();
-    topicProps.put("min.insync.replicas","3");
-
+    val topicProps = new Properties()
+    topicProps.put("min.insync.replicas","3")
 
     TestUtils.createTopic(zkClient, topicName, 1, 2, servers,topicProps)
-
 
     val record = new ProducerRecord(topicName, null, "key".getBytes, "value".getBytes)
     try {
@@ -327,18 +325,16 @@ class ProducerFailureHandlingTest extends JUnit3Suite with KafkaServerTestHarnes
   @Test
   def testNotEnoughReplicasAfterBrokerShutdown() {
     val topicName = "minisrtest2"
-    val topicProps = new Properties();
-    topicProps.put("min.insync.replicas","2");
-
+    val topicProps = new Properties()
+    topicProps.put("min.insync.replicas","2")
 
     TestUtils.createTopic(zkClient, topicName, 1, 2, servers,topicProps)
 
-
     val record = new ProducerRecord(topicName, null, "key".getBytes, "value".getBytes)
-    // This should work
+    // this should work with all brokers up and running
     producer3.send(record).get
 
-    //shut down one broker
+    // shut down one broker
     servers.head.shutdown()
     servers.head.awaitShutdown()
     try {
@@ -351,8 +347,8 @@ class ProducerFailureHandlingTest extends JUnit3Suite with KafkaServerTestHarnes
         }
     }
 
+    // restart the server
     servers.head.startup()
-
   }
 
   private class ProducerScheduler extends ShutdownableThread("daemon-producer", false)

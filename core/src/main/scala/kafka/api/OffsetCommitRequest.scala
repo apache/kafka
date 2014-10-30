@@ -78,27 +78,11 @@ case class OffsetCommitRequest(groupId: String,
                                groupGenerationId: Int = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_GENERATION_ID,
                                consumerId: String =  org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_CONSUMER_ID)
     extends RequestOrResponse(Some(RequestKeys.OffsetCommitKey)) {
+
   assert(versionId == 0 || versionId == 1,
          "Version " + versionId + " is invalid for OffsetCommitRequest. Valid versions are 0 or 1.")
 
   lazy val requestInfoGroupedByTopic = requestInfo.groupBy(_._1.topic)
-
-  def filterLargeMetadata(maxMetadataSize: Int) =
-    requestInfo.filter(info => info._2.metadata == null || info._2.metadata.length <= maxMetadataSize)
-
-  def responseFor(errorCode: Short, offsetMetadataMaxSize: Int) = {
-    val commitStatus = requestInfo.map {info =>
-      (info._1, if (info._2.metadata != null && info._2.metadata.length > offsetMetadataMaxSize)
-                  ErrorMapping.OffsetMetadataTooLargeCode
-                else if (errorCode == ErrorMapping.UnknownTopicOrPartitionCode)
-                  ErrorMapping.ConsumerCoordinatorNotAvailableCode
-                else if (errorCode == ErrorMapping.NotLeaderForPartitionCode)
-                  ErrorMapping.NotCoordinatorForConsumerCode
-                else
-                  errorCode)
-    }.toMap
-    OffsetCommitResponse(commitStatus, correlationId)
-  }
 
   def writeTo(buffer: ByteBuffer) {
     // Write envelope
@@ -150,8 +134,10 @@ case class OffsetCommitRequest(groupId: String,
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     val errorCode = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
-    val errorResponse = responseFor(errorCode, Int.MaxValue)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+    val commitStatus = requestInfo.mapValues(_ => errorCode)
+    val commitResponse = OffsetCommitResponse(commitStatus, correlationId)
+
+    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(commitResponse)))
   }
 
   override def describe(details: Boolean): String = {

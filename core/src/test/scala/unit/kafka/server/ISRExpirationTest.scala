@@ -36,8 +36,21 @@ class IsrExpirationTest extends JUnit3Suite {
   })
   val topic = "foo"
 
+  val time = new MockTime
+
+  var replicaManager: ReplicaManager = null
+
+  override def setUp() {
+    super.setUp()
+    replicaManager = new ReplicaManager(configs.head, time, null, null, null, new AtomicBoolean(false))
+  }
+
+  override def tearDown() {
+    replicaManager.shutdown(false)
+    super.tearDown()
+  }
+
   def testIsrExpirationForStuckFollowers() {
-    val time = new MockTime
     val log = getLogWithLogEndOffset(15L, 2) // set logEndOffset for leader to 15L
 
     // create one partition and all replicas
@@ -61,7 +74,6 @@ class IsrExpirationTest extends JUnit3Suite {
   }
 
   def testIsrExpirationForSlowFollowers() {
-    val time = new MockTime
     // create leader replica
     val log = getLogWithLogEndOffset(15L, 1)
     // add one partition
@@ -82,7 +94,6 @@ class IsrExpirationTest extends JUnit3Suite {
   private def getPartitionWithAllReplicasInIsr(topic: String, partitionId: Int, time: Time, config: KafkaConfig,
                                                localLog: Log): Partition = {
     val leaderId=config.brokerId
-    val replicaManager = new ReplicaManager(config, time, null, null, null, new AtomicBoolean(false))
     val partition = replicaManager.getOrCreatePartition(topic, partitionId)
     val leaderReplica = new Replica(leaderId, partition, time, 0, Some(localLog))
 

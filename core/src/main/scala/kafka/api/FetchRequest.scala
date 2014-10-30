@@ -30,7 +30,6 @@ import scala.collection.immutable.Map
 
 case class PartitionFetchInfo(offset: Long, fetchSize: Int)
 
-
 object FetchRequest {
   val CurrentVersion = 0.shortValue
   val DefaultMaxWait = 0

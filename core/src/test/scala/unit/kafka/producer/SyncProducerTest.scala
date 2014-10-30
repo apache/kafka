@@ -237,8 +237,8 @@ class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
     props.put("request.required.acks", "-1")
 
     val producer = new SyncProducer(new SyncProducerConfig(props))
-    val topicProps = new Properties();
-    topicProps.put("min.insync.replicas","2");
+    val topicProps = new Properties()
+    topicProps.put("min.insync.replicas","2")
     AdminUtils.createTopic(zkClient, topicName, 1, 1,topicProps)
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topicName, 0)
 

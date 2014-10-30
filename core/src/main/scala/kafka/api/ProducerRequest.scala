@@ -153,7 +153,6 @@ case class ProducerRequest(versionId: Short = ProducerRequest.CurrentVersion,
     producerRequest.toString()
   }
 
-
   def emptyData(){
     data.clear()
   }

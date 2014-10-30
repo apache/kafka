@@ -25,7 +25,7 @@ import kafka.api.RequestOrResponse
 @nonthreadsafe
 private[kafka] class BoundedByteBufferSend(val buffer: ByteBuffer) extends Send {
   
-  private var sizeBuffer = ByteBuffer.allocate(4)
+  private val sizeBuffer = ByteBuffer.allocate(4)
 
   // Avoid possibility of overflow for 2GB-4 byte buffer
   if(buffer.remaining > Int.MaxValue - sizeBuffer.limit)
@@ -53,7 +53,7 @@ private[kafka] class BoundedByteBufferSend(val buffer: ByteBuffer) extends Send 
   
   def writeTo(channel: GatheringByteChannel): Int = {
     expectIncomplete()
-    var written = channel.write(Array(sizeBuffer, buffer))
+    val written = channel.write(Array(sizeBuffer, buffer))
     // if we are done, mark it off
     if(!buffer.hasRemaining)
       complete = true    

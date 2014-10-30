@@ -74,6 +74,9 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     fooPartition0Hw = hwmFor(replicaManager, topic, 0)
     assertEquals(leaderReplicaPartition0.highWatermark.messageOffset, fooPartition0Hw)
     EasyMock.verify(zkClient)
+
+    // shutdown the replica manager upon test completion
+    replicaManager.shutdown(false)
   }
 
   def testHighWatermarkPersistenceMultiplePartitions() {
@@ -130,6 +133,10 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
     topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
     assertEquals(10L, topic1Partition0Hw)
     EasyMock.verify(zkClient)
+
+    // shutdown the replica manager upon test completion
+    replicaManager.shutdown(false)
+
   }
 
   def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long = {

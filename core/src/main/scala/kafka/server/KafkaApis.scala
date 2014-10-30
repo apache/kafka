@@ -20,7 +20,6 @@ package kafka.server
 import kafka.api._
 import kafka.common._
 import kafka.log._
-import kafka.message._
 import kafka.network._
 import kafka.admin.AdminUtils
 import kafka.network.RequestChannel.Response
@@ -42,12 +41,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val config: KafkaConfig,
                 val controller: KafkaController) extends Logging {
 
-  val producerRequestPurgatory = new ProducerRequestPurgatory(replicaManager, offsetManager, requestChannel)
-  val fetchRequestPurgatory = new FetchRequestPurgatory(replicaManager, requestChannel)
-  // TODO: the following line will be removed in 0.9
-  replicaManager.initWithRequestPurgatory(producerRequestPurgatory, fetchRequestPurgatory)
-  var metadataCache = new MetadataCache
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
+  val metadataCache = new MetadataCache
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -56,7 +51,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     try{
       trace("Handling request: " + request.requestObj + " from client: " + request.remoteAddress)
       request.requestId match {
-        case RequestKeys.ProduceKey => handleProducerOrOffsetCommitRequest(request)
+        case RequestKeys.ProduceKey => handleProducerRequest(request)
         case RequestKeys.FetchKey => handleFetchRequest(request)
         case RequestKeys.OffsetsKey => handleOffsetRequest(request)
         case RequestKeys.MetadataKey => handleTopicMetadataRequest(request)
@@ -64,7 +59,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.StopReplicaKey => handleStopReplicaRequest(request)
         case RequestKeys.UpdateMetadataKey => handleUpdateMetadataRequest(request)
         case RequestKeys.ControlledShutdownKey => handleControlledShutdownRequest(request)
-        case RequestKeys.OffsetCommitKey => handleProducerOrOffsetCommitRequest(request)
+        case RequestKeys.OffsetCommitKey => handleOffsetCommitRequest(request)
         case RequestKeys.OffsetFetchKey => handleOffsetFetchRequest(request)
         case RequestKeys.ConsumerMetadataKey => handleConsumerMetadataRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
@@ -123,179 +118,87 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(controlledShutdownResponse)))
   }
 
-  private def producerRequestFromOffsetCommit(offsetCommitRequest: OffsetCommitRequest) = {
-    val msgs = offsetCommitRequest.filterLargeMetadata(config.offsetMetadataMaxSize).map {
-      case (topicAndPartition, offset) =>
-        new Message(
-          bytes = OffsetManager.offsetCommitValue(offset),
-          key = OffsetManager.offsetCommitKey(offsetCommitRequest.groupId, topicAndPartition.topic, topicAndPartition.partition)
-        )
-    }.toSeq
-
-    val producerData = mutable.Map(
-      TopicAndPartition(OffsetManager.OffsetsTopicName, offsetManager.partitionFor(offsetCommitRequest.groupId)) ->
-        new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, msgs:_*)
-    )
-
-    val request = ProducerRequest(
-      correlationId = offsetCommitRequest.correlationId,
-      clientId = offsetCommitRequest.clientId,
-      requiredAcks = config.offsetCommitRequiredAcks,
-      ackTimeoutMs = config.offsetCommitTimeoutMs,
-      data = producerData)
-    trace("Created producer request %s for offset commit request %s.".format(request, offsetCommitRequest))
-    request
-  }
 
   /**
-   * Handle a produce request or offset commit request (which is really a specialized producer request)
+   * Handle an offset commit request
    */
-  def handleProducerOrOffsetCommitRequest(request: RequestChannel.Request) {
-    val (produceRequest, offsetCommitRequestOpt) =
-      if (request.requestId == RequestKeys.OffsetCommitKey) {
-        val offsetCommitRequest = request.requestObj.asInstanceOf[OffsetCommitRequest]
-        (producerRequestFromOffsetCommit(offsetCommitRequest), Some(offsetCommitRequest))
-      } else {
-        (request.requestObj.asInstanceOf[ProducerRequest], None)
+  def handleOffsetCommitRequest(request: RequestChannel.Request) {
+    val offsetCommitRequest = request.requestObj.asInstanceOf[OffsetCommitRequest]
+
+    // the callback for sending the response
+    def sendResponseCallback(commitStatus: immutable.Map[TopicAndPartition, Short]) {
+      commitStatus.foreach { case (topicAndPartition, errorCode) =>
+        // we only print warnings for known errors here; only replica manager could see an unknown
+        // exception while trying to write the offset message to the local log, and it will log
+        // an error message and write the error code in this case; hence it can be ignored here
+        if (errorCode != ErrorMapping.NoError && errorCode != ErrorMapping.UnknownCode) {
+          debug("Offset commit request with correlation id %d from client %s on partition %s failed due to %s"
+            .format(offsetCommitRequest.correlationId, offsetCommitRequest.clientId,
+            topicAndPartition, ErrorMapping.exceptionNameFor(errorCode)))
+        }
       }
 
-    val sTime = SystemTime.milliseconds
-    val localProduceResults = appendToLocalLog(produceRequest, offsetCommitRequestOpt.nonEmpty)
-    debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
-
-    val firstErrorCode = localProduceResults.find(_.errorCode != ErrorMapping.NoError).map(_.errorCode).getOrElse(ErrorMapping.NoError)
-
-    val numPartitionsInError = localProduceResults.count(_.error.isDefined)
-    if(produceRequest.requiredAcks == 0) {
-      // no operation needed if producer request.required.acks = 0; however, if there is any exception in handling the request, since
-      // no response is expected by the producer the handler will send a close connection response to the socket server
-      // to close the socket so that the producer client will know that some exception has happened and will refresh its metadata
-      if (numPartitionsInError != 0) {
-        info(("Send the close connection response due to error handling produce request " +
-          "[clientId = %s, correlationId = %s, topicAndPartition = %s] with Ack=0")
-          .format(produceRequest.clientId, produceRequest.correlationId, produceRequest.topicPartitionMessageSizeMap.keySet.mkString(",")))
-        requestChannel.closeConnection(request.processor, request)
-      } else {
-
-        if (firstErrorCode == ErrorMapping.NoError)
-          offsetCommitRequestOpt.foreach(ocr => offsetManager.putOffsets(ocr.groupId, ocr.requestInfo))
-
-        if (offsetCommitRequestOpt.isDefined) {
-          val response = offsetCommitRequestOpt.get.responseFor(firstErrorCode, config.offsetMetadataMaxSize)
-          requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
-        } else
-          requestChannel.noOperation(request.processor, request)
-      }
-    } else if (produceRequest.requiredAcks == 1 ||
-        produceRequest.numPartitions <= 0 ||
-        numPartitionsInError == produceRequest.numPartitions) {
-
-      if (firstErrorCode == ErrorMapping.NoError) {
-        offsetCommitRequestOpt.foreach(ocr => offsetManager.putOffsets(ocr.groupId, ocr.requestInfo) )
-      }
-
-      val statuses = localProduceResults.map(r => r.key -> ProducerResponseStatus(r.errorCode, r.start)).toMap
-      val response = offsetCommitRequestOpt.map(_.responseFor(firstErrorCode, config.offsetMetadataMaxSize))
-                                           .getOrElse(ProducerResponse(produceRequest.correlationId, statuses))
-
+      val response = OffsetCommitResponse(commitStatus, offsetCommitRequest.correlationId)
       requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
-    } else {
-      // create a list of (topic, partition) pairs to use as keys for this delayed request
-      val producerRequestKeys = produceRequest.data.keys.map(
-        topicAndPartition => new TopicPartitionRequestKey(topicAndPartition)).toSeq
-      val statuses = localProduceResults.map(r =>
-        r.key -> DelayedProduceResponseStatus(r.end + 1, ProducerResponseStatus(r.errorCode, r.start))).toMap
-      val delayedRequest =  new DelayedProduce(
-        producerRequestKeys,
-        request,
-        produceRequest.ackTimeoutMs.toLong,
-        produceRequest,
-        statuses,
-        offsetCommitRequestOpt)
-
-      // add the produce request for watch if it's not satisfied, otherwise send the response back
-      val satisfiedByMe = producerRequestPurgatory.checkAndMaybeWatch(delayedRequest)
-      if (satisfiedByMe)
-        producerRequestPurgatory.respond(delayedRequest)
     }
 
-    // we do not need the data anymore
-    produceRequest.emptyData()
-  }
-
-  case class ProduceResult(key: TopicAndPartition, start: Long, end: Long, error: Option[Throwable] = None) {
-    def this(key: TopicAndPartition, throwable: Throwable) = 
-      this(key, -1L, -1L, Some(throwable))
-    
-    def errorCode = error match {
-      case None => ErrorMapping.NoError
-      case Some(error) => ErrorMapping.codeFor(error.getClass.asInstanceOf[Class[Throwable]])
-    }
+    // call offset manager to store offsets
+    offsetManager.storeOffsets(
+      offsetCommitRequest.groupId,
+      offsetCommitRequest.consumerId,
+      offsetCommitRequest.groupGenerationId,
+      offsetCommitRequest.requestInfo,
+      sendResponseCallback)
   }
 
   /**
-   * Helper method for handling a parsed producer request
+   * Handle a produce request
    */
-  private def appendToLocalLog(producerRequest: ProducerRequest, isOffsetCommit: Boolean): Iterable[ProduceResult] = {
-    val partitionAndData: Map[TopicAndPartition, MessageSet] = producerRequest.data
-    trace("Append [%s] to local log ".format(partitionAndData.toString))
-    partitionAndData.map {case (topicAndPartition, messages) =>
-      try {
-        if (Topic.InternalTopics.contains(topicAndPartition.topic) &&
-            !(isOffsetCommit && topicAndPartition.topic == OffsetManager.OffsetsTopicName)) {
-          throw new InvalidTopicException("Cannot append to internal topic %s".format(topicAndPartition.topic))
+  def handleProducerRequest(request: RequestChannel.Request) {
+    val produceRequest = request.requestObj.asInstanceOf[ProducerRequest]
+
+    // the callback for sending the response
+    def sendResponseCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
+      var errorInResponse = false
+      responseStatus.foreach { case (topicAndPartition, status) =>
+        // we only print warnings for known errors here; if it is unknown, it will cause
+        // an error message in the replica manager
+        if (status.error != ErrorMapping.NoError && status.error != ErrorMapping.UnknownCode) {
+          debug("Produce request with correlation id %d from client %s on partition %s failed due to %s"
+            .format(produceRequest.correlationId, produceRequest.clientId,
+            topicAndPartition, ErrorMapping.exceptionNameFor(status.error)))
+          errorInResponse = true
         }
-        val partitionOpt = replicaManager.getPartition(topicAndPartition.topic, topicAndPartition.partition)
-        val info = partitionOpt match {
-          case Some(partition) =>
-            partition.appendMessagesToLeader(messages.asInstanceOf[ByteBufferMessageSet],producerRequest.requiredAcks)
-          case None => throw new UnknownTopicOrPartitionException("Partition %s doesn't exist on %d"
-            .format(topicAndPartition, brokerId))
+      }
+
+      if (produceRequest.requiredAcks == 0) {
+        // no operation needed if producer request.required.acks = 0; however, if there is any error in handling
+        // the request, since no response is expected by the producer, the server will close socket server so that
+        // the producer client will know that some error has happened and will refresh its metadata
+        if (errorInResponse) {
+          info("Close connection due to error handling produce request with correlation id %d from client id %s with ack=0"
+            .format(produceRequest.correlationId, produceRequest.clientId))
+          requestChannel.closeConnection(request.processor, request)
+        } else {
+          requestChannel.noOperation(request.processor, request)
         }
-
-        val numAppendedMessages = if (info.firstOffset == -1L || info.lastOffset == -1L) 0 else (info.lastOffset - info.firstOffset + 1)
-
-        // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
-        BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesInRate.mark(messages.sizeInBytes)
-        BrokerTopicStats.getBrokerAllTopicsStats.bytesInRate.mark(messages.sizeInBytes)
-        BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).messagesInRate.mark(numAppendedMessages)
-        BrokerTopicStats.getBrokerAllTopicsStats.messagesInRate.mark(numAppendedMessages)
-
-        trace("%d bytes written to log %s-%d beginning at offset %d and ending at offset %d"
-              .format(messages.size, topicAndPartition.topic, topicAndPartition.partition, info.firstOffset, info.lastOffset))
-        ProduceResult(topicAndPartition, info.firstOffset, info.lastOffset)
-      } catch {
-        // NOTE: Failed produce requests is not incremented for UnknownTopicOrPartitionException and NotLeaderForPartitionException
-        // since failed produce requests metric is supposed to indicate failure of a broker in handling a produce request
-        // for a partition it is the leader for
-        case e: KafkaStorageException =>
-          fatal("Halting due to unrecoverable I/O error while handling produce request: ", e)
-          Runtime.getRuntime.halt(1)
-          null
-        case ite: InvalidTopicException =>
-          warn("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
-            producerRequest.correlationId, producerRequest.clientId, topicAndPartition, ite.getMessage))
-          new ProduceResult(topicAndPartition, ite)
-        case utpe: UnknownTopicOrPartitionException =>
-          warn("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
-               producerRequest.correlationId, producerRequest.clientId, topicAndPartition, utpe.getMessage))
-          new ProduceResult(topicAndPartition, utpe)
-        case nle: NotLeaderForPartitionException =>
-          warn("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
-               producerRequest.correlationId, producerRequest.clientId, topicAndPartition, nle.getMessage))
-          new ProduceResult(topicAndPartition, nle)
-        case nere: NotEnoughReplicasException =>
-          warn("Produce request with correlation id %d from client %s on partition %s failed due to %s".format(
-            producerRequest.correlationId, producerRequest.clientId, topicAndPartition, nere.getMessage))
-          new ProduceResult(topicAndPartition, nere)
-        case e: Throwable =>
-          BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).failedProduceRequestRate.mark()
-          BrokerTopicStats.getBrokerAllTopicsStats.failedProduceRequestRate.mark()
-          error("Error processing ProducerRequest with correlation id %d from client %s on partition %s"
-            .format(producerRequest.correlationId, producerRequest.clientId, topicAndPartition), e)
-          new ProduceResult(topicAndPartition, e)
-       }
+      } else {
+        val response = ProducerResponse(produceRequest.correlationId, responseStatus)
+        requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+      }
     }
+
+    // call the replica manager to append messages to the replicas
+    replicaManager.appendMessages(
+      produceRequest.ackTimeoutMs.toLong,
+      produceRequest.requiredAcks,
+      produceRequest.data,
+      sendResponseCallback)
+
+    // if the request is put into the purgatory, it will have a held reference
+    // and hence cannot be garbage collected; hence we clear its data here in
+    // order to let GC re-claim its memory since it is already appended to log
+    produceRequest.emptyData()
   }
 
   /**
@@ -303,59 +206,38 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handleFetchRequest(request: RequestChannel.Request) {
     val fetchRequest = request.requestObj.asInstanceOf[FetchRequest]
-    val dataRead = replicaManager.readMessageSets(fetchRequest)
 
-    // if the fetch request comes from the follower,
-    // update its corresponding log end offset
-    if(fetchRequest.isFromFollower)
-      recordFollowerLogEndOffsets(fetchRequest.replicaId, dataRead.mapValues(_.offset))
+    // the callback for sending the response
+    def sendResponseCallback(responsePartitionData: Map[TopicAndPartition, FetchResponsePartitionData]) {
+      responsePartitionData.foreach { case (topicAndPartition, data) =>
+        // we only print warnings for known errors here; if it is unknown, it will cause
+        // an error message in the replica manager already and hence can be ignored here
+        if (data.error != ErrorMapping.NoError && data.error != ErrorMapping.UnknownCode) {
+          debug("Fetch request with correlation id %d from client %s on partition %s failed due to %s"
+            .format(fetchRequest.correlationId, fetchRequest.clientId,
+            topicAndPartition, ErrorMapping.exceptionNameFor(data.error)))
+        }
 
-    // check if this fetch request can be satisfied right away
-    val bytesReadable = dataRead.values.map(_.data.messages.sizeInBytes).sum
-    val errorReadingData = dataRead.values.foldLeft(false)((errorIncurred, dataAndOffset) =>
-      errorIncurred || (dataAndOffset.data.error != ErrorMapping.NoError))
-    // send the data immediately if 1) fetch request does not want to wait
-    //                              2) fetch request does not require any data
-    //                              3) has enough data to respond
-    //                              4) some error happens while reading data
-    if(fetchRequest.maxWait <= 0 ||
-       fetchRequest.numPartitions <= 0 ||
-       bytesReadable >= fetchRequest.minBytes ||
-       errorReadingData) {
-      debug("Returning fetch response %s for fetch request with correlation id %d to client %s"
-        .format(dataRead.values.map(_.data.error).mkString(","), fetchRequest.correlationId, fetchRequest.clientId))
-      val response = new FetchResponse(fetchRequest.correlationId, dataRead.mapValues(_.data))
+        // record the bytes out metrics only when the response is being sent
+        BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesOutRate.mark(data.messages.sizeInBytes)
+        BrokerTopicStats.getBrokerAllTopicsStats().bytesOutRate.mark(data.messages.sizeInBytes)
+      }
+
+      val response = FetchResponse(fetchRequest.correlationId, responsePartitionData)
       requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(response)))
-    } else {
-      debug("Putting fetch request with correlation id %d from client %s into purgatory".format(fetchRequest.correlationId,
-        fetchRequest.clientId))
-      // create a list of (topic, partition) pairs to use as keys for this delayed request
-      val delayedFetchKeys = fetchRequest.requestInfo.keys.toSeq.map(new TopicPartitionRequestKey(_))
-      val delayedFetch = new DelayedFetch(delayedFetchKeys, request, fetchRequest.maxWait, fetchRequest,
-        dataRead.mapValues(_.offset))
-
-      // add the fetch request for watch if it's not satisfied, otherwise send the response back
-      val satisfiedByMe = fetchRequestPurgatory.checkAndMaybeWatch(delayedFetch)
-      if (satisfiedByMe)
-        fetchRequestPurgatory.respond(delayedFetch)
     }
-  }
 
-  private def recordFollowerLogEndOffsets(replicaId: Int, offsets: Map[TopicAndPartition, LogOffsetMetadata]) {
-    debug("Record follower log end offsets: %s ".format(offsets))
-    offsets.foreach {
-      case (topicAndPartition, offset) =>
-        replicaManager.updateReplicaLEOAndPartitionHW(topicAndPartition.topic,
-          topicAndPartition.partition, replicaId, offset)
-
-        // for producer requests with ack > 1, we need to check
-        // if they can be unblocked after some follower's log end offsets have moved
-        replicaManager.unblockDelayedProduceRequests(new TopicPartitionRequestKey(topicAndPartition))
-    }
+    // call the replica manager to fetch messages from the local replica
+    replicaManager.fetchMessages(
+      fetchRequest.maxWait.toLong,
+      fetchRequest.replicaId,
+      fetchRequest.minBytes,
+      fetchRequest.requestInfo,
+      sendResponseCallback)
   }
 
   /**
-   * Service the offset request API 
+   * Handle an offset request
    */
   def handleOffsetRequest(request: RequestChannel.Request) {
     val offsetRequest = request.requestObj.asInstanceOf[OffsetRequest]
@@ -387,15 +269,15 @@ class KafkaApis(val requestChannel: RequestChannel,
         // NOTE: UnknownTopicOrPartitionException and NotLeaderForPartitionException are special cased since these error messages
         // are typically transient and there is no value in logging the entire stack trace for the same
         case utpe: UnknownTopicOrPartitionException =>
-          warn("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
+          debug("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
                offsetRequest.correlationId, offsetRequest.clientId, topicAndPartition, utpe.getMessage))
           (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(utpe.getClass.asInstanceOf[Class[Throwable]]), Nil) )
         case nle: NotLeaderForPartitionException =>
-          warn("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
+          debug("Offset request with correlation id %d from client %s on partition %s failed due to %s".format(
                offsetRequest.correlationId, offsetRequest.clientId, topicAndPartition,nle.getMessage))
           (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(nle.getClass.asInstanceOf[Class[Throwable]]), Nil) )
         case e: Throwable =>
-          warn("Error while responding to offset request", e)
+          error("Error while responding to offset request", e)
           (topicAndPartition, PartitionOffsetsResponse(ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]), Nil) )
       }
     })
@@ -415,7 +297,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
   
-  def fetchOffsetsBefore(log: Log, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
+  private def fetchOffsetsBefore(log: Log, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
     val segsArray = log.logSegments.toArray
     var offsetTimeArray: Array[(Long, Long)] = null
     if(segsArray.last.size > 0)
@@ -488,7 +370,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   /**
-   * Service the topic metadata request API
+   * Handle a topic metadata request
    */
   def handleTopicMetadataRequest(request: RequestChannel.Request) {
     val metadataRequest = request.requestObj.asInstanceOf[TopicMetadataRequest]
@@ -500,7 +382,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   /*
-   * Service the Offset fetch API
+   * Handle an offset fetch request
    */
   def handleOffsetFetchRequest(request: RequestChannel.Request) {
     val offsetFetchRequest = request.requestObj.asInstanceOf[OffsetFetchRequest]
@@ -520,7 +402,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   /*
-   * Service the consumer metadata API
+   * Handle a consumer metadata request
    */
   def handleConsumerMetadataRequest(request: RequestChannel.Request) {
     val consumerMetadataRequest = request.requestObj.asInstanceOf[ConsumerMetadataRequest]
@@ -545,9 +427,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def close() {
-    debug("Shutting down.")
-    fetchRequestPurgatory.shutdown()
-    producerRequestPurgatory.shutdown()
+    // TODO currently closing the API is an no-op since the API no longer maintain any modules
+    // maybe removing the closing call in the end when KafkaAPI becomes a pure stateless layer
     debug("Shut down complete.")
   }
 }

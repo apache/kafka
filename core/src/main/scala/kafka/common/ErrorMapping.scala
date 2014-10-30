@@ -84,4 +84,6 @@ object ErrorMapping {
       throw codeToException(code).newInstance()
 
   def exceptionFor(code: Short) : Throwable = codeToException(code).newInstance()
+
+  def exceptionNameFor(code: Short) : String = codeToException(code).getName()
 }

@@ -40,6 +40,7 @@ import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.core.Gauge
 import org.I0Itec.zkclient.ZkClient
+import kafka.api.ProducerResponseStatus
 
 
 /**
@@ -144,6 +145,8 @@ class OffsetManager(val config: OffsetManagerConfig,
         trace("Marked %d offsets in %s for deletion.".format(messages.size, appendPartition))
 
         try {
+          // do not need to require acks since even if the tombsone is lost,
+          // it will be appended again in the next purge cycle
           partition.appendMessagesToLeader(new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, messages:_*))
           tombstones.size
         }
@@ -192,13 +195,91 @@ class OffsetManager(val config: OffsetManagerConfig,
     offsetsCache.put(key, offsetAndMetadata)
   }
 
-  def putOffsets(group: String, offsets: Map[TopicAndPartition, OffsetAndMetadata]) {
-    // this method is called _after_ the offsets have been durably appended to the commit log, so there is no need to
-    // check for current leadership as we do for the offset fetch
-    trace("Putting offsets %s for group %s in offsets partition %d.".format(offsets, group, partitionFor(group)))
-    offsets.foreach { case (topicAndPartition, offsetAndMetadata) =>
-      putOffset(GroupTopicPartition(group, topicAndPartition), offsetAndMetadata)
+  /*
+   * Check if the offset metadata length is valid
+   */
+  def validateOffsetMetadataLength(metadata: String) : Boolean = {
+    metadata == null || metadata.length() <= config.maxMetadataSize
+  }
+
+  /**
+   * Store offsets by appending it to the replicated log and then inserting to cache
+   */
+  // TODO: generation id and consumer id is needed by coordinator to do consumer checking in the future
+  def storeOffsets(groupName: String,
+                   consumerId: String,
+                   generationId: Int,
+                   offsetMetadata: immutable.Map[TopicAndPartition, OffsetAndMetadata],
+                   responseCallback: immutable.Map[TopicAndPartition, Short] => Unit) {
+
+    // first filter out partitions with offset metadata size exceeding limit
+    // TODO: in the future we may want to only support atomic commit and hence fail the whole commit
+    val filteredOffsetMetadata = offsetMetadata.filter { case (topicAndPartition, offsetAndMetadata) =>
+      validateOffsetMetadataLength(offsetAndMetadata.metadata)
     }
+
+    // construct the message set to append
+    val messages = filteredOffsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
+      new Message(
+        key = OffsetManager.offsetCommitKey(groupName, topicAndPartition.topic, topicAndPartition.partition),
+        bytes = OffsetManager.offsetCommitValue(offsetAndMetadata)
+      )
+    }.toSeq
+
+    val offsetTopicPartition = TopicAndPartition(OffsetManager.OffsetsTopicName, partitionFor(groupName))
+
+    val offsetsAndMetadataMessageSet = Map(offsetTopicPartition ->
+      new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, messages:_*))
+
+    // set the callback function to insert offsets into cache after log append completed
+    def putCacheCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
+      // the append response should only contain the topics partition
+      if (responseStatus.size != 1 || ! responseStatus.contains(offsetTopicPartition))
+        throw new IllegalStateException("Append status %s should only have one partition %s"
+          .format(responseStatus, offsetTopicPartition))
+
+      // construct the commit response status and insert
+      // the offset and metadata to cache iff the append status has no error
+      val status = responseStatus(offsetTopicPartition)
+
+      val responseCode =
+        if (status.error == ErrorMapping.NoError) {
+          filteredOffsetMetadata.foreach { case (topicAndPartition, offsetAndMetadata) =>
+            putOffset(GroupTopicPartition(groupName, topicAndPartition), offsetAndMetadata)
+          }
+          ErrorMapping.NoError
+        } else {
+          debug("Offset commit %s from group %s consumer %s with generation %d failed when appending to log due to %s"
+            .format(filteredOffsetMetadata, groupName, consumerId, generationId, ErrorMapping.exceptionNameFor(status.error)))
+
+          // transform the log append error code to the corresponding the commit status error code
+          if (status.error == ErrorMapping.UnknownTopicOrPartitionCode)
+            ErrorMapping.ConsumerCoordinatorNotAvailableCode
+          else if (status.error == ErrorMapping.NotLeaderForPartitionCode)
+            ErrorMapping.NotCoordinatorForConsumerCode
+          else
+            status.error
+        }
+
+
+      // compute the final error codes for the commit response
+      val commitStatus = offsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
+        if (validateOffsetMetadataLength(offsetAndMetadata.metadata))
+          (topicAndPartition, responseCode)
+        else
+          (topicAndPartition, ErrorMapping.OffsetMetadataTooLargeCode)
+      }
+
+      // finally trigger the callback logic passed from the API layer
+      responseCallback(commitStatus)
+    }
+
+    // call replica manager to append the offset messages
+    replicaManager.appendMessages(
+      config.offsetCommitTimeoutMs.toLong,
+      config.offsetCommitRequiredAcks,
+      offsetsAndMetadataMessageSet,
+      putCacheCallback)
   }
 
   /**

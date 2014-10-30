@@ -106,7 +106,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     val newProps = TestUtils.createBrokerConfig(0, port)
     newProps.setProperty("delete.topic.enable", "true")
     val newConfig = new KafkaConfig(newProps)
-    var server = new KafkaServer(newConfig)
+    val server = new KafkaServer(newConfig)
     server.startup()
     server.shutdown()
     server.awaitShutdown()
