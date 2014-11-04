@@ -42,7 +42,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   val brokerInfo = "host_%s-port_%s".format(config.host, config.port)
   val producerRequestStats = ProducerRequestStatsRegistry.getProducerRequestStats(config.clientId)
 
-  trace("Instantiating Scala Sync Producer")
+  trace("Instantiating Scala Sync Producer with properties: %s".format(config.props))
 
   private def verifyRequest(request: RequestOrResponse) = {
     /**

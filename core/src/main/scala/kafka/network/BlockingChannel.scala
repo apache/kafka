@@ -42,7 +42,8 @@ class BlockingChannel( val host: String,
   private var readChannel: ReadableByteChannel = null
   private var writeChannel: GatheringByteChannel = null
   private val lock = new Object()
-  
+  private val connectTimeoutMs = readTimeoutMs
+
   def connect() = lock synchronized  {
     if(!connected) {
       try {
@@ -55,19 +56,21 @@ class BlockingChannel( val host: String,
         channel.socket.setSoTimeout(readTimeoutMs)
         channel.socket.setKeepAlive(true)
         channel.socket.setTcpNoDelay(true)
-        channel.connect(new InetSocketAddress(host, port))
+        channel.socket.connect(new InetSocketAddress(host, port), connectTimeoutMs)
 
         writeChannel = channel
         readChannel = Channels.newChannel(channel.socket().getInputStream)
         connected = true
         // settings may not match what we requested above
-        val msg = "Created socket with SO_TIMEOUT = %d (requested %d), SO_RCVBUF = %d (requested %d), SO_SNDBUF = %d (requested %d)."
+        val msg = "Created socket with SO_TIMEOUT = %d (requested %d), SO_RCVBUF = %d (requested %d), SO_SNDBUF = %d (requested %d), connectTimeoutMs = %d."
         debug(msg.format(channel.socket.getSoTimeout,
                          readTimeoutMs,
                          channel.socket.getReceiveBufferSize, 
                          readBufferSize,
                          channel.socket.getSendBufferSize,
-                         writeBufferSize))
+                         writeBufferSize,
+                         connectTimeoutMs))
+
       } catch {
         case e: Throwable => disconnect()
       }
