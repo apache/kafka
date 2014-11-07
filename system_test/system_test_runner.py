@@ -199,6 +199,6 @@ def main():
 # main entry point
 # =========================
 
-main()
+sys.exit(main())
 
 

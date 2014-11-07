@@ -2400,6 +2400,9 @@ def validate_index_log(systemTestEnv, testcaseEnv, clusterName="source"):
                                 logger.debug("#### error found [" + line + "]", extra=d)
                                 failureCount += 1
                                 showMismatchedIndexOffset = True
+                        if subproc.wait() != 0:
+                            logger.debug("#### error found [DumpLogSegments exited abnormally]", extra=d)
+                            failureCount += 1
 
     if failureCount == 0:
         validationStatusDict["Validate index log in cluster [" + clusterName + "]"] = "PASSED"
