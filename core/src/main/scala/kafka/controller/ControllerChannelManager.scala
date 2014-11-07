@@ -130,10 +130,11 @@ class RequestSendThread(val controllerId: Int,
           // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
           try {
             channel.send(request)
+            receive = channel.receive()
             isSendSuccessful = true
           } catch {
             case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
-              error(("Controller %d epoch %d failed to send request %s to broker %s. " +
+              warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
                 "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
                 request.toString, toBroker.toString()), e)
               channel.disconnect()
@@ -143,7 +144,6 @@ class RequestSendThread(val controllerId: Int,
               Utils.swallow(Thread.sleep(300))
           }
         }
-        receive = channel.receive()
         var response: RequestOrResponse = null
         request.requestId.get match {
           case RequestKeys.LeaderAndIsrKey =>
@@ -162,7 +162,7 @@ class RequestSendThread(val controllerId: Int,
       }
     } catch {
       case e: Throwable =>
-        warn("Controller %d fails to send a request to broker %s".format(controllerId, toBroker.toString()), e)
+        error("Controller %d fails to send a request to broker %s".format(controllerId, toBroker.toString()), e)
         // If there is any socket error (eg, socket timeout), the channel is no longer usable and needs to be recreated.
         channel.disconnect()
     }
