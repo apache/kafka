@@ -44,15 +44,6 @@ class MessageCompressionTest extends JUnitSuite {
     assertEquals(messages, decompressed)
   }
 
-  @Test
-  def testComplexCompressDecompress() {
-    val messages = List(new Message("hi there".getBytes), new Message("I am fine".getBytes), new Message("I am not so well today".getBytes))
-    val message = new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec, messages = messages.slice(0, 2):_*)
-    val complexMessages = List(message.shallowIterator.next.message):::messages.slice(2,3)
-    val complexMessage = new ByteBufferMessageSet(compressionCodec = DefaultCompressionCodec, messages = complexMessages:_*)
-    val decompressedMessages = complexMessage.iterator.map(_.message).toList
-    assertEquals(messages, decompressedMessages)
-  }
   
   def isSnappyAvailable(): Boolean = {
     try {
