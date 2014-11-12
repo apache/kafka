@@ -171,7 +171,9 @@ public class ProducerConfig extends AbstractConfig {
 
     /** <code>max.in.flight.requests.per.connection</code> */
     public static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION = "max.in.flight.requests.per.connection";
-    private static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC = "The maximum number of unacknowledged requests the client will send on a single connection before blocking.";
+    private static final String MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC = "The maximum number of unacknowledged requests the client will send on a single connection before blocking."
+                                                                            + " Note that if this setting is set to be greater than 1 and there are failed sends, there is a risk of"
+                                                                            + " message re-ordering due to retries (i.e., if retries are enabled).";
 
     static {
         config = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, BOOSTRAP_SERVERS_DOC)
