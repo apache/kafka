@@ -119,6 +119,19 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
+     * disconnected, this respects the reconnect backoff time. When connecting or connected, this handles slow/stalled
+     * connections.
+     * @param node The node to check
+     * @param now The current timestamp
+     * @return The number of milliseconds to wait.
+     */
+    @Override
+    public long connectionDelay(Node node, long now) {
+        return connectionStates.connectionDelay(node.id(), now);
+    }
+
+    /**
      * Check if the node with the given id is ready to send more requests.
      * @param node The given node id
      * @param now The current time in ms

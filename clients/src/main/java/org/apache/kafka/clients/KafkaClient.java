@@ -41,6 +41,16 @@ public interface KafkaClient {
     public boolean ready(Node node, long now);
 
     /**
+     * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
+     * disconnected, this respects the reconnect backoff time. When connecting or connected, this handles slow/stalled
+     * connections.
+     * @param node The node to check
+     * @param now The current timestamp
+     * @return The number of milliseconds to wait.
+     */
+    public long connectionDelay(Node node, long now);
+
+    /**
      * Initiate the sending of the given requests and return any completed responses. Requests can only be sent on ready
      * connections.
      * @param requests The requests to send

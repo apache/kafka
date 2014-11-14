@@ -41,6 +41,11 @@ public class MockClient implements KafkaClient {
         return found;
     }
 
+    @Override
+    public long connectionDelay(Node node, long now) {
+        return 0;
+    }
+
     public void disconnect(Integer node) {
         Iterator<ClientRequest> iter = requests.iterator();
         while (iter.hasNext()) {

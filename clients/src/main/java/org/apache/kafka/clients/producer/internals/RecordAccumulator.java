@@ -183,9 +183,9 @@ public final class RecordAccumulator {
     }
 
     /**
-     * Get a list of nodes whose partitions are ready to be sent, and the time to when any partition will be ready if no
-     * partitions are ready yet; If the ready nodes list is non-empty, the timeout value will be 0. Also return the flag
-     * for whether there are any unknown leaders for the accumulated partition batches.
+     * Get a list of nodes whose partitions are ready to be sent, and the earliest time at which any non-sendable
+     * partition will be ready; Also return the flag for whether there are any unknown leaders for the accumulated
+     * partition batches.
      * <p>
      * A destination node is ready to send data if ANY one of its partition is not backing off the send and ANY of the
      * following are true :
@@ -219,11 +219,17 @@ public final class RecordAccumulator {
                         long timeToWaitMs = backingOff ? retryBackoffMs : lingerMs;
                         long timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, 0);
                         boolean full = deque.size() > 1 || batch.records.isFull();
-                        boolean expired = waitedTimeMs >= lingerMs;
+                        boolean expired = waitedTimeMs >= timeToWaitMs;
                         boolean sendable = full || expired || exhausted || closed;
-                        if (sendable && !backingOff)
+                        if (sendable && !backingOff) {
                             readyNodes.add(leader);
-                        nextReadyCheckDelayMs = Math.min(timeLeftMs, nextReadyCheckDelayMs);
+                        }
+                        else {
+                            // Note that this results in a conservative estimate since an un-sendable partition may have
+                            // a leader that will later be found to have sendable data. However, this is good enough
+                            // since we'll just wake up and then sleep again for the remaining time.
+                            nextReadyCheckDelayMs = Math.min(timeLeftMs, nextReadyCheckDelayMs);
+                        }
                     }
                 }
             }

@@ -57,6 +57,27 @@ final class ClusterConnectionStates {
     }
 
     /**
+     * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
+     * disconnected, this respects the reconnect backoff time. When connecting or connected, this handles slow/stalled
+     * connections.
+     * @param node The node to check
+     * @param now The current time in ms
+     */
+    public long connectionDelay(int node, long now) {
+        NodeConnectionState state = nodeState.get(node);
+        if (state == null) return 0;
+        long timeWaited = now - state.lastConnectAttemptMs;
+        if (state.state == ConnectionState.DISCONNECTED) {
+            return Math.max(this.reconnectBackoffMs - timeWaited, 0);
+        }
+        else {
+            // When connecting or connected, we should be able to delay indefinitely since other events (connection or
+            // data acked) will cause a wakeup once data can be sent.
+            return Long.MAX_VALUE;
+        }
+    }
+
+    /**
      * Enter the connecting state for the given node.
      * @param node The id of the node we are connecting to
      * @param now The current time.
