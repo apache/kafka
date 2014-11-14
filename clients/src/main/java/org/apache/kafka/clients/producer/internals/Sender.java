@@ -152,10 +152,13 @@ public class Sender implements Runnable {
 
         // remove any nodes we aren't ready to send to
         Iterator<Node> iter = result.readyNodes.iterator();
+        long notReadyTimeout = Long.MAX_VALUE;
         while (iter.hasNext()) {
             Node node = iter.next();
-            if (!this.client.ready(node, now))
+            if (!this.client.ready(node, now)) {
                 iter.remove();
+                notReadyTimeout = Math.min(notReadyTimeout, this.client.connectionDelay(node, now));
+            }
         }
 
         // create produce requests
@@ -163,16 +166,22 @@ public class Sender implements Runnable {
         List<ClientRequest> requests = createProduceRequests(batches, now);
         sensors.updateProduceRequestMetrics(requests);
 
+        // If we have any nodes that are ready to send + have sendable data, poll with 0 timeout so this can immediately
+        // loop and try sending more data. Otherwise, the timeout is determined by nodes that have partitions with data
+        // that isn't yet sendable (e.g. lingering, backing off). Note that this specifically does not include nodes
+        // with sendable data that aren't ready to send since they would cause busy looping.
+        long pollTimeout = Math.min(result.nextReadyCheckDelayMs, notReadyTimeout);
         if (result.readyNodes.size() > 0) {
             log.trace("Nodes with data ready to send: {}", result.readyNodes);
             log.trace("Created {} produce requests: {}", requests.size(), requests);
+            pollTimeout = 0;
         }
 
         // if some partitions are already ready to be sent, the select time would be 0;
         // otherwise if some partition already has some data accumulated but not ready yet,
         // the select time will be the time difference between now and its linger expiry time;
         // otherwise the select time will be the time difference between now and the metadata expiry time;
-        List<ClientResponse> responses = this.client.poll(requests, result.nextReadyCheckDelayMs, now);
+        List<ClientResponse> responses = this.client.poll(requests, pollTimeout, now);
         for (ClientResponse response : responses) {
             if (response.wasDisconnected())
                 handleDisconnect(response, now);
