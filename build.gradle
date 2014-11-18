@@ -361,4 +361,10 @@ project(':clients') {
         exceptionFormat = 'full'
     }
   }
+
+  javadoc {
+    include "**/org/apache/kafka/clients/producer/*"
+    include "**/org/apache/kafka/common/errors/*"
+  }
+
 }
