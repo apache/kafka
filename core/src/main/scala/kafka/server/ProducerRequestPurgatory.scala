@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.common.TopicAndPartition
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Pool
 import kafka.network.{BoundedByteBufferSend, RequestChannel}
@@ -30,19 +31,24 @@ class ProducerRequestPurgatory(replicaManager: ReplicaManager, offsetManager: Of
   extends RequestPurgatory[DelayedProduce](replicaManager.config.brokerId, replicaManager.config.producerPurgatoryPurgeIntervalRequests) {
   this.logIdent = "[ProducerRequestPurgatory-%d] ".format(replicaManager.config.brokerId)
 
-  private class DelayedProducerRequestMetrics(keyLabel: String = DelayedRequestKey.globalLabel) extends KafkaMetricsGroup {
-    val expiredRequestMeter = newMeter(keyLabel + "ExpiresPerSecond", "requests", TimeUnit.SECONDS)
+  private class DelayedProducerRequestMetrics(metricId: Option[TopicAndPartition]) extends KafkaMetricsGroup {
+    val tags: scala.collection.Map[String, String] = metricId match {
+      case Some(topicAndPartition) => Map("topic" -> topicAndPartition.topic, "partition" -> topicAndPartition.partition.toString)
+      case None => Map.empty
+    }
+
+    val expiredRequestMeter = newMeter("ExpiresPerSecond", "requests", TimeUnit.SECONDS, tags)
   }
 
   private val producerRequestMetricsForKey = {
-    val valueFactory = (k: DelayedRequestKey) => new DelayedProducerRequestMetrics(k.keyLabel + "-")
-    new Pool[DelayedRequestKey, DelayedProducerRequestMetrics](Some(valueFactory))
+    val valueFactory = (k: TopicAndPartition) => new DelayedProducerRequestMetrics(Some(k))
+    new Pool[TopicAndPartition, DelayedProducerRequestMetrics](Some(valueFactory))
   }
 
-  private val aggregateProduceRequestMetrics = new DelayedProducerRequestMetrics
+  private val aggregateProduceRequestMetrics = new DelayedProducerRequestMetrics(None)
 
-  private def recordDelayedProducerKeyExpired(key: DelayedRequestKey) {
-    val keyMetrics = producerRequestMetricsForKey.getAndMaybePut(key)
+  private def recordDelayedProducerKeyExpired(metricId: TopicAndPartition) {
+    val keyMetrics = producerRequestMetricsForKey.getAndMaybePut(metricId)
     List(keyMetrics, aggregateProduceRequestMetrics).foreach(_.expiredRequestMeter.mark())
   }
 
@@ -57,7 +63,7 @@ class ProducerRequestPurgatory(replicaManager: ReplicaManager, offsetManager: Of
   def expire(delayedProduce: DelayedProduce) {
     debug("Expiring produce request %s.".format(delayedProduce.produce))
     for ((topicPartition, responseStatus) <- delayedProduce.partitionStatus if responseStatus.acksPending)
-      recordDelayedProducerKeyExpired(new TopicPartitionRequestKey(topicPartition))
+      recordDelayedProducerKeyExpired(topicPartition)
     respond(delayedProduce)
   }
 

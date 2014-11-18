@@ -19,7 +19,7 @@ package kafka.producer
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{LinkedBlockingQueue, TimeUnit}
 
-import kafka.common.QueueFullException
+import kafka.common.{AppInfo, QueueFullException}
 import kafka.metrics._
 import kafka.producer.async.{DefaultEventHandler, EventHandler, ProducerSendThread}
 import kafka.serializer.Encoder
@@ -53,6 +53,7 @@ class Producer[K,V](val config: ProducerConfig,
   private val producerTopicStats = ProducerTopicStatsRegistry.getProducerTopicStats(config.clientId)
 
   KafkaMetricsReporter.startReporters(config.props)
+  AppInfo.registerInfo()
 
   def this(config: ProducerConfig) =
     this(config,

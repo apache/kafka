@@ -21,7 +21,7 @@ import kafka.admin.AdminUtils
 import kafka.utils._
 import kafka.api.{PartitionStateInfo, LeaderAndIsr}
 import kafka.log.LogConfig
-import kafka.server.{TopicPartitionRequestKey, LogOffsetMetadata, OffsetManager, ReplicaManager}
+import kafka.server.{LogOffsetMetadata, OffsetManager, ReplicaManager}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.controller.KafkaController
 import kafka.message.ByteBufferMessageSet
@@ -29,7 +29,6 @@ import kafka.message.ByteBufferMessageSet
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.utils.Utils.{inReadLock,inWriteLock}
-import scala.Some
 import scala.collection.immutable.Set
 
 import com.yammer.metrics.core.Gauge
@@ -62,13 +61,13 @@ class Partition(val topic: String,
 
   private def isReplicaLocal(replicaId: Int) : Boolean = (replicaId == localBrokerId)
 
-  newGauge(
-    topic + "-" + partitionId + "-UnderReplicated",
+  newGauge("UnderReplicated",
     new Gauge[Int] {
       def value = {
         if (isUnderReplicated) 1 else 0
       }
-    }
+    },
+    Map("topic" -> topic, "partition" -> partitionId.toString)
   )
 
   def isUnderReplicated(): Boolean = {
@@ -309,7 +308,7 @@ class Partition(val topic: String,
       leaderReplica.highWatermark = newHighWatermark
       debug("High watermark for partition [%s,%d] updated to %s".format(topic, partitionId, newHighWatermark))
       // some delayed requests may be unblocked after HW changed
-      val requestKey = new TopicPartitionRequestKey(this.topic, this.partitionId)
+      val requestKey = new TopicAndPartition(this.topic, this.partitionId)
       replicaManager.unblockDelayedFetchRequests(requestKey)
       replicaManager.unblockDelayedProduceRequests(requestKey)
     } else {
@@ -379,7 +378,7 @@ class Partition(val topic: String,
 
           val info = log.append(messages, assignOffsets = true)
           // probably unblock some follower fetch requests since log end offset has been updated
-          replicaManager.unblockDelayedFetchRequests(new TopicPartitionRequestKey(this.topic, this.partitionId))
+          replicaManager.unblockDelayedFetchRequests(new TopicAndPartition(this.topic, this.partitionId))
           // we may need to increment high watermark since ISR could be down to 1
           maybeIncrementLeaderHW(leaderReplica)
           info

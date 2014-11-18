@@ -201,8 +201,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
     } else {
       // create a list of (topic, partition) pairs to use as keys for this delayed request
-      val producerRequestKeys = produceRequest.data.keys.map(
-        topicAndPartition => new TopicPartitionRequestKey(topicAndPartition)).toSeq
+      val producerRequestKeys = produceRequest.data.keys.toSeq
       val statuses = localProduceResults.map(r =>
         r.key -> DelayedProduceResponseStatus(r.end + 1, ProducerResponseStatus(r.errorCode, r.start))).toMap
       val delayedRequest =  new DelayedProduce(
@@ -330,7 +329,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       debug("Putting fetch request with correlation id %d from client %s into purgatory".format(fetchRequest.correlationId,
         fetchRequest.clientId))
       // create a list of (topic, partition) pairs to use as keys for this delayed request
-      val delayedFetchKeys = fetchRequest.requestInfo.keys.toSeq.map(new TopicPartitionRequestKey(_))
+      val delayedFetchKeys = fetchRequest.requestInfo.keys.toSeq
       val delayedFetch = new DelayedFetch(delayedFetchKeys, request, fetchRequest.maxWait, fetchRequest,
         dataRead.mapValues(_.offset))
 
@@ -350,7 +349,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         // for producer requests with ack > 1, we need to check
         // if they can be unblocked after some follower's log end offsets have moved
-        replicaManager.unblockDelayedProduceRequests(new TopicPartitionRequestKey(topicAndPartition))
+        replicaManager.unblockDelayedProduceRequests(topicAndPartition)
     }
   }
 

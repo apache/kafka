@@ -113,10 +113,10 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Unblock some delayed produce requests with the request key
    */
-  def unblockDelayedProduceRequests(key: DelayedRequestKey) {
+  def unblockDelayedProduceRequests(key: TopicAndPartition) {
     val satisfied = producerRequestPurgatory.update(key)
     debug("Request key %s unblocked %d producer requests."
-      .format(key.keyLabel, satisfied.size))
+      .format(key, satisfied.size))
 
     // send any newly unblocked responses
     satisfied.foreach(producerRequestPurgatory.respond(_))
@@ -125,9 +125,9 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Unblock some delayed fetch requests with the request key
    */
-  def unblockDelayedFetchRequests(key: DelayedRequestKey) {
+  def unblockDelayedFetchRequests(key: TopicAndPartition) {
     val satisfied = fetchRequestPurgatory.update(key)
-    debug("Request key %s unblocked %d fetch requests.".format(key.keyLabel, satisfied.size))
+    debug("Request key %s unblocked %d fetch requests.".format(key, satisfied.size))
 
     // send any newly unblocked responses
     satisfied.foreach(fetchRequestPurgatory.respond(_))

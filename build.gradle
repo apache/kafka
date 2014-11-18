@@ -263,6 +263,12 @@ project(':core') {
     dependsOn 'copyDependantLibs'
   }
 
+  jar.manifest {
+    attributes(
+      'Version': "${version}"
+    )
+  }
+
   task testJar(type: Jar) {
     classifier = 'test'
     from sourceSets.test.output

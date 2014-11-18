@@ -28,7 +28,6 @@ import java.util.concurrent.atomic.AtomicLong
 import java.util._
 import java.text.SimpleDateFormat
 import java.math.BigInteger
-import scala.collection.immutable.List
 
 import org.apache.log4j.Logger
 

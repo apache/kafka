@@ -35,7 +35,7 @@ import scala.collection.Seq
   *   B.2 - else, at least requiredAcks replicas should be caught up to this request.
   */
 
-class DelayedProduce(override val keys: Seq[TopicPartitionRequestKey],
+class DelayedProduce(override val keys: Seq[TopicAndPartition],
                      override val request: RequestChannel.Request,
                      override val delayMs: Long,
                      val produce: ProducerRequest,
