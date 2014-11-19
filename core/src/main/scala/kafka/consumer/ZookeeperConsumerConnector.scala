@@ -199,7 +199,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           }
           sendShutdownToAllQueues()
           if (config.autoCommitEnable)
-            commitOffsets()
+            commitOffsets(true)
           if (zkClient != null) {
             zkClient.close()
             zkClient = null
@@ -286,7 +286,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     }
   }
 
-  def commitOffsets(isAutoCommit: Boolean = true) {
+  def commitOffsets(isAutoCommit: Boolean) {
     var retriesRemaining = 1 + (if (isAutoCommit) config.offsetsCommitMaxRetries else 0) // no retries for commits from auto-commit
     var done = false
 
@@ -373,6 +373,11 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       }
     }
   }
+
+  /**
+   * KAFKA-1743: This method added for backward compatibility.
+   */
+  def commitOffsets { commitOffsets(true) }
 
   private def fetchOffsetFromZooKeeper(topicPartition: TopicAndPartition) = {
     val dirs = new ZKGroupTopicDirs(config.groupId, topicPartition.topic)
@@ -716,7 +721,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           * successfully and the fetchers restart to fetch more data chunks
           **/
         if (config.autoCommitEnable)
-          commitOffsets()
+          commitOffsets(true)
         case None =>
       }
     }

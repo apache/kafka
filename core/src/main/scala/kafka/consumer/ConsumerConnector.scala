@@ -70,7 +70,12 @@ trait ConsumerConnector {
   /**
    *  Commit the offsets of all broker partitions connected by this connector.
    */
-  def commitOffsets(retryOnFailure: Boolean = true)
+  def commitOffsets(retryOnFailure: Boolean)
+  
+  /**
+   * KAFKA-1743: This method added for backward compatibility.
+   */
+  def commitOffsets
   
   /**
    *  Shut down the connector
