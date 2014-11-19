@@ -114,7 +114,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     assertEquals(expected_1, actual_1)
 
     // commit consumed offsets
-    zkConsumerConnector1.commitOffsets()
+    zkConsumerConnector1.commitOffsets(true)
 
     // create a consumer
     val consumerConfig2 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer2)) {
@@ -202,7 +202,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     assertEquals(expected_1, actual_1)
 
     // commit consumed offsets
-    zkConsumerConnector1.commitOffsets()
+    zkConsumerConnector1.commitOffsets(true)
 
     // create a consumer
     val consumerConfig2 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer2)) {

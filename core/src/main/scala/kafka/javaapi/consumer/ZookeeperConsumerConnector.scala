@@ -108,7 +108,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     createMessageStreamsByFilter(topicFilter, 1, new DefaultDecoder(), new DefaultDecoder())
 
   def commitOffsets() {
-    underlying.commitOffsets()
+    underlying.commitOffsets(true)
   }
 
   def commitOffsets(retryOnFailure: Boolean) {
