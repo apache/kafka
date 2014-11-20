@@ -19,13 +19,21 @@ package kafka.consumer
 
 import java.util.concurrent.TimeUnit
 
-import kafka.common.ClientIdAndBroker
+import kafka.common.{ClientIdAllBrokers, ClientIdBroker, ClientIdAndBroker}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.utils.Pool
 
-class FetchRequestAndResponseMetrics(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
-  val requestTimer = new KafkaTimer(newTimer(metricId + "FetchRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
-  val requestSizeHist = newHistogram(metricId + "FetchResponseSize")
+class FetchRequestAndResponseMetrics(metricId: ClientIdBroker) extends KafkaMetricsGroup {
+  val tags = metricId match {
+    case ClientIdAndBroker(clientId, brokerHost, brokerPort) =>
+      Map("clientId" -> clientId, "brokerHost" -> brokerHost,
+      "brokerPort" -> brokerPort.toString)
+    case ClientIdAllBrokers(clientId) =>
+      Map("clientId" -> clientId)
+  }
+
+  val requestTimer = new KafkaTimer(newTimer("FetchRequestRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS, tags))
+  val requestSizeHist = newHistogram("FetchResponseSize", biased = true, tags)
 }
 
 /**
@@ -33,14 +41,14 @@ class FetchRequestAndResponseMetrics(metricId: ClientIdAndBroker) extends KafkaM
  * @param clientId ClientId of the given consumer
  */
 class FetchRequestAndResponseStats(clientId: String) {
-  private val valueFactory = (k: ClientIdAndBroker) => new FetchRequestAndResponseMetrics(k)
-  private val stats = new Pool[ClientIdAndBroker, FetchRequestAndResponseMetrics](Some(valueFactory))
-  private val allBrokersStats = new FetchRequestAndResponseMetrics(new ClientIdAndBroker(clientId, "AllBrokers"))
+  private val valueFactory = (k: ClientIdBroker) => new FetchRequestAndResponseMetrics(k)
+  private val stats = new Pool[ClientIdBroker, FetchRequestAndResponseMetrics](Some(valueFactory))
+  private val allBrokersStats = new FetchRequestAndResponseMetrics(new ClientIdAllBrokers(clientId))
 
   def getFetchRequestAndResponseAllBrokersStats(): FetchRequestAndResponseMetrics = allBrokersStats
 
-  def getFetchRequestAndResponseStats(brokerInfo: String): FetchRequestAndResponseMetrics = {
-    stats.getAndMaybePut(new ClientIdAndBroker(clientId, brokerInfo + "-"))
+  def getFetchRequestAndResponseStats(brokerHost: String, brokerPort: Int): FetchRequestAndResponseMetrics = {
+    stats.getAndMaybePut(new ClientIdAndBroker(clientId, brokerHost, brokerPort))
   }
 }
 
@@ -56,7 +64,7 @@ object FetchRequestAndResponseStatsRegistry {
   }
 
   def removeConsumerFetchRequestAndResponseStats(clientId: String) {
-    val pattern = (clientId + "-ConsumerFetcherThread.*").r
+    val pattern = (".*" + clientId + ".*").r
     val keys = globalStats.keys
     for (key <- keys) {
       pattern.findFirstIn(key) match {

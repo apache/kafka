@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.common.AppInfo
 import kafka.utils.Logging
 
 
@@ -26,6 +27,7 @@ class KafkaServerStartable(val serverConfig: KafkaConfig) extends Logging {
   def startup() {
     try {
       server.startup()
+      AppInfo.registerInfo()
     }
     catch {
       case e: Throwable =>

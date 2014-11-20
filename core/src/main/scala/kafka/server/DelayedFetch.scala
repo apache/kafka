@@ -44,7 +44,6 @@ case class FetchMetadata(fetchMinBytes: Int,
                           "onlyCommitted: " + fetchOnlyCommitted + ", "
                           "partitionStatus: " + fetchPartitionStatus + "]"
 }
-
 /**
  * A delayed fetch request that can be created by the replica manager and watched
  * in the fetch request purgatory

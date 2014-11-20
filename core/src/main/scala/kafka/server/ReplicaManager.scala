@@ -34,7 +34,6 @@ import scala.collection._
 import scala.collection.mutable.HashMap
 import scala.collection.Map
 import scala.collection.Set
-import scala.Some
 
 import org.I0Itec.zkclient.ZkClient
 import com.yammer.metrics.core.Gauge
@@ -124,9 +123,9 @@ class ReplicaManager(val config: KafkaConfig,
    * 1. The partition HW has changed (for acks = -1)
    * 2. A follower replica's fetch operation is received (for acks > 1)
    */
-  def tryCompleteDelayedProduce(key: DelayedRequestKey) {
+  def tryCompleteDelayedProduce(key: TopicAndPartition) {
     val completed = producerRequestPurgatory.checkAndComplete(key)
-    debug("Request key %s unblocked %d producer requests.".format(key.keyLabel, completed))
+    debug("Request key %s unblocked %d producer requests.".format(key, completed))
   }
 
   /**
@@ -136,9 +135,9 @@ class ReplicaManager(val config: KafkaConfig,
    * 1. The partition HW has changed (for regular fetch)
    * 2. A new message set is appended to the local log (for follower fetch)
    */
-  def tryCompleteDelayedFetch(key: DelayedRequestKey) {
+  def tryCompleteDelayedFetch(key: TopicAndPartition) {
     val completed = fetchRequestPurgatory.checkAndComplete(key)
-    debug("Request key %s unblocked %d fetch requests.".format(key.keyLabel, completed))
+    debug("Request key %s unblocked %d fetch requests.".format(key, completed))
   }
 
   def startup() {
@@ -281,7 +280,7 @@ class ReplicaManager(val config: KafkaConfig,
       val delayedProduce =  new DelayedProduce(timeout, produceMetadata, this, responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed request
-      val producerRequestKeys = messagesPerPartition.keys.map(new TopicPartitionRequestKey(_)).toSeq
+      val producerRequestKeys = messagesPerPartition.keys.toSeq
 
       // try to complete the request immediately, otherwise put it into the purgatory
       // this is because while the delayed request is being created, new requests may
@@ -384,7 +383,7 @@ class ReplicaManager(val config: KafkaConfig,
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed request
-      val delayedFetchKeys = fetchPartitionStatus.keys.map(new TopicPartitionRequestKey(_)).toSeq
+      val delayedFetchKeys = fetchPartitionStatus.keys.toSeq
 
       // try to complete the request immediately, otherwise put it into the purgatory;
       // this is because while the delayed request is being created, new requests may
@@ -709,7 +708,7 @@ class ReplicaManager(val config: KafkaConfig,
 
           // for producer requests with ack > 1, we need to check
           // if they can be unblocked after some follower's log end offsets have moved
-          tryCompleteDelayedProduce(new TopicPartitionRequestKey(topicAndPartition))
+          tryCompleteDelayedProduce(topicAndPartition)
         case None =>
           warn("While recording the replica LEO, the partition %s hasn't been created.".format(topicAndPartition))
       }

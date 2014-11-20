@@ -8,7 +8,7 @@ package kafka.common
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
  *
- *    http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -21,6 +21,14 @@ package kafka.common
  * Convenience case class since (clientId, brokerInfo) pairs are used to create
  * SyncProducer Request Stats and SimpleConsumer Request and Response Stats.
  */
-case class ClientIdAndBroker(clientId: String, brokerInfo: String) {
-  override def toString = "%s-%s".format(clientId, brokerInfo)
+
+trait ClientIdBroker {
+}
+
+case class ClientIdAndBroker(clientId: String, brokerHost: String, brokerPort: Int) extends ClientIdBroker {
+  override def toString = "%s-%s-%d".format(clientId, brokerHost, brokerPort)
+}
+
+case class ClientIdAllBrokers(clientId: String) extends ClientIdBroker {
+  override def toString = "%s-%s".format(clientId, "AllBrokers")
 }

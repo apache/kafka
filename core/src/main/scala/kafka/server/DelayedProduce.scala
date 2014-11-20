@@ -22,7 +22,6 @@ import kafka.api.ProducerResponseStatus
 import kafka.common.ErrorMapping
 import kafka.common.TopicAndPartition
 
-import scala.Some
 import scala.collection._
 
 case class ProducePartitionStatus(requiredOffset: Long, responseStatus: ProducerResponseStatus) {
@@ -119,4 +118,3 @@ class DelayedProduce(delayMs: Long,
     responseCallback(responseStatus)
   }
 }
-
