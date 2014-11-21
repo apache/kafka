@@ -17,7 +17,9 @@
 package kafka.common
 
 /**
- * Indicates an unknown topic or a partition id not between 0 and numPartitions-1
+ * Indicates one of the following situation:
+ * 1. Producer does not have the partition metadata for this id upon sending messages
+ * 2. Broker does not have the specified partition by id upon receiving messages
  */
 class UnknownTopicOrPartitionException(message: String) extends RuntimeException(message) {
   def this() = this(null)
