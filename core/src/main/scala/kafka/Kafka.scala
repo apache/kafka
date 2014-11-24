@@ -17,22 +17,42 @@
 
 package kafka
 
-
+import scala.collection.JavaConversions._
+import joptsimple.OptionParser
 import metrics.KafkaMetricsReporter
 import server.{KafkaConfig, KafkaServerStartable, KafkaServer}
-import utils.{Utils, Logging}
+import kafka.utils.{CommandLineUtils, Utils, Logging}
 
 object Kafka extends Logging {
 
-  def main(args: Array[String]): Unit = {
-    if (args.length != 1) {
-      println("USAGE: java [options] %s server.properties".format(classOf[KafkaServer].getSimpleName()))
-      System.exit(1)
+  def getKafkaConfigFromArgs(args: Array[String]): KafkaConfig = {
+    val optionParser = new OptionParser
+    val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file")
+      .withRequiredArg()
+      .ofType(classOf[String])
+
+    if (args.length == 0) {
+      CommandLineUtils.printUsageAndDie(optionParser, "USAGE: java [options] %s server.properties [--override property=value]*".format(classOf[KafkaServer].getSimpleName()))
     }
-  
+
+    val props = Utils.loadProps(args(0))
+
+    if(args.length > 1) {
+      val options = optionParser.parse(args.slice(1, args.length): _*)
+
+      if(options.nonOptionArguments().size() > 0) {
+        CommandLineUtils.printUsageAndDie(optionParser, "Found non argument parameters: " + options.nonOptionArguments().toArray.mkString(","))
+      }
+
+      props.putAll(CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt)))
+    }
+
+    new KafkaConfig(props)
+  }
+
+  def main(args: Array[String]): Unit = {
     try {
-      val props = Utils.loadProps(args(0))
-      val serverConfig = new KafkaConfig(props)
+      val serverConfig = getKafkaConfigFromArgs(args)
       KafkaMetricsReporter.startReporters(serverConfig.props)
       val kafkaServerStartable = new KafkaServerStartable(serverConfig)
 
