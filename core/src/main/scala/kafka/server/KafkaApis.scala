@@ -188,10 +188,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
+    // only allow appending to internal topic partitions
+    // if the client is not from admin
+    val internalTopicsAllowed = produceRequest.clientId == AdminUtils.AdminClientId
+
     // call the replica manager to append messages to the replicas
     replicaManager.appendMessages(
       produceRequest.ackTimeoutMs.toLong,
       produceRequest.requiredAcks,
+      internalTopicsAllowed,
       produceRequest.data,
       sendResponseCallback)
 

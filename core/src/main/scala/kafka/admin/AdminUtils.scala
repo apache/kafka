@@ -17,25 +17,30 @@
 
 package kafka.admin
 
-import java.util.Random
-import java.util.Properties
-import kafka.api.{TopicMetadata, PartitionMetadata}
+import kafka.common._
 import kafka.cluster.Broker
 import kafka.log.LogConfig
 import kafka.utils.{Logging, ZkUtils, Json}
-import org.I0Itec.zkclient.ZkClient
-import org.I0Itec.zkclient.exception.ZkNodeExistsException
+import kafka.api.{TopicMetadata, PartitionMetadata}
+
+import java.util.Random
+import java.util.Properties
+import scala.Some
+import scala.Predef._
 import scala.collection._
 import mutable.ListBuffer
 import scala.collection.mutable
-import kafka.common._
-import scala.Predef._
 import collection.Map
-import scala.Some
 import collection.Set
+
+import org.I0Itec.zkclient.ZkClient
+import org.I0Itec.zkclient.exception.ZkNodeExistsException
 
 object AdminUtils extends Logging {
   val rand = new Random
+
+  val AdminClientId = "__admin_client"
+
   val TopicConfigChangeZnodePrefix = "config_change_"
 
   /**

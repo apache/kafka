@@ -15,27 +15,27 @@
  * limitations under the License.
  */
 
-package kafka.api
+package kafka.api.test
 
-import kafka.common.Topic
-import org.apache.kafka.common.errors.{InvalidTopicException,NotEnoughReplicasException}
-import org.scalatest.junit.JUnit3Suite
 import org.junit.Test
 import org.junit.Assert._
 
-import java.util.{Properties, Random}
 import java.lang.Integer
+import java.util.{Properties, Random}
 import java.util.concurrent.{TimeoutException, TimeUnit, ExecutionException}
 
-import kafka.server.KafkaConfig
-import kafka.utils.{TestZKUtils, ShutdownableThread, TestUtils}
-import kafka.integration.KafkaServerTestHarness
+import kafka.api.FetchRequestBuilder
+import kafka.common.Topic
 import kafka.consumer.SimpleConsumer
+import kafka.server.KafkaConfig
+import kafka.integration.KafkaServerTestHarness
+import kafka.utils.{TestZKUtils, ShutdownableThread, TestUtils}
 
 import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.errors.{InvalidTopicException, NotEnoughReplicasException}
 import org.apache.kafka.clients.producer._
 
-class ProducerFailureHandlingTest extends JUnit3Suite with KafkaServerTestHarness {
+class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
   private val serverMessageMaxBytes =  producerBufferSize/2
 
@@ -297,9 +297,12 @@ class ProducerFailureHandlingTest extends JUnit3Suite with KafkaServerTestHarnes
     assertEquals("Should have fetched " + scheduler.sent + " unique messages", scheduler.sent, uniqueMessageSize)
   }
 
-  @Test(expected = classOf[InvalidTopicException])
+  @Test
   def testCannotSendToInternalTopic() {
-    producer1.send(new ProducerRecord(Topic.InternalTopics.head, "test".getBytes, "test".getBytes)).get
+    val thrown = intercept[ExecutionException] {
+      producer2.send(new ProducerRecord(Topic.InternalTopics.head, "test".getBytes, "test".getBytes)).get
+    }
+    assertTrue(thrown.getCause.isInstanceOf[InvalidTopicException])
   }
 
   @Test

@@ -29,6 +29,7 @@ import kafka.message._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.common.TopicAndPartition
 import kafka.tools.MessageFormatter
+import kafka.api.ProducerResponseStatus
 
 import scala.Some
 import scala.collection._
@@ -40,7 +41,6 @@ import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.core.Gauge
 import org.I0Itec.zkclient.ZkClient
-import kafka.api.ProducerResponseStatus
 
 
 /**
@@ -206,7 +206,7 @@ class OffsetManager(val config: OffsetManagerConfig,
    * Store offsets by appending it to the replicated log and then inserting to cache
    */
   // TODO: generation id and consumer id is needed by coordinator to do consumer checking in the future
-  def storeOffsets(groupName: String,
+  def storeOffsets(groupId: String,
                    consumerId: String,
                    generationId: Int,
                    offsetMetadata: immutable.Map[TopicAndPartition, OffsetAndMetadata],
@@ -221,12 +221,12 @@ class OffsetManager(val config: OffsetManagerConfig,
     // construct the message set to append
     val messages = filteredOffsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
       new Message(
-        key = OffsetManager.offsetCommitKey(groupName, topicAndPartition.topic, topicAndPartition.partition),
+        key = OffsetManager.offsetCommitKey(groupId, topicAndPartition.topic, topicAndPartition.partition),
         bytes = OffsetManager.offsetCommitValue(offsetAndMetadata)
       )
     }.toSeq
 
-    val offsetTopicPartition = TopicAndPartition(OffsetManager.OffsetsTopicName, partitionFor(groupName))
+    val offsetTopicPartition = TopicAndPartition(OffsetManager.OffsetsTopicName, partitionFor(groupId))
 
     val offsetsAndMetadataMessageSet = Map(offsetTopicPartition ->
       new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, messages:_*))
@@ -245,12 +245,12 @@ class OffsetManager(val config: OffsetManagerConfig,
       val responseCode =
         if (status.error == ErrorMapping.NoError) {
           filteredOffsetMetadata.foreach { case (topicAndPartition, offsetAndMetadata) =>
-            putOffset(GroupTopicPartition(groupName, topicAndPartition), offsetAndMetadata)
+            putOffset(GroupTopicPartition(groupId, topicAndPartition), offsetAndMetadata)
           }
           ErrorMapping.NoError
         } else {
           debug("Offset commit %s from group %s consumer %s with generation %d failed when appending to log due to %s"
-            .format(filteredOffsetMetadata, groupName, consumerId, generationId, ErrorMapping.exceptionNameFor(status.error)))
+            .format(filteredOffsetMetadata, groupId, consumerId, generationId, ErrorMapping.exceptionNameFor(status.error)))
 
           // transform the log append error code to the corresponding the commit status error code
           if (status.error == ErrorMapping.UnknownTopicOrPartitionCode)
@@ -278,6 +278,7 @@ class OffsetManager(val config: OffsetManagerConfig,
     replicaManager.appendMessages(
       config.offsetCommitTimeoutMs.toLong,
       config.offsetCommitRequiredAcks,
+      true, // allow appending to internal offset topic
       offsetsAndMetadataMessageSet,
       putCacheCallback)
   }

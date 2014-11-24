@@ -249,11 +249,12 @@ class ReplicaManager(val config: KafkaConfig,
    */
   def appendMessages(timeout: Long,
                      requiredAcks: Short,
+                     internalTopicsAllowed: Boolean,
                      messagesPerPartition: Map[TopicAndPartition, MessageSet],
                      responseCallback: Map[TopicAndPartition, ProducerResponseStatus] => Unit) {
 
     val sTime = SystemTime.milliseconds
-    val localProduceResults = appendToLocalLog(messagesPerPartition, requiredAcks)
+    val localProduceResults = appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
     debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
 
     val produceStatus = localProduceResults.map{ case (topicAndPartition, result) =>
@@ -292,50 +293,59 @@ class ReplicaManager(val config: KafkaConfig,
   /**
    * Append the messages to the local replica logs
    */
-  private def appendToLocalLog(messagesPerPartition: Map[TopicAndPartition, MessageSet],
+  private def appendToLocalLog(internalTopicsAllowed: Boolean,
+                               messagesPerPartition: Map[TopicAndPartition, MessageSet],
                                requiredAcks: Short): Map[TopicAndPartition, LogAppendResult] = {
     trace("Append [%s] to local log ".format(messagesPerPartition))
     messagesPerPartition.map { case (topicAndPartition, messages) =>
-      try {
-        val partitionOpt = getPartition(topicAndPartition.topic, topicAndPartition.partition)
-        val info = partitionOpt match {
-          case Some(partition) =>
-            partition.appendMessagesToLeader(messages.asInstanceOf[ByteBufferMessageSet], requiredAcks)
-          case None => throw new UnknownTopicOrPartitionException("Partition %s doesn't exist on %d"
-            .format(topicAndPartition, localBrokerId))
+      // reject appending to internal topics if it is not allowed
+      if (Topic.InternalTopics.contains(topicAndPartition.topic) && !internalTopicsAllowed) {
+
+        (topicAndPartition, LogAppendResult(
+          LogAppendInfo.UnknownLogAppendInfo,
+          Some(new InvalidTopicException("Cannot append to internal topic %s".format(topicAndPartition.topic)))))
+      } else {
+        try {
+          val partitionOpt = getPartition(topicAndPartition.topic, topicAndPartition.partition)
+          val info = partitionOpt match {
+            case Some(partition) =>
+              partition.appendMessagesToLeader(messages.asInstanceOf[ByteBufferMessageSet], requiredAcks)
+            case None => throw new UnknownTopicOrPartitionException("Partition %s doesn't exist on %d"
+              .format(topicAndPartition, localBrokerId))
+          }
+
+          val numAppendedMessages =
+            if (info.firstOffset == -1L || info.lastOffset == -1L)
+              0
+            else
+              info.lastOffset - info.firstOffset + 1
+
+          // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
+          BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesInRate.mark(messages.sizeInBytes)
+          BrokerTopicStats.getBrokerAllTopicsStats.bytesInRate.mark(messages.sizeInBytes)
+          BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).messagesInRate.mark(numAppendedMessages)
+          BrokerTopicStats.getBrokerAllTopicsStats.messagesInRate.mark(numAppendedMessages)
+
+          trace("%d bytes written to log %s-%d beginning at offset %d and ending at offset %d"
+            .format(messages.size, topicAndPartition.topic, topicAndPartition.partition, info.firstOffset, info.lastOffset))
+          (topicAndPartition, LogAppendResult(info))
+        } catch {
+          // NOTE: Failed produce requests metric is not incremented for known exceptions
+          // it is supposed to indicate un-expected failures of a broker in handling a produce request
+          case e: KafkaStorageException =>
+            fatal("Halting due to unrecoverable I/O error while handling produce request: ", e)
+            Runtime.getRuntime.halt(1)
+            (topicAndPartition, null)
+          case utpe: UnknownTopicOrPartitionException =>
+            (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(utpe)))
+          case nle: NotLeaderForPartitionException =>
+            (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(nle)))
+          case e: Throwable =>
+            BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).failedProduceRequestRate.mark()
+            BrokerTopicStats.getBrokerAllTopicsStats.failedProduceRequestRate.mark()
+            error("Error processing append operation on partition %s".format(topicAndPartition), e)
+            (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(e)))
         }
-
-        val numAppendedMessages =
-          if (info.firstOffset == -1L || info.lastOffset == -1L)
-            0
-          else
-            info.lastOffset - info.firstOffset + 1
-
-        // update stats for successfully appended bytes and messages as bytesInRate and messageInRate
-        BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).bytesInRate.mark(messages.sizeInBytes)
-        BrokerTopicStats.getBrokerAllTopicsStats.bytesInRate.mark(messages.sizeInBytes)
-        BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).messagesInRate.mark(numAppendedMessages)
-        BrokerTopicStats.getBrokerAllTopicsStats.messagesInRate.mark(numAppendedMessages)
-
-        trace("%d bytes written to log %s-%d beginning at offset %d and ending at offset %d"
-          .format(messages.size, topicAndPartition.topic, topicAndPartition.partition, info.firstOffset, info.lastOffset))
-        (topicAndPartition, LogAppendResult(info))
-      } catch {
-        // NOTE: Failed produce requests metric is not incremented for known exceptions
-        // it is supposed to indicate un-expected failures of a broker in handling a produce request
-        case e: KafkaStorageException =>
-          fatal("Halting due to unrecoverable I/O error while handling produce request: ", e)
-          Runtime.getRuntime.halt(1)
-          (topicAndPartition, null)
-        case utpe: UnknownTopicOrPartitionException =>
-          (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(utpe)))
-        case nle: NotLeaderForPartitionException =>
-          (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(nle)))
-        case e: Throwable =>
-          BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).failedProduceRequestRate.mark()
-          BrokerTopicStats.getBrokerAllTopicsStats.failedProduceRequestRate.mark()
-          error("Error processing append operation on partition %s".format(topicAndPartition), e)
-          (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(e)))
       }
     }
   }
