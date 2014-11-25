@@ -17,6 +17,8 @@
 
 package kafka.integration
 
+import org.apache.kafka.common.config.ConfigException
+
 import scala.collection.mutable.MutableList
 import scala.util.Random
 import org.apache.log4j.{Level, Logger}
@@ -155,7 +157,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     val topicProps = new Properties()
     topicProps.put("unclean.leader.election.enable", "invalid")
 
-    intercept[IllegalArgumentException] {
+    intercept[ConfigException] {
       AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, Map(partitionId -> Seq(brokerId1)), topicProps)
     }
   }

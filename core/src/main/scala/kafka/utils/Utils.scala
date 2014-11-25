@@ -505,6 +505,32 @@ object Utils extends Logging {
     props.store(writer, "")
     writer.toString
   }
+
+  /**
+   * Turn {@linkplain java.util.Properties} with default values into a {@linkplain java.util.Map}. Following example
+   * illustrates difference from the cast
+   * <pre>
+   * val defaults = new Properties()
+   * defaults.put("foo", "bar")
+   * val props = new Properties(defaults)
+   *
+   * props.getProperty("foo") // "bar"
+   * props.get("foo") // null
+   * evaluateDefaults(props).get("foo") // "bar"
+   * </pre>
+   *
+   * @param props properties to evaluate
+   * @return new java.util.Map instance
+   */
+  def evaluateDefaults(props: Properties): java.util.Map[String, String] = {
+    import java.util._
+    import JavaConversions.asScalaSet
+    val evaluated = new HashMap[String, String]()
+    for (name <- props.stringPropertyNames()) {
+      evaluated.put(name, props.getProperty(name))
+    }
+    evaluated
+  }
   
   /**
    * Read some properties with the given default values

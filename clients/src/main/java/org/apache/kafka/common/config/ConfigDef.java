@@ -19,6 +19,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * This class is used for specifying the set of expected configurations, their type, their defaults, their
@@ -47,6 +48,14 @@ public class ConfigDef {
     private static final Object NO_DEFAULT_VALUE = new String("");
 
     private final Map<String, ConfigKey> configKeys = new HashMap<String, ConfigKey>();
+
+    /**
+     * Returns unmodifiable set of properties names defined in this {@linkplain ConfigDef}
+     * @return new unmodifiable {@link Set} instance containing the keys
+     */
+    public Set<String> names() {
+        return Collections.unmodifiableSet(configKeys.keySet());
+    }
 
     /**
      * Define a new configuration
