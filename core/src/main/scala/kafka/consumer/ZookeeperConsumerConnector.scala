@@ -46,7 +46,7 @@ import scala.collection._
  *
  * Directories:
  * 1. Consumer id registry:
- * /consumers/[group_id]/ids[consumer_id] -> topic1,...topicN
+ * /consumers/[group_id]/ids/[consumer_id] -> topic1,...topicN
  * A consumer has a unique consumer id within a consumer group. A consumer registers its id as an ephemeral znode
  * and puts all topics that it subscribes to as the value of the znode. The znode is deleted when the client is gone.
  * A consumer subscribes to event changes of the consumer id registry within its group.
