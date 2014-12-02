@@ -154,8 +154,14 @@ public class ConfigDef {
                 trimmed = ((String) value).trim();
             switch (type) {
                 case BOOLEAN:
-                    if (value instanceof String)
-                        return Boolean.parseBoolean(trimmed);
+                    if (value instanceof String) {
+                    	if (trimmed.equalsIgnoreCase("true"))
+                    		return true;
+                    	else if (trimmed.equalsIgnoreCase("false"))
+                    		return false;
+                    	else
+                    		throw new ConfigException(name, value, "Expected value to be either true or false");
+                    }
                     else if (value instanceof Boolean)
                         return value;
                     else

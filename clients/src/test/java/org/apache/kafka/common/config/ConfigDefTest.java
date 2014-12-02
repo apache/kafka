@@ -38,7 +38,9 @@ public class ConfigDefTest {
                                        .define("d", Type.LIST, Importance.HIGH, "docs")
                                        .define("e", Type.DOUBLE, Importance.HIGH, "docs")
                                        .define("f", Type.CLASS, Importance.HIGH, "docs")
-                                       .define("g", Type.BOOLEAN, Importance.HIGH, "docs");
+                                       .define("g", Type.BOOLEAN, Importance.HIGH, "docs")
+                                       .define("h", Type.BOOLEAN, Importance.HIGH, "docs")
+                                       .define("i", Type.BOOLEAN, Importance.HIGH, "docs");
 
         Properties props = new Properties();
         props.put("a", "1   ");
@@ -47,6 +49,8 @@ public class ConfigDefTest {
         props.put("e", 42.5d);
         props.put("f", String.class.getName());
         props.put("g", "true");
+        props.put("h", "FalSE");
+        props.put("i", "TRUE");
 
         Map<String, Object> vals = def.parse(props);
         assertEquals(1, vals.get("a"));
@@ -56,6 +60,8 @@ public class ConfigDefTest {
         assertEquals(42.5d, vals.get("e"));
         assertEquals(String.class, vals.get("f"));
         assertEquals(true, vals.get("g"));
+        assertEquals(false, vals.get("h"));
+        assertEquals(true, vals.get("i"));
     }
 
     @Test(expected = ConfigException.class)
@@ -85,6 +91,7 @@ public class ConfigDefTest {
         testBadInputs(Type.DOUBLE, "hello", null, new Object());
         testBadInputs(Type.STRING, new Object());
         testBadInputs(Type.LIST, 53, new Object());
+        testBadInputs(Type.BOOLEAN, "hello", "truee", "fals");
     }
 
     private void testBadInputs(Type type, Object... values) {
