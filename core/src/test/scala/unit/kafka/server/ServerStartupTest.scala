@@ -18,7 +18,6 @@
 package kafka.server
 
 import org.scalatest.junit.JUnit3Suite
-import kafka.zk
 import kafka.utils.ZkUtils
 import kafka.utils.Utils
 import kafka.utils.TestUtils
@@ -36,7 +35,6 @@ class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
     val props = TestUtils.createBrokerConfig(brokerId, TestUtils.choosePort())
     val zooKeeperConnect = props.get("zookeeper.connect")
     props.put("zookeeper.connect", zooKeeperConnect + zookeeperChroot)
-
     server = TestUtils.createServer(new KafkaConfig(props))
   }
 
@@ -49,6 +47,20 @@ class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testBrokerCreatesZKChroot {
     val pathExists = ZkUtils.pathExists(zkClient, zookeeperChroot)
     assertTrue(pathExists)
+  }
+
+  def testServerStartupConsecutively() {
+    server.shutdown()
+    try {
+      intercept[IllegalStateException]{
+        server.startup()
+        server.startup()
+      }
+    }
+    finally {
+      server.shutdown()
+    }
+
   }
 
 }

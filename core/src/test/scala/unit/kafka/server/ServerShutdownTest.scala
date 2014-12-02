@@ -146,4 +146,18 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       .map(_.asInstanceOf[Thread])
       .count(t => !t.isDaemon && t.isAlive && t.getClass.getCanonicalName.toLowerCase.startsWith("kafka")))
   }
+
+  def testConsecutiveShutdown(){
+    val server = new KafkaServer(config)
+    try {
+      server.startup()
+      server.shutdown()
+      server.awaitShutdown()
+      server.shutdown()
+      assertTrue(true);
+    }
+    catch{
+      case ex => fail()
+    }
+  }
 }
