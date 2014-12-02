@@ -144,7 +144,12 @@ public class AbstractConfig {
         List<String> klasses = getList(key);
         List<T> objects = new ArrayList<T>();
         for (String klass : klasses) {
-            Class<?> c = getClass(klass);
+            Class<?> c;
+            try {
+                c = Class.forName(klass);
+            } catch (ClassNotFoundException e) {
+                throw new ConfigException(key, klass, "Class " + klass + " could not be found.");
+            }
             if (c == null)
                 return null;
             Object o = Utils.newInstance(c);
