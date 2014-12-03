@@ -171,9 +171,8 @@ object LogConfig {
         MinCleanableRatioDoc)
       .define(CleanupPolicyProp, STRING, if (Defaults.Compact) Compact else Delete, in(asList(Compact, Delete)), MEDIUM,
         CompactDoc)
-      // we validate true/false explicitly to fail in case of typo
-      .define(UncleanLeaderElectionEnableProp, STRING, Defaults.UncleanLeaderElectionEnable.toString,
-        in(asList(true.toString, false.toString)), MEDIUM, UncleanLeaderElectionEnableDoc)
+      .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable,
+        MEDIUM, UncleanLeaderElectionEnableDoc)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), MEDIUM, MinInSyncReplicasDoc)
   }
 
@@ -202,7 +201,7 @@ object LogConfig {
                   deleteRetentionMs = parsed.get(DeleteRetentionMsProp).asInstanceOf[Long],
                   minCleanableRatio = parsed.get(MinCleanableDirtyRatioProp).asInstanceOf[Double],
                   compact = parsed.get(CleanupPolicyProp).asInstanceOf[String].toLowerCase != Delete,
-                  uncleanLeaderElectionEnable = parsed.get(UncleanLeaderElectionEnableProp).asInstanceOf[String].toBoolean,
+                  uncleanLeaderElectionEnable = parsed.get(UncleanLeaderElectionEnableProp).asInstanceOf[Boolean],
                   minInSyncReplicas = parsed.get(MinInSyncReplicasProp).asInstanceOf[Int])
   }
 
