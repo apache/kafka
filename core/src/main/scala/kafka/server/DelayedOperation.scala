@@ -39,9 +39,9 @@ import com.yammer.metrics.core.Gauge
  * or tryComplete(), which first checks if the operation can be completed or not now, and if yes calls
  * forceComplete().
  *
- * A subclass of DelayedRequest needs to provide an implementation of both onComplete() and tryComplete().
+ * A subclass of DelayedOperation needs to provide an implementation of both onComplete() and tryComplete().
  */
-abstract class DelayedRequest(delayMs: Long) extends DelayedItem(delayMs) {
+abstract class DelayedOperation(delayMs: Long) extends DelayedItem(delayMs) {
   private val completed = new AtomicBoolean(false)
 
   /*
@@ -51,7 +51,10 @@ abstract class DelayedRequest(delayMs: Long) extends DelayedItem(delayMs) {
    * 1. The operation has been verified to be completable inside tryComplete()
    * 2. The operation has expired and hence needs to be completed right now
    *
-   * Return true iff the operation is completed by the caller
+   * Return true iff the operation is completed by the caller: note that
+   * concurrent threads can try to complete the same operation, but only
+   * the first thread will succeed in completing the operation and return
+   * true, others will still return false
    */
   def forceComplete(): Boolean = {
     if (completed.compareAndSet(false, true)) {
@@ -68,8 +71,8 @@ abstract class DelayedRequest(delayMs: Long) extends DelayedItem(delayMs) {
   def isCompleted(): Boolean = completed.get()
 
   /**
-   * Process for completing an operation; This function needs to be defined in subclasses
-   * and will be called exactly once in forceComplete()
+   * Process for completing an operation; This function needs to be defined
+   * in subclasses and will be called exactly once in forceComplete()
    */
   def onComplete(): Unit
 
@@ -78,11 +81,7 @@ abstract class DelayedRequest(delayMs: Long) extends DelayedItem(delayMs) {
    * can be completed by now. If yes execute the completion logic by calling
    * forceComplete() and return true iff forceComplete returns true; otherwise return false
    *
-   * Note that concurrent threads can check if an operation can be completed or not,
-   * but only the first thread will succeed in completing the operation and return
-   * true, others will still return false
-   *
-   * this function needs to be defined in subclasses
+   * This function needs to be defined in subclasses
    */
   def tryComplete(): Boolean
 }
@@ -90,13 +89,13 @@ abstract class DelayedRequest(delayMs: Long) extends DelayedItem(delayMs) {
 /**
  * A helper purgatory class for bookkeeping delayed operations with a timeout, and expiring timed out operations.
  */
-class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInterval: Int = 1000)
+class DelayedOperationPurgatory[T <: DelayedOperation](brokerId: Int = 0, purgeInterval: Int = 1000)
         extends Logging with KafkaMetricsGroup {
 
-  /* a list of requests watching each key */
+  /* a list of operation watching keys */
   private val watchersForKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers))
 
-  /* background thread expiring requests that have been waiting too long */
+  /* background thread expiring operations that have timed out */
   private val expirationReaper = new ExpiredOperationReaper
 
   newGauge(
@@ -107,7 +106,7 @@ class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInterval: In
   )
 
   newGauge(
-    "NumDelayedRequests",
+    "NumDelayedOperations",
     new Gauge[Int] {
       def value = delayed()
     }
@@ -153,10 +152,10 @@ class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInterval: In
   }
 
   /**
-   * Check if some some delayed requests can be completed with the given watch key,
+   * Check if some some delayed operations can be completed with the given watch key,
    * and if yes complete them.
    *
-   * @return the number of completed requests during this process
+   * @return the number of completed operations during this process
    */
   def checkAndComplete(key: Any): Int = {
     val watchers = watchersForKey.get(key)
@@ -194,14 +193,14 @@ class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInterval: In
    * A linked list of watched delayed operations based on some key
    */
   private class Watchers {
-    private val requests = new util.LinkedList[T]
+    private val operations = new util.LinkedList[T]
 
-    def watched = requests.size()
+    def watched = operations.size()
 
     // add the element to watch
     def watch(t: T) {
       synchronized {
-        requests.add(t)
+        operations.add(t)
       }
     }
 
@@ -209,11 +208,11 @@ class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInterval: In
     def tryCompleteWatched(): Int = {
       var completed = 0
       synchronized {
-        val iter = requests.iterator()
+        val iter = operations.iterator()
         while(iter.hasNext) {
           val curr = iter.next
           if (curr.isCompleted()) {
-            // another thread has completed this request, just remove it
+            // another thread has completed this operation, just remove it
             iter.remove()
           } else {
             if(curr synchronized curr.tryComplete()) {
@@ -230,7 +229,7 @@ class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInterval: In
     def purgeCompleted(): Int = {
       var purged = 0
       synchronized {
-        val iter = requests.iterator()
+        val iter = operations.iterator()
         while (iter.hasNext) {
           val curr = iter.next
           if(curr.isCompleted()) {
@@ -301,12 +300,12 @@ class RequestPurgatory[T <: DelayedRequest](brokerId: Int = 0, purgeInterval: In
       // try to get the next expired operation and force completing it
       expireNext()
       // see if we need to purge the watch lists
-      if (RequestPurgatory.this.watched() >= purgeInterval) {
+      if (DelayedOperationPurgatory.this.watched() >= purgeInterval) {
         debug("Begin purging watch lists")
         val purged = watchersForKey.values.map(_.purgeCompleted()).sum
         debug("Purged %d elements from watch lists.".format(purged))
       }
-      // see if we need to purge the delayed request queue
+      // see if we need to purge the delayed operation queue
       if (delayed() >= purgeInterval) {
         debug("Begin purging delayed queue")
         val purged = purgeCompleted()

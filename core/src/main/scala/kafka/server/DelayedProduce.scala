@@ -32,7 +32,7 @@ case class ProducePartitionStatus(requiredOffset: Long, responseStatus: Producer
 }
 
 /**
- * The produce metadata maintained by the delayed produce request
+ * The produce metadata maintained by the delayed produce operation
  */
 case class ProduceMetadata(produceRequiredAcks: Short,
                            produceStatus: Map[TopicAndPartition, ProducePartitionStatus]) {
@@ -42,14 +42,14 @@ case class ProduceMetadata(produceRequiredAcks: Short,
 }
 
 /**
- * A delayed produce request that can be created by the replica manager and watched
- * in the produce request purgatory
+ * A delayed produce operation that can be created by the replica manager and watched
+ * in the produce operation purgatory
  */
 class DelayedProduce(delayMs: Long,
                      produceMetadata: ProduceMetadata,
                      replicaManager: ReplicaManager,
                      responseCallback: Map[TopicAndPartition, ProducerResponseStatus] => Unit)
-  extends DelayedRequest(delayMs) {
+  extends DelayedOperation(delayMs) {
 
   // first update the acks pending variable according to the error code
   produceMetadata.produceStatus.foreach { case (topicAndPartition, status) =>
@@ -65,13 +65,13 @@ class DelayedProduce(delayMs: Long,
   }
 
   /**
-   * The delayed produce request can be completed if every partition
+   * The delayed produce operation can be completed if every partition
    * it produces to is satisfied by one of the following:
    *
    * Case A: This broker is no longer the leader: set an error in response
    * Case B: This broker is the leader:
    *   B.1 - If there was a local error thrown while checking if at least requiredAcks
-   *         replicas have caught up to this request: set an error in response
+   *         replicas have caught up to this operation: set an error in response
    *   B.2 - Otherwise, set the response with no error.
    */
   override def tryComplete(): Boolean = {

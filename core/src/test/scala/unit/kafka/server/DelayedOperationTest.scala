@@ -22,13 +22,13 @@ import org.scalatest.junit.JUnit3Suite
 import junit.framework.Assert._
 import kafka.utils.TestUtils
 
-class RequestPurgatoryTest extends JUnit3Suite {
+class DelayedOperationTest extends JUnit3Suite {
 
-  var purgatory: RequestPurgatory[MockDelayedRequest] = null
+  var purgatory: DelayedOperationPurgatory[MockDelayedOperation] = null
   
   override def setUp() {
     super.setUp()
-    purgatory = new RequestPurgatory[MockDelayedRequest](0, 5)
+    purgatory = new DelayedOperationPurgatory[MockDelayedOperation](0, 5)
   }
   
   override def tearDown() {
@@ -38,8 +38,8 @@ class RequestPurgatoryTest extends JUnit3Suite {
 
   @Test
   def testRequestSatisfaction() {
-    val r1 = new MockDelayedRequest(100000L)
-    val r2 = new MockDelayedRequest(100000L)
+    val r1 = new MockDelayedOperation(100000L)
+    val r2 = new MockDelayedOperation(100000L)
     assertEquals("With no waiting requests, nothing should be satisfied", 0, purgatory.checkAndComplete("test1"))
     assertFalse("r1 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r1, Array("test1")))
     assertEquals("Still nothing satisfied", 0, purgatory.checkAndComplete("test1"))
@@ -56,8 +56,8 @@ class RequestPurgatoryTest extends JUnit3Suite {
   @Test
   def testRequestExpiry() {
     val expiration = 20L
-    val r1 = new MockDelayedRequest(expiration)
-    val r2 = new MockDelayedRequest(200000L)
+    val r1 = new MockDelayedOperation(expiration)
+    val r2 = new MockDelayedOperation(200000L)
     val start = System.currentTimeMillis
     assertFalse("r1 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r1, Array("test1")))
     assertFalse("r2 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r2, Array("test2")))
@@ -70,14 +70,14 @@ class RequestPurgatoryTest extends JUnit3Suite {
 
   @Test
   def testRequestPurge() {
-    val r1 = new MockDelayedRequest(100000L)
-    val r2 = new MockDelayedRequest(100000L)
+    val r1 = new MockDelayedOperation(100000L)
+    val r2 = new MockDelayedOperation(100000L)
     purgatory.tryCompleteElseWatch(r1, Array("test1"))
     purgatory.tryCompleteElseWatch(r2, Array("test1", "test2"))
     purgatory.tryCompleteElseWatch(r1, Array("test2", "test3"))
 
     assertEquals("Purgatory should have 5 watched elements", 5, purgatory.watched())
-    assertEquals("Purgatory should have 3 total delayed requests", 3, purgatory.delayed())
+    assertEquals("Purgatory should have 3 total delayed operations", 3, purgatory.delayed())
 
     // complete one of the operations, it should
     // eventually be purged from the watch list with purge interval 5
@@ -86,7 +86,7 @@ class RequestPurgatoryTest extends JUnit3Suite {
     TestUtils.waitUntilTrue(() => purgatory.watched() == 3,
       "Purgatory should have 3 watched elements instead of " + purgatory.watched(), 1000L)
     TestUtils.waitUntilTrue(() => purgatory.delayed() == 3,
-      "Purgatory should still have 3 total delayed requests instead of " + purgatory.delayed(), 1000L)
+      "Purgatory should still have 3 total delayed operations instead of " + purgatory.delayed(), 1000L)
 
     // add two more requests, then the satisfied request should be purged from the delayed queue with purge interval 5
     purgatory.tryCompleteElseWatch(r1, Array("test1"))
@@ -95,10 +95,10 @@ class RequestPurgatoryTest extends JUnit3Suite {
     TestUtils.waitUntilTrue(() => purgatory.watched() == 5,
       "Purgatory should have 5 watched elements instead of " + purgatory.watched(), 1000L)
     TestUtils.waitUntilTrue(() => purgatory.delayed() == 4,
-      "Purgatory should have 4 total delayed requests instead of " + purgatory.delayed(), 1000L)
+      "Purgatory should have 4 total delayed operations instead of " + purgatory.delayed(), 1000L)
   }
   
-  class MockDelayedRequest(delayMs: Long) extends DelayedRequest(delayMs) {
+  class MockDelayedOperation(delayMs: Long) extends DelayedOperation(delayMs) {
     var completable = false
 
     def awaitExpiration() {

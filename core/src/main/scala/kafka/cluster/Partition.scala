@@ -17,18 +17,18 @@
 package kafka.cluster
 
 import kafka.common._
-import kafka.admin.AdminUtils
 import kafka.utils._
+import kafka.utils.Utils.{inReadLock,inWriteLock}
+import kafka.admin.AdminUtils
 import kafka.api.{PartitionStateInfo, LeaderAndIsr}
 import kafka.log.LogConfig
-import kafka.server.{LogOffsetMetadata, OffsetManager, ReplicaManager}
+import kafka.server.{TopicPartitionOperationKey, LogOffsetMetadata, OffsetManager, ReplicaManager}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.controller.KafkaController
 import kafka.message.ByteBufferMessageSet
 
 import java.io.IOException
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.utils.Utils.{inReadLock,inWriteLock}
 import scala.collection.immutable.Set
 
 import com.yammer.metrics.core.Gauge
@@ -232,7 +232,7 @@ class Partition(val topic: String,
   /**
    * Update the log end offset of a certain replica of this partition
    */
-  def updateReplicaLEO(replicaId: Int, offset: LogOffsetMetadata) = {
+  def updateReplicaLEO(replicaId: Int, offset: LogOffsetMetadata) {
     getReplica(replicaId) match {
       case Some(replica) =>
         replica.logEndOffset = offset
@@ -343,8 +343,8 @@ class Partition(val topic: String,
     if(oldHighWatermark.precedes(newHighWatermark)) {
       leaderReplica.highWatermark = newHighWatermark
       debug("High watermark for partition [%s,%d] updated to %s".format(topic, partitionId, newHighWatermark))
-      // some delayed requests may be unblocked after HW changed
-      val requestKey = new TopicAndPartition(this.topic, this.partitionId)
+      // some delayed operations may be unblocked after HW changed
+      val requestKey = new TopicPartitionOperationKey(this.topic, this.partitionId)
       replicaManager.tryCompleteDelayedFetch(requestKey)
       replicaManager.tryCompleteDelayedProduce(requestKey)
     } else {
@@ -414,7 +414,7 @@ class Partition(val topic: String,
 
           val info = log.append(messages, assignOffsets = true)
           // probably unblock some follower fetch requests since log end offset has been updated
-          replicaManager.tryCompleteDelayedFetch(new TopicAndPartition(this.topic, this.partitionId))
+          replicaManager.tryCompleteDelayedFetch(new TopicPartitionOperationKey(this.topic, this.partitionId))
           // we may need to increment high watermark since ISR could be down to 1
           maybeIncrementLeaderHW(leaderReplica)
           info

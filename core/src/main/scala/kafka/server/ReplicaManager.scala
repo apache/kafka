@@ -80,8 +80,8 @@ class ReplicaManager(val config: KafkaConfig,
   this.logIdent = "[Replica Manager on Broker " + localBrokerId + "]: "
   val stateChangeLogger = KafkaController.stateChangeLogger
 
-  val producerRequestPurgatory = new RequestPurgatory[DelayedProduce](config.brokerId, config.producerPurgatoryPurgeIntervalRequests)
-  val fetchRequestPurgatory = new RequestPurgatory[DelayedFetch](config.brokerId, config.fetchPurgatoryPurgeIntervalRequests)
+  val delayedProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](config.brokerId, config.producerPurgatoryPurgeIntervalRequests)
+  val delayedFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](config.brokerId, config.fetchPurgatoryPurgeIntervalRequests)
 
 
   newGauge(
@@ -123,9 +123,9 @@ class ReplicaManager(val config: KafkaConfig,
    * 1. The partition HW has changed (for acks = -1)
    * 2. A follower replica's fetch operation is received (for acks > 1)
    */
-  def tryCompleteDelayedProduce(key: TopicAndPartition) {
-    val completed = producerRequestPurgatory.checkAndComplete(key)
-    debug("Request key %s unblocked %d producer requests.".format(key, completed))
+  def tryCompleteDelayedProduce(key: DelayedOperationKey) {
+    val completed = delayedProducePurgatory.checkAndComplete(key)
+    debug("Request key %s unblocked %d producer requests.".format(key.keyLabel, completed))
   }
 
   /**
@@ -135,9 +135,9 @@ class ReplicaManager(val config: KafkaConfig,
    * 1. The partition HW has changed (for regular fetch)
    * 2. A new message set is appended to the local log (for follower fetch)
    */
-  def tryCompleteDelayedFetch(key: TopicAndPartition) {
-    val completed = fetchRequestPurgatory.checkAndComplete(key)
-    debug("Request key %s unblocked %d fetch requests.".format(key, completed))
+  def tryCompleteDelayedFetch(key: DelayedOperationKey) {
+    val completed = delayedFetchPurgatory.checkAndComplete(key)
+    debug("Request key %s unblocked %d fetch requests.".format(key.keyLabel, completed))
   }
 
   def startup() {
@@ -280,13 +280,13 @@ class ReplicaManager(val config: KafkaConfig,
       val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
       val delayedProduce =  new DelayedProduce(timeout, produceMetadata, this, responseCallback)
 
-      // create a list of (topic, partition) pairs to use as keys for this delayed request
-      val producerRequestKeys = messagesPerPartition.keys.toSeq
+      // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
+      val producerRequestKeys = messagesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
 
       // try to complete the request immediately, otherwise put it into the purgatory
-      // this is because while the delayed request is being created, new requests may
-      // arrive which can make this request completable.
-      producerRequestPurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
+      // this is because while the delayed produce operation is being created, new
+      // requests may arrive and hence make this operation completable.
+      delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
     }
   }
 
@@ -392,13 +392,13 @@ class ReplicaManager(val config: KafkaConfig,
       val fetchMetadata = FetchMetadata(fetchMinBytes, fetchOnlyFromLeader, fetchOnlyCommitted, fetchPartitionStatus)
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, responseCallback)
 
-      // create a list of (topic, partition) pairs to use as keys for this delayed request
-      val delayedFetchKeys = fetchPartitionStatus.keys.toSeq
+      // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
+      val delayedFetchKeys = fetchPartitionStatus.keys.map(new TopicPartitionOperationKey(_)).toSeq
 
       // try to complete the request immediately, otherwise put it into the purgatory;
-      // this is because while the delayed request is being created, new requests may
-      // arrive which can make this request completable.
-      fetchRequestPurgatory.tryCompleteElseWatch(delayedFetch, delayedFetchKeys)
+      // this is because while the delayed fetch operation is being created, new requests
+      // may arrive and hence make this operation completable.
+      delayedFetchPurgatory.tryCompleteElseWatch(delayedFetch, delayedFetchKeys)
     }
   }
 
@@ -718,7 +718,7 @@ class ReplicaManager(val config: KafkaConfig,
 
           // for producer requests with ack > 1, we need to check
           // if they can be unblocked after some follower's log end offsets have moved
-          tryCompleteDelayedProduce(topicAndPartition)
+          tryCompleteDelayedProduce(new TopicPartitionOperationKey(topicAndPartition))
         case None =>
           warn("While recording the replica LEO, the partition %s hasn't been created.".format(topicAndPartition))
       }
@@ -749,8 +749,8 @@ class ReplicaManager(val config: KafkaConfig,
   def shutdown(checkpointHW: Boolean = true) {
     info("Shutting down")
     replicaFetcherManager.shutdown()
-    fetchRequestPurgatory.shutdown()
-    producerRequestPurgatory.shutdown()
+    delayedFetchPurgatory.shutdown()
+    delayedProducePurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
     info("Shut down completely")

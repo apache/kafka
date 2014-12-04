@@ -32,7 +32,7 @@ case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInf
 }
 
 /**
- * The fetch metadata maintained by the delayed produce request
+ * The fetch metadata maintained by the delayed fetch operation
  */
 case class FetchMetadata(fetchMinBytes: Int,
                          fetchOnlyLeader: Boolean,
@@ -45,17 +45,17 @@ case class FetchMetadata(fetchMinBytes: Int,
                           "partitionStatus: " + fetchPartitionStatus + "]"
 }
 /**
- * A delayed fetch request that can be created by the replica manager and watched
- * in the fetch request purgatory
+ * A delayed fetch operation that can be created by the replica manager and watched
+ * in the fetch operation purgatory
  */
 class DelayedFetch(delayMs: Long,
                    fetchMetadata: FetchMetadata,
                    replicaManager: ReplicaManager,
                    responseCallback: Map[TopicAndPartition, FetchResponsePartitionData] => Unit)
-  extends DelayedRequest(delayMs) {
+  extends DelayedOperation(delayMs) {
 
   /**
-   * The request can be completed if:
+   * The operation can be completed if:
    *
    * Case A: This broker is no longer the leader for some partitions it tries to fetch
    * Case B: This broker does not know of some partitions it tries to fetch
