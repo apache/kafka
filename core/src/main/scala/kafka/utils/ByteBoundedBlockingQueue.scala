@@ -216,4 +216,15 @@ class ByteBoundedBlockingQueue[E] (val queueNumMessageCapacity: Int, val queueBy
    * @return the remaining bytes capacity of the queue
    */
   def remainingByteSize = math.max(0, queueByteCapacity - currentByteSize.get())
+
+  /**
+   * remove all the items in the queue
+   */
+  def clear() {
+    putLock synchronized {
+      queue.clear()
+      currentByteSize.set(0)
+      putLock.notify()
+    }
+  }
 }

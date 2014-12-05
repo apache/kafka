@@ -19,17 +19,20 @@ package kafka.consumer
 
 import junit.framework.Assert._
 import kafka.integration.KafkaServerTestHarness
+import kafka.javaapi.consumer.ConsumerRebalanceListener
 import kafka.server._
 import scala.collection._
+import scala.collection.JavaConversions._
 import org.scalatest.junit.JUnit3Suite
 import kafka.message._
 import kafka.serializer._
 import org.I0Itec.zkclient.ZkClient
 import kafka.utils._
-import java.util.Collections
+import kafka.producer.{KeyedMessage, Producer}
+import java.util.{Collections, Properties}
 import org.apache.log4j.{Logger, Level}
 import kafka.utils.TestUtils._
-import kafka.common.MessageStreamsExistException
+import kafka.common.{TopicAndPartition, MessageStreamsExistException}
 
 class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
@@ -344,6 +347,49 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     zkClient.close()
   }
 
+  def testConsumerRebalanceListener() {
+    // Send messages to create topic
+    sendMessagesToPartition(configs, topic, 0, nMessages)
+    sendMessagesToPartition(configs, topic, 1, nMessages)
+
+    val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer1))
+    val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
+    // Register consumer rebalance listener
+    val rebalanceListener1 = new TestConsumerRebalanceListener()
+    zkConsumerConnector1.setConsumerRebalanceListener(rebalanceListener1)
+    val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Map(topic -> 1), new StringDecoder(), new StringDecoder())
+
+    // Check if rebalance listener is fired
+    assertEquals(true, rebalanceListener1.listenerCalled)
+    assertEquals(null, rebalanceListener1.partitionOwnership.get(topic))
+    // reset the flag
+    rebalanceListener1.listenerCalled = false
+
+    val actual_1 = getZKChildrenValues(dirs.consumerOwnerDir)
+    val expected_1 = List(("0", "group1_consumer1-0"),
+                          ("1", "group1_consumer1-0"))
+    assertEquals(expected_1, actual_1)
+
+    val consumerConfig2 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer2))
+    val zkConsumerConnector2 = new ZookeeperConsumerConnector(consumerConfig2, true)
+    // Register consumer rebalance listener
+    val rebalanceListener2 = new TestConsumerRebalanceListener()
+    zkConsumerConnector2.setConsumerRebalanceListener(rebalanceListener2)
+    val topicMessageStreams2 = zkConsumerConnector2.createMessageStreams(Map(topic -> 1), new StringDecoder(), new StringDecoder())
+
+    val actual_2 = getZKChildrenValues(dirs.consumerOwnerDir)
+    val expected_2 = List(("0", "group1_consumer1-0"),
+                          ("1", "group1_consumer2-0"))
+    assertEquals(expected_2, actual_2)
+
+    // Check if rebalance listener is fired
+    assertEquals(true, rebalanceListener1.listenerCalled)
+    assertEquals(Set[Int](0, 1), rebalanceListener1.partitionOwnership.get(topic))
+    assertEquals(true, rebalanceListener2.listenerCalled)
+    assertEquals(null, rebalanceListener2.partitionOwnership.get(topic))
+
+  }
+
   def getZKChildrenValues(path : String) : Seq[Tuple2[String,String]] = {
     val children = zkClient.getChildren(path)
     Collections.sort(children)
@@ -353,6 +399,16 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     }
     childrenAsSeq.map(partition =>
       (partition, zkClient.readData(path + "/" + partition).asInstanceOf[String]))
+  }
+
+  private class TestConsumerRebalanceListener extends ConsumerRebalanceListener {
+    var listenerCalled: Boolean = false
+    var partitionOwnership: java.util.Map[String, java.util.Set[java.lang.Integer]] = null
+
+    override def beforeReleasingPartitions(partitionOwnership: java.util.Map[String, java.util.Set[java.lang.Integer]]) {
+      listenerCalled = true
+      this.partitionOwnership = partitionOwnership
+    }
   }
 
 }
