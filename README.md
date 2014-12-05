@@ -94,6 +94,10 @@ Please note for this to work you should create/update `~/.gradle/gradle.properti
 ### Determining how transitive dependencies are added ###
     ./gradlew core:dependencies --configuration runtime
 
+### Running in Vagrant ###
+
+See [vagrant/README.md](vagrant/README.md).
+
 ### Contribution ###
 
 Apache Kafka is interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).

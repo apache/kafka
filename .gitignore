@@ -21,3 +21,8 @@ TAGS
 .gradle
 kafka.ipr
 kafka.iws
+.vagrant
+Vagrantfile.local
+
+config/server-*
+config/zookeeper-*
