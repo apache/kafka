@@ -105,6 +105,42 @@ class UtilsTest extends JUnitSuite {
   }
 
   @Test
+  def testCsvMap() {
+    val emptyString: String = ""
+    val emptyMap = Utils.parseCsvMap(emptyString)
+    val emptyStringMap = Map.empty[String, String]
+    assertTrue(emptyMap != null)
+    assertTrue(emptyStringMap.equals(emptyStringMap))
+
+    val kvPairsIpV6: String = "a:b:c:v,a:b:c:v"
+    val ipv6Map = Utils.parseCsvMap(kvPairsIpV6)
+    for (m <- ipv6Map) {
+      assertTrue(m._1.equals("a:b:c"))
+      assertTrue(m._2.equals("v"))
+    }
+
+    val singleEntry:String = "key:value"
+    val singleMap = Utils.parseCsvMap(singleEntry)
+    val value = singleMap.getOrElse("key", 0)
+    assertTrue(value.equals("value"))
+
+    val kvPairsIpV4: String = "192.168.2.1/30:allow, 192.168.2.1/30:allow"
+    val ipv4Map = Utils.parseCsvMap(kvPairsIpV4)
+    for (m <- ipv4Map) {
+      assertTrue(m._1.equals("192.168.2.1/30"))
+      assertTrue(m._2.equals("allow"))
+    }
+
+    val kvPairsSpaces: String = "key:value      , key:   value"
+    val spaceMap = Utils.parseCsvMap(kvPairsSpaces)
+    for (m <- spaceMap) {
+      assertTrue(m._1.equals("key"))
+      assertTrue(m._2.equals("value"))
+    }
+  }
+
+
+  @Test
   def testInLock() {
     val lock = new ReentrantLock()
     val result = inLock(lock) {
