@@ -504,7 +504,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       if (connector == null) {
         warn("No consumer connector available to commit offset.")
       } else {
-        connector.commitOffsets(isAutoCommit = false, offsetsToCommit)
+        connector.commitOffsets(
+          isAutoCommit = false,
+          topicPartitionOffsets = offsetsToCommit
+        )
         commitCounter += 1
       }
     }
