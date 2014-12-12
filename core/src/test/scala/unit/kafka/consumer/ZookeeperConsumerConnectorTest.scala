@@ -387,7 +387,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     assertEquals(Set[Int](0, 1), rebalanceListener1.partitionOwnership.get(topic))
     assertEquals(true, rebalanceListener2.listenerCalled)
     assertEquals(null, rebalanceListener2.partitionOwnership.get(topic))
-
+    zkConsumerConnector1.shutdown()
+    zkConsumerConnector2.shutdown()
   }
 
   def getZKChildrenValues(path : String) : Seq[Tuple2[String,String]] = {

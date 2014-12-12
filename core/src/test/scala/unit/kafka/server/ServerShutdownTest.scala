@@ -141,10 +141,18 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     verifyNonDaemonThreadsStatus
   }
 
+  private[this] def isNonDaemonKafkaThread(t: Thread): Boolean = {
+    val threadName = Option(t.getClass.getCanonicalName)
+      .getOrElse(t.getClass.getName())
+      .toLowerCase
+
+    !t.isDaemon && t.isAlive && threadName.startsWith("kafka")
+  }
+
   def verifyNonDaemonThreadsStatus() {
     assertEquals(0, Thread.getAllStackTraces.keySet().toArray
-      .map(_.asInstanceOf[Thread])
-      .count(t => !t.isDaemon && t.isAlive && t.getClass.getCanonicalName.toLowerCase.startsWith("kafka")))
+      .map{ _.asInstanceOf[Thread] }
+      .count(isNonDaemonKafkaThread))
   }
 
   def testConsecutiveShutdown(){
