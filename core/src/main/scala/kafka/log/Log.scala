@@ -84,7 +84,7 @@ class Log(val dir: File,
   /* Calculate the offset of the next message */
   @volatile var nextOffsetMetadata = new LogOffsetMetadata(activeSegment.nextOffset(), activeSegment.baseOffset, activeSegment.size.toInt)
 
-  val topicAndPartition: TopicAndPartition = Log.parseTopicPartitionName(name)
+  val topicAndPartition: TopicAndPartition = Log.parseTopicPartitionName(dir)
 
   info("Completed load of log %s with log end offset %d".format(name, logEndOffset))
 
@@ -832,9 +832,25 @@ object Log {
   /**
    * Parse the topic and partition out of the directory name of a log
    */
-  def parseTopicPartitionName(name: String): TopicAndPartition = {
+  def parseTopicPartitionName(dir: File): TopicAndPartition = {
+    val name: String = dir.getName
+    if (name == null || name.isEmpty || !name.contains('-')) {
+      throwException(dir)
+    }
     val index = name.lastIndexOf('-')
-    TopicAndPartition(name.substring(0,index), name.substring(index+1).toInt)
+    val topic: String = name.substring(0, index)
+    val partition: String = name.substring(index + 1)
+    if (topic.length < 1 || partition.length < 1) {
+      throwException(dir)
+    }
+    TopicAndPartition(topic, partition.toInt)
+  }
+
+  def throwException(dir: File) {
+    throw new KafkaException("Found directory " + dir.getCanonicalPath + ", " +
+      "'" + dir.getName + "' is not in the form of topic-partition\n" +
+      "If a directory does not contain Kafka topic data it should not exist in Kafka's log " +
+      "directory")
   }
 }
   

@@ -134,7 +134,7 @@ class LogManager(val logDirs: Array[File],
         Utils.runnable {
           debug("Loading log '" + logDir.getName + "'")
 
-          val topicPartition = Log.parseTopicPartitionName(logDir.getName)
+          val topicPartition = Log.parseTopicPartitionName(logDir)
           val config = topicConfigs.getOrElse(topicPartition.topic, defaultConfig)
           val logRecoveryPoint = recoveryPoints.getOrElse(topicPartition, 0L)
 

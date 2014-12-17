@@ -688,4 +688,79 @@ class LogTest extends JUnitSuite {
     assertEquals(recoveryPoint, log.logEndOffset)
     cleanShutdownFile.delete()
   }
+
+  @Test
+  def testParseTopicPartitionName() {
+    val topic: String = "test_topic"
+    val partition:String = "143"
+    val dir: File = new File(logDir + topicPartitionName(topic, partition))
+    val topicAndPartition = Log.parseTopicPartitionName(dir);
+    assertEquals(topic, topicAndPartition.asTuple._1)
+    assertEquals(partition.toInt, topicAndPartition.asTuple._2)
+  }
+
+  @Test
+  def testParseTopicPartitionNameForEmptyName() {
+    try {
+      val dir: File = new File("")
+      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
+    } catch {
+      case e: Exception => // its GOOD!
+    }
+  }
+
+  @Test
+  def testParseTopicPartitionNameForNull() {
+    try {
+      val dir: File = null
+      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      fail("KafkaException should have been thrown for dir: " + dir)
+    } catch {
+      case e: Exception => // its GOOD!
+    }
+  }
+
+  @Test
+  def testParseTopicPartitionNameForMissingSeparator() {
+    val topic: String = "test_topic"
+    val partition:String = "1999"
+    val dir: File = new File(logDir + File.separator + topic + partition)
+    try {
+      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
+    } catch {
+      case e: Exception => // its GOOD!
+    }
+  }
+
+  @Test
+  def testParseTopicPartitionNameForMissingTopic() {
+    val topic: String = ""
+    val partition:String = "1999"
+    val dir: File = new File(logDir + topicPartitionName(topic, partition))
+    try {
+      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
+    } catch {
+      case e: Exception => // its GOOD!
+    }
+  }
+
+  @Test
+  def testParseTopicPartitionNameForMissingPartition() {
+    val topic: String = "test_topic"
+    val partition:String = ""
+    val dir: File = new File(logDir + topicPartitionName(topic, partition))
+    try {
+      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
+    } catch {
+      case e: Exception => // its GOOD!
+    }
+  }
+
+  def topicPartitionName(topic: String, partition: String): String = {
+    File.separator + topic + "-" + partition
+  }
 }
