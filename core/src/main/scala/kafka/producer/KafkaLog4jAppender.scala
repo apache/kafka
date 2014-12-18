@@ -32,7 +32,7 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
   var requiredNumAcks: Int = Int.MaxValue
   var syncSend: Boolean = false
 
-  private var producer: KafkaProducer = null
+  private var producer: KafkaProducer[Array[Byte],Array[Byte]] = null
 
   def getTopic: String = topic
   def setTopic(topic: String) { this.topic = topic }
@@ -60,7 +60,7 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
       throw new MissingConfigException("topic must be specified by the Kafka log4j appender")
     if(compressionType != null) props.put(org.apache.kafka.clients.producer.ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType)
     if(requiredNumAcks != Int.MaxValue) props.put(org.apache.kafka.clients.producer.ProducerConfig.ACKS_CONFIG, requiredNumAcks.toString)
-    producer = new KafkaProducer(props)
+    producer = new KafkaProducer[Array[Byte],Array[Byte]](props)
     LogLog.debug("Kafka producer connected to " +  brokerList)
     LogLog.debug("Logging for topic: " + topic)
   }
@@ -68,7 +68,7 @@ class KafkaLog4jAppender extends AppenderSkeleton with Logging {
   override def append(event: LoggingEvent)  {
     val message = subAppend(event)
     LogLog.debug("[" + new Date(event.getTimeStamp).toString + "]" + message)
-    val response = producer.send(new ProducerRecord(topic, message.getBytes()))
+    val response = producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic, message.getBytes()))
     if (syncSend) response.get
   }
 

@@ -75,7 +75,7 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression)
     props.put(ProducerConfig.BATCH_SIZE_CONFIG, "66000")
     props.put(ProducerConfig.LINGER_MS_CONFIG, "200")
-    var producer = new KafkaProducer(props)
+    var producer = new KafkaProducer[Array[Byte],Array[Byte]](props)
     val consumer = new SimpleConsumer("localhost", port, 100, 1024*1024, "")
 
     try {
@@ -89,7 +89,7 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
 
       // make sure the returned messages are correct
       val responses = for (message <- messages)
-        yield producer.send(new ProducerRecord(topic, null, null, message))
+        yield producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic, null, null, message))
       val futures = responses.toList
       for ((future, offset) <- futures zip (0 until numRecords)) {
         assertEquals(offset.toLong, future.get.offset)

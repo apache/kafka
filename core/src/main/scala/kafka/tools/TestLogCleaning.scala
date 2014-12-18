@@ -242,7 +242,7 @@ object TestLogCleaning {
     val producerProps = new Properties
     producerProps.setProperty(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
     producerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
-    val producer = new KafkaProducer(producerProps)
+    val producer = new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
     val rand = new Random(1)
     val keyCount = (messages / dups).toInt
     val producedFile = File.createTempFile("kafka-log-cleaner-produced-", ".txt")
@@ -254,9 +254,9 @@ object TestLogCleaning {
       val delete = i % 100 < percentDeletes
       val msg = 
         if(delete)
-          new ProducerRecord(topic, key.toString.getBytes(), null)
+          new ProducerRecord[Array[Byte],Array[Byte]](topic, key.toString.getBytes(), null)
         else
-          new ProducerRecord(topic, key.toString.getBytes(), i.toString.getBytes())
+          new ProducerRecord[Array[Byte],Array[Byte]](topic, key.toString.getBytes(), i.toString.getBytes())
       producer.send(msg)
       producedWriter.write(TestRecord(topic, key, i, delete).toString)
       producedWriter.newLine()

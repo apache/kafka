@@ -33,7 +33,7 @@ import org.apache.kafka.common.TopicPartition;
  * The consumer runs in the user thread and multiplexes I/O over TCP connections to each of the brokers it
  * needs to communicate with. Failure to close the consumer after use will leak these resources.
  */
-public class MockConsumer implements Consumer {
+public class MockConsumer implements Consumer<byte[], byte[]> {
 
     private final Set<TopicPartition> subscribedPartitions;
     private final Set<String> subscribedTopics;
@@ -90,10 +90,10 @@ public class MockConsumer implements Consumer {
     }
 
     @Override
-    public Map<String, ConsumerRecords> poll(long timeout) {
+    public Map<String, ConsumerRecords<byte[], byte[]>> poll(long timeout) {
         // hand out one dummy record, 1 per topic
         Map<String, List<ConsumerRecord>> records = new HashMap<String, List<ConsumerRecord>>();
-        Map<String, ConsumerRecords> recordMetadata = new HashMap<String, ConsumerRecords>();
+        Map<String, ConsumerRecords<byte[], byte[]>> recordMetadata = new HashMap<String, ConsumerRecords<byte[], byte[]>>();
         for(TopicPartition partition : subscribedPartitions) {
             // get the last consumed offset
             long messageSequence = consumedOffsets.get(partition);

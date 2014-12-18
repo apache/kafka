@@ -37,7 +37,7 @@ public class MockProducerTest {
     @Test
     public void testAutoCompleteMock() throws Exception {
         MockProducer producer = new MockProducer(true);
-        ProducerRecord record = new ProducerRecord(topic, "key".getBytes(), "value".getBytes());
+        ProducerRecord record = new ProducerRecord<byte[], byte[]>(topic, "key".getBytes(), "value".getBytes());
         Future<RecordMetadata> metadata = producer.send(record);
         assertTrue("Send should be immediately complete", metadata.isDone());
         assertFalse("Send should be successful", isError(metadata));
@@ -51,8 +51,8 @@ public class MockProducerTest {
     @Test
     public void testManualCompletion() throws Exception {
         MockProducer producer = new MockProducer(false);
-        ProducerRecord record1 = new ProducerRecord("topic", "key1".getBytes(), "value1".getBytes());
-        ProducerRecord record2 = new ProducerRecord("topic", "key2".getBytes(), "value2".getBytes());
+        ProducerRecord record1 = new ProducerRecord<byte[], byte[]>("topic", "key1".getBytes(), "value1".getBytes());
+        ProducerRecord record2 = new ProducerRecord<byte[], byte[]>("topic", "key2".getBytes(), "value2".getBytes());
         Future<RecordMetadata> md1 = producer.send(record1);
         assertFalse("Send shouldn't have completed", md1.isDone());
         Future<RecordMetadata> md2 = producer.send(record2);

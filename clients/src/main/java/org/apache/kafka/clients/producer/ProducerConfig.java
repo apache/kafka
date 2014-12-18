@@ -17,7 +17,6 @@ import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 
 import org.apache.kafka.common.config.AbstractConfig;
@@ -175,6 +174,14 @@ public class ProducerConfig extends AbstractConfig {
                                                                             + " Note that if this setting is set to be greater than 1 and there are failed sends, there is a risk of"
                                                                             + " message re-ordering due to retries (i.e., if retries are enabled).";
 
+    /** <code>key.serializer</code> */
+    public static final String KEY_SERIALIZER_CLASS_CONFIG = "key.serializer";
+    private static final String KEY_SERIALIZER_CLASS_DOC = "Serializer class for key that implements the <code>Serializer</code> interface.";
+
+    /** <code>value.serializer</code> */
+    public static final String VALUE_SERIALIZER_CLASS_CONFIG = "value.serializer";
+    private static final String VALUE_SERIALIZER_CLASS_DOC = "Serializer class for value that implements the <code>Serializer</code> interface.";
+
     static {
         config = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, BOOSTRAP_SERVERS_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
@@ -182,7 +189,7 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(ACKS_CONFIG,
                                         Type.STRING,
                                         "1",
-                                        in(Arrays.asList("all","-1", "0", "1")),
+                                        in(Arrays.asList("all", "-1", "0", "1")),
                                         Importance.HIGH,
                                         ACKS_DOC)
                                 .define(COMPRESSION_TYPE_CONFIG, Type.STRING, "none", Importance.HIGH, COMPRESSION_TYPE_DOC)
@@ -221,7 +228,9 @@ public class ProducerConfig extends AbstractConfig {
                                         5,
                                         atLeast(1),
                                         Importance.LOW,
-                                        MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC);
+                                        MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC)
+                                .define(KEY_SERIALIZER_CLASS_CONFIG, Type.CLASS, "org.apache.kafka.clients.producer.ByteArraySerializer", Importance.HIGH, KEY_SERIALIZER_CLASS_DOC)
+                                .define(VALUE_SERIALIZER_CLASS_CONFIG, Type.CLASS, "org.apache.kafka.clients.producer.ByteArraySerializer", Importance.HIGH, VALUE_SERIALIZER_CLASS_DOC);
     }
 
     ProducerConfig(Map<? extends Object, ? extends Object> props) {

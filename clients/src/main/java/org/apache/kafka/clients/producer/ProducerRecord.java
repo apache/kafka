@@ -20,12 +20,12 @@ package org.apache.kafka.clients.producer;
  * specified but a key is present a partition will be chosen using a hash of the key. If neither key nor partition is
  * present a partition will be assigned in a round-robin fashion.
  */
-public final class ProducerRecord {
+public final class ProducerRecord<K, V> {
 
     private final String topic;
     private final Integer partition;
-    private final byte[] key;
-    private final byte[] value;
+    private final K key;
+    private final V value;
 
     /**
      * Creates a record to be sent to a specified topic and partition
@@ -35,7 +35,7 @@ public final class ProducerRecord {
      * @param key The key that will be included in the record
      * @param value The record contents
      */
-    public ProducerRecord(String topic, Integer partition, byte[] key, byte[] value) {
+    public ProducerRecord(String topic, Integer partition, K key, V value) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null");
         this.topic = topic;
@@ -51,7 +51,7 @@ public final class ProducerRecord {
      * @param key The key that will be included in the record
      * @param value The record contents
      */
-    public ProducerRecord(String topic, byte[] key, byte[] value) {
+    public ProducerRecord(String topic, K key, V value) {
         this(topic, null, key, value);
     }
 
@@ -61,7 +61,7 @@ public final class ProducerRecord {
      * @param topic The topic this record should be sent to
      * @param value The record contents
      */
-    public ProducerRecord(String topic, byte[] value) {
+    public ProducerRecord(String topic, V value) {
         this(topic, null, value);
     }
 
@@ -75,14 +75,14 @@ public final class ProducerRecord {
     /**
      * The key (or null if no key is specified)
      */
-    public byte[] key() {
+    public K key() {
         return key;
     }
 
     /**
      * @return The value
      */
-    public byte[] value() {
+    public V value() {
         return value;
     }
 
@@ -95,8 +95,8 @@ public final class ProducerRecord {
 
     @Override
     public String toString() {
-        String key = this.key == null ? "null" : ("byte[" + this.key.length + "]");
-        String value = this.value == null ? "null" : ("byte[" + this.value.length + "]");
+        String key = this.key == null ? "null" : this.key.toString();
+        String value = this.value == null ? "null" : this.value.toString();
         return "ProducerRecord(topic=" + topic + ", partition=" + partition + ", key=" + key + ", value=" + value;
     }
 }

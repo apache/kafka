@@ -27,7 +27,6 @@ import kafka.producer.{OldProducer, NewShinyProducer}
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{RecordMetadata, ProducerRecord}
-import org.apache.kafka.common.KafkaException
 
 import scala.collection.JavaConversions._
 
@@ -547,7 +546,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       extends NewShinyProducer(producerProps) with MirrorMakerBaseProducer {
 
     override def send(topicPartition: TopicAndPartition, offset: Long, key: Array[Byte], value: Array[Byte]) {
-      val record = new ProducerRecord(topicPartition.topic, key, value)
+      val record = new ProducerRecord[Array[Byte],Array[Byte]](topicPartition.topic, key, value)
       if(sync) {
         topicPartitionOffsetMap.getAndMaybePut(topicPartition).put(this.producer.send(record).get().partition(), offset)
       } else {

@@ -50,22 +50,22 @@ public class PartitionerTest {
     public void testUserSuppliedPartitioning() {
         assertEquals("If the user supplies a partition we should use it.",
                      0,
-                     partitioner.partition(new ProducerRecord("test", 0, key, value), cluster));
+                     partitioner.partition(new ProducerRecord<byte[], byte[]>("test", 0, key, value), cluster));
     }
 
     @Test
     public void testKeyPartitionIsStable() {
-        int partition = partitioner.partition(new ProducerRecord("test", key, value), cluster);
+        int partition = partitioner.partition(new ProducerRecord<byte[], byte[]>("test", key, value), cluster);
         assertEquals("Same key should yield same partition",
                      partition,
-                     partitioner.partition(new ProducerRecord("test", key, "value2".getBytes()), cluster));
+                     partitioner.partition(new ProducerRecord<byte[], byte[]>("test", key, "value2".getBytes()), cluster));
     }
 
     @Test
     public void testRoundRobinIsStable() {
-        int startPart = partitioner.partition(new ProducerRecord("test", value), cluster);
+        int startPart = partitioner.partition(new ProducerRecord<byte[], byte[]>("test", value), cluster);
         for (int i = 1; i <= 100; i++) {
-            int partition = partitioner.partition(new ProducerRecord("test", value), cluster);
+            int partition = partitioner.partition(new ProducerRecord<byte[], byte[]>("test", value), cluster);
             assertEquals("Should yield a different partition each call with round-robin partitioner",
                 partition, (startPart + i) % 2);
       }
@@ -74,7 +74,7 @@ public class PartitionerTest {
     @Test
     public void testRoundRobinWithDownNode() {
         for (int i = 0; i < partitions.size(); i++) {
-            int part = partitioner.partition(new ProducerRecord("test", value), cluster);
+            int part = partitioner.partition(new ProducerRecord<byte[], byte[]>("test", value), cluster);
             assertTrue("We should never choose a leader-less node in round robin", part >= 0 && part < 2);
         }
     }

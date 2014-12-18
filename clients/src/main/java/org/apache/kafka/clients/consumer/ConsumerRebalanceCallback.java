@@ -35,7 +35,7 @@ public interface ConsumerRebalanceCallback {
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}  
      * @param partitions The list of partitions that are assigned to the consumer after rebalance
      */
-    public void onPartitionsAssigned(Consumer consumer, Collection<TopicPartition> partitions);
+    public void onPartitionsAssigned(Consumer<?,?> consumer, Collection<TopicPartition> partitions);
     
     /**
      * A callback method the user can implement to provide handling of offset commits to a customized store on the 
@@ -46,5 +46,5 @@ public interface ConsumerRebalanceCallback {
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}  
      * @param partitions The list of partitions that were assigned to the consumer on the last rebalance
      */
-    public void onPartitionsRevoked(Consumer consumer, Collection<TopicPartition> partitions);
+    public void onPartitionsRevoked(Consumer<?,?> consumer, Collection<TopicPartition> partitions);
 }
