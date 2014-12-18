@@ -59,7 +59,7 @@ import org.slf4j.LoggerFactory;
  * The producer manages a single background thread that does I/O as well as a TCP connection to each of the brokers it
  * needs to communicate with. Failure to close the producer after use will leak these resources.
  */
-public class KafkaProducer implements Producer {
+public class KafkaProducer<K,V> implements Producer<K,V> {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaProducer.class);
 
@@ -75,26 +75,59 @@ public class KafkaProducer implements Producer {
     private final CompressionType compressionType;
     private final Sensor errors;
     private final Time time;
+    private final Serializer<K> keySerializer;
+    private final Serializer<V> valueSerializer;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
      * are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>. Values can be
      * either strings or Objects of the appropriate type (for example a numeric configuration would accept either the
      * string "42" or the integer 42).
+     * @param configs   The producer configs
+     *
      */
     public KafkaProducer(Map<String, Object> configs) {
-        this(new ProducerConfig(configs));
+        this(new ProducerConfig(configs), null, null);
+    }
+
+    /**
+     * A producer is instantiated by providing a set of key-value pairs as configuration, a key and a value {@link Serializer}.
+     * Valid configuration strings are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>.
+     * Values can be either strings or Objects of the appropriate type (for example a numeric configuration would accept
+     * either the string "42" or the integer 42).
+     * @param configs   The producer configs
+     * @param keySerializer  The serializer for key that implements {@link Serializer}. The configure() method won't be
+     *                       called when the serializer is passed in directly.
+     * @param valueSerializer  The serializer for value that implements {@link Serializer}. The configure() method won't
+     *                         be called when the serializer is passed in directly.
+     */
+    public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+        this(new ProducerConfig(configs), keySerializer, valueSerializer);
     }
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
      * are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>.
+     * @param properties   The producer configs
      */
     public KafkaProducer(Properties properties) {
-        this(new ProducerConfig(properties));
+        this(new ProducerConfig(properties), null, null);
     }
 
-    private KafkaProducer(ProducerConfig config) {
+    /**
+     * A producer is instantiated by providing a set of key-value pairs as configuration, a key and a value {@link Serializer}.
+     * Valid configuration strings are documented <a href="http://kafka.apache.org/documentation.html#producerconfigs">here</a>.
+     * @param properties   The producer configs
+     * @param keySerializer  The serializer for key that implements {@link Serializer}. The configure() method won't be
+     *                       called when the serializer is passed in directly.
+     * @param valueSerializer  The serializer for value that implements {@link Serializer}. The configure() method won't
+     *                         be called when the serializer is passed in directly.
+     */
+    public KafkaProducer(Properties properties, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+        this(new ProducerConfig(properties), keySerializer, valueSerializer);
+    }
+
+    private KafkaProducer(ProducerConfig config, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         log.trace("Starting the Kafka producer");
         this.time = new SystemTime();
         MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ProducerConfig.METRICS_NUM_SAMPLES_CONFIG))
@@ -145,6 +178,17 @@ public class KafkaProducer implements Producer {
 
         this.errors = this.metrics.sensor("errors");
 
+        if (keySerializer == null)
+            this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                                                              Serializer.class);
+        else
+            this.keySerializer = keySerializer;
+        if (valueSerializer == null)
+            this.valueSerializer = config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                                                                Serializer.class);
+        else
+            this.valueSerializer = valueSerializer;
+
         config.logUnused();
         log.debug("Kafka producer started");
     }
@@ -159,9 +203,10 @@ public class KafkaProducer implements Producer {
 
     /**
      * Asynchronously send a record to a topic. Equivalent to {@link #send(ProducerRecord, Callback) send(record, null)}
+     * @param record  The record to be sent
      */
     @Override
-    public Future<RecordMetadata> send(ProducerRecord record) {
+    public Future<RecordMetadata> send(ProducerRecord<K,V> record) {
         return send(record, null);
     }
 
@@ -226,16 +271,19 @@ public class KafkaProducer implements Producer {
      *        indicates no callback)
      */
     @Override
-    public Future<RecordMetadata> send(ProducerRecord record, Callback callback) {
+    public Future<RecordMetadata> send(ProducerRecord<K,V> record, Callback callback) {
         try {
             // first make sure the metadata for the topic is available
             waitOnMetadata(record.topic(), this.metadataFetchTimeoutMs);
-            int partition = partitioner.partition(record, metadata.fetch());
-            int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(record.key(), record.value());
+            byte[] serializedKey = keySerializer.serialize(record.topic(), record.key(), true);
+            byte[] serializedValue = valueSerializer.serialize(record.topic(), record.value(), false);
+            ProducerRecord serializedRecord = new ProducerRecord<byte[], byte[]>(record.topic(), record.partition(), serializedKey, serializedValue);
+            int partition = partitioner.partition(serializedRecord, metadata.fetch());
+            int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);
             ensureValidRecordSize(serializedSize);
             TopicPartition tp = new TopicPartition(record.topic(), partition);
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
-            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, record.key(), record.value(), compressionType, callback);
+            RecordAccumulator.RecordAppendResult result = accumulator.append(tp, serializedKey, serializedValue, compressionType, callback);
             if (result.batchIsFull || result.newBatchCreated) {
                 log.trace("Waking up the sender since topic {} partition {} is either full or getting a new batch", record.topic(), partition);
                 this.sender.wakeup();
@@ -324,6 +372,8 @@ public class KafkaProducer implements Producer {
             throw new KafkaException(e);
         }
         this.metrics.close();
+        this.keySerializer.close();
+        this.valueSerializer.close();
         log.debug("The Kafka producer has closed.");
     }
 

@@ -43,7 +43,7 @@ public class Partitioner {
      * @param record The record being sent
      * @param cluster The current cluster metadata
      */
-    public int partition(ProducerRecord record, Cluster cluster) {
+    public int partition(ProducerRecord<byte[], byte[]> record, Cluster cluster) {
         List<PartitionInfo> partitions = cluster.partitionsForTopic(record.topic());
         int numPartitions = partitions.size();
         if (record.partition() != null) {

@@ -18,10 +18,10 @@ import org.apache.kafka.common.TopicPartition;
  * A key/value pair to be received from Kafka. This consists of a topic name and a partition number, from which the 
  * record is being received and an offset that points to the record in a Kafka partition. 
  */
-public final class ConsumerRecord {
+public final class ConsumerRecord<K,V> {
     private final TopicPartition partition; 
-    private final byte[] key;
-    private final byte[] value;
+    private final K key;
+    private final V value;
     private final long offset;
     private volatile Exception error;
     
@@ -34,7 +34,7 @@ public final class ConsumerRecord {
      * @param value     The record contents
      * @param offset    The offset of this record in the corresponding Kafka partition
      */
-    public ConsumerRecord(String topic, int partitionId, byte[] key, byte[] value, long offset) {
+    public ConsumerRecord(String topic, int partitionId, K key, V value, long offset) {
         this(topic, partitionId, key, value, offset, null);
     }
 
@@ -46,7 +46,7 @@ public final class ConsumerRecord {
      * @param value The record contents
      * @param offset The offset of this record in the corresponding Kafka partition
      */
-    public ConsumerRecord(String topic, int partitionId, byte[] value, long offset) {
+    public ConsumerRecord(String topic, int partitionId, V value, long offset) {
         this(topic, partitionId, null, value, offset);
     }
 
@@ -60,7 +60,7 @@ public final class ConsumerRecord {
         this(topic, partitionId, null, null, -1L, error);
     }
     
-    private ConsumerRecord(String topic, int partitionId, byte[] key, byte[] value, long offset, Exception error) {
+    private ConsumerRecord(String topic, int partitionId, K key, V value, long offset, Exception error) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null");
         this.partition = new TopicPartition(topic, partitionId);
@@ -95,7 +95,7 @@ public final class ConsumerRecord {
      * The key (or null if no key is specified)
      * @throws Exception The exception thrown while fetching this record.
      */
-    public byte[] key() throws Exception {
+    public K key() throws Exception {
         if (this.error != null)
             throw this.error;
         return key;
@@ -105,7 +105,7 @@ public final class ConsumerRecord {
      * The value
      * @throws Exception The exception thrown while fetching this record.
      */
-    public byte[] value() throws Exception {
+    public V value() throws Exception {
         if (this.error != null)
             throw this.error;
         return value;

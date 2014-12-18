@@ -21,12 +21,12 @@ import java.util.Map.Entry;
  * A container that holds the list {@link ConsumerRecord} per partition for a particular topic. There is one for every topic returned by a 
  * {@link Consumer#poll(long)} operation. 
  */
-public class ConsumerRecords {
+public class ConsumerRecords<K,V> {
 
     private final String topic;
-    private final Map<Integer, List<ConsumerRecord>> recordsPerPartition;
+    private final Map<Integer, List<ConsumerRecord<K,V>>> recordsPerPartition;
     
-    public ConsumerRecords(String topic, Map<Integer, List<ConsumerRecord>> records) {
+    public ConsumerRecords(String topic, Map<Integer, List<ConsumerRecord<K,V>>> records) {
         this.topic = topic;
         this.recordsPerPartition = records;
     }
@@ -36,16 +36,16 @@ public class ConsumerRecords {
      * specified, returns records for all partitions
      * @return The list of {@link ConsumerRecord}s associated with the given partitions.
      */
-    public List<ConsumerRecord> records(int... partitions) {
-        List<ConsumerRecord> recordsToReturn = new ArrayList<ConsumerRecord>(); 
+    public List<ConsumerRecord<K,V>> records(int... partitions) {
+        List<ConsumerRecord<K,V>> recordsToReturn = new ArrayList<ConsumerRecord<K,V>>();
         if(partitions.length == 0) {
             // return records for all partitions
-            for(Entry<Integer, List<ConsumerRecord>> record : recordsPerPartition.entrySet()) {
+            for(Entry<Integer, List<ConsumerRecord<K,V>>> record : recordsPerPartition.entrySet()) {
                 recordsToReturn.addAll(record.getValue());
             }
         } else {
            for(int partition : partitions) {
-               List<ConsumerRecord> recordsForThisPartition = recordsPerPartition.get(partition);
+               List<ConsumerRecord<K,V>> recordsForThisPartition = recordsPerPartition.get(partition);
                recordsToReturn.addAll(recordsForThisPartition);
            }
         }

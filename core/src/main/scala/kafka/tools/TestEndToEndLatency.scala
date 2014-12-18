@@ -56,7 +56,7 @@ object TestEndToEndLatency {
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0")
     producerProps.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
     producerProps.put(ProducerConfig.ACKS_CONFIG, producerAcks.toString)
-    val producer = new KafkaProducer(producerProps)
+    val producer = new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
 
     // make sure the consumer fetcher has started before sending data since otherwise
     // the consumption from the tail will skip the first message and hence be blocked
@@ -67,7 +67,7 @@ object TestEndToEndLatency {
     val latencies = new Array[Long](numMessages)
     for (i <- 0 until numMessages) {
       val begin = System.nanoTime
-      producer.send(new ProducerRecord(topic, message))
+      producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic, message))
       val received = iter.next
       val elapsed = System.nanoTime - begin
       // poor man's progress bar

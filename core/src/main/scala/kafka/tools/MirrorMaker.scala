@@ -39,7 +39,7 @@ object MirrorMaker extends Logging {
   private var producerThreads: Seq[ProducerThread] = null
   private val isShuttingdown: AtomicBoolean = new AtomicBoolean(false)
 
-  private val shutdownMessage : ProducerRecord = new ProducerRecord("shutdown", "shutdown".getBytes)
+  private val shutdownMessage : ProducerRecord[Array[Byte],Array[Byte]] = new ProducerRecord[Array[Byte],Array[Byte]]("shutdown", "shutdown".getBytes)
 
   def main(args: Array[String]) {
     
@@ -187,9 +187,9 @@ object MirrorMaker extends Logging {
 
   class DataChannel(capacity: Int, numInputs: Int, numOutputs: Int) extends KafkaMetricsGroup {
 
-    val queues = new Array[BlockingQueue[ProducerRecord]](numOutputs)
+    val queues = new Array[BlockingQueue[ProducerRecord[Array[Byte],Array[Byte]]]](numOutputs)
     for (i <- 0 until numOutputs)
-      queues(i) = new ArrayBlockingQueue[ProducerRecord](capacity)
+      queues(i) = new ArrayBlockingQueue[ProducerRecord[Array[Byte],Array[Byte]]](capacity)
 
     private val counter = new AtomicInteger(new Random().nextInt())
 
@@ -201,7 +201,7 @@ object MirrorMaker extends Logging {
     private val waitTake = newMeter("MirrorMaker-DataChannel-WaitOnTake", "percent", TimeUnit.NANOSECONDS)
     private val channelSizeHist = newHistogram("MirrorMaker-DataChannel-Size")
 
-    def put(record: ProducerRecord) {
+    def put(record: ProducerRecord[Array[Byte],Array[Byte]]) {
       // If the key of the message is empty, use round-robin to select the queue
       // Otherwise use the queue based on the key value so that same key-ed messages go to the same queue
       val queueId =
@@ -213,7 +213,7 @@ object MirrorMaker extends Logging {
       put(record, queueId)
     }
 
-    def put(record: ProducerRecord, queueId: Int) {
+    def put(record: ProducerRecord[Array[Byte],Array[Byte]], queueId: Int) {
       val queue = queues(queueId)
 
       var putSucceed = false
@@ -225,9 +225,9 @@ object MirrorMaker extends Logging {
       channelSizeHist.update(queue.size)
     }
 
-    def take(queueId: Int): ProducerRecord = {
+    def take(queueId: Int): ProducerRecord[Array[Byte],Array[Byte]] = {
       val queue = queues(queueId)
-      var data: ProducerRecord = null
+      var data: ProducerRecord[Array[Byte],Array[Byte]] = null
       while (data == null) {
         val startTakeTime = SystemTime.nanoseconds
         data = queue.poll(500, TimeUnit.MILLISECONDS)
@@ -254,7 +254,7 @@ object MirrorMaker extends Logging {
       info("Starting mirror maker consumer thread " + threadName)
       try {
         for (msgAndMetadata <- stream) {
-          val data = new ProducerRecord(msgAndMetadata.topic, msgAndMetadata.key, msgAndMetadata.message)
+          val data = new ProducerRecord[Array[Byte],Array[Byte]](msgAndMetadata.topic, msgAndMetadata.key, msgAndMetadata.message)
           mirrorDataChannel.put(data)
         }
       } catch {
@@ -297,7 +297,7 @@ object MirrorMaker extends Logging {
       info("Starting mirror maker producer thread " + threadName)
       try {
         while (true) {
-          val data: ProducerRecord = dataChannel.take(threadId)
+          val data: ProducerRecord[Array[Byte],Array[Byte]] = dataChannel.take(threadId)
           trace("Sending message with value size %d".format(data.value().size))
           if(data eq shutdownMessage) {
             info("Received shutdown message")
@@ -346,4 +346,3 @@ object MirrorMaker extends Logging {
     }
   }
 }
-
