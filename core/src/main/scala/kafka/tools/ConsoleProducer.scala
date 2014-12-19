@@ -36,10 +36,8 @@ object ConsoleProducer {
     val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[MessageReader]
     val props = new Properties
     props.putAll(config.cmdLineProps)
-    
-    val readerProps = new Properties(props)
-    readerProps.put("topic", config.topic)
-    reader.init(System.in, readerProps)
+    props.put("topic", config.topic)
+    reader.init(System.in, props)
 
     try {
         val producer =
@@ -134,13 +132,13 @@ object ConsoleProducer {
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(100)
     val sendTimeoutOpt = parser.accepts("timeout", "If set and the producer is running in asynchronous mode, this gives the maximum amount of time" +
-      " a message will queue awaiting suffient batch size. The value is given in ms.")
+      " a message will queue awaiting sufficient batch size. The value is given in ms.")
       .withRequiredArg
       .describedAs("timeout_ms")
       .ofType(classOf[java.lang.Integer])
       .defaultsTo(1000)
     val queueSizeOpt = parser.accepts("queue-size", "If set and the producer is running in asynchronous mode, this gives the maximum amount of " +
-      " messages will queue awaiting suffient batch size.")
+      " messages will queue awaiting sufficient batch size.")
       .withRequiredArg
       .describedAs("queue_size")
       .ofType(classOf[java.lang.Integer])
