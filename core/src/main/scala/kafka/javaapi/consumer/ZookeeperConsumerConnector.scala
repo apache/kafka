@@ -18,9 +18,8 @@ package kafka.javaapi.consumer
 
 import kafka.serializer._
 import kafka.consumer._
-import kafka.common.MessageStreamsExistException
-import scala.collection.mutable
-import scala.collection.JavaConversions
+import kafka.common.{OffsetAndMetadata, TopicAndPartition, MessageStreamsExistException}
+import scala.collection.{immutable, mutable, JavaConversions}
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -113,6 +112,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
 
   def commitOffsets(retryOnFailure: Boolean) {
     underlying.commitOffsets(retryOnFailure)
+  }
+
+  def commitOffsets(offsetsToCommit: java.util.Map[TopicAndPartition, OffsetAndMetadata], retryOnFailure: Boolean) {
+    underlying.commitOffsets(offsetsToCommit.asInstanceOf[immutable.Map[TopicAndPartition, OffsetAndMetadata]], retryOnFailure)
   }
 
   def setConsumerRebalanceListener(consumerRebalanceListener: ConsumerRebalanceListener) {

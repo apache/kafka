@@ -150,4 +150,54 @@ class UtilsTest extends JUnitSuite {
     assertEquals(2, result)
     assertFalse("Should be unlocked", lock.isLocked)
   }
+
+  @Test
+  def testDoublyLinkedList() {
+    val list = new DoublyLinkedList[Int]
+
+    // test remove from a single-entry list.
+    list.add(new DoublyLinkedListNode[Int](0))
+    list.remove()
+    assert(list.size == 0)
+    assert(list.peek() == null)
+
+    // test add
+    for (i <- 0 to 2) {
+      list.add(new DoublyLinkedListNode[Int](i))
+    }
+    val toBeRemoved1 = new DoublyLinkedListNode[Int](3)
+    list.add(toBeRemoved1)
+    for (i <- 4 to 6) {
+      list.add(new DoublyLinkedListNode[Int](i))
+    }
+    val toBeRemoved2 = new DoublyLinkedListNode[Int](7)
+    list.add(toBeRemoved2)
+
+    // test iterator
+    val iter = list.iterator
+    for (i <- 0 to 7) {
+      assert(iter.hasNext)
+      assert(iter.next().element == i)
+    }
+    assert(!iter.hasNext)
+
+    // remove from head
+    list.remove()
+    assert(list.peek().element == 1)
+    // remove from middle
+    list.remove(toBeRemoved1)
+    // remove from tail
+    list.remove(toBeRemoved2)
+
+    // List = [1,2,4,5,6]
+    val iter2 = list.iterator
+    for (i <- Array[Int](1,2,4,5,6)) {
+      assert(iter2.hasNext)
+      assert(iter2.next().element == i)
+    }
+
+    // test size
+    assert(list.size == 5)
+  }
+
 }

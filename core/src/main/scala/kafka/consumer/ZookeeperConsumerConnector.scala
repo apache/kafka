@@ -302,25 +302,28 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
   def commitOffsets { commitOffsets(true) }
 
   def commitOffsets(isAutoCommit: Boolean) {
-    commitOffsets(isAutoCommit, null)
+
+    val offsetsToCommit =
+      immutable.Map(topicRegistry.flatMap { case (topic, partitionTopicInfos) =>
+        partitionTopicInfos.map { case (partition, info) =>
+          TopicAndPartition(info.topic, info.partitionId) -> OffsetAndMetadata(info.getConsumeOffset())
+        }
+      }.toSeq: _*)
+
+    commitOffsets(offsetsToCommit, isAutoCommit)
+
   }
 
-  def commitOffsets(isAutoCommit: Boolean,
-                    topicPartitionOffsets: immutable.Map[TopicAndPartition, OffsetAndMetadata]) {
-    var retriesRemaining = 1 + (if (isAutoCommit) config.offsetsCommitMaxRetries else 0) // no retries for commits from auto-commit
+  def commitOffsets(offsetsToCommit: immutable.Map[TopicAndPartition, OffsetAndMetadata], isAutoCommit: Boolean) {
+    trace("OffsetMap: %s".format(offsetsToCommit))
+    var retriesRemaining = 1 + (if (isAutoCommit) 0 else config.offsetsCommitMaxRetries) // no retries for commits from auto-commit
     var done = false
-
     while (!done) {
-      val committed = offsetsChannelLock synchronized { // committed when we receive either no error codes or only MetadataTooLarge errors
-        val offsetsToCommit = if (topicPartitionOffsets == null) {immutable.Map(topicRegistry.flatMap { case (topic, partitionTopicInfos) =>
-          partitionTopicInfos.map { case (partition, info) =>
-            TopicAndPartition(info.topic, info.partitionId) -> OffsetAndMetadata(info.getConsumeOffset())
-          }
-        }.toSeq:_*)} else topicPartitionOffsets
-
+      val committed = offsetsChannelLock synchronized {
+        // committed when we receive either no error codes or only MetadataTooLarge errors
         if (offsetsToCommit.size > 0) {
           if (config.offsetsStorage == "zookeeper") {
-            offsetsToCommit.foreach { case(topicAndPartition, offsetAndMetadata) =>
+            offsetsToCommit.foreach { case (topicAndPartition, offsetAndMetadata) =>
               commitOffsetToZooKeeper(topicAndPartition, offsetAndMetadata.offset)
             }
             true
@@ -334,25 +337,25 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
               trace("Offset commit response: %s.".format(offsetCommitResponse))
 
               val (commitFailed, retryableIfFailed, shouldRefreshCoordinator, errorCount) = {
-                offsetCommitResponse.commitStatus.foldLeft(false, false, false, 0) { case(folded, (topicPartition, errorCode)) =>
+                offsetCommitResponse.commitStatus.foldLeft(false, false, false, 0) { case (folded, (topicPartition, errorCode)) =>
 
                   if (errorCode == ErrorMapping.NoError && config.dualCommitEnabled) {
-                      val offset = offsetsToCommit(topicPartition).offset
-                      commitOffsetToZooKeeper(topicPartition, offset)
+                    val offset = offsetsToCommit(topicPartition).offset
+                    commitOffsetToZooKeeper(topicPartition, offset)
                   }
 
                   (folded._1 || // update commitFailed
-                     errorCode != ErrorMapping.NoError,
+                    errorCode != ErrorMapping.NoError,
 
-                  folded._2 || // update retryableIfFailed - (only metadata too large is not retryable)
-                    (errorCode != ErrorMapping.NoError && errorCode != ErrorMapping.OffsetMetadataTooLargeCode),
+                    folded._2 || // update retryableIfFailed - (only metadata too large is not retryable)
+                      (errorCode != ErrorMapping.NoError && errorCode != ErrorMapping.OffsetMetadataTooLargeCode),
 
-                  folded._3 || // update shouldRefreshCoordinator
-                    errorCode == ErrorMapping.NotCoordinatorForConsumerCode ||
-                    errorCode == ErrorMapping.ConsumerCoordinatorNotAvailableCode,
+                    folded._3 || // update shouldRefreshCoordinator
+                      errorCode == ErrorMapping.NotCoordinatorForConsumerCode ||
+                      errorCode == ErrorMapping.ConsumerCoordinatorNotAvailableCode,
 
-                  // update error count
-                  folded._4 + (if (errorCode != ErrorMapping.NoError) 1 else 0))
+                    // update error count
+                    folded._4 + (if (errorCode != ErrorMapping.NoError) 1 else 0))
                 }
               }
               debug(errorCount + " errors in offset commit response.")
@@ -381,11 +384,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         }
       }
 
-      done = if (isShuttingDown.get() && isAutoCommit) { // should not retry indefinitely if shutting down
+      done = {
         retriesRemaining -= 1
         retriesRemaining == 0 || committed
-      } else
-        true
+      }
 
       if (!done) {
         debug("Retrying offset commit in %d ms".format(config.offsetsChannelBackoffMs))
