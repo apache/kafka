@@ -71,6 +71,12 @@ object ConsumerPerformance {
 
     val endMs = System.currentTimeMillis
     val elapsedSecs = (endMs - startMs - config.consumerConfig.consumerTimeoutMs) / 1000.0
+
+    if(elapsedSecs <= 0) {
+      println("The total running time should be more than 'consumer.timeout.ms'!")
+      System.exit(1)
+    }
+
     if (!config.showDetailedStats) {
       val totalMBRead = (totalBytesRead.get * 1.0) / (1024 * 1024)
       println(("%s, %s, %d, %.4f, %.4f, %d, %.4f").format(config.dateFormat.format(startMs), config.dateFormat.format(endMs),
