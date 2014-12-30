@@ -28,7 +28,7 @@ popd
 set CLASSPATH=
 
 IF ["%SCALA_VERSION%"] EQU [""] (
-  set SCALA_VERSION=2.10.1
+  set SCALA_VERSION=2.10.4
 )
 
 IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
