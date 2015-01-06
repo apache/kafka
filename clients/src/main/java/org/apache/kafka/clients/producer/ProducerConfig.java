@@ -227,8 +227,8 @@ public class ProducerConfig extends AbstractConfig {
                                         atLeast(1),
                                         Importance.LOW,
                                         MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC)
-                                .define(KEY_SERIALIZER_CLASS_CONFIG, Type.CLASS, "org.apache.kafka.clients.producer.ByteArraySerializer", Importance.HIGH, KEY_SERIALIZER_CLASS_DOC)
-                                .define(VALUE_SERIALIZER_CLASS_CONFIG, Type.CLASS, "org.apache.kafka.clients.producer.ByteArraySerializer", Importance.HIGH, VALUE_SERIALIZER_CLASS_DOC);
+                                .define(KEY_SERIALIZER_CLASS_CONFIG, Type.CLASS, Importance.HIGH, KEY_SERIALIZER_CLASS_DOC)
+                                .define(VALUE_SERIALIZER_CLASS_CONFIG, Type.CLASS, Importance.HIGH, VALUE_SERIALIZER_CLASS_DOC);
     }
 
     ProducerConfig(Map<? extends Object, ? extends Object> props) {

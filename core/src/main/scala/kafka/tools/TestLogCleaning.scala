@@ -242,6 +242,8 @@ object TestLogCleaning {
     val producerProps = new Properties
     producerProps.setProperty(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
     producerProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerUrl)
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     val producer = new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
     val rand = new Random(1)
     val keyCount = (messages / dups).toInt

@@ -56,6 +56,8 @@ object TestEndToEndLatency {
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0")
     producerProps.put(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG, "true")
     producerProps.put(ProducerConfig.ACKS_CONFIG, producerAcks.toString)
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     val producer = new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
 
     // make sure the consumer fetcher has started before sending data since otherwise

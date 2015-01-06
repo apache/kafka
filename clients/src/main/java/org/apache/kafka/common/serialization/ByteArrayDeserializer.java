@@ -11,28 +11,24 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package org.apache.kafka.clients.consumer;
+package org.apache.kafka.common.serialization;
 
-import org.apache.kafka.common.Configurable;
+import java.util.Map;
 
-/**
- *
- * @param <T> Type to be deserialized into.
- *
- * A class that implements this interface is expected to have a constructor with no parameter.
- */
-public interface Deserializer<T> extends Configurable {
-    /**
-     *
-     * @param topic Topic associated with the data
-     * @param data Serialized bytes
-     * @param isKey Is data for key or value
-     * @return
-     */
-    public T deserialize(String topic, byte[] data, boolean isKey);
+public class ByteArrayDeserializer implements Deserializer<byte[]> {
 
-    /**
-     * Close this deserializer
-     */
-    public void close();
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+        // nothing to do
+    }
+
+    @Override
+    public byte[] deserialize(String topic, byte[] data) {
+        return data;
+    }
+
+    @Override
+    public void close() {
+        // nothing to do
+    }
 }

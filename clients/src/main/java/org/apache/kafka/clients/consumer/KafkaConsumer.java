@@ -18,6 +18,7 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.ClientUtils;
 import org.apache.kafka.common.utils.SystemTime;
 import org.slf4j.Logger;
@@ -345,7 +346,7 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
      * @param configs   The consumer configs
      */
     public KafkaConsumer(Map<String, Object> configs) {
-        this(new ConsumerConfig(configs), null, null, null);
+        this(configs, null);
     }
 
     /**
@@ -358,7 +359,7 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
      *                  every rebalance operation.  
      */
     public KafkaConsumer(Map<String, Object> configs, ConsumerRebalanceCallback callback) {
-        this(new ConsumerConfig(configs), callback, null, null);
+        this(configs, callback, null, null);
     }
 
     /**
@@ -375,7 +376,19 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
      *                           won't be called when the deserializer is passed in directly.
      */
     public KafkaConsumer(Map<String, Object> configs, ConsumerRebalanceCallback callback, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(configs), callback, keyDeserializer, valueDeserializer);
+        this(new ConsumerConfig(addDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+             callback, keyDeserializer, valueDeserializer);
+    }
+
+    private static Map<String, Object> addDeserializerToConfig(Map<String, Object> configs,
+                                                               Deserializer<?> keyDeserializer, Deserializer<?> valueDeserializer) {
+        Map<String, Object> newConfigs = new HashMap<String, Object>();
+        newConfigs.putAll(configs);
+        if (keyDeserializer != null)
+            newConfigs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass());
+        if (keyDeserializer != null)
+            newConfigs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
+        return newConfigs;
     }
 
     /**
@@ -383,7 +396,7 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
      * Valid configuration strings are documented at {@link ConsumerConfig}
      */
     public KafkaConsumer(Properties properties) {
-        this(new ConsumerConfig(properties), null, null, null);
+        this(properties, null);
     }
 
     /**
@@ -396,7 +409,7 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
      *                   every rebalance operation.  
      */
     public KafkaConsumer(Properties properties, ConsumerRebalanceCallback callback) {
-        this(new ConsumerConfig(properties), callback, null, null);
+        this(properties, callback, null, null);
     }
 
     /**
@@ -413,7 +426,19 @@ public class KafkaConsumer<K,V> implements Consumer<K,V> {
      *                           won't be called when the deserializer is passed in directly.
      */
     public KafkaConsumer(Properties properties, ConsumerRebalanceCallback callback, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(properties), callback, keyDeserializer, valueDeserializer);
+        this(new ConsumerConfig(addDeserializerToConfig(properties, keyDeserializer, valueDeserializer)),
+             callback, keyDeserializer, valueDeserializer);
+    }
+
+    private static Properties addDeserializerToConfig(Properties properties,
+                                                      Deserializer<?> keyDeserializer, Deserializer<?> valueDeserializer) {
+        Properties newProperties = new Properties();
+        newProperties.putAll(properties);
+        if (keyDeserializer != null)
+            newProperties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer.getClass().getName());
+        if (keyDeserializer != null)
+            newProperties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass().getName());
+        return newProperties;
     }
 
     private KafkaConsumer(ConsumerConfig config, ConsumerRebalanceCallback callback, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {

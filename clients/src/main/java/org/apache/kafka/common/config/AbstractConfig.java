@@ -12,12 +12,7 @@
  */
 package org.apache.kafka.common.config;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
@@ -95,6 +90,12 @@ public class AbstractConfig {
         Set<String> keys = new HashSet<String>(originals.keySet());
         keys.removeAll(used);
         return keys;
+    }
+
+    public Map<String, ?> originals() {
+        Map<String, Object> copy = new HashMap<String, Object>();
+        copy.putAll(originals);
+        return copy;
     }
 
     private void logAll() {

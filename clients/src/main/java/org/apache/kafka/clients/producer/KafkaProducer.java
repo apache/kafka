@@ -13,10 +13,7 @@
 package org.apache.kafka.clients.producer;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
@@ -34,6 +31,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
+import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -44,6 +42,7 @@ import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.ClientUtils;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.SystemTime;
@@ -102,7 +101,19 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
      *                         be called when the serializer is passed in directly.
      */
     public KafkaProducer(Map<String, Object> configs, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-        this(new ProducerConfig(configs), keySerializer, valueSerializer);
+        this(new ProducerConfig(addSerializerToConfig(configs, keySerializer, valueSerializer)),
+             keySerializer, valueSerializer);
+    }
+
+    private static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,
+                                                      Serializer<?> keySerializer, Serializer<?> valueSerializer) {
+        Map<String, Object> newConfigs = new HashMap<String, Object>();
+        newConfigs.putAll(configs);
+        if (keySerializer != null)
+            newConfigs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass());
+        if (valueSerializer != null)
+            newConfigs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass());
+        return newConfigs;
     }
 
     /**
@@ -124,7 +135,19 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
      *                         be called when the serializer is passed in directly.
      */
     public KafkaProducer(Properties properties, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-        this(new ProducerConfig(properties), keySerializer, valueSerializer);
+        this(new ProducerConfig(addSerializerToConfig(properties, keySerializer, valueSerializer)),
+             keySerializer, valueSerializer);
+    }
+
+    private static Properties addSerializerToConfig(Properties properties,
+                                                    Serializer<?> keySerializer, Serializer<?> valueSerializer) {
+        Properties newProperties = new Properties();
+        newProperties.putAll(properties);
+        if (keySerializer != null)
+            newProperties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer.getClass().getName());
+        if (valueSerializer != null)
+            newProperties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer.getClass().getName());
+        return newProperties;
     }
 
     private KafkaProducer(ProducerConfig config, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
@@ -178,14 +201,18 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
 
         this.errors = this.metrics.sensor("errors");
 
-        if (keySerializer == null)
+        if (keySerializer == null) {
             this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                                                               Serializer.class);
+            this.keySerializer.configure(config.originals(), true);
+        }
         else
             this.keySerializer = keySerializer;
-        if (valueSerializer == null)
+        if (valueSerializer == null) {
             this.valueSerializer = config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                                                                 Serializer.class);
+            this.valueSerializer.configure(config.originals(), false);
+        }
         else
             this.valueSerializer = valueSerializer;
 
@@ -275,8 +302,20 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
         try {
             // first make sure the metadata for the topic is available
             waitOnMetadata(record.topic(), this.metadataFetchTimeoutMs);
-            byte[] serializedKey = keySerializer.serialize(record.topic(), record.key(), true);
-            byte[] serializedValue = valueSerializer.serialize(record.topic(), record.value(), false);
+            byte[] serializedKey;
+            try {
+                serializedKey = keySerializer.serialize(record.topic(), record.key());
+            } catch (ClassCastException cce) {
+                throw new SerializationException("Can't convert key of class " + record.key().getClass().getName() +
+                        " to the one specified in key.serializer");
+            }
+            byte[] serializedValue;
+            try {
+                serializedValue = valueSerializer.serialize(record.topic(), record.value());
+            } catch (ClassCastException cce) {
+                throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
+                        " to the one specified in value.serializer");
+            }
             ProducerRecord serializedRecord = new ProducerRecord<byte[], byte[]>(record.topic(), record.partition(), serializedKey, serializedValue);
             int partition = partitioner.partition(serializedRecord, metadata.fetch());
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);

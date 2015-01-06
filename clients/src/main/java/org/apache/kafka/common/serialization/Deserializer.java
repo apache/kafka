@@ -11,24 +11,35 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package org.apache.kafka.clients.producer;
+package org.apache.kafka.common.serialization;
 
 import java.util.Map;
 
-public class ByteArraySerializer implements Serializer<byte[]> {
+/**
+ *
+ * @param <T> Type to be deserialized into.
+ *
+ * A class that implements this interface is expected to have a constructor with no parameter.
+ */
+public interface Deserializer<T> {
 
-    @Override
-    public void configure(Map<String, ?> configs) {
-        // nothing to do
-    }
+    /**
+     * Configure this class.
+     * @param configs configs in key/value pairs
+     * @param isKey whether is for key or value
+     */
+    public void configure(Map<String, ?> configs, boolean isKey);
 
-    @Override
-    public byte[] serialize(String topic, byte[] data, boolean isKey) {
-        return data;
-    }
+    /**
+     *
+     * @param topic topic associated with the data
+     * @param data serialized bytes
+     * @return deserialized object
+     */
+    public T deserialize(String topic, byte[] data);
 
-    @Override
-    public void close() {
-        // nothing to do
-    }
+    /**
+     * Close this deserializer
+     */
+    public void close();
 }

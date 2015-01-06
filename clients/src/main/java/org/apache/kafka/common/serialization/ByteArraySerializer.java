@@ -11,37 +11,24 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package org.apache.kafka.common.errors;
+package org.apache.kafka.common.serialization;
 
-import org.apache.kafka.common.KafkaException;
+import java.util.Map;
 
-/**
- *  Any exception during deserialization in the consumer
- */
-public class DeserializationException extends KafkaException {
+public class ByteArraySerializer implements Serializer<byte[]> {
 
-    private static final long serialVersionUID = 1L;
-
-    public DeserializationException(String message, Throwable cause) {
-        super(message, cause);
-    }
-
-    public DeserializationException(String message) {
-        super(message);
-    }
-
-    public DeserializationException(Throwable cause) {
-        super(cause);
-    }
-
-    public DeserializationException() {
-        super();
-    }
-
-    /* avoid the expensive and useless stack trace for deserialization exceptions */
     @Override
-    public Throwable fillInStackTrace() {
-        return this;
+    public void configure(Map<String, ?> configs, boolean isKey) {
+        // nothing to do
     }
 
+    @Override
+    public byte[] serialize(String topic, byte[] data) {
+        return data;
+    }
+
+    @Override
+    public void close() {
+        // nothing to do
+    }
 }

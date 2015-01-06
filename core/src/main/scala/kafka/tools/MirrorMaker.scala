@@ -22,7 +22,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.producer.{BaseProducer, NewShinyProducer, OldProducer}
 import kafka.serializer._
 import kafka.utils._
-import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 
 import java.util.Random
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
@@ -133,8 +133,11 @@ object MirrorMaker extends Logging {
     producerThreads = (0 until numProducers).map(i => {
       producerProps.setProperty("client.id", clientId + "-" + i)
       val producer =
-      if (useNewProducer)
+      if (useNewProducer) {
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
         new NewShinyProducer(producerProps)
+      }
       else
         new OldProducer(producerProps)
       new ProducerThread(mirrorDataChannel, producer, i)
