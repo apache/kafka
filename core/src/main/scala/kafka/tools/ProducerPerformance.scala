@@ -188,6 +188,8 @@ object ProducerPerformance extends Logging {
         props.put(ProducerConfig.RETRIES_CONFIG, config.producerNumRetries.toString)
         props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.producerRetryBackoffMs.toString)
         props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec.name)
+        props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+        props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
         new NewShinyProducer(props)
       } else {
         props.put("metadata.broker.list", config.brokerList)

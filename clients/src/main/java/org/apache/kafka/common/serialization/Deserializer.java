@@ -11,28 +11,35 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package org.apache.kafka.clients.producer;
+package org.apache.kafka.common.serialization;
 
-import org.apache.kafka.common.Configurable;
+import java.util.Map;
 
 /**
  *
- * @param <T> Type to be serialized from.
+ * @param <T> Type to be deserialized into.
  *
  * A class that implements this interface is expected to have a constructor with no parameter.
  */
-public interface Serializer<T> extends Configurable {
-    /**
-     *
-     * @param topic Topic associated with data
-     * @param data Typed data
-     * @param isKey Is data for key or value
-     * @return bytes of the serialized data
-     */
-    public byte[] serialize(String topic, T data, boolean isKey);
+public interface Deserializer<T> {
 
     /**
-     * Close this serializer
+     * Configure this class.
+     * @param configs configs in key/value pairs
+     * @param isKey whether is for key or value
+     */
+    public void configure(Map<String, ?> configs, boolean isKey);
+
+    /**
+     *
+     * @param topic topic associated with the data
+     * @param data serialized bytes
+     * @return deserialized typed data
+     */
+    public T deserialize(String topic, byte[] data);
+
+    /**
+     * Close this deserializer
      */
     public void close();
 }

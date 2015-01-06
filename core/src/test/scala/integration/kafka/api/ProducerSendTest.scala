@@ -30,6 +30,10 @@ import kafka.consumer.SimpleConsumer
 import kafka.api.FetchRequestBuilder
 import kafka.message.Message
 import kafka.integration.KafkaServerTestHarness
+import org.apache.kafka.common.errors.SerializationException
+import java.util.Properties
+import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.serialization.ByteArraySerializer
 
 
 class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
@@ -124,6 +128,55 @@ class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
         producer = null
       }
     }
+  }
+
+  @Test
+  def testSerializer() {
+    // send a record with a wrong type should receive a serialization exception
+    try {
+      val producer = createNewProducerWithWrongSerializer(brokerList)
+      val record5 = new ProducerRecord[Array[Byte],Array[Byte]](topic, new Integer(0), "key".getBytes, "value".getBytes)
+      producer.send(record5)
+      fail("Should have gotten a SerializationException")
+    } catch {
+      case se: SerializationException => // this is ok
+    }
+
+    try {
+      createNewProducerWithNoSerializer(brokerList)
+      fail("Instantiating a producer without specifying a serializer should cause a ConfigException")
+    } catch {
+      case ce : ConfigException => // this is ok
+    }
+
+    // create a producer with explicit serializers should succeed
+    createNewProducerWithExplicitSerializer(brokerList)
+  }
+
+  private def createNewProducerWithWrongSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
+    import org.apache.kafka.clients.producer.ProducerConfig
+
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
+    producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.StringSerializer")
+    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
+  }
+
+  private def createNewProducerWithNoSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
+    import org.apache.kafka.clients.producer.ProducerConfig
+
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
+  }
+
+  private def createNewProducerWithExplicitSerializer(brokerList: String) : KafkaProducer[Array[Byte],Array[Byte]] = {
+    import org.apache.kafka.clients.producer.ProducerConfig
+
+    val producerProps = new Properties()
+    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps, new ByteArraySerializer, new ByteArraySerializer)
   }
 
   /**

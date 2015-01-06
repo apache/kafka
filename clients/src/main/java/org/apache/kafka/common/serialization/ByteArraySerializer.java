@@ -11,19 +11,19 @@
  * specific language governing permissions and limitations under the License.
  */
 
-package org.apache.kafka.clients.consumer;
+package org.apache.kafka.common.serialization;
 
 import java.util.Map;
 
-public class ByteArrayDeserializer implements Deserializer<byte[]> {
+public class ByteArraySerializer implements Serializer<byte[]> {
 
     @Override
-    public void configure(Map<String, ?> configs) {
+    public void configure(Map<String, ?> configs, boolean isKey) {
         // nothing to do
     }
 
     @Override
-    public byte[] deserialize(String topic, byte[] data, boolean isKey) {
+    public byte[] serialize(String topic, byte[] data) {
         return data;
     }
 

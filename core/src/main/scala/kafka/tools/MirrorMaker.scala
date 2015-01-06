@@ -27,9 +27,6 @@ import kafka.producer.{KeyedMessage, ProducerConfig}
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, RecordMetadata, ProducerRecord}
-import org.apache.kafka.common.KafkaException
-
-import scala.collection.JavaConversions._
 
 import joptsimple.OptionParser
 import java.util.Properties
@@ -240,8 +237,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     producerThreads = (0 until numProducers).map(i => {
       producerProps.setProperty("client.id", clientId + "-" + i)
       val producer =
-      if (useNewProducer)
+      if (useNewProducer) {
+        producerProps.put(org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
+                          "org.apache.kafka.common.serialization.ByteArraySerializer")
+        producerProps.put(org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
+                          "org.apache.kafka.common.serialization.ByteArraySerializer")
         new MirrorMakerNewProducer(producerProps)
+      }
       else
         new MirrorMakerOldProducer(producerProps)
       new ProducerThread(mirrorDataChannel, producer, i)
