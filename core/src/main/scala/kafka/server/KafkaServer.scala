@@ -94,7 +94,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                       config.socketReceiveBufferBytes,
                                       config.socketRequestMaxBytes,
                                       config.maxConnectionsPerIp,
-                                      config.connectionsMaxIdleMs)
+                                      config.connectionsMaxIdleMs,
+                                      config.maxConnectionsPerIpOverrides)
       socketServer.startup()
 
       replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler, logManager, isShuttingDown)
