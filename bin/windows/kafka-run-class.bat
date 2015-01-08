@@ -26,8 +26,9 @@ pushd %~dp0..\..
 set BASE_DIR=%CD%
 popd
 
+
 IF ["%SCALA_VERSION%"] EQU [""] (
-  set SCALA_VERSION=2.10.6
+  set SCALA_VERSION=2.10.5
 )
 
 IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
@@ -55,7 +56,9 @@ for %%i in (%BASE_DIR%\examples\build\libs\kafka-examples-*.jar) do (
 )
 
 rem Classpath addition for release
-call :concat %BASE_DIR%\libs\*
+for %%i in (%BASE_DIR%\libs\*.jar) do (
+	call :concat %%i
+)
 
 rem Classpath addition for core
 for %%i in (%BASE_DIR%\core\build\libs\kafka_%SCALA_BINARY_VERSION%*.jar) do (

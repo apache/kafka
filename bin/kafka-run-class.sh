@@ -40,6 +40,16 @@ should_include_file() {
 
 base_dir=$(dirname $0)/..
 
+# run kafka-env.sh
+KAFKA_ENV=$base_dir/config/kafka-env.sh
+if [ -f $KAFKA_ENV ]; then
+    . $KAFKA_ENV
+fi
+
+if [ ! -f $JAVA_HOME/bin/java ]; then
+    echo "Error: JAVA_HOME is incorrectly set."
+    exit
+fi
 if [ -z "$SCALA_VERSION" ]; then
 	SCALA_VERSION=2.10.6
 fi
