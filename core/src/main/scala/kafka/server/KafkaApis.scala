@@ -508,7 +508,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       metadataCache.getPartitionInfo(topicAndPartition.topic, topicAndPartition.partition).isEmpty
     )
     val unknownStatus = unknownTopicPartitions.map(topicAndPartition => (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)).toMap
-    val knownStatus = offsetManager.getOffsets(offsetFetchRequest.groupId, knownTopicPartitions).toMap
+    val knownStatus =
+      if (knownTopicPartitions.size > 0)
+        offsetManager.getOffsets(offsetFetchRequest.groupId, knownTopicPartitions).toMap
+      else
+        Map.empty[TopicAndPartition, OffsetMetadataAndError]
     val status = unknownStatus ++ knownStatus
 
     val response = OffsetFetchResponse(status, offsetFetchRequest.correlationId)
