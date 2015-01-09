@@ -48,8 +48,10 @@ public class SerializationTest {
 
             assertEquals("Should get the original string after serialization and deserialization with encoding " + encoding,
                     str, deserializer.deserialize(mytopic, serializer.serialize(mytopic, str)));
-        }
 
+            assertEquals("Should support null in serialization and deserialization with encoding " + encoding,
+                    null, deserializer.deserialize(mytopic, serializer.serialize(mytopic, null)));
+        }
     }
 
     private SerDeser<String> getStringSerDeser(String encoder) {

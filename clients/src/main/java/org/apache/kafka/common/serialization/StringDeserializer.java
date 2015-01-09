@@ -37,7 +37,10 @@ public class StringDeserializer implements Deserializer<String> {
     @Override
     public String deserialize(String topic, byte[] data) {
         try {
-            return new String(data, encoding);
+            if (data == null)
+                return null;
+            else
+                return new String(data, encoding);
         } catch (UnsupportedEncodingException e) {
             throw new SerializationException("Error when deserializing byte[] to string due to unsupported encoding " + encoding);
         }
