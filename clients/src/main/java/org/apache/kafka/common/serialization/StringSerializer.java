@@ -37,7 +37,10 @@ public class StringSerializer implements Serializer<String> {
     @Override
     public byte[] serialize(String topic, String data) {
         try {
-            return data.getBytes(encoding);
+            if (data == null)
+                return null;
+            else
+                return data.getBytes(encoding);
         } catch (UnsupportedEncodingException e) {
             throw new SerializationException("Error when serializing string to byte[] due to unsupported encoding " + encoding);
         }
