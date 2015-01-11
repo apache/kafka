@@ -90,7 +90,7 @@ class Partition(val topic: String,
           val checkpoint = replicaManager.highWatermarkCheckpoints(log.dir.getParentFile.getAbsolutePath)
           val offsetMap = checkpoint.read
           if (!offsetMap.contains(TopicAndPartition(topic, partitionId)))
-            warn("No checkpointed highwatermark is found for partition [%s,%d]".format(topic, partitionId))
+            info("No checkpointed highwatermark is found for partition [%s,%d]".format(topic, partitionId))
           val offset = offsetMap.getOrElse(TopicAndPartition(topic, partitionId), 0L).min(log.logEndOffset)
           val localReplica = new Replica(replicaId, this, time, offset, Some(log))
           addReplicaIfNotExists(localReplica)

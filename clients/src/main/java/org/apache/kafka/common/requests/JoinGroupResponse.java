@@ -23,16 +23,17 @@ import java.nio.ByteBuffer;
 import java.util.*;
 
 public class JoinGroupResponse extends AbstractRequestResponse {
-    public static Schema curSchema = ProtoUtils.currentResponseSchema(ApiKeys.JOIN_GROUP.id);
-    private static String ERROR_CODE_KEY_NAME = "error_code";
-    private static String GENERATION_ID_KEY_NAME = "group_generation_id";
-    private static String CONSUMER_ID_KEY_NAME = "consumer_id";
-    private static String ASSIGNED_PARTITIONS_KEY_NAME = "assigned_partitions";
-    private static String TOPIC_KEY_NAME = "topic";
-    private static String PARTITIONS_KEY_NAME = "partitions";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.JOIN_GROUP.id);
+    private static final String ERROR_CODE_KEY_NAME = "error_code";
+    private static final String GENERATION_ID_KEY_NAME = "group_generation_id";
+    private static final String CONSUMER_ID_KEY_NAME = "consumer_id";
+    private static final String ASSIGNED_PARTITIONS_KEY_NAME = "assigned_partitions";
+    private static final String TOPIC_KEY_NAME = "topic";
+    private static final String PARTITIONS_KEY_NAME = "partitions";
 
-    public static int UNKNOWN_GENERATION_ID = -1;
-    public static String UNKNOWN_CONSUMER_ID = "";
+    public static final int UNKNOWN_GENERATION_ID = -1;
+    public static final String UNKNOWN_CONSUMER_ID = "";
 
     private final short errorCode;
     private final int generationId;
@@ -40,7 +41,7 @@ public class JoinGroupResponse extends AbstractRequestResponse {
     private final List<TopicPartition> assignedPartitions;
 
     public JoinGroupResponse(short errorCode, int generationId, String consumerId, List<TopicPartition> assignedPartitions) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
 
         Map<String, List<Integer>> partitionsByTopic = CollectionUtils.groupDataByTopic(assignedPartitions);
 
@@ -97,6 +98,6 @@ public class JoinGroupResponse extends AbstractRequestResponse {
     }
 
     public static JoinGroupResponse parse(ByteBuffer buffer) {
-        return new JoinGroupResponse(((Struct) curSchema.read(buffer)));
+        return new JoinGroupResponse(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

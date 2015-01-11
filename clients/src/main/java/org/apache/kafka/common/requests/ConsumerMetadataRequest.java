@@ -20,13 +20,14 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public class ConsumerMetadataRequest extends AbstractRequestResponse {
-    public static Schema curSchema = ProtoUtils.currentRequestSchema(ApiKeys.CONSUMER_METADATA.id);
-    private static String GROUP_ID_KEY_NAME = "group_id";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.CONSUMER_METADATA.id);
+    private static final String GROUP_ID_KEY_NAME = "group_id";
 
     private final String groupId;
 
     public ConsumerMetadataRequest(String groupId) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
 
         struct.set(GROUP_ID_KEY_NAME, groupId);
         this.groupId = groupId;
@@ -42,6 +43,6 @@ public class ConsumerMetadataRequest extends AbstractRequestResponse {
     }
 
     public static ConsumerMetadataRequest parse(ByteBuffer buffer) {
-        return new ConsumerMetadataRequest(((Struct) curSchema.read(buffer)));
+        return new ConsumerMetadataRequest(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

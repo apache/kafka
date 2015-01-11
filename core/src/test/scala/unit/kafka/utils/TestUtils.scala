@@ -45,6 +45,7 @@ import kafka.log._
 import junit.framework.AssertionFailedError
 import junit.framework.Assert._
 import org.apache.kafka.clients.producer.KafkaProducer
+import collection.Iterable
 
 import scala.collection.Map
 
@@ -709,24 +710,21 @@ object TestUtils extends Logging {
   /**
    * Create new LogManager instance with default configuration for testing
    */
-  def createLogManager(
-    logDirs: Array[File] = Array.empty[File],
-    defaultConfig: LogConfig = LogConfig(),
-    cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
-    time: MockTime = new MockTime()) =
-  {
-    new LogManager(
-      logDirs = logDirs,
-      topicConfigs = Map(),
-      defaultConfig = defaultConfig,
-      cleanerConfig = cleanerConfig,
-      ioThreads = 4,
-      flushCheckMs = 1000L,
-      flushCheckpointMs = 10000L,
-      retentionCheckMs = 1000L,
-      scheduler = time.scheduler,
-      time = time,
-      brokerState = new BrokerState())
+  def createLogManager(logDirs: Array[File] = Array.empty[File],
+                       defaultConfig: LogConfig = LogConfig(),
+                       cleanerConfig: CleanerConfig = CleanerConfig(enableCleaner = false),
+                       time: MockTime = new MockTime()): LogManager = {
+    new LogManager(logDirs = logDirs,
+                   topicConfigs = Map(),
+                   defaultConfig = defaultConfig,
+                   cleanerConfig = cleanerConfig,
+                   ioThreads = 4,
+                   flushCheckMs = 1000L,
+                   flushCheckpointMs = 10000L,
+                   retentionCheckMs = 1000L,
+                   scheduler = time.scheduler,
+                   time = time,
+                   brokerState = new BrokerState())
   }
 
   def sendMessagesToPartition(configs: Seq[KafkaConfig],

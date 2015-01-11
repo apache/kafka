@@ -59,11 +59,31 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public List<ClientResponse> poll(List<ClientRequest> requests, long timeoutMs, long now) {
-        this.requests.addAll(requests);
-        List<ClientResponse> copy = new ArrayList<ClientResponse>(this.responses);
+    public void send(ClientRequest request) {
+        this.requests.add(request);
+    }
+
+    @Override
+    public List<ClientResponse> poll(long timeoutMs, long now) {
+        for(ClientResponse response: this.responses)
+            if (response.request().hasCallback()) 
+                response.request().callback().onComplete(response);
+        List<ClientResponse> copy = new ArrayList<ClientResponse>();
         this.responses.clear();
         return copy;
+    }
+
+    @Override
+    public List<ClientResponse> completeAll(int node, long now) {
+        return completeAll(now);
+    }
+
+    @Override
+    public List<ClientResponse> completeAll(long now) {
+        List<ClientResponse> responses = poll(0, now);
+        if (requests.size() > 0)
+            throw new IllegalStateException("Requests without responses remain.");
+        return responses;
     }
 
     public Queue<ClientRequest> requests() {
@@ -77,6 +97,11 @@ public class MockClient implements KafkaClient {
 
     @Override
     public int inFlightRequestCount() {
+        return requests.size();
+    }
+
+    @Override
+    public int inFlightRequestCount(int nodeId) {
         return requests.size();
     }
 

@@ -30,18 +30,19 @@ import java.util.List;
 import java.util.Map;
 
 public class ListOffsetRequest extends AbstractRequestResponse {
-    public static Schema curSchema = ProtoUtils.currentRequestSchema(ApiKeys.LIST_OFFSETS.id);
-    private static String REPLICA_ID_KEY_NAME = "replica_id";
-    private static String TOPICS_KEY_NAME = "topics";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.LIST_OFFSETS.id);
+    private static final String REPLICA_ID_KEY_NAME = "replica_id";
+    private static final String TOPICS_KEY_NAME = "topics";
 
     // topic level field names
-    private static String TOPIC_KEY_NAME = "topic";
-    private static String PARTITIONS_KEY_NAME = "partitions";
+    private static final String TOPIC_KEY_NAME = "topic";
+    private static final String PARTITIONS_KEY_NAME = "partitions";
 
     // partition level field names
-    private static String PARTITION_KEY_NAME = "partition";
-    private static String TIMESTAMP_KEY_NAME = "timestamp";
-    private static String MAX_NUM_OFFSETS_KEY_NAME = "max_num_offsets";
+    private static final String PARTITION_KEY_NAME = "partition";
+    private static final String TIMESTAMP_KEY_NAME = "timestamp";
+    private static final String MAX_NUM_OFFSETS_KEY_NAME = "max_num_offsets";
 
     private final int replicaId;
     private final Map<TopicPartition, PartitionData> offsetData;
@@ -55,9 +56,13 @@ public class ListOffsetRequest extends AbstractRequestResponse {
             this.maxNumOffsets = maxNumOffsets;
         }
     }
+    
+    public ListOffsetRequest(Map<TopicPartition, PartitionData> offsetData) {
+    	this(-1, offsetData);
+    }
 
     public ListOffsetRequest(int replicaId, Map<TopicPartition, PartitionData> offsetData) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(offsetData);
 
         struct.set(REPLICA_ID_KEY_NAME, replicaId);
@@ -109,6 +114,6 @@ public class ListOffsetRequest extends AbstractRequestResponse {
     }
 
     public static ListOffsetRequest parse(ByteBuffer buffer) {
-        return new ListOffsetRequest(((Struct) curSchema.read(buffer)));
+        return new ListOffsetRequest(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

@@ -17,6 +17,12 @@
 
 package kafka.server
 
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.JoinGroupResponse
+import org.apache.kafka.common.requests.HeartbeatResponse
+import org.apache.kafka.common.requests.ResponseHeader
+import org.apache.kafka.common.protocol.types.Struct
+
 import kafka.api._
 import kafka.common._
 import kafka.log._
@@ -26,6 +32,9 @@ import kafka.network.RequestChannel.Response
 import kafka.controller.KafkaController
 import kafka.utils.{SystemTime, Logging}
 
+import java.nio.ByteBuffer
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic._
 import scala.collection._
 
 import org.I0Itec.zkclient.ZkClient
@@ -43,6 +52,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val metadataCache = new MetadataCache
+  private var consumerGroupGenerationId = 0
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -62,6 +72,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         case RequestKeys.OffsetCommitKey => handleOffsetCommitRequest(request)
         case RequestKeys.OffsetFetchKey => handleOffsetFetchRequest(request)
         case RequestKeys.ConsumerMetadataKey => handleConsumerMetadataRequest(request)
+        case RequestKeys.JoinGroupKey => handleJoinGroupRequest(request)
+        case RequestKeys.HeartbeatKey => handleHeartbeatRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -442,6 +454,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
   }
 
+  def handleJoinGroupRequest(request: RequestChannel.Request) {
+    val joinGroupReq = request.requestObj.asInstanceOf[JoinGroupRequestAndHeader]
+    val topics = JavaConversions.asScalaIterable(joinGroupReq.body.topics()).toSet
+    val partitions = this.replicaManager.logManager.allLogs.filter(log => topics.contains(log.topicAndPartition.topic))
+    val partitionList = partitions.map(_.topicAndPartition).map(tp => new org.apache.kafka.common.TopicPartition(tp.topic, tp.partition)).toBuffer
+    this.consumerGroupGenerationId += 1
+    val response = new JoinGroupResponse(ErrorMapping.NoError, this.consumerGroupGenerationId, joinGroupReq.body.consumerId, JavaConversions.asJavaList(partitionList))
+    val send = new BoundedByteBufferSend(new JoinGroupResponseAndHeader(joinGroupReq.correlationId, response))
+    requestChannel.sendResponse(new RequestChannel.Response(request, send))
+  }
+  
+  def handleHeartbeatRequest(request: RequestChannel.Request) {
+    val hbReq = request.requestObj.asInstanceOf[HeartbeatRequestAndHeader]
+    val send = new BoundedByteBufferSend(new HeartbeatResponseAndHeader(hbReq.correlationId, new HeartbeatResponse(Errors.NONE.code)))
+    requestChannel.sendResponse(new RequestChannel.Response(request, send))
+  }
+  
   def close() {
     // TODO currently closing the API is an no-op since the API no longer maintain any modules
     // maybe removing the closing call in the end when KafkaAPI becomes a pure stateless layer

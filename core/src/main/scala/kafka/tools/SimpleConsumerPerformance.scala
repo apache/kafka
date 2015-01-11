@@ -79,7 +79,7 @@ object SimpleConsumerPerformance {
         done = true
       else
         // we only did one fetch so we find the offset for the first (head) messageset
-        offset += messageSet.validBytes
+        offset = messageSet.last.nextOffset
 
       totalBytesRead += bytesRead
       totalMessagesRead += messagesRead

@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.util.Arrays;
+import java.util.Collections;
+
 import org.junit.Test;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
@@ -47,5 +50,12 @@ public class UtilsTest {
         assertEquals("mydomain.com:8080", formatAddress("mydomain.com", 8080));
         assertEquals("[::1]:1234", formatAddress("::1", 1234));
         assertEquals("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678", formatAddress("2001:db8:85a3:8d3:1319:8a2e:370:7348", 5678));
+    }
+    
+    @Test
+    public void testJoin() {
+        assertEquals("", Utils.join(Collections.emptyList(), ","));
+        assertEquals("1", Utils.join(Arrays.asList("1"), ","));
+        assertEquals("1,2,3", Utils.join(Arrays.asList(1, 2, 3), ","));
     }
 }

@@ -72,14 +72,14 @@ public class SenderTest {
 
     @Test
     public void testSimple() throws Exception {
-        int offset = 0;
+        long offset = 0;
         Future<RecordMetadata> future = accumulator.append(tp, "key".getBytes(), "value".getBytes(), CompressionType.NONE, null).future;
         sender.run(time.milliseconds()); // connect
         sender.run(time.milliseconds()); // send produce request
         assertEquals("We should have a single produce request in flight.", 1, client.inFlightRequestCount());
         client.respond(produceResponse(tp.topic(), tp.partition(), offset, Errors.NONE.code()));
         sender.run(time.milliseconds());
-        assertEquals("All requests completed.", offset, client.inFlightRequestCount());
+        assertEquals("All requests completed.", offset, (long) client.inFlightRequestCount());
         sender.run(time.milliseconds());
         assertTrue("Request should be completed", future.isDone());
         assertEquals(offset, future.get().offset());
@@ -110,7 +110,7 @@ public class SenderTest {
         sender.run(time.milliseconds()); // reconnect
         sender.run(time.milliseconds()); // resend
         assertEquals(1, client.inFlightRequestCount());
-        int offset = 0;
+        long offset = 0;
         client.respond(produceResponse(tp.topic(), tp.partition(), offset, Errors.NONE.code()));
         sender.run(time.milliseconds());
         assertTrue("Request should have retried and completed", future.isDone());

@@ -26,6 +26,7 @@ public interface KafkaClient {
     /**
      * Check if we are currently ready to send another request to the given node but don't attempt to connect if we
      * aren't.
+     * 
      * @param node The node to check
      * @param now The current timestamp
      */
@@ -34,6 +35,7 @@ public interface KafkaClient {
     /**
      * Initiate a connection to the given node (if necessary), and return true if already connected. The readiness of a
      * node will change only when poll is invoked.
+     * 
      * @param node The node to connect to.
      * @param now The current time
      * @return true iff we are ready to immediately initiate the sending of another request to the given node.
@@ -44,6 +46,7 @@ public interface KafkaClient {
      * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
      * disconnected, this respects the reconnect backoff time. When connecting or connected, this handles slow/stalled
      * connections.
+     * 
      * @param node The node to check
      * @param now The current timestamp
      * @return The number of milliseconds to wait.
@@ -51,19 +54,44 @@ public interface KafkaClient {
     public long connectionDelay(Node node, long now);
 
     /**
-     * Initiate the sending of the given requests and return any completed responses. Requests can only be sent on ready
-     * connections.
-     * @param requests The requests to send
+     * Queue up the given request for sending. Requests can only be sent on ready connections.
+     * 
+     * @param request The request
+     * @param now The current time
+     */
+    public void send(ClientRequest request);
+
+    /**
+     * Do actual reads and writes from sockets.
+     * 
      * @param timeout The maximum amount of time to wait for responses in ms
      * @param now The current time in ms
      * @throws IllegalStateException If a request is sent to an unready node
      */
-    public List<ClientResponse> poll(List<ClientRequest> requests, long timeout, long now);
+    public List<ClientResponse> poll(long timeout, long now);
+
+    /**
+     * Complete all in-flight requests for a given node
+     * 
+     * @param node The node to complete requests for
+     * @param now The current time in ms
+     * @return All requests that complete during this time period.
+     */
+    public List<ClientResponse> completeAll(int node, long now);
+
+    /**
+     * Complete all in-flight requests
+     * 
+     * @param now The current time in ms
+     * @return All requests that complete during this time period.
+     */
+    public List<ClientResponse> completeAll(long now);
 
     /**
      * Choose the node with the fewest outstanding requests. This method will prefer a node with an existing connection,
      * but will potentially choose a node for which we don't yet have a connection if all existing connections are in
      * use.
+     * 
      * @param now The current time in ms
      * @return The node with the fewest in-flight requests.
      */
@@ -75,7 +103,15 @@ public interface KafkaClient {
     public int inFlightRequestCount();
 
     /**
+     * Get the total in-flight requests for a particular node
+     * 
+     * @param nodeId The id of the node
+     */
+    public int inFlightRequestCount(int nodeId);
+
+    /**
      * Generate a request header for the next request
+     * 
      * @param key The API key of the request
      */
     public RequestHeader nextRequestHeader(ApiKeys key);

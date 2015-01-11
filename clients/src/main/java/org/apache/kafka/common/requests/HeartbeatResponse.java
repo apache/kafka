@@ -20,12 +20,13 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public class HeartbeatResponse extends AbstractRequestResponse {
-    private static Schema curSchema = ProtoUtils.currentResponseSchema(ApiKeys.HEARTBEAT.id);
-    private static String ERROR_CODE_KEY_NAME = "error_code";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.HEARTBEAT.id);
+    private static final String ERROR_CODE_KEY_NAME = "error_code";
 
     private final short errorCode;
     public HeartbeatResponse(short errorCode) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
         struct.set(ERROR_CODE_KEY_NAME, errorCode);
         this.errorCode = errorCode;
     }
@@ -40,6 +41,6 @@ public class HeartbeatResponse extends AbstractRequestResponse {
     }
 
     public static HeartbeatResponse parse(ByteBuffer buffer) {
-        return new HeartbeatResponse(((Struct) curSchema.read(buffer)));
+        return new HeartbeatResponse(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

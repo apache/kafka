@@ -9,185 +9,174 @@
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
-*/
+ */
 package org.apache.kafka.clients.consumer;
 
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.ObjectOutputStream;
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+
+import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.MetricName;
 
 /**
- * A mock of the {@link Consumer} interface you can use for testing code that uses Kafka.
- * This class is <i> not threadsafe </i>
+ * A mock of the {@link Consumer} interface you can use for testing code that uses Kafka. This class is <i> not
+ * threadsafe </i>
  * <p>
- * The consumer runs in the user thread and multiplexes I/O over TCP connections to each of the brokers it
- * needs to communicate with. Failure to close the consumer after use will leak these resources.
+ * The consumer runs in the user thread and multiplexes I/O over TCP connections to each of the brokers it needs to
+ * communicate with. Failure to close the consumer after use will leak these resources.
  */
-public class MockConsumer implements Consumer<byte[], byte[]> {
+public class MockConsumer<K, V> implements Consumer<K, V> {
 
-    private final Set<TopicPartition> subscribedPartitions;
-    private final Set<String> subscribedTopics;
-    private final Map<TopicPartition, Long> committedOffsets; 
-    private final Map<TopicPartition, Long> consumedOffsets;
-    
+    private final Map<String, List<PartitionInfo>> partitions;
+    private final SubscriptionState subscriptions;
+    private Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
+    private boolean closed;
+
     public MockConsumer() {
-        subscribedPartitions = new HashSet<TopicPartition>();
-        subscribedTopics = new HashSet<String>();
-        committedOffsets = new HashMap<TopicPartition, Long>();
-        consumedOffsets = new HashMap<TopicPartition, Long>();
+        this.subscriptions = new SubscriptionState();
+        this.partitions = new HashMap<String, List<PartitionInfo>>();
+        this.records = new HashMap<TopicPartition, List<ConsumerRecord<K, V>>>();
+        this.closed = false;
     }
     
     @Override
-    public void subscribe(String... topics) {
-        if(subscribedPartitions.size() > 0)
-            throw new IllegalStateException("Subcription to topics and partitions is mutually exclusive");
-        for(String topic : topics) {
-            subscribedTopics.add(topic);
-        }
+    public synchronized Set<TopicPartition> subscriptions() {
+        return this.subscriptions.assignedPartitions();
     }
 
     @Override
-    public void subscribe(TopicPartition... partitions) {
-        if(subscribedTopics.size() > 0)
-            throw new IllegalStateException("Subcription to topics and partitions is mutually exclusive");
-        for(TopicPartition partition : partitions) {
-            subscribedPartitions.add(partition);
-            consumedOffsets.put(partition, 0L);
-        }
-    }
-
-    public void unsubscribe(String... topics) {
-        // throw an exception if the topic was never subscribed to
-        for(String topic:topics) {
-            if(!subscribedTopics.contains(topic))
-                throw new IllegalStateException("Topic " + topic + " was never subscribed to. subscribe(" + topic + ") should be called prior" +
-                        " to unsubscribe(" + topic + ")");
-            subscribedTopics.remove(topic);
-        }
-    }
-
-    public void unsubscribe(TopicPartition... partitions) {
-        // throw an exception if the partition was never subscribed to
-        for(TopicPartition partition:partitions) {
-            if(!subscribedPartitions.contains(partition))
-                throw new IllegalStateException("Partition " + partition + " was never subscribed to. subscribe(new TopicPartition(" + 
-                                                 partition.topic() + "," + partition.partition() + ") should be called prior" +
-                                                " to unsubscribe(new TopicPartition(" + partition.topic() + "," + partition.partition() + ")");
-            subscribedPartitions.remove(partition);                    
-            committedOffsets.remove(partition);
-            consumedOffsets.remove(partition);
-        }
+    public synchronized void subscribe(String... topics) {
+        ensureNotClosed();
+        for (String topic : topics)
+            this.subscriptions.subscribe(topic);
     }
 
     @Override
-    public Map<String, ConsumerRecords<byte[], byte[]>> poll(long timeout) {
-        // hand out one dummy record, 1 per topic
-        Map<String, List<ConsumerRecord>> records = new HashMap<String, List<ConsumerRecord>>();
-        Map<String, ConsumerRecords<byte[], byte[]>> recordMetadata = new HashMap<String, ConsumerRecords<byte[], byte[]>>();
-        for(TopicPartition partition : subscribedPartitions) {
-            // get the last consumed offset
-            long messageSequence = consumedOffsets.get(partition);
-            ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-            ObjectOutputStream outputStream;
-            try {
-                outputStream = new ObjectOutputStream(byteStream);
-                outputStream.writeLong(messageSequence++);
-                outputStream.close();
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-            List<ConsumerRecord> recordsForTopic = records.get(partition.topic());
-            if(recordsForTopic == null) {
-                recordsForTopic = new ArrayList<ConsumerRecord>();
-                records.put(partition.topic(), recordsForTopic);
-            }
-            recordsForTopic.add(new ConsumerRecord(partition.topic(), partition.partition(), null, byteStream.toByteArray(), messageSequence));
-            consumedOffsets.put(partition, messageSequence);
+    public synchronized void subscribe(TopicPartition... partitions) {
+        ensureNotClosed();
+        for (TopicPartition partition : partitions)
+            this.subscriptions.subscribe(partition);
+    }
+
+    public synchronized void unsubscribe(String... topics) {
+        ensureNotClosed();
+        for (String topic : topics)
+            this.subscriptions.unsubscribe(topic);
+    }
+
+    public synchronized void unsubscribe(TopicPartition... partitions) {
+        ensureNotClosed();
+        for (TopicPartition partition : partitions)
+            this.subscriptions.unsubscribe(partition);
+    }
+
+    @Override
+    public synchronized ConsumerRecords<K, V> poll(long timeout) {
+        ensureNotClosed();
+        // update the consumed offset
+        for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
+            List<ConsumerRecord<K, V>> recs = entry.getValue();
+            if (!recs.isEmpty())
+                this.subscriptions.consumed(entry.getKey(), recs.get(recs.size() - 1).offset());
         }
-        for(Entry<String, List<ConsumerRecord>> recordsPerTopic : records.entrySet()) {
-            Map<Integer, List<ConsumerRecord>> recordsPerPartition = new HashMap<Integer, List<ConsumerRecord>>();
-            for(ConsumerRecord record : recordsPerTopic.getValue()) {
-                List<ConsumerRecord> recordsForThisPartition = recordsPerPartition.get(record.partition());
-                if(recordsForThisPartition == null) {
-                    recordsForThisPartition = new ArrayList<ConsumerRecord>();
-                    recordsPerPartition.put(record.partition(), recordsForThisPartition);
-                }
-                recordsForThisPartition.add(record);
-            }
-            recordMetadata.put(recordsPerTopic.getKey(), new ConsumerRecords(recordsPerTopic.getKey(), recordsPerPartition));
+
+        ConsumerRecords<K, V> copy = new ConsumerRecords<K, V>(this.records);
+        this.records = new HashMap<TopicPartition, List<ConsumerRecord<K, V>>>();
+        return copy;
+    }
+
+    public synchronized void addRecord(ConsumerRecord<K, V> record) {
+        ensureNotClosed();
+        TopicPartition tp = new TopicPartition(record.topic(), record.partition());
+        this.subscriptions.assignedPartitions().add(tp);
+        List<ConsumerRecord<K, V>> recs = this.records.get(tp);
+        if (recs == null) {
+            recs = new ArrayList<ConsumerRecord<K, V>>();
+            this.records.put(tp, recs);
         }
-        return recordMetadata;
+        recs.add(record);
     }
 
     @Override
-    public OffsetMetadata commit(Map<TopicPartition, Long> offsets, boolean sync) {
-        if(!sync)
-            return null;
-        for(Entry<TopicPartition, Long> partitionOffset : offsets.entrySet()) {
-            committedOffsets.put(partitionOffset.getKey(), partitionOffset.getValue());            
-        }        
-        return new OffsetMetadata(committedOffsets, null);
+    public synchronized void commit(Map<TopicPartition, Long> offsets, CommitType commitType) {
+        ensureNotClosed();
+        for (Entry<TopicPartition, Long> entry : offsets.entrySet())
+            subscriptions.committed(entry.getKey(), entry.getValue());
     }
 
     @Override
-    public OffsetMetadata commit(boolean sync) {
-        if(!sync)
-            return null;
-        return commit(consumedOffsets, sync);
+    public synchronized void commit(CommitType commitType) {
+        ensureNotClosed();
+        commit(this.subscriptions.allConsumed(), commitType);
     }
 
     @Override
-    public void seek(Map<TopicPartition, Long> offsets) {
-        // change the fetch offsets
-        for(Entry<TopicPartition, Long> partitionOffset : offsets.entrySet()) {
-            consumedOffsets.put(partitionOffset.getKey(), partitionOffset.getValue());            
-        }
+    public synchronized void seek(TopicPartition partition, long offset) {
+        ensureNotClosed();
+        subscriptions.seek(partition, offset);
     }
 
     @Override
-    public Map<TopicPartition, Long> committed(Collection<TopicPartition> partitions) {
-        Map<TopicPartition, Long> offsets = new HashMap<TopicPartition, Long>();
-        for(TopicPartition partition : partitions) {
-            offsets.put(new TopicPartition(partition.topic(), partition.partition()), committedOffsets.get(partition));
-        }
-        return offsets;
+    public synchronized long committed(TopicPartition partition) {
+        ensureNotClosed();
+        return subscriptions.committed(partition);
     }
 
     @Override
-    public Map<TopicPartition, Long> position(Collection<TopicPartition> partitions) {
-        Map<TopicPartition, Long> positions = new HashMap<TopicPartition, Long>();
-        for(TopicPartition partition : partitions) {
-            positions.put(partition, consumedOffsets.get(partition));
-        }
-        return positions;
+    public synchronized long position(TopicPartition partition) {
+        ensureNotClosed();
+        return subscriptions.consumed(partition);
     }
 
     @Override
-    public Map<TopicPartition, Long> offsetsBeforeTime(long timestamp,
-            Collection<TopicPartition> partitions) {
+    public synchronized void seekToBeginning(TopicPartition... partitions) {
+        ensureNotClosed();
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public synchronized void seekToEnd(TopicPartition... partitions) {
+        ensureNotClosed();
         throw new UnsupportedOperationException();
     }
 
     @Override
     public Map<MetricName, ? extends Metric> metrics() {
-        return null;
+        ensureNotClosed();
+        return Collections.emptyMap();
     }
 
     @Override
-    public void close() {
-       // unsubscribe from all partitions
-        TopicPartition[] allPartitions = new TopicPartition[subscribedPartitions.size()];
-        unsubscribe(subscribedPartitions.toArray(allPartitions));
+    public synchronized List<PartitionInfo> partitionsFor(String topic) {
+        ensureNotClosed();
+        List<PartitionInfo> parts = this.partitions.get(topic);
+        if (parts == null)
+            return Collections.emptyList();
+        else
+            return parts;
+    }
+
+    public synchronized void updatePartitions(String topic, List<PartitionInfo> partitions) {
+        ensureNotClosed();
+        this.partitions.put(topic, partitions);
+    }
+
+    @Override
+    public synchronized void close() {
+        ensureNotClosed();
+        this.closed = true;
+    }
+
+    private void ensureNotClosed() {
+        if (this.closed)
+            throw new IllegalStateException("This consumer has already been closed.");
     }
 }

@@ -3,14 +3,20 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- *
+ * 
  * http://www.apache.org/licenses/LICENSE-2.0
- *
+ * 
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.common.requests;
+
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -19,31 +25,26 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
 /**
  * This wrapper supports both v0 and v1 of OffsetCommitRequest.
  */
 public class OffsetCommitRequest extends AbstractRequestResponse {
-    public static Schema curSchema = ProtoUtils.currentRequestSchema(ApiKeys.OFFSET_COMMIT.id);
-    private static String GROUP_ID_KEY_NAME = "group_id";
-    private static String GENERATION_ID_KEY_NAME = "group_generation_id";
-    private static String CONSUMER_ID_KEY_NAME = "consumer_id";
-    private static String TOPICS_KEY_NAME = "topics";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.OFFSET_COMMIT.id);
+    private static final String GROUP_ID_KEY_NAME = "group_id";
+    private static final String GENERATION_ID_KEY_NAME = "group_generation_id";
+    private static final String CONSUMER_ID_KEY_NAME = "consumer_id";
+    private static final String TOPICS_KEY_NAME = "topics";
 
     // topic level field names
-    private static String TOPIC_KEY_NAME = "topic";
-    private static String PARTITIONS_KEY_NAME = "partitions";
+    private static final String TOPIC_KEY_NAME = "topic";
+    private static final String PARTITIONS_KEY_NAME = "partitions";
 
     // partition level field names
-    private static String PARTITION_KEY_NAME = "partition";
-    private static String COMMIT_OFFSET_KEY_NAME = "offset";
-    private static String TIMESTAMP_KEY_NAME = "timestamp";
-    private static String METADATA_KEY_NAME = "metadata";
+    private static final String PARTITION_KEY_NAME = "partition";
+    private static final String COMMIT_OFFSET_KEY_NAME = "offset";
+    private static final String TIMESTAMP_KEY_NAME = "timestamp";
+    private static final String METADATA_KEY_NAME = "metadata";
 
     public static final int DEFAULT_GENERATION_ID = -1;
     public static final String DEFAULT_CONSUMER_ID = "";
@@ -88,7 +89,7 @@ public class OffsetCommitRequest extends AbstractRequestResponse {
      * @param offsetData
      */
     public OffsetCommitRequest(String groupId, int generationId, String consumerId, Map<TopicPartition, PartitionData> offsetData) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
 
         initCommonFields(groupId, offsetData);
         struct.set(GENERATION_ID_KEY_NAME, generationId);
@@ -104,7 +105,7 @@ public class OffsetCommitRequest extends AbstractRequestResponse {
 
         struct.set(GROUP_ID_KEY_NAME, groupId);
         List<Struct> topicArray = new ArrayList<Struct>();
-        for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry: topicsData.entrySet()) {
+        for (Map.Entry<String, Map<Integer, PartitionData>> topicEntry : topicsData.entrySet()) {
             Struct topicData = struct.instance(TOPICS_KEY_NAME);
             topicData.set(TOPIC_KEY_NAME, topicEntry.getKey());
             List<Struct> partitionArray = new ArrayList<Struct>();
@@ -175,6 +176,6 @@ public class OffsetCommitRequest extends AbstractRequestResponse {
     }
 
     public static OffsetCommitRequest parse(ByteBuffer buffer) {
-        return new OffsetCommitRequest(((Struct) curSchema.read(buffer)));
+        return new OffsetCommitRequest(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

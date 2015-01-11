@@ -17,11 +17,14 @@
 
 package kafka.integration
 
+import java.util.Arrays
+import scala.collection.mutable.Buffer
 import kafka.server._
 import kafka.utils.{Utils, TestUtils}
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.common.KafkaException
+import kafka.utils.TestUtils
 
 /**
  * A test harness that brings up some number of broker nodes
@@ -29,20 +32,50 @@ import kafka.common.KafkaException
 trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
 
   val configs: List[KafkaConfig]
-  var servers: List[KafkaServer] = null
+  var servers: Buffer[KafkaServer] = null
   var brokerList: String = null
-
+  var alive: Array[Boolean] = null
+  
+  def serverForId(id: Int) = servers.find(s => s.config.brokerId == id)
+  
+  def bootstrapUrl = configs.map(c => c.hostName + ":" + c.port).mkString(",")
+  
   override def setUp() {
     super.setUp
     if(configs.size <= 0)
       throw new KafkaException("Must suply at least one server config.")
     brokerList = TestUtils.getBrokerListStrFromConfigs(configs)
-    servers = configs.map(TestUtils.createServer(_))
+    servers = configs.map(TestUtils.createServer(_)).toBuffer
+    alive = new Array[Boolean](servers.length)
+    Arrays.fill(alive, true)
   }
 
   override def tearDown() {
     servers.map(server => server.shutdown())
     servers.map(server => server.config.logDirs.map(Utils.rm(_)))
     super.tearDown
+  }
+  
+  /**
+   * Pick a broker at random and kill it if it isn't already dead
+   * Return the id of the broker killed
+   */
+  def killRandomBroker(): Int = {
+    val index = TestUtils.random.nextInt(servers.length)
+    if(alive(index)) {
+      servers(index).shutdown()
+      alive(index) = false
+    }
+    index
+  }
+  
+  /**
+   * Restart any dead brokers
+   */
+  def restartDeadBrokers() {
+    for(i <- 0 until servers.length if !alive(i)) {
+      servers(i) = TestUtils.createServer(configs(i))
+      alive(i) = true
+    }
   }
 }

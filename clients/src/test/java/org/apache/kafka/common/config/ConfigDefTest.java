@@ -110,18 +110,18 @@ public class ConfigDefTest {
 
     @Test(expected = ConfigException.class)
     public void testInvalidDefaultRange() {
-        ConfigDef def = new ConfigDef().define("name", Type.INT, -1, Range.between(0,10), Importance.HIGH, "docs");
+        new ConfigDef().define("name", Type.INT, -1, Range.between(0,10), Importance.HIGH, "docs");
     }
 
     @Test(expected = ConfigException.class)
     public void testInvalidDefaultString() {
-        ConfigDef def = new ConfigDef().define("name", Type.STRING, "bad", ValidString.in(Arrays.asList("valid", "values")), Importance.HIGH, "docs");
+        new ConfigDef().define("name", Type.STRING, "bad", ValidString.in("valid", "values"), Importance.HIGH, "docs");
     }
 
     @Test
     public void testValidators() {
         testValidators(Type.INT, Range.between(0,10), 5, new Object[]{1, 5, 9}, new Object[]{-1, 11});
-        testValidators(Type.STRING, ValidString.in(Arrays.asList("good", "values", "default")), "default",
+        testValidators(Type.STRING, ValidString.in("good", "values", "default"), "default",
                 new Object[]{"good", "values", "default"}, new Object[]{"bad", "inputs"});
     }
 

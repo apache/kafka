@@ -1,0 +1,61 @@
+package org.apache.kafka.clients.consumer.internals;
+
+import static org.junit.Assert.*;
+import static java.util.Arrays.asList;
+
+import java.util.Collections;
+
+import org.apache.kafka.common.TopicPartition;
+import org.junit.Test;
+
+public class SubscriptionStateTest {
+    
+    private final SubscriptionState state = new SubscriptionState();
+    private final TopicPartition tp0 = new TopicPartition("test", 0);
+    private final TopicPartition tp1 = new TopicPartition("test", 1);
+
+    @Test
+    public void partitionSubscription() {      
+        state.subscribe(tp0);
+        assertEquals(Collections.singleton(tp0), state.assignedPartitions());
+        state.committed(tp0, 1);
+        state.fetched(tp0, 1);
+        state.consumed(tp0, 1);
+        assertAllPositions(tp0, 1L);
+        state.unsubscribe(tp0);
+        assertTrue(state.assignedPartitions().isEmpty());
+        assertAllPositions(tp0, null);
+    }
+    
+    public void topicSubscription() {
+        state.subscribe("test");
+        assertEquals(1, state.subscribedTopics().size());
+        assertTrue(state.assignedPartitions().isEmpty());
+        assertTrue(state.partitionsAutoAssigned());
+        state.changePartitionAssignment(asList(tp0));
+        state.committed(tp0, 1);
+        state.fetched(tp0, 1);
+        state.consumed(tp0, 1);
+        assertAllPositions(tp0, 1L);
+        state.changePartitionAssignment(asList(tp1));
+        assertAllPositions(tp0, null);
+        assertEquals(Collections.singleton(tp1), state.assignedPartitions());
+    }
+    
+    @Test(expected = IllegalArgumentException.class)
+    public void cantChangeFetchPositionForNonAssignedPartition() {
+        state.fetched(tp0, 1);
+    }
+    
+    @Test(expected = IllegalArgumentException.class)
+    public void cantChangeConsumedPositionForNonAssignedPartition() {
+        state.consumed(tp0, 1);
+    }
+    
+    public void assertAllPositions(TopicPartition tp, Long offset) {
+        assertEquals(offset, state.committed(tp));
+        assertEquals(offset, state.fetched(tp));
+        assertEquals(offset, state.consumed(tp));
+    }
+    
+}

@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.network;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -81,6 +82,7 @@ public class Selector implements Selectable {
     private final List<NetworkReceive> completedReceives;
     private final List<Integer> disconnected;
     private final List<Integer> connected;
+    private final List<Integer> failedSends;
     private final Time time;
     private final SelectorMetrics sensors;
     private final String metricGrpPrefix;
@@ -103,6 +105,7 @@ public class Selector implements Selectable {
         this.completedReceives = new ArrayList<NetworkReceive>();
         this.connected = new ArrayList<Integer>();
         this.disconnected = new ArrayList<Integer>();
+        this.failedSends = new ArrayList<Integer>();
         this.sensors = new SelectorMetrics(metrics);
     }
 
@@ -179,10 +182,26 @@ public class Selector implements Selectable {
     }
 
     /**
+     * Queue the given request for sending in the subsequent {@poll(long)} calls
+     * @param send The request to send
+     */
+    public void send(NetworkSend send) {
+        SelectionKey key = keyForId(send.destination());
+        Transmissions transmissions = transmissions(key);
+        if (transmissions.hasSend())
+            throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress.");
+        transmissions.send = send;
+        try {
+            key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
+        } catch (CancelledKeyException e) {
+            close(key);
+            this.failedSends.add(send.destination());
+        }
+    }
+
+    /**
      * Do whatever I/O can be done on each connection without blocking. This includes completing connections, completing
      * disconnections, initiating new sends, or making progress on in-progress sends or receives.
-     * <p>
-     * The provided network sends will be started.
      * 
      * When this call is completed the user can check for completed sends, receives, connections or disconnects using
      * {@link #completedSends()}, {@link #completedReceives()}, {@link #connected()}, {@link #disconnected()}. These
@@ -190,28 +209,12 @@ public class Selector implements Selectable {
      * completed I/O.
      * 
      * @param timeout The amount of time to wait, in milliseconds. If negative, wait indefinitely.
-     * @param sends The list of new sends to begin
-     * 
      * @throws IllegalStateException If a send is given for which we have no existing connection or for which there is
      *         already an in-progress send
      */
     @Override
-    public void poll(long timeout, List<NetworkSend> sends) throws IOException {
+    public void poll(long timeout) throws IOException {
         clear();
-
-        /* register for write interest on any new sends */
-        for (NetworkSend send : sends) {
-            SelectionKey key = keyForId(send.destination());
-            Transmissions transmissions = transmissions(key);
-            if (transmissions.hasSend())
-                throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress.");
-            transmissions.send = send;
-            try {
-                key.interestOps(key.interestOps() | SelectionKey.OP_WRITE);
-            } catch (CancelledKeyException e) {
-                close(key);
-            }
-        }
 
         /* check ready keys */
         long startSelect = time.nanoseconds();
@@ -266,20 +269,33 @@ public class Selector implements Selectable {
                     }
 
                     /* cancel any defunct sockets */
-                    if (!key.isValid())
+                    if (!key.isValid()) {
                         close(key);
+                        this.disconnected.add(transmissions.id);
+                    }
                 } catch (IOException e) {
-                    InetAddress remoteAddress = null;
-                    Socket socket = channel.socket();
-                    if (socket != null)
-                        remoteAddress = socket.getInetAddress();
-                    log.warn("Error in I/O with {}", remoteAddress , e);
+                    String desc = socketDescription(channel);
+                    if(e instanceof EOFException)
+                        log.info("Connection {} disconnected", desc);
+                    else
+                        log.warn("Error in I/O with connection to {}", desc, e);
                     close(key);
+                    this.disconnected.add(transmissions.id);
                 }
             }
         }
         long endIo = time.nanoseconds();
         this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
+    }
+    
+    private String socketDescription(SocketChannel channel) {
+        Socket socket = channel.socket();
+        if(socket == null)
+            return "[unconnected socket]";
+        else if(socket.getInetAddress() != null)
+            return socket.getInetAddress().toString();
+        else
+            return socket.getLocalAddress().toString();
     }
 
     @Override
@@ -302,6 +318,36 @@ public class Selector implements Selectable {
         return this.connected;
     }
 
+    @Override
+    public void mute(int id) {
+        mute(this.keyForId(id));
+    }
+
+    private void mute(SelectionKey key) {
+        key.interestOps(key.interestOps() & ~SelectionKey.OP_READ);
+    }
+
+    @Override
+    public void unmute(int id) {
+        unmute(this.keyForId(id));
+    }
+
+    private void unmute(SelectionKey key) {
+        key.interestOps(key.interestOps() | SelectionKey.OP_READ);
+    }
+
+    @Override
+    public void muteAll() {
+        for (SelectionKey key : this.keys.values())
+            mute(key);
+    }
+
+    @Override
+    public void unmuteAll() {
+        for (SelectionKey key : this.keys.values())
+            unmute(key);
+    }
+
     /**
      * Clear the results from the prior poll
      */
@@ -310,6 +356,8 @@ public class Selector implements Selectable {
         this.completedReceives.clear();
         this.connected.clear();
         this.disconnected.clear();
+        this.disconnected.addAll(this.failedSends);
+        this.failedSends.clear();
     }
 
     /**
@@ -335,7 +383,6 @@ public class Selector implements Selectable {
         SocketChannel channel = channel(key);
         Transmissions trans = transmissions(key);
         if (trans != null) {
-            this.disconnected.add(trans.id);
             this.keys.remove(trans.id);
             trans.clearReceive();
             trans.clearSend();

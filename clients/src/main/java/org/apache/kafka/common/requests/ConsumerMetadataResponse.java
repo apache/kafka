@@ -21,20 +21,21 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public class ConsumerMetadataResponse extends AbstractRequestResponse {
-    private static Schema curSchema = ProtoUtils.currentResponseSchema(ApiKeys.CONSUMER_METADATA.id);
-    private static String ERROR_CODE_KEY_NAME = "error_code";
-    private static String COORDINATOR_KEY_NAME = "coordinator";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.CONSUMER_METADATA.id);
+    private static final String ERROR_CODE_KEY_NAME = "error_code";
+    private static final String COORDINATOR_KEY_NAME = "coordinator";
 
     // coordinator level field names
-    private static String NODE_ID_KEY_NAME = "node_id";
-    private static String HOST_KEY_NAME = "host";
-    private static String PORT_KEY_NAME = "port";
+    private static final String NODE_ID_KEY_NAME = "node_id";
+    private static final String HOST_KEY_NAME = "host";
+    private static final String PORT_KEY_NAME = "port";
 
     private final short errorCode;
     private final Node node;
 
     public ConsumerMetadataResponse(short errorCode, Node node) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
         struct.set(ERROR_CODE_KEY_NAME, errorCode);
         Struct coordinator = struct.instance(COORDINATOR_KEY_NAME);
         coordinator.set(NODE_ID_KEY_NAME, node.id());
@@ -64,6 +65,6 @@ public class ConsumerMetadataResponse extends AbstractRequestResponse {
     }
 
     public static ConsumerMetadataResponse parse(ByteBuffer buffer) {
-        return new ConsumerMetadataResponse(((Struct) curSchema.read(buffer)));
+        return new ConsumerMetadataResponse(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

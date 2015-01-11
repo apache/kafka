@@ -17,6 +17,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -224,6 +227,18 @@ public class Utils {
     }
 
     /**
+     * Sleep for a bit
+     * @param ms The duration of the sleep
+     */
+    public static void sleep(long ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            // this is okay, we just wake up early
+        }
+    }
+
+    /**
      * Instantiate the class
      */
     public static Object newInstance(Class<?> c) {
@@ -312,5 +327,32 @@ public class Utils {
         return host.contains(":")
                 ? "[" + host + "]:" + port // IPv6
                 : host + ":" + port;
+    }
+    
+    /**
+     * Create a string representation of an array joined by the given separator
+     * @param strs The array of items
+     * @param seperator The separator
+     * @return The string representation.
+     */
+    public static <T> String join(T[] strs, String seperator) {
+        return join(Arrays.asList(strs), seperator);
+    }
+    
+    /**
+     * Create a string representation of a list joined by the given separator
+     * @param list The list of items
+     * @param seperator The separator
+     * @return The string representation.
+     */
+    public static <T> String join(Collection<T> list, String seperator) {
+        StringBuilder sb = new StringBuilder();
+        Iterator<T> iter = list.iterator();
+        while(iter.hasNext()) {
+            sb.append(iter.next());
+            if(iter.hasNext())
+            sb.append(seperator);  
+        }
+      return sb.toString();
     }
 }

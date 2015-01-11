@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.apache.kafka.common.utils.Utils;
+
 /**
  * This class is used for specifying the set of expected configurations, their type, their defaults, their
  * documentation, and any special validation logic used for checking the correctness of the values the user provides.
@@ -292,39 +294,23 @@ public class ConfigDef {
       this.validStrings = validStrings;
     }
 
-    public static ValidString in(List<String> validStrings) {
-      return new ValidString(validStrings);
+    public static ValidString in(String... validStrings) {
+      return new ValidString(Arrays.asList(validStrings));
     }
 
     @Override
     public void ensureValid(String name, Object o) {
-
       String s = (String) o;
-
       if (!validStrings.contains(s)) {
-        throw new ConfigException(name,o,"String must be one of:" +join(validStrings));
+        throw new ConfigException(name,o,"String must be one of: " + Utils.join(validStrings, ", "));
       }
 
     }
 
     public String toString() {
-      return "[" + join(validStrings) + "]";
+      return "[" + Utils.join(validStrings, ", ") + "]";
     }
 
-    private String join(List<String> list)
-    {
-      StringBuilder sb = new StringBuilder();
-      boolean first = true;
-      for (String item : list)
-      {
-        if (first)
-          first = false;
-        else
-          sb.append(",");
-        sb.append(item);
-      }
-      return sb.toString();
-    }
   }
 
     private static class ConfigKey {

@@ -28,16 +28,17 @@ import java.util.Map;
  * This wrapper supports both v0 and v1 of OffsetFetchRequest.
  */
 public class OffsetFetchRequest extends AbstractRequestResponse {
-    public static Schema curSchema = ProtoUtils.currentRequestSchema(ApiKeys.OFFSET_FETCH.id);
-    private static String GROUP_ID_KEY_NAME = "group_id";
-    private static String TOPICS_KEY_NAME = "topics";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.OFFSET_FETCH.id);
+    private static final String GROUP_ID_KEY_NAME = "group_id";
+    private static final String TOPICS_KEY_NAME = "topics";
 
     // topic level field names
-    private static String TOPIC_KEY_NAME = "topic";
-    private static String PARTITIONS_KEY_NAME = "partitions";
+    private static final String TOPIC_KEY_NAME = "topic";
+    private static final String PARTITIONS_KEY_NAME = "partitions";
 
     // partition level field names
-    private static String PARTITION_KEY_NAME = "partition";
+    private static final String PARTITION_KEY_NAME = "partition";
 
     public static final int DEFAULT_GENERATION_ID = -1;
     public static final String DEFAULT_CONSUMER_ID = "";
@@ -46,7 +47,7 @@ public class OffsetFetchRequest extends AbstractRequestResponse {
     private final List<TopicPartition> partitions;
 
     public OffsetFetchRequest(String groupId, List<TopicPartition> partitions) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
 
         Map<String, List<Integer>> topicsData = CollectionUtils.groupDataByTopic(partitions);
 
@@ -93,6 +94,6 @@ public class OffsetFetchRequest extends AbstractRequestResponse {
     }
 
     public static OffsetFetchRequest parse(ByteBuffer buffer) {
-        return new OffsetFetchRequest(((Struct) curSchema.read(buffer)));
+        return new OffsetFetchRequest(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

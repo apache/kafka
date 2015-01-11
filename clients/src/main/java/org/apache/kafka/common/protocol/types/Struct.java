@@ -1,18 +1,14 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements. See the NOTICE
+ * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
+ * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at
+ * 
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
  */
 package org.apache.kafka.common.protocol.types;
 
@@ -124,14 +120,6 @@ public class Struct {
         return (Long) get(name);
     }
 
-    public ByteBuffer getBytes(Field field) {
-        return (ByteBuffer) get(field);
-    }
-
-    public ByteBuffer getBytes(String name) {
-        return (ByteBuffer) get(name);
-    }
-
     public Object[] getArray(Field field) {
         return (Object[]) get(field);
     }
@@ -146,6 +134,14 @@ public class Struct {
 
     public String getString(String name) {
         return (String) get(name);
+    }
+
+    public ByteBuffer getBytes(Field field) {
+        return (ByteBuffer) get(field);
+    }
+
+    public ByteBuffer getBytes(String name) {
+        return (ByteBuffer) get(name);
     }
 
     /**
@@ -175,9 +171,9 @@ public class Struct {
     }
 
     /**
-     * Create a struct for the schema of a container type (struct or array).
-     * Note that for array type, this method assumes that the type is an array of schema and creates a struct
-     * of that schema. Arrays of other types can't be instantiated with this method.
+     * Create a struct for the schema of a container type (struct or array). Note that for array type, this method
+     * assumes that the type is an array of schema and creates a struct of that schema. Arrays of other types can't be
+     * instantiated with this method.
      * 
      * @param field The field to create an instance of
      * @return The struct

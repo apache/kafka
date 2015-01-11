@@ -102,6 +102,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Begin connecting to the given node, return true if we are already connected and ready to send to that node.
+     * 
      * @param node The node to check
      * @param now The current timestamp
      * @return True if we are ready to send to the given node
@@ -122,6 +123,7 @@ public class NetworkClient implements KafkaClient {
      * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
      * disconnected, this respects the reconnect backoff time. When connecting or connected, this handles slow/stalled
      * connections.
+     * 
      * @param node The node to check
      * @param now The current timestamp
      * @return The number of milliseconds to wait.
@@ -133,7 +135,8 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Check if the node with the given id is ready to send more requests.
-     * @param node The given node id
+     * 
+     * @param node The node
      * @param now The current time in ms
      * @return true if the node is ready
      */
@@ -141,7 +144,8 @@ public class NetworkClient implements KafkaClient {
     public boolean isReady(Node node, long now) {
         int nodeId = node.id();
         if (!this.metadataFetchInProgress && this.metadata.timeToNextUpdate(now) == 0)
-            // if we need to update our metadata now declare all requests unready to make metadata requests first priority
+            // if we need to update our metadata now declare all requests unready to make metadata requests first
+            // priority
             return false;
         else
             // otherwise we are ready if we are connected and can send more requests
@@ -150,6 +154,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Are we connected and ready and able to send more requests to the given node?
+     * 
      * @param node The node
      */
     private boolean isSendable(int node) {
@@ -157,49 +162,106 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
-     * Initiate the given requests and check for any new responses, waiting up to the specified time. Requests can only
-     * be sent for ready nodes.
-     * @param requests The requests to initiate
+     * Return the state of the connection to the given node
+     * 
+     * @param node The node to check
+     * @return The connection state
+     */
+    public ConnectionState connectionState(int node) {
+        return connectionStates.connectionState(node);
+    }
+
+    /**
+     * Queue up the given request for sending. Requests can only be sent out to ready nodes.
+     * 
+     * @param request The request
+     * @param now The current time
+     */
+    @Override
+    public void send(ClientRequest request) {
+        int nodeId = request.request().destination();
+        if (!isSendable(nodeId))
+            throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
+
+        this.inFlightRequests.add(request);
+        selector.send(request.request());
+    }
+
+    /**
+     * Do actual reads and writes to sockets.
+     * 
      * @param timeout The maximum amount of time to wait (in ms) for responses if there are none immediately
      * @param now The current time in milliseconds
      * @return The list of responses received
      */
     @Override
-    public List<ClientResponse> poll(List<ClientRequest> requests, long timeout, long now) {
-        List<NetworkSend> sends = new ArrayList<NetworkSend>();
-
-        for (int i = 0; i < requests.size(); i++) {
-            ClientRequest request = requests.get(i);
-            int nodeId = request.request().destination();
-            if (!isSendable(nodeId))
-                throw new IllegalStateException("Attempt to send a request to node " + nodeId + " which is not ready.");
-
-            this.inFlightRequests.add(request);
-            sends.add(request.request());
-        }
-
+    public List<ClientResponse> poll(long timeout, long now) {
         // should we update our metadata?
         long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
         long timeToNextReconnectAttempt = Math.max(this.lastNoNodeAvailableMs + metadata.refreshBackoff() - now, 0);
         long waitForMetadataFetch = (this.metadataFetchInProgress ? Integer.MAX_VALUE : 0);
         // if there is no node available to connect, back off refreshing metadata
-        long metadataTimeout = Math.max(Math.max(timeToNextMetadataUpdate, timeToNextReconnectAttempt), waitForMetadataFetch);
+        long metadataTimeout = Math.max(Math.max(timeToNextMetadataUpdate, timeToNextReconnectAttempt),
+                                        waitForMetadataFetch);
         if (!this.metadataFetchInProgress && metadataTimeout == 0)
-            maybeUpdateMetadata(sends, now);
-
+            maybeUpdateMetadata(now);
         // do the I/O
         try {
-            this.selector.poll(Math.min(timeout, metadataTimeout), sends);
+            this.selector.poll(Math.min(timeout, metadataTimeout));
         } catch (IOException e) {
             log.error("Unexpected error during I/O in producer network thread", e);
         }
 
+        // process completed actions
         List<ClientResponse> responses = new ArrayList<ClientResponse>();
         handleCompletedSends(responses, now);
         handleCompletedReceives(responses, now);
         handleDisconnections(responses, now);
         handleConnections();
 
+        // invoke callbacks
+        for (ClientResponse response : responses) {
+            if (response.request().hasCallback()) {
+                try {
+                    response.request().callback().onComplete(response);
+                } catch (Exception e) {
+                    log.error("Uncaught error in request completion:", e);
+                }
+            }
+        }
+
+        return responses;
+    }
+
+    /**
+     * Await all the outstanding responses for requests on the given connection
+     * 
+     * @param node The node to block on
+     * @param now The current time in ms
+     * @return All the collected responses
+     */
+    @Override
+    public List<ClientResponse> completeAll(int node, long now) {
+        try {
+            this.selector.muteAll();
+            this.selector.unmute(node);
+            List<ClientResponse> responses = new ArrayList<ClientResponse>();
+            while (inFlightRequestCount(node) > 0)
+                responses.addAll(poll(Integer.MAX_VALUE, now));
+            return responses;
+        } finally {
+            this.selector.unmuteAll();
+        }
+    }
+
+    /**
+     * Wait for all outstanding requests to complete.
+     */
+    @Override
+    public List<ClientResponse> completeAll(long now) {
+        List<ClientResponse> responses = new ArrayList<ClientResponse>();
+        while (inFlightRequestCount() > 0)
+            responses.addAll(poll(Integer.MAX_VALUE, now));
         return responses;
     }
 
@@ -212,7 +274,16 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Get the number of in-flight requests for a given node
+     */
+    @Override
+    public int inFlightRequestCount(int nodeId) {
+        return this.inFlightRequests.inFlightRequestCount(nodeId);
+    }
+
+    /**
      * Generate a request header for the given API key
+     * 
      * @param key The api key
      * @return A request header with the appropriate client id and correlation id
      */
@@ -242,6 +313,7 @@ public class NetworkClient implements KafkaClient {
      * prefer a node with an existing connection, but will potentially choose a node for which we don't yet have a
      * connection if all existing connections are in use. This method will never choose a node for which there is no
      * existing connection and from which we have disconnected within the reconnect backoff period.
+     * 
      * @return The node with the fewest in-flight requests.
      */
     public Node leastLoadedNode(long now) {
@@ -261,12 +333,12 @@ public class NetworkClient implements KafkaClient {
                 found = node;
             }
         }
-
         return found;
     }
 
     /**
      * Handle any completed request send. In particular if no response is expected consider the request complete.
+     * 
      * @param responses The list of responses to update
      * @param now The current time
      */
@@ -283,6 +355,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Handle any completed receives and update the response list with the responses received.
+     * 
      * @param responses The list of responses to update
      * @param now The current time
      */
@@ -317,6 +390,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Handle any disconnected connections
+     * 
      * @param responses The list of responses that completed with the disconnection
      * @param now The current time
      */
@@ -353,10 +427,8 @@ public class NetworkClient implements KafkaClient {
      */
     private void correlate(RequestHeader requestHeader, ResponseHeader responseHeader) {
         if (requestHeader.correlationId() != responseHeader.correlationId())
-            throw new IllegalStateException("Correlation id for response (" + responseHeader.correlationId() +
-                                            ") does not match request (" +
-                                            requestHeader.correlationId() +
-                                            ")");
+            throw new IllegalStateException("Correlation id for response (" + responseHeader.correlationId()
+                    + ") does not match request (" + requestHeader.correlationId() + ")");
     }
 
     /**
@@ -371,7 +443,7 @@ public class NetworkClient implements KafkaClient {
     /**
      * Add a metadata request to the list of sends if we can make one
      */
-    private void maybeUpdateMetadata(List<NetworkSend> sends, long now) {
+    private void maybeUpdateMetadata(long now) {
         // Beware that the behavior of this method and the computation of timeouts for poll() are
         // highly dependent on the behavior of leastLoadedNode.
         Node node = this.leastLoadedNode(now);
@@ -382,17 +454,16 @@ public class NetworkClient implements KafkaClient {
             return;
         }
 
-        log.debug("Trying to send metadata request to node {}", node.id());
         if (connectionStates.isConnected(node.id()) && inFlightRequests.canSendMore(node.id())) {
             Set<String> topics = metadata.topics();
             this.metadataFetchInProgress = true;
             ClientRequest metadataRequest = metadataRequest(now, node.id(), topics);
             log.debug("Sending metadata request {} to node {}", metadataRequest, node.id());
-            sends.add(metadataRequest.request());
+            this.selector.send(metadataRequest.request());
             this.inFlightRequests.add(metadataRequest);
         } else if (connectionStates.canConnect(node.id(), now)) {
             // we don't have a connection to this node right now, make one
-            log.debug("Init connection to node {} for sending metadata request in the next iteration", node.id());
+            log.debug("Initialize connection to node {} for sending metadata request", node.id());
             initiateConnect(node, now);
             // If initiateConnect failed immediately, this node will be put into blackout and we
             // should allow immediately retrying in case there is another candidate node. If it
@@ -412,7 +483,10 @@ public class NetworkClient implements KafkaClient {
         try {
             log.debug("Initiating connection to node {} at {}:{}.", node.id(), node.host(), node.port());
             this.connectionStates.connecting(node.id(), now);
-            selector.connect(node.id(), new InetSocketAddress(node.host(), node.port()), this.socketSendBuffer, this.socketReceiveBuffer);
+            selector.connect(node.id(),
+                             new InetSocketAddress(node.host(), node.port()),
+                             this.socketSendBuffer,
+                             this.socketReceiveBuffer);
         } catch (IOException e) {
             /* attempt failed, we'll try again after the backoff */
             connectionStates.disconnected(node.id());

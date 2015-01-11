@@ -32,6 +32,7 @@ import kafka.common.{TopicAndPartition, ErrorMapping, UnknownTopicOrPartitionExc
 import kafka.utils.{StaticPartitioner, TestUtils, Utils}
 import kafka.serializer.StringEncoder
 import java.util.Properties
+import TestUtils._
 
 /**
  * End to end tests of the primitive apis against a local server
@@ -113,7 +114,8 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
   }
 
   private def produceAndMultiFetch(producer: Producer[String, String]) {
-    createSimpleTopicsAndAwaitLeader(zkClient, List("test1", "test2", "test3", "test4"))
+    for(topic <- List("test1", "test2", "test3", "test4"))
+      TestUtils.createTopic(zkClient, topic, servers = servers)
 
     // send some messages
     val topics = List(("test4", 0), ("test1", 0), ("test2", 0), ("test3", 0));
@@ -181,7 +183,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
   private def multiProduce(producer: Producer[String, String]) {
     val topics = Map("test4" -> 0, "test1" -> 0, "test2" -> 0, "test3" -> 0)
-    createSimpleTopicsAndAwaitLeader(zkClient, topics.keys)
+    topics.keys.map(topic => TestUtils.createTopic(zkClient, topic, servers = servers))
 
     val messages = new mutable.HashMap[String, Seq[String]]
     val builder = new FetchRequestBuilder()
@@ -215,7 +217,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
   def testPipelinedProduceRequests() {
     val topics = Map("test4" -> 0, "test1" -> 0, "test2" -> 0, "test3" -> 0)
-    createSimpleTopicsAndAwaitLeader(zkClient, topics.keys)
+    topics.keys.map(topic => TestUtils.createTopic(zkClient, topic, servers = servers))
     val props = new Properties()
     props.put("request.required.acks", "0")
     val pipelinedProducer: Producer[String, String] =
@@ -263,17 +265,6 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
     for( (topic, partition) <- topics) {
       val fetched = response.messageSet(topic, partition)
       assertEquals(messages(topic), fetched.map(messageAndOffset => Utils.readString(messageAndOffset.message.payload)))
-    }
-  }
-
-  /**
-   * For testing purposes, just create these topics each with one partition and one replica for
-   * which the provided broker should the leader for.  Create and wait for broker to lead.  Simple.
-   */
-  private def createSimpleTopicsAndAwaitLeader(zkClient: ZkClient, topics: Iterable[String]) {
-    for( topic <- topics ) {
-      AdminUtils.createTopic(zkClient, topic, partitions = 1, replicationFactor = 1)
-      TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition = 0)
     }
   }
 }

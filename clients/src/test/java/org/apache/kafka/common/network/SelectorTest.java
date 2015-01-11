@@ -12,7 +12,6 @@
  */
 package org.apache.kafka.common.network;
 
-import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -74,7 +73,7 @@ public class SelectorTest {
         // disconnect
         this.server.closeConnections();
         while (!selector.disconnected().contains(node))
-            selector.poll(1000L, EMPTY);
+            selector.poll(1000L);
 
         // reconnect and do another request
         blockingConnect(node);
@@ -89,7 +88,8 @@ public class SelectorTest {
         int node = 0;
         blockingConnect(node);
         selector.disconnect(node);
-        selector.poll(10, asList(createSend(node, "hello1")));
+        selector.send(createSend(node, "hello1"));
+        selector.poll(10);
         assertEquals("Request should not have succeeded", 0, selector.completedSends().size());
         assertEquals("There should be a disconnect", 1, selector.disconnected().size());
         assertTrue("The disconnect should be from our node", selector.disconnected().contains(node));
@@ -104,7 +104,9 @@ public class SelectorTest {
     public void testCantSendWithInProgress() throws Exception {
         int node = 0;
         blockingConnect(node);
-        selector.poll(1000L, asList(createSend(node, "test1"), createSend(node, "test2")));
+        selector.send(createSend(node, "test1"));
+        selector.send(createSend(node, "test2"));
+        selector.poll(1000L);
     }
 
     /**
@@ -112,7 +114,8 @@ public class SelectorTest {
      */
     @Test(expected = IllegalStateException.class)
     public void testCantSendWithoutConnecting() throws Exception {
-        selector.poll(1000L, asList(createSend(0, "test")));
+        selector.send(createSend(0, "test"));
+        selector.poll(1000L);
     }
 
     /**
@@ -131,7 +134,7 @@ public class SelectorTest {
         int node = 0;
         selector.connect(node, new InetSocketAddress("localhost", TestUtils.choosePort()), BUFFER_SIZE, BUFFER_SIZE);
         while (selector.disconnected().contains(node))
-            selector.poll(1000L, EMPTY);
+            selector.poll(1000L);
     }
 
     /**
@@ -152,14 +155,13 @@ public class SelectorTest {
         int[] requests = new int[conns];
         int[] responses = new int[conns];
         int responseCount = 0;
-        List<NetworkSend> sends = new ArrayList<NetworkSend>();
         for (int i = 0; i < conns; i++)
-            sends.add(createSend(i, i + "-" + 0));
+            selector.send(createSend(i, i + "-" + 0));
 
         // loop until we complete all requests
         while (responseCount < conns * reqs) {
             // do the i/o
-            selector.poll(0L, sends);
+            selector.poll(0L);
 
             assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
 
@@ -175,12 +177,11 @@ public class SelectorTest {
             }
 
             // prepare new sends for the next round
-            sends.clear();
             for (NetworkSend send : selector.completedSends()) {
                 int dest = send.destination();
                 requests[dest]++;
                 if (requests[dest] < reqs)
-                    sends.add(createSend(dest, dest + "-" + requests[dest]));
+                    selector.send(createSend(dest, dest + "-" + requests[dest]));
             }
         }
     }
@@ -212,10 +213,34 @@ public class SelectorTest {
         blockingConnect(0);
     }
 
+    @Test
+    public void testMute() throws Exception {
+        blockingConnect(0);
+        blockingConnect(1);
+
+        selector.send(createSend(0, "hello"));
+        selector.send(createSend(1, "hi"));
+
+        selector.mute(1);
+
+        while (selector.completedReceives().isEmpty())
+            selector.poll(5);
+        assertEquals("We should have only one response", 1, selector.completedReceives().size());
+        assertEquals("The response should not be from the muted node", 0, selector.completedReceives().get(0).source());
+
+        selector.unmute(1);
+        do {
+            selector.poll(5);
+        } while (selector.completedReceives().isEmpty());
+        assertEquals("We should have only one response", 1, selector.completedReceives().size());
+        assertEquals("The response should be from the previously muted node", 1, selector.completedReceives().get(0).source());
+    }
+
     private String blockingRequest(int node, String s) throws IOException {
-        selector.poll(1000L, asList(createSend(node, s)));
+        selector.send(createSend(node, s));
+        selector.poll(1000L);
         while (true) {
-            selector.poll(1000L, EMPTY);
+            selector.poll(1000L);
             for (NetworkReceive receive : selector.completedReceives())
                 if (receive.source() == node)
                     return asString(receive);
@@ -226,7 +251,7 @@ public class SelectorTest {
     private void blockingConnect(int node) throws IOException {
         selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
         while (!selector.connected().contains(node))
-            selector.poll(10000L, EMPTY);
+            selector.poll(10000L);
     }
 
     private NetworkSend createSend(int node, String s) {

@@ -141,7 +141,7 @@ class RequestSendThread(val controllerId: Int,
               connectToBroker(toBroker, channel)
               isSendSuccessful = false
               // backoff before retrying the connection and send
-              Utils.swallow(Thread.sleep(300))
+              Utils.swallowTrace(Thread.sleep(300))
           }
         }
         if (receive != null) {

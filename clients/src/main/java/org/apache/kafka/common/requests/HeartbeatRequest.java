@@ -20,17 +20,18 @@ import org.apache.kafka.common.protocol.types.Struct;
 import java.nio.ByteBuffer;
 
 public class HeartbeatRequest extends AbstractRequestResponse {
-    public static Schema curSchema = ProtoUtils.currentRequestSchema(ApiKeys.HEARTBEAT.id);
-    private static String GROUP_ID_KEY_NAME = "group_id";
-    private static String GROUP_GENERATION_ID_KEY_NAME = "group_generation_id";
-    private static String CONSUMER_ID_KEY_NAME = "consumer_id";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.HEARTBEAT.id);
+    private static final String GROUP_ID_KEY_NAME = "group_id";
+    private static final String GROUP_GENERATION_ID_KEY_NAME = "group_generation_id";
+    private static final String CONSUMER_ID_KEY_NAME = "consumer_id";
 
     private final String groupId;
     private final int groupGenerationId;
     private final String consumerId;
 
     public HeartbeatRequest(String groupId, int groupGenerationId, String consumerId) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(GROUP_GENERATION_ID_KEY_NAME, groupGenerationId);
         struct.set(CONSUMER_ID_KEY_NAME, consumerId);
@@ -59,6 +60,6 @@ public class HeartbeatRequest extends AbstractRequestResponse {
     }
 
     public static HeartbeatRequest parse(ByteBuffer buffer) {
-        return new HeartbeatRequest(((Struct) curSchema.read(buffer)));
+        return new HeartbeatRequest(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

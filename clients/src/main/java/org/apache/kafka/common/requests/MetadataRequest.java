@@ -22,13 +22,14 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 public class MetadataRequest extends AbstractRequestResponse {
-    public static Schema curSchema = ProtoUtils.currentRequestSchema(ApiKeys.METADATA.id);
-    private static String TOPICS_KEY_NAME = "topics";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.METADATA.id);
+    private static final String TOPICS_KEY_NAME = "topics";
 
     private final List<String> topics;
 
     public MetadataRequest(List<String> topics) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
         struct.set(TOPICS_KEY_NAME, topics.toArray());
         this.topics = topics;
     }
@@ -47,6 +48,6 @@ public class MetadataRequest extends AbstractRequestResponse {
     }
 
     public static MetadataRequest parse(ByteBuffer buffer) {
-        return new MetadataRequest(((Struct) curSchema.read(buffer)));
+        return new MetadataRequest(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

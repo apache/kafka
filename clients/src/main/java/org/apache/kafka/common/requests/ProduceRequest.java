@@ -27,25 +27,26 @@ import java.util.List;
 import java.util.Map;
 
 public class ProduceRequest  extends AbstractRequestResponse {
-    public static Schema curSchema = ProtoUtils.currentRequestSchema(ApiKeys.PRODUCE.id);
-    private static String ACKS_KEY_NAME = "acks";
-    private static String TIMEOUT_KEY_NAME = "timeout";
-    private static String TOPIC_DATA_KEY_NAME = "topic_data";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.PRODUCE.id);
+    private static final String ACKS_KEY_NAME = "acks";
+    private static final String TIMEOUT_KEY_NAME = "timeout";
+    private static final String TOPIC_DATA_KEY_NAME = "topic_data";
 
     // topic level field names
-    private static String TOPIC_KEY_NAME = "topic";
-    private static String PARTITION_DATA_KEY_NAME = "data";
+    private static final String TOPIC_KEY_NAME = "topic";
+    private static final String PARTITION_DATA_KEY_NAME = "data";
 
     // partition level field names
-    private static String PARTITION_KEY_NAME = "partition";
-    private static String RECORD_SET_KEY_NAME = "record_set";
+    private static final String PARTITION_KEY_NAME = "partition";
+    private static final String RECORD_SET_KEY_NAME = "record_set";
 
     private final short acks;
     private final int timeout;
     private final Map<TopicPartition, ByteBuffer> partitionRecords;
 
     public ProduceRequest(short acks, int timeout, Map<TopicPartition, ByteBuffer> partitionRecords) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
         Map<String, Map<Integer, ByteBuffer>> recordsByTopic = CollectionUtils.groupDataByTopic(partitionRecords);
         struct.set(ACKS_KEY_NAME, acks);
         struct.set(TIMEOUT_KEY_NAME, timeout);
@@ -100,6 +101,6 @@ public class ProduceRequest  extends AbstractRequestResponse {
     }
 
     public static ProduceRequest parse(ByteBuffer buffer) {
-        return new ProduceRequest(((Struct) curSchema.read(buffer)));
+        return new ProduceRequest(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

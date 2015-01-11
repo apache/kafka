@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.utils.Utils;
@@ -40,32 +39,34 @@ public class Partitioner {
     /**
      * Compute the partition for the given record.
      * 
-     * @param record The record being sent
+     * @param topic The topic name
+     * @param key The key to partition on (or null if no key)
+     * @param partition The partition to use (or null if none)
      * @param cluster The current cluster metadata
      */
-    public int partition(ProducerRecord<byte[], byte[]> record, Cluster cluster) {
-        List<PartitionInfo> partitions = cluster.partitionsForTopic(record.topic());
+    public int partition(String topic, byte[] key, Integer partition, Cluster cluster) {
+        List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
         int numPartitions = partitions.size();
-        if (record.partition() != null) {
+        if (partition != null) {
             // they have given us a partition, use it
-            if (record.partition() < 0 || record.partition() >= numPartitions)
-                throw new IllegalArgumentException("Invalid partition given with record: " + record.partition()
+            if (partition < 0 || partition >= numPartitions)
+                throw new IllegalArgumentException("Invalid partition given with record: " + partition
                                                    + " is not in the range [0..."
                                                    + numPartitions
                                                    + "].");
-            return record.partition();
-        } else if (record.key() == null) {
+            return partition;
+        } else if (key == null) {
             // choose the next available node in a round-robin fashion
             for (int i = 0; i < numPartitions; i++) {
-                int partition = Utils.abs(counter.getAndIncrement()) % numPartitions;
-                if (partitions.get(partition).leader() != null)
-                    return partition;
+                int part = Utils.abs(counter.getAndIncrement()) % numPartitions;
+                if (partitions.get(part).leader() != null)
+                    return part;
             }
             // no partitions are available, give a non-available partition
             return Utils.abs(counter.getAndIncrement()) % numPartitions;
         } else {
             // hash the key to choose a partition
-            return Utils.abs(Utils.murmur2(record.key())) % numPartitions;
+            return Utils.abs(Utils.murmur2(key)) % numPartitions;
         }
     }
 

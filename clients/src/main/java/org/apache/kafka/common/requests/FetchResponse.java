@@ -30,18 +30,19 @@ import java.util.List;
 import java.util.Map;
 
 public class FetchResponse extends AbstractRequestResponse {
-    public static Schema curSchema = ProtoUtils.currentResponseSchema(ApiKeys.FETCH.id);
-    private static String RESPONSES_KEY_NAME = "responses";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.FETCH.id);
+    private static final String RESPONSES_KEY_NAME = "responses";
 
     // topic level field names
-    private static String TOPIC_KEY_NAME = "topic";
-    private static String PARTITIONS_KEY_NAME = "partition_responses";
+    private static final String TOPIC_KEY_NAME = "topic";
+    private static final String PARTITIONS_KEY_NAME = "partition_responses";
 
     // partition level field names
-    private static String PARTITION_KEY_NAME = "partition";
-    private static String ERROR_CODE_KEY_NAME = "error_code";
-    private static String HIGH_WATERMARK_KEY_NAME = "high_watermark";
-    private static String RECORD_SET_KEY_NAME = "record_set";
+    private static final String PARTITION_KEY_NAME = "partition";
+    private static final String ERROR_CODE_KEY_NAME = "error_code";
+    private static final String HIGH_WATERMARK_KEY_NAME = "high_watermark";
+    private static final String RECORD_SET_KEY_NAME = "record_set";
 
     private final Map<TopicPartition, PartitionData> responseData;
 
@@ -58,7 +59,7 @@ public class FetchResponse extends AbstractRequestResponse {
     }
 
     public FetchResponse(Map<TopicPartition, PartitionData> responseData) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(responseData);
 
         List<Struct> topicArray = new ArrayList<Struct>();
@@ -105,6 +106,6 @@ public class FetchResponse extends AbstractRequestResponse {
     }
 
     public static FetchResponse parse(ByteBuffer buffer) {
-        return new FetchResponse(((Struct) curSchema.read(buffer)));
+        return new FetchResponse(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

@@ -55,7 +55,7 @@ public class MemoryRecords implements Records {
         return emptyRecords(buffer, type, buffer.capacity());
     }
 
-    public static MemoryRecords iterableRecords(ByteBuffer buffer) {
+    public static MemoryRecords readableRecords(ByteBuffer buffer) {
         return new MemoryRecords(buffer, CompressionType.NONE, false, buffer.capacity());
     }
 
@@ -94,22 +94,21 @@ public class MemoryRecords implements Records {
      * Note that the return value is based on the estimate of the bytes written to the compressor, which may not be
      * accurate if compression is really used. When this happens, the following append may cause dynamic buffer
      * re-allocation in the underlying byte buffer stream.
-     *
+     * 
      * Also note that besides the records' capacity, there is also a size limit for the batch. This size limit may be
      * smaller than the capacity (e.g. when appending a single message whose size is larger than the batch size, the
-     * capacity will be the message size, but the size limit will still be the batch size), and when the records' size has
-     * exceed this limit we also mark this record as full.
+     * capacity will be the message size, but the size limit will still be the batch size), and when the records' size
+     * has exceed this limit we also mark this record as full.
      */
     public boolean hasRoomFor(byte[] key, byte[] value) {
-        return this.writable &&
-            this.capacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD + Record.recordSize(key, value) &&
-            this.sizeLimit >= this.compressor.estimatedBytesWritten();
+        return this.writable && this.capacity >= this.compressor.estimatedBytesWritten() + Records.LOG_OVERHEAD +
+                                                 Record.recordSize(key, value) &&
+               this.sizeLimit >= this.compressor.estimatedBytesWritten();
     }
 
     public boolean isFull() {
-        return !this.writable ||
-            this.capacity <= this.compressor.estimatedBytesWritten() ||
-            this.sizeLimit <= this.compressor.estimatedBytesWritten();
+        return !this.writable || this.capacity <= this.compressor.estimatedBytesWritten() ||
+               this.sizeLimit <= this.compressor.estimatedBytesWritten();
     }
 
     /**
@@ -132,7 +131,7 @@ public class MemoryRecords implements Records {
     public int sizeInBytes() {
         return compressor.buffer().position();
     }
-    
+
     /**
      * The compression rate of this record set
      */
@@ -162,6 +161,25 @@ public class MemoryRecords implements Records {
         ByteBuffer copy = (ByteBuffer) this.buffer.duplicate().flip();
         return new RecordsIterator(copy, CompressionType.NONE, false);
     }
+    
+    @Override
+    public String toString() {
+      Iterator<LogEntry> iter = iterator();
+      StringBuilder builder = new StringBuilder();
+      builder.append('[');
+      while(iter.hasNext()) {
+        LogEntry entry = iter.next();
+        builder.append('(');
+        builder.append("offset=");
+        builder.append(entry.offset());
+        builder.append(",");
+        builder.append("record=");
+        builder.append(entry.record());
+        builder.append(")");
+      }
+      builder.append(']');
+      return builder.toString();
+    }
 
     public static class RecordsIterator extends AbstractIterator<LogEntry> {
         private final ByteBuffer buffer;
@@ -174,7 +192,7 @@ public class MemoryRecords implements Records {
             this.type = type;
             this.buffer = buffer;
             this.shallow = shallow;
-            stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type);
+            this.stream = Compressor.wrapForInput(new ByteBufferInputStream(this.buffer), type);
         }
 
         /*
@@ -199,7 +217,10 @@ public class MemoryRecords implements Records {
                     ByteBuffer rec;
                     if (type == CompressionType.NONE) {
                         rec = buffer.slice();
-                        buffer.position(buffer.position() + size);
+                        int newPos = buffer.position() + size;
+                        if(newPos > buffer.limit())
+                          return allDone();
+                        buffer.position(newPos);
                         rec.limit(size);
                     } else {
                         byte[] recordBuffer = new byte[size];
@@ -207,7 +228,6 @@ public class MemoryRecords implements Records {
                         rec = ByteBuffer.wrap(recordBuffer);
                     }
                     LogEntry entry = new LogEntry(offset, new Record(rec));
-                    entry.record().ensureValid();
 
                     // decide whether to go shallow or deep iteration if it is compressed
                     CompressionType compression = entry.record().compressionType();

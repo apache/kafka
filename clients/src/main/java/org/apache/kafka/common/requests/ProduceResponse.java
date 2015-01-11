@@ -26,22 +26,23 @@ import java.util.List;
 import java.util.Map;
 
 public class ProduceResponse extends AbstractRequestResponse {
-    private static Schema curSchema = ProtoUtils.currentResponseSchema(ApiKeys.PRODUCE.id);
-    private static String RESPONSES_KEY_NAME = "responses";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.PRODUCE.id);
+    private static final String RESPONSES_KEY_NAME = "responses";
 
     // topic level field names
-    private static String TOPIC_KEY_NAME = "topic";
-    private static String PARTITION_RESPONSES_KEY_NAME = "partition_responses";
+    private static final String TOPIC_KEY_NAME = "topic";
+    private static final String PARTITION_RESPONSES_KEY_NAME = "partition_responses";
 
     // partition level field names
-    private static String PARTITION_KEY_NAME = "partition";
-    private static String ERROR_CODE_KEY_NAME = "error_code";
-    private static String BASE_OFFSET_KEY_NAME = "base_offset";
+    private static final String PARTITION_KEY_NAME = "partition";
+    private static final String ERROR_CODE_KEY_NAME = "error_code";
+    private static final String BASE_OFFSET_KEY_NAME = "base_offset";
 
     private final Map<TopicPartition, PartitionResponse> responses;
 
     public ProduceResponse(Map<TopicPartition, PartitionResponse> responses) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
         Map<String, Map<Integer, PartitionResponse>> responseByTopic = CollectionUtils.groupDataByTopic(responses);
         List<Struct> topicDatas = new ArrayList<Struct>(responseByTopic.size());
         for (Map.Entry<String, Map<Integer, PartitionResponse>> entry : responseByTopic.entrySet()) {
@@ -107,6 +108,6 @@ public class ProduceResponse extends AbstractRequestResponse {
     }
 
     public static ProduceResponse parse(ByteBuffer buffer) {
-        return new ProduceResponse(((Struct) curSchema.read(buffer)));
+        return new ProduceResponse(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

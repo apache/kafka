@@ -78,9 +78,9 @@ public final class Metadata {
     }
 
     /**
-     * The next time to update the cluster info is the maximum of the time the current info will expire
-     * and the time the current info can be updated (i.e. backoff time has elapsed); If an update has
-     * been request then the expiry time is now
+     * The next time to update the cluster info is the maximum of the time the current info will expire and the time the
+     * current info can be updated (i.e. backoff time has elapsed); If an update has been request then the expiry time
+     * is now
      */
     public synchronized long timeToNextUpdate(long nowMs) {
         long timeToExpire = needUpdate ? 0 : Math.max(this.lastRefreshMs + this.metadataExpireMs - nowMs, 0);
@@ -120,6 +120,15 @@ public final class Metadata {
     }
 
     /**
+     * Add one or more topics to maintain metadata for
+     */
+    public synchronized void addTopics(String... topics) {
+        for (String topic : topics)
+            this.topics.add(topic);
+        requestUpdate();
+    }
+
+    /**
      * Get the list of topics we are currently maintaining metadata for
      */
     public synchronized Set<String> topics() {
@@ -136,6 +145,13 @@ public final class Metadata {
         this.cluster = cluster;
         notifyAll();
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
+    }
+    
+    /**
+     * @return The current metadata version
+     */
+    public synchronized int version() {
+        return this.version;
     }
 
     /**

@@ -22,12 +22,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class JoinGroupRequest extends AbstractRequestResponse {
-    public static Schema curSchema = ProtoUtils.currentRequestSchema(ApiKeys.JOIN_GROUP.id);
-    private static String GROUP_ID_KEY_NAME = "group_id";
-    private static String SESSION_TIMEOUT_KEY_NAME = "session_timeout";
-    private static String TOPICS_KEY_NAME = "topics";
-    private static String CONSUMER_ID_KEY_NAME = "consumer_id";
-    private static String STRATEGY_KEY_NAME = "partition_assignment_strategy";
+    
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.JOIN_GROUP.id);
+    private static final String GROUP_ID_KEY_NAME = "group_id";
+    private static final String SESSION_TIMEOUT_KEY_NAME = "session_timeout";
+    private static final String TOPICS_KEY_NAME = "topics";
+    private static final String CONSUMER_ID_KEY_NAME = "consumer_id";
+    private static final String STRATEGY_KEY_NAME = "partition_assignment_strategy";
 
     private final String groupId;
     private final int sessionTimeout;
@@ -36,7 +37,7 @@ public class JoinGroupRequest extends AbstractRequestResponse {
     private final String strategy;
 
     public JoinGroupRequest(String groupId, int sessionTimeout, List<String> topics, String consumerId, String strategy) {
-        super(new Struct(curSchema));
+        super(new Struct(CURRENT_SCHEMA));
         struct.set(GROUP_ID_KEY_NAME, groupId);
         struct.set(SESSION_TIMEOUT_KEY_NAME, sessionTimeout);
         struct.set(TOPICS_KEY_NAME, topics.toArray());
@@ -82,6 +83,6 @@ public class JoinGroupRequest extends AbstractRequestResponse {
     }
 
     public static JoinGroupRequest parse(ByteBuffer buffer) {
-        return new JoinGroupRequest(((Struct) curSchema.read(buffer)));
+        return new JoinGroupRequest(((Struct) CURRENT_SCHEMA.read(buffer)));
     }
 }

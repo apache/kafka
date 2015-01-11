@@ -119,16 +119,42 @@ final class ClusterConnectionStates {
     public void disconnected(int node) {
         nodeState(node).state = ConnectionState.DISCONNECTED;
     }
-
+    
     /**
-     * Get the state of our connection to the given state
+     * Get the state of our connection to the given node
      * @param node The id of the node
      * @return The state of our connection
+     */
+    public ConnectionState connectionState(int node) {
+        return nodeState(node).state;
+    }
+    
+    /**
+     * Get the state of a given node
+     * @param node The node to fetch the state for
      */
     private NodeConnectionState nodeState(int node) {
         NodeConnectionState state = this.nodeState.get(node);
         if (state == null)
             throw new IllegalStateException("No entry found for node " + node);
         return state;
+    }
+    
+    /**
+     * The state of our connection to a node
+     */
+    private static class NodeConnectionState {
+
+        ConnectionState state;
+        long lastConnectAttemptMs;
+
+        public NodeConnectionState(ConnectionState state, long lastConnectAttempt) {
+            this.state = state;
+            this.lastConnectAttemptMs = lastConnectAttempt;
+        }
+
+        public String toString() {
+            return "NodeState(" + state + ", " + lastConnectAttemptMs + ")";
+        }
     }
 }

@@ -36,6 +36,8 @@ class MockScheduler(val time: Time) extends Scheduler {
   
   /* a priority queue of tasks ordered by next execution time */
   var tasks = new PriorityQueue[MockTask]()
+  
+  def isStarted = true
 
   def startup() {}
   
