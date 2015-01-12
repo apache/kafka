@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * This class is shared by the client thread (for partitioning) and the background sender thread.
  * 
- * Metadata is maintained for only a subset of topics, which can be added to over time. When we request metdata for a
+ * Metadata is maintained for only a subset of topics, which can be added to over time. When we request metadata for a
  * topic we don't have any metadata for it will trigger a metadata update.
  */
 public final class Metadata {
@@ -99,12 +99,17 @@ public final class Metadata {
     /**
      * Wait for metadata update until the current version is larger than the last version we know of
      */
-    public synchronized void awaitUpdate(int lastVerison, long maxWaitMs) {
+    public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) {
+        if (maxWaitMs < 0) {
+            throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milli seconds");
+        }
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
-        while (this.version <= lastVerison) {
+        while (this.version <= lastVersion) {
             try {
-                wait(remainingWaitMs);
+                if (remainingWaitMs != 0) {
+                    wait(remainingWaitMs);
+                }
             } catch (InterruptedException e) { /* this is fine */
             }
             long elapsed = System.currentTimeMillis() - begin;
