@@ -25,11 +25,12 @@ import kafka.utils._
 import java.util.concurrent._
 import atomic.{AtomicInteger, AtomicBoolean}
 import java.io.File
+import collection.mutable
 import org.I0Itec.zkclient.ZkClient
 import kafka.controller.{ControllerStats, KafkaController}
 import kafka.cluster.Broker
 import kafka.api.{ControlledShutdownResponse, ControlledShutdownRequest}
-import kafka.common.ErrorMapping
+import kafka.common.{ErrorMapping, InconsistentBrokerIdException, GenerateBrokerIdException}
 import kafka.network.{Receive, BlockingChannel, SocketServer}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
@@ -39,10 +40,11 @@ import com.yammer.metrics.core.Gauge
  * to start up and shutdown a single Kafka node.
  */
 class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
-  this.logIdent = "[Kafka Server " + config.brokerId + "], "
   private var isShuttingDown = new AtomicBoolean(false)
   private var shutdownLatch = new CountDownLatch(1)
   private var startupComplete = new AtomicBoolean(false)
+  private var brokerId: Int = -1
+
   val brokerState: BrokerState = new BrokerState
   val correlationId: AtomicInteger = new AtomicInteger(0)
   var socketServer: SocketServer = null
@@ -56,6 +58,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   var kafkaController: KafkaController = null
   val kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
   var zkClient: ZkClient = null
+  val brokerMetaPropsFile = "meta.properties"
+  val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator +brokerMetaPropsFile)))).toMap
 
   newGauge(
     "BrokerState",
@@ -77,13 +81,17 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
       /* start scheduler */
       kafkaScheduler.startup()
-    
+
       /* setup zookeeper */
       zkClient = initZk()
 
       /* start log manager */
       logManager = createLogManager(zkClient, brokerState)
       logManager.startup()
+
+      /* generate brokerId */
+      config.brokerId =  getBrokerId
+      this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
       socketServer = new SocketServer(config.brokerId,
                                       config.hostName,
@@ -104,26 +112,25 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       offsetManager = createOffsetManager()
 
       kafkaController = new KafkaController(config, zkClient, brokerState)
-    
+
       /* start processing requests */
       apis = new KafkaApis(socketServer.requestChannel, replicaManager, offsetManager, zkClient, config.brokerId, config, kafkaController)
       requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
       brokerState.newState(RunningAsBroker)
-   
+
       Mx4jLoader.maybeLoad()
 
       replicaManager.startup()
 
       kafkaController.startup()
-    
+
       topicConfigManager = new TopicConfigManager(zkClient, logManager)
       topicConfigManager.startup()
-    
+
       /* tell everyone we are alive */
       kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, config.advertisedHostName, config.advertisedPort, config.zkSessionTimeoutMs, zkClient)
       kafkaHealthcheck.startup()
 
-    
       registerStats()
       startupComplete.set(true)
       info("started")
@@ -181,10 +188,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       info("Starting controlled shutdown")
       var channel : BlockingChannel = null
       var prevController : Broker = null
-      var shutdownSuceeded : Boolean = false
+      var shutdownSucceeded : Boolean = false
       try {
         brokerState.newState(PendingControlledShutdown)
-        while (!shutdownSuceeded && remainingRetries > 0) {
+        while (!shutdownSucceeded && remainingRetries > 0) {
           remainingRetries = remainingRetries - 1
 
           // 1. Find the controller and establish a connection to it.
@@ -223,7 +230,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
               val shutdownResponse = ControlledShutdownResponse.readFrom(response.buffer)
               if (shutdownResponse.errorCode == ErrorMapping.NoError && shutdownResponse.partitionsRemaining != null &&
                   shutdownResponse.partitionsRemaining.size == 0) {
-                shutdownSuceeded = true
+                shutdownSucceeded = true
                 info ("Controlled shutdown succeeded")
               }
               else {
@@ -239,7 +246,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                 // ignore and try again
             }
           }
-          if (!shutdownSuceeded) {
+          if (!shutdownSucceeded) {
             Thread.sleep(config.controlledShutdownRetryBackoffMs)
             warn("Retrying controlled shutdown after the previous attempt failed...")
           }
@@ -251,7 +258,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
           channel = null
         }
       }
-      if (!shutdownSuceeded) {
+      if (!shutdownSucceeded) {
         warn("Proceeding to do an unclean shutdown as all the controlled shutdown attempts failed")
       }
     }
@@ -307,7 +314,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   def awaitShutdown(): Unit = shutdownLatch.await()
 
   def getLogManager(): LogManager = logManager
-  
+
   private def createLogManager(zkClient: ZkClient, brokerState: BrokerState): LogManager = {
     val defaultLogConfig = LogConfig(segmentSize = config.logSegmentBytes,
                                      segmentMs = config.logRollTimeMillis,
@@ -359,5 +366,55 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     new OffsetManager(offsetManagerConfig, replicaManager, zkClient, kafkaScheduler)
   }
 
-}
+  /**
+    * Generates new brokerId or reads from meta.properties based on following conditions
+    * <ol>
+    * <li> config has no broker.id provided , generates a broker.id based on Zookeeper's sequence
+    * <li> stored broker.id in meta.properties doesn't match in all the log.dirs throws InconsistentBrokerIdException
+    * <li> config has broker.id and meta.properties contains broker.id if they don't match throws InconsistentBrokerIdException
+    * <li> config has broker.id and there is no meta.properties file, creates new meta.properties and stores broker.id
+    * <ol>
+    * @returns A brokerId.
+    */
+  private def getBrokerId: Int =  {
+    var brokerId = config.brokerId
+    var logDirsWithoutMetaProps: List[String] = List()
+    val brokerIdSet = mutable.HashSet[Int]()
 
+    for (logDir <- config.logDirs) {
+      val brokerMetadataOpt = brokerMetadataCheckpoints(logDir).read()
+      brokerMetadataOpt match {
+        case Some(brokerMetadata: BrokerMetadata) =>
+          brokerIdSet.add(brokerMetadata.brokerId)
+        case None =>
+          logDirsWithoutMetaProps ++= List(logDir)
+      }
+    }
+
+    if(brokerIdSet.size > 1)
+      throw new InconsistentBrokerIdException("Failed to match brokerId across logDirs")
+    else if(brokerId >= 0 && brokerIdSet.size == 1 && brokerIdSet.last != brokerId)
+      throw new InconsistentBrokerIdException("Configured brokerId %s doesn't match stored brokerId %s in meta.properties".format(brokerId, brokerIdSet.last))
+    else if(brokerIdSet.size == 0 && brokerId < 0)  // generate a new brokerId from Zookeeper
+      brokerId = generateBrokerId
+    else if(brokerIdSet.size == 1) // pick broker.id from meta.properties
+      brokerId = brokerIdSet.last
+
+    for(logDir <- logDirsWithoutMetaProps) {
+      val checkpoint = brokerMetadataCheckpoints(logDir)
+      checkpoint.write(new BrokerMetadata(brokerId))
+    }
+
+    return brokerId
+  }
+
+  private def generateBrokerId: Int = {
+    try {
+      ZkUtils.getBrokerSequenceId(zkClient, config.MaxReservedBrokerId)
+    } catch {
+      case e: Exception =>
+        error("Failed to generate broker.id due to ", e)
+        throw new GenerateBrokerIdException("Failed to generate broker.id", e)
+    }
+  }
+}

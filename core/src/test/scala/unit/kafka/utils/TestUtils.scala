@@ -94,7 +94,7 @@ object TestUtils extends Logging {
         Utils.rm(f)
       }
     })
-    
+
     f
   }
 
@@ -154,7 +154,7 @@ object TestUtils extends Logging {
   def createBrokerConfig(nodeId: Int, port: Int = choosePort(),
     enableControlledShutdown: Boolean = true): Properties = {
     val props = new Properties
-    props.put("broker.id", nodeId.toString)
+    if (nodeId >= 0) props.put("broker.id", nodeId.toString)
     props.put("host.name", "localhost")
     props.put("port", port.toString)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
@@ -700,6 +700,11 @@ object TestUtils extends Logging {
     ZkUtils.pathExists(zkClient, ZkUtils.ReassignPartitionsPath)
   }
 
+  def verifyNonDaemonThreadsStatus() {
+    assertEquals(0, Thread.getAllStackTraces.keySet().toArray
+      .map(_.asInstanceOf[Thread])
+      .count(t => !t.isDaemon && t.isAlive && t.getClass.getCanonicalName.toLowerCase.startsWith("kafka")))
+  }
 
   /**
    * Create new LogManager instance with default configuration for testing
