@@ -299,7 +299,7 @@ class ProducerFailureHandlingTest extends JUnit3Suite with KafkaServerTestHarnes
 
   @Test(expected = classOf[InvalidTopicException])
   def testCannotSendToInternalTopic() {
-    producer1.send(new ProducerRecord(Topic.InternalTopics.head, "test".getBytes, "test".getBytes)).get
+    producer1.send(new ProducerRecord[Array[Byte],Array[Byte]](Topic.InternalTopics.head, "test".getBytes, "test".getBytes)).get
   }
 
   @Test

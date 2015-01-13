@@ -46,12 +46,12 @@ public class ProducerPerformance {
                 throw new IllegalArgumentException("Invalid property: " + args[i]);
             props.put(pieces[0], pieces[1]);
         }
-        KafkaProducer producer = new KafkaProducer(props);
+        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[], byte[]>(props);
 
         /* setup perf test */
         byte[] payload = new byte[recordSize];
         Arrays.fill(payload, (byte) 1);
-        ProducerRecord record = new ProducerRecord(topicName, payload);
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<byte[], byte[]>(topicName, payload);
         long sleepTime = NS_PER_SEC / throughput;
         long sleepDeficitNs = 0;
         Stats stats = new Stats(numRecords, 5000);

@@ -40,7 +40,7 @@ import org.apache.kafka.common.TopicPartition;
  * By default this mock will synchronously complete each send call successfully. However it can be configured to allow
  * the user to control the completion of the call and supply an optional error for the producer to throw.
  */
-public class MockProducer implements Producer {
+public class MockProducer implements Producer<byte[],byte[]> {
 
     private final Cluster cluster;
     private final Partitioner partitioner = new Partitioner();
@@ -90,7 +90,7 @@ public class MockProducer implements Producer {
      * @see #history()
      */
     @Override
-    public synchronized Future<RecordMetadata> send(ProducerRecord record) {
+    public synchronized Future<RecordMetadata> send(ProducerRecord<byte[], byte[]> record) {
         return send(record, null);
     }
 
@@ -100,7 +100,7 @@ public class MockProducer implements Producer {
      * @see #history()
      */
     @Override
-    public synchronized Future<RecordMetadata> send(ProducerRecord record, Callback callback) {
+    public synchronized Future<RecordMetadata> send(ProducerRecord<byte[],byte[]> record, Callback callback) {
         int partition = 0;
         if (this.cluster.partitionsForTopic(record.topic()) != null)
             partition = partitioner.partition(record, this.cluster);
