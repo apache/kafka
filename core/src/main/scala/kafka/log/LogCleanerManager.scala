@@ -44,9 +44,12 @@ private[log] case object LogCleaningPaused extends LogCleaningState
 private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[TopicAndPartition, Log]) extends Logging with KafkaMetricsGroup {
   
   override val loggerName = classOf[LogCleaner].getName
+
+  // package-private for testing
+  private[log] val offsetCheckpointFile = "cleaner-offset-checkpoint"
   
   /* the offset checkpoints holding the last cleaned point for each log */
-  private val checkpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, "cleaner-offset-checkpoint")))).toMap
+  private val checkpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, offsetCheckpointFile)))).toMap
 
   /* the set of logs currently being cleaned */
   private val inProgress = mutable.HashMap[TopicAndPartition, LogCleaningState]()
@@ -181,6 +184,14 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     }
   }
 
+  def updateCheckpoints(dataDir: File, update: Option[(TopicAndPartition,Long)]) {
+    inLock(lock) {
+      val checkpoint = checkpoints(dataDir)
+      val existing = checkpoint.read().filterKeys(logs.keys) ++ update
+      checkpoint.write(existing)
+    }
+  }
+
   /**
    * Save out the endOffset and remove the given log from the in-progress set, if not aborted.
    */
@@ -188,9 +199,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     inLock(lock) {
       inProgress(topicAndPartition) match {
         case LogCleaningInProgress =>
-          val checkpoint = checkpoints(dataDir)
-          val offsets = checkpoint.read() + ((topicAndPartition, endOffset))
-          checkpoint.write(offsets)
+          updateCheckpoints(dataDir,Option(topicAndPartition, endOffset))
           inProgress.remove(topicAndPartition)
         case LogCleaningAborted =>
           inProgress.put(topicAndPartition, LogCleaningPaused)

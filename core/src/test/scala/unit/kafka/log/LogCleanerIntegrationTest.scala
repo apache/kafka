@@ -18,6 +18,8 @@
 package kafka.log
 
 import java.io.File
+import kafka.server.OffsetCheckpoint
+
 import scala.collection._
 import org.junit._
 import kafka.common.TopicAndPartition
@@ -62,6 +64,18 @@ class LogCleanerIntegrationTest extends JUnitSuite {
     cleaner.awaitCleaned("log", 0, lastCleaned2)
     val read2 = readFromLog(log)
     assertEquals("Contents of the map shouldn't change.", appends2.toMap, read2.toMap)
+
+    // simulate deleting a partition, by removing it from logs
+    // force a checkpoint
+    // and make sure its gone from checkpoint file
+
+    cleaner.logs.remove(topics(0))
+
+    cleaner.updateCheckpoints(logDir)
+    val checkpoints = new OffsetCheckpoint(new File(logDir,cleaner.cleanerManager.offsetCheckpointFile)).read()
+
+    // we expect partition 0 to be gone
+    assert(!checkpoints.contains(topics(0)))
     
     cleaner.shutdown()
   }
