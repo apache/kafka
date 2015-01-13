@@ -7,22 +7,31 @@ import time
 import datetime
 import tempfile
 import commands
+import getpass
 from jira.client import JIRA
 
 def get_jira_config():
   # read the config file
   home=jira_home=os.getenv('HOME')
   home=home.rstrip('/')
-  jira_config = dict(line.strip().split('=') for line in open(home + '/jira.ini'))
-  return jira_config
+  if not (os.path.isfile(home + '/jira.ini')):
+    jira_user=raw_input('JIRA user :')
+    jira_pass=getpass.getpass('JIRA password :')
+    jira_config = {'user':jira_user, 'password':jira_pass}
+    return jira_config
+  else:
+    jira_config = dict(line.strip().split('=') for line in open(home + '/jira.ini'))
+    return jira_config
 
-def get_jira():
+def get_jira(jira_config):
   options = {
     'server': 'https://issues.apache.org/jira'
   }
-
-  jira_config = get_jira_config()
   jira = JIRA(options=options,basic_auth=(jira_config['user'], jira_config['password']))
+  # (Force) verify the auth was really done
+  jira_session=jira.session()
+  if (jira_session is None):
+    raise Exception("Failed to login to the JIRA instance")
   return jira
 
 def cmd_exists(cmd):
@@ -81,6 +90,15 @@ def main():
   p=os.popen(git_remote_update)
   p.close()
 
+  # Get JIRA configuration and login to JIRA to ensure the credentials work, before publishing the patch to the review board
+  print "Verifying JIRA connection configurations"
+  try:
+    jira_config=get_jira_config()
+    jira=get_jira(jira_config)
+  except:
+    print "Failed to login to the JIRA instance", sys.exc_info()[0], sys.exc_info()[1]
+    sys.exit(1)
+
   rb_command= post_review_tool + " --publish --tracking-branch " + opt.branch + " --target-groups=kafka --bugs-closed=" + opt.jira
   if opt.debug:
     rb_command=rb_command + " --debug"
@@ -123,7 +141,6 @@ def main():
   p.close()
 
   print 'Creating diff against', opt.branch, 'and uploading patch to JIRA',opt.jira
-  jira=get_jira()
   issue = jira.issue(opt.jira)
   attachment=open(patch_file)
   jira.add_attachment(issue,attachment)
@@ -145,8 +162,6 @@ def main():
   
   for t in transitions:
     transitionsMap[t['name']] = t['id']
-
-  jira_config = get_jira_config()
 
   if('Submit Patch' in transitionsMap):
      jira.transition_issue(issue, transitionsMap['Submit Patch'] , assignee={'name': jira_config['user']} )
