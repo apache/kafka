@@ -59,7 +59,7 @@ public class Percentiles extends SampledStat implements CompoundStat {
         List<NamedMeasurable> ms = new ArrayList<NamedMeasurable>(this.percentiles.length);
         for (Percentile percentile : this.percentiles) {
             final double pct = percentile.percentile();
-            ms.add(new NamedMeasurable(percentile.name(), percentile.description(), new Measurable() {
+            ms.add(new NamedMeasurable(percentile.name(), new Measurable() {
                 public double measure(MetricConfig config, long now) {
                     return value(config, now, pct / 100.0);
                 }

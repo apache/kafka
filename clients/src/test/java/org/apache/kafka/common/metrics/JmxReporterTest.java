@@ -16,10 +16,7 @@
  */
 package org.apache.kafka.common.metrics;
 
-
-import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.junit.Test;
@@ -31,10 +28,10 @@ public class JmxReporterTest {
         Metrics metrics = new Metrics();
         metrics.addReporter(new JmxReporter());
         Sensor sensor = metrics.sensor("kafka.requests");
-        sensor.add("pack.bean1.avg", new Avg());
-        sensor.add("pack.bean2.total", new Total());
+        sensor.add(new MetricName("pack.bean1.avg", "grp1"), new Avg());
+        sensor.add(new MetricName("pack.bean2.total", "grp2"), new Total());
         Sensor sensor2 = metrics.sensor("kafka.blah");
-        sensor2.add("pack.bean1.some", new Total());
-        sensor2.add("pack.bean2.some", new Total());
+        sensor2.add(new MetricName("pack.bean1.some", "grp1"), new Total());
+        sensor2.add(new MetricName("pack.bean2.some", "grp1"), new Total());
     }
 }

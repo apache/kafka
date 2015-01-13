@@ -23,11 +23,11 @@ import java.util.concurrent.Future;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.MetricName;
 
 
 /**
  * The interface for the {@link KafkaProducer}
- * 
  * @see KafkaProducer
  * @see MockProducer
  */
@@ -55,7 +55,7 @@ public interface Producer<K,V> extends Closeable {
     /**
      * Return a map of metrics maintained by the producer
      */
-    public Map<String, ? extends Metric> metrics();
+    public Map<MetricName, ? extends Metric> metrics();
 
     /**
      * Close this producer
