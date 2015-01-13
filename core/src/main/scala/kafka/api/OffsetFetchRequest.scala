@@ -25,7 +25,9 @@ import kafka.network.{BoundedByteBufferSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 import kafka.common.{OffsetAndMetadata, ErrorMapping, OffsetMetadataAndError, TopicAndPartition}
 object OffsetFetchRequest extends Logging {
-  val CurrentVersion: Short = 0
+  // version 0 and 1 have exactly the same wire format, but different functionality.
+  // version 0 will read the offsets from ZK and version 1 will read the offsets from Kafka.
+  val CurrentVersion: Short = 1
   val DefaultClientId = ""
 
   def readFrom(buffer: ByteBuffer): OffsetFetchRequest = {

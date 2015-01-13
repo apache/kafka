@@ -30,8 +30,6 @@ object OffsetCommitRequest extends Logging {
   val DefaultClientId = ""
 
   def readFrom(buffer: ByteBuffer): OffsetCommitRequest = {
-    val now = SystemTime.milliseconds
-
     // Read values from the envelope
     val versionId = buffer.getShort
     assert(versionId == 0 || versionId == 1,
@@ -59,14 +57,24 @@ object OffsetCommitRequest extends Logging {
         val partitionId = buffer.getInt
         val offset = buffer.getLong
         val timestamp = {
-          val given = buffer.getLong
-          if (given == -1L) now else given
+          if (versionId == 1) {
+            val given = buffer.getLong
+            given
+          } else
+            OffsetAndMetadata.InvalidTime
         }
         val metadata = readShortString(buffer)
         (TopicAndPartition(topic, partitionId), OffsetAndMetadata(offset, metadata, timestamp))
       })
     })
     OffsetCommitRequest(consumerGroupId, immutable.Map(pairs:_*), versionId, correlationId, clientId, groupGenerationId, consumerId)
+  }
+
+  def changeInvalidTimeToCurrentTime(offsetCommitRequest: OffsetCommitRequest) {
+    val now = SystemTime.milliseconds
+    for ( (topicAndPartiiton, offsetAndMetadata) <- offsetCommitRequest.requestInfo)
+      if (offsetAndMetadata.timestamp == OffsetAndMetadata.InvalidTime)
+        offsetAndMetadata.timestamp = now
   }
 }
 
@@ -121,7 +129,8 @@ case class OffsetCommitRequest(groupId: String,
       t1._2.foreach( t2 => {
         buffer.putInt(t2._1.partition)
         buffer.putLong(t2._2.offset)
-        buffer.putLong(t2._2.timestamp)
+        if (versionId == 1)
+          buffer.putLong(t2._2.timestamp)
         writeShortString(buffer, t2._2.metadata)
       })
     })
@@ -143,7 +152,7 @@ case class OffsetCommitRequest(groupId: String,
         innerCount +
         4 /* partition */ +
         8 /* offset */ +
-        8 /* timestamp */ +
+        (if (versionId == 1) 8 else 0 ) /* timestamp */ +
         shortStringLength(offsetAndMetadata._2.metadata)
       })
     })

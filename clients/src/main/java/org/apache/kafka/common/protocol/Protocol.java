@@ -111,6 +111,16 @@ public class Protocol {
                                                                          new Field("offset",
                                                                                    INT64,
                                                                                    "Message offset to be committed."),
+                                                                         new Field("metadata",
+                                                                                   STRING,
+                                                                                   "Any associated metadata the client wants to keep."));
+
+    public static Schema OFFSET_COMMIT_REQUEST_PARTITION_V1 = new Schema(new Field("partition",
+                                                                                   INT32,
+                                                                                   "Topic partition id."),
+                                                                         new Field("offset",
+                                                                                   INT64,
+                                                                                   "Message offset to be committed."),
                                                                          new Field("timestamp",
                                                                                    INT64,
                                                                                    "Timestamp of the commit"),
@@ -124,6 +134,13 @@ public class Protocol {
                                                                        new Field("partitions",
                                                                                  new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V0),
                                                                                  "Partitions to commit offsets."));
+
+    public static Schema OFFSET_COMMIT_REQUEST_TOPIC_V1 = new Schema(new Field("topic",
+                                                                               STRING,
+                                                                               "Topic to commit."),
+                                                                     new Field("partitions",
+                                                                               new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V1),
+                                                                               "Partitions to commit offsets."));
 
     public static Schema OFFSET_COMMIT_REQUEST_V0 = new Schema(new Field("group_id",
                                                                          STRING,
@@ -142,7 +159,7 @@ public class Protocol {
                                                                          STRING,
                                                                          "The consumer id assigned by the group coordinator."),
                                                                new Field("topics",
-                                                                         new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V0),
+                                                                         new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V1),
                                                                          "Topics to commit offsets."));
 
     public static Schema OFFSET_COMMIT_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
@@ -158,9 +175,11 @@ public class Protocol {
     public static Schema OFFSET_COMMIT_RESPONSE_V0 = new Schema(new Field("responses",
                                                                           new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
 
-    public static Schema[] OFFSET_COMMIT_REQUEST = new Schema[] { OFFSET_COMMIT_REQUEST_V0, OFFSET_COMMIT_REQUEST_V1 };
     /* The response types for both V0 and V1 of OFFSET_COMMIT_REQUEST are the same. */
-    public static Schema[] OFFSET_COMMIT_RESPONSE = new Schema[] { OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V0};
+    public static Schema OFFSET_COMMIT_RESPONSE_V1 = OFFSET_COMMIT_RESPONSE_V0;
+
+    public static Schema[] OFFSET_COMMIT_REQUEST = new Schema[] { OFFSET_COMMIT_REQUEST_V0, OFFSET_COMMIT_REQUEST_V1 };
+    public static Schema[] OFFSET_COMMIT_RESPONSE = new Schema[] { OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V1};
 
     /* Offset fetch api */
     public static Schema OFFSET_FETCH_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
@@ -181,6 +200,10 @@ public class Protocol {
                                                                         new ArrayOf(OFFSET_FETCH_REQUEST_TOPIC_V0),
                                                                         "Topics to fetch offsets."));
 
+    // version 0 and 1 have exactly the same wire format, but different functionality.
+    // version 0 will read the offsets from ZK and version 1 will read the offsets from Kafka.
+    public static Schema OFFSET_FETCH_REQUEST_V1 = OFFSET_FETCH_REQUEST_V0;
+
     public static Schema OFFSET_FETCH_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
                                                                                    INT32,
                                                                                    "Topic partition id."),
@@ -200,8 +223,11 @@ public class Protocol {
     public static Schema OFFSET_FETCH_RESPONSE_V0 = new Schema(new Field("responses",
                                                                          new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)));
 
-    public static Schema[] OFFSET_FETCH_REQUEST = new Schema[] { OFFSET_FETCH_REQUEST_V0 };
-    public static Schema[] OFFSET_FETCH_RESPONSE = new Schema[] { OFFSET_FETCH_RESPONSE_V0 };
+    /* The response types for both V0 and V1 of OFFSET_FETCH_RESPONSE are the same. */
+    public static Schema OFFSET_FETCH_RESPONSE_V1 = OFFSET_FETCH_RESPONSE_V0;
+
+    public static Schema[] OFFSET_FETCH_REQUEST = new Schema[] { OFFSET_FETCH_REQUEST_V0, OFFSET_FETCH_REQUEST_V1 };
+    public static Schema[] OFFSET_FETCH_RESPONSE = new Schema[] { OFFSET_FETCH_RESPONSE_V0, OFFSET_FETCH_RESPONSE_V1 };
 
     /* List offset api */
     public static Schema LIST_OFFSET_REQUEST_PARTITION_V0 = new Schema(new Field("partition",

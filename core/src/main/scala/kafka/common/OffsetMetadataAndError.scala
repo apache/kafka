@@ -19,7 +19,7 @@ package kafka.common
 
 case class OffsetAndMetadata(offset: Long,
                              metadata: String = OffsetAndMetadata.NoMetadata,
-                             timestamp: Long = -1L) {
+                             var timestamp: Long = -1L) {
   override def toString = "OffsetAndMetadata[%d,%s%s]"
                           .format(offset,
                                   if (metadata != null && metadata.length > 0) metadata else "NO_METADATA",

@@ -47,6 +47,7 @@ public class OffsetCommitRequest extends AbstractRequestResponse {
 
     public static final int DEFAULT_GENERATION_ID = -1;
     public static final String DEFAULT_CONSUMER_ID = "";
+    public static final long DEFAULT_TIMESTAMP = -1L;
 
     private final String groupId;
     private final int generationId;
@@ -57,6 +58,11 @@ public class OffsetCommitRequest extends AbstractRequestResponse {
         public final long offset;
         public final long timestamp;
         public final String metadata;
+
+        // for v0
+        public PartitionData(long offset, String metadata) {
+            this(offset, DEFAULT_TIMESTAMP, metadata);
+        }
 
         public PartitionData(long offset, long timestamp, String metadata) {
             this.offset = offset;
@@ -73,7 +79,7 @@ public class OffsetCommitRequest extends AbstractRequestResponse {
     @Deprecated
     public OffsetCommitRequest(String groupId, Map<TopicPartition, PartitionData> offsetData) {
         super(new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_COMMIT.id, 0)));
-        initCommonFields(groupId, offsetData);
+        initCommonFields(groupId, offsetData, 0);
         this.groupId = groupId;
         this.generationId = DEFAULT_GENERATION_ID;
         this.consumerId = DEFAULT_CONSUMER_ID;
@@ -90,7 +96,7 @@ public class OffsetCommitRequest extends AbstractRequestResponse {
     public OffsetCommitRequest(String groupId, int generationId, String consumerId, Map<TopicPartition, PartitionData> offsetData) {
         super(new Struct(curSchema));
 
-        initCommonFields(groupId, offsetData);
+        initCommonFields(groupId, offsetData, 1);
         struct.set(GENERATION_ID_KEY_NAME, generationId);
         struct.set(CONSUMER_ID_KEY_NAME, consumerId);
         this.groupId = groupId;
@@ -99,7 +105,7 @@ public class OffsetCommitRequest extends AbstractRequestResponse {
         this.offsetData = offsetData;
     }
 
-    private void initCommonFields(String groupId, Map<TopicPartition, PartitionData> offsetData) {
+    private void initCommonFields(String groupId, Map<TopicPartition, PartitionData> offsetData, int versionId) {
         Map<String, Map<Integer, PartitionData>> topicsData = CollectionUtils.groupDataByTopic(offsetData);
 
         struct.set(GROUP_ID_KEY_NAME, groupId);
@@ -113,7 +119,8 @@ public class OffsetCommitRequest extends AbstractRequestResponse {
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
                 partitionData.set(COMMIT_OFFSET_KEY_NAME, fetchPartitionData.offset);
-                partitionData.set(TIMESTAMP_KEY_NAME, fetchPartitionData.timestamp);
+                if (versionId == 1)
+                    partitionData.set(TIMESTAMP_KEY_NAME, fetchPartitionData.timestamp);
                 partitionData.set(METADATA_KEY_NAME, fetchPartitionData.metadata);
                 partitionArray.add(partitionData);
             }
@@ -133,7 +140,12 @@ public class OffsetCommitRequest extends AbstractRequestResponse {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.getInt(PARTITION_KEY_NAME);
                 long offset = partitionResponse.getLong(COMMIT_OFFSET_KEY_NAME);
-                long timestamp = partitionResponse.getLong(TIMESTAMP_KEY_NAME);
+                long timestamp;
+                // timestamp only exists in v1
+                if (partitionResponse.hasField(TIMESTAMP_KEY_NAME))
+                    timestamp = partitionResponse.getLong(TIMESTAMP_KEY_NAME);
+                else
+                    timestamp = DEFAULT_TIMESTAMP;
                 String metadata = partitionResponse.getString(METADATA_KEY_NAME);
                 PartitionData partitionData = new PartitionData(offset, timestamp, metadata);
                 offsetData.put(new TopicPartition(topic, partition), partitionData);

@@ -23,7 +23,7 @@ import kafka.utils.Logging
 import kafka.common.TopicAndPartition
 
 object OffsetCommitResponse extends Logging {
-  val CurrentVersion: Short = 0
+  val CurrentVersion: Short = 1
 
   def readFrom(buffer: ByteBuffer): OffsetCommitResponse = {
     val correlationId = buffer.getInt
@@ -41,6 +41,9 @@ object OffsetCommitResponse extends Logging {
   }
 }
 
+/**
+ *  Single constructor for both version 0 and 1 since they have the same format.
+ */
 case class OffsetCommitResponse(commitStatus: Map[TopicAndPartition, Short],
                                 correlationId: Int = 0)
     extends RequestOrResponse() {
