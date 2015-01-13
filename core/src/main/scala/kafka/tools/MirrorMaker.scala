@@ -534,7 +534,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
     override def send(sourceTopicPartition: TopicAndPartition, sourceOffset: Long, key: Array[Byte], value: Array[Byte]) {
-      val record = new ProducerRecord(sourceTopicPartition.topic, key, value)
+      val record = new ProducerRecord[Array[Byte], Array[Byte]](sourceTopicPartition.topic, key, value)
       if(sync) {
         this.producer.send(record).get()
         unackedOffsetsMap.getAndMaybePut(sourceTopicPartition).maybeUpdateMaxOffsetSeen(sourceOffset)
