@@ -18,6 +18,7 @@ import java.util.Map;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.MetricName;
 
 /**
  * @see KafkaConsumer
@@ -111,11 +112,11 @@ public interface Consumer<K,V> extends Closeable {
      * @return The offsets for messages that were written to the server before the specified timestamp.
      */
     public Map<TopicPartition, Long> offsetsBeforeTime(long timestamp, Collection<TopicPartition> partitions);
-    
+
     /**
      * Return a map of metrics maintained by the consumer
      */
-    public Map<String, ? extends Metric> metrics();
+    public Map<MetricName, ? extends Metric> metrics();
 
     /**
      * Close this consumer

@@ -16,6 +16,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -29,6 +30,7 @@ import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -82,6 +84,9 @@ public class Sender implements Runnable {
     /* metrics */
     private final SenderMetrics sensors;
 
+    /* param clientId of the client */
+    private String clientId;
+
     public Sender(KafkaClient client,
                   Metadata metadata,
                   RecordAccumulator accumulator,
@@ -90,7 +95,8 @@ public class Sender implements Runnable {
                   int retries,
                   int requestTimeout,
                   Metrics metrics,
-                  Time time) {
+                  Time time,
+                  String clientId) {
         this.client = client;
         this.accumulator = accumulator;
         this.metadata = metadata;
@@ -100,6 +106,7 @@ public class Sender implements Runnable {
         this.acks = acks;
         this.retries = retries;
         this.time = time;
+        this.clientId = clientId;
         this.sensors = new SenderMetrics(metrics);
     }
 
@@ -324,46 +331,60 @@ public class Sender implements Runnable {
 
         public SenderMetrics(Metrics metrics) {
             this.metrics = metrics;
+            Map<String, String> metricTags = new LinkedHashMap<String, String>();
+            metricTags.put("client-id", clientId);
+            String metricGrpName = "producer-metrics";
 
             this.batchSizeSensor = metrics.sensor("batch-size");
-            this.batchSizeSensor.add("batch-size-avg", "The average number of bytes sent per partition per-request.", new Avg());
-            this.batchSizeSensor.add("batch-size-max", "The max number of bytes sent per partition per-request.", new Max());
+            MetricName m = new MetricName("batch-size-avg", metricGrpName, "The average number of bytes sent per partition per-request.", metricTags);
+            this.batchSizeSensor.add(m, new Avg());
+            m = new MetricName("batch-size-max", metricGrpName, "The max number of bytes sent per partition per-request.", metricTags);
+            this.batchSizeSensor.add(m, new Max());
 
             this.compressionRateSensor = metrics.sensor("compression-rate");
-            this.compressionRateSensor.add("compression-rate-avg", "The average compression rate of record batches.", new Avg());
+            m = new MetricName("compression-rate-avg", metricGrpName, "The average compression rate of record batches.", metricTags);
+            this.compressionRateSensor.add(m, new Avg());
 
             this.queueTimeSensor = metrics.sensor("queue-time");
-            this.queueTimeSensor.add("record-queue-time-avg",
-                                     "The average time in ms record batches spent in the record accumulator.",
-                                     new Avg());
-            this.queueTimeSensor.add("record-queue-time-max",
-                                     "The maximum time in ms record batches spent in the record accumulator.",
-                                     new Max());
+            m = new MetricName("record-queue-time-avg", metricGrpName, "The average time in ms record batches spent in the record accumulator.", metricTags);
+            this.queueTimeSensor.add(m, new Avg());
+            m = new MetricName("record-queue-time-max", metricGrpName, "The maximum time in ms record batches spent in the record accumulator.", metricTags);
+            this.queueTimeSensor.add(m, new Max());
 
             this.requestTimeSensor = metrics.sensor("request-time");
-            this.requestTimeSensor.add("request-latency-avg", "The average request latency in ms", new Avg());
-            this.requestTimeSensor.add("request-latency-max", "The maximum request latency in ms", new Max());
+            m = new MetricName("request-latency-avg", metricGrpName, "The average request latency in ms", metricTags);
+            this.requestTimeSensor.add(m, new Avg());
+            m = new MetricName("request-latency-max", metricGrpName, "The maximum request latency in ms", metricTags);
+            this.requestTimeSensor.add(m, new Max());
 
             this.recordsPerRequestSensor = metrics.sensor("records-per-request");
-            this.recordsPerRequestSensor.add("record-send-rate", "The average number of records sent per second.", new Rate());
-            this.recordsPerRequestSensor.add("records-per-request-avg", "The average number of records per request.", new Avg());
+            m = new MetricName("record-send-rate", metricGrpName, "The average number of records sent per second.", metricTags);
+            this.recordsPerRequestSensor.add(m, new Rate());
+            m = new MetricName("records-per-request-avg", metricGrpName, "The average number of records per request.", metricTags);
+            this.recordsPerRequestSensor.add(m, new Avg());
 
             this.retrySensor = metrics.sensor("record-retries");
-            this.retrySensor.add("record-retry-rate", "The average per-second number of retried record sends", new Rate());
+            m = new MetricName("record-retry-rate", metricGrpName, "The average per-second number of retried record sends", metricTags);
+            this.retrySensor.add(m, new Rate());
 
             this.errorSensor = metrics.sensor("errors");
-            this.errorSensor.add("record-error-rate", "The average per-second number of record sends that resulted in errors", new Rate());
+            m = new MetricName("record-error-rate", metricGrpName, "The average per-second number of record sends that resulted in errors", metricTags);
+            this.errorSensor.add(m, new Rate());
 
             this.maxRecordSizeSensor = metrics.sensor("record-size-max");
-            this.maxRecordSizeSensor.add("record-size-max", "The maximum record size", new Max());
-            this.maxRecordSizeSensor.add("record-size-avg", "The average record size", new Avg());
+            m = new MetricName("record-size-max", metricGrpName, "The maximum record size", metricTags);
+            this.maxRecordSizeSensor.add(m, new Max());
+            m = new MetricName("record-size-avg", metricGrpName, "The average record size", metricTags);
+            this.maxRecordSizeSensor.add(m, new Avg());
 
-            this.metrics.addMetric("requests-in-flight", "The current number of in-flight requests awaiting a response.", new Measurable() {
+            m = new MetricName("requests-in-flight", metricGrpName, "The current number of in-flight requests awaiting a response.", metricTags);
+            this.metrics.addMetric(m, new Measurable() {
                 public double measure(MetricConfig config, long now) {
                     return client.inFlightRequestCount();
                 }
             });
-            metrics.addMetric("metadata-age", "The age in seconds of the current producer metadata being used.", new Measurable() {
+            m = new MetricName("metadata-age", metricGrpName, "The age in seconds of the current producer metadata being used.", metricTags);
+            metrics.addMetric(m, new Measurable() {
                 public double measure(MetricConfig config, long now) {
                     return (now - metadata.lastUpdate()) / 1000.0;
                 }
@@ -376,24 +397,34 @@ public class Sender implements Runnable {
             String topicRecordsCountName = "topic." + topic + ".records-per-batch";
             Sensor topicRecordCount = this.metrics.getSensor(topicRecordsCountName);
             if (topicRecordCount == null) {
+                Map<String, String> metricTags = new LinkedHashMap<String, String>();
+                metricTags.put("client-id", clientId);
+                metricTags.put("topic", topic);
+                String metricGrpName = "producer-topic-metrics";
+
                 topicRecordCount = this.metrics.sensor(topicRecordsCountName);
-                topicRecordCount.add("topic." + topic + ".record-send-rate", new Rate());
+                MetricName m = new MetricName("record-send-rate", metricGrpName , metricTags);
+                topicRecordCount.add(m, new Rate());
 
                 String topicByteRateName = "topic." + topic + ".bytes";
                 Sensor topicByteRate = this.metrics.sensor(topicByteRateName);
-                topicByteRate.add("topic." + topic + ".byte-rate", new Rate());
+                m = new MetricName("byte-rate", metricGrpName , metricTags);
+                topicByteRate.add(m, new Rate());
 
                 String topicCompressionRateName = "topic." + topic + ".compression-rate";
                 Sensor topicCompressionRate = this.metrics.sensor(topicCompressionRateName);
-                topicCompressionRate.add("topic." + topic + ".compression-rate", new Avg());
+                m = new MetricName("compression-rate", metricGrpName , metricTags);
+                topicCompressionRate.add(m, new Avg());
 
                 String topicRetryName = "topic." + topic + ".record-retries";
                 Sensor topicRetrySensor = this.metrics.sensor(topicRetryName);
-                topicRetrySensor.add("topic." + topic + ".record-retry-rate", new Rate());
+                m = new MetricName("record-retry-rate", metricGrpName , metricTags);
+                topicRetrySensor.add(m, new Rate());
 
                 String topicErrorName = "topic." + topic + ".record-errors";
                 Sensor topicErrorSensor = this.metrics.sensor(topicErrorName);
-                topicErrorSensor.add("topic." + topic + ".record-error-rate", new Rate());
+                m = new MetricName("record-error-rate", metricGrpName , metricTags);
+                topicErrorSensor.add(m, new Rate());
             }
         }
 

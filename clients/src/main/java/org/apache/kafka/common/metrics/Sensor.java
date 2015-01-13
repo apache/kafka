@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -112,7 +113,7 @@ public final class Sensor {
                 Quota quota = config.quota();
                 if (quota != null) {
                     if (!quota.acceptable(metric.value(timeMs)))
-                        throw new QuotaViolationException("Metric " + metric.name() + " is in violation of its quota of " + quota.bound());
+                        throw new QuotaViolationException(metric.metricName() + " is in violation of its quota of " + quota.bound());
                 }
             }
         }
@@ -134,55 +135,33 @@ public final class Sensor {
     public synchronized void add(CompoundStat stat, MetricConfig config) {
         this.stats.add(Utils.notNull(stat));
         for (NamedMeasurable m : stat.stats()) {
-            KafkaMetric metric = new KafkaMetric(this, m.name(), m.description(), m.stat(), config == null ? this.config : config, time);
+            KafkaMetric metric = new KafkaMetric(this, m.name(), m.stat(), config == null ? this.config : config, time);
             this.registry.registerMetric(metric);
             this.metrics.add(metric);
         }
     }
 
     /**
-     * Add a metric with default configuration and no description. Equivalent to
-     * {@link Sensor#add(String, String, MeasurableStat, MetricConfig) add(name, "", stat, null)}
-     * 
+     * Register a metric with this sensor
+     * @param metricName The name of the metric
+     * @param stat The statistic to keep
      */
-    public void add(String name, MeasurableStat stat) {
-        add(name, stat, null);
-    }
-
-    /**
-     * Add a metric with default configuration. Equivalent to
-     * {@link Sensor#add(String, String, MeasurableStat, MetricConfig) add(name, description, stat, null)}
-     * 
-     */
-    public void add(String name, String description, MeasurableStat stat) {
-        add(name, description, stat, null);
-    }
-
-    /**
-     * Add a metric to this sensor with no description. Equivalent to
-     * {@link Sensor#add(String, String, MeasurableStat, MetricConfig) add(name, "", stat, config)}
-     * @param name
-     * @param stat
-     * @param config
-     */
-    public void add(String name, MeasurableStat stat, MetricConfig config) {
-        add(name, "", stat, config);
+    public void add(MetricName metricName, MeasurableStat stat) {
+      add(metricName, stat, null);
     }
 
     /**
      * Register a metric with this sensor
-     * @param name The name of the metric
-     * @param description A description used when reporting the value
+     * @param metricName The name of the metric
      * @param stat The statistic to keep
      * @param config A special configuration for this metric. If null use the sensor default configuration.
      */
-    public synchronized void add(String name, String description, MeasurableStat stat, MetricConfig config) {
-        KafkaMetric metric = new KafkaMetric(this,
-                                             Utils.notNull(name),
-                                             Utils.notNull(description),
-                                             Utils.notNull(stat),
-                                             config == null ? this.config : config,
-                                             time);
+    public synchronized void add(MetricName metricName, MeasurableStat stat, MetricConfig config) {
+      KafkaMetric metric = new KafkaMetric(new Object(),
+                                      Utils.notNull(metricName),
+                                      Utils.notNull(stat),
+                                      config == null ? this.config : config,
+                                      time);
         this.registry.registerMetric(metric);
         this.metrics.add(metric);
         this.stats.add(stat);

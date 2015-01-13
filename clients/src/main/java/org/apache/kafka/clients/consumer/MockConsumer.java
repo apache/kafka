@@ -25,6 +25,7 @@ import java.util.Map.Entry;
 import java.util.Set;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.MetricName;
 
 /**
  * A mock of the {@link Consumer} interface you can use for testing code that uses Kafka.
@@ -179,7 +180,7 @@ public class MockConsumer implements Consumer<byte[], byte[]> {
     }
 
     @Override
-    public Map<String, ? extends Metric> metrics() {        
+    public Map<MetricName, ? extends Metric> metrics() {
         return null;
     }
 

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.metrics;
 
+import org.apache.kafka.common.MetricName;
+
 import java.util.List;
 
 /**
@@ -28,23 +30,17 @@ public interface CompoundStat extends Stat {
 
     public static class NamedMeasurable {
 
-        private final String name;
-        private final String description;
+        private final MetricName name;
         private final Measurable stat;
 
-        public NamedMeasurable(String name, String description, Measurable stat) {
+        public NamedMeasurable(MetricName name, Measurable stat) {
             super();
             this.name = name;
-            this.description = description;
             this.stat = stat;
         }
 
-        public String name() {
+        public MetricName name() {
             return name;
-        }
-
-        public String description() {
-            return description;
         }
 
         public Measurable stat() {

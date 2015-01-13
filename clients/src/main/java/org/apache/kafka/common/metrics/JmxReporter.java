@@ -32,6 +32,7 @@ import javax.management.ObjectName;
 import javax.management.ReflectionException;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.MetricName;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,17 +81,38 @@ public class JmxReporter implements MetricsReporter {
 
     private KafkaMbean addAttribute(KafkaMetric metric) {
         try {
-            String[] names = split(prefix + metric.name());
-            String qualifiedName = names[0] + "." + names[1];
-            if (!this.mbeans.containsKey(qualifiedName))
-                mbeans.put(qualifiedName, new KafkaMbean(names[0], names[1]));
-            KafkaMbean mbean = this.mbeans.get(qualifiedName);
-            mbean.setAttribute(names[2], metric);
+            MetricName metricName = metric.metricName();
+            String mBeanName = getMBeanName(metricName);
+            if (!this.mbeans.containsKey(mBeanName))
+                mbeans.put(mBeanName, new KafkaMbean(mBeanName));
+            KafkaMbean mbean = this.mbeans.get(mBeanName);
+            mbean.setAttribute(metricName.name() , metric);
             return mbean;
         } catch (JMException e) {
-            throw new KafkaException("Error creating mbean attribute " + metric.name(), e);
+            throw new KafkaException("Error creating mbean attribute for metricName :" + metric.metricName(), e);
         }
     }
+
+  /**
+   * @param metricName
+   * @return standard JMX MBean name in the following format
+   *       domainName:type=metricType,key1=val1,key2=val2
+   */
+  private String getMBeanName(MetricName metricName) {
+    StringBuilder mBeanName = new StringBuilder();
+    mBeanName.append(prefix);
+    mBeanName.append(":type=");
+    mBeanName.append(metricName.group());
+    for (Map.Entry<String, String> entry : metricName.tags().entrySet()) {
+      if(entry.getKey().length() <= 0 || entry.getValue().length() <= 0)
+         continue;
+      mBeanName.append(",");
+      mBeanName.append(entry.getKey());
+      mBeanName.append("=");
+      mBeanName.append(entry.getValue());
+    }
+    return mBeanName.toString();
+  }
 
     public void close() {
         synchronized (lock) {
@@ -118,29 +140,13 @@ public class JmxReporter implements MetricsReporter {
         }
     }
 
-    private String[] split(String name) {
-        int attributeStart = name.lastIndexOf('.');
-        if (attributeStart < 0)
-            throw new IllegalArgumentException("No MBean name in metric name: " + name);
-        String attributeName = name.substring(attributeStart + 1, name.length());
-        String remainder = name.substring(0, attributeStart);
-        int beanStart = remainder.lastIndexOf('.');
-        if (beanStart < 0)
-            return new String[] { "", remainder, attributeName };
-        String packageName = remainder.substring(0, beanStart);
-        String beanName = remainder.substring(beanStart + 1, remainder.length());
-        return new String[] { packageName, beanName, attributeName };
-    }
-
     private static class KafkaMbean implements DynamicMBean {
-        private final String beanName;
         private final ObjectName objectName;
         private final Map<String, KafkaMetric> metrics;
 
-        public KafkaMbean(String packageName, String beanName) throws MalformedObjectNameException {
-            this.beanName = beanName;
+        public KafkaMbean(String mbeanName) throws MalformedObjectNameException {
             this.metrics = new HashMap<String, KafkaMetric>();
-            this.objectName = new ObjectName(packageName + ":type=" + beanName);
+            this.objectName = new ObjectName(mbeanName);
         }
 
         public ObjectName name() {
@@ -179,10 +185,10 @@ public class JmxReporter implements MetricsReporter {
             for (Map.Entry<String, KafkaMetric> entry : this.metrics.entrySet()) {
                 String attribute = entry.getKey();
                 KafkaMetric metric = entry.getValue();
-                attrs[i] = new MBeanAttributeInfo(attribute, double.class.getName(), metric.description(), true, false, false);
+                attrs[i] = new MBeanAttributeInfo(attribute, double.class.getName(), metric.metricName().description(), true, false, false);
                 i += 1;
             }
-            return new MBeanInfo(beanName, "", attrs, null, null, null);
+            return new MBeanInfo(this.getClass().getName(), "", attrs, null, null, null);
         }
 
         @Override

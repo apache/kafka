@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.CopyOnWriteMap;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
@@ -36,8 +37,10 @@ import org.apache.kafka.common.utils.Utils;
  * // set up metrics:
  * Metrics metrics = new Metrics(); // this is the global repository of metrics and sensors
  * Sensor sensor = metrics.sensor(&quot;message-sizes&quot;);
- * sensor.add(&quot;kafka.producer.message-sizes.avg&quot;, new Avg());
- * sensor.add(&quot;kafka.producer.message-sizes.max&quot;, new Max());
+ * MetricName metricName = new MetricName(&quot;message-size-avg&quot;, &quot;producer-metrics&quot;);
+ * sensor.add(metricName, new Avg());
+ * metricName = new MetricName(&quot;message-size-max&quot;, &quot;producer-metrics&quot;);
+ * sensor.add(metricName, new Max());
  * 
  * // as messages are sent we record the sizes
  * sensor.record(messageSize);
@@ -46,7 +49,7 @@ import org.apache.kafka.common.utils.Utils;
 public class Metrics {
 
     private final MetricConfig config;
-    private final ConcurrentMap<String, KafkaMetric> metrics;
+    private final ConcurrentMap<MetricName, KafkaMetric> metrics;
     private final ConcurrentMap<String, Sensor> sensors;
     private final List<MetricsReporter> reporters;
     private final Time time;
@@ -83,7 +86,7 @@ public class Metrics {
     public Metrics(MetricConfig defaultConfig, List<MetricsReporter> reporters, Time time) {
         this.config = defaultConfig;
         this.sensors = new CopyOnWriteMap<String, Sensor>();
-        this.metrics = new CopyOnWriteMap<String, KafkaMetric>();
+        this.metrics = new CopyOnWriteMap<MetricName, KafkaMetric>();
         this.reporters = Utils.notNull(reporters);
         this.time = time;
         for (MetricsReporter reporter : reporters)
@@ -139,47 +142,23 @@ public class Metrics {
     /**
      * Add a metric to monitor an object that implements measurable. This metric won't be associated with any sensor.
      * This is a way to expose existing values as metrics.
-     * @param name The name of the metric
+     * @param metricName The name of the metric
      * @param measurable The measurable that will be measured by this metric
      */
-    public void addMetric(String name, Measurable measurable) {
-        addMetric(name, "", measurable);
+    public void addMetric(MetricName metricName, Measurable measurable) {
+        addMetric(metricName, null, measurable);
     }
 
     /**
      * Add a metric to monitor an object that implements measurable. This metric won't be associated with any sensor.
      * This is a way to expose existing values as metrics.
-     * @param name The name of the metric
-     * @param description A human-readable description to include in the metric
-     * @param measurable The measurable that will be measured by this metric
-     */
-    public void addMetric(String name, String description, Measurable measurable) {
-        addMetric(name, description, null, measurable);
-    }
-
-    /**
-     * Add a metric to monitor an object that implements measurable. This metric won't be associated with any sensor.
-     * This is a way to expose existing values as metrics.
-     * @param name The name of the metric
+     * @param metricName The name of the metric
      * @param config The configuration to use when measuring this measurable
      * @param measurable The measurable that will be measured by this metric
      */
-    public void addMetric(String name, MetricConfig config, Measurable measurable) {
-        addMetric(name, "", config, measurable);
-    }
-
-    /**
-     * Add a metric to monitor an object that implements measurable. This metric won't be associated with any sensor.
-     * This is a way to expose existing values as metrics.
-     * @param name The name of the metric
-     * @param description A human-readable description to include in the metric
-     * @param config The configuration to use when measuring this measurable
-     * @param measurable The measurable that will be measured by this metric
-     */
-    public synchronized void addMetric(String name, String description, MetricConfig config, Measurable measurable) {
+    public synchronized void addMetric(MetricName metricName, MetricConfig config, Measurable measurable) {
         KafkaMetric m = new KafkaMetric(new Object(),
-                                        Utils.notNull(name),
-                                        Utils.notNull(description),
+                                        Utils.notNull(metricName),
                                         Utils.notNull(measurable),
                                         config == null ? this.config : config,
                                         time);
@@ -195,17 +174,18 @@ public class Metrics {
     }
 
     synchronized void registerMetric(KafkaMetric metric) {
-        if (this.metrics.containsKey(metric.name()))
-            throw new IllegalArgumentException("A metric named '" + metric.name() + "' already exists, can't register another one.");
-        this.metrics.put(metric.name(), metric);
+        MetricName metricName = metric.metricName();
+        if (this.metrics.containsKey(metricName))
+            throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
+        this.metrics.put(metricName, metric);
         for (MetricsReporter reporter : reporters)
             reporter.metricChange(metric);
     }
 
     /**
-     * Get all the metrics currently maintained indexed by metric name
+     * Get all the metrics currently maintained indexed by metricName
      */
-    public Map<String, KafkaMetric> metrics() {
+    public Map<MetricName, KafkaMetric> metrics() {
         return this.metrics;
     }
 

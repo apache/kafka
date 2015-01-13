@@ -17,6 +17,7 @@ import java.util.*;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.producer.internals.Metadata;
@@ -35,6 +36,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
@@ -77,6 +79,7 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
     private final ProducerConfig producerConfig;
+    private static final AtomicInteger producerAutoId = new AtomicInteger(1);
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -159,7 +162,9 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
                                                       .timeWindow(config.getLong(ProducerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
                                                                   TimeUnit.MILLISECONDS);
         String clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
-        String jmxPrefix = "kafka.producer." + (clientId.length() > 0 ? clientId + "." : "");
+        if(clientId.length() <= 0)
+          clientId = "producer-" + producerAutoId.getAndIncrement();
+        String jmxPrefix = "kafka.producer";
         List<MetricsReporter> reporters = config.getConfiguredInstances(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                                                                         MetricsReporter.class);
         reporters.add(new JmxReporter(jmxPrefix));
@@ -171,17 +176,20 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
         this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
         this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
         this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+        Map<String, String> metricTags = new LinkedHashMap<String, String>();
+        metricTags.put("client-id", clientId);
         this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                                                  this.totalMemorySize,
                                                  config.getLong(ProducerConfig.LINGER_MS_CONFIG),
                                                  retryBackoffMs,
                                                  config.getBoolean(ProducerConfig.BLOCK_ON_BUFFER_FULL_CONFIG),
                                                  metrics,
-                                                 time);
+                                                 time,
+                                                 metricTags);
         List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
         this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
 
-        NetworkClient client = new NetworkClient(new Selector(this.metrics, time),
+        NetworkClient client = new NetworkClient(new Selector(this.metrics, time , "producer", metricTags),
                                                  this.metadata,
                                                  clientId,
                                                  config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
@@ -196,7 +204,8 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
                                  config.getInt(ProducerConfig.RETRIES_CONFIG),
                                  config.getInt(ProducerConfig.TIMEOUT_CONFIG),
                                  this.metrics,
-                                 new SystemTime());
+                                 new SystemTime(),
+                                 clientId);
         String ioThreadName = "kafka-producer-network-thread" + (clientId.length() > 0 ? " | " + clientId : "");
         this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
         this.ioThread.start();
@@ -398,7 +407,7 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
     }
 
     @Override
-    public Map<String, ? extends Metric> metrics() {
+    public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(this.metrics.metrics());
     }
 

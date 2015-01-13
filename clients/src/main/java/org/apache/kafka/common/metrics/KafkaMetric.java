@@ -17,21 +17,20 @@
 package org.apache.kafka.common.metrics;
 
 import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.utils.Time;
 
 public final class KafkaMetric implements Metric {
 
-    private final String name;
-    private final String description;
+    private MetricName metricName;
     private final Object lock;
     private final Time time;
     private final Measurable measurable;
     private MetricConfig config;
 
-    KafkaMetric(Object lock, String name, String description, Measurable measurable, MetricConfig config, Time time) {
+    KafkaMetric(Object lock, MetricName metricName, Measurable measurable, MetricConfig config, Time time) {
         super();
-        this.name = name;
-        this.description = description;
+        this.metricName = metricName;
         this.lock = lock;
         this.measurable = measurable;
         this.config = config;
@@ -43,13 +42,8 @@ public final class KafkaMetric implements Metric {
     }
 
     @Override
-    public String name() {
-        return this.name;
-    }
-
-    @Override
-    public String description() {
-        return this.description;
+    public MetricName metricName() {
+        return this.metricName;
     }
 
     @Override

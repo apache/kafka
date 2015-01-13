@@ -370,6 +370,7 @@ project(':clients') {
 
   javadoc {
     include "**/org/apache/kafka/clients/producer/*"
+    include "**/org/apache/kafka/common/*"
     include "**/org/apache/kafka/common/errors/*"
     include "**/org/apache/kafka/common/serialization/*"
   }

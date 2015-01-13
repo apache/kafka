@@ -28,10 +28,7 @@ import java.util.concurrent.Future;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.Partitioner;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
-import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.*;
 
 
 /**
@@ -136,7 +133,7 @@ public class MockProducer implements Producer<byte[],byte[]> {
         return this.cluster.partitionsForTopic(topic);
     }
 
-    public Map<String, Metric> metrics() {
+    public Map<MetricName, Metric> metrics() {
         return Collections.emptyMap();
     }
 
