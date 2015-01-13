@@ -57,8 +57,9 @@ class LogManager(val logDirs: Array[File],
   private val dirLocks = lockLogDirs(logDirs)
   private val recoveryPointCheckpoints = logDirs.map(dir => (dir, new OffsetCheckpoint(new File(dir, RecoveryPointCheckpointFile)))).toMap
   loadLogs()
-  
-  private val cleaner: LogCleaner = 
+
+  // public, so we can access this from kafka.admin.DeleteTopicTest
+  val cleaner: LogCleaner =
     if(cleanerConfig.enableCleaner)
       new LogCleaner(cleanerConfig, logDirs, logs, time = time)
     else
@@ -370,8 +371,10 @@ class LogManager(val logDirs: Array[File],
     }
     if (removedLog != null) {
       //We need to wait until there is no more cleaning task on the log to be deleted before actually deleting it.
-      if (cleaner != null)
+      if (cleaner != null) {
         cleaner.abortCleaning(topicAndPartition)
+        cleaner.updateCheckpoints(removedLog.dir.getParentFile)
+      }
       removedLog.delete()
       info("Deleted log for partition [%s,%d] in %s."
            .format(topicAndPartition.topic,

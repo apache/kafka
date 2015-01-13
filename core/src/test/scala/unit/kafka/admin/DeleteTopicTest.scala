@@ -16,11 +16,14 @@
  */
 package kafka.admin
 
+import java.io.File
+
+import kafka.log.Log
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import junit.framework.Assert._
 import kafka.utils.{ZkUtils, TestUtils}
-import kafka.server.{KafkaServer, KafkaConfig}
+import kafka.server.{OffsetCheckpoint, KafkaServer, KafkaConfig}
 import org.junit.Test
 import kafka.common._
 import kafka.producer.{ProducerConfig, Producer}
@@ -221,14 +224,50 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
     assertTrue("Leader should exist for topic test", leaderIdOpt.isDefined)
     servers.foreach(_.shutdown())
+  }
 
+  @Test
+  def testDeleteTopicWithCleaner() {
+    val topicName = "test"
+    val topicAndPartition = TopicAndPartition(topicName, 0)
+    val topic = topicAndPartition.topic
+
+    val brokerConfigs = TestUtils.createBrokerConfigs(3, false)
+    brokerConfigs(0).setProperty("delete.topic.enable", "true")
+    brokerConfigs(0).setProperty("log.cleaner.enable","true")
+    brokerConfigs(0).setProperty("log.cleanup.policy","compact")
+    brokerConfigs(0).setProperty("log.segment.bytes","100")
+    brokerConfigs(0).setProperty("log.segment.delete.delay.ms","1000")
+    val servers = createTestTopicAndCluster(topic,brokerConfigs)
+
+    // for simplicity, we are validating cleaner offsets on a single broker
+    val server = servers(0)
+    val log = server.logManager.getLog(topicAndPartition).get
+
+    // write to the topic to activate cleaner
+    writeDups(numKeys = 100, numDups = 3,log)
+
+    // wait for cleaner to clean
+   server.logManager.cleaner.awaitCleaned(topicName,0,0)
+
+    // delete topic
+    AdminUtils.deleteTopic(zkClient, "test")
+    verifyTopicDeletion("test", servers)
+
+    servers.foreach(_.shutdown())
   }
 
   private def createTestTopicAndCluster(topic: String): Seq[KafkaServer] = {
+
+    val brokerConfigs = TestUtils.createBrokerConfigs(3, false)
+    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true")
+    )
+    createTestTopicAndCluster(topic,brokerConfigs)
+  }
+
+  private def createTestTopicAndCluster(topic: String, brokerConfigs: Seq[Properties]): Seq[KafkaServer] = {
     val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
     val topicAndPartition = TopicAndPartition(topic, 0)
-    val brokerConfigs = TestUtils.createBrokerConfigs(3, false)
-    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
     // create brokers
     val servers = brokerConfigs.map(b => TestUtils.createServer(new KafkaConfig(b)))
     // create the topic
@@ -253,5 +292,24 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     // ensure that logs from all replicas are deleted if delete topic is marked successful in zookeeper
     assertTrue("Replica logs not deleted after delete topic is complete",
       servers.foldLeft(true)((res, server) => res && server.getLogManager().getLog(topicAndPartition).isEmpty))
+    // ensure that topic is removed from all cleaner offsets
+    TestUtils.waitUntilTrue(() => servers.foldLeft(true)((res,server) => res &&
+    {
+      val topicAndPartition = TopicAndPartition(topic,0)
+      val logdir = server.getLogManager().logDirs(0)
+      val checkpoints =  new OffsetCheckpoint(new File(logdir,"cleaner-offset-checkpoint")).read()
+      !checkpoints.contains(topicAndPartition)
+    }),
+      "Cleaner offset for deleted partition should have been removed")
+  }
+
+  private def writeDups(numKeys: Int, numDups: Int, log: Log): Seq[(Int, Int)] = {
+    var counter = 0
+    for(dup <- 0 until numDups; key <- 0 until numKeys) yield {
+      val count = counter
+      log.append(TestUtils.singleMessageSet(payload = counter.toString.getBytes, key = key.toString.getBytes), assignOffsets = true)
+      counter += 1
+      (key, count)
+    }
   }
 }

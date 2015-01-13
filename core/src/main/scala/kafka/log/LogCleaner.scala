@@ -71,8 +71,8 @@ class LogCleaner(val config: CleanerConfig,
                  val logs: Pool[TopicAndPartition, Log], 
                  time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
   
-  /* for managing the state of partitions being cleaned. */
-  private val cleanerManager = new LogCleanerManager(logDirs, logs);
+  /* for managing the state of partitions being cleaned. package-private to allow access in tests */
+  private[log] val cleanerManager = new LogCleanerManager(logDirs, logs);
 
   /* a throttle used to limit the I/O of all the cleaner threads to a user-specified maximum rate */
   private val throttler = new Throttler(desiredRatePerSec = config.maxIoBytesPerSecond, 
@@ -127,6 +127,13 @@ class LogCleaner(val config: CleanerConfig,
    */
   def abortCleaning(topicAndPartition: TopicAndPartition) {
     cleanerManager.abortCleaning(topicAndPartition)
+  }
+
+  /**
+   * Update checkpoint file, removing topics and partitions that no longer exist
+   */
+  def updateCheckpoints(dataDir: File) {
+    cleanerManager.updateCheckpoints(dataDir, update=None);
   }
 
   /**
