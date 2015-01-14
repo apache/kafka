@@ -21,6 +21,8 @@ import org.junit.Test
 import junit.framework.Assert._
 import org.scalatest.junit.JUnit3Suite
 import kafka.utils.TestUtils
+import kafka.message.GZIPCompressionCodec
+import kafka.message.NoCompressionCodec
 
 class KafkaConfigTest extends JUnit3Suite {
 
@@ -180,6 +182,30 @@ class KafkaConfigTest extends JUnit3Suite {
     assertEquals(24 * 7 * 60L * 60L * 1000L, cfg.logRollTimeMillis																									)
 
   }
-  
 
+  @Test
+  def testDefaultCompressionType() {
+    val props = TestUtils.createBrokerConfig(0, 8181)
+    val serverConfig = new KafkaConfig(props)
+
+    assertEquals(serverConfig.compressionType, "producer")
+  }
+
+  @Test
+  def testValidCompressionType() {
+    val props = TestUtils.createBrokerConfig(0, 8181)
+    props.put("compression.type", "gzip")
+    val serverConfig = new KafkaConfig(props)
+
+    assertEquals(serverConfig.compressionType, "gzip")
+  }
+
+  @Test
+  def testInvalidCompressionType() {
+    val props = TestUtils.createBrokerConfig(0, 8181)
+    props.put("compression.type", "abc")
+    intercept[IllegalArgumentException] {
+      new KafkaConfig(props)
+    }
+  }
 }

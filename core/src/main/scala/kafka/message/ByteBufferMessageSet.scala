@@ -194,16 +194,16 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
             innerIter.next
         }
       }
-      
+
     }
   }
-  
+
   /**
    * Update the offsets for this message set. This method attempts to do an in-place conversion
    * if there is no compression, but otherwise recopies the messages
    */
-  private[kafka] def assignOffsets(offsetCounter: AtomicLong, codec: CompressionCodec): ByteBufferMessageSet = {
-    if(codec == NoCompressionCodec) {
+  private[kafka] def assignOffsets(offsetCounter: AtomicLong, sourceCodec: CompressionCodec, targetCodec: CompressionCodec): ByteBufferMessageSet = {
+    if(sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // do an in-place conversion
       var position = 0
       buffer.mark()
@@ -217,16 +217,16 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
     } else {
       // messages are compressed, crack open the messageset and recompress with correct offset
       val messages = this.internalIterator(isShallow = false).map(_.message)
-      new ByteBufferMessageSet(compressionCodec = codec, offsetCounter = offsetCounter, messages = messages.toBuffer:_*)
+      new ByteBufferMessageSet(compressionCodec = targetCodec, offsetCounter = offsetCounter, messages = messages.toBuffer:_*)
     }
   }
- 
+
 
   /**
    * The total number of bytes in this message set, including any partial trailing messages
    */
   def sizeInBytes: Int = buffer.limit
-  
+
   /**
    * The total number of bytes in this message set not including any partial, trailing messages
    */

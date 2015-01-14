@@ -1,0 +1,84 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package kafka.log
+
+import java.io.File
+import kafka.utils._
+import kafka.message._
+import org.scalatest.junit.JUnitSuite
+import org.junit._
+import org.junit.Assert._
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
+import org.junit.runners.Parameterized.Parameters
+import java.util.{ Collection, ArrayList }
+import kafka.server.KafkaConfig
+import org.apache.kafka.common.record.CompressionType
+import scala.collection.JavaConversions._
+
+@RunWith(value = classOf[Parameterized])
+class BrokerCompressionTest(messageCompression: String, brokerCompression: String) extends JUnitSuite {
+
+  var logDir: File = null
+  val time = new MockTime(0)
+  val logConfig = LogConfig()
+
+  @Before
+  def setUp() {
+    logDir = TestUtils.tempDir()
+  }
+
+  @After
+  def tearDown() {
+    Utils.rm(logDir)
+  }
+
+  /**
+   * Test broker-side compression configuration
+   */
+  @Test
+  def testBrokerSideCompression() {
+    val messageCompressionCode = CompressionCodec.getCompressionCodec(messageCompression)
+
+    /*configure broker-side compression  */
+    val log = new Log(logDir, logConfig.copy(compressionType = brokerCompression), recoveryPoint = 0L, time.scheduler, time = time)
+
+    /* append two messages */
+    log.append(new ByteBufferMessageSet(messageCompressionCode, new Message("hello".getBytes), new Message("there".getBytes)))
+
+    def readMessage(offset: Int) = log.read(offset, 4096).messageSet.head.message
+
+    if (!brokerCompression.equals("producer")) {
+      val brokerCompressionCode = BrokerCompressionCodec.getCompressionCodec(brokerCompression)
+      assertEquals("Compression at offset 0 should produce " + brokerCompressionCode.name, brokerCompressionCode, readMessage(0).compressionCodec)
+    }
+    else
+      assertEquals("Compression at offset 0 should produce " + messageCompressionCode.name, messageCompressionCode, readMessage(0).compressionCodec)
+
+  }
+
+}
+
+object BrokerCompressionTest {
+  @Parameters
+  def parameters: Collection[Array[String]] = {
+     for (brokerCompression <- BrokerCompressionCodec.brokerCompressionOptions;
+         messageCompression <- CompressionType.values
+    ) yield Array(messageCompression.name, brokerCompression)
+  }
+}

@@ -38,29 +38,58 @@ object CompressionCodec {
   }
 }
 
-sealed trait CompressionCodec { def codec: Int; def name: String }
+object BrokerCompressionCodec {
 
-case object DefaultCompressionCodec extends CompressionCodec {
+  val brokerCompressionCodecs = List(UncompressedCodec, SnappyCompressionCodec, LZ4CompressionCodec, GZIPCompressionCodec, ProducerCompressionCodec)
+  val brokerCompressionOptions = brokerCompressionCodecs.map(codec => codec.name)
+
+  def isValid(compressionType: String): Boolean = brokerCompressionOptions.contains((compressionType.toLowerCase()))
+
+  def getCompressionCodec(compressionType: String): CompressionCodec = {
+    compressionType.toLowerCase match {
+      case UncompressedCodec.name => NoCompressionCodec
+      case _ => CompressionCodec.getCompressionCodec(compressionType)
+    }
+  }
+
+  def getTargetCompressionCodec(compressionType: String, producerCompression: CompressionCodec): CompressionCodec = {
+    if (ProducerCompressionCodec.name.equals(compressionType)) producerCompression
+    else getCompressionCodec(compressionType)
+  }
+}
+
+sealed trait CompressionCodec { def codec: Int; def name: String }
+sealed trait BrokerCompressionCodec { def name: String }
+
+case object DefaultCompressionCodec extends CompressionCodec with BrokerCompressionCodec {
   val codec = GZIPCompressionCodec.codec
   val name = GZIPCompressionCodec.name
 }
 
-case object GZIPCompressionCodec extends CompressionCodec {
+case object GZIPCompressionCodec extends CompressionCodec with BrokerCompressionCodec {
   val codec = 1
   val name = "gzip"
 }
 
-case object SnappyCompressionCodec extends CompressionCodec {
+case object SnappyCompressionCodec extends CompressionCodec with BrokerCompressionCodec {
   val codec = 2
   val name = "snappy"
 }
 
-case object LZ4CompressionCodec extends CompressionCodec {
+case object LZ4CompressionCodec extends CompressionCodec with BrokerCompressionCodec {
   val codec = 3
   val name = "lz4"
 }
 
-case object NoCompressionCodec extends CompressionCodec {
+case object NoCompressionCodec extends CompressionCodec with BrokerCompressionCodec {
   val codec = 0
   val name = "none"
+}
+
+case object UncompressedCodec extends BrokerCompressionCodec {
+  val name = "uncompressed"
+}
+
+case object ProducerCompressionCodec extends BrokerCompressionCodec {
+  val name = "producer"
 }

@@ -32,7 +32,7 @@ import scala.collection.JavaConversions
 import com.yammer.metrics.core.Gauge
 
 object LogAppendInfo {
-  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, NoCompressionCodec, -1, -1, false)
+  val UnknownLogAppendInfo = LogAppendInfo(-1, -1, NoCompressionCodec, NoCompressionCodec, -1, -1, false)
 }
 
 /**
@@ -41,10 +41,11 @@ object LogAppendInfo {
  * @param lastOffset The last offset in the message set
  * @param shallowCount The number of shallow messages
  * @param validBytes The number of valid bytes
- * @param codec The codec used in the message set
+ * @param sourceCodec The source codec used in the message set(coming from producer)
+ * @param targetCodec The target codec of the message set(after applying broker compression logic)
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
  */
-case class LogAppendInfo(var firstOffset: Long, var lastOffset: Long, codec: CompressionCodec, shallowCount: Int, validBytes: Int, offsetsMonotonic: Boolean)
+case class LogAppendInfo(var firstOffset: Long, var lastOffset: Long, sourceCodec: CompressionCodec, targetCodec: CompressionCodec, shallowCount: Int, validBytes: Int, offsetsMonotonic: Boolean)
 
 
 /**
@@ -287,7 +288,7 @@ class Log(val dir: File,
           // assign offsets to the message set
           val offset = new AtomicLong(nextOffsetMetadata.messageOffset)
           try {
-            validMessages = validMessages.assignOffsets(offset, appendInfo.codec)
+            validMessages = validMessages.assignOffsets(offset, appendInfo.sourceCodec, appendInfo.targetCodec)
           } catch {
             case e: IOException => throw new KafkaException("Error in validating messages while appending to log '%s'".format(name), e)
           }
@@ -360,7 +361,7 @@ class Log(val dir: File,
     var shallowMessageCount = 0
     var validBytesCount = 0
     var firstOffset, lastOffset = -1L
-    var codec: CompressionCodec = NoCompressionCodec
+    var sourceCodec: CompressionCodec = NoCompressionCodec
     var monotonic = true
     for(messageAndOffset <- messages.shallowIterator) {
       // update the first offset if on the first message
@@ -388,14 +389,18 @@ class Log(val dir: File,
 
       shallowMessageCount += 1
       validBytesCount += messageSize
-      
+
       val messageCodec = m.compressionCodec
       if(messageCodec != NoCompressionCodec)
-        codec = messageCodec
+        sourceCodec = messageCodec
     }
-    LogAppendInfo(firstOffset, lastOffset, codec, shallowMessageCount, validBytesCount, monotonic)
+
+    //Apply if any broker-side compression
+    val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
+    
+    LogAppendInfo(firstOffset, lastOffset, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic)
   }
-  
+
   /**
    * Trim any invalid bytes from the end of this message set (if there are any)
    * @param messages The message set to trim

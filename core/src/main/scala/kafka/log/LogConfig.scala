@@ -19,9 +19,11 @@ package kafka.log
 
 import java.util.Properties
 import org.apache.kafka.common.utils.Utils
-
 import scala.collection._
 import org.apache.kafka.common.config.ConfigDef
+import kafka.common._
+import scala.collection.JavaConversions._
+import kafka.message.BrokerCompressionCodec
 
 object Defaults {
   val SegmentSize = 1024 * 1024
@@ -40,6 +42,7 @@ object Defaults {
   val Compact = false
   val UncleanLeaderElectionEnable = true
   val MinInSyncReplicas = 1
+  val CompressionType = "producer"
 }
 
 /**
@@ -59,6 +62,7 @@ object Defaults {
  * @param compact Should old segments in this log be deleted or deduplicated?
  * @param uncleanLeaderElectionEnable Indicates whether unclean leader election is enabled
  * @param minInSyncReplicas If number of insync replicas drops below this number, we stop accepting writes with -1 (or all) required acks
+ * @param compressionType compressionType for a given topic
  *
  */
 case class LogConfig(val segmentSize: Int = Defaults.SegmentSize,
@@ -76,7 +80,8 @@ case class LogConfig(val segmentSize: Int = Defaults.SegmentSize,
                      val minCleanableRatio: Double = Defaults.MinCleanableDirtyRatio,
                      val compact: Boolean = Defaults.Compact,
                      val uncleanLeaderElectionEnable: Boolean = Defaults.UncleanLeaderElectionEnable,
-                     val minInSyncReplicas: Int = Defaults.MinInSyncReplicas) {
+                     val minInSyncReplicas: Int = Defaults.MinInSyncReplicas,
+                     val compressionType: String = Defaults.CompressionType) {
 
   def toProps: Properties = {
     val props = new Properties()
@@ -97,6 +102,7 @@ case class LogConfig(val segmentSize: Int = Defaults.SegmentSize,
     props.put(CleanupPolicyProp, if(compact) "compact" else "delete")
     props.put(UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)
     props.put(MinInSyncReplicasProp, minInSyncReplicas.toString)
+    props.put(CompressionTypeProp, compressionType)
     props
   }
 
@@ -125,6 +131,7 @@ object LogConfig {
   val CleanupPolicyProp = "cleanup.policy"
   val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
   val MinInSyncReplicasProp = "min.insync.replicas"
+  val CompressionTypeProp = "compression.type"
 
   val SegmentSizeDoc = "The hard maximum for the size of a segment file in the log"
   val SegmentMsDoc = "The soft maximum on the amount of time before a new log segment is rolled"
@@ -145,6 +152,10 @@ object LogConfig {
   val UncleanLeaderElectionEnableDoc = "Indicates whether unclean leader election is enabled"
   val MinInSyncReplicasDoc = "If number of insync replicas drops below this number, we stop accepting writes with" +
     " -1 (or all) required acks"
+  val CompressionTypeDoc = "This parameter allows you to specify the compression logic for a given topic. This config" +
+    " is used to retain/remove/change the compression set by the producer. This config takes the following options: " +
+    " uncompressed, gzip, snappy, lz4, producer. uncompressed means that regardless of what the producer sets, the broker" +
+    " writes the message decompressed. producer means the broker attempts to retain whatever is used by the producer"
 
   private val configDef = {
     import ConfigDef.Range._
@@ -174,12 +185,14 @@ object LogConfig {
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable,
         MEDIUM, UncleanLeaderElectionEnableDoc)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), MEDIUM, MinInSyncReplicasDoc)
+      .define(CompressionTypeProp, STRING, Defaults.CompressionType, in(seqAsJavaList(BrokerCompressionCodec.brokerCompressionOptions)), MEDIUM, CompressionTypeDoc)
   }
 
   def configNames() = {
     import JavaConversions._
     configDef.names().toList.sorted
   }
+
 
   /**
    * Parse the given properties instance into a LogConfig object
@@ -202,7 +215,8 @@ object LogConfig {
                   minCleanableRatio = parsed.get(MinCleanableDirtyRatioProp).asInstanceOf[Double],
                   compact = parsed.get(CleanupPolicyProp).asInstanceOf[String].toLowerCase != Delete,
                   uncleanLeaderElectionEnable = parsed.get(UncleanLeaderElectionEnableProp).asInstanceOf[Boolean],
-                  minInSyncReplicas = parsed.get(MinInSyncReplicasProp).asInstanceOf[Int])
+                  minInSyncReplicas = parsed.get(MinInSyncReplicasProp).asInstanceOf[Int],
+                  compressionType = parsed.get(CompressionTypeProp).asInstanceOf[String].toLowerCase())
   }
 
   /**

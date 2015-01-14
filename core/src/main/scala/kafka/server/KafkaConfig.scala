@@ -21,6 +21,8 @@ import java.util.Properties
 import kafka.message.{MessageSet, Message}
 import kafka.consumer.ConsumerConfig
 import kafka.utils.{VerifiableProperties, ZKConfig, Utils}
+import kafka.message.NoCompressionCodec
+import kafka.message.BrokerCompressionCodec
 
 /**
  * Configuration settings for the kafka server
@@ -345,4 +347,13 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /* Enables delete topic. Delete topic through the admin tool will have no effect if this config is turned off */
   val deleteTopicEnable = props.getBoolean("delete.topic.enable", false)
 
+  /**
+   * This parameter allows you to specify the broker-side compression logic. This config is used to
+   * retain/remove/change the compression set by the producer. This config takes the following options:
+   * uncompressed, gzip, snappy, lz4, producer. uncompressed means that regardless of what the producer sets, the broker
+   * writes the message decompressed. producer means the broker attempts to retain whatever is used by the producer"
+  */
+  val compressionType = props.getString("compression.type", "producer").toLowerCase()
+  require(BrokerCompressionCodec.isValid(compressionType), "compression.type : "+compressionType + " is not valid." +
+      " Valid options are "+BrokerCompressionCodec.brokerCompressionOptions.mkString(","))
 }
