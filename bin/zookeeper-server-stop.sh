@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -13,4 +13,11 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-ps ax | grep -i 'zookeeper' | grep -v grep | awk '{print $1}' | xargs kill -SIGINT
+zookeepers=`ps ax | grep -i 'zookeeper.properties' | grep -v grep | awk '{print $1}'`
+if [ ${zookeepers} ]
+  then
+	echo ${zookeepers} given KILL signal
+	echo ${zookeepers} | xargs kill
+else
+	echo "Zookeeper not running"
+fi
