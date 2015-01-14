@@ -19,34 +19,40 @@ import org.apache.kafka.common.utils.Utils;
 
 /**
  * The <code>MetricName</code> class encapsulates a metric's name, logical group and its related attributes
- * <p/>
+ * <p>
  * This class captures the following parameters
  * <pre>
  *  <b>name</b> The name of the metric
  *  <b>group</b> logical group name of the metrics to which this metric belongs.
  *  <b>description</b> A human-readable description to include in the metric. This is optional.
  *  <b>tags</b> additional key/value attributes of the metric. This is optional.
- *   </pre>
+ * </pre>
  * group, tags parameters can be used to create unique metric names while reporting in JMX or any custom reporting.
- *
+ * <p>
  * Ex: standard JMX MBean can be constructed like  <b>domainName:type=group,key1=val1,key2=val2</b>
- *
+ * <p>
  * Usage looks something like this:
- * <pre>
+ * <pre>{@code
  * // set up metrics:
  * Metrics metrics = new Metrics(); // this is the global repository of metrics and sensors
- * Sensor sensor = metrics.sensor(&quot;message-sizes&quot;);
+ * Sensor sensor = metrics.sensor("message-sizes");
+ *
  * Map<String, String> metricTags = new LinkedHashMap<String, String>();
  * metricTags.put("client-id", "producer-1");
  * metricTags.put("topic", "topic");
- * MetricName metricName = new MetricName(&quot;message-size-avg&quot;, &quot;producer-metrics&quot;, "average message size", metricTags);
+ *
+ * MetricName metricName = new MetricName("message-size-avg", "producer-metrics", "average message size", metricTags);
  * sensor.add(metricName, new Avg());
- * metricName = new MetricName(&quot;message-size-max&quot;, &quot;producer-metrics&quot;,metricTags);
+ *
+ * metricName = new MetricName("message-size-max", "producer-metrics", metricTags);
  * sensor.add(metricName, new Max());
+ *
+ * metricName = new MetricName("message-size-min", "producer-metrics", "message minimum size", "client-id", "my-client", "topic", "my-topic");
+ * sensor.add(metricName, new Min());
  *
  * // as messages are sent we record the sizes
  * sensor.record(messageSize);
- * </pre>
+ * }</pre>
  */
 public final class MetricName {
 
