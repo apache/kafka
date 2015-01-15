@@ -152,10 +152,9 @@ object LogConfig {
   val UncleanLeaderElectionEnableDoc = "Indicates whether unclean leader election is enabled"
   val MinInSyncReplicasDoc = "If number of insync replicas drops below this number, we stop accepting writes with" +
     " -1 (or all) required acks"
-  val CompressionTypeDoc = "This parameter allows you to specify the compression logic for a given topic. This config" +
-    " is used to retain/remove/change the compression set by the producer. This config takes the following options: " +
-    " uncompressed, gzip, snappy, lz4, producer. uncompressed means that regardless of what the producer sets, the broker" +
-    " writes the message decompressed. producer means the broker attempts to retain whatever is used by the producer"
+  val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the " +
+    "standard compression codecs ('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to " +
+    "no compression; and 'producer' which means retain the original compression codec set by the producer."
 
   private val configDef = {
     import ConfigDef.Range._

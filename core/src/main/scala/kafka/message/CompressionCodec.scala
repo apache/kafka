@@ -53,8 +53,10 @@ object BrokerCompressionCodec {
   }
 
   def getTargetCompressionCodec(compressionType: String, producerCompression: CompressionCodec): CompressionCodec = {
-    if (ProducerCompressionCodec.name.equals(compressionType)) producerCompression
-    else getCompressionCodec(compressionType)
+    if (ProducerCompressionCodec.name.equals(compressionType))
+      producerCompression
+    else
+      getCompressionCodec(compressionType)
   }
 }
 

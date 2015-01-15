@@ -51,7 +51,7 @@ class LogConfigTest extends JUnit3Suite {
     LogConfig.configNames().foreach((name) => {
       name match {
         case LogConfig.UncleanLeaderElectionEnableProp => expected.setProperty(name, randFrom("true", "false"))
-        case LogConfig.CompressionTypeProp => expected.setProperty(name, randFrom("producer","uncompressed","gzip"))
+        case LogConfig.CompressionTypeProp => expected.setProperty(name, randFrom("producer", "uncompressed", "gzip"))
         case LogConfig.CleanupPolicyProp => expected.setProperty(name, randFrom(LogConfig.Compact, LogConfig.Delete))
         case LogConfig.MinCleanableDirtyRatioProp => expected.setProperty(name, "%.1f".format(nextDouble * .9 + .1))
         case LogConfig.MinInSyncReplicasProp => expected.setProperty(name, (nextInt(Int.MaxValue - 1) + 1).toString)

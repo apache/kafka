@@ -41,8 +41,8 @@ object LogAppendInfo {
  * @param lastOffset The last offset in the message set
  * @param shallowCount The number of shallow messages
  * @param validBytes The number of valid bytes
- * @param sourceCodec The source codec used in the message set(coming from producer)
- * @param targetCodec The target codec of the message set(after applying broker compression logic)
+ * @param sourceCodec The source codec used in the message set (send by the producer)
+ * @param targetCodec The target codec of the message set(after applying the broker compression configuration if any)
  * @param offsetsMonotonic Are the offsets in this message set monotonically increasing
  */
 case class LogAppendInfo(var firstOffset: Long, var lastOffset: Long, sourceCodec: CompressionCodec, targetCodec: CompressionCodec, shallowCount: Int, validBytes: Int, offsetsMonotonic: Boolean)
@@ -395,7 +395,7 @@ class Log(val dir: File,
         sourceCodec = messageCodec
     }
 
-    //Apply if any broker-side compression
+    // Apply broker-side compression if any
     val targetCodec = BrokerCompressionCodec.getTargetCompressionCodec(config.compressionType, sourceCodec)
     
     LogAppendInfo(firstOffset, lastOffset, sourceCodec, targetCodec, shallowMessageCount, validBytesCount, monotonic)
