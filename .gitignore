@@ -6,11 +6,16 @@ src_managed/
 project/boot/
 project/plugins/project/
 project/sbt_project_definition.iml
+build/
+data/
+logs/
 .idea
 .svn
 .classpath
+.gradle
 *~
 *#
-.#*
+.#* 
+*.log
 rat.out
 TAGS
