@@ -498,10 +498,17 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (topic == OffsetManager.OffsetsTopicName || config.autoCreateTopicsEnable) {
           try {
             if (topic == OffsetManager.OffsetsTopicName) {
-              AdminUtils.createTopic(zkClient, topic, config.offsetsTopicPartitions, config.offsetsTopicReplicationFactor,
+              val aliveBrokers = metadataCache.getAliveBrokers
+              val offsetsTopicReplicationFactor =
+                if (aliveBrokers.length > 0)
+                  Math.min(config.offsetsTopicReplicationFactor, aliveBrokers.length)
+                else
+                  config.offsetsTopicReplicationFactor
+              AdminUtils.createTopic(zkClient, topic, config.offsetsTopicPartitions,
+                                     offsetsTopicReplicationFactor,
                                      offsetManager.offsetsTopicConfig)
               info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
-                .format(topic, config.offsetsTopicPartitions, config.offsetsTopicReplicationFactor))
+                .format(topic, config.offsetsTopicPartitions, offsetsTopicReplicationFactor))
             }
             else {
               AdminUtils.createTopic(zkClient, topic, config.numPartitions, config.defaultReplicationFactor)

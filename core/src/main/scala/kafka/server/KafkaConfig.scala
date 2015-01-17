@@ -304,7 +304,11 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   val offsetsLoadBufferSize = props.getIntInRange("offsets.load.buffer.size",
     OffsetManagerConfig.DefaultLoadBufferSize, (1, Integer.MAX_VALUE))
 
-  /** The replication factor for the offset commit topic (set higher to ensure availability). */
+  /** The replication factor for the offsets topic (set higher to ensure availability). To
+    * ensure that the effective replication factor of the offsets topic is the configured value,
+    * the number of alive brokers has to be at least the replication factor at the time of the
+    * first request for the offsets topic. If not, either the offsets topic creation will fail or
+    * it will get a replication factor of min(alive brokers, configured replication factor) */
   val offsetsTopicReplicationFactor: Short = props.getShortInRange("offsets.topic.replication.factor",
     OffsetManagerConfig.DefaultOffsetsTopicReplicationFactor, (1, Short.MaxValue))
 
