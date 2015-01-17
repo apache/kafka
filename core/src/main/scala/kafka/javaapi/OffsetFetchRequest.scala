@@ -36,7 +36,7 @@ class OffsetFetchRequest(groupId: String,
     kafka.api.OffsetFetchRequest(
       groupId = groupId,
       requestInfo = scalaSeq,
-      versionId = versionId,
+      versionId = 0, // binds to version 0 so that it commits to Zookeeper
       correlationId = correlationId,
       clientId = clientId
     )
