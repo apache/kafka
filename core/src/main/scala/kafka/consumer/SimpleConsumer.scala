@@ -128,6 +128,7 @@ class SimpleConsumer(val host: String,
 
   /**
    * Commit offsets for a topic
+   * Version 0 of the request will commit offsets to Zookeeper and version 1 and above will commit offsets to Kafka.
    * @param request a [[kafka.api.OffsetCommitRequest]] object.
    * @return a [[kafka.api.OffsetCommitResponse]] object.
    */
@@ -139,6 +140,7 @@ class SimpleConsumer(val host: String,
 
   /**
    * Fetch offsets for a topic
+   * Version 0 of the request will fetch offsets from Zookeeper and version 1 and above will fetch offsets from Kafka.
    * @param request a [[kafka.api.OffsetFetchRequest]] object.
    * @return a [[kafka.api.OffsetFetchResponse]] object.
    */

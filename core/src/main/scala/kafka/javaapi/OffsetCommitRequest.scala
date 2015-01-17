@@ -32,6 +32,7 @@ class OffsetCommitRequest(groupId: String,
     kafka.api.OffsetCommitRequest(
       groupId = groupId,
       requestInfo = scalaMap,
+      versionId = 0, // binds to version 0 so that it commits to Zookeeper
       correlationId = correlationId,
       clientId = clientId
     )
