@@ -264,33 +264,33 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
      * sending the record.
      * <p>
      * If you want to simulate a simple blocking call you can do the following:
-     * 
-     * <pre>
-     *   producer.send(new ProducerRecord("the-topic", "key, "value")).get();
-     * </pre>
+     *
+     * <pre>{@code
+     * producer.send(new ProducerRecord<byte[],byte[]>("the-topic", "key".getBytes(), "value".getBytes())).get();
+     * }</pre>
      * <p>
      * Those desiring fully non-blocking usage can make use of the {@link Callback} parameter to provide a callback that
      * will be invoked when the request is complete.
-     * 
-     * <pre>
-     *   ProducerRecord record = new ProducerRecord("the-topic", "key, "value");
+     *
+     * <pre>{@code
+     * ProducerRecord<byte[],byte[]> record = new ProducerRecord<byte[],byte[]>("the-topic", "key".getBytes(), "value".getBytes());
      *   producer.send(myRecord,
-     *                 new Callback() {
+     *                new Callback() {
      *                     public void onCompletion(RecordMetadata metadata, Exception e) {
      *                         if(e != null)
      *                             e.printStackTrace();
      *                         System.out.println("The offset of the record we just sent is: " + metadata.offset());
      *                     }
-     *                 });
-     * </pre>
-     * 
+     *                });
+     * }</pre>
+     *
      * Callbacks for records being sent to the same partition are guaranteed to execute in order. That is, in the
      * following example <code>callback1</code> is guaranteed to execute before <code>callback2</code>:
-     * 
-     * <pre>
-     * producer.send(new ProducerRecord(topic, partition, key, value), callback1);
-     * producer.send(new ProducerRecord(topic, partition, key2, value2), callback2);
-     * </pre>
+     *
+     * <pre>{@code
+     * producer.send(new ProducerRecord<byte[],byte[]>(topic, partition, key1, value1), callback1);
+     * producer.send(new ProducerRecord<byte[],byte[]>(topic, partition, key2, value2), callback2);
+     * }</pre>
      * <p>
      * Note that callbacks will generally execute in the I/O thread of the producer and so should be reasonably fast or
      * they will delay the sending of messages from other threads. If you want to execute blocking or computationally
@@ -329,7 +329,7 @@ public class KafkaProducer<K,V> implements Producer<K,V> {
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
                         " specified in value.serializer");
             }
-            ProducerRecord serializedRecord = new ProducerRecord<byte[], byte[]>(record.topic(), record.partition(), serializedKey, serializedValue);
+            ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<byte[], byte[]>(record.topic(), record.partition(), serializedKey, serializedValue);
             int partition = partitioner.partition(serializedRecord, metadata.fetch());
             int serializedSize = Records.LOG_OVERHEAD + Record.recordSize(serializedKey, serializedValue);
             ensureValidRecordSize(serializedSize);
