@@ -53,6 +53,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
       // the issue by overriding offsets.topic.replication.factor to 1 for now. When we fix KAFKA-1867, we need to
       // remove the following config override.
       override val offsetsTopicReplicationFactor = 1.asInstanceOf[Short]
+      // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
+      // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
+      override val offsetsTopicPartitions = 1
     }
 
 
@@ -309,7 +312,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     val thrown = intercept[ExecutionException] {
       producer2.send(new ProducerRecord[Array[Byte],Array[Byte]](Topic.InternalTopics.head, "test".getBytes, "test".getBytes)).get
     }
-    assertTrue(thrown.getCause.isInstanceOf[InvalidTopicException])
+    assertTrue("Unexpected exception while sending to an invalid topic " + thrown.getCause, thrown.getCause.isInstanceOf[InvalidTopicException])
   }
 
   @Test
