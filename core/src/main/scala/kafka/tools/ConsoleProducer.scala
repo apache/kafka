@@ -35,11 +35,9 @@ object ConsoleProducer {
     val config = new ProducerConfig(args)
     val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[MessageReader]
     val props = new Properties
+    props.put("topic", config.topic)
     props.putAll(config.cmdLineProps)
-    
-    val readerProps = new Properties(props)
-    readerProps.put("topic", config.topic)
-    reader.init(System.in, readerProps)
+    reader.init(System.in, props)
 
     try {
         val producer =
