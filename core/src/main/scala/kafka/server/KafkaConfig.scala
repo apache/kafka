@@ -92,7 +92,7 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
   /*********** Socket Server Configuration ***********/
 
   /* the port to listen and accept connections on */
-  val port: Int = props.getInt("port", 6667)
+  val port: Int = props.getInt("port", 9092)
 
   /* hostname of broker. If this is set, it will only bind to this address. If this is not set,
    * it will bind to all interfaces */
