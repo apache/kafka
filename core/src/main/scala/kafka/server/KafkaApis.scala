@@ -194,6 +194,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         (request.requestObj.asInstanceOf[ProducerRequest], None)
       }
 
+    if (produceRequest.requiredAcks > 1 || produceRequest.requiredAcks < -1) {
+      warn(("Client %s from %s sent a produce request with request.required.acks of %d, which is now deprecated and will " +
+            "be removed in next release. Valid values are -1, 0 or 1. Please consult Kafka documentation for supported " +
+            "and recommended configuration.").format(produceRequest.clientId, request.remoteAddress, produceRequest.requiredAcks))
+    }
+
     val sTime = SystemTime.milliseconds
     val localProduceResults = appendToLocalLog(produceRequest, offsetCommitRequestOpt.nonEmpty)
     debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
