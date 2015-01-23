@@ -273,7 +273,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       streams = connector.createMessageStreamsByFilter(filterSpec, numStreams, new DefaultDecoder(), new DefaultDecoder())
     } catch {
       case t: Throwable =>
-        fatal("Unable to create stream - shutting down mirror maker.")
+        fatal("Unable to create stream - shutting down mirror maker.", t)
         connector.shutdown()
     }
     consumerThreads = streams.zipWithIndex.map(streamAndIndex => new ConsumerThread(streamAndIndex._1, mirrorDataChannel, streamAndIndex._2))
