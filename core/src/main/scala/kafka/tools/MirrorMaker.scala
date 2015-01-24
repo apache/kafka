@@ -637,7 +637,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                                           val sourceOffset: Long,
                                           val key: Array[Byte],
                                           val value: Array[Byte]) {
-    def size = value.length + {if (key == null) 0 else key.length}
+    def size = {if (value == null) 0 else value.length} + {if (key == null) 0 else key.length}
   }
 
   private class UnackedOffset(offset: Long) extends DoublyLinkedListNode[Long](offset) {
