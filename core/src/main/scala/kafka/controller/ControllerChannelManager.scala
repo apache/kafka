@@ -125,7 +125,7 @@ class RequestSendThread(val controllerId: Int,
     try {
       lock synchronized {
         var isSendSuccessful = false
-        while(isRunning.get() && !isSendSuccessful) {
+        while (isRunning.get() && !isSendSuccessful) {
           // if a broker goes down for a long time, then at some point the controller's zookeeper listener will trigger a
           // removeBroker which will invoke shutdown() on this thread. At that point, we will stop retrying.
           try {
@@ -136,7 +136,7 @@ class RequestSendThread(val controllerId: Int,
             case e: Throwable => // if the send was not successful, reconnect to broker and resend the message
               warn(("Controller %d epoch %d fails to send request %s to broker %s. " +
                 "Reconnecting to broker.").format(controllerId, controllerContext.epoch,
-                request.toString, toBroker.toString()), e)
+                  request.toString, toBroker.toString()), e)
               channel.disconnect()
               connectToBroker(toBroker, channel)
               isSendSuccessful = false
@@ -144,20 +144,22 @@ class RequestSendThread(val controllerId: Int,
               Utils.swallow(Thread.sleep(300))
           }
         }
-        var response: RequestOrResponse = null
-        request.requestId.get match {
-          case RequestKeys.LeaderAndIsrKey =>
-            response = LeaderAndIsrResponse.readFrom(receive.buffer)
-          case RequestKeys.StopReplicaKey =>
-            response = StopReplicaResponse.readFrom(receive.buffer)
-          case RequestKeys.UpdateMetadataKey =>
-            response = UpdateMetadataResponse.readFrom(receive.buffer)
-        }
-        stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
-                                  .format(controllerId, controllerContext.epoch, response.toString, toBroker.toString))
+        if (receive != null) {
+          var response: RequestOrResponse = null
+          request.requestId.get match {
+            case RequestKeys.LeaderAndIsrKey =>
+              response = LeaderAndIsrResponse.readFrom(receive.buffer)
+            case RequestKeys.StopReplicaKey =>
+              response = StopReplicaResponse.readFrom(receive.buffer)
+            case RequestKeys.UpdateMetadataKey =>
+              response = UpdateMetadataResponse.readFrom(receive.buffer)
+          }
+          stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
+            .format(controllerId, controllerContext.epoch, response.toString, toBroker.toString))
 
-        if(callback != null) {
-          callback(response)
+          if (callback != null) {
+            callback(response)
+          }
         }
       }
     } catch {
