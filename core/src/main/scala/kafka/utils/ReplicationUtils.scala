@@ -61,30 +61,22 @@ object ReplicationUtils extends Logging {
 
   def getLeaderIsrAndEpochForPartition(zkClient: ZkClient, topic: String, partition: Int):Option[LeaderIsrAndControllerEpoch] = {
     val leaderAndIsrPath = ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partition)
-    val leaderAndIsrInfo = ZkUtils.readDataMaybeNull(zkClient, leaderAndIsrPath)
-    val leaderAndIsrOpt = leaderAndIsrInfo._1
-    val stat = leaderAndIsrInfo._2
-    leaderAndIsrOpt match {
-      case Some(leaderAndIsrStr) => parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat)
-      case None => None
-    }
+    val (leaderAndIsrOpt, stat) = ZkUtils.readDataMaybeNull(zkClient, leaderAndIsrPath)
+    leaderAndIsrOpt.flatMap(leaderAndIsrStr => parseLeaderAndIsr(leaderAndIsrStr, leaderAndIsrPath, stat))
   }
 
   private def parseLeaderAndIsr(leaderAndIsrStr: String, path: String, stat: Stat)
       : Option[LeaderIsrAndControllerEpoch] = {
-    Json.parseFull(leaderAndIsrStr) match {
-      case Some(m) =>
-        val leaderIsrAndEpochInfo = m.asInstanceOf[Map[String, Any]]
-        val leader = leaderIsrAndEpochInfo.get("leader").get.asInstanceOf[Int]
-        val epoch = leaderIsrAndEpochInfo.get("leader_epoch").get.asInstanceOf[Int]
-        val isr = leaderIsrAndEpochInfo.get("isr").get.asInstanceOf[List[Int]]
-        val controllerEpoch = leaderIsrAndEpochInfo.get("controller_epoch").get.asInstanceOf[Int]
-        val zkPathVersion = stat.getVersion
-        debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for leaderAndIsrPath %s".format(leader, epoch,
-          isr.toString(), zkPathVersion, path))
-        Some(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, zkPathVersion), controllerEpoch))
-      case None => None
-    }
+    Json.parseFull(leaderAndIsrStr).flatMap {m =>
+      val leaderIsrAndEpochInfo = m.asInstanceOf[Map[String, Any]]
+      val leader = leaderIsrAndEpochInfo.get("leader").get.asInstanceOf[Int]
+      val epoch = leaderIsrAndEpochInfo.get("leader_epoch").get.asInstanceOf[Int]
+      val isr = leaderIsrAndEpochInfo.get("isr").get.asInstanceOf[List[Int]]
+      val controllerEpoch = leaderIsrAndEpochInfo.get("controller_epoch").get.asInstanceOf[Int]
+      val zkPathVersion = stat.getVersion
+      debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for leaderAndIsrPath %s".format(leader, epoch,
+        isr.toString(), zkPathVersion, path))
+      Some(LeaderIsrAndControllerEpoch(LeaderAndIsr(leader, epoch, isr, zkPathVersion), controllerEpoch))}
   }
 
 }

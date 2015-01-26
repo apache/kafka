@@ -17,6 +17,7 @@
 
 package kafka.utils
 
+import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.server.{ReplicaFetcherManager, KafkaConfig}
 import kafka.api.LeaderAndIsr
 import kafka.zk.ZooKeeperTestHarness
@@ -41,6 +42,8 @@ class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
     "versions" -> 2, "leader_epoch" -> 1,"isr" -> List(1,2)))
   val topicDataMismatch = Json.encode(Map("controller_epoch" -> 1, "leader" -> 1,
     "versions" -> 2, "leader_epoch" -> 2,"isr" -> List(1,2)))
+
+  val topicDataLeaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(1,leaderEpoch,List(1,2),0), controllerEpoch)
 
 
   override def setUp() {
@@ -90,6 +93,13 @@ class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
       "my-topic-test", partitionId, newLeaderAndIsr3, controllerEpoch, zkVersion + 1)
     assertFalse(updateSucceeded3)
     assertEquals(newZkVersion3,-1)
+  }
+
+  @Test
+  def testGetLeaderIsrAndEpochForPartition() {
+    val leaderIsrAndControllerEpoch = ReplicationUtils.getLeaderIsrAndEpochForPartition(zkClient, topic, partitionId)
+    assertEquals(topicDataLeaderIsrAndControllerEpoch, leaderIsrAndControllerEpoch.get)
+    assertEquals(None, ReplicationUtils.getLeaderIsrAndEpochForPartition(zkClient, topic, partitionId + 1))
   }
 
 }
