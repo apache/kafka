@@ -125,7 +125,7 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     -loggc)
-      if [ -z "$KAFKA_GC_LOG_OPTS"] ; then
+      if [ -z "$KAFKA_GC_LOG_OPTS" ]; then
         GC_LOG_ENABLED="true"
       fi
       shift
