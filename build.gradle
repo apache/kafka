@@ -209,7 +209,7 @@ project(':core') {
     compile 'com.yammer.metrics:metrics-core:2.2.0'
     compile 'net.sf.jopt-simple:jopt-simple:3.2'
 
-    testCompile 'junit:junit:4.1'
+    testCompile 'junit:junit:4.6'
     testCompile 'org.easymock:easymock:3.0'
     testCompile 'org.objenesis:objenesis:1.2'
     testCompile project(':clients')
