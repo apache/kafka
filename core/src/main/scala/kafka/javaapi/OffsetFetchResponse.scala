@@ -17,6 +17,8 @@
 
 package kafka.javaapi
 
+import java.nio.ByteBuffer
+
 import kafka.common.{TopicAndPartition, OffsetMetadataAndError}
 import collection.JavaConversions
 
@@ -29,3 +31,6 @@ class OffsetFetchResponse(private val underlying: kafka.api.OffsetFetchResponse)
 
 }
 
+object OffsetFetchResponse {
+  def readFrom(buffer: ByteBuffer) = new OffsetFetchResponse(kafka.api.OffsetFetchResponse.readFrom(buffer))
+}

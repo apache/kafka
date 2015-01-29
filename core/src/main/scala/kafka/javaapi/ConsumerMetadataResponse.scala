@@ -17,6 +17,8 @@
 
 package kafka.javaapi
 
+import java.nio.ByteBuffer
+
 import kafka.cluster.Broker
 
 class ConsumerMetadataResponse(private val underlying: kafka.api.ConsumerMetadataResponse) {
@@ -39,4 +41,8 @@ class ConsumerMetadataResponse(private val underlying: kafka.api.ConsumerMetadat
 
   override def toString = underlying.toString
 
+}
+
+object ConsumerMetadataResponse {
+  def readFrom(buffer: ByteBuffer) = new ConsumerMetadataResponse(kafka.api.ConsumerMetadataResponse.readFrom(buffer))
 }

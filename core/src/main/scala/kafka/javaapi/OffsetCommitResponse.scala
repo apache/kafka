@@ -17,6 +17,8 @@
 
 package kafka.javaapi
 
+import java.nio.ByteBuffer
+
 import kafka.common.TopicAndPartition
 import collection.JavaConversions
 
@@ -27,5 +29,12 @@ class OffsetCommitResponse(private val underlying: kafka.api.OffsetCommitRespons
     underlying.commitStatus
   }
 
+  def hasError = underlying.hasError
+
+  def errorCode(topicAndPartition: TopicAndPartition) = underlying.commitStatus(topicAndPartition)
+
 }
 
+object OffsetCommitResponse {
+  def readFrom(buffer: ByteBuffer) = new OffsetCommitResponse(kafka.api.OffsetCommitResponse.readFrom(buffer))
+}
