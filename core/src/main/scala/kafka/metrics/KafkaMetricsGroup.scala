@@ -61,9 +61,15 @@ trait KafkaMetricsGroup extends Logging {
       nameBuilder.append(name)
     }
 
-    KafkaMetricsGroup.toMBeanName(tags).map(mbeanName => nameBuilder.append(",").append(mbeanName))
+    val scope: String = KafkaMetricsGroup.toScope(tags).getOrElse(null)
+    val tagsName = KafkaMetricsGroup.toMBeanName(tags)
+    tagsName match {
+      case Some(tn) =>
+        nameBuilder.append(",").append(tn)
+      case None =>
+    }
 
-    new MetricName(group, typeName, name, null, nameBuilder.toString())
+    new MetricName(group, typeName, name, scope, nameBuilder.toString())
   }
 
   def newGauge[T](name: String, metric: Gauge[T], tags: scala.collection.Map[String, String] = Map.empty) =
@@ -152,6 +158,23 @@ object KafkaMetricsGroup extends KafkaMetricsGroup with Logging {
       val tagsString = filteredTags
         .map { case (key, value) => "%s=%s".format(key, value)}
         .mkString(",")
+
+      Some(tagsString)
+    }
+    else {
+      None
+    }
+  }
+
+  private def toScope(tags: collection.Map[String, String]): Option[String] = {
+    val filteredTags = tags
+      .filter { case (tagKey, tagValue) => tagValue != ""}
+    if (filteredTags.nonEmpty) {
+      // convert dot to _ since reporters like Graphite typically use dot to represent hierarchy
+      val tagsString = filteredTags
+        .toList.sortWith((t1, t2) => t1._1 < t2._1)
+        .map { case (key, value) => "%s.%s".format(key, value.replaceAll("\\.", "_"))}
+        .mkString(".")
 
       Some(tagsString)
     }
