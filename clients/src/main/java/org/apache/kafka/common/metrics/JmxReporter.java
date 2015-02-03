@@ -42,7 +42,7 @@ import org.slf4j.LoggerFactory;
 public class JmxReporter implements MetricsReporter {
 
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
-    private static final Object lock = new Object();
+    private static final Object LOCK = new Object();
     private String prefix;
     private final Map<String, KafkaMbean> mbeans = new HashMap<String, KafkaMbean>();
 
@@ -58,12 +58,11 @@ public class JmxReporter implements MetricsReporter {
     }
 
     @Override
-    public void configure(Map<String, ?> configs) {
-    }
+    public void configure(Map<String, ?> configs) {}
 
     @Override
     public void init(List<KafkaMetric> metrics) {
-        synchronized (lock) {
+        synchronized (LOCK) {
             for (KafkaMetric metric : metrics)
                 addAttribute(metric);
             for (KafkaMbean mbean : mbeans.values())
@@ -73,7 +72,7 @@ public class JmxReporter implements MetricsReporter {
 
     @Override
     public void metricChange(KafkaMetric metric) {
-        synchronized (lock) {
+        synchronized (LOCK) {
             KafkaMbean mbean = addAttribute(metric);
             reregister(mbean);
         }
@@ -86,36 +85,35 @@ public class JmxReporter implements MetricsReporter {
             if (!this.mbeans.containsKey(mBeanName))
                 mbeans.put(mBeanName, new KafkaMbean(mBeanName));
             KafkaMbean mbean = this.mbeans.get(mBeanName);
-            mbean.setAttribute(metricName.name() , metric);
+            mbean.setAttribute(metricName.name(), metric);
             return mbean;
         } catch (JMException e) {
             throw new KafkaException("Error creating mbean attribute for metricName :" + metric.metricName(), e);
         }
     }
 
-  /**
-   * @param metricName
-   * @return standard JMX MBean name in the following format
-   *       domainName:type=metricType,key1=val1,key2=val2
-   */
-  private String getMBeanName(MetricName metricName) {
-    StringBuilder mBeanName = new StringBuilder();
-    mBeanName.append(prefix);
-    mBeanName.append(":type=");
-    mBeanName.append(metricName.group());
-    for (Map.Entry<String, String> entry : metricName.tags().entrySet()) {
-      if(entry.getKey().length() <= 0 || entry.getValue().length() <= 0)
-         continue;
-      mBeanName.append(",");
-      mBeanName.append(entry.getKey());
-      mBeanName.append("=");
-      mBeanName.append(entry.getValue());
+    /**
+     * @param metricName
+     * @return standard JMX MBean name in the following format domainName:type=metricType,key1=val1,key2=val2
+     */
+    private String getMBeanName(MetricName metricName) {
+        StringBuilder mBeanName = new StringBuilder();
+        mBeanName.append(prefix);
+        mBeanName.append(":type=");
+        mBeanName.append(metricName.group());
+        for (Map.Entry<String, String> entry : metricName.tags().entrySet()) {
+            if (entry.getKey().length() <= 0 || entry.getValue().length() <= 0)
+                continue;
+            mBeanName.append(",");
+            mBeanName.append(entry.getKey());
+            mBeanName.append("=");
+            mBeanName.append(entry.getValue());
+        }
+        return mBeanName.toString();
     }
-    return mBeanName.toString();
-  }
 
     public void close() {
-        synchronized (lock) {
+        synchronized (LOCK) {
             for (KafkaMbean mbean : this.mbeans.values())
                 unregister(mbean);
         }
@@ -185,7 +183,12 @@ public class JmxReporter implements MetricsReporter {
             for (Map.Entry<String, KafkaMetric> entry : this.metrics.entrySet()) {
                 String attribute = entry.getKey();
                 KafkaMetric metric = entry.getValue();
-                attrs[i] = new MBeanAttributeInfo(attribute, double.class.getName(), metric.metricName().description(), true, false, false);
+                attrs[i] = new MBeanAttributeInfo(attribute,
+                                                  double.class.getName(),
+                                                  metric.metricName().description(),
+                                                  true,
+                                                  false,
+                                                  false);
                 i += 1;
             }
             return new MBeanInfo(this.getClass().getName(), "", attrs, null, null, null);

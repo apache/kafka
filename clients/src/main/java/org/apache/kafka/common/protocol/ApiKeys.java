@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.common.protocol;
 
-
-import java.util.ArrayList;
-import java.util.List;
-
 /**
  * Identifiers for all the Kafka APIs
  */
@@ -37,16 +33,18 @@ public enum ApiKeys {
     HEARTBEAT(12, "heartbeat");
 
     private static ApiKeys[] codeToType;
-    public static int MAX_API_KEY = -1;
+    public static final int MAX_API_KEY;
 
     static {
+        int maxKey = -1;
         for (ApiKeys key : ApiKeys.values()) {
-            MAX_API_KEY = Math.max(MAX_API_KEY, key.id);
+            maxKey = Math.max(maxKey, key.id);
         }
-        codeToType = new ApiKeys[MAX_API_KEY+1];
+        codeToType = new ApiKeys[maxKey + 1];
         for (ApiKeys key : ApiKeys.values()) {
             codeToType[key.id] = key;
         }
+        MAX_API_KEY = maxKey;
     }
 
     /** the perminant and immutable id of an API--this can't change ever */

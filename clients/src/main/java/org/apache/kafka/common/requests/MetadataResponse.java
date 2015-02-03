@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 public class MetadataResponse extends AbstractRequestResponse {
     
-    private static Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.METADATA.id);
+    private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.METADATA.id);
     private static final String BROKERS_KEY_NAME = "brokers";
     private static final String TOPIC_METATDATA_KEY_NAME = "topic_metadata";
 
@@ -69,12 +69,12 @@ public class MetadataResponse extends AbstractRequestResponse {
         List<Struct> topicArray = new ArrayList<Struct>();
         for (String topic: cluster.topics()) {
             Struct topicData = struct.instance(TOPIC_METATDATA_KEY_NAME);
-            topicData.set(TOPIC_ERROR_CODE_KEY_NAME, (short)0);  // no error
+            topicData.set(TOPIC_ERROR_CODE_KEY_NAME, Errors.NONE.code());
             topicData.set(TOPIC_KEY_NAME, topic);
             List<Struct> partitionArray = new ArrayList<Struct>();
             for (PartitionInfo fetchPartitionData : cluster.partitionsForTopic(topic)) {
                 Struct partitionData = topicData.instance(PARTITION_METADATA_KEY_NAME);
-                partitionData.set(PARTITION_ERROR_CODE_KEY_NAME, (short)0);  // no error
+                partitionData.set(PARTITION_ERROR_CODE_KEY_NAME, Errors.NONE.code());
                 partitionData.set(PARTITION_KEY_NAME, fetchPartitionData.partition());
                 partitionData.set(LEADER_KEY_NAME, fetchPartitionData.leader().id());
                 ArrayList<Integer> replicas = new ArrayList<Integer>();
@@ -148,6 +148,6 @@ public class MetadataResponse extends AbstractRequestResponse {
     }
 
     public static MetadataResponse parse(ByteBuffer buffer) {
-        return new MetadataResponse(((Struct) CURRENT_SCHEMA.read(buffer)));
+        return new MetadataResponse((Struct) CURRENT_SCHEMA.read(buffer));
     }
 }

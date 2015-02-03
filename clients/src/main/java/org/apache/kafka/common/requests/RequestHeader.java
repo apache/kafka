@@ -26,10 +26,10 @@ import org.apache.kafka.common.protocol.types.Struct;
  */
 public class RequestHeader extends AbstractRequestResponse {
 
-    private static Field API_KEY_FIELD = REQUEST_HEADER.get("api_key");
-    private static Field API_VERSION_FIELD = REQUEST_HEADER.get("api_version");
-    private static Field CLIENT_ID_FIELD = REQUEST_HEADER.get("client_id");
-    private static Field CORRELATION_ID_FIELD = REQUEST_HEADER.get("correlation_id");
+    private static final Field API_KEY_FIELD = REQUEST_HEADER.get("api_key");
+    private static final Field API_VERSION_FIELD = REQUEST_HEADER.get("api_version");
+    private static final Field CLIENT_ID_FIELD = REQUEST_HEADER.get("client_id");
+    private static final Field CORRELATION_ID_FIELD = REQUEST_HEADER.get("correlation_id");
 
     private final short apiKey;
     private final short apiVersion;

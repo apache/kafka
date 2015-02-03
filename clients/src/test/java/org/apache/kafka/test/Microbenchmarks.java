@@ -162,7 +162,6 @@ public class Microbenchmarks {
         for (int i = 0; i < numThreads; i++) {
             threads.add(new Thread() {
                 public void run() {
-                    int sum = 0;
                     long start = System.nanoTime();
                     for (int j = 0; j < iters; j++)
                         map.get(keys.get(j % threads.size()));

@@ -34,16 +34,15 @@ public class Compressor {
     static private final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
     static private final int COMPRESSION_DEFAULT_BUFFER_SIZE = 1024;
 
-    private static float[] typeToRate;
-    private static int MAX_TYPE_ID = -1;
+    private static final float[] TYPE_TO_RATE;
 
     static {
+        int maxTypeId = -1;
+        for (CompressionType type : CompressionType.values())
+            maxTypeId = Math.max(maxTypeId, type.id);
+        TYPE_TO_RATE = new float[maxTypeId + 1];
         for (CompressionType type : CompressionType.values()) {
-            MAX_TYPE_ID = Math.max(MAX_TYPE_ID, type.id);
-        }
-        typeToRate = new float[MAX_TYPE_ID+1];
-        for (CompressionType type : CompressionType.values()) {
-            typeToRate[type.id] = type.rate;
+            TYPE_TO_RATE[type.id] = type.rate;
         }
     }
 
@@ -118,7 +117,7 @@ public class Compressor {
 
             // update the compression ratio
             float compressionRate = (float) buffer.position() / this.writtenUncompressed;
-            typeToRate[type.id] = typeToRate[type.id] * COMPRESSION_RATE_DAMPING_FACTOR +
+            TYPE_TO_RATE[type.id] = TYPE_TO_RATE[type.id] * COMPRESSION_RATE_DAMPING_FACTOR +
                 compressionRate * (1 - COMPRESSION_RATE_DAMPING_FACTOR);
         }
     }
@@ -192,7 +191,7 @@ public class Compressor {
             return bufferStream.buffer().position();
         } else {
             // estimate the written bytes to the underlying byte buffer based on uncompressed written bytes
-            return (long) (writtenUncompressed * typeToRate[type.id] * COMPRESSION_RATE_ESTIMATION_FACTOR);
+            return (long) (writtenUncompressed * TYPE_TO_RATE[type.id] * COMPRESSION_RATE_ESTIMATION_FACTOR);
         }
     }
 
@@ -209,8 +208,8 @@ public class Compressor {
                     // dynamically load the snappy class to avoid runtime dependency
                     // on snappy if we are not using it
                     try {
-                        Class SnappyOutputStream = Class.forName("org.xerial.snappy.SnappyOutputStream");
-                        OutputStream stream = (OutputStream) SnappyOutputStream.getConstructor(OutputStream.class, Integer.TYPE)
+                        Class<?> outputStreamClass = Class.forName("org.xerial.snappy.SnappyOutputStream");
+                        OutputStream stream = (OutputStream) outputStreamClass.getConstructor(OutputStream.class, Integer.TYPE)
                             .newInstance(buffer, bufferSize);
                         return new DataOutputStream(stream);
                     } catch (Exception e) {
@@ -218,7 +217,7 @@ public class Compressor {
                     }
                 case LZ4:
                     try {
-                        Class outputStreamClass = Class.forName("org.apache.kafka.common.message.KafkaLZ4BlockOutputStream");
+                        Class<?> outputStreamClass = Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockOutputStream");
                         OutputStream stream = (OutputStream) outputStreamClass.getConstructor(OutputStream.class)
                             .newInstance(buffer);
                         return new DataOutputStream(stream);
@@ -244,8 +243,8 @@ public class Compressor {
                     // dynamically load the snappy class to avoid runtime dependency
                     // on snappy if we are not using it
                     try {
-                        Class SnappyInputStream = Class.forName("org.xerial.snappy.SnappyInputStream");
-                        InputStream stream = (InputStream) SnappyInputStream.getConstructor(InputStream.class)
+                        Class<?> inputStreamClass = Class.forName("org.xerial.snappy.SnappyInputStream");
+                        InputStream stream = (InputStream) inputStreamClass.getConstructor(InputStream.class)
                             .newInstance(buffer);
                         return new DataInputStream(stream);
                     } catch (Exception e) {
@@ -254,7 +253,7 @@ public class Compressor {
                 case LZ4:
                     // dynamically load LZ4 class to avoid runtime dependency
                     try {
-                        Class inputStreamClass = Class.forName("org.apache.kafka.common.message.KafkaLZ4BlockInputStream");
+                        Class<?> inputStreamClass = Class.forName("org.apache.kafka.common.record.KafkaLZ4BlockInputStream");
                         InputStream stream = (InputStream) inputStreamClass.getConstructor(InputStream.class)
                             .newInstance(buffer);
                         return new DataInputStream(stream);

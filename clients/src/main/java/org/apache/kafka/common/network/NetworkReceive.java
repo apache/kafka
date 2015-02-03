@@ -50,7 +50,7 @@ public class NetworkReceive implements Receive {
 
     @Override
     public ByteBuffer[] reify() {
-        return new ByteBuffer[] { this.buffer };
+        return new ByteBuffer[] {this.buffer};
     }
 
     @Override

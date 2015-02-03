@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -17,27 +17,26 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Number of insync replicas for the partition is lower than min.insync.replicas
- * This exception is raised when the low ISR size is discovered *after* the message
- * was already appended to the log. Producer retries will cause duplicates.
+ * Number of insync replicas for the partition is lower than min.insync.replicas This exception is raised when the low
+ * ISR size is discovered *after* the message was already appended to the log. Producer retries will cause duplicates.
  */
 public class NotEnoughReplicasAfterAppendException extends RetriableException {
-  private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
-  public NotEnoughReplicasAfterAppendException() {
-    super();
-  }
+    public NotEnoughReplicasAfterAppendException() {
+        super();
+    }
 
-  public NotEnoughReplicasAfterAppendException(String message, Throwable cause) {
-    super(message,cause);
-  }
+    public NotEnoughReplicasAfterAppendException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
-  public NotEnoughReplicasAfterAppendException(String message) {
-    super(message);
-  }
+    public NotEnoughReplicasAfterAppendException(String message) {
+        super(message);
+    }
 
-  public NotEnoughReplicasAfterAppendException(Throwable cause) {
-    super(cause);
-  }
+    public NotEnoughReplicasAfterAppendException(Throwable cause) {
+        super(cause);
+    }
 
 }

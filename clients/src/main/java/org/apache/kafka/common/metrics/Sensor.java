@@ -147,7 +147,7 @@ public final class Sensor {
      * @param stat The statistic to keep
      */
     public void add(MetricName metricName, MeasurableStat stat) {
-      add(metricName, stat, null);
+        add(metricName, stat, null);
     }
 
     /**
@@ -157,11 +157,11 @@ public final class Sensor {
      * @param config A special configuration for this metric. If null use the sensor default configuration.
      */
     public synchronized void add(MetricName metricName, MeasurableStat stat, MetricConfig config) {
-      KafkaMetric metric = new KafkaMetric(new Object(),
-                                      Utils.notNull(metricName),
-                                      Utils.notNull(stat),
-                                      config == null ? this.config : config,
-                                      time);
+        KafkaMetric metric = new KafkaMetric(new Object(),
+                                             Utils.notNull(metricName),
+                                             Utils.notNull(stat),
+                                             config == null ? this.config : config,
+                                             time);
         this.registry.registerMetric(metric);
         this.metrics.add(metric);
         this.stats.add(stat);

@@ -128,6 +128,7 @@ public class RecordAccumulatorTest {
         assertEquals("But due to size bound only one partition should have been retrieved", 1, batches.size());
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void testStressfulSituation() throws Exception {
         final int numThreads = 5;
@@ -194,7 +195,7 @@ public class RecordAccumulatorTest {
         assertEquals("Next check time should be defined by node1, half remaining linger time", lingerMs / 2, result.nextReadyCheckDelayMs);
 
         // Add data for another partition on node1, enough to make data sendable immediately
-        for (int i = 0; i < appends+1; i++)
+        for (int i = 0; i < appends + 1; i++)
             accum.append(tp2, key, value, CompressionType.NONE, null);
         result = accum.ready(cluster, time.milliseconds());
         assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);

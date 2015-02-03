@@ -98,6 +98,9 @@ Please note for this to work you should create/update `~/.gradle/gradle.properti
 
 ### Determining how transitive dependencies are added ###
     ./gradlew core:dependencies --configuration runtime
+	
+### Running checkstyle on the java code ###
+    ./gradlew checkstyleMain checkstyleTest
 
 ### Running in Vagrant ###
 

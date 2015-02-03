@@ -65,6 +65,6 @@ public class ConsumerMetadataResponse extends AbstractRequestResponse {
     }
 
     public static ConsumerMetadataResponse parse(ByteBuffer buffer) {
-        return new ConsumerMetadataResponse(((Struct) CURRENT_SCHEMA.read(buffer)));
+        return new ConsumerMetadataResponse((Struct) CURRENT_SCHEMA.read(buffer));
     }
 }

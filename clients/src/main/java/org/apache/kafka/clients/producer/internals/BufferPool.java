@@ -80,11 +80,11 @@ public final class BufferPool {
         this.time = time;
         this.waitTime = this.metrics.sensor("bufferpool-wait-time");
         MetricName metricName = new MetricName("bufferpool-wait-ratio",
-                                              metricGrpName,
-                                              "The fraction of time an appender waits for space allocation.",
-                                              metricTags);
+                                               metricGrpName,
+                                               "The fraction of time an appender waits for space allocation.",
+                                               metricTags);
         this.waitTime.add(metricName, new Rate(TimeUnit.NANOSECONDS));
-   }
+    }
 
     /**
      * Allocate a buffer of the given size. This method blocks if there is not enough memory and the buffer pool

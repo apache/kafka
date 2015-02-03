@@ -28,7 +28,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
  * The consumer configuration keys
  */
 public class ConsumerConfig extends AbstractConfig {
-    private static final ConfigDef config;
+    private static final ConfigDef CONFIG;
 
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG STRINGS OR THEIR JAVA VARIABLE NAMES AS
@@ -154,7 +154,7 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String VALUE_DESERIALIZER_CLASS_DOC = "Deserializer class for value that implements the <code>Deserializer</code> interface.";
 
     static {
-        config = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
+        CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
                                         Importance.HIGH,
                                         CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
@@ -277,11 +277,11 @@ public class ConsumerConfig extends AbstractConfig {
     }
 
     ConsumerConfig(Map<? extends Object, ? extends Object> props) {
-        super(config, props);
+        super(CONFIG, props);
     }
 
     public static void main(String[] args) {
-        System.out.println(config.toHtmlTable());
+        System.out.println(CONFIG.toHtmlTable());
     }
 
 }

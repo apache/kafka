@@ -90,8 +90,8 @@ public final class MetricName {
             throw new IllegalArgumentException("keyValue needs to be specified in paris");
         Map<String, String> tags = new HashMap<String, String>();
 
-        for (int i=0; i<(keyValue.length / 2); i++)
-            tags.put(keyValue[i], keyValue[i+1]);
+        for (int i = 0; i < keyValue.length / 2; i++)
+            tags.put(keyValue[i], keyValue[i + 1]);
         return tags;
     }
 

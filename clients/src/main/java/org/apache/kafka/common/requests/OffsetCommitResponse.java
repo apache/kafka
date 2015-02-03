@@ -83,6 +83,6 @@ public class OffsetCommitResponse extends AbstractRequestResponse {
     }
 
     public static OffsetCommitResponse parse(ByteBuffer buffer) {
-        return new OffsetCommitResponse(((Struct) CURRENT_SCHEMA.read(buffer)));
+        return new OffsetCommitResponse((Struct) CURRENT_SCHEMA.read(buffer));
     }
 }

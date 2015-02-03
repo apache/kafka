@@ -22,7 +22,7 @@ import kafka.javaapi.FetchResponse;
 
 import java.io.UnsupportedEncodingException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import kafka.javaapi.consumer.SimpleConsumer;
 import kafka.javaapi.message.ByteBufferMessageSet;
@@ -71,10 +71,9 @@ public class SimpleConsumerDemo {
       printMessages((ByteBufferMessageSet) fetchResponse.messageSet(KafkaProperties.topic2, 0));
 
     System.out.println("Testing single multi-fetch");
-    Map<String, List<Integer>> topicMap = new HashMap<String, List<Integer>>() {{
-        put(KafkaProperties.topic2, new ArrayList<Integer>(){{ add(0); }});
-        put(KafkaProperties.topic3, new ArrayList<Integer>(){{ add(0); }});
-    }};
+    Map<String, List<Integer>> topicMap = new HashMap<String, List<Integer>>();
+    topicMap.put(KafkaProperties.topic2, Collections.singletonList(0));
+    topicMap.put(KafkaProperties.topic3, Collections.singletonList(0));
     req = new FetchRequestBuilder()
             .clientId(KafkaProperties.clientId)
             .addFetch(KafkaProperties.topic2, 0, 0L, 100)

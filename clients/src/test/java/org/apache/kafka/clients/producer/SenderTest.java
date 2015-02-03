@@ -21,8 +21,8 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.producer.internals.Metadata;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.common.Cluster;
@@ -147,8 +147,8 @@ public class SenderTest {
         partResp.set("partition", part);
         partResp.set("error_code", (short) error);
         partResp.set("base_offset", offset);
-        response.set("partition_responses", new Object[] { partResp });
-        struct.set("responses", new Object[] { response });
+        response.set("partition_responses", new Object[] {partResp});
+        struct.set("responses", new Object[] {response});
         return struct;
     }
 

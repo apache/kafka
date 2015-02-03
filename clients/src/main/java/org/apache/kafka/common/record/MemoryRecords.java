@@ -164,21 +164,21 @@ public class MemoryRecords implements Records {
     
     @Override
     public String toString() {
-      Iterator<LogEntry> iter = iterator();
-      StringBuilder builder = new StringBuilder();
-      builder.append('[');
-      while(iter.hasNext()) {
-        LogEntry entry = iter.next();
-        builder.append('(');
-        builder.append("offset=");
-        builder.append(entry.offset());
-        builder.append(",");
-        builder.append("record=");
-        builder.append(entry.record());
-        builder.append(")");
-      }
-      builder.append(']');
-      return builder.toString();
+        Iterator<LogEntry> iter = iterator();
+        StringBuilder builder = new StringBuilder();
+        builder.append('[');
+        while (iter.hasNext()) {
+            LogEntry entry = iter.next();
+            builder.append('(');
+            builder.append("offset=");
+            builder.append(entry.offset());
+            builder.append(",");
+            builder.append("record=");
+            builder.append(entry.record());
+            builder.append(")");
+        }
+        builder.append(']');
+        return builder.toString();
     }
 
     public static class RecordsIterator extends AbstractIterator<LogEntry> {
@@ -218,8 +218,8 @@ public class MemoryRecords implements Records {
                     if (type == CompressionType.NONE) {
                         rec = buffer.slice();
                         int newPos = buffer.position() + size;
-                        if(newPos > buffer.limit())
-                          return allDone();
+                        if (newPos > buffer.limit())
+                            return allDone();
                         buffer.position(newPos);
                         rec.limit(size);
                     } else {
@@ -251,7 +251,7 @@ public class MemoryRecords implements Records {
         }
 
         private boolean innerDone() {
-            return (innerIter == null || !innerIter.hasNext());
+            return innerIter == null || !innerIter.hasNext();
         }
     }
 }

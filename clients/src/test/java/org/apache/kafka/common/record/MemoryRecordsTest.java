@@ -71,7 +71,7 @@ public class MemoryRecordsTest {
     public static Collection<Object[]> data() {
         List<Object[]> values = new ArrayList<Object[]>();
         for (CompressionType type: CompressionType.values())
-            values.add(new Object[] { type });
+            values.add(new Object[] {type});
         return values;
     }
 }

@@ -19,7 +19,6 @@ import java.util.List;
 import java.util.Random;
 import java.util.Set;
 
-import org.apache.kafka.clients.producer.internals.Metadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.network.NetworkReceive;
@@ -199,7 +198,7 @@ public class NetworkClient implements KafkaClient {
         // should we update our metadata?
         long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
         long timeToNextReconnectAttempt = Math.max(this.lastNoNodeAvailableMs + metadata.refreshBackoff() - now, 0);
-        long waitForMetadataFetch = (this.metadataFetchInProgress ? Integer.MAX_VALUE : 0);
+        long waitForMetadataFetch = this.metadataFetchInProgress ? Integer.MAX_VALUE : 0;
         // if there is no node available to connect, back off refreshing metadata
         long metadataTimeout = Math.max(Math.max(timeToNextMetadataUpdate, timeToNextReconnectAttempt),
                                         waitForMetadataFetch);

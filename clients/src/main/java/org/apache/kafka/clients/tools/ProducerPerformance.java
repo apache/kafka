@@ -45,12 +45,12 @@ public class ProducerPerformance {
         }
         props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
         props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
-        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[],byte[]>(props);
+        KafkaProducer<byte[], byte[]> producer = new KafkaProducer<byte[], byte[]>(props);
 
         /* setup perf test */
         byte[] payload = new byte[recordSize];
         Arrays.fill(payload, (byte) 1);
-        ProducerRecord<byte[],byte[]> record = new ProducerRecord<byte[],byte[]>(topicName, payload);
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<byte[], byte[]>(topicName, payload);
         long sleepTime = NS_PER_SEC / throughput;
         long sleepDeficitNs = 0;
         Stats stats = new Stats(numRecords, 5000);
@@ -66,8 +66,8 @@ public class ProducerPerformance {
              * and then make up the whole deficit in one longer sleep.
              */
             if (throughput > 0) {
-                float elapsed = (sendStart - start)/1000.f;
-                if (elapsed > 0 && i/elapsed > throughput) {
+                float elapsed = (sendStart - start) / 1000.f;
+                if (elapsed > 0 && i / elapsed > throughput) {
                     sleepDeficitNs += sleepTime;
                     if (sleepDeficitNs >= MIN_SLEEP_NS) {
                         long sleepMs = sleepDeficitNs / 1000000;

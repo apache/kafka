@@ -12,7 +12,7 @@
  */
 package org.apache.kafka.clients.producer;
 
-import org.apache.kafka.clients.producer.internals.Metadata;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.test.TestUtils;
@@ -49,7 +49,7 @@ public class MetadataTest {
     }
 
     /**
-     * Tests that {@link org.apache.kafka.clients.producer.internals.Metadata#awaitUpdate(int, long)} doesn't
+     * Tests that {@link org.apache.kafka.clients.Metadata#awaitUpdate(int, long)} doesn't
      * wait forever with a max timeout value of 0
      *
      * @throws Exception
@@ -68,9 +68,9 @@ public class MetadataTest {
             // expected
         }
         // now try with a higher timeout value once
-        final long TWO_SECOND_WAIT = 2000;
+        final long twoSecondWait = 2000;
         try {
-            metadata.awaitUpdate(metadata.requestUpdate(), TWO_SECOND_WAIT);
+            metadata.awaitUpdate(metadata.requestUpdate(), twoSecondWait);
             fail("Wait on metadata update was expected to timeout, but it didn't");
         } catch (TimeoutException te) {
             // expected

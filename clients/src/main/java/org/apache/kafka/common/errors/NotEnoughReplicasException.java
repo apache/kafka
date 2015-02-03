@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -20,21 +20,21 @@ package org.apache.kafka.common.errors;
  * Number of insync replicas for the partition is lower than min.insync.replicas
  */
 public class NotEnoughReplicasException extends RetriableException {
-  private static final long serialVersionUID = 1L;
+    private static final long serialVersionUID = 1L;
 
-  public NotEnoughReplicasException() {
-    super();
-  }
+    public NotEnoughReplicasException() {
+        super();
+    }
 
-  public NotEnoughReplicasException(String message, Throwable cause) {
-    super(message, cause);
-  }
+    public NotEnoughReplicasException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
-  public NotEnoughReplicasException(String message) {
-    super(message);
-  }
+    public NotEnoughReplicasException(String message) {
+        super(message);
+    }
 
-  public NotEnoughReplicasException(Throwable cause) {
-    super(cause);
-  }
+    public NotEnoughReplicasException(Throwable cause) {
+        super(cause);
+    }
 }

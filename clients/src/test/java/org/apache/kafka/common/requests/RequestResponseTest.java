@@ -17,6 +17,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.Errors;
 import org.junit.Test;
 
 import java.lang.reflect.Method;
@@ -31,7 +32,7 @@ import static org.junit.Assert.assertEquals;
 public class RequestResponseTest {
 
     @Test
-    public void testSerialization() throws Exception{
+    public void testSerialization() throws Exception {
         List<AbstractRequestResponse> requestList = Arrays.asList(
                 createRequestHeader(),
                 createResponseHeader(),
@@ -67,7 +68,7 @@ public class RequestResponseTest {
     }
 
     private AbstractRequestResponse createRequestHeader() {
-        return new RequestHeader((short)10, (short)1, "", 10);
+        return new RequestHeader((short) 10, (short) 1, "", 10);
     }
 
     private AbstractRequestResponse createResponseHeader() {
@@ -79,7 +80,7 @@ public class RequestResponseTest {
     }
 
     private AbstractRequestResponse createConsumerMetadataResponse() {
-        return new ConsumerMetadataResponse((short)1, new Node(10, "host1", 2014));
+        return new ConsumerMetadataResponse((short) 1, new Node(10, "host1", 2014));
     }
 
     private AbstractRequestResponse createFetchRequest() {
@@ -91,7 +92,7 @@ public class RequestResponseTest {
 
     private AbstractRequestResponse createFetchResponse() {
         Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
-        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData((short)0, 1000000, ByteBuffer.allocate(10)));
+        responseData.put(new TopicPartition("test", 0), new FetchResponse.PartitionData(Errors.NONE.code(), 1000000, ByteBuffer.allocate(10)));
         return new FetchResponse(responseData);
     }
 
@@ -100,7 +101,7 @@ public class RequestResponseTest {
     }
 
     private AbstractRequestResponse createHeartBeatResponse() {
-        return new HeartbeatResponse((short)0);
+        return new HeartbeatResponse(Errors.NONE.code());
     }
 
     private AbstractRequestResponse createJoinGroupRequest() {
@@ -108,7 +109,7 @@ public class RequestResponseTest {
     }
 
     private AbstractRequestResponse createJoinGroupResponse() {
-        return new JoinGroupResponse((short)0, 1, "consumer1", Arrays.asList(new TopicPartition("test11", 1), new TopicPartition("test2", 1)));
+        return new JoinGroupResponse(Errors.NONE.code(), 1, "consumer1", Arrays.asList(new TopicPartition("test11", 1), new TopicPartition("test2", 1)));
     }
 
     private AbstractRequestResponse createListOffsetRequest() {
@@ -119,7 +120,7 @@ public class RequestResponseTest {
 
     private AbstractRequestResponse createListOffsetResponse() {
         Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<TopicPartition, ListOffsetResponse.PartitionData>();
-        responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData((short)0, Arrays.asList(100L)));
+        responseData.put(new TopicPartition("test", 0), new ListOffsetResponse.PartitionData(Errors.NONE.code(), Arrays.asList(100L)));
         return new ListOffsetResponse(responseData);
     }
 
@@ -145,7 +146,7 @@ public class RequestResponseTest {
 
     private AbstractRequestResponse createOffsetCommitResponse() {
         Map<TopicPartition, Short> responseData = new HashMap<TopicPartition, Short>();
-        responseData.put(new TopicPartition("test", 0), (short)0);
+        responseData.put(new TopicPartition("test", 0), Errors.NONE.code());
         return new OffsetCommitResponse(responseData);
     }
 
@@ -155,19 +156,19 @@ public class RequestResponseTest {
 
     private AbstractRequestResponse createOffsetFetchResponse() {
         Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<TopicPartition, OffsetFetchResponse.PartitionData>();
-        responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(100L, "", (short)0));
+        responseData.put(new TopicPartition("test", 0), new OffsetFetchResponse.PartitionData(100L, "", Errors.NONE.code()));
         return new OffsetFetchResponse(responseData);
     }
 
     private AbstractRequestResponse createProduceRequest() {
         Map<TopicPartition, ByteBuffer> produceData = new HashMap<TopicPartition, ByteBuffer>();
         produceData.put(new TopicPartition("test", 0), ByteBuffer.allocate(10));
-        return new ProduceRequest((short)0, 5000, produceData);
+        return new ProduceRequest(Errors.NONE.code(), 5000, produceData);
     }
 
     private AbstractRequestResponse createProduceResponse() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
-        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse((short) 0, 10000));
+        responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE.code(), 10000));
         return new ProduceResponse(responseData);
     }
 }

@@ -29,7 +29,7 @@ public class Utils {
 
     private static final Pattern HOST_PORT_PATTERN = Pattern.compile("\\[?(.+?)\\]?:(\\d+)");
 
-    public static String NL = System.getProperty("line.separator");
+    public static final String NL = System.getProperty("line.separator");
 
     /**
      * Turn the given UTF8 byte array into a string
@@ -87,10 +87,10 @@ public class Utils {
      * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
      */
     public static int readUnsignedIntLE(InputStream in) throws IOException {
-        return (in.read() << 8*0) 
-             | (in.read() << 8*1)
-             | (in.read() << 8*2)
-             | (in.read() << 8*3);
+        return (in.read() << 8 * 0) 
+             | (in.read() << 8 * 1)
+             | (in.read() << 8 * 2)
+             | (in.read() << 8 * 3);
     }
 
     /**
@@ -102,10 +102,10 @@ public class Utils {
      * @return The integer read (MUST BE TREATED WITH SPECIAL CARE TO AVOID SIGNEDNESS)
      */
     public static int readUnsignedIntLE(byte[] buffer, int offset) {
-        return (buffer[offset++] << 8*0)
-             | (buffer[offset++] << 8*1)
-             | (buffer[offset++] << 8*2)
-             | (buffer[offset]   << 8*3);
+        return (buffer[offset++] << 8 * 0)
+             | (buffer[offset++] << 8 * 1)
+             | (buffer[offset++] << 8 * 2)
+             | (buffer[offset]   << 8 * 3);
     }
 
     /**
@@ -136,10 +136,10 @@ public class Utils {
      * @param value The value to write
      */
     public static void writeUnsignedIntLE(OutputStream out, int value) throws IOException {
-        out.write(value >>> 8*0);
-        out.write(value >>> 8*1);
-        out.write(value >>> 8*2);
-        out.write(value >>> 8*3);
+        out.write(value >>> 8 * 0);
+        out.write(value >>> 8 * 1);
+        out.write(value >>> 8 * 2);
+        out.write(value >>> 8 * 3);
     }
 
     /**
@@ -151,10 +151,10 @@ public class Utils {
      * @param value The value to write
      */
     public static void writeUnsignedIntLE(byte[] buffer, int offset, int value) {
-        buffer[offset++] = (byte) (value >>> 8*0);
-        buffer[offset++] = (byte) (value >>> 8*1);
-        buffer[offset++] = (byte) (value >>> 8*2);
-        buffer[offset]   = (byte) (value >>> 8*3);
+        buffer[offset++] = (byte) (value >>> 8 * 0);
+        buffer[offset++] = (byte) (value >>> 8 * 1);
+        buffer[offset++] = (byte) (value >>> 8 * 2);
+        buffer[offset]   = (byte) (value >>> 8 * 3);
     }
 
 
@@ -285,7 +285,7 @@ public class Utils {
             case 2:
                 h ^= (data[(length & ~3) + 1] & 0xff) << 8;
             case 1:
-                h ^= (data[length & ~3] & 0xff);
+                h ^= data[length & ~3] & 0xff;
                 h *= m;
         }
 
@@ -348,11 +348,11 @@ public class Utils {
     public static <T> String join(Collection<T> list, String seperator) {
         StringBuilder sb = new StringBuilder();
         Iterator<T> iter = list.iterator();
-        while(iter.hasNext()) {
+        while (iter.hasNext()) {
             sb.append(iter.next());
-            if(iter.hasNext())
-            sb.append(seperator);  
+            if (iter.hasNext())
+                sb.append(seperator);  
         }
-      return sb.toString();
+        return sb.toString();
     }
 }

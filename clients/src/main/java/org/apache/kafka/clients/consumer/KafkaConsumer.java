@@ -30,13 +30,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.ConnectionState;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.internals.Heartbeat;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
-import org.apache.kafka.clients.producer.ProducerConfig;
-import org.apache.kafka.clients.producer.internals.Metadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -78,7 +78,6 @@ import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestSend;
-import org.apache.kafka.common.utils.ClientUtils;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -380,7 +379,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final Logger log = LoggerFactory.getLogger(KafkaConsumer.class);
     private static final long EARLIEST_OFFSET_TIMESTAMP = -2L;
     private static final long LATEST_OFFSET_TIMESTAMP = -1L;
-    private static final AtomicInteger consumerAutoId = new AtomicInteger(1);
+    private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     private final Time time;
     private final ConsumerMetrics metrics;
@@ -547,15 +546,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                                                                   TimeUnit.MILLISECONDS);
         String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
         String jmxPrefix = "kafka.consumer";
-        if(clientId .length() <= 0)
-          clientId = "consumer-" + consumerAutoId.getAndIncrement();
+        if (clientId.length() <= 0)
+          clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
         List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
                                                                         MetricsReporter.class);
         reporters.add(new JmxReporter(jmxPrefix));
         Metrics metrics = new Metrics(metricConfig, reporters, time);
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.metadata = new Metadata(retryBackoffMs, config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG));
-        List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
+        List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
         this.metadata.update(Cluster.bootstrap(addresses), 0);
 
         String metricsGroup = "consumer";
@@ -1554,23 +1553,31 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                                         "The maximum lag for any partition in this window",
                                         tags), new Max());
 
+            Measurable numParts = 
+                new Measurable() {
+                    public double measure(MetricConfig config, long now) {
+                        return subscriptions.assignedPartitions().size();
+                    }
+                };
             metrics.addMetric(new MetricName("assigned-partitions",
                                              metricsGroup,
                                              "The number of partitions currently assigned to this consumer",
-                                             tags), new Measurable() {
-                public double measure(MetricConfig config, long now) {
-                    return subscriptions.assignedPartitions().size();
-                }
-            });
-
+                                             tags),
+                              numParts);
+                              
+            
+            Measurable lastHeartbeat =                               
+                new Measurable() {
+                    public double measure(MetricConfig config, long now) {
+                        return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
+                    }
+                };
             metrics.addMetric(new MetricName("last-heartbeat-seconds-ago",
                                              metricsGroup,
                                              "The number of seconds since the last controller heartbeat",
-                                             tags), new Measurable() {
-                public double measure(MetricConfig config, long now) {
-                    return TimeUnit.SECONDS.convert(now - heartbeat.lastHeartbeatSend(), TimeUnit.MILLISECONDS);
-                }
-            });
+                                             tags), 
+                                             
+                              lastHeartbeat);
         }
 
         public void recordTopicFetchMetrics(String topic, int bytes, int records) {

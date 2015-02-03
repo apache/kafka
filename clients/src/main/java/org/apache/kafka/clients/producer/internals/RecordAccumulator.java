@@ -102,26 +102,27 @@ public final class RecordAccumulator {
     private void registerMetrics(Metrics metrics, String metricGrpName, Map<String, String> metricTags) {
 
         MetricName metricName = new MetricName("waiting-threads", metricGrpName, "The number of user threads blocked waiting for buffer memory to enqueue their records", metricTags);
-        metrics.addMetric(metricName,
-                          new Measurable() {
-                              public double measure(MetricConfig config, long now) {
-                                  return free.queued();
-                              }
-                          });
+        Measurable waitingThreads = new Measurable() {
+            public double measure(MetricConfig config, long now) {
+                return free.queued();
+            }
+        };
+        metrics.addMetric(metricName, waitingThreads);
+                 
         metricName = new MetricName("buffer-total-bytes", metricGrpName, "The maximum amount of buffer memory the client can use (whether or not it is currently used).", metricTags);
-        metrics.addMetric(metricName,
-                          new Measurable() {
-                              public double measure(MetricConfig config, long now) {
-                                  return free.totalMemory();
-                              }
-                          });
+        Measurable totalBytes = new Measurable() {
+            public double measure(MetricConfig config, long now) {
+                return free.totalMemory();
+            }
+        };
+        metrics.addMetric(metricName, totalBytes);
         metricName = new MetricName("buffer-available-bytes", metricGrpName, "The total amount of buffer memory that is not being used (either unallocated or in the free list).", metricTags);
-        metrics.addMetric(metricName,
-                          new Measurable() {
-                              public double measure(MetricConfig config, long now) {
-                                  return free.availableMemory();
-                              }
-                          });
+        Measurable availableBytes = new Measurable() {
+            public double measure(MetricConfig config, long now) {
+                return free.availableMemory();
+            }
+        };
+        metrics.addMetric(metricName, availableBytes);
     }
 
     /**
@@ -228,8 +229,7 @@ public final class RecordAccumulator {
                         boolean sendable = full || expired || exhausted || closed;
                         if (sendable && !backingOff) {
                             readyNodes.add(leader);
-                        }
-                        else {
+                        } else {
                             // Note that this results in a conservative estimate since an un-sendable partition may have
                             // a leader that will later be found to have sendable data. However, this is good enough
                             // since we'll just wake up and then sleep again for the remaining time.

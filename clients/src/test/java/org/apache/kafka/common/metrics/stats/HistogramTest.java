@@ -22,7 +22,6 @@ import java.util.Arrays;
 import java.util.Random;
 
 
-import org.apache.kafka.common.metrics.stats.Histogram;
 import org.apache.kafka.common.metrics.stats.Histogram.BinScheme;
 import org.apache.kafka.common.metrics.stats.Histogram.ConstantBinScheme;
 import org.apache.kafka.common.metrics.stats.Histogram.LinearBinScheme;

@@ -32,6 +32,7 @@ public class MockProducerTest {
     private String topic = "topic";
 
     @Test
+    @SuppressWarnings("unchecked")
     public void testAutoCompleteMock() throws Exception {
         MockProducer producer = new MockProducer(true);
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<byte[], byte[]>(topic, "key".getBytes(), "value".getBytes());

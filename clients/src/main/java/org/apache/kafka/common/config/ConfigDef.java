@@ -53,6 +53,7 @@ public class ConfigDef {
 
     /**
      * Returns unmodifiable set of properties names defined in this {@linkplain ConfigDef}
+     * 
      * @return new unmodifiable {@link Set} instance containing the keys
      */
     public Set<String> names() {
@@ -61,6 +62,7 @@ public class ConfigDef {
 
     /**
      * Define a new configuration
+     * 
      * @param name The name of the config parameter
      * @param type The type of the config
      * @param defaultValue The default value to use if this config isn't present
@@ -69,16 +71,23 @@ public class ConfigDef {
      * @param documentation The documentation string for the config
      * @return This ConfigDef so you can chain calls
      */
-    public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation) {
+    public ConfigDef define(String name,
+                            Type type,
+                            Object defaultValue,
+                            Validator validator,
+                            Importance importance,
+                            String documentation) {
         if (configKeys.containsKey(name))
             throw new ConfigException("Configuration " + name + " is defined twice.");
-        Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE : parseType(name, defaultValue, type);
+        Object parsedDefault = defaultValue == NO_DEFAULT_VALUE ? NO_DEFAULT_VALUE
+                : parseType(name, defaultValue, type);
         configKeys.put(name, new ConfigKey(name, type, parsedDefault, validator, importance, documentation));
         return this;
     }
 
     /**
      * Define a new configuration with no special validation logic
+     * 
      * @param name The name of the config parameter
      * @param type The type of the config
      * @param defaultValue The default value to use if this config isn't present
@@ -92,6 +101,7 @@ public class ConfigDef {
 
     /**
      * Define a required parameter with no default value
+     * 
      * @param name The name of the config parameter
      * @param type The type of the config
      * @param validator A validator to use in checking the correctness of the config
@@ -105,6 +115,7 @@ public class ConfigDef {
 
     /**
      * Define a required parameter with no default value and no special validation logic
+     * 
      * @param name The name of the config parameter
      * @param type The type of the config
      * @param importance The importance of this config: is this something you will likely need to change.
@@ -120,6 +131,7 @@ public class ConfigDef {
      * that the keys of the map are strings, but the values can either be strings or they may already be of the
      * appropriate type (int, string, etc). This will work equally well with either java.util.Properties instances or a
      * programmatically constructed map.
+     * 
      * @param props The configs to parse and validate
      * @return Parsed and validated configs. The key will be the config name and the value will be the value parsed into
      *         the appropriate type (int, string, etc)
@@ -132,7 +144,8 @@ public class ConfigDef {
             if (props.containsKey(key.name))
                 value = parseType(key.name, props.get(key.name), key.type);
             else if (key.defaultValue == NO_DEFAULT_VALUE)
-                throw new ConfigException("Missing required configuration \"" + key.name + "\" which has no default value.");
+                throw new ConfigException("Missing required configuration \"" + key.name
+                        + "\" which has no default value.");
             else
                 value = key.defaultValue;
             if (key.validator != null)
@@ -144,6 +157,7 @@ public class ConfigDef {
 
     /**
      * Parse a value according to its expected type.
+     * 
      * @param name The config name
      * @param value The config value
      * @param type The expected type
@@ -157,14 +171,13 @@ public class ConfigDef {
             switch (type) {
                 case BOOLEAN:
                     if (value instanceof String) {
-                    	if (trimmed.equalsIgnoreCase("true"))
-                    		return true;
-                    	else if (trimmed.equalsIgnoreCase("false"))
-                    		return false;
-                    	else
-                    		throw new ConfigException(name, value, "Expected value to be either true or false");
-                    }
-                    else if (value instanceof Boolean)
+                        if (trimmed.equalsIgnoreCase("true"))
+                            return true;
+                        else if (trimmed.equalsIgnoreCase("false"))
+                            return false;
+                        else
+                            throw new ConfigException(name, value, "Expected value to be either true or false");
+                    } else if (value instanceof Boolean)
                         return value;
                     else
                         throw new ConfigException(name, value, "Expected value to be either true or false");
@@ -172,7 +185,8 @@ public class ConfigDef {
                     if (value instanceof String)
                         return trimmed;
                     else
-                        throw new ConfigException(name, value, "Expected value to be a string, but it was a " + value.getClass().getName());
+                        throw new ConfigException(name, value, "Expected value to be a string, but it was a "
+                                + value.getClass().getName());
                 case INT:
                     if (value instanceof Integer) {
                         return (Integer) value;
@@ -256,6 +270,7 @@ public class ConfigDef {
 
         /**
          * A numeric range that checks only the lower bound
+         * 
          * @param min The minimum acceptable value
          */
         public static Range atLeast(Number min) {
@@ -287,31 +302,29 @@ public class ConfigDef {
         }
     }
 
-  public static class ValidString implements Validator {
-    List<String> validStrings;
+    public static class ValidString implements Validator {
+        private final List<String> validStrings;
 
-    private ValidString(List<String> validStrings) {
-      this.validStrings = validStrings;
+        private ValidString(List<String> validStrings) {
+            this.validStrings = validStrings;
+        }
+
+        public static ValidString in(String... validStrings) {
+            return new ValidString(Arrays.asList(validStrings));
+        }
+
+        @Override
+        public void ensureValid(String name, Object o) {
+            String s = (String) o;
+            if (!validStrings.contains(s))
+                throw new ConfigException(name, o, "String must be one of: " + Utils.join(validStrings, ", "));
+        }
+
+        public String toString() {
+            return "[" + Utils.join(validStrings, ", ") + "]";
+        }
+
     }
-
-    public static ValidString in(String... validStrings) {
-      return new ValidString(Arrays.asList(validStrings));
-    }
-
-    @Override
-    public void ensureValid(String name, Object o) {
-      String s = (String) o;
-      if (!validStrings.contains(s)) {
-        throw new ConfigException(name,o,"String must be one of: " + Utils.join(validStrings, ", "));
-      }
-
-    }
-
-    public String toString() {
-      return "[" + Utils.join(validStrings, ", ") + "]";
-    }
-
-  }
 
     private static class ConfigKey {
         public final String name;
@@ -321,7 +334,12 @@ public class ConfigDef {
         public final Validator validator;
         public final Importance importance;
 
-        public ConfigKey(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation) {
+        public ConfigKey(String name,
+                         Type type,
+                         Object defaultValue,
+                         Validator validator,
+                         Importance importance,
+                         String documentation) {
             super();
             this.name = name;
             this.type = type;

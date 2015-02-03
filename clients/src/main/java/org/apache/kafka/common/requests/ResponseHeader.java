@@ -30,7 +30,7 @@ import org.apache.kafka.common.protocol.types.Struct;
  */
 public class ResponseHeader extends AbstractRequestResponse {
 
-    private static Field CORRELATION_KEY_FIELD = RESPONSE_HEADER.get("correlation_id");
+    private static final Field CORRELATION_KEY_FIELD = RESPONSE_HEADER.get("correlation_id");
 
     private final int correlationId;
 
@@ -50,7 +50,7 @@ public class ResponseHeader extends AbstractRequestResponse {
     }
 
     public static ResponseHeader parse(ByteBuffer buffer) {
-        return new ResponseHeader(((Struct) Protocol.RESPONSE_HEADER.read(buffer)));
+        return new ResponseHeader((Struct) Protocol.RESPONSE_HEADER.read(buffer));
     }
 
 }

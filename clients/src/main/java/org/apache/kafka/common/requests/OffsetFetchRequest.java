@@ -83,7 +83,7 @@ public class OffsetFetchRequest extends AbstractRequestResponse {
             }
         }
         groupId = struct.getString(GROUP_ID_KEY_NAME);
-   }
+    }
 
     public String groupId() {
         return groupId;
@@ -94,6 +94,6 @@ public class OffsetFetchRequest extends AbstractRequestResponse {
     }
 
     public static OffsetFetchRequest parse(ByteBuffer buffer) {
-        return new OffsetFetchRequest(((Struct) CURRENT_SCHEMA.read(buffer)));
+        return new OffsetFetchRequest((Struct) CURRENT_SCHEMA.read(buffer));
     }
 }

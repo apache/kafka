@@ -35,13 +35,13 @@ public class SerializationTest {
 
     @Test
     public void testStringSerializer() {
-       String str = "my string";
+        String str = "my string";
         String mytopic = "testTopic";
         List<String> encodings = new ArrayList<String>();
         encodings.add("UTF8");
         encodings.add("UTF-16");
 
-        for ( String encoding : encodings) {
+        for (String encoding : encodings) {
             SerDeser<String> serDeser = getStringSerDeser(encoding);
             Serializer<String> serializer = serDeser.serializer;
             Deserializer<String> deserializer = serDeser.deserializer;

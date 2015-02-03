@@ -22,9 +22,9 @@ import org.apache.kafka.common.TopicPartition;
 public class NoOpConsumerRebalanceCallback implements ConsumerRebalanceCallback {
 
     @Override
-    public void onPartitionsAssigned(Consumer<?,?> consumer, Collection<TopicPartition> partitions) {}
+    public void onPartitionsAssigned(Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {}
 
     @Override
-    public void onPartitionsRevoked(Consumer<?,?> consumer, Collection<TopicPartition> partitions) {}
+    public void onPartitionsRevoked(Consumer<?, ?> consumer, Collection<TopicPartition> partitions) {}
 
 }

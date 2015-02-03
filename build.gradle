@@ -345,6 +345,7 @@ project(':examples') {
 }
 
 project(':clients') {
+  apply plugin: 'checkstyle'
   archivesBaseName = "kafka-clients"
 
   dependencies {
@@ -379,4 +380,9 @@ project(':clients') {
   artifacts {
     archives testJar
   }
+  
+  checkstyle {
+     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }

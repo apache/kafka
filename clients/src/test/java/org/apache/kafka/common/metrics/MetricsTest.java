@@ -36,7 +36,7 @@ import org.junit.Test;
 
 public class MetricsTest {
 
-    private static double EPS = 0.000001;
+    private static final double EPS = 0.000001;
 
     MockTime time = new MockTime();
     Metrics metrics = new Metrics(new MetricConfig(), Arrays.asList((MetricsReporter) new JmxReporter()), time);
@@ -71,7 +71,7 @@ public class MetricsTest {
         s.add(new MetricName("test.count", "grp1"), new Count());
         s.add(new Percentiles(100, -100, 100, BucketSizing.CONSTANT,
                              new Percentile(new MetricName("test.median", "grp1"), 50.0),
-                             new Percentile(new MetricName("test.perc99_9", "grp1"),99.9)));
+                             new Percentile(new MetricName("test.perc99_9", "grp1"), 99.9)));
 
         Sensor s2 = metrics.sensor("test.sensor2");
         s2.add(new MetricName("s2.total", "grp1"), new Total());

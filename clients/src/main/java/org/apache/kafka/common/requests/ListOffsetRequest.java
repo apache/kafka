@@ -58,7 +58,7 @@ public class ListOffsetRequest extends AbstractRequestResponse {
     }
     
     public ListOffsetRequest(Map<TopicPartition, PartitionData> offsetData) {
-    	this(-1, offsetData);
+        this(-1, offsetData);
     }
 
     public ListOffsetRequest(int replicaId, Map<TopicPartition, PartitionData> offsetData) {
@@ -114,6 +114,6 @@ public class ListOffsetRequest extends AbstractRequestResponse {
     }
 
     public static ListOffsetRequest parse(ByteBuffer buffer) {
-        return new ListOffsetRequest(((Struct) CURRENT_SCHEMA.read(buffer)));
+        return new ListOffsetRequest((Struct) CURRENT_SCHEMA.read(buffer));
     }
 }

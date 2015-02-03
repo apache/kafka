@@ -31,7 +31,7 @@ public class PartitionerTest {
     private Node node0 = new Node(0, "localhost", 99);
     private Node node1 = new Node(1, "localhost", 100);
     private Node node2 = new Node(2, "localhost", 101);
-    private Node[] nodes = new Node[] { node0, node1, node2 };
+    private Node[] nodes = new Node[] {node0, node1, node2};
     private String topic = "test";
     private List<PartitionInfo> partitions = asList(new PartitionInfo(topic, 0, node0, nodes, nodes),
                                                     new PartitionInfo(topic, 1, node1, nodes, nodes),

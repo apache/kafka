@@ -245,7 +245,7 @@ public class Struct {
     public ByteBuffer[] toBytes() {
         ByteBuffer buffer = ByteBuffer.allocate(sizeOf());
         writeTo(buffer);
-        return new ByteBuffer[] { buffer };
+        return new ByteBuffer[] {buffer};
     }
 
     @Override

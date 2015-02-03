@@ -71,7 +71,7 @@ public class Rate implements MeasurableStat {
             case MILLISECONDS:
                 return time;
             case SECONDS:
-                return time / (1000.0);
+                return time / 1000.0;
             case MINUTES:
                 return time / (60.0 * 1000.0);
             case HOURS:

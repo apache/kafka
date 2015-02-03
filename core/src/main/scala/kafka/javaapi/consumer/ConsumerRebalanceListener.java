@@ -17,9 +17,6 @@
 
 package kafka.javaapi.consumer;
 
-import kafka.common.TopicAndPartition;
-import kafka.consumer.ConsumerThreadId;
-
 import java.util.Map;
 import java.util.Set;
 

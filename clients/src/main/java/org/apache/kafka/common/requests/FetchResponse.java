@@ -106,6 +106,6 @@ public class FetchResponse extends AbstractRequestResponse {
     }
 
     public static FetchResponse parse(ByteBuffer buffer) {
-        return new FetchResponse(((Struct) CURRENT_SCHEMA.read(buffer)));
+        return new FetchResponse((Struct) CURRENT_SCHEMA.read(buffer));
     }
 }

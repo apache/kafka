@@ -60,7 +60,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @SuppressWarnings({"unchecked", "rawtypes"})
 public class KafkaMigrationTool
 {
-  private static final org.apache.log4j.Logger logger = org.apache.log4j.Logger.getLogger(KafkaMigrationTool.class.getName());
+  private static final org.apache.log4j.Logger log = org.apache.log4j.Logger.getLogger(KafkaMigrationTool.class.getName());
   private static final String KAFKA_07_STATIC_CONSUMER_CLASS_NAME = "kafka.consumer.Consumer";
   private static final String KAFKA_07_CONSUMER_CONFIG_CLASS_NAME = "kafka.consumer.ConsumerConfig";
   private static final String KAFKA_07_CONSUMER_STREAM_CLASS_NAME = "kafka.consumer.KafkaStream";
@@ -194,7 +194,7 @@ public class KafkaMigrationTool
       kafkaConsumerProperties_07.load(new FileInputStream(consumerConfigFile_07));
       /** Disable shallow iteration because the message format is different between 07 and 08, we have to get each individual message **/
       if(kafkaConsumerProperties_07.getProperty("shallow.iterator.enable", "").equals("true")) {
-        logger.warn("Shallow iterator should not be used in the migration tool");
+        log.warn("Shallow iterator should not be used in the migration tool");
         kafkaConsumerProperties_07.setProperty("shallow.iterator.enable", "false");
       }
       Object consumerConfig_07 = ConsumerConfigConstructor_07.newInstance(kafkaConsumerProperties_07);
@@ -230,7 +230,7 @@ public class KafkaMigrationTool
           try {
             ConsumerConnectorShutdownMethod_07.invoke(consumerConnector_07);
           } catch(Exception e) {
-            logger.error("Error while shutting down Kafka consumer", e);
+            log.error("Error while shutting down Kafka consumer", e);
           }
           for(MigrationThread migrationThread : migrationThreads) {
             migrationThread.shutdown();
@@ -241,7 +241,7 @@ public class KafkaMigrationTool
           for(ProducerThread producerThread : producerThreads) {
             producerThread.awaitShutdown();
           }
-          logger.info("Kafka migration tool shutdown successfully");
+          log.info("Kafka migration tool shutdown successfully");
         }
       });
 
@@ -266,7 +266,7 @@ public class KafkaMigrationTool
     }
     catch (Throwable e){
       System.out.println("Kafka migration tool failed due to: " + Utils.stackTrace(e));
-      logger.error("Kafka migration tool failed: ", e);
+      log.error("Kafka migration tool failed: ", e);
     }
   }
 
@@ -388,7 +388,7 @@ public class KafkaMigrationTool
           KeyedMessage<byte[], byte[]> data = producerDataChannel.receiveRequest();
           if(!data.equals(shutdownMessage)) {
             producer.send(data);
-            if(logger.isDebugEnabled()) logger.debug("Sending message %s".format(new String(data.message())));
+            if(logger.isDebugEnabled()) logger.debug(String.format("Sending message %s", new String(data.message())));
           }
           else
             break;

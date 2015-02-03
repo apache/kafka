@@ -14,7 +14,6 @@ package org.apache.kafka.common.network;
 
 import java.io.EOFException;
 import java.io.IOException;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.CancelledKeyException;
@@ -275,7 +274,7 @@ public class Selector implements Selectable {
                     }
                 } catch (IOException e) {
                     String desc = socketDescription(channel);
-                    if(e instanceof EOFException)
+                    if (e instanceof EOFException)
                         log.info("Connection {} disconnected", desc);
                     else
                         log.warn("Error in I/O with connection to {}", desc, e);
@@ -290,9 +289,9 @@ public class Selector implements Selectable {
     
     private String socketDescription(SocketChannel channel) {
         Socket socket = channel.socket();
-        if(socket == null)
+        if (socket == null)
             return "[unconnected socket]";
-        else if(socket.getInetAddress() != null)
+        else if (socket.getInetAddress() != null)
             return socket.getInetAddress().toString();
         else
             return socket.getLocalAddress().toString();
@@ -525,7 +524,7 @@ public class Selector implements Selectable {
                     String metricGrpName = metricGrpPrefix + "-node-metrics";
 
                     Map<String, String> tags = new LinkedHashMap<String, String>(metricTags);
-                    tags.put("node-id", "node-"+node);
+                    tags.put("node-id", "node-" + node);
 
                     nodeRequest = this.metrics.sensor(nodeRequestName);
                     MetricName metricName = new MetricName("outgoing-byte-rate", metricGrpName, tags);

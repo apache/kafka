@@ -63,7 +63,7 @@ public class RecordTest {
     @Test
     public void testChecksum() {
         assertEquals(record.checksum(), record.computeChecksum());
-        assertEquals(record.checksum(), record.computeChecksum(
+        assertEquals(record.checksum(), Record.computeChecksum(
             this.key == null ? null : this.key.array(),
             this.value == null ? null : this.value.array(),
             this.compression, 0, -1));
@@ -102,7 +102,7 @@ public class RecordTest {
         for (byte[] key : Arrays.asList(null, "".getBytes(), "key".getBytes(), payload))
             for (byte[] value : Arrays.asList(null, "".getBytes(), "value".getBytes(), payload))
                 for (CompressionType compression : CompressionType.values())
-                    values.add(new Object[] { key, value, compression });
+                    values.add(new Object[] {key, value, compression});
         return values;
     }
 

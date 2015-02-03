@@ -40,7 +40,6 @@ import org.junit.Test;
  */
 public class SelectorTest {
 
-    private static final List<NetworkSend> EMPTY = new ArrayList<NetworkSend>();
     private static final int BUFFER_SIZE = 4 * 1024;
 
     private EchoServer server;

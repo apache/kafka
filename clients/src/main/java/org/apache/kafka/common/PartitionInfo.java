@@ -72,7 +72,7 @@ public class PartitionInfo {
         return String.format("Partition(topic = %s, partition = %d, leader = %s, replicas = %s, isr = %s",
                              topic,
                              partition,
-                             leader == null? "none" : leader.id(),
+                             leader == null ? "none" : leader.id(),
                              fmtNodeIds(replicas),
                              fmtNodeIds(inSyncReplicas));
     }

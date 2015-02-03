@@ -107,7 +107,7 @@ public class BufferPoolTest {
 
     private CountDownLatch asyncDeallocate(final BufferPool pool, final ByteBuffer buffer) {
         final CountDownLatch latch = new CountDownLatch(1);
-        new Thread() {
+        Thread thread = new Thread() {
             public void run() {
                 try {
                     latch.await();
@@ -116,13 +116,14 @@ public class BufferPoolTest {
                 }
                 pool.deallocate(buffer);
             }
-        }.start();
+        };
+        thread.start();
         return latch;
     }
 
     private CountDownLatch asyncAllocate(final BufferPool pool, final int size) {
         final CountDownLatch completed = new CountDownLatch(1);
-        new Thread() {
+        Thread thread = new Thread() {
             public void run() {
                 try {
                     pool.allocate(size);
@@ -132,7 +133,8 @@ public class BufferPoolTest {
                     completed.countDown();
                 }
             }
-        }.start();
+        };
+        thread.start();
         return completed;
     }
 
@@ -172,12 +174,12 @@ public class BufferPoolTest {
             try {
                 for (int i = 0; i < iterations; i++) {
                     int size;
-                    if (TestUtils.random.nextBoolean())
+                    if (TestUtils.RANDOM.nextBoolean())
                         // allocate poolable size
                         size = pool.poolableSize();
                     else
                         // allocate a random size
-                        size = TestUtils.random.nextInt((int) pool.totalMemory());
+                        size = TestUtils.RANDOM.nextInt((int) pool.totalMemory());
                     ByteBuffer buffer = pool.allocate(size);
                     pool.deallocate(buffer);
                 }

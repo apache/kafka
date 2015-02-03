@@ -23,12 +23,6 @@ import static org.junit.Assert.fail;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.SchemaException;
-import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.protocol.types.Type;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -53,8 +47,8 @@ public class ProtocolSerializationTest {
                                              .set("int64", (long) 1)
                                              .set("string", "1")
                                              .set("bytes", "1".getBytes())
-                                             .set("array", new Object[] { 1 });
-        this.struct.set("struct", this.struct.instance("struct").set("field", new Object[] { 1, 2, 3 }));
+                                             .set("array", new Object[] {1});
+        this.struct.set("struct", this.struct.instance("struct").set("field", new Object[] {1, 2, 3}));
     }
 
     @Test
@@ -68,9 +62,9 @@ public class ProtocolSerializationTest {
         check(Type.STRING, "A\u00ea\u00f1\u00fcC");
         check(Type.BYTES, ByteBuffer.allocate(0));
         check(Type.BYTES, ByteBuffer.wrap("abcd".getBytes()));
-        check(new ArrayOf(Type.INT32), new Object[] { 1, 2, 3, 4 });
+        check(new ArrayOf(Type.INT32), new Object[] {1, 2, 3, 4});
         check(new ArrayOf(Type.STRING), new Object[] {});
-        check(new ArrayOf(Type.STRING), new Object[] { "hello", "there", "beautiful" });
+        check(new ArrayOf(Type.STRING), new Object[] {"hello", "there", "beautiful"});
     }
 
     @Test

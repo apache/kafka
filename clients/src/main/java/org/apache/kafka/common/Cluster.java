@@ -40,8 +40,8 @@ public final class Cluster {
         this.nodes = Collections.unmodifiableList(copy);
         
         this.nodesById = new HashMap<Integer, Node>();
-        for(Node node: nodes)
-          this.nodesById.put(node.id(), node);
+        for (Node node: nodes)
+            this.nodesById.put(node.id(), node);
 
         // index the partitions by topic/partition for quick lookup
         this.partitionsByTopicPartition = new HashMap<TopicPartition, PartitionInfo>(partitions.size());
