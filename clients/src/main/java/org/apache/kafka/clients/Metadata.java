@@ -148,6 +148,14 @@ public final class Metadata {
     }
     
     /**
+     * Record an attempt to update the metadata that failed. We need to keep track of this
+     * to avoid retrying immediately.
+     */
+    public synchronized void failedUpdate(long now) {
+        this.lastRefreshMs = now;
+    }
+    
+    /**
      * @return The current metadata version
      */
     public synchronized int version() {

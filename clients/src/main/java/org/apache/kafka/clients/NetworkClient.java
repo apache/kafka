@@ -381,10 +381,12 @@ public class NetworkClient implements KafkaClient {
         Cluster cluster = response.cluster();
         // don't update the cluster if there are no valid nodes...the topic we want may still be in the process of being
         // created which means we will get errors and no nodes until it exists
-        if (cluster.nodes().size() > 0)
+        if (cluster.nodes().size() > 0) {
             this.metadata.update(cluster, now);
-        else
+        } else {
             log.trace("Ignoring empty metadata response with correlation id {}.", header.correlationId());
+            this.metadata.failedUpdate(now);
+        }
     }
 
     /**
