@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
@@ -39,7 +40,7 @@ public final class RecordBatch {
     public long lastAttemptMs;
     public final MemoryRecords records;
     public final TopicPartition topicPartition;
-    private final ProduceRequestResult produceFuture;
+    public final ProduceRequestResult produceFuture;
     private final List<Thunk> thunks;
 
     public RecordBatch(TopicPartition tp, MemoryRecords records, long now) {
@@ -77,7 +78,6 @@ public final class RecordBatch {
      * @param exception The exception that occurred (or null if the request was successful)
      */
     public void done(long baseOffset, RuntimeException exception) {
-        this.produceFuture.done(topicPartition, baseOffset, exception);
         log.trace("Produced messages to topic-partition {} with base offset offset {} and error: {}.",
                   topicPartition,
                   baseOffset,
@@ -86,14 +86,17 @@ public final class RecordBatch {
         for (int i = 0; i < this.thunks.size(); i++) {
             try {
                 Thunk thunk = this.thunks.get(i);
-                if (exception == null)
-                    thunk.callback.onCompletion(thunk.future.get(), null);
-                else
+                if (exception == null) {
+                    RecordMetadata metadata = new RecordMetadata(this.topicPartition,  baseOffset, thunk.future.relativeOffset());
+                    thunk.callback.onCompletion(metadata, null);
+                } else {
                     thunk.callback.onCompletion(null, exception);
+                }
             } catch (Exception e) {
                 log.error("Error executing user-provided callback on message for topic-partition {}:", topicPartition, e);
             }
         }
+        this.produceFuture.done(topicPartition, baseOffset, exception);
     }
 
     /**

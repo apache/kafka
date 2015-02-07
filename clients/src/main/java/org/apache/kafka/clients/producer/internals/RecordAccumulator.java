@@ -23,6 +23,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.common.Cluster;
@@ -55,6 +56,7 @@ public final class RecordAccumulator {
     private static final Logger log = LoggerFactory.getLogger(RecordAccumulator.class);
 
     private volatile boolean closed;
+    private volatile AtomicInteger flushesInProgress;
     private int drainIndex;
     private final int batchSize;
     private final long lingerMs;
@@ -62,6 +64,7 @@ public final class RecordAccumulator {
     private final BufferPool free;
     private final Time time;
     private final ConcurrentMap<TopicPartition, Deque<RecordBatch>> batches;
+    private final IncompleteRecordBatches incomplete;
 
     /**
      * Create a new record accumulator
@@ -89,12 +92,14 @@ public final class RecordAccumulator {
                              Map<String, String> metricTags) {
         this.drainIndex = 0;
         this.closed = false;
+        this.flushesInProgress = new AtomicInteger(0);
         this.batchSize = batchSize;
         this.lingerMs = lingerMs;
         this.retryBackoffMs = retryBackoffMs;
         this.batches = new CopyOnWriteMap<TopicPartition, Deque<RecordBatch>>();
         String metricGrpName = "producer-metrics";
         this.free = new BufferPool(totalSize, batchSize, blockOnBufferFull, metrics, time , metricGrpName , metricTags);
+        this.incomplete = new IncompleteRecordBatches();
         this.time = time;
         registerMetrics(metrics, metricGrpName, metricTags);
     }
@@ -146,9 +151,8 @@ public final class RecordAccumulator {
             RecordBatch last = dq.peekLast();
             if (last != null) {
                 FutureRecordMetadata future = last.tryAppend(key, value, callback);
-                if (future != null) {
+                if (future != null)
                     return new RecordAppendResult(future, dq.size() > 1 || last.records.isFull(), false);
-                }
             }
         }
 
@@ -161,8 +165,7 @@ public final class RecordAccumulator {
             if (last != null) {
                 FutureRecordMetadata future = last.tryAppend(key, value, callback);
                 if (future != null) {
-                    // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen
-                    // often...
+                    // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
                     free.deallocate(buffer);
                     return new RecordAppendResult(future, dq.size() > 1 || last.records.isFull(), false);
                 }
@@ -172,6 +175,7 @@ public final class RecordAccumulator {
             FutureRecordMetadata future = Utils.notNull(batch.tryAppend(key, value, callback));
 
             dq.addLast(batch);
+            incomplete.add(batch);
             return new RecordAppendResult(future, dq.size() > 1 || batch.records.isFull(), true);
         }
     }
@@ -226,7 +230,7 @@ public final class RecordAccumulator {
                         long timeLeftMs = Math.max(timeToWaitMs - waitedTimeMs, 0);
                         boolean full = deque.size() > 1 || batch.records.isFull();
                         boolean expired = waitedTimeMs >= timeToWaitMs;
-                        boolean sendable = full || expired || exhausted || closed;
+                        boolean sendable = full || expired || exhausted || closed || flushInProgress();
                         if (sendable && !backingOff) {
                             readyNodes.add(leader);
                         } else {
@@ -266,7 +270,6 @@ public final class RecordAccumulator {
      * @param maxSize The maximum number of bytes to drain
      * @param now The current unix time in milliseconds
      * @return A list of {@link RecordBatch} for each node specified with total size less than the requested maxSize.
-     *         TODO: There may be a starvation issue due to iteration order
      */
     public Map<Integer, List<RecordBatch>> drain(Cluster cluster, Set<Node> nodes, int maxSize, long now) {
         if (nodes.isEmpty())
@@ -324,7 +327,31 @@ public final class RecordAccumulator {
      * Deallocate the record batch
      */
     public void deallocate(RecordBatch batch) {
+        incomplete.remove(batch);
         free.deallocate(batch.records.buffer(), batch.records.capacity());
+    }
+    
+    /**
+     * Are there any threads currently waiting on a flush?
+     */
+    private boolean flushInProgress() {
+        return flushesInProgress.get() > 0;
+    }
+    
+    /**
+     * Initiate the flushing of data from the accumulator...this makes all requests immediately ready
+     */
+    public void beginFlush() {
+        this.flushesInProgress.getAndIncrement();
+    }
+    
+    /**
+     * Mark all partitions as ready to send and block until the send is complete
+     */
+    public void awaitFlushCompletion() throws InterruptedException {
+        for (RecordBatch batch: this.incomplete.all())
+            batch.produceFuture.await();
+        this.flushesInProgress.decrementAndGet();
     }
 
     /**
@@ -334,7 +361,9 @@ public final class RecordAccumulator {
         this.closed = true;
     }
 
-
+    /*
+     * Metadata about a record just appended to the record accumulator
+     */
     public final static class RecordAppendResult {
         public final FutureRecordMetadata future;
         public final boolean batchIsFull;
@@ -347,6 +376,9 @@ public final class RecordAccumulator {
         }
     }
 
+    /*
+     * The set of nodes that have at least one complete record batch in the accumulator
+     */
     public final static class ReadyCheckResult {
         public final Set<Node> readyNodes;
         public final long nextReadyCheckDelayMs;
@@ -356,6 +388,37 @@ public final class RecordAccumulator {
             this.readyNodes = readyNodes;
             this.nextReadyCheckDelayMs = nextReadyCheckDelayMs;
             this.unknownLeadersExist = unknownLeadersExist;
+        }
+    }
+    
+    /*
+     * A threadsafe helper class to hold RecordBatches that haven't been ack'd yet
+     */
+    private final static class IncompleteRecordBatches {
+        private final Set<RecordBatch> incomplete;
+        
+        public IncompleteRecordBatches() {
+            this.incomplete = new HashSet<RecordBatch>();
+        }
+        
+        public void add(RecordBatch batch) {
+            synchronized (incomplete) {
+                this.incomplete.add(batch);
+            }
+        }
+        
+        public void remove(RecordBatch batch) {
+            synchronized (incomplete) {
+                boolean removed = this.incomplete.remove(batch);
+                if (!removed)
+                    throw new IllegalStateException("Remove from the incomplete set failed. This should be impossible.");
+            }
+        }
+        
+        public Iterable<RecordBatch> all() {
+            synchronized (incomplete) {
+                return new ArrayList<RecordBatch>(this.incomplete);
+            }
         }
     }
 }

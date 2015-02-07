@@ -10,7 +10,7 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.apache.kafka.clients.producer;
+package org.apache.kafka.clients.producer.internals;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -27,8 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.apache.kafka.clients.producer.internals.RecordAccumulator;
-import org.apache.kafka.clients.producer.internals.RecordBatch;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -202,6 +200,29 @@ public class RecordAccumulatorTest {
         // Note this can actually be < linger time because it may use delays from partitions that aren't sendable
         // but have leaders with other sendable data.
         assertTrue("Next check time should be defined by node2, at most linger time", result.nextReadyCheckDelayMs <= lingerMs);
+    }
+    
+    @Test
+    public void testFlush() throws Exception {
+        long lingerMs = Long.MAX_VALUE;
+        final RecordAccumulator accum = new RecordAccumulator(4 * 1024, 64 * 1024, lingerMs, 100L, false, metrics, time, metricTags);
+        for (int i = 0; i < 100; i++)
+            accum.append(new TopicPartition(topic, i % 3), key, value, CompressionType.NONE, null);
+        RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
+        assertEquals("No nodes should be ready.", 0, result.readyNodes.size());
+        
+        accum.beginFlush();
+        result = accum.ready(cluster, time.milliseconds());
+        
+        // drain and deallocate all batches
+        Map<Integer, List<RecordBatch>> results = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        for (List<RecordBatch> batches: results.values())
+            for (RecordBatch batch: batches)
+                accum.deallocate(batch);
+        
+        // should be complete with no unsent records.
+        accum.awaitFlushCompletion();
+        assertFalse(accum.hasUnsent());
     }
 
 }

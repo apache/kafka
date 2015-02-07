@@ -128,6 +128,11 @@ public class MockProducer implements Producer<byte[], byte[]> {
             return offset;
         }
     }
+    
+    public synchronized void flush() {
+        while (!this.completions.isEmpty())
+            completeNext();
+    }
 
     public List<PartitionInfo> partitionsFor(String topic) {
         return this.cluster.partitionsForTopic(topic);

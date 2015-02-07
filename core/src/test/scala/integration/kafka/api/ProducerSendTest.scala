@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.api.test
+package kafka.api
 
 import java.lang.{Integer, IllegalArgumentException}
 
@@ -27,7 +27,6 @@ import org.junit.Assert._
 import kafka.server.KafkaConfig
 import kafka.utils.{TestZKUtils, TestUtils}
 import kafka.consumer.SimpleConsumer
-import kafka.api.FetchRequestBuilder
 import kafka.message.Message
 import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.common.errors.SerializationException
@@ -66,13 +65,6 @@ class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
     super.tearDown()
   }
 
-  class CheckErrorCallback extends Callback {
-    def onCompletion(metadata: RecordMetadata, exception: Exception) {
-      if (exception != null)
-        fail("Send callback returns the following exception", exception)
-    }
-  }
-
   /**
    * testSendOffset checks the basic send API behavior
    *
@@ -82,23 +74,36 @@ class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
   @Test
   def testSendOffset() {
     var producer = TestUtils.createNewProducer(brokerList)
-
-    val callback = new CheckErrorCallback
+    val partition = new Integer(0)
+    
+    object callback extends Callback {
+      var offset = 0L
+      def onCompletion(metadata: RecordMetadata, exception: Exception) {
+        if (exception == null) {
+          assertEquals(offset, metadata.offset())
+          assertEquals(topic, metadata.topic())
+          assertEquals(partition, metadata.partition())
+          offset += 1
+        } else {
+          fail("Send callback returns the following exception", exception)
+        }
+      }
+    }
 
     try {
       // create topic
       TestUtils.createTopic(zkClient, topic, 1, 2, servers)
 
       // send a normal record
-      val record0 = new ProducerRecord[Array[Byte],Array[Byte]](topic, new Integer(0), "key".getBytes, "value".getBytes)
+      val record0 = new ProducerRecord[Array[Byte],Array[Byte]](topic, partition, "key".getBytes, "value".getBytes)
       assertEquals("Should have offset 0", 0L, producer.send(record0, callback).get.offset)
 
       // send a record with null value should be ok
-      val record1 = new ProducerRecord[Array[Byte],Array[Byte]](topic, new Integer(0), "key".getBytes, null)
+      val record1 = new ProducerRecord[Array[Byte],Array[Byte]](topic, partition, "key".getBytes, null)
       assertEquals("Should have offset 1", 1L, producer.send(record1, callback).get.offset)
 
       // send a record with null key should be ok
-      val record2 = new ProducerRecord[Array[Byte],Array[Byte]](topic, new Integer(0), null, "value".getBytes)
+      val record2 = new ProducerRecord[Array[Byte],Array[Byte]](topic, partition, null, "value".getBytes)
       assertEquals("Should have offset 2", 2L, producer.send(record2, callback).get.offset)
 
       // send a record with null part id should be ok
@@ -107,7 +112,7 @@ class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
 
       // send a record with null topic should fail
       try {
-        val record4 = new ProducerRecord[Array[Byte],Array[Byte]](null, new Integer(0), "key".getBytes, "value".getBytes)
+        val record4 = new ProducerRecord[Array[Byte],Array[Byte]](null, partition, "key".getBytes, "value".getBytes)
         producer.send(record4, callback)
         fail("Should not allow sending a record without topic")
       } catch {
@@ -117,7 +122,7 @@ class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
 
       // non-blocking send a list of records
       for (i <- 1 to numRecords)
-        producer.send(record0)
+        producer.send(record0, callback)
 
       // check that all messages have been acked via offset
       assertEquals("Should have offset " + (numRecords + 4), numRecords + 4L, producer.send(record0, callback).get.offset)
@@ -235,7 +240,7 @@ class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
 
       val responses =
         for (i <- 1 to numRecords)
-        yield producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic, partition, null, ("value" + i).getBytes))
+          yield producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic, partition, null, ("value" + i).getBytes))
       val futures = responses.toList
       futures.map(_.get)
       for (future <- futures)
@@ -294,4 +299,27 @@ class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
       }
     }
   }
+  
+  /**
+   * Test that flush immediately sends all accumulated requests.
+   */
+  @Test
+  def testFlush() {
+    var producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
+    try {
+      TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+      val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, "value".getBytes)
+      for(i <- 0 until 50) {
+        val responses = (0 until numRecords) map (i => producer.send(record))
+        assertTrue("No request is complete.", responses.forall(!_.isDone()))
+        producer.flush()
+        assertTrue("All requests are complete.", responses.forall(_.isDone()))
+      }
+    } finally {
+      if (producer != null)
+        producer.close()
+    }
+  }
+  
+
 }

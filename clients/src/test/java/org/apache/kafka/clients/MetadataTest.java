@@ -10,12 +10,14 @@
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
  */
-package org.apache.kafka.clients.producer;
+package org.apache.kafka.clients;
 
-import org.apache.kafka.clients.Metadata;
+import java.util.concurrent.atomic.AtomicBoolean;
+
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.test.TestUtils;
+import org.junit.After;
 import org.junit.Test;
 
 import static org.junit.Assert.*;
@@ -25,6 +27,12 @@ public class MetadataTest {
     private long refreshBackoffMs = 100;
     private long metadataExpireMs = 1000;
     private Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs);
+    private AtomicBoolean backgroundError = new AtomicBoolean(false);
+    
+    @After
+    public void tearDown() {
+        assertFalse(backgroundError.get());
+    }
 
     @Test
     public void testMetadata() throws Exception {
@@ -83,8 +91,8 @@ public class MetadataTest {
                 while (metadata.fetch().partitionsForTopic(topic) == null) {
                     try {
                         metadata.awaitUpdate(metadata.requestUpdate(), refreshBackoffMs);
-                    } catch (TimeoutException e) {
-                        // let it go
+                    } catch (Exception e) {
+                        backgroundError.set(true);
                     }
                 }
             }

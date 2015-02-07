@@ -45,6 +45,11 @@ public interface Producer<K, V> extends Closeable {
      * Send a record and invoke the given callback when the record has been acknowledged by the server
      */
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback);
+    
+    /**
+     * Flush any accumulated records from the producer. Blocks until all sends are complete.
+     */
+    public void flush();
 
     /**
      * Get a list of partitions for the given topic for custom partition assignment. The partition metadata will change

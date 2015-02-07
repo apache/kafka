@@ -14,9 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.producer;
+package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.producer.internals.BufferPool;
+import org.apache.kafka.clients.producer.BufferExhaustedException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
@@ -146,7 +146,7 @@ public class BufferPoolTest {
         int numThreads = 10;
         final int iterations = 50000;
         final int poolableSize = 1024;
-        final int totalMemory = numThreads / 2 * poolableSize;
+        final long totalMemory = numThreads / 2 * poolableSize;
         final BufferPool pool = new BufferPool(totalMemory, poolableSize, true, metrics, time, metricGroup, metricTags);
         List<StressTestThread> threads = new ArrayList<StressTestThread>();
         for (int i = 0; i < numThreads; i++)

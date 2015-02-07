@@ -67,6 +67,12 @@ public class MockProducerTest {
             assertEquals(e, err.getCause());
         }
         assertFalse("No more requests to complete", producer.completeNext());
+        
+        Future<RecordMetadata> md3 = producer.send(record1);
+        Future<RecordMetadata> md4 = producer.send(record2);
+        assertTrue("Requests should not be completed.", !md3.isDone() && !md4.isDone());
+        producer.flush();
+        assertTrue("Requests should be completed.", md3.isDone() && md4.isDone());
     }
 
     private boolean isError(Future<?> future) {

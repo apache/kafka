@@ -102,15 +102,21 @@ public final class ProducerRecord<K, V> {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (!(o instanceof ProducerRecord)) return false;
+        if (this == o)
+            return true;
+        else if (!(o instanceof ProducerRecord))
+            return false;
 
-        ProducerRecord that = (ProducerRecord) o;
+        ProducerRecord<?, ?> that = (ProducerRecord<?, ?>) o;
 
-        if (key != null ? !key.equals(that.key) : that.key != null) return false;
-        if (partition != null ? !partition.equals(that.partition) : that.partition != null) return false;
-        if (topic != null ? !topic.equals(that.topic) : that.topic != null) return false;
-        if (value != null ? !value.equals(that.value) : that.value != null) return false;
+        if (key != null ? !key.equals(that.key) : that.key != null) 
+            return false;
+        else if (partition != null ? !partition.equals(that.partition) : that.partition != null) 
+            return false;
+        else if (topic != null ? !topic.equals(that.topic) : that.topic != null) 
+            return false;
+        else if (value != null ? !value.equals(that.value) : that.value != null) 
+            return false;
 
         return true;
     }
