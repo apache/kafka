@@ -442,7 +442,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
                         val producer: MirrorMakerBaseProducer,
                         val threadId: Int) extends Thread with Logging with KafkaMetricsGroup {
     private val threadName = "mirrormaker-producer-" + threadId
-    private val shutdownComplete: CountDownLatch = new CountDownLatch(1)
+    private val shutdownLatch: CountDownLatch = new CountDownLatch(1)
     this.logIdent = "[%s] ".format(threadName)
 
     setName(threadName)
@@ -466,7 +466,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         case t: Throwable =>
           fatal("Producer thread failure due to ", t)
       } finally {
-        shutdownComplete.countDown()
+        shutdownLatch.countDown()
         info("Producer thread stopped")
         // if it exits accidentally, stop the entire mirror maker
         if (!isShuttingdown.get()) {
@@ -490,7 +490,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     def awaitShutdown() {
       try {
-        shutdownComplete.await()
+        shutdownLatch.await()
         producer.close()
         info("Producer thread shutdown complete")
       } catch {

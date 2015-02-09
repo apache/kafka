@@ -30,9 +30,28 @@ object DelayedOperationKey {
   val globalLabel = "All"
 }
 
+/* used by delayed-produce and delayed-fetch operations */
 case class TopicPartitionOperationKey(topic: String, partition: Int) extends DelayedOperationKey {
 
   def this(topicAndPartition: TopicAndPartition) = this(topicAndPartition.topic, topicAndPartition.partition)
 
   override def keyLabel = "%s-%d".format(topic, partition)
+}
+
+/* used by bucketized delayed-heartbeat operations */
+case class TTimeMsKey(time: Long) extends DelayedOperationKey {
+
+  override def keyLabel = "%d".format(time)
+}
+
+/* used by delayed-join-group operations */
+case class ConsumerKey(groupId: String, consumerId: String) extends DelayedOperationKey {
+
+  override def keyLabel = "%s-%s".format(groupId, consumerId)
+}
+
+/* used by delayed-rebalance operations */
+case class ConsumerGroupKey(groupId: String) extends DelayedOperationKey {
+
+  override def keyLabel = groupId
 }

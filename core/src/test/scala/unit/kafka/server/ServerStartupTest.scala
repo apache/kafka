@@ -48,19 +48,4 @@ class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
     val pathExists = ZkUtils.pathExists(zkClient, zookeeperChroot)
     assertTrue(pathExists)
   }
-
-  def testServerStartupConsecutively() {
-    server.shutdown()
-    try {
-      intercept[IllegalStateException]{
-        server.startup()
-        server.startup()
-      }
-    }
-    finally {
-      server.shutdown()
-    }
-
-  }
-
 }

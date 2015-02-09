@@ -96,6 +96,8 @@ class OffsetManager(val config: OffsetManagerConfig,
 
   private val shuttingDown = new AtomicBoolean(false)
 
+  this.logIdent = "[Offset Manager on Broker " + replicaManager.config.brokerId + "]: "
+
   scheduler.schedule(name = "offsets-cache-compactor",
                      fun = compact,
                      period = config.offsetsRetentionCheckIntervalMs,

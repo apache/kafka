@@ -17,24 +17,27 @@
 
 package kafka.server
 
-import scala.collection.{Seq, Set, mutable}
 import kafka.api._
+import kafka.common._
 import kafka.cluster.Broker
-import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.utils.Utils._
-import kafka.common.{ErrorMapping, ReplicaNotAvailableException, LeaderNotAvailableException}
-import kafka.common.TopicAndPartition
 import kafka.controller.KafkaController.StateChangeLogger
+import scala.collection.{Seq, Set, mutable}
+import kafka.utils.Logging
+import kafka.utils.Utils._
+
+import java.util.concurrent.locks.ReentrantReadWriteLock
 
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
  *  UpdateMetadataRequest from the controller. Every broker maintains the same cache, asynchronously.
  */
-private[server] class MetadataCache {
+private[server] class MetadataCache(brokerId: Int) extends Logging {
   private val cache: mutable.Map[String, mutable.Map[Int, PartitionStateInfo]] =
     new mutable.HashMap[String, mutable.Map[Int, PartitionStateInfo]]()
   private var aliveBrokers: Map[Int, Broker] = Map()
   private val partitionMetadataLock = new ReentrantReadWriteLock()
+
+  this.logIdent = "[Kafka Metadata Cache on broker %d] ".format(brokerId)
 
   def getTopicMetadata(topics: Set[String]) = {
     val isAllTopics = topics.isEmpty
@@ -68,7 +71,7 @@ private[server] class MetadataCache {
                 new PartitionMetadata(partitionId, leaderInfo, replicaInfo, isrInfo, ErrorMapping.NoError)
               } catch {
                 case e: Throwable =>
-                  debug("Error while fetching metadata for %s. Possible cause: %s".format(topicPartition, e.getMessage))
+                  debug("Error while fetching metadata for %s: %s".format(topicPartition, e.toString))
                   new PartitionMetadata(partitionId, leaderInfo, replicaInfo, isrInfo,
                     ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
               }

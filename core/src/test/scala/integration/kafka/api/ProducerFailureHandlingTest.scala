@@ -272,7 +272,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
       for (server <- servers) {
         server.shutdown()
         server.awaitShutdown()
-        server.startup
+        server.startup()
 
         Thread.sleep(2000)
       }

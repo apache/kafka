@@ -34,30 +34,43 @@ import kafka.common.{ErrorMapping, InconsistentBrokerIdException, GenerateBroker
 import kafka.network.{Receive, BlockingChannel, SocketServer}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
+import kafka.coordinator.ConsumerCoordinator
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
  * to start up and shutdown a single Kafka node.
  */
 class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logging with KafkaMetricsGroup {
-  private var isShuttingDown = new AtomicBoolean(false)
+  private val startupComplete = new AtomicBoolean(false)
+  private val isShuttingDown = new AtomicBoolean(false)
+  private val isStartingUp = new AtomicBoolean(false)
+
   private var shutdownLatch = new CountDownLatch(1)
-  private var startupComplete = new AtomicBoolean(false)
-  private var brokerId: Int = -1
 
   val brokerState: BrokerState = new BrokerState
-  val correlationId: AtomicInteger = new AtomicInteger(0)
+
+  var apis: KafkaApis = null
   var socketServer: SocketServer = null
   var requestHandlerPool: KafkaRequestHandlerPool = null
+
   var logManager: LogManager = null
+
   var offsetManager: OffsetManager = null
-  var kafkaHealthcheck: KafkaHealthcheck = null
-  var topicConfigManager: TopicConfigManager = null
+
   var replicaManager: ReplicaManager = null
-  var apis: KafkaApis = null
+
+  var topicConfigManager: TopicConfigManager = null
+
+  var consumerCoordinator: ConsumerCoordinator = null
+
   var kafkaController: KafkaController = null
+
   val kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
+
+  var kafkaHealthcheck: KafkaHealthcheck = null
+
   var zkClient: ZkClient = null
+  val correlationId: AtomicInteger = new AtomicInteger(0)
   val brokerMetaPropsFile = "meta.properties"
   val brokerMetadataCheckpoints = config.logDirs.map(logDir => (logDir, new BrokerMetadataCheckpoint(new File(logDir + File.separator +brokerMetaPropsFile)))).toMap
 
@@ -75,69 +88,87 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   def startup() {
     try {
       info("starting")
-      brokerState.newState(Starting)
-      isShuttingDown = new AtomicBoolean(false)
-      shutdownLatch = new CountDownLatch(1)
 
-      /* start scheduler */
-      kafkaScheduler.startup()
+      if(isShuttingDown.get)
+        throw new IllegalStateException("Kafka server is still shutting down, cannot re-start!")
 
-      /* setup zookeeper */
-      zkClient = initZk()
+      if(startupComplete.get)
+        return
 
-      /* start log manager */
-      logManager = createLogManager(zkClient, brokerState)
-      logManager.startup()
+      val canStartup = isStartingUp.compareAndSet(false, true)
+      if (canStartup) {
+        brokerState.newState(Starting)
 
-      /* generate brokerId */
-      config.brokerId =  getBrokerId
-      this.logIdent = "[Kafka Server " + config.brokerId + "], "
+        /* start scheduler */
+        kafkaScheduler.startup()
 
-      socketServer = new SocketServer(config.brokerId,
-                                      config.hostName,
-                                      config.port,
-                                      config.numNetworkThreads,
-                                      config.queuedMaxRequests,
-                                      config.socketSendBufferBytes,
-                                      config.socketReceiveBufferBytes,
-                                      config.socketRequestMaxBytes,
-                                      config.maxConnectionsPerIp,
-                                      config.connectionsMaxIdleMs,
-                                      config.maxConnectionsPerIpOverrides)
-      socketServer.startup()
+        /* setup zookeeper */
+        zkClient = initZk()
 
-      replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler, logManager, isShuttingDown)
+        /* start log manager */
+        logManager = createLogManager(zkClient, brokerState)
+        logManager.startup()
 
-      /* start offset manager */
-      offsetManager = createOffsetManager()
+        /* generate brokerId */
+        config.brokerId =  getBrokerId
+        this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
-      kafkaController = new KafkaController(config, zkClient, brokerState)
+        socketServer = new SocketServer(config.brokerId,
+          config.hostName,
+          config.port,
+          config.numNetworkThreads,
+          config.queuedMaxRequests,
+          config.socketSendBufferBytes,
+          config.socketReceiveBufferBytes,
+          config.socketRequestMaxBytes,
+          config.maxConnectionsPerIp,
+          config.connectionsMaxIdleMs,
+          config.maxConnectionsPerIpOverrides)
+        socketServer.startup()
 
-      /* start processing requests */
-      apis = new KafkaApis(socketServer.requestChannel, replicaManager, offsetManager, zkClient, config.brokerId, config, kafkaController)
-      requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
-      brokerState.newState(RunningAsBroker)
+        /* start replica manager */
+        replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler, logManager, isShuttingDown)
+        replicaManager.startup()
 
-      Mx4jLoader.maybeLoad()
+        /* start offset manager */
+        offsetManager = createOffsetManager()
 
-      replicaManager.startup()
+        /* start kafka controller */
+        kafkaController = new KafkaController(config, zkClient, brokerState)
+        kafkaController.startup()
 
-      kafkaController.startup()
+        /* start kafka coordinator */
+        consumerCoordinator = new ConsumerCoordinator(config, zkClient)
+        consumerCoordinator.startup()
 
-      topicConfigManager = new TopicConfigManager(zkClient, logManager)
-      topicConfigManager.startup()
+        /* start processing requests */
+        apis = new KafkaApis(socketServer.requestChannel, replicaManager, offsetManager, consumerCoordinator, kafkaController, zkClient, config.brokerId, config)
+        requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
+        brokerState.newState(RunningAsBroker)
 
-      /* tell everyone we are alive */
-      kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, config.advertisedHostName, config.advertisedPort, config.zkSessionTimeoutMs, zkClient)
-      kafkaHealthcheck.startup()
+        Mx4jLoader.maybeLoad()
 
-      registerStats()
-      startupComplete.set(true)
-      info("started")
+        /* start topic config manager */
+        topicConfigManager = new TopicConfigManager(zkClient, logManager)
+        topicConfigManager.startup()
+
+        /* tell everyone we are alive */
+        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, config.advertisedHostName, config.advertisedPort, config.zkSessionTimeoutMs, zkClient)
+        kafkaHealthcheck.startup()
+
+        /* register broker metrics */
+        registerStats()
+
+        shutdownLatch = new CountDownLatch(1)
+        startupComplete.set(true)
+        isStartingUp.set(false)
+        info("started")
+      }
     }
     catch {
       case e: Throwable =>
         fatal("Fatal error during KafkaServer startup. Prepare to shutdown", e)
+        isStartingUp.set(false)
         shutdown()
         throw e
     }
@@ -271,6 +302,10 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   def shutdown() {
     try {
       info("shutting down")
+
+      if(isStartingUp.get)
+        throw new IllegalStateException("Kafka server is still starting up, cannot shut down!")
+
       val canShutdown = isShuttingDown.compareAndSet(false, true)
       if (canShutdown) {
         Utils.swallow(controlledShutdown())
@@ -290,20 +325,25 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
           Utils.swallow(replicaManager.shutdown())
         if(logManager != null)
           Utils.swallow(logManager.shutdown())
+        if(consumerCoordinator != null)
+          Utils.swallow(consumerCoordinator.shutdown())
         if(kafkaController != null)
           Utils.swallow(kafkaController.shutdown())
         if(zkClient != null)
           Utils.swallow(zkClient.close())
 
         brokerState.newState(NotRunning)
-        shutdownLatch.countDown()
+
         startupComplete.set(false)
+        isShuttingDown.set(false)
+        shutdownLatch.countDown()
         info("shut down completed")
       }
     }
     catch {
       case e: Throwable =>
         fatal("Fatal error during KafkaServer shutdown.", e)
+        isShuttingDown.set(false)
         throw e
     }
   }

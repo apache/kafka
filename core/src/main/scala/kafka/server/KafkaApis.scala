@@ -17,24 +17,20 @@
 
 package kafka.server
 
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.JoinGroupResponse
 import org.apache.kafka.common.requests.HeartbeatResponse
-import org.apache.kafka.common.requests.ResponseHeader
-import org.apache.kafka.common.protocol.types.Struct
+import org.apache.kafka.common.TopicPartition
 
 import kafka.api._
+import kafka.admin.AdminUtils
 import kafka.common._
+import kafka.controller.KafkaController
+import kafka.coordinator.ConsumerCoordinator
 import kafka.log._
 import kafka.network._
-import kafka.admin.AdminUtils
 import kafka.network.RequestChannel.Response
-import kafka.controller.KafkaController
 import kafka.utils.{SystemTime, Logging}
 
-import java.nio.ByteBuffer
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic._
 import scala.collection._
 
 import org.I0Itec.zkclient.ZkClient
@@ -45,14 +41,14 @@ import org.I0Itec.zkclient.ZkClient
 class KafkaApis(val requestChannel: RequestChannel,
                 val replicaManager: ReplicaManager,
                 val offsetManager: OffsetManager,
+                val coordinator: ConsumerCoordinator,
+                val controller: KafkaController,
                 val zkClient: ZkClient,
                 val brokerId: Int,
-                val config: KafkaConfig,
-                val controller: KafkaController) extends Logging {
+                val config: KafkaConfig) extends Logging {
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
-  val metadataCache = new MetadataCache
-  private var consumerGroupGenerationId = 0
+  val metadataCache = new MetadataCache(brokerId)
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -137,7 +133,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleOffsetCommitRequest(request: RequestChannel.Request) {
     val offsetCommitRequest = request.requestObj.asInstanceOf[OffsetCommitRequest]
 
-    // the callback for sending the response
+    // the callback for sending an offset commit response
     def sendResponseCallback(commitStatus: immutable.Map[TopicAndPartition, Short]) {
       commitStatus.foreach { case (topicAndPartition, errorCode) =>
         // we only print warnings for known errors here; only replica manager could see an unknown
@@ -169,7 +165,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleProducerRequest(request: RequestChannel.Request) {
     val produceRequest = request.requestObj.asInstanceOf[ProducerRequest]
 
-    // the callback for sending the response
+    // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) {
       var errorInResponse = false
       responseStatus.foreach { case (topicAndPartition, status) =>
@@ -224,7 +220,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleFetchRequest(request: RequestChannel.Request) {
     val fetchRequest = request.requestObj.asInstanceOf[FetchRequest]
 
-    // the callback for sending the response
+    // the callback for sending a fetch response
     def sendResponseCallback(responsePartitionData: Map[TopicAndPartition, FetchResponsePartitionData]) {
       responsePartitionData.foreach { case (topicAndPartition, data) =>
         // we only print warnings for known errors here; if it is unknown, it will cause
@@ -456,20 +452,42 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleJoinGroupRequest(request: RequestChannel.Request) {
     import JavaConversions._
-    val joinGroupReq = request.requestObj.asInstanceOf[JoinGroupRequestAndHeader]
-    val topics = joinGroupReq.body.topics().toSet
-    val partitions = this.replicaManager.logManager.allLogs.filter(log => topics.contains(log.topicAndPartition.topic))
-    val partitionList = partitions.map(_.topicAndPartition).map(tp => new org.apache.kafka.common.TopicPartition(tp.topic, tp.partition)).toBuffer
-    this.consumerGroupGenerationId += 1
-    val response = new JoinGroupResponse(ErrorMapping.NoError, this.consumerGroupGenerationId, joinGroupReq.body.consumerId, partitionList)
-    val send = new BoundedByteBufferSend(new JoinGroupResponseAndHeader(joinGroupReq.correlationId, response))
-    requestChannel.sendResponse(new RequestChannel.Response(request, send))
+
+    val joinGroupRequest = request.requestObj.asInstanceOf[JoinGroupRequestAndHeader]
+    
+    // the callback for sending a join-group response
+    def sendResponseCallback(partitions: List[TopicAndPartition], generationId: Int, errorCode: Short) {
+      val partitionList = partitions.map(tp => new TopicPartition(tp.topic, tp.partition)).toBuffer
+      val responseBody = new JoinGroupResponse(errorCode, generationId, joinGroupRequest.body.consumerId, partitionList)
+      val response = new JoinGroupResponseAndHeader(joinGroupRequest.correlationId, responseBody)
+      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+    }
+
+    // let the coordinator to handle join-group
+    coordinator.consumerJoinGroup(
+      joinGroupRequest.body.groupId(),
+      joinGroupRequest.body.consumerId(),
+      joinGroupRequest.body.topics().toList,
+      joinGroupRequest.body.sessionTimeout(),
+      joinGroupRequest.body.strategy(),
+      sendResponseCallback)
   }
   
   def handleHeartbeatRequest(request: RequestChannel.Request) {
-    val hbReq = request.requestObj.asInstanceOf[HeartbeatRequestAndHeader]
-    val send = new BoundedByteBufferSend(new HeartbeatResponseAndHeader(hbReq.correlationId, new HeartbeatResponse(Errors.NONE.code)))
-    requestChannel.sendResponse(new RequestChannel.Response(request, send))
+    val heartbeatRequest = request.requestObj.asInstanceOf[HeartbeatRequestAndHeader]
+
+    // the callback for sending a heartbeat response
+    def sendResponseCallback(errorCode: Short) {
+      val response = new HeartbeatResponseAndHeader(heartbeatRequest.correlationId, new HeartbeatResponse(errorCode))
+      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+    }
+
+    // let the coordinator to handle heartbeat
+    coordinator.consumerHeartbeat(
+      heartbeatRequest.body.groupId(),
+      heartbeatRequest.body.consumerId(),
+      heartbeatRequest.body.groupGenerationId(),
+      sendResponseCallback)
   }
   
   def close() {
