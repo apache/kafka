@@ -64,6 +64,7 @@ trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
     val index = TestUtils.random.nextInt(servers.length)
     if(alive(index)) {
       servers(index).shutdown()
+      servers(index).awaitShutdown()
       alive(index) = false
     }
     index

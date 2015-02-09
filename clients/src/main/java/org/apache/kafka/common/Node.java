@@ -82,7 +82,7 @@ public class Node {
 
     @Override
     public String toString() {
-        return "Node(" + (id < 0 ? "" : id + ", ") + host + ", " + port + ")";
+        return "Node(" + id + ", " + host + ", " + port + ")";
     }
 
 }

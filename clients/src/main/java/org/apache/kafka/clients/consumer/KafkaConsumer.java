@@ -1281,7 +1281,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (!resp.wasDisconnected()) {
                 ConsumerMetadataResponse response = new ConsumerMetadataResponse(resp.responseBody());
                 if (response.errorCode() == Errors.NONE.code())
-                    return new Node(Integer.MIN_VALUE, response.node().host(), response.node().port());
+                    return new Node(Integer.MAX_VALUE - response.node().id(), response.node().host(), response.node().port());
             }
         }
         return null;
