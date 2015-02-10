@@ -20,7 +20,7 @@ package kafka.admin
 import kafka.common._
 import kafka.cluster.Broker
 import kafka.log.LogConfig
-import kafka.utils.{Logging, ZkUtils, Json}
+import kafka.utils._
 import kafka.api.{TopicMetadata, PartitionMetadata}
 
 import java.util.Random
@@ -164,6 +164,60 @@ object AdminUtils extends Logging {
     ZkUtils.createPersistentPath(zkClient, ZkUtils.getDeleteTopicPath(topic))
   }
   
+  def isConsumerGroupActive(zkClient: ZkClient, group: String) = {
+    ZkUtils.getConsumersInGroup(zkClient, group).nonEmpty
+  }
+
+  /**
+   * Delete the whole directory of the given consumer group if the group is inactive.
+   *
+   * @param zkClient Zookeeper client
+   * @param group Consumer group
+   * @return whether or not we deleted the consumer group information
+   */
+  def deleteConsumerGroupInZK(zkClient: ZkClient, group: String) = {
+    if (!isConsumerGroupActive(zkClient, group)) {
+      val dir = new ZKGroupDirs(group)
+      ZkUtils.deletePathRecursive(zkClient, dir.consumerGroupDir)
+      true
+    }
+    else false
+  }
+
+  /**
+   * Delete the given consumer group's information for the given topic in Zookeeper if the group is inactive.
+   * If the consumer group consumes no other topics, delete the whole consumer group directory.
+   *
+   * @param zkClient Zookeeper client
+   * @param group Consumer group
+   * @param topic Topic of the consumer group information we wish to delete
+   * @return whether or not we deleted the consumer group information for the given topic
+   */
+  def deleteConsumerGroupInfoForTopicInZK(zkClient: ZkClient, group: String, topic: String) = {
+    val topics = ZkUtils.getTopicsByConsumerGroup(zkClient, group)
+    if (topics == Seq(topic)) {
+      deleteConsumerGroupInZK(zkClient, group)
+    }
+    else if (!isConsumerGroupActive(zkClient, group)) {
+      val dir = new ZKGroupTopicDirs(group, topic)
+      ZkUtils.deletePathRecursive(zkClient, dir.consumerOwnerDir)
+      ZkUtils.deletePathRecursive(zkClient, dir.consumerOffsetDir)
+      true
+    }
+    else false
+  }
+
+  /**
+   * Delete every inactive consumer group's information about the given topic in Zookeeper.
+   *
+   * @param zkClient Zookeeper client
+   * @param topic Topic of the consumer group information we wish to delete
+   */
+  def deleteAllConsumerGroupInfoForTopicInZK(zkClient: ZkClient, topic: String) {
+    val groups = ZkUtils.getAllConsumerGroupsForTopic(zkClient, topic)
+    groups.foreach(group => deleteConsumerGroupInfoForTopicInZK(zkClient, group, topic))
+  }
+
   def topicExists(zkClient: ZkClient, topic: String): Boolean = 
     zkClient.exists(ZkUtils.getTopicPath(topic))
     

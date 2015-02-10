@@ -749,6 +749,26 @@ object ZkUtils extends Logging {
       }.flatten.toSet
     }
   }
+
+  def getConsumerGroups(zkClient: ZkClient) = {
+    ZkUtils.getChildren(zkClient, ConsumersPath)
+  }
+
+  def getTopicsByConsumerGroup(zkClient: ZkClient,consumerGroup:String) = {
+    ZkUtils.getChildrenParentMayNotExist(zkClient, new ZKGroupDirs(consumerGroup).consumerGroupOwnersDir)
+  }
+
+  def getAllConsumerGroupsForTopic(zkClient: ZkClient, topic: String): Set[String] = {
+    val groups = ZkUtils.getChildrenParentMayNotExist(zkClient, ConsumersPath)
+    if (groups == null) Set.empty
+    else {
+      groups.foldLeft(Set.empty[String]) {(consumerGroupsForTopic, group) =>
+        val topics = getChildren(zkClient, new ZKGroupDirs(group).consumerGroupOffsetsDir)
+        if (topics.contains(topic)) consumerGroupsForTopic + group
+        else consumerGroupsForTopic
+      }
+    }
+  }
 }
 
 object ZKStringSerializer extends ZkSerializer {
@@ -769,11 +789,13 @@ class ZKGroupDirs(val group: String) {
   def consumerDir = ZkUtils.ConsumersPath
   def consumerGroupDir = consumerDir + "/" + group
   def consumerRegistryDir = consumerGroupDir + "/ids"
+  def consumerGroupOffsetsDir = consumerGroupDir + "/offsets"
+  def consumerGroupOwnersDir = consumerGroupDir + "/owners"
 }
 
 class ZKGroupTopicDirs(group: String, topic: String) extends ZKGroupDirs(group) {
-  def consumerOffsetDir = consumerGroupDir + "/offsets/" + topic
-  def consumerOwnerDir = consumerGroupDir + "/owners/" + topic
+  def consumerOffsetDir = consumerGroupOffsetsDir + "/" + topic
+  def consumerOwnerDir = consumerGroupOwnersDir + "/" + topic
 }
 
 
