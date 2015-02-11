@@ -1,0 +1,40 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+SLF4J_VERSION = 1.7.7
+SLF4J = slf4j-$(SLF4J_VERSION)
+
+override_dh_auto_build:
+	./gradlew jar
+
+# Do not install init script automatically
+override_dh_installinit:
+
+DESTDIR = debian/kafka-0.8.1
+override_dh_auto_install:
+	install -m 755 -d $(DESTDIR)/etc/kafka
+	install -m 644 config/*.properties $(DESTDIR)/etc/kafka
+	install -m 755 -d $(DESTDIR)/usr/lib/kafka
+	for i in `ls | grep -vE config\|debian\|perf\|examples\|gradle\|system_test`; do \
+	    cp -r $$i $(DESTDIR)/usr/lib/kafka || exit $$?; \
+	    done
+	find $(DESTDIR)/usr/lib/kafka -type f -a \
+	    \( -name \*.java -o -name \*.class -o \
+	    -name \*.scala -o -name \*.gradle -o -name \*.MF -o -name \*.html \) \
+	    -print -delete
+	for i in `seq 10`; do \
+	    find $(DESTDIR) -type d -empty -print -exec rmdir '{}' ';' || :; \
+	    done
+	find $(DESTDIR)/usr/lib/kafka -type f -a \
+	    \( -name README\* -o -name LICENSE -o -name NOTICE -o -name HEADER \) \
+	    -print -delete || :
+	find $(DESTDIR)/usr/lib/kafka -type d -a \
+	    \( -name test -o -name src -o -name tmp \) \
+	    -print -exec rm -rf '{}' ';' || :
+	ln -s /etc/kafka $(DESTDIR)/usr/lib/kafka/config
+	ln -s /var/log/kafka $(DESTDIR)/usr/lib/kafka/logs
+	sed -i 's#/tmp/zookeeper#/var/lib/kafka/zookeeper#' $(DESTDIR)/etc/kafka/zookeeper.properties
+	sed -i 's#/tmp/kafka-logs#/var/lib/kafka/logs#' $(DESTDIR)/etc/kafka/server.properties
+	install -m 755 -d $(DESTDIR)/var/lib/kafka $(DESTDIR)/var/log/kafka

@@ -1,0 +1,5 @@
+kafka-0.8.1 (0) unstable; urgency=low
+
+  * Create debian package
+
+ -- Norbert Hu <norbert@uber.com>  Fri, 10 Feb 2015 00:00:00 +0000
