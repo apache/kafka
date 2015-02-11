@@ -7,7 +7,7 @@ SLF4J_VERSION = 1.7.7
 SLF4J = slf4j-$(SLF4J_VERSION)
 
 override_dh_auto_build:
-	./gradlew jar
+	./gradlew -PscalaVersion=2.8.0 jar
 
 # Do not install init script automatically
 override_dh_installinit:
