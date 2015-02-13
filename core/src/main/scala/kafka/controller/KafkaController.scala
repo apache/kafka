@@ -365,6 +365,8 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
       controllerContext.epoch=0
       controllerContext.epochZkVersion=0
       brokerState.newState(RunningAsBroker)
+
+      info("Broker %d resigned as the controller".format(config.brokerId))
     }
   }
 

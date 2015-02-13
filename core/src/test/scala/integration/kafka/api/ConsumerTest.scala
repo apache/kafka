@@ -230,7 +230,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     assertEquals(1, parts.size)
     assertNotNull(parts(0).leader())
     
-    // shutdown the co-ordinator
+    // shutdown the coordinator
     val coordinator = parts(0).leader().id()
     this.servers(coordinator).shutdown()
     
@@ -239,6 +239,9 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
       consumer0.poll(50)
     assertEquals(2, callback.callsToAssigned)
     assertEquals(2, callback.callsToRevoked)
+
+    // restart the coordinator since it may also be hosting "test" topic
+    this.servers(coordinator).startup()
     
     consumer0.close()
   }
