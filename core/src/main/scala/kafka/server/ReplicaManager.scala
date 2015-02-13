@@ -29,6 +29,8 @@ import kafka.message.{ByteBufferMessageSet, MessageSet}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.{IOException, File}
 import java.util.concurrent.TimeUnit
+import org.apache.kafka.common.protocol.Errors
+
 import scala.Predef._
 import scala.collection._
 import scala.collection.mutable.HashMap
@@ -253,41 +255,64 @@ class ReplicaManager(val config: KafkaConfig,
                      messagesPerPartition: Map[TopicAndPartition, MessageSet],
                      responseCallback: Map[TopicAndPartition, ProducerResponseStatus] => Unit) {
 
-    val sTime = SystemTime.milliseconds
-    val localProduceResults = appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
-    debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
+    if (isValidRequiredAcks(requiredAcks)) {
 
-    val produceStatus = localProduceResults.map{ case (topicAndPartition, result) =>
-      topicAndPartition ->
-        ProducePartitionStatus(
-          result.info.lastOffset + 1, // required offset
-          ProducerResponseStatus(result.errorCode, result.info.firstOffset)) // response status
-    }
+      val sTime = SystemTime.milliseconds
+      val localProduceResults = appendToLocalLog(internalTopicsAllowed, messagesPerPartition, requiredAcks)
+      debug("Produce to local log in %d ms".format(SystemTime.milliseconds - sTime))
 
-    if(requiredAcks == 0 ||
-      requiredAcks == 1 ||
-      messagesPerPartition.size <= 0 ||
-      localProduceResults.values.count(_.error.isDefined) == messagesPerPartition.size) {
-      // in case of the following we can respond immediately:
-      //
-      // 1. required acks = 0 or 1
-      // 2. there is no data to append
-      // 3. all partition appends have failed
-      val produceResponseStatus = produceStatus.mapValues(status => status.responseStatus)
-      responseCallback(produceResponseStatus)
+      val produceStatus = localProduceResults.map { case (topicAndPartition, result) =>
+        topicAndPartition ->
+                ProducePartitionStatus(
+                  result.info.lastOffset + 1, // required offset
+                  ProducerResponseStatus(result.errorCode, result.info.firstOffset)) // response status
+      }
+
+      if (delayedRequestRequired(requiredAcks, messagesPerPartition, localProduceResults)) {
+        // create delayed produce operation
+        val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
+        val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback)
+
+        // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
+        val producerRequestKeys = messagesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
+
+        // try to complete the request immediately, otherwise put it into the purgatory
+        // this is because while the delayed produce operation is being created, new
+        // requests may arrive and hence make this operation completable.
+        delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
+
+      } else {
+        // we can respond immediately
+        val produceResponseStatus = produceStatus.mapValues(status => status.responseStatus)
+        responseCallback(produceResponseStatus)
+      }
     } else {
-      // create delayed produce operation
-      val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
-      val delayedProduce =  new DelayedProduce(timeout, produceMetadata, this, responseCallback)
-
-      // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
-      val producerRequestKeys = messagesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
-
-      // try to complete the request immediately, otherwise put it into the purgatory
-      // this is because while the delayed produce operation is being created, new
-      // requests may arrive and hence make this operation completable.
-      delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
+      // If required.acks is outside accepted range, something is wrong with the client
+      // Just return an error and don't handle the request at all
+      val responseStatus = messagesPerPartition.map {
+        case (topicAndPartition, messageSet) =>
+          (topicAndPartition ->
+                  ProducerResponseStatus(Errors.INVALID_REQUIRED_ACKS.code,
+                    LogAppendInfo.UnknownLogAppendInfo.firstOffset))
+      }
+      responseCallback(responseStatus)
     }
+  }
+
+  // If all the following conditions are true, we need to put a delayed produce request and wait for replication to complete
+  //
+  // 1. required acks = -1
+  // 2. there is data to append
+  // 3. at least one partition append was successful (fewer errors than partitions)
+  private def delayedRequestRequired(requiredAcks: Short, messagesPerPartition: Map[TopicAndPartition, MessageSet],
+                                       localProduceResults: Map[TopicAndPartition, LogAppendResult]): Boolean = {
+    requiredAcks == -1 &&
+    messagesPerPartition.size > 0 &&
+    localProduceResults.values.count(_.error.isDefined) < messagesPerPartition.size
+  }
+
+  private def isValidRequiredAcks(requiredAcks: Short): Boolean = {
+    requiredAcks == -1 || requiredAcks == 1 || requiredAcks == 0
   }
 
   /**

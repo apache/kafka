@@ -185,7 +185,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         // the producer client will know that some error has happened and will refresh its metadata
         if (errorInResponse) {
           info("Close connection due to error handling produce request with correlation id %d from client id %s with ack=0"
-            .format(produceRequest.correlationId, produceRequest.clientId))
+                  .format(produceRequest.correlationId, produceRequest.clientId))
           requestChannel.closeConnection(request.processor, request)
         } else {
           requestChannel.noOperation(request.processor, request)

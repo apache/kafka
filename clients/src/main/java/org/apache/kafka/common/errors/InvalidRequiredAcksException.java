@@ -16,15 +16,10 @@
  */
 package org.apache.kafka.common.errors;
 
-/**
- * Number of insync replicas for the partition is lower than min.insync.replicas This exception is raised when the low
- * ISR size is discovered *after* the message was already appended to the log. Producer retries will cause duplicates.
- */
-public class NotEnoughReplicasAfterAppendException extends RetriableException {
+public class InvalidRequiredAcksException extends ApiException {
     private static final long serialVersionUID = 1L;
 
-    public NotEnoughReplicasAfterAppendException(String message) {
+    public InvalidRequiredAcksException(String message) {
         super(message);
     }
-
 }

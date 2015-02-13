@@ -317,8 +317,6 @@ class Partition(val topic: String,
           } else {
             (true, ErrorMapping.NotEnoughReplicasAfterAppendCode)
           }
-        } else if (requiredAcks > 0 && numAcks >= requiredAcks) {
-          (true, ErrorMapping.NoError)
         } else
           (false, ErrorMapping.NoError)
       case None =>

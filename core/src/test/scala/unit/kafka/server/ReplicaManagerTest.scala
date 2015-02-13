@@ -17,15 +17,20 @@
 
 package kafka.server
 
+import kafka.api.{ProducerResponseStatus, SerializationTestUtils, ProducerRequest}
+import kafka.common.TopicAndPartition
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.File
 
+import org.apache.kafka.common.protocol.Errors
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
 import org.scalatest.junit.JUnit3Suite
 import org.junit.Test
+
+import scala.collection.Map
 
 class ReplicaManagerTest extends JUnit3Suite {
 
@@ -62,5 +67,26 @@ class ReplicaManagerTest extends JUnit3Suite {
 
     // shutdown the replica manager upon test completion
     rm.shutdown(false)
+  }
+
+  @Test
+  def testIllegalRequiredAcks() {
+    val props = TestUtils.createBrokerConfig(1)
+    val config = new KafkaConfig(props)
+    val zkClient = EasyMock.createMock(classOf[ZkClient])
+    val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
+    val time: MockTime = new MockTime()
+    val rm = new ReplicaManager(config, time, zkClient, new MockScheduler(time), mockLogMgr, new AtomicBoolean(false))
+    val produceRequest = new ProducerRequest(1, "client 1", 3, 1000, SerializationTestUtils.topicDataProducerRequest)
+    def callback(responseStatus: Map[TopicAndPartition, ProducerResponseStatus]) = {
+      assert(responseStatus.values.head.error == Errors.INVALID_REQUIRED_ACKS.code)
+    }
+
+    rm.appendMessages(timeout = 0, requiredAcks = 3, internalTopicsAllowed = false, messagesPerPartition = produceRequest.data, responseCallback = callback)
+
+    rm.shutdown(false);
+
+    TestUtils.verifyNonDaemonThreadsStatus
+
   }
 }
