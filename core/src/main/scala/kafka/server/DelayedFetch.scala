@@ -63,7 +63,7 @@ class DelayedFetch(override val keys: Seq[TopicAndPartition],
               debug("Satisfying fetch request %s since it is fetching later segments of partition %s.".format(fetch, topicAndPartition))
               return true
             } else if (fetchOffset.offsetOnOlderSegment(endOffset)) {
-              // Case C, this can happen when the folloer replica is lagging too much
+              // Case C, this can happen when the follower replica is lagging too much
               debug("Satisfying fetch request %s immediately since it is fetching older segments.".format(fetch))
               return true
             } else if (fetchOffset.precedes(endOffset)) {
