@@ -26,3 +26,5 @@ Vagrantfile.local
 
 config/server-*
 config/zookeeper-*
+core/data/*
+gradle/wrapper/*
