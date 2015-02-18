@@ -99,4 +99,28 @@ public final class ProducerRecord<K, V> {
         String value = this.value == null ? "null" : this.value.toString();
         return "ProducerRecord(topic=" + topic + ", partition=" + partition + ", key=" + key + ", value=" + value;
     }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof ProducerRecord)) return false;
+
+        ProducerRecord that = (ProducerRecord) o;
+
+        if (key != null ? !key.equals(that.key) : that.key != null) return false;
+        if (partition != null ? !partition.equals(that.partition) : that.partition != null) return false;
+        if (topic != null ? !topic.equals(that.topic) : that.topic != null) return false;
+        if (value != null ? !value.equals(that.value) : that.value != null) return false;
+
+        return true;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = topic != null ? topic.hashCode() : 0;
+        result = 31 * result + (partition != null ? partition.hashCode() : 0);
+        result = 31 * result + (key != null ? key.hashCode() : 0);
+        result = 31 * result + (value != null ? value.hashCode() : 0);
+        return result;
+    }
 }
