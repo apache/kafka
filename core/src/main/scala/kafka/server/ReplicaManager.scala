@@ -323,6 +323,9 @@ class ReplicaManager(val config: KafkaConfig,
                                requiredAcks: Short): Map[TopicAndPartition, LogAppendResult] = {
     trace("Append [%s] to local log ".format(messagesPerPartition))
     messagesPerPartition.map { case (topicAndPartition, messages) =>
+      BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).totalProduceRequestRate.mark()
+      BrokerTopicStats.getBrokerAllTopicsStats().totalProduceRequestRate.mark()
+
       // reject appending to internal topics if it is not allowed
       if (Topic.InternalTopics.contains(topicAndPartition.topic) && !internalTopicsAllowed) {
 
@@ -439,6 +442,9 @@ class ReplicaManager(val config: KafkaConfig,
                        readPartitionInfo: Map[TopicAndPartition, PartitionFetchInfo]): Map[TopicAndPartition, LogReadResult] = {
 
     readPartitionInfo.map { case (TopicAndPartition(topic, partition), PartitionFetchInfo(offset, fetchSize)) =>
+      BrokerTopicStats.getBrokerTopicStats(topic).totalFetchRequestRate.mark()
+      BrokerTopicStats.getBrokerAllTopicsStats().totalFetchRequestRate.mark()
+
       val partitionDataAndOffsetInfo =
         try {
           trace("Fetching log segment for topic %s, partition %d, offset %d, size %d".format(topic, partition, offset, fetchSize))
