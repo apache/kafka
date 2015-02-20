@@ -117,10 +117,10 @@ class KafkaConfig private (val props: VerifiableProperties) extends ZKConfig(pro
    * it will publish the same port that the broker binds to. */
   val advertisedPort: Int = props.getInt("advertised.port", port)
 
-  /* the SO_SNDBUFF buffer of the socket sever sockets */
+  /* the SO_SNDBUF buffer of the socket sever sockets */
   val socketSendBufferBytes: Int = props.getInt("socket.send.buffer.bytes", 100*1024)
 
-  /* the SO_RCVBUFF buffer of the socket sever sockets */
+  /* the SO_RCVBUF buffer of the socket sever sockets */
   val socketReceiveBufferBytes: Int = props.getInt("socket.receive.buffer.bytes", 100*1024)
 
   /* the maximum number of bytes in a socket request */
