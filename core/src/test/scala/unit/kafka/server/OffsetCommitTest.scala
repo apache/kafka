@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -46,13 +46,6 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
   override def setUp() {
     super.setUp()
     val config: Properties = createBrokerConfig(1, brokerPort)
-    // TODO: Currently, when there is no topic in a cluster, the controller doesn't send any UpdateMetadataRequest to
-    // the broker. As a result, the live broker list in metadataCache is empty. This causes the ConsumerMetadataRequest
-    // to fail since if the number of live brokers is 0, we try to create the offset topic with the default
-    // offsets.topic.replication.factor of 3. The creation will fail since there is not enough live brokers. In order
-    // for the unit test to pass, overriding offsets.topic.replication.factor to 1 for now. When we fix KAFKA-1867, we
-    // need to remove the following config override.
-    config.put("offsets.topic.replication.factor", "1")
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
     time = new MockTime()

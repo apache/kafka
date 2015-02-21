@@ -269,7 +269,13 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
       else
         givenPartitions -- controller.deleteTopicManager.partitionsToBeDeleted
     }
-    filteredPartitions.foreach(partition => updateMetadataRequestMapFor(partition, beingDeleted = false))
+    if(filteredPartitions.isEmpty)
+      brokerIds.filter(b => b >= 0).foreach { brokerId =>
+        updateMetadataRequestMap.getOrElseUpdate(brokerId, new mutable.HashMap[TopicAndPartition, PartitionStateInfo])
+      }
+    else
+      filteredPartitions.foreach(partition => updateMetadataRequestMapFor(partition, beingDeleted = false))
+
     controller.deleteTopicManager.partitionsToBeDeleted.foreach(partition => updateMetadataRequestMapFor(partition, beingDeleted = true))
   }
 
