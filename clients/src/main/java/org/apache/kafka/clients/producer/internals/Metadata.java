@@ -113,6 +113,14 @@ public final class Metadata {
             remainingWaitMs = maxWaitMs - elapsed;
         }
     }
+    
+    /**
+     * Record an attempt to update the metadata that failed. We need to keep track of this
+     * to avoid retrying immediately.
+     */
+    public synchronized void failedUpdate(long now) {
+        this.lastRefreshMs = now;
+    }
 
     /**
      * Get the list of topics we are currently maintaining metadata for
