@@ -318,6 +318,8 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
    */
   def delete(): Boolean = {
     info("Deleting index " + this.file.getAbsolutePath)
+    if(Os.isWindows)
+      Utils.swallow(forceUnmap(this.mmap))
     this.file.delete()
   }
   
