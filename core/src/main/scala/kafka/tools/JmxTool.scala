@@ -41,7 +41,7 @@ object JmxTool extends Logging {
         .describedAs("name")
         .ofType(classOf[String])
     val attributesOpt =
-      parser.accepts("attributes", "The whitelist of attributes to query. This is a comma-separated list. If no " +
+      parser.accepts("attributes", "The whitelist of attributes to query. This is a tilde-separated list. If no " +
         "attributes are specified all objects will be queried.")
         .withRequiredArg
         .describedAs("name")
@@ -77,7 +77,7 @@ object JmxTool extends Logging {
     val url = new JMXServiceURL(options.valueOf(jmxServiceUrlOpt))
     val interval = options.valueOf(reportingIntervalOpt).intValue
     val attributesWhitelistExists = options.has(attributesOpt)
-    val attributesWhitelist = if(attributesWhitelistExists) Some(options.valueOf(attributesOpt).split(",")) else None
+    val attributesWhitelist = if(attributesWhitelistExists) Some(options.valueOf(attributesOpt).split("~")) else None
     val dateFormatExists = options.has(dateFormatOpt)
     val dateFormat = if(dateFormatExists) Some(new SimpleDateFormat(options.valueOf(dateFormatOpt))) else None
     val jmxc = JMXConnectorFactory.connect(url, null)
