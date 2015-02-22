@@ -31,10 +31,12 @@ import kafka.common.TopicAndPartition
  */
 object SimpleConsumerPerformance {
 
-  def main(args: Array[String]) {
-    val logger = Logger.getLogger(getClass)
-    val config = new ConsumerPerfConfig(args)
+  private val logger = Logger.getLogger(getClass())
 
+  def main(args: Array[String]) {
+
+    val config = new ConsumerPerfConfig(args)
+    logger.info("Starting simpleconsumer...")
     if(!config.hideHeader) {
       if(!config.showDetailedStats)
         println("start.time, end.time, fetch.size, data.consumed.in.MB, MB.sec, data.consumed.in.nMsg, nMsg.sec")
@@ -141,7 +143,7 @@ object SimpleConsumerPerformance {
 
     val options = parser.parse(args : _*)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, urlOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, urlOpt, numMessagesOpt)
 
     val url = new URI(options.valueOf(urlOpt))
     val fetchSize = options.valueOf(fetchSizeOpt).intValue
