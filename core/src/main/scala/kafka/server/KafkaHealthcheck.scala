@@ -55,8 +55,16 @@ class KafkaHealthcheck(private val brokerId: Int,
    */
   def register() {
     val advertisedHostName = 
-      if(advertisedHost == null || advertisedHost.trim.isEmpty) 
-        InetAddress.getLocalHost.getCanonicalHostName 
+      if(advertisedHost == null || advertisedHost.trim.isEmpty)
+        try {
+          InetAddress.getLocalHost.getCanonicalHostName
+        }
+        catch {
+          case uhe: java.net.UnknownHostException =>
+            warn("Error trying to get address for the localhost: %s".format(uhe.getMessage))
+            //null
+            throw uhe
+        }
       else
         advertisedHost
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
