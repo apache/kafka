@@ -39,15 +39,10 @@ class KafkaHealthcheck(private val brokerId: Int,
 
   val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + brokerId
   val sessionExpireListener = new SessionExpireListener
-  
+
   def startup() {
     zkClient.subscribeStateChanges(sessionExpireListener)
     register()
-  }
-
-  def shutdown() {
-    zkClient.unsubscribeStateChanges(sessionExpireListener)
-    ZkUtils.deregisterBrokerInZk(zkClient, brokerId)
   }
 
   /**
