@@ -179,12 +179,6 @@ object ZkUtils extends Logging {
     info("Registered broker %d at path %s with address %s:%d.".format(id, brokerIdPath, host, port))
   }
 
-  def deregisterBrokerInZk(zkClient: ZkClient, id: Int) {
-    val brokerIdPath = ZkUtils.BrokerIdsPath + "/" + id
-    deletePath(zkClient, brokerIdPath)
-    info("Deregistered broker %d at path %s.".format(id, brokerIdPath))
-  }
-
   def getConsumerPartitionOwnerPath(group: String, topic: String, partition: Int): String = {
     val topicDirs = new ZKGroupTopicDirs(group, topic)
     topicDirs.consumerOwnerDir + "/" + partition
