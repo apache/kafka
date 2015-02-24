@@ -38,9 +38,10 @@ public class PartitionerTest {
     private Node node2 = new Node(2, "localhost", 101);
     private Node[] nodes = new Node[] { node0, node1, node2 };
     private String topic = "test";
-    private List<PartitionInfo> partitions = asList(new PartitionInfo(topic, 0, node0, nodes, nodes),
-                                                    new PartitionInfo(topic, 1, node1, nodes, nodes),
-                                                    new PartitionInfo(topic, 2, null, nodes, nodes));
+    // Intentionally make the partition list not in partition order to test the edge cases.
+    private List<PartitionInfo> partitions = asList(new PartitionInfo(topic, 1, null, nodes, nodes),
+                                                    new PartitionInfo(topic, 2, node1, nodes, nodes),
+                                                    new PartitionInfo(topic, 0, node0, nodes, nodes));
     private Cluster cluster = new Cluster(asList(node0, node1, node2), partitions);
 
     @Test
@@ -59,20 +60,19 @@ public class PartitionerTest {
     }
 
     @Test
-    public void testRoundRobinIsStable() {
-        int startPart = partitioner.partition(new ProducerRecord<byte[], byte[]>("test", value), cluster);
+    public void testRoundRobinWithUnavailablePartitions() {
+        // When there are some unavailable partitions, we want to make sure that (1) we always pick an available partition,
+        // and (2) the available partitions are selected in a round robin way.
+        int countForPart0 = 0;
+        int countForPart2 = 0;
         for (int i = 1; i <= 100; i++) {
-            int partition = partitioner.partition(new ProducerRecord<byte[], byte[]>("test", value), cluster);
-            assertEquals("Should yield a different partition each call with round-robin partitioner",
-                partition, (startPart + i) % 2);
-      }
-    }
-
-    @Test
-    public void testRoundRobinWithDownNode() {
-        for (int i = 0; i < partitions.size(); i++) {
             int part = partitioner.partition(new ProducerRecord<byte[], byte[]>("test", value), cluster);
-            assertTrue("We should never choose a leader-less node in round robin", part >= 0 && part < 2);
+            assertTrue("We should never choose a leader-less node in round robin", part == 0 || part == 2);
+            if (part == 0)
+                countForPart0++;
+            else
+                countForPart2++;
         }
+        assertEquals("The distribution between two available partitions should be even", countForPart0, countForPart2);
     }
 }

@@ -55,14 +55,15 @@ public class Partitioner {
                                                    + "].");
             return record.partition();
         } else if (record.key() == null) {
-            // choose the next available node in a round-robin fashion
-            for (int i = 0; i < numPartitions; i++) {
-                int partition = Utils.abs(counter.getAndIncrement()) % numPartitions;
-                if (partitions.get(partition).leader() != null)
-                    return partition;
+            int nextValue = counter.getAndIncrement();
+            List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(record.topic());
+            if (availablePartitions.size() > 0) {
+                int part = Utils.abs(nextValue) % availablePartitions.size();
+                return availablePartitions.get(part).partition();
+            } else {
+                // no partitions are available, give a non-available partition
+                return Utils.abs(nextValue) % numPartitions;
             }
-            // no partitions are available, give a non-available partition
-            return Utils.abs(counter.getAndIncrement()) % numPartitions;
         } else {
             // hash the key to choose a partition
             return Utils.abs(Utils.murmur2(record.key())) % numPartitions;
