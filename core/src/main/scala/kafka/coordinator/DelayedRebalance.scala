@@ -50,6 +50,10 @@ class DelayedRebalance(sessionTimeout: Long,
       false
   }
 
+  override def onExpiration() {
+    // TODO
+  }
+
   /* mark consumers that have not re-joined group as failed and proceed to rebalance the rest of the group */
   override def onComplete() {
     groupRegistry.memberRegistries.values.foreach(consumerRegistry =>

@@ -71,9 +71,9 @@ class ConsumerCoordinator(val config: KafkaConfig,
     latestHeartbeatBucketEndMs = SystemTime.milliseconds
 
     // Initialize purgatories for delayed heartbeat, join-group and rebalance operations
-    heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat](config.brokerId)
-    joinGroupPurgatory = new DelayedOperationPurgatory[DelayedJoinGroup](config.brokerId)
-    rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance](config.brokerId)
+    heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat](purgatoryName = "Heartbeat", brokerId = config.brokerId)
+    joinGroupPurgatory = new DelayedOperationPurgatory[DelayedJoinGroup](purgatoryName = "JoinGroup", brokerId = config.brokerId)
+    rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance](purgatoryName = "Rebalance", brokerId = config.brokerId)
 
   }
 

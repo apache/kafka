@@ -36,6 +36,10 @@ class DelayedHeartbeat(sessionTimeout: Long,
     throw new IllegalStateException("Delayed heartbeat purgatory should never try to complete any bucket")
   }
 
+  override def onExpiration() {
+    // TODO
+  }
+
   /* mark all consumers within the heartbeat as heartbeat timed out */
   override def onComplete() {
     for (registry <- bucket.consumerRegistryList)

@@ -71,6 +71,11 @@ abstract class DelayedOperation(delayMs: Long) extends DelayedItem(delayMs) {
   def isCompleted(): Boolean = completed.get()
 
   /**
+   * Call-back to execute when a delayed operation expires, but before completion.
+   */
+  def onExpiration(): Unit
+
+  /**
    * Process for completing an operation; This function needs to be defined
    * in subclasses and will be called exactly once in forceComplete()
    */
@@ -89,7 +94,7 @@ abstract class DelayedOperation(delayMs: Long) extends DelayedItem(delayMs) {
 /**
  * A helper purgatory class for bookkeeping delayed operations with a timeout, and expiring timed out operations.
  */
-class DelayedOperationPurgatory[T <: DelayedOperation](brokerId: Int = 0, purgeInterval: Int = 1000)
+class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, brokerId: Int = 0, purgeInterval: Int = 1000)
         extends Logging with KafkaMetricsGroup {
 
   /* a list of operation watching keys */
@@ -98,18 +103,22 @@ class DelayedOperationPurgatory[T <: DelayedOperation](brokerId: Int = 0, purgeI
   /* background thread expiring operations that have timed out */
   private val expirationReaper = new ExpiredOperationReaper
 
+  private val metricsTags = Map("delayedOperation" -> purgatoryName)
+
   newGauge(
     "PurgatorySize",
     new Gauge[Int] {
       def value = watched()
-    }
+    },
+    metricsTags
   )
 
   newGauge(
     "NumDelayedOperations",
     new Gauge[Int] {
       def value = delayed()
-    }
+    },
+    metricsTags
   )
 
   expirationReaper.start()
@@ -283,9 +292,12 @@ class DelayedOperationPurgatory[T <: DelayedOperation](brokerId: Int = 0, purgeI
       val curr = delayedQueue.poll(200L, TimeUnit.MILLISECONDS)
       if (curr != null.asInstanceOf[T]) {
         // if there is an expired operation, try to force complete it
-        if (curr synchronized curr.forceComplete()) {
-          debug("Force complete expired delayed operation %s".format(curr))
+        val completedByMe: Boolean = curr synchronized {
+          curr.onExpiration()
+          curr.forceComplete()
         }
+        if (completedByMe)
+          debug("Force complete expired delayed operation %s".format(curr))
       }
     }
 

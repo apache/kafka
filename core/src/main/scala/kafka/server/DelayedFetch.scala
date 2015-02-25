@@ -17,11 +17,14 @@
 
 package kafka.server
 
+import java.util.concurrent.TimeUnit
+
 import kafka.api.FetchResponsePartitionData
 import kafka.api.PartitionFetchInfo
 import kafka.common.UnknownTopicOrPartitionException
 import kafka.common.NotLeaderForPartitionException
 import kafka.common.TopicAndPartition
+import kafka.metrics.KafkaMetricsGroup
 
 import scala.collection._
 
@@ -37,6 +40,7 @@ case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInf
 case class FetchMetadata(fetchMinBytes: Int,
                          fetchOnlyLeader: Boolean,
                          fetchOnlyCommitted: Boolean,
+                         isFromFollower: Boolean,
                          fetchPartitionStatus: Map[TopicAndPartition, FetchPartitionStatus]) {
 
   override def toString = "[minBytes: " + fetchMinBytes + ", " +
@@ -109,6 +113,13 @@ class DelayedFetch(delayMs: Long,
       false
   }
 
+  override def onExpiration() {
+    if (fetchMetadata.isFromFollower)
+      DelayedFetchMetrics.followerExpiredRequestMeter.mark()
+    else
+      DelayedFetchMetrics.consumerExpiredRequestMeter.mark()
+  }
+
   /**
    * Upon completion, read whatever data is available and pass to the complete callback
    */
@@ -123,3 +134,10 @@ class DelayedFetch(delayMs: Long,
     responseCallback(fetchPartitionData)
   }
 }
+
+object DelayedFetchMetrics extends KafkaMetricsGroup {
+  private val FetcherTypeKey = "fetcherType"
+  val followerExpiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "follower"))
+  val consumerExpiredRequestMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS, tags = Map(FetcherTypeKey -> "consumer"))
+}
+

@@ -35,6 +35,10 @@ class DelayedJoinGroup(sessionTimeout: Long,
     forceComplete()
   }
 
+  override def onExpiration() {
+    // TODO
+  }
+
   /* always assume the partition is already assigned as this delayed operation should never time-out */
   override def onComplete() {
 

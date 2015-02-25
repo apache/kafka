@@ -28,7 +28,7 @@ class DelayedOperationTest extends JUnit3Suite {
   
   override def setUp() {
     super.setUp()
-    purgatory = new DelayedOperationPurgatory[MockDelayedOperation](0, 5)
+    purgatory = new DelayedOperationPurgatory[MockDelayedOperation](purgatoryName = "mock", 0, 5)
   }
   
   override def tearDown() {
@@ -112,6 +112,10 @@ class DelayedOperationTest extends JUnit3Suite {
         forceComplete()
       else
         false
+    }
+
+    override def onExpiration() {
+
     }
 
     override def onComplete() {

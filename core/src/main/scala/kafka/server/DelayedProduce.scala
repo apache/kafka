@@ -18,9 +18,14 @@
 package kafka.server
 
 
+import java.util.concurrent.TimeUnit
+
+import com.yammer.metrics.core.Meter
 import kafka.api.ProducerResponseStatus
 import kafka.common.ErrorMapping
 import kafka.common.TopicAndPartition
+import kafka.metrics.KafkaMetricsGroup
+import kafka.utils.Pool
 
 import scala.collection._
 
@@ -110,6 +115,14 @@ class DelayedProduce(delayMs: Long,
       false
   }
 
+  override def onExpiration() {
+    produceMetadata.produceStatus.foreach { case (topicPartition, status) =>
+      if (status.acksPending) {
+        DelayedProduceMetrics.recordExpiration(topicPartition)
+      }
+    }
+  }
+
   /**
    * Upon completion, return the current response status along with the error code per partition
    */
@@ -118,3 +131,21 @@ class DelayedProduce(delayMs: Long,
     responseCallback(responseStatus)
   }
 }
+
+object DelayedProduceMetrics extends KafkaMetricsGroup {
+
+  private val aggregateExpirationMeter = newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
+
+  private val partitionExpirationMeterFactory = (key: TopicAndPartition) =>
+    newMeter("ExpiresPerSec",
+             "requests",
+             TimeUnit.SECONDS,
+             tags = Map("topic" -> key.topic, "partition" -> key.partition.toString))
+  private val partitionExpirationMeters = new Pool[TopicAndPartition, Meter](valueFactory = Some(partitionExpirationMeterFactory))
+
+  def recordExpiration(partition: TopicAndPartition) {
+    aggregateExpirationMeter.mark()
+    partitionExpirationMeters.getAndMaybePut(partition).mark()
+  }
+}
+
