@@ -230,6 +230,8 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     brokerConfigs(0).setProperty("log.cleanup.policy","compact")
     brokerConfigs(0).setProperty("log.segment.bytes","100")
     brokerConfigs(0).setProperty("log.segment.delete.delay.ms","1000")
+    brokerConfigs(0).setProperty("log.cleaner.dedupe.buffer.size","1048577")
+
     val servers = createTestTopicAndCluster(topic,brokerConfigs)
 
     // for simplicity, we are validating cleaner offsets on a single broker
