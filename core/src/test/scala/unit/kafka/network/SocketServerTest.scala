@@ -139,8 +139,11 @@ class SocketServerTest extends JUnitSuite {
     processRequest(server.requestChannel)
     // then shutdown the server
     server.shutdown()
+
+    val largeChunkOfBytes = new Array[Byte](1000000)
     // doing a subsequent send should throw an exception as the connection should be closed.
-    sendRequest(socket, 0, bytes)
+    // send a large chunk of bytes to trigger a socket flush
+    sendRequest(socket, 0, largeChunkOfBytes)
   }
 
   @Test
