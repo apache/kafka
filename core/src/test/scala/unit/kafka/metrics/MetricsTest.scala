@@ -18,15 +18,20 @@
 package kafka.consumer
 
 import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.MetricPredicate
+import org.junit.Test
 import junit.framework.Assert._
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
-import scala.collection._
-import org.scalatest.junit.JUnit3Suite
 import kafka.message._
 import kafka.serializer._
 import kafka.utils._
+import kafka.admin.AdminUtils
 import kafka.utils.TestUtils._
+import scala.collection._
+import scala.collection.JavaConversions._
+import scala.util.matching.Regex
+import org.scalatest.junit.JUnit3Suite
 
 class MetricsTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
   val zookeeperConnect = TestZKUtils.zookeeperConnect
@@ -34,7 +39,7 @@ class MetricsTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
   val numParts = 2
   val topic = "topic1"
   val configs =
-    for (props <- TestUtils.createBrokerConfigs(numNodes))
+    for (props <- TestUtils.createBrokerConfigs(numNodes, enableDeleteTopic=true))
     yield new KafkaConfig(props) {
       override val zkConnect = zookeeperConnect
       override val numPartitions = numParts
@@ -45,6 +50,7 @@ class MetricsTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
     super.tearDown()
   }
 
+  @Test
   def testMetricsLeak() {
     // create topic topic1 with 1 partition on broker 0
     createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = servers)
@@ -59,6 +65,15 @@ class MetricsTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
     }
   }
 
+  @Test
+  def testMetricsReporterAfterDeletingTopic() {
+    val topic = "test-topic-metric"
+    AdminUtils.createTopic(zkClient, topic, 1, 1)
+    AdminUtils.deleteTopic(zkClient, topic)
+    TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
+    assertFalse("Topic metrics exists after deleteTopic", checkTopicMetricsExists(topic))
+  }
+
   def createAndShutdownStep(group: String, consumerId: String, producerId: String): Unit = {
     val sentMessages1 = sendMessages(configs, topic, producerId, nMessages, "batch1", NoCompressionCodec, 1)
     // create a consumer
@@ -68,5 +83,15 @@ class MetricsTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
     val receivedMessages1 = getMessages(nMessages, topicMessageStreams1)
 
     zkConsumerConnector1.shutdown()
+  }
+
+  private def checkTopicMetricsExists(topic: String): Boolean = {
+    val topicMetricRegex = new Regex(".*("+topic+")$")
+    val metricGroups = Metrics.defaultRegistry().groupedMetrics(MetricPredicate.ALL).entrySet()
+    for(metricGroup <- metricGroups) {
+      if (topicMetricRegex.pattern.matcher(metricGroup.getKey()).matches)
+        return true
+    }
+    false
   }
 }

@@ -624,6 +624,7 @@ class Log(val dir: File,
    */
   private[log] def delete() {
     lock synchronized {
+      removeLogMetrics()
       logSegments.foreach(_.delete())
       segments.clear()
       Utils.rm(dir)
@@ -769,7 +770,16 @@ class Log(val dir: File,
       newSegment.changeFileSuffixes(Log.SwapFileSuffix, "")
     }  
   }
-  
+
+  /**
+   * remove deleted log metrics
+   */
+  private[log] def removeLogMetrics(): Unit = {
+    removeMetric("NumLogSegments", tags)
+    removeMetric("LogStartOffset", tags)
+    removeMetric("LogEndOffset", tags)
+    removeMetric("Size", tags)
+  }
   /**
    * Add the given segment to the segments in this log. If this segment replaces an existing segment, delete it.
    * @param segment The segment to add

@@ -60,6 +60,7 @@ class Partition(val topic: String,
   this.logIdent = "Partition [%s,%d] on broker %d: ".format(topic, partitionId, localBrokerId)
 
   private def isReplicaLocal(replicaId: Int) : Boolean = (replicaId == localBrokerId)
+  val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
 
   newGauge("UnderReplicated",
     new Gauge[Int] {
@@ -67,7 +68,7 @@ class Partition(val topic: String,
         if (isUnderReplicated) 1 else 0
       }
     },
-    Map("topic" -> topic, "partition" -> partitionId.toString)
+    tags
   )
 
   def isUnderReplicated(): Boolean = {
@@ -141,6 +142,7 @@ class Partition(val topic: String,
       leaderReplicaIdOpt = None
       try {
         logManager.deleteLog(TopicAndPartition(topic, partitionId))
+        removePartitionMetrics()
       } catch {
         case e: IOException =>
           fatal("Error deleting the log for partition [%s,%d]".format(topic, partitionId), e)
@@ -434,6 +436,13 @@ class Partition(val topic: String,
     } else {
       info("Cached zkVersion [%d] not equal to that in zookeeper, skip updating ISR".format(zkVersion))
     }
+  }
+
+  /**
+   * remove deleted log metrics
+   */
+  private def removePartitionMetrics() {
+    removeMetric("UnderReplicated", tags)
   }
 
   override def equals(that: Any): Boolean = {
