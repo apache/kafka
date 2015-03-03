@@ -374,6 +374,8 @@ class ReplicaManager(val config: KafkaConfig,
             (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(mtl)))
           case mstl: MessageSetSizeTooLargeException =>
             (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(mstl)))
+          case imse : InvalidMessageSizeException =>
+            (topicAndPartition, LogAppendResult(LogAppendInfo.UnknownLogAppendInfo, Some(imse)))
           case t: Throwable =>
             BrokerTopicStats.getBrokerTopicStats(topicAndPartition.topic).failedProduceRequestRate.mark()
             BrokerTopicStats.getBrokerAllTopicsStats.failedProduceRequestRate.mark()
@@ -483,6 +485,8 @@ class ReplicaManager(val config: KafkaConfig,
             LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MessageSet.Empty), -1L, fetchSize, Some(nle))
           case rnae: ReplicaNotAvailableException =>
             LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MessageSet.Empty), -1L, fetchSize, Some(rnae))
+          case oor : OffsetOutOfRangeException =>
+            LogReadResult(FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MessageSet.Empty), -1L, fetchSize, Some(oor))
           case e: Throwable =>
             BrokerTopicStats.getBrokerTopicStats(topic).failedFetchRequestRate.mark()
             BrokerTopicStats.getBrokerAllTopicsStats().failedFetchRequestRate.mark()
