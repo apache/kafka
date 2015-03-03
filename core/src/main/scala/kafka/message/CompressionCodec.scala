@@ -43,7 +43,7 @@ object BrokerCompressionCodec {
   val brokerCompressionCodecs = List(UncompressedCodec, SnappyCompressionCodec, LZ4CompressionCodec, GZIPCompressionCodec, ProducerCompressionCodec)
   val brokerCompressionOptions = brokerCompressionCodecs.map(codec => codec.name)
 
-  def isValid(compressionType: String): Boolean = brokerCompressionOptions.contains((compressionType.toLowerCase()))
+  def isValid(compressionType: String): Boolean = brokerCompressionOptions.contains(compressionType.toLowerCase())
 
   def getCompressionCodec(compressionType: String): CompressionCodec = {
     compressionType.toLowerCase match {
