@@ -68,6 +68,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   val kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
 
   var kafkaHealthcheck: KafkaHealthcheck = null
+  val metadataCache: MetadataCache = new MetadataCache(config.brokerId)
+
+
 
   var zkClient: ZkClient = null
   val correlationId: AtomicInteger = new AtomicInteger(0)
@@ -142,7 +145,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         consumerCoordinator.startup()
 
         /* start processing requests */
-        apis = new KafkaApis(socketServer.requestChannel, replicaManager, offsetManager, consumerCoordinator, kafkaController, zkClient, config.brokerId, config)
+        apis = new KafkaApis(socketServer.requestChannel, replicaManager, offsetManager, consumerCoordinator,
+          kafkaController, zkClient, config.brokerId, config, metadataCache)
         requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
         brokerState.newState(RunningAsBroker)
 
@@ -402,7 +406,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
       offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
       offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
-    new OffsetManager(offsetManagerConfig, replicaManager, zkClient, kafkaScheduler)
+    new OffsetManager(offsetManagerConfig, replicaManager, zkClient, kafkaScheduler, metadataCache)
   }
 
   /**

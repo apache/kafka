@@ -206,4 +206,23 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(ErrorMapping.OffsetMetadataTooLargeCode, commitResponse1.commitStatus.get(topicAndPartition).get)
 
   }
+
+  @Test
+  def testNonExistingTopicOffsetCommit() {
+    val topic1 = "topicDoesNotExists"
+    val topic2 = "topic-2"
+
+    createTopic(zkClient, topic2, servers = Seq(server), numPartitions = 1)
+
+    // Commit an offset
+    val expectedReplicaAssignment = Map(0  -> List(1))
+    val commitRequest = OffsetCommitRequest(group, immutable.Map(
+      TopicAndPartition(topic1, 0) -> OffsetAndMetadata(offset=42L),
+      TopicAndPartition(topic2, 0) -> OffsetAndMetadata(offset=42L)
+    ))
+    val commitResponse = simpleConsumer.commitOffsets(commitRequest)
+
+    assertEquals(ErrorMapping.UnknownTopicOrPartitionCode, commitResponse.commitStatus.get(TopicAndPartition(topic1, 0)).get)
+    assertEquals(ErrorMapping.NoError, commitResponse.commitStatus.get(TopicAndPartition(topic2, 0)).get)
+  }
 }

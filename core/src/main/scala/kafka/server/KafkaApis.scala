@@ -45,10 +45,10 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val controller: KafkaController,
                 val zkClient: ZkClient,
                 val brokerId: Int,
-                val config: KafkaConfig) extends Logging {
+                val config: KafkaConfig,
+                val metadataCache: MetadataCache) extends Logging {
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
-  val metadataCache = new MetadataCache(brokerId)
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -149,7 +149,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       val response = OffsetCommitResponse(commitStatus, offsetCommitRequest.correlationId)
       requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
     }
-
     // call offset manager to store offsets
     offsetManager.storeOffsets(
       offsetCommitRequest.groupId,
@@ -273,7 +272,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             val hw = localReplica.highWatermark.messageOffset
             if (allOffsets.exists(_ > hw))
               hw +: allOffsets.dropWhile(_ > hw)
-            else 
+            else
               allOffsets
           }
         }
@@ -297,19 +296,19 @@ class KafkaApis(val requestChannel: RequestChannel,
     val response = OffsetResponse(offsetRequest.correlationId, responseMap)
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
   }
-  
+
   def fetchOffsets(logManager: LogManager, topicAndPartition: TopicAndPartition, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
     logManager.getLog(topicAndPartition) match {
-      case Some(log) => 
+      case Some(log) =>
         fetchOffsetsBefore(log, timestamp, maxNumOffsets)
-      case None => 
+      case None =>
         if (timestamp == OffsetRequest.LatestTime || timestamp == OffsetRequest.EarliestTime)
           Seq(0L)
         else
           Nil
     }
   }
-  
+
   private def fetchOffsetsBefore(log: Log, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
     val segsArray = log.logSegments.toArray
     var offsetTimeArray: Array[(Long, Long)] = null
@@ -454,7 +453,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     import JavaConversions._
 
     val joinGroupRequest = request.requestObj.asInstanceOf[JoinGroupRequestAndHeader]
-    
+
     // the callback for sending a join-group response
     def sendResponseCallback(partitions: List[TopicAndPartition], generationId: Int, errorCode: Short) {
       val partitionList = partitions.map(tp => new TopicPartition(tp.topic, tp.partition)).toBuffer
@@ -472,7 +471,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       joinGroupRequest.body.strategy(),
       sendResponseCallback)
   }
-  
+
   def handleHeartbeatRequest(request: RequestChannel.Request) {
     val heartbeatRequest = request.requestObj.asInstanceOf[HeartbeatRequestAndHeader]
 
@@ -489,11 +488,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       heartbeatRequest.body.groupGenerationId(),
       sendResponseCallback)
   }
-  
+
   def close() {
     // TODO currently closing the API is an no-op since the API no longer maintain any modules
     // maybe removing the closing call in the end when KafkaAPI becomes a pure stateless layer
     debug("Shut down complete.")
   }
 }
-

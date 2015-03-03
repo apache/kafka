@@ -136,6 +136,12 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 
+  def contains(topic: String): Boolean = {
+    inReadLock(partitionMetadataLock) {
+      cache.contains(topic)
+    }
+  }
+
   private def removePartitionInfo(topic: String, partitionId: Int) = {
     cache.get(topic) match {
       case Some(infos) => {
@@ -149,4 +155,3 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
     }
   }
 }
-

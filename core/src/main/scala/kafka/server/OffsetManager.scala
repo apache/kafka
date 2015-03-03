@@ -86,7 +86,8 @@ object OffsetManagerConfig {
 class OffsetManager(val config: OffsetManagerConfig,
                     replicaManager: ReplicaManager,
                     zkClient: ZkClient,
-                    scheduler: Scheduler) extends Logging with KafkaMetricsGroup {
+                    scheduler: Scheduler,
+                    metadataCache: MetadataCache) extends Logging with KafkaMetricsGroup {
 
   /* offsets and metadata cache */
   private val offsetsCache = new Pool[GroupTopicPartition, OffsetAndMetadata]
@@ -164,6 +165,7 @@ class OffsetManager(val config: OffsetManagerConfig,
     debug("Removed %d stale offsets in %d milliseconds.".format(numRemoved, SystemTime.milliseconds - startMs))
   }
 
+
   def offsetsTopicConfig: Properties = {
     val props = new Properties
     props.put(LogConfig.SegmentBytesProp, config.offsetsTopicSegmentBytes.toString)
@@ -214,11 +216,16 @@ class OffsetManager(val config: OffsetManagerConfig,
                    generationId: Int,
                    offsetMetadata: immutable.Map[TopicAndPartition, OffsetAndMetadata],
                    responseCallback: immutable.Map[TopicAndPartition, Short] => Unit) {
+    // check if there are any non-existent topics
+    val nonExistentTopics = offsetMetadata.filter { case (topicAndPartition, offsetMetadata) =>
+      !metadataCache.contains(topicAndPartition.topic)
+    }
 
-    // first filter out partitions with offset metadata size exceeding limit
+    // first filter out partitions with offset metadata size exceeding limit or
+    // if its a non existing topic
     // TODO: in the future we may want to only support atomic commit and hence fail the whole commit
     val filteredOffsetMetadata = offsetMetadata.filter { case (topicAndPartition, offsetAndMetadata) =>
-      validateOffsetMetadataLength(offsetAndMetadata.metadata)
+      validateOffsetMetadataLength(offsetAndMetadata.metadata) || nonExistentTopics.contains(topicAndPartition)
     }
 
     // construct the message set to append
@@ -242,7 +249,7 @@ class OffsetManager(val config: OffsetManagerConfig,
           .format(responseStatus, offsetTopicPartition))
 
       // construct the commit response status and insert
-      // the offset and metadata to cache iff the append status has no error
+      // the offset and metadata to cache if the append status has no error
       val status = responseStatus(offsetTopicPartition)
 
       val responseCode =
@@ -267,7 +274,9 @@ class OffsetManager(val config: OffsetManagerConfig,
 
       // compute the final error codes for the commit response
       val commitStatus = offsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
-        if (validateOffsetMetadataLength(offsetAndMetadata.metadata))
+        if (nonExistentTopics.contains(topicAndPartition))
+          (topicAndPartition, ErrorMapping.UnknownTopicOrPartitionCode)
+        else if (validateOffsetMetadataLength(offsetAndMetadata.metadata))
           (topicAndPartition, responseCode)
         else
           (topicAndPartition, ErrorMapping.OffsetMetadataTooLargeCode)
