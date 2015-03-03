@@ -168,6 +168,7 @@ class OffsetManager(val config: OffsetManagerConfig,
     val props = new Properties
     props.put(LogConfig.SegmentBytesProp, config.offsetsTopicSegmentBytes.toString)
     props.put(LogConfig.CleanupPolicyProp, "compact")
+    props.put(LogConfig.CompressionTypeProp, "none")
     props
   }
 

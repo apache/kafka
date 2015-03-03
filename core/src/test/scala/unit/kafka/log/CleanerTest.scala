@@ -90,10 +90,42 @@ class CleanerTest extends JUnitSuite {
     assertTrue("None of the keys we deleted should still exist.", 
                (0 until leo.toInt by 2).forall(!keys.contains(_)))
   }
+
+  @Test
+  def testCleaningWithUnkeyedMessages {
+    val cleaner = makeCleaner(Int.MaxValue)
+
+    // create a log with compaction turned off so we can append unkeyed messages
+    val log = makeLog(config = logConfig.copy(segmentSize = 1024, compact = false))
+
+    // append messages with unkeyed messages
+    while(log.numberOfSegments < 2)
+      log.append(unkeyedMessage(log.logEndOffset.toInt))
+    val numInvalidMessages = unkeyedMessageCountInLog(log)
+
+    val sizeWithUnkeyedMessages = log.size
+
+    // append messages with unkeyed messages
+    while(log.numberOfSegments < 3)
+      log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
+
+    val expectedSizeAfterCleaning = log.size - sizeWithUnkeyedMessages
+
+    // turn on compaction and compact the log
+    val compactedLog = makeLog(config = logConfig.copy(segmentSize = 1024))
+    cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 0))
+
+    assertEquals("Log should only contain keyed messages after cleaning.", 0, unkeyedMessageCountInLog(log))
+    assertEquals("Log should only contain keyed messages after cleaning.", expectedSizeAfterCleaning, log.size)
+    assertEquals("Cleaner should have seen %d invalid messages.", numInvalidMessages, cleaner.stats.invalidMessagesRead)
+  }
   
   /* extract all the keys from a log */
-  def keysInLog(log: Log): Iterable[Int] = 
-    log.logSegments.flatMap(s => s.log.filter(!_.message.isNull).map(m => Utils.readString(m.message.key).toInt))
+  def keysInLog(log: Log): Iterable[Int] =
+    log.logSegments.flatMap(s => s.log.filter(!_.message.isNull).filter(_.message.hasKey).map(m => Utils.readString(m.message.key).toInt))
+
+  def unkeyedMessageCountInLog(log: Log) =
+    log.logSegments.map(s => s.log.filter(!_.message.isNull).count(m => !m.message.hasKey)).sum
 
   def abortCheckDone(topicAndPartition: TopicAndPartition) {
     throw new LogCleaningAbortedException()
@@ -130,7 +162,7 @@ class CleanerTest extends JUnitSuite {
     // append some messages to the log
     var i = 0
     while(log.numberOfSegments < 10) {
-      log.append(TestUtils.singleMessageSet("hello".getBytes))
+      log.append(TestUtils.singleMessageSet(payload = "hello".getBytes, key = "hello".getBytes))
       i += 1
     }
     
@@ -220,7 +252,10 @@ class CleanerTest extends JUnitSuite {
   
   def message(key: Int, value: Int) = 
     new ByteBufferMessageSet(new Message(key=key.toString.getBytes, bytes=value.toString.getBytes))
-  
+
+  def unkeyedMessage(value: Int) =
+    new ByteBufferMessageSet(new Message(bytes=value.toString.getBytes))
+
   def deleteMessage(key: Int) =
     new ByteBufferMessageSet(new Message(key=key.toString.getBytes, bytes=null))
   

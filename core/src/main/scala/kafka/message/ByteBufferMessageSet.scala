@@ -199,24 +199,48 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
   }
 
   /**
-   * Update the offsets for this message set. This method attempts to do an in-place conversion
-   * if there is no compression, but otherwise recopies the messages
+   * Update the offsets for this message set and do further validation on messages. This method attempts to do an
+   * in-place conversion if there is no compression, but otherwise recopies the messages
    */
-  private[kafka] def assignOffsets(offsetCounter: AtomicLong, sourceCodec: CompressionCodec, targetCodec: CompressionCodec): ByteBufferMessageSet = {
+  private[kafka] def validateMessagesAndAssignOffsets(offsetCounter: AtomicLong,
+                                                      sourceCodec: CompressionCodec,
+                                                      targetCodec: CompressionCodec,
+                                                      compactedTopic: Boolean = false): ByteBufferMessageSet = {
     if(sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
-      // do an in-place conversion
-      var position = 0
+      // do in-place validation and offset assignment
+      var messagePosition = 0
       buffer.mark()
-      while(position < sizeInBytes - MessageSet.LogOverhead) {
-        buffer.position(position)
+      while(messagePosition < sizeInBytes - MessageSet.LogOverhead) {
+        buffer.position(messagePosition)
         buffer.putLong(offsetCounter.getAndIncrement())
-        position += MessageSet.LogOverhead + buffer.getInt()
+        val messageSize = buffer.getInt()
+        val positionAfterKeySize = buffer.position + Message.KeySizeOffset + Message.KeySizeLength
+        if (compactedTopic && positionAfterKeySize < sizeInBytes) {
+          buffer.position(buffer.position() + Message.KeySizeOffset)
+          val keySize = buffer.getInt()
+          if (keySize <= 0) {
+            buffer.reset()
+            throw new InvalidMessageException("Compacted topic cannot accept message without key.")
+          }
+        }
+        messagePosition += MessageSet.LogOverhead + messageSize
       }
       buffer.reset()
       this
     } else {
-      // messages are compressed, crack open the messageset and recompress with correct offset
-      val messages = this.internalIterator(isShallow = false).map(_.message)
+      if (compactedTopic && targetCodec != NoCompressionCodec)
+        throw new InvalidMessageException("Compacted topic cannot accept compressed messages. " +
+          "Either the producer sent a compressed message or the topic has been configured with a broker-side compression codec.")
+      // We need to crack open the message-set if any of these are true:
+      // (i) messages are compressed,
+      // (ii) this message-set is sent to a compacted topic (and so we need to verify that each message has a key)
+      // If the broker is configured with a target compression codec then we need to recompress regardless of original codec
+      val messages = this.internalIterator(isShallow = false).map(messageAndOffset => {
+        if (compactedTopic && !messageAndOffset.message.hasKey)
+          throw new InvalidMessageException("Compacted topic cannot accept message without key.")
+
+        messageAndOffset.message
+      })
       new ByteBufferMessageSet(compressionCodec = targetCodec, offsetCounter = offsetCounter, messages = messages.toBuffer:_*)
     }
   }

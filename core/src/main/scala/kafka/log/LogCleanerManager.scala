@@ -122,8 +122,8 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     inLock(lock) {
       abortAndPauseCleaning(topicAndPartition)
       resumeCleaning(topicAndPartition)
-      info("The cleaning for partition %s is aborted".format(topicAndPartition))
     }
+    info("The cleaning for partition %s is aborted".format(topicAndPartition))
   }
 
   /**
@@ -152,8 +152,8 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
       }
       while (!isCleaningInState(topicAndPartition, LogCleaningPaused))
         pausedCleaningCond.await(100, TimeUnit.MILLISECONDS)
-      info("The cleaning for partition %s is aborted and paused".format(topicAndPartition))
     }
+    info("The cleaning for partition %s is aborted and paused".format(topicAndPartition))
   }
 
   /**
@@ -181,14 +181,14 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   /**
    *  Check if the cleaning for a partition is in a particular state. The caller is expected to hold lock while making the call.
    */
-  def isCleaningInState(topicAndPartition: TopicAndPartition, expectedState: LogCleaningState): Boolean = {
+  private def isCleaningInState(topicAndPartition: TopicAndPartition, expectedState: LogCleaningState): Boolean = {
     inProgress.get(topicAndPartition) match {
-      case None => return false
+      case None => false
       case Some(state) =>
         if (state == expectedState)
-          return true
+          true
         else
-          return false
+          false
     }
   }
 
