@@ -98,14 +98,14 @@ class CleanerTest extends JUnitSuite {
     // create a log with compaction turned off so we can append unkeyed messages
     val log = makeLog(config = logConfig.copy(segmentSize = 1024, compact = false))
 
-    // append messages with unkeyed messages
+    // append unkeyed messages
     while(log.numberOfSegments < 2)
       log.append(unkeyedMessage(log.logEndOffset.toInt))
     val numInvalidMessages = unkeyedMessageCountInLog(log)
 
     val sizeWithUnkeyedMessages = log.size
 
-    // append messages with unkeyed messages
+    // append keyed messages
     while(log.numberOfSegments < 3)
       log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
 
