@@ -24,7 +24,6 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.utils.Utils;
 
-
 /**
  * The default partitioning strategy:
  * <ul>
@@ -35,6 +34,22 @@ import org.apache.kafka.common.utils.Utils;
 public class Partitioner {
 
     private final AtomicInteger counter = new AtomicInteger(new Random().nextInt());
+
+    /**
+     * A cheap way to deterministically convert a number to a positive value. When the input is 
+     * positive, the original value is returned. When the input number is negative, the returned
+     * positive value is the original value bit AND against 0x7fffffff which is not its absolutely
+     * value.
+     * 
+     * Note: changing this method in the future will possibly cause partition selection not to be
+     * compatible with the existing messages already placed on a partition. 
+     * 
+     * @param number a given number
+     * @return a positive number.
+     */
+    private static int toPositive(int number) {
+        return number & 0x7fffffff; 
+    }
 
     /**
      * Compute the partition for the given record.
@@ -59,15 +74,15 @@ public class Partitioner {
             int nextValue = counter.getAndIncrement();
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
             if (availablePartitions.size() > 0) {
-                int part = Utils.abs(nextValue) % availablePartitions.size();
+                int part = Partitioner.toPositive(nextValue) % availablePartitions.size();
                 return availablePartitions.get(part).partition();
             } else {
                 // no partitions are available, give a non-available partition
-                return Utils.abs(nextValue) % numPartitions;
+                return Partitioner.toPositive(nextValue) % numPartitions;
             }
         } else {
             // hash the key to choose a partition
-            return Utils.abs(Utils.murmur2(key)) % numPartitions;
+            return Partitioner.toPositive(Utils.murmur2(key)) % numPartitions;
         }
     }
 

@@ -58,4 +58,13 @@ public class UtilsTest {
         assertEquals("1", Utils.join(Arrays.asList("1"), ","));
         assertEquals("1,2,3", Utils.join(Arrays.asList(1, 2, 3), ","));
     }
+
+    @Test
+    public void testAbs() {
+        assertEquals(0, Utils.abs(Integer.MIN_VALUE));
+        assertEquals(10, Utils.abs(-10));
+        assertEquals(10, Utils.abs(10));
+        assertEquals(0, Utils.abs(0));
+        assertEquals(1, Utils.abs(-1));
+    }
 }
