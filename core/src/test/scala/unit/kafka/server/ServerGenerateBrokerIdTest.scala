@@ -25,9 +25,9 @@ import java.io.File
 
 class ServerGenerateBrokerIdTest extends JUnit3Suite with ZooKeeperTestHarness {
   var props1 = TestUtils.createBrokerConfig(-1, TestUtils.choosePort)
-  var config1 = new KafkaConfig(props1)
+  var config1 = KafkaConfig.fromProps(props1)
   var props2 = TestUtils.createBrokerConfig(0, TestUtils.choosePort)
-  var config2 = new KafkaConfig(props2)
+  var config2 = KafkaConfig.fromProps(props2)
   val brokerMetaPropsFile = "meta.properties"
 
 
@@ -52,7 +52,7 @@ class ServerGenerateBrokerIdTest extends JUnit3Suite with ZooKeeperTestHarness {
     val server1 = new KafkaServer(config1)
     val server2 = new KafkaServer(config2)
     val props3 = TestUtils.createBrokerConfig(-1, TestUtils.choosePort)
-    val config3 = new KafkaConfig(props3)
+    val config3 = KafkaConfig.fromProps(props3)
     val server3 = new KafkaServer(config3)
     server1.startup()
     assertEquals(server1.config.brokerId,1001)
@@ -78,7 +78,7 @@ class ServerGenerateBrokerIdTest extends JUnit3Suite with ZooKeeperTestHarness {
     val logDirs = props1.getProperty("log.dir")+ "," + TestUtils.tempDir().getAbsolutePath +
     "," + TestUtils.tempDir().getAbsolutePath
     props1.setProperty("log.dir",logDirs)
-    config1 = new KafkaConfig(props1)
+    config1 = KafkaConfig.fromProps(props1)
     var server1 = new KafkaServer(config1)
     server1.startup()
     server1.shutdown()
@@ -86,7 +86,7 @@ class ServerGenerateBrokerIdTest extends JUnit3Suite with ZooKeeperTestHarness {
     // addition to log.dirs after generation of a broker.id from zk should be copied over
     val newLogDirs = props1.getProperty("log.dir") + "," + TestUtils.tempDir().getAbsolutePath
     props1.setProperty("log.dir",newLogDirs)
-    config1 = new KafkaConfig(props1)
+    config1 = KafkaConfig.fromProps(props1)
     server1 = new KafkaServer(config1)
     server1.startup()
     server1.shutdown()

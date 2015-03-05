@@ -34,7 +34,7 @@ import junit.framework.Assert._
 class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
   val port = TestUtils.choosePort
   val props = TestUtils.createBrokerConfig(0, port)
-  val config = new KafkaConfig(props)
+  val config = KafkaConfig.fromProps(props)
 
   val host = "localhost"
   val topic = "test"
@@ -105,7 +105,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testCleanShutdownWithDeleteTopicEnabled() {
     val newProps = TestUtils.createBrokerConfig(0, port)
     newProps.setProperty("delete.topic.enable", "true")
-    val newConfig = new KafkaConfig(newProps)
+    val newConfig = KafkaConfig.fromProps(newProps)
     val server = new KafkaServer(newConfig)
     server.startup()
     server.shutdown()
@@ -118,7 +118,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testCleanShutdownAfterFailedStartup() {
     val newProps = TestUtils.createBrokerConfig(0, port)
     newProps.setProperty("zookeeper.connect", "fakehostthatwontresolve:65535")
-    val newConfig = new KafkaConfig(newProps)
+    val newConfig = KafkaConfig.fromProps(newProps)
     val server = new KafkaServer(newConfig)
     try {
       server.startup()

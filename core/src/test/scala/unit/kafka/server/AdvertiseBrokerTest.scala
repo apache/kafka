@@ -34,7 +34,7 @@ class AdvertiseBrokerTest extends JUnit3Suite with ZooKeeperTestHarness {
     props.put("advertised.host.name", advertisedHostName)
     props.put("advertised.port", advertisedPort.toString)
     
-    server = TestUtils.createServer(new KafkaConfig(props))
+    server = TestUtils.createServer(KafkaConfig.fromProps(props))
   }
 
   override def tearDown() {

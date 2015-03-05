@@ -27,7 +27,7 @@ import org.scalatest.junit.JUnit3Suite
 
 class DynamicConfigChangeTest extends JUnit3Suite with KafkaServerTestHarness {
   
-  override val configs = List(new KafkaConfig(TestUtils.createBrokerConfig(0, TestUtils.choosePort)))
+  override val configs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, TestUtils.choosePort)))
 
   @Test
   def testConfigChange() {

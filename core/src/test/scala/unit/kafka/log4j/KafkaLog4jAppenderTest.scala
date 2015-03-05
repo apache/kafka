@@ -57,7 +57,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     val propsZk = TestUtils.createBrokerConfig(brokerZk, portZk)
     val logDirZkPath = propsZk.getProperty("log.dir")
     logDirZk = new File(logDirZkPath)
-    config = new KafkaConfig(propsZk)
+    config = KafkaConfig.fromProps(propsZk)
     server = TestUtils.createServer(config)
     simpleConsumerZk = new SimpleConsumer("localhost", portZk, 1000000, 64 * 1024, "")
   }

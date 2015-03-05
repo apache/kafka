@@ -33,7 +33,7 @@ class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
     val props = TestUtils.createBrokerConfig(brokerId, TestUtils.choosePort())
     val zooKeeperConnect = props.get("zookeeper.connect")
     props.put("zookeeper.connect", zooKeeperConnect + zookeeperChroot)
-    val server = TestUtils.createServer(new KafkaConfig(props))
+    val server = TestUtils.createServer(KafkaConfig.fromProps(props))
 
     val pathExists = ZkUtils.pathExists(zkClient, zookeeperChroot)
     assertTrue(pathExists)
@@ -48,12 +48,12 @@ class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     val brokerId = 0
     val props1 = TestUtils.createBrokerConfig(brokerId)
-    val server1 = TestUtils.createServer(new KafkaConfig(props1))
+    val server1 = TestUtils.createServer(KafkaConfig.fromProps(props1))
     val brokerRegistration = ZkUtils.readData(zkClient, ZkUtils.BrokerIdsPath + "/" + brokerId)._1
 
     val props2 = TestUtils.createBrokerConfig(brokerId)
     try {
-      TestUtils.createServer(new KafkaConfig(props2))
+      TestUtils.createServer(KafkaConfig.fromProps(props2))
       fail("Registering a broker with a conflicting id should fail")
     } catch {
       case e : RuntimeException =>

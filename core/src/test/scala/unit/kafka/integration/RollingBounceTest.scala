@@ -49,10 +49,10 @@ class RollingBounceTest extends JUnit3Suite with ZooKeeperTestHarness {
   override def setUp() {
     super.setUp()
     // start all the servers
-    val server1 = TestUtils.createServer(new KafkaConfig(configProps1))
-    val server2 = TestUtils.createServer(new KafkaConfig(configProps2))
-    val server3 = TestUtils.createServer(new KafkaConfig(configProps3))
-    val server4 = TestUtils.createServer(new KafkaConfig(configProps4))
+    val server1 = TestUtils.createServer(KafkaConfig.fromProps(configProps1))
+    val server2 = TestUtils.createServer(KafkaConfig.fromProps(configProps2))
+    val server3 = TestUtils.createServer(KafkaConfig.fromProps(configProps3))
+    val server4 = TestUtils.createServer(KafkaConfig.fromProps(configProps4))
 
     servers ++= List(server1, server2, server3, server4)
   }

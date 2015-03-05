@@ -18,6 +18,7 @@
 
 package kafka.consumer
 
+import java.util.Properties
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import scala.collection._
@@ -36,11 +37,14 @@ import kafka.integration.KafkaServerTestHarness
 class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
 
   val numNodes = 1
+
+  val overridingProps = new Properties()
+  overridingProps.put(KafkaConfig.ZkConnectProp, TestZKUtils.zookeeperConnect)
+
   val configs =
     for(props <- TestUtils.createBrokerConfigs(numNodes))
-    yield new KafkaConfig(props) {
-      override val zkConnect = TestZKUtils.zookeeperConnect
-    }
+    yield KafkaConfig.fromProps(props, overridingProps)
+
   val messages = new mutable.HashMap[Int, Seq[Message]]
   val topic = "topic"
   val group = "group1"

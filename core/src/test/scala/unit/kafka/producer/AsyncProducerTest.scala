@@ -37,7 +37,7 @@ import kafka.utils._
 
 class AsyncProducerTest extends JUnit3Suite {
   val props = createBrokerConfigs(1)
-  val configs = props.map(p => new KafkaConfig(p))
+  val configs = props.map(p => KafkaConfig.fromProps(p))
 
   override def setUp() {
     super.setUp()

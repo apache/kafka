@@ -17,6 +17,8 @@
 
 package kafka.javaapi.consumer
 
+import java.util.Properties
+
 import kafka.server._
 import kafka.message._
 import kafka.serializer._
@@ -42,12 +44,15 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   val numNodes = 2
   val numParts = 2
   val topic = "topic1"
+
+  val overridingProps = new Properties()
+  overridingProps.put(KafkaConfig.ZkConnectProp, zookeeperConnect)
+  overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
+
   val configs =
-    for(props <- TestUtils.createBrokerConfigs(numNodes))
-    yield new KafkaConfig(props) {
-      override val numPartitions = numParts
-      override val zkConnect = zookeeperConnect
-    }
+    for (props <- TestUtils.createBrokerConfigs(numNodes))
+    yield KafkaConfig.fromProps(props, overridingProps)
+
   val group = "group1"
   val consumer1 = "consumer1"
   val nMessages = 2

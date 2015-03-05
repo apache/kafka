@@ -91,7 +91,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   private def startBrokers(cluster: Seq[Properties]) {
     for (props <- cluster) {
-      val config = new KafkaConfig(props)
+      val config = KafkaConfig.fromProps(props)
       val server = createServer(config)
       configs ++= List(config)
       servers ++= List(server)

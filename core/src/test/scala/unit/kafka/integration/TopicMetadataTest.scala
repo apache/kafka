@@ -32,7 +32,7 @@ import kafka.client.ClientUtils
 
 class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   val props = createBrokerConfigs(1)
-  val configs = props.map(p => new KafkaConfig(p))
+  val configs = props.map(p => KafkaConfig.fromProps(p))
   private var server1: KafkaServer = null
   val brokers = configs.map(c => new Broker(c.brokerId,c.hostName,c.port))
 

@@ -40,17 +40,18 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val serverMessageMaxBytes =  producerBufferSize/2
 
   val numServers = 2
-  val configs =
-    for(props <- TestUtils.createBrokerConfigs(numServers, false))
-    yield new KafkaConfig(props) {
-      override val zkConnect = TestZKUtils.zookeeperConnect
-      override val autoCreateTopicsEnable = false
-      override val messageMaxBytes = serverMessageMaxBytes
-      // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
-      // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
-      override val offsetsTopicPartitions = 1
-    }
 
+  val overridingProps = new Properties()
+  overridingProps.put(KafkaConfig.ZkConnectProp, TestZKUtils.zookeeperConnect)
+  overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+  overridingProps.put(KafkaConfig.MessageMaxBytesProp, serverMessageMaxBytes.toString)
+  // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
+  // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
+  overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
+
+  val configs =
+    for (props <- TestUtils.createBrokerConfigs(numServers, false))
+    yield KafkaConfig.fromProps(props, overridingProps)
 
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null

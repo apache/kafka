@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import org.apache.kafka.common.config.ConfigException
 import org.junit.Test
 import junit.framework.Assert._
 import org.scalatest.junit.JUnit3Suite
@@ -31,7 +32,7 @@ class KafkaConfigTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, 8181)
     props.put("log.retention.hours", "1")
 
-    val cfg = new KafkaConfig(props)
+    val cfg = KafkaConfig.fromProps(props)
     assertEquals(60L * 60L * 1000L, cfg.logRetentionTimeMillis)
 
   }
@@ -41,7 +42,7 @@ class KafkaConfigTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, 8181)
     props.put("log.retention.minutes", "30")
 
-    val cfg = new KafkaConfig(props)
+    val cfg = KafkaConfig.fromProps(props)
     assertEquals(30 * 60L * 1000L, cfg.logRetentionTimeMillis)
 
   }
@@ -51,7 +52,7 @@ class KafkaConfigTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, 8181)
     props.put("log.retention.ms", "1800000")
 
-    val cfg = new KafkaConfig(props)
+    val cfg = KafkaConfig.fromProps(props)
     assertEquals(30 * 60L * 1000L, cfg.logRetentionTimeMillis)
 
   }
@@ -60,7 +61,7 @@ class KafkaConfigTest extends JUnit3Suite {
   def testLogRetentionTimeNoConfigProvided() {
     val props = TestUtils.createBrokerConfig(0, 8181)
 
-    val cfg = new KafkaConfig(props)
+    val cfg = KafkaConfig.fromProps(props)
     assertEquals(24 * 7 * 60L * 60L * 1000L, cfg.logRetentionTimeMillis)
 
   }
@@ -71,7 +72,7 @@ class KafkaConfigTest extends JUnit3Suite {
     props.put("log.retention.minutes", "30")
     props.put("log.retention.hours", "1")
 
-    val cfg = new KafkaConfig(props)
+    val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRetentionTimeMillis)
 
   }
@@ -82,7 +83,7 @@ class KafkaConfigTest extends JUnit3Suite {
     props.put("log.retention.ms", "1800000")
     props.put("log.retention.minutes", "10")
 
-    val cfg = new KafkaConfig(props)
+    val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRetentionTimeMillis)
 
   }
@@ -95,7 +96,7 @@ class KafkaConfigTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, port)
     props.put("host.name", hostName)
     
-    val serverConfig = new KafkaConfig(props)
+    val serverConfig = KafkaConfig.fromProps(props)
     
     assertEquals(serverConfig.advertisedHostName, hostName)
     assertEquals(serverConfig.advertisedPort, port)
@@ -111,7 +112,7 @@ class KafkaConfigTest extends JUnit3Suite {
     props.put("advertised.host.name", advertisedHostName)
     props.put("advertised.port", advertisedPort.toString)
     
-    val serverConfig = new KafkaConfig(props)
+    val serverConfig = KafkaConfig.fromProps(props)
     
     assertEquals(serverConfig.advertisedHostName, advertisedHostName)
     assertEquals(serverConfig.advertisedPort, advertisedPort)
@@ -120,7 +121,7 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testUncleanLeaderElectionDefault() {
     val props = TestUtils.createBrokerConfig(0, 8181)
-    val serverConfig = new KafkaConfig(props)
+    val serverConfig = KafkaConfig.fromProps(props)
 
     assertEquals(serverConfig.uncleanLeaderElectionEnable, true)
   }
@@ -129,7 +130,7 @@ class KafkaConfigTest extends JUnit3Suite {
   def testUncleanElectionDisabled() {
     val props = TestUtils.createBrokerConfig(0, 8181)
     props.put("unclean.leader.election.enable", String.valueOf(false))
-    val serverConfig = new KafkaConfig(props)
+    val serverConfig = KafkaConfig.fromProps(props)
 
     assertEquals(serverConfig.uncleanLeaderElectionEnable, false)
   }
@@ -138,7 +139,7 @@ class KafkaConfigTest extends JUnit3Suite {
   def testUncleanElectionEnabled() {
     val props = TestUtils.createBrokerConfig(0, 8181)
     props.put("unclean.leader.election.enable", String.valueOf(true))
-    val serverConfig = new KafkaConfig(props)
+    val serverConfig = KafkaConfig.fromProps(props)
 
     assertEquals(serverConfig.uncleanLeaderElectionEnable, true)
   }
@@ -148,8 +149,8 @@ class KafkaConfigTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, 8181)
     props.put("unclean.leader.election.enable", "invalid")
 
-    intercept[IllegalArgumentException] {
-      new KafkaConfig(props)
+    intercept[ConfigException] {
+      KafkaConfig.fromProps(props)
     }
   }
   
@@ -158,7 +159,7 @@ class KafkaConfigTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, 8181)
     props.put("log.roll.ms", "1800000")
 
-    val cfg = new KafkaConfig(props)
+    val cfg = KafkaConfig.fromProps(props)
     assertEquals(30 * 60L * 1000L, cfg.logRollTimeMillis)
 
   }
@@ -169,7 +170,7 @@ class KafkaConfigTest extends JUnit3Suite {
     props.put("log.roll.ms", "1800000")
     props.put("log.roll.hours", "1")
 
-    val cfg = new KafkaConfig(props)
+    val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRollTimeMillis)
 
   }
@@ -178,7 +179,7 @@ class KafkaConfigTest extends JUnit3Suite {
   def testLogRollTimeNoConfigProvided() {
     val props = TestUtils.createBrokerConfig(0, 8181)
 
-    val cfg = new KafkaConfig(props)
+    val cfg = KafkaConfig.fromProps(props)
     assertEquals(24 * 7 * 60L * 60L * 1000L, cfg.logRollTimeMillis																									)
 
   }
@@ -186,7 +187,7 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testDefaultCompressionType() {
     val props = TestUtils.createBrokerConfig(0, 8181)
-    val serverConfig = new KafkaConfig(props)
+    val serverConfig = KafkaConfig.fromProps(props)
 
     assertEquals(serverConfig.compressionType, "producer")
   }
@@ -195,7 +196,7 @@ class KafkaConfigTest extends JUnit3Suite {
   def testValidCompressionType() {
     val props = TestUtils.createBrokerConfig(0, 8181)
     props.put("compression.type", "gzip")
-    val serverConfig = new KafkaConfig(props)
+    val serverConfig = KafkaConfig.fromProps(props)
 
     assertEquals(serverConfig.compressionType, "gzip")
   }
@@ -205,7 +206,7 @@ class KafkaConfigTest extends JUnit3Suite {
     val props = TestUtils.createBrokerConfig(0, 8181)
     props.put("compression.type", "abc")
     intercept[IllegalArgumentException] {
-      new KafkaConfig(props)
+      KafkaConfig.fromProps(props)
     }
   }
 }

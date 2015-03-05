@@ -44,7 +44,7 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
   private var server: KafkaServer = null
 
   private val props = TestUtils.createBrokerConfig(brokerId, port)
-  private val config = new KafkaConfig(props)
+  private val config = KafkaConfig.fromProps(props)
 
   private val topic = "topic"
   private val numRecords = 2000

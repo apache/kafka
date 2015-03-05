@@ -49,7 +49,7 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
     time = new MockTime()
-    server = TestUtils.createServer(new KafkaConfig(config), time)
+    server = TestUtils.createServer(KafkaConfig.fromProps(config), time)
     simpleConsumer = new SimpleConsumer("localhost", brokerPort, 1000000, 64*1024, "test-client")
     val consumerMetadataRequest = ConsumerMetadataRequest(group)
     Stream.continually {

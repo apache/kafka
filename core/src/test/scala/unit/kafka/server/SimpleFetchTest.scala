@@ -24,7 +24,7 @@ import kafka.log.Log
 import kafka.message.{ByteBufferMessageSet, Message}
 
 import scala.Some
-import java.util.Collections
+import java.util.{Properties, Collections}
 import java.util.concurrent.atomic.AtomicBoolean
 import collection.JavaConversions._
 
@@ -35,11 +35,16 @@ import junit.framework.Assert._
 
 class SimpleFetchTest extends JUnit3Suite {
 
-  val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
-    override val replicaLagTimeMaxMs = 100L
-    override val replicaFetchWaitMaxMs = 100
-    override val replicaLagMaxMessages = 10L
-  })
+  val replicaLagTimeMaxMs = 100L
+  val replicaFetchWaitMaxMs = 100
+  val replicaLagMaxMessages = 10L
+
+  val overridingProps = new Properties()
+  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
+  overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
+  overridingProps.put(KafkaConfig.ReplicaLagMaxMessagesProp, replicaLagMaxMessages.toString)
+
+  val configs = TestUtils.createBrokerConfigs(2).map(KafkaConfig.fromProps(_, overridingProps))
 
   // set the replica manager with the partition
   val time = new MockTime

@@ -31,7 +31,7 @@ import junit.framework.Assert._
 
 class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
-  val configs = List(new KafkaConfig(TestUtils.createBrokerConfig(0)))
+  val configs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0)))
 
   val topic = "test_topic"
   val group = "default_group"

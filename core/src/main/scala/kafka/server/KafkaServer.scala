@@ -453,7 +453,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
   private def generateBrokerId: Int = {
     try {
-      ZkUtils.getBrokerSequenceId(zkClient, config.MaxReservedBrokerId)
+      ZkUtils.getBrokerSequenceId(zkClient, config.maxReservedBrokerId)
     } catch {
       case e: Exception =>
         error("Failed to generate broker.id due to ", e)

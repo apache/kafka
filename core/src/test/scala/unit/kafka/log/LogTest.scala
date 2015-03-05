@@ -38,7 +38,7 @@ class LogTest extends JUnitSuite {
   def setUp() {
     logDir = TestUtils.tempDir()
     val props = TestUtils.createBrokerConfig(0, -1)
-    config = new KafkaConfig(props)
+    config = KafkaConfig.fromProps(props)
   }
 
   @After

@@ -99,7 +99,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val brokerConfigs = TestUtils.createBrokerConfigs(4, false)
     brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
     // create brokers
-    val allServers = brokerConfigs.map(b => TestUtils.createServer(new KafkaConfig(b)))
+    val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     val servers = allServers.filter(s => expectedReplicaAssignment(0).contains(s.config.brokerId))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
@@ -263,7 +263,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
     val topicAndPartition = TopicAndPartition(topic, 0)
     // create brokers
-    val servers = brokerConfigs.map(b => TestUtils.createServer(new KafkaConfig(b)))
+    val servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
     // wait until replica log is created on every broker

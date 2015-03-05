@@ -16,6 +16,8 @@
 */
 package kafka.server
 
+import java.util.Properties
+
 import org.scalatest.junit.JUnit3Suite
 import collection.mutable.HashMap
 import collection.mutable.Map
@@ -29,11 +31,15 @@ import java.util.concurrent.atomic.AtomicBoolean
 class IsrExpirationTest extends JUnit3Suite {
 
   var topicPartitionIsr: Map[(String, Int), Seq[Int]] = new HashMap[(String, Int), Seq[Int]]()
-  val configs = TestUtils.createBrokerConfigs(2).map(new KafkaConfig(_) {
-    override val replicaLagTimeMaxMs = 100L
-    override val replicaFetchWaitMaxMs = 100
-    override val replicaLagMaxMessages = 10L
-  })
+  val replicaLagTimeMaxMs = 100L
+  val replicaFetchWaitMaxMs = 100
+  val replicaLagMaxMessages = 10L
+
+  val overridingProps = new Properties()
+  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
+  overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
+  overridingProps.put(KafkaConfig.ReplicaLagMaxMessagesProp, replicaLagMaxMessages.toString)
+  val configs = TestUtils.createBrokerConfigs(2).map(KafkaConfig.fromProps(_, overridingProps))
   val topic = "foo"
 
   val time = new MockTime

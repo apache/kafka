@@ -17,6 +17,8 @@
 
 package kafka.consumer
 
+import java.util.Properties
+
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.MetricPredicate
 import org.junit.Test
@@ -38,12 +40,15 @@ class MetricsTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
   val numNodes = 2
   val numParts = 2
   val topic = "topic1"
+
+  val overridingProps = new Properties()
+  overridingProps.put(KafkaConfig.ZkConnectProp, zookeeperConnect)
+  overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
+
   val configs =
-    for (props <- TestUtils.createBrokerConfigs(numNodes, enableDeleteTopic=true))
-    yield new KafkaConfig(props) {
-      override val zkConnect = zookeeperConnect
-      override val numPartitions = numParts
-    }
+    for (props <- TestUtils.createBrokerConfigs(numNodes, enableDeleteTopic = true))
+    yield KafkaConfig.fromProps(props, overridingProps)
+
   val nMessages = 2
 
   override def tearDown() {

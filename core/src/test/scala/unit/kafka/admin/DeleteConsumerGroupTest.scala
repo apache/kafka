@@ -26,7 +26,7 @@ import kafka.integration.KafkaServerTestHarness
 
 
 class DeleteConsumerGroupTest extends JUnit3Suite with KafkaServerTestHarness {
-  val configs = TestUtils.createBrokerConfigs(3, false, true).map(new KafkaConfig(_))
+  val configs = TestUtils.createBrokerConfigs(3, false, true).map(KafkaConfig.fromProps)
 
   @Test
   def testGroupWideDeleteInZK() {

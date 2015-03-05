@@ -37,12 +37,14 @@ import org.apache.kafka.common.serialization.ByteArraySerializer
 
 class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
   val numServers = 2
+
+  val overridingProps = new Properties()
+  overridingProps.put(KafkaConfig.ZkConnectProp, TestZKUtils.zookeeperConnect)
+  overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
+
   val configs =
-    for(props <- TestUtils.createBrokerConfigs(numServers, false))
-    yield new KafkaConfig(props) {
-      override val zkConnect = TestZKUtils.zookeeperConnect
-      override val numPartitions = 4
-    }
+    for (props <- TestUtils.createBrokerConfigs(numServers, false))
+    yield KafkaConfig.fromProps(props, overridingProps)
 
   private var consumer1: SimpleConsumer = null
   private var consumer2: SimpleConsumer = null

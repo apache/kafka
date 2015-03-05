@@ -21,7 +21,7 @@ import scala.collection.JavaConversions._
 import joptsimple.OptionParser
 import metrics.KafkaMetricsReporter
 import server.{KafkaConfig, KafkaServerStartable, KafkaServer}
-import kafka.utils.{CommandLineUtils, Utils, Logging}
+import kafka.utils.{VerifiableProperties, CommandLineUtils, Utils, Logging}
 
 object Kafka extends Logging {
 
@@ -47,13 +47,13 @@ object Kafka extends Logging {
       props.putAll(CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt)))
     }
 
-    new KafkaConfig(props)
+    KafkaConfig.fromProps(props)
   }
 
   def main(args: Array[String]): Unit = {
     try {
       val serverConfig = getKafkaConfigFromArgs(args)
-      KafkaMetricsReporter.startReporters(serverConfig.props)
+      KafkaMetricsReporter.startReporters(new VerifiableProperties(serverConfig.toProps))
       val kafkaServerStartable = new KafkaServerStartable(serverConfig)
 
       // attach shutdown handler to catch control-c

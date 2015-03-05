@@ -51,10 +51,10 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
   private val props1 = TestUtils.createBrokerConfig(brokerId1, port1, false)
   props1.put("num.partitions", "4")
-  private val config1 = new KafkaConfig(props1)
+  private val config1 = KafkaConfig.fromProps(props1)
   private val props2 = TestUtils.createBrokerConfig(brokerId2, port2, false)
   props2.put("num.partitions", "4")
-  private val config2 = new KafkaConfig(props2)
+  private val config2 = KafkaConfig.fromProps(props2)
 
   override def setUp() {
     super.setUp()

@@ -28,7 +28,7 @@ import kafka.common._
 
 class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
   val props = createBrokerConfigs(2,false)
-  val configs = props.map(p => new KafkaConfig(p))
+  val configs = props.map(p => KafkaConfig.fromProps(p))
   var brokers: Seq[KafkaServer] = null
   val topic1 = "foo"
   val topic2 = "bar"

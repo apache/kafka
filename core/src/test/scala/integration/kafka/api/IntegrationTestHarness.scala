@@ -44,7 +44,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   override lazy val configs = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount)
     cfgs.map(_.putAll(serverConfig))
-    cfgs.map(new KafkaConfig(_))
+    cfgs.map(KafkaConfig.fromProps)
   }
   
   var consumers = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()

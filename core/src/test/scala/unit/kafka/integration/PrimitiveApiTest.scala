@@ -42,7 +42,7 @@ class PrimitiveApiTest extends JUnit3Suite with ProducerConsumerTestHarness with
 
   val port = TestUtils.choosePort()
   val props = TestUtils.createBrokerConfig(0, port)
-  val config = new KafkaConfig(props)
+  val config = KafkaConfig.fromProps(props)
   val configs = List(config)
 
   def testFetchRequestCanProperlySerialize() {

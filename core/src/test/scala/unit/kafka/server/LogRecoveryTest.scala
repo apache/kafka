@@ -16,6 +16,8 @@
 */
 package kafka.server
 
+import java.util.Properties
+
 import kafka.utils.TestUtils._
 import kafka.utils.IntEncoder
 import kafka.utils.{Utils, TestUtils}
@@ -31,12 +33,18 @@ import org.junit.Assert._
 
 class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
-  val configs = TestUtils.createBrokerConfigs(2, false).map(new KafkaConfig(_) {
-    override val replicaLagTimeMaxMs = 5000L
-    override val replicaLagMaxMessages = 10L
-    override val replicaFetchWaitMaxMs = 1000
-    override val replicaFetchMinBytes = 20
-  })
+  val replicaLagTimeMaxMs = 5000L
+  val replicaLagMaxMessages = 10L
+  val replicaFetchWaitMaxMs = 1000
+  val replicaFetchMinBytes = 20
+
+  val overridingProps = new Properties()
+  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
+  overridingProps.put(KafkaConfig.ReplicaLagMaxMessagesProp, replicaLagMaxMessages.toString)
+  overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
+  overridingProps.put(KafkaConfig.ReplicaFetchMinBytesProp, replicaFetchMinBytes.toString)
+
+  val configs = TestUtils.createBrokerConfigs(2, false).map(KafkaConfig.fromProps(_, overridingProps))
   val topic = "new-topic"
   val partitionId = 0
 
