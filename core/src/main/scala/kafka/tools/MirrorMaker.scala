@@ -589,7 +589,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           "of skipped unacked messages is" + numSkippedUnackedMessages.incrementAndGet())
         super.onCompletion(metadata, exception)
       } else {
-        trace("Updating offset for %s to %d".format(topicPartition, offset))
+        trace("Updating offset for %s to %d".format(topicPartition, offset.element))
       }
       // remove the offset from the unackedOffsets
       val unackedOffsets = unackedOffsetsMap.get(topicPartition)
@@ -662,7 +662,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     def removeOffset(offset: DoublyLinkedListNode[Long]) {
-      offsetList.remove(offset)
+      this synchronized {
+        offsetList.remove(offset)
+      }
     }
 
     def getOffsetToCommit: Long = {
