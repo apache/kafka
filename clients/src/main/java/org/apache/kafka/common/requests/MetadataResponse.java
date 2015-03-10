@@ -40,11 +40,25 @@ public class MetadataResponse extends AbstractRequestResponse {
 
     // topic level field names
     private static final String TOPIC_ERROR_CODE_KEY_NAME = "topic_error_code";
+
+    /**
+     * Possible error code:
+     *
+     * TODO
+     */
+
     private static final String TOPIC_KEY_NAME = "topic";
     private static final String PARTITION_METADATA_KEY_NAME = "partition_metadata";
 
     // partition level field names
     private static final String PARTITION_ERROR_CODE_KEY_NAME = "partition_error_code";
+
+    /**
+     * Possible error code:
+     *
+     * TODO
+     */
+
     private static final String PARTITION_KEY_NAME = "partition_id";
     private static final String LEADER_KEY_NAME = "leader";
     private static final String REPLICAS_KEY_NAME = "replicas";

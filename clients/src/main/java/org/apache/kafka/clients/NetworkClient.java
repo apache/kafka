@@ -133,6 +133,19 @@ public class NetworkClient implements KafkaClient {
     }
 
     /**
+     * Check if the connection of the node has failed, based on the connection state. Such connection failure are
+     * usually transient and can be resumed in the next {@link #ready(org.apache.kafka.common.Node, long)} }
+     * call, but there are cases where transient failures needs to be caught and re-acted upon.
+     *
+     * @param node the node to check
+     * @return true iff the connection has failed and the node is disconnected
+     */
+    @Override
+    public boolean connectionFailed(Node node) {
+        return connectionStates.connectionState(node.id()).equals(ConnectionState.DISCONNECTED);
+    }
+
+    /**
      * Check if the node with the given id is ready to send more requests.
      * 
      * @param node The node
@@ -174,7 +187,6 @@ public class NetworkClient implements KafkaClient {
      * Queue up the given request for sending. Requests can only be sent out to ready nodes.
      * 
      * @param request The request
-     * @param now The current time
      */
     @Override
     public void send(ClientRequest request) {

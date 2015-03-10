@@ -16,6 +16,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -27,11 +28,10 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
@@ -76,7 +76,7 @@ public class SenderTest {
         sender.run(time.milliseconds()); // connect
         sender.run(time.milliseconds()); // send produce request
         assertEquals("We should have a single produce request in flight.", 1, client.inFlightRequestCount());
-        client.respond(produceResponse(tp.topic(), tp.partition(), offset, Errors.NONE.code()));
+        client.respond(produceResponse(tp, offset, Errors.NONE.code()));
         sender.run(time.milliseconds());
         assertEquals("All requests completed.", offset, (long) client.inFlightRequestCount());
         sender.run(time.milliseconds());
@@ -110,7 +110,7 @@ public class SenderTest {
         sender.run(time.milliseconds()); // resend
         assertEquals(1, client.inFlightRequestCount());
         long offset = 0;
-        client.respond(produceResponse(tp.topic(), tp.partition(), offset, Errors.NONE.code()));
+        client.respond(produceResponse(tp, offset, Errors.NONE.code()));
         sender.run(time.milliseconds());
         assertTrue("Request should have retried and completed", future.isDone());
         assertEquals(offset, future.get().offset());
@@ -138,17 +138,11 @@ public class SenderTest {
         }
     }
 
-    private Struct produceResponse(String topic, int part, long offset, int error) {
-        Struct struct = new Struct(ProtoUtils.currentResponseSchema(ApiKeys.PRODUCE.id));
-        Struct response = struct.instance("responses");
-        response.set("topic", topic);
-        Struct partResp = response.instance("partition_responses");
-        partResp.set("partition", part);
-        partResp.set("error_code", (short) error);
-        partResp.set("base_offset", offset);
-        response.set("partition_responses", new Object[] {partResp});
-        struct.set("responses", new Object[] {response});
-        return struct;
+    private Struct produceResponse(TopicPartition tp, long offset, int error) {
+        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse((short) error, offset);
+        Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
+        ProduceResponse response = new ProduceResponse(partResp);
+        return response.toStruct();
     }
 
 }

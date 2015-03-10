@@ -24,6 +24,12 @@ public class HeartbeatResponse extends AbstractRequestResponse {
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.HEARTBEAT.id);
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
+    /**
+     * Possible error code:
+     *
+     * TODO
+     */
+
     private final short errorCode;
     public HeartbeatResponse(short errorCode) {
         super(new Struct(CURRENT_SCHEMA));

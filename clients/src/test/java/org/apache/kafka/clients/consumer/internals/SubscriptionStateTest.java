@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static java.util.Arrays.asList;
 
 import java.util.Collections;

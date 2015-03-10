@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.api.test
+package kafka.api
 
 import org.junit.Test
 import org.junit.Assert._

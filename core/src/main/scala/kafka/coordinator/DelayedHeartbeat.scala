@@ -43,6 +43,6 @@ class DelayedHeartbeat(sessionTimeout: Long,
   /* mark all consumers within the heartbeat as heartbeat timed out */
   override def onComplete() {
     for (registry <- bucket.consumerRegistryList)
-      expireCallback(registry.groupRegistry.groupId, registry.consumerId)
+      expireCallback(registry.groupId, registry.consumerId)
   }
 }

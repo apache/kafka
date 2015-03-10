@@ -41,14 +41,23 @@ public enum Errors {
             new LeaderNotAvailableException("There is no leader for this topic-partition as we are in the middle of a leadership election.")),
     NOT_LEADER_FOR_PARTITION(6,
             new NotLeaderForPartitionException("This server is not the leader for that topic-partition.")),
-    REQUEST_TIMED_OUT(7, new TimeoutException("The request timed out.")),
+    REQUEST_TIMED_OUT(7,
+            new TimeoutException("The request timed out.")),
+    // TODO: errorCode 8 for BrokerNotAvailable
+    REPLICA_NOT_AVAILABLE(9,
+            new ApiException("The replica is not available for the requested topic-partition")),
     MESSAGE_TOO_LARGE(10,
             new RecordTooLargeException("The request included a message larger than the max message size the server will accept.")),
-    OFFSET_METADATA_TOO_LARGE(12, new OffsetMetadataTooLarge("The metadata field of the offset request was too large.")),
-    NETWORK_EXCEPTION(13, new NetworkException("The server disconnected before a response was received.")),
-    OFFSET_LOAD_IN_PROGRESS(14, new ApiException("The coordinator is loading offsets and can't process requests.")),
-    CONSUMER_COORDINATOR_NOT_AVAILABLE(15, new ApiException("The coordinator is not available.")),
-    NOT_COORDINATOR_FOR_CONSUMER(16, new ApiException("This is not the correct co-ordinator for this consumer.")),
+    OFFSET_METADATA_TOO_LARGE(12,
+            new OffsetMetadataTooLarge("The metadata field of the offset request was too large.")),
+    NETWORK_EXCEPTION(13,
+            new NetworkException("The server disconnected before a response was received.")),
+    OFFSET_LOAD_IN_PROGRESS(14,
+            new ApiException("The coordinator is loading offsets and can't process requests.")),
+    CONSUMER_COORDINATOR_NOT_AVAILABLE(15,
+            new ApiException("The coordinator is not available.")),
+    NOT_COORDINATOR_FOR_CONSUMER(16,
+            new ApiException("This is not the correct co-ordinator for this consumer.")),
     INVALID_TOPIC_EXCEPTION(17,
             new InvalidTopicException("The request attempted to perform an operation on an invalid topic.")),
     RECORD_LIST_TOO_LARGE(18,
@@ -57,7 +66,12 @@ public enum Errors {
             new NotEnoughReplicasException("Messages are rejected since there are fewer in-sync replicas than required.")),
     NOT_ENOUGH_REPLICAS_AFTER_APPEND(20,
             new NotEnoughReplicasAfterAppendException("Messages are written to the log, but to fewer in-sync replicas than required.")),
-    INVALID_REQUIRED_ACKS(21, new InvalidRequiredAcksException("Produce request specified an invalid value for required acks."));
+    INVALID_REQUIRED_ACKS(21,
+            new InvalidRequiredAcksException("Produce request specified an invalid value for required acks.")),
+    ILLEGAL_GENERATION(22,
+            new ApiException("Specified consumer generation id is not valid.")),
+    NO_OFFSETS_FETCHABLE(23,
+            new ApiException("No offsets have been committed so far."));
 
     private static Map<Class<?>, Errors> classToError = new HashMap<Class<?>, Errors>();
     private static Map<Short, Errors> codeToError = new HashMap<Short, Errors>();
@@ -68,7 +82,6 @@ public enum Errors {
             if (error.exception != null)
                 classToError.put(error.exception.getClass(), error);
         }
-
     }
 
     private final short code;

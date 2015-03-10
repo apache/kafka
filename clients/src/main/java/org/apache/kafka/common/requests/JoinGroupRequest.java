@@ -30,6 +30,8 @@ public class JoinGroupRequest extends AbstractRequestResponse {
     private static final String CONSUMER_ID_KEY_NAME = "consumer_id";
     private static final String STRATEGY_KEY_NAME = "partition_assignment_strategy";
 
+    public static final String UNKNOWN_CONSUMER_ID = "";
+
     private final String groupId;
     private final int sessionTimeout;
     private final List<String> topics;

@@ -41,6 +41,13 @@ public class ListOffsetResponse extends AbstractRequestResponse {
     // partition level field names
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
+
+    /**
+     * Possible error code:
+     *
+     * TODO
+     */
+
     private static final String OFFSETS_KEY_NAME = "offsets";
 
     private final Map<TopicPartition, PartitionData> responseData;

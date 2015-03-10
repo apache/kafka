@@ -26,6 +26,13 @@ public class JoinGroupResponse extends AbstractRequestResponse {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentResponseSchema(ApiKeys.JOIN_GROUP.id);
     private static final String ERROR_CODE_KEY_NAME = "error_code";
+
+    /**
+     * Possible error code:
+     *
+     * TODO
+     */
+
     private static final String GENERATION_ID_KEY_NAME = "group_generation_id";
     private static final String CONSUMER_ID_KEY_NAME = "consumer_id";
     private static final String ASSIGNED_PARTITIONS_KEY_NAME = "assigned_partitions";

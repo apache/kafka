@@ -43,8 +43,11 @@ public class SubscriptionState {
     /* the last committed offset for each partition */
     private final Map<TopicPartition, Long> committed;
 
-    /* do we need to request a partition assignment from the co-ordinator? */
+    /* do we need to request a partition assignment from the coordinator? */
     private boolean needsPartitionAssignment;
+
+    /* do we need to request the latest committed offsets from the coordinator? */
+    private boolean needsFetchCommittedOffsets;
 
     public SubscriptionState() {
         this.subscribedTopics = new HashSet<String>();
@@ -54,6 +57,7 @@ public class SubscriptionState {
         this.fetched = new HashMap<TopicPartition, Long>();
         this.committed = new HashMap<TopicPartition, Long>();
         this.needsPartitionAssignment = false;
+        this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
     }
 
     public void subscribe(String topic) {
@@ -73,6 +77,10 @@ public class SubscriptionState {
         for (TopicPartition tp: assignedPartitions())
             if (topic.equals(tp.topic()))
                 clearPartition(tp);
+    }
+
+    public void needReassignment() {
+        this.needsPartitionAssignment = true;
     }
 
     public void subscribe(TopicPartition tp) {
@@ -119,10 +127,19 @@ public class SubscriptionState {
 
     public void committed(TopicPartition tp, long offset) {
         this.committed.put(tp, offset);
+        this.needsFetchCommittedOffsets = false;
     }
 
     public Long committed(TopicPartition tp) {
         return this.committed.get(tp);
+    }
+
+    public void needRefreshCommits() {
+        this.needsFetchCommittedOffsets = true;
+    }
+
+    public boolean refreshCommitsNeeded() {
+        return this.needsFetchCommittedOffsets;
     }
     
     public void seek(TopicPartition tp, long offset) {
@@ -162,7 +179,7 @@ public class SubscriptionState {
         return copy;
     }
 
-    public boolean needsPartitionAssignment() {
+    public boolean partitionAssignmentNeeded() {
         return this.needsPartitionAssignment;
     }
 

@@ -19,14 +19,11 @@ package kafka.api
 
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.scalatest.junit.JUnit3Suite
-import collection._
 import kafka.utils.TestUtils
 import java.util.Properties
-import java.util.Arrays
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.KafkaProducer
-import kafka.server.KafkaConfig
+import kafka.server.{OffsetManager, KafkaConfig}
 import kafka.integration.KafkaServerTestHarness
 import scala.collection.mutable.Buffer
 
@@ -62,6 +59,13 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
       producers += new KafkaProducer(producerConfig)
     for(i <- 0 until consumerCount)
       consumers += new KafkaConsumer(consumerConfig)
+
+    // create the consumer offset topic
+    TestUtils.createTopic(zkClient, OffsetManager.OffsetsTopicName,
+      serverConfig.getProperty("offsets.topic.num.partitions").toInt,
+      serverConfig.getProperty("offsets.topic.replication.factor").toInt,
+      servers,
+      servers(0).offsetManager.offsetsTopicConfig)
   }
   
   override def tearDown() {

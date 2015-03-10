@@ -48,6 +48,7 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import collection.Iterable
 
 import scala.collection.Map
+import org.apache.kafka.clients.consumer.KafkaConsumer
 
 /**
  * Utility functions to help with testing
@@ -404,6 +405,27 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     return new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
+  }
+
+  /**
+   * Create a new consumer with a few pre-configured properties.
+   */
+  def createNewConsumer(brokerList: String,
+                        groupId: String,
+                        autoOffsetReset: String = "earliest",
+                        partitionFetchSize: Long = 4096L) : KafkaConsumer[Array[Byte],Array[Byte]] = {
+    import org.apache.kafka.clients.consumer.ConsumerConfig
+
+    val consumerProps= new Properties()
+    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, autoOffsetReset)
+    consumerProps.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, partitionFetchSize.toString)
+    consumerProps.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, "100")
+    consumerProps.put(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, "200")
+    consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
+    return new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }
 
   /**

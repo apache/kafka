@@ -25,6 +25,7 @@ import kafka.utils._
 import scala.collection.mutable.HashMap
 
 import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
+import org.apache.kafka.common.requests.JoinGroupRequest
 
 
 /**
@@ -114,9 +115,15 @@ class ConsumerCoordinator(val config: KafkaConfig,
     if (!consumerGroupRegistries.contains(groupId))
       createNewGroup(groupId, partitionAssignmentStrategy)
 
+    val groupRegistry = consumerGroupRegistries(groupId)
+
     // if the consumer id is unknown or it does exists in
     // the group yet, register this consumer to the group
-    // TODO
+    if (consumerId.equals(JoinGroupRequest.UNKNOWN_CONSUMER_ID)) {
+      createNewConsumer(groupId, groupRegistry.generateNextConsumerId, topics, sessionTimeoutMs)
+    } else if (!groupRegistry.memberRegistries.contains(consumerId)) {
+      createNewConsumer(groupId, consumerId, topics, sessionTimeoutMs)
+    }
 
     // add a delayed join-group operation to the purgatory
     // TODO
@@ -146,9 +153,9 @@ class ConsumerCoordinator(val config: KafkaConfig,
    * Process a heartbeat request from a consumer
    */
   def consumerHeartbeat(groupId: String,
-                      consumerId: String,
-                      generationId: Int,
-                      responseCallback: Short => Unit) {
+                        consumerId: String,
+                        generationId: Int,
+                        responseCallback: Short => Unit) {
 
     // check that the group already exists
     // TODO
@@ -171,21 +178,28 @@ class ConsumerCoordinator(val config: KafkaConfig,
     // TODO: this is just a stub for new consumer testing,
     // TODO: needs to be replaced with the logic above
     // TODO --------------------------------------------------------------
-    // always return OK for heartbeat immediately
-    responseCallback(Errors.NONE.code)
+    // check if the consumer already exist, if yes return OK,
+    // otherwise return illegal generation error
+    if (consumerGroupRegistries.contains(groupId)
+      && consumerGroupRegistries(groupId).memberRegistries.contains(consumerId))
+      responseCallback(Errors.NONE.code)
+    else
+      responseCallback(Errors.ILLEGAL_GENERATION.code)
   }
 
   /**
    * Create a new consumer
    */
-  private def createNewConsumer(consumerId: String,
+  private def createNewConsumer(groupId: String,
+                                consumerId: String,
                                 topics: List[String],
-                                sessionTimeoutMs: Int,
-                                groupRegistry: GroupRegistry) {
-    debug("Registering consumer " + consumerId + " for group " + groupRegistry.groupId)
+                                sessionTimeoutMs: Int) {
+    debug("Registering consumer " + consumerId + " for group " + groupId)
 
     // create the new consumer registry entry
-    // TODO: specify consumerId as unknown and update at the end of the prepare-rebalance phase
+    val consumerRegistry = new ConsumerRegistry(groupId, consumerId, topics, sessionTimeoutMs)
+
+    consumerGroupRegistries(groupId).memberRegistries.put(consumerId, consumerRegistry)
 
     // check if the partition assignment strategy is consistent with the group
     // TODO
@@ -202,7 +216,7 @@ class ConsumerCoordinator(val config: KafkaConfig,
     // start preparing group partition rebalance
     // TODO
 
-    info("Registered consumer " + consumerId + " for group " + groupRegistry.groupId)
+    info("Registered consumer " + consumerId + " for group " + groupId)
   }
 
   /**

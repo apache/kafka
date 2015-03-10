@@ -32,10 +32,10 @@ import java.util.HashMap
  *  1. subscribed topic list
  *  2. assigned partitions for the subscribed topics.
  */
-class ConsumerRegistry(val consumerId: String,
-                       val subscribedTopics: List[String],
-                       val sessionTimeoutMs: Int,
-                       val groupRegistry: GroupRegistry) {
+class ConsumerRegistry(val groupId: String,
+                       val consumerId: String,
+                       val topics: List[String],
+                       val sessionTimeoutMs: Int) {
 
   /* number of expired heartbeat recorded */
   val numExpiredHeartbeat = new AtomicInteger(0)

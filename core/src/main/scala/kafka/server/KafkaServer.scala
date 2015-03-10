@@ -311,7 +311,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         throw new IllegalStateException("Kafka server is still starting up, cannot shut down!")
 
       val canShutdown = isShuttingDown.compareAndSet(false, true)
-      if (canShutdown) {
+      if (canShutdown && shutdownLatch.getCount > 0) {
         Utils.swallow(controlledShutdown())
         brokerState.newState(BrokerShuttingDown)
         if(socketServer != null)

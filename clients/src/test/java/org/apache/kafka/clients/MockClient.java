@@ -35,11 +35,23 @@ import org.apache.kafka.common.utils.Time;
  */
 public class MockClient implements KafkaClient {
 
+    private class FutureResponse {
+        public final Struct responseBody;
+        public final boolean disconnected;
+
+        public FutureResponse(Struct responseBody, boolean disconnected) {
+            this.responseBody = responseBody;
+            this.disconnected = disconnected;
+        }
+    }
+
     private final Time time;
     private int correlation = 0;
+    private Node node = null;
     private final Set<Integer> ready = new HashSet<Integer>();
     private final Queue<ClientRequest> requests = new ArrayDeque<ClientRequest>();
     private final Queue<ClientResponse> responses = new ArrayDeque<ClientResponse>();
+    private final Queue<FutureResponse> futureResponses = new ArrayDeque<FutureResponse>();
 
     public MockClient(Time time) {
         this.time = time;
@@ -52,14 +64,18 @@ public class MockClient implements KafkaClient {
 
     @Override
     public boolean ready(Node node, long now) {
-        boolean found = isReady(node, now);
         ready.add(node.id());
-        return found;
+        return true;
     }
 
     @Override
     public long connectionDelay(Node node, long now) {
         return 0;
+    }
+
+    @Override
+    public boolean connectionFailed(Node node) {
+        return false;
     }
 
     public void disconnect(Integer node) {
@@ -76,16 +92,25 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void send(ClientRequest request) {
-        this.requests.add(request);
+        if (!futureResponses.isEmpty()) {
+            FutureResponse futureResp = futureResponses.poll();
+            ClientResponse resp = new ClientResponse(request, time.milliseconds(), futureResp.disconnected, futureResp.responseBody);
+            responses.add(resp);
+        } else {
+            this.requests.add(request);
+        }
     }
 
     @Override
     public List<ClientResponse> poll(long timeoutMs, long now) {
-        for (ClientResponse response: this.responses)
-            if (response.request().hasCallback()) 
+        List<ClientResponse> copy = new ArrayList<ClientResponse>(this.responses);
+
+        while (!this.responses.isEmpty()) {
+            ClientResponse response = this.responses.poll();
+            if (response.request().hasCallback())
                 response.request().callback().onComplete(response);
-        List<ClientResponse> copy = new ArrayList<ClientResponse>();
-        this.responses.clear();
+        }
+
         return copy;
     }
 
@@ -107,8 +132,24 @@ public class MockClient implements KafkaClient {
     }
 
     public void respond(Struct body) {
+        respond(body, false);
+    }
+
+    public void respond(Struct body, boolean disconnected) {
         ClientRequest request = requests.remove();
-        responses.add(new ClientResponse(request, time.milliseconds(), false, body));
+        responses.add(new ClientResponse(request, time.milliseconds(), disconnected, body));
+    }
+
+    public void prepareResponse(Struct body) {
+        prepareResponse(body, false);
+    }
+
+    public void prepareResponse(Struct body, boolean disconnected) {
+        futureResponses.add(new FutureResponse(body, disconnected));
+    }
+
+    public void setNode(Node node) {
+        this.node = node;
     }
 
     @Override
@@ -136,7 +177,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public Node leastLoadedNode(long now) {
-        return null;
+        return this.node;
     }
 
 }

@@ -41,6 +41,15 @@ public class OffsetFetchResponse extends AbstractRequestResponse {
     private static final String METADATA_KEY_NAME = "metadata";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
+    /**
+     * Possible error code:
+     *
+     *  UNKNOWN_TOPIC_OR_PARTITION (3)
+     *  OFFSET_LOAD_IN_PROGRESS (14)
+     *  NOT_COORDINATOR_FOR_CONSUMER (16)
+     *  NO_OFFSETS_FETCHABLE (23)
+     */
+
     private final Map<TopicPartition, PartitionData> responseData;
 
     public static final class PartitionData {

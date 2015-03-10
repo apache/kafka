@@ -50,7 +50,9 @@ public class MemoryRecordsTest {
             recs2.append(i, toArray(r.key()), toArray(r.value()));
         }
         recs1.close();
+        recs1.rewind();
         recs2.close();
+        recs2.rewind();
 
         for (int iteration = 0; iteration < 2; iteration++) {
             for (MemoryRecords recs : Arrays.asList(recs1, recs2)) {

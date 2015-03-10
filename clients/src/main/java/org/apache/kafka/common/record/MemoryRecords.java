@@ -120,6 +120,16 @@ public class MemoryRecords implements Records {
         buffer = compressor.buffer();
     }
 
+    /**
+     * Rewind the writable records to read mode
+     */
+    public void rewind() {
+        if (writable)
+            throw new IllegalStateException("The memory records need to be closed for write before rewinding for read");
+
+        buffer.flip();
+    }
+
     /** Write the records in this set to the given channel */
     public int writeTo(GatheringByteChannel channel) throws IOException {
         return channel.write(buffer);
@@ -158,7 +168,7 @@ public class MemoryRecords implements Records {
 
     @Override
     public Iterator<LogEntry> iterator() {
-        ByteBuffer copy = (ByteBuffer) this.buffer.duplicate().flip();
+        ByteBuffer copy = this.buffer.duplicate();
         return new RecordsIterator(copy, CompressionType.NONE, false);
     }
     

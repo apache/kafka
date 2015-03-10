@@ -14,6 +14,7 @@ package org.apache.kafka.common.network;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.channels.CancelledKeyException;
@@ -90,7 +91,7 @@ public class Selector implements Selectable {
     /**
      * Create a new selector
      */
-    public Selector(Metrics metrics, Time time , String metricGrpPrefix , Map<String, String> metricTags) {
+    public Selector(Metrics metrics, Time time, String metricGrpPrefix, Map<String, String> metricTags) {
         try {
             this.selector = java.nio.channels.Selector.open();
         } catch (IOException e) {
@@ -274,7 +275,7 @@ public class Selector implements Selectable {
                     }
                 } catch (IOException e) {
                     String desc = socketDescription(channel);
-                    if (e instanceof EOFException)
+                    if (e instanceof EOFException || e instanceof ConnectException)
                         log.info("Connection {} disconnected", desc);
                     else
                         log.warn("Error in I/O with connection to {}", desc, e);

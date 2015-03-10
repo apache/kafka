@@ -75,7 +75,7 @@ trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
    */
   def restartDeadBrokers() {
     for(i <- 0 until servers.length if !alive(i)) {
-      servers(i) = TestUtils.createServer(configs(i))
+      servers(i).startup()
       alive(i) = true
     }
   }

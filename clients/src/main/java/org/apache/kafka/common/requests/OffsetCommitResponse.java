@@ -38,6 +38,12 @@ public class OffsetCommitResponse extends AbstractRequestResponse {
     private static final String PARTITION_KEY_NAME = "partition";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
+    /**
+     * Possible error code:
+     *
+     * TODO
+     */
+
     private final Map<TopicPartition, Short> responseData;
 
     public OffsetCommitResponse(Map<TopicPartition, Short> responseData) {

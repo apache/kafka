@@ -18,6 +18,7 @@
 package kafka.coordinator
 
 import scala.collection.mutable
+import java.util.concurrent.atomic.AtomicInteger
 
 sealed trait GroupStates { def state: Byte }
 
@@ -69,6 +70,10 @@ class GroupRegistry(val groupId: String,
 
   val state: GroupState = new GroupState()
 
-  var generationId: Int = 1
+  val generationId = new AtomicInteger(1)
+
+  val nextConsumerId = new AtomicInteger(1)
+
+  def generateNextConsumerId = groupId + "-" + nextConsumerId.getAndIncrement
 }
 
