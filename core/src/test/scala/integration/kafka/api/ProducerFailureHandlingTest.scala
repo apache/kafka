@@ -24,16 +24,16 @@ import java.lang.Integer
 import java.util.{Properties, Random}
 import java.util.concurrent.{TimeoutException, TimeUnit, ExecutionException}
 
-import kafka.api.FetchRequestBuilder
 import kafka.common.Topic
 import kafka.consumer.SimpleConsumer
-import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
+import kafka.server.KafkaConfig
 import kafka.utils.{TestZKUtils, ShutdownableThread, TestUtils}
 
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors.{InvalidTopicException, NotEnoughReplicasException, NotEnoughReplicasAfterAppendException}
 import org.apache.kafka.clients.producer._
+import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 
 class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   private val producerBufferSize = 30000
@@ -371,7 +371,8 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     override def doWork(): Unit = {
       val responses =
         for (i <- sent+1 to sent+numRecords)
-        yield producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic1, null, null, i.toString.getBytes))
+        yield producer.send(new ProducerRecord[Array[Byte],Array[Byte]](topic1, null, null, i.toString.getBytes),
+                            new ErrorLoggingCallback(topic1, null, null, true))
       val futures = responses.toList
 
       try {

@@ -90,7 +90,7 @@ public class FetcherTest {
         records.append(2L, "key".getBytes(), "value-2".getBytes());
         records.append(3L, "key".getBytes(), "value-3".getBytes());
         records.close();
-        records.rewind();
+        records.flip();
     }
 
     @Test

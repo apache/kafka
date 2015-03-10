@@ -120,16 +120,6 @@ public class MemoryRecords implements Records {
         buffer = compressor.buffer();
     }
 
-    /**
-     * Rewind the writable records to read mode
-     */
-    public void rewind() {
-        if (writable)
-            throw new IllegalStateException("The memory records need to be closed for write before rewinding for read");
-
-        buffer.flip();
-    }
-
     /** Write the records in this set to the given channel */
     public int writeTo(GatheringByteChannel channel) throws IOException {
         return channel.write(buffer);
@@ -164,6 +154,16 @@ public class MemoryRecords implements Records {
      */
     public ByteBuffer buffer() {
         return buffer.duplicate();
+    }
+
+    /**
+     * Return a flipped duplicate of the closed buffer to reading records
+     */
+    public ByteBuffer flip() {
+        if (writable)
+            throw new IllegalStateException("The memory records need to be closed for write before rewinding for read");
+
+        return (ByteBuffer) buffer.duplicate().flip();
     }
 
     @Override
