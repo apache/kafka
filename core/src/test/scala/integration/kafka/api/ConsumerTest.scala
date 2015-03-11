@@ -286,7 +286,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
       for (record <- consumer.poll(50))
         records.add(record)
       if(iters > maxIters)
-        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.");
+        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
       iters += 1
     }
     for (i <- 0 until numRecords) {

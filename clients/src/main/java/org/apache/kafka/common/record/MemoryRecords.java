@@ -163,7 +163,7 @@ public class MemoryRecords implements Records {
         if (writable)
             throw new IllegalStateException("The memory records need to be closed for write before rewinding for read");
 
-        return (ByteBuffer) buffer.duplicate().flip();
+        return (ByteBuffer) buffer.flip();
     }
 
     @Override

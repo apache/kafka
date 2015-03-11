@@ -59,7 +59,6 @@ public class RecordAccumulatorTest {
     private int msgSize = Records.LOG_OVERHEAD + Record.recordSize(key, value);
     private Cluster cluster = new Cluster(Arrays.asList(node1, node2), Arrays.asList(part1, part2, part3));
     private Metrics metrics = new Metrics(time);
-    String metricGroup = "TestMetrics";
     Map<String, String> metricTags = new LinkedHashMap<String, String>();
 
     @Test
