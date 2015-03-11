@@ -261,6 +261,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
 
     override def doWork(): Unit = {
       killRandomBroker()
+      Thread.sleep(500)
       restartDeadBrokers()
 
       iter += 1

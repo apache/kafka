@@ -129,7 +129,7 @@ public final class Coordinator {
 
         // process the response
         JoinGroupResponse response = new JoinGroupResponse(resp.responseBody());
-        // TODO: needs to handle disconnects and errors
+        // TODO: needs to handle disconnects and errors, should not just throw exceptions
         Errors.forCode(response.errorCode()).maybeThrow();
         this.consumerId = response.consumerId();
 

@@ -45,7 +45,9 @@ public class ListOffsetResponse extends AbstractRequestResponse {
     /**
      * Possible error code:
      *
-     * TODO
+     *  UNKNOWN_TOPIC_OR_PARTITION (3)
+     *  NOT_LEADER_FOR_PARTITION (6)
+     *  UNKNOWN (-1)
      */
 
     private static final String OFFSETS_KEY_NAME = "offsets";

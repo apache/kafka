@@ -231,11 +231,12 @@ public class Fetcher<K, V> {
                         log.debug("Fetched offset {} for partition {}", offset, topicPartition);
                         return offset;
                     } else if (errorCode == Errors.NOT_LEADER_FOR_PARTITION.code()
-                        || errorCode == Errors.LEADER_NOT_AVAILABLE.code()) {
+                        || errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
                         log.warn("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
                             topicPartition);
                         awaitMetadataUpdate();
                     } else {
+                        // TODO: we should not just throw exceptions but should handle and log it.
                         Errors.forCode(errorCode).maybeThrow();
                     }
                 }
