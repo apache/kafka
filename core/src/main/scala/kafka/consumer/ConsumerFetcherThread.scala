@@ -29,7 +29,7 @@ class ConsumerFetcherThread(name: String,
                             sourceBroker: Broker,
                             partitionMap: Map[TopicAndPartition, PartitionTopicInfo],
                             val consumerFetcherManager: ConsumerFetcherManager)
-        extends AbstractFetcherThread(name = name, 
+        extends AbstractFetcherThread(name = name,
                                       clientId = config.clientId,
                                       sourceBroker = sourceBroker,
                                       socketTimeout = config.socketTimeoutMs,
@@ -38,6 +38,7 @@ class ConsumerFetcherThread(name: String,
                                       fetcherBrokerId = Request.OrdinaryConsumerId,
                                       maxWait = config.fetchWaitMaxMs,
                                       minBytes = config.fetchMinBytes,
+                                      fetchBackOffMs = config.refreshLeaderBackoffMs,
                                       isInterruptible = true) {
 
   // process fetched data

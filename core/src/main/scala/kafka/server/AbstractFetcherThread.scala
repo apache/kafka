@@ -37,7 +37,7 @@ import com.yammer.metrics.core.Gauge
  *  Abstract class for fetching data from multiple partitions from the same broker.
  */
 abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroker: Broker, socketTimeout: Int, socketBufferSize: Int,
-                                     fetchSize: Int, fetcherBrokerId: Int = -1, maxWait: Int = 0, minBytes: Int = 1,
+                                     fetchSize: Int, fetcherBrokerId: Int = -1, maxWait: Int = 0, minBytes: Int = 1, fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
   private val partitionMap = new mutable.HashMap[TopicAndPartition, Long] // a (topic, partition) -> offset map
@@ -66,7 +66,11 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition])
 
   override def shutdown(){
-    super.shutdown()
+    initiateShutdown()
+    inLock(partitionMapLock) {
+      partitionMapCond.signalAll()
+    }
+    awaitShutdown()
     simpleConsumer.close()
   }
 
@@ -98,6 +102,8 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
           warn("Error in fetch %s. Possible cause: %s".format(fetchRequest, t.toString))
           partitionMapLock synchronized {
             partitionsWithError ++= partitionMap.keys
+            // there is an error occurred while fetching partitions, sleep a while
+            partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
           }
         }
     }
@@ -241,4 +247,3 @@ class FetcherStats(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
 case class ClientIdTopicPartition(clientId: String, topic: String, partitionId: Int) {
   override def toString = "%s-%s-%d".format(clientId, topic, partitionId)
 }
-

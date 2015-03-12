@@ -94,6 +94,7 @@ object Defaults {
   val ReplicaFetchWaitMaxMs = 500
   val ReplicaFetchMinBytes = 1
   val NumReplicaFetchers = 1
+  val ReplicaFetchBackoffMs = 1000
   val ReplicaHighWatermarkCheckpointIntervalMs = 5000L
   val FetchPurgatoryPurgeIntervalRequests = 1000
   val ProducerPurgatoryPurgeIntervalRequests = 1000
@@ -199,6 +200,7 @@ object KafkaConfig {
   val ReplicaFetchMaxBytesProp = "replica.fetch.max.bytes"
   val ReplicaFetchWaitMaxMsProp = "replica.fetch.wait.max.ms"
   val ReplicaFetchMinBytesProp = "replica.fetch.min.bytes"
+  val ReplicaFetchBackoffMsProp = "replica.fetch.backoff.ms"
   val NumReplicaFetchersProp = "num.replica.fetchers"
   val ReplicaHighWatermarkCheckpointIntervalMsProp = "replica.high.watermark.checkpoint.interval.ms"
   val FetchPurgatoryPurgeIntervalRequestsProp = "fetch.purgatory.purge.interval.requests"
@@ -311,6 +313,7 @@ object KafkaConfig {
   val ReplicaFetchMinBytesDoc = "Minimum bytes expected for each fetch response. If not enough bytes, wait up to replicaMaxWaitTimeMs"
   val NumReplicaFetchersDoc = "Number of fetcher threads used to replicate messages from a source broker. " +
     "Increasing this value can increase the degree of I/O parallelism in the follower broker."
+  val ReplicaFetchBackoffMsDoc = "The amount of time to sleep when fetch partition error occurs."
   val ReplicaHighWatermarkCheckpointIntervalMsDoc = "The frequency with which the high watermark is saved out to disk"
   val FetchPurgatoryPurgeIntervalRequestsDoc = "The purge interval (in number of requests) of the fetch request purgatory"
   val ProducerPurgatoryPurgeIntervalRequestsDoc = "The purge interval (in number of requests) of the producer request purgatory"
@@ -429,6 +432,7 @@ object KafkaConfig {
       .define(ReplicaSocketReceiveBufferBytesProp, INT, Defaults.ReplicaSocketReceiveBufferBytes, HIGH, ReplicaSocketReceiveBufferBytesDoc)
       .define(ReplicaFetchMaxBytesProp, INT, Defaults.ReplicaFetchMaxBytes, HIGH, ReplicaFetchMaxBytesDoc)
       .define(ReplicaFetchWaitMaxMsProp, INT, Defaults.ReplicaFetchWaitMaxMs, HIGH, ReplicaFetchWaitMaxMsDoc)
+      .define(ReplicaFetchBackoffMsProp, INT, Defaults.ReplicaFetchBackoffMs, atLeast(0), MEDIUM, ReplicaFetchBackoffMsDoc)
       .define(ReplicaFetchMinBytesProp, INT, Defaults.ReplicaFetchMinBytes, HIGH, ReplicaFetchMinBytesDoc)
       .define(NumReplicaFetchersProp, INT, Defaults.NumReplicaFetchers, HIGH, NumReplicaFetchersDoc)
       .define(ReplicaHighWatermarkCheckpointIntervalMsProp, LONG, Defaults.ReplicaHighWatermarkCheckpointIntervalMs, HIGH, ReplicaHighWatermarkCheckpointIntervalMsDoc)
@@ -548,6 +552,7 @@ object KafkaConfig {
       replicaFetchMaxBytes = parsed.get(ReplicaFetchMaxBytesProp).asInstanceOf[Int],
       replicaFetchWaitMaxMs = parsed.get(ReplicaFetchWaitMaxMsProp).asInstanceOf[Int],
       replicaFetchMinBytes = parsed.get(ReplicaFetchMinBytesProp).asInstanceOf[Int],
+      replicaFetchBackoffMs = parsed.get(ReplicaFetchBackoffMsProp).asInstanceOf[Int],
       numReplicaFetchers = parsed.get(NumReplicaFetchersProp).asInstanceOf[Int],
       replicaHighWatermarkCheckpointIntervalMs = parsed.get(ReplicaHighWatermarkCheckpointIntervalMsProp).asInstanceOf[Long],
       fetchPurgatoryPurgeIntervalRequests = parsed.get(FetchPurgatoryPurgeIntervalRequestsProp).asInstanceOf[Int],
@@ -688,6 +693,7 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
                   val replicaFetchMaxBytes: Int = Defaults.ReplicaFetchMaxBytes,
                   val replicaFetchWaitMaxMs: Int = Defaults.ReplicaFetchWaitMaxMs,
                   val replicaFetchMinBytes: Int = Defaults.ReplicaFetchMinBytes,
+                  val replicaFetchBackoffMs: Int = Defaults.ReplicaFetchBackoffMs,
                   val numReplicaFetchers: Int = Defaults.NumReplicaFetchers,
                   val replicaHighWatermarkCheckpointIntervalMs: Long = Defaults.ReplicaHighWatermarkCheckpointIntervalMs,
                   val fetchPurgatoryPurgeIntervalRequests: Int = Defaults.FetchPurgatoryPurgeIntervalRequests,
@@ -856,6 +862,7 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
     props.put(ReplicaFetchMaxBytesProp, replicaFetchMaxBytes.toString)
     props.put(ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
     props.put(ReplicaFetchMinBytesProp, replicaFetchMinBytes.toString)
+    props.put(ReplicaFetchBackoffMsProp, replicaFetchBackoffMs.toString)
     props.put(NumReplicaFetchersProp, numReplicaFetchers.toString)
     props.put(ReplicaHighWatermarkCheckpointIntervalMsProp, replicaHighWatermarkCheckpointIntervalMs.toString)
     props.put(FetchPurgatoryPurgeIntervalRequestsProp, fetchPurgatoryPurgeIntervalRequests.toString)
