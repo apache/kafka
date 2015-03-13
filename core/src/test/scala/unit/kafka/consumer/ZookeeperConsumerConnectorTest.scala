@@ -17,22 +17,22 @@
 
 package kafka.consumer
 
+import java.util.{Collections, Properties}
+
 import junit.framework.Assert._
+import kafka.common.MessageStreamsExistException
 import kafka.integration.KafkaServerTestHarness
 import kafka.javaapi.consumer.ConsumerRebalanceListener
-import kafka.server._
-import scala.collection._
-import scala.collection.JavaConversions._
-import org.scalatest.junit.JUnit3Suite
 import kafka.message._
 import kafka.serializer._
-import org.I0Itec.zkclient.ZkClient
-import kafka.utils._
-import kafka.producer.{KeyedMessage, Producer}
-import java.util.{Collections, Properties}
-import org.apache.log4j.{Logger, Level}
+import kafka.server._
 import kafka.utils.TestUtils._
-import kafka.common.{TopicAndPartition, MessageStreamsExistException}
+import kafka.utils._
+import org.I0Itec.zkclient.ZkClient
+import org.apache.log4j.{Level, Logger}
+import org.scalatest.junit.JUnit3Suite
+
+import scala.collection._
 
 class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
@@ -362,10 +362,18 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Map(topic -> 1), new StringDecoder(), new StringDecoder())
 
     // Check if rebalance listener is fired
-    assertEquals(true, rebalanceListener1.listenerCalled)
+    assertEquals(true, rebalanceListener1.beforeReleasingPartitionsCalled)
+    assertEquals(true, rebalanceListener1.beforeStartingFetchersCalled)
     assertEquals(null, rebalanceListener1.partitionOwnership.get(topic))
+    // Check if partition assignment in rebalance listener is correct
+    assertEquals("group1_consumer1", rebalanceListener1.globalPartitionOwnership.get(topic).get(0).consumer)
+    assertEquals("group1_consumer1", rebalanceListener1.globalPartitionOwnership.get(topic).get(1).consumer)
+    assertEquals(0, rebalanceListener1.globalPartitionOwnership.get(topic).get(0).threadId)
+    assertEquals(0, rebalanceListener1.globalPartitionOwnership.get(topic).get(1).threadId)
+    assertEquals("group1_consumer1", rebalanceListener1.consumerId)
     // reset the flag
-    rebalanceListener1.listenerCalled = false
+    rebalanceListener1.beforeReleasingPartitionsCalled = false
+    rebalanceListener1.beforeStartingFetchersCalled = false
 
     val actual_1 = getZKChildrenValues(dirs.consumerOwnerDir)
     val expected_1 = List(("0", "group1_consumer1-0"),
@@ -379,16 +387,26 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     zkConsumerConnector2.setConsumerRebalanceListener(rebalanceListener2)
     val topicMessageStreams2 = zkConsumerConnector2.createMessageStreams(Map(topic -> 1), new StringDecoder(), new StringDecoder())
 
+    // Consume messages from consumer 1 to make sure it has finished rebalance
+    getMessages(nMessages, topicMessageStreams1)
+
     val actual_2 = getZKChildrenValues(dirs.consumerOwnerDir)
     val expected_2 = List(("0", "group1_consumer1-0"),
                           ("1", "group1_consumer2-0"))
     assertEquals(expected_2, actual_2)
 
     // Check if rebalance listener is fired
-    assertEquals(true, rebalanceListener1.listenerCalled)
+    assertEquals(true, rebalanceListener1.beforeReleasingPartitionsCalled)
+    assertEquals(true, rebalanceListener1.beforeStartingFetchersCalled)
     assertEquals(Set[Int](0, 1), rebalanceListener1.partitionOwnership.get(topic))
-    assertEquals(true, rebalanceListener2.listenerCalled)
-    assertEquals(null, rebalanceListener2.partitionOwnership.get(topic))
+    // Check if global partition ownership in rebalance listener is correct
+    assertEquals("group1_consumer1", rebalanceListener1.globalPartitionOwnership.get(topic).get(0).consumer)
+    assertEquals("group1_consumer2", rebalanceListener1.globalPartitionOwnership.get(topic).get(1).consumer)
+    assertEquals(0, rebalanceListener1.globalPartitionOwnership.get(topic).get(0).threadId)
+    assertEquals(0, rebalanceListener1.globalPartitionOwnership.get(topic).get(1).threadId)
+    assertEquals("group1_consumer1", rebalanceListener1.consumerId)
+    assertEquals("group1_consumer2", rebalanceListener2.consumerId)
+    assertEquals(rebalanceListener1.globalPartitionOwnership, rebalanceListener2.globalPartitionOwnership)
     zkConsumerConnector1.shutdown()
     zkConsumerConnector2.shutdown()
   }
@@ -397,7 +415,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val children = zkClient.getChildren(path)
     Collections.sort(children)
     val childrenAsSeq : Seq[java.lang.String] = {
-      import JavaConversions._
+      import scala.collection.JavaConversions._
       children.toSeq
     }
     childrenAsSeq.map(partition =>
@@ -405,12 +423,21 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   }
 
   private class TestConsumerRebalanceListener extends ConsumerRebalanceListener {
-    var listenerCalled: Boolean = false
+    var beforeReleasingPartitionsCalled: Boolean = false
+    var beforeStartingFetchersCalled: Boolean = false
+    var consumerId: String = "";
     var partitionOwnership: java.util.Map[String, java.util.Set[java.lang.Integer]] = null
+    var globalPartitionOwnership: java.util.Map[String, java.util.Map[java.lang.Integer, ConsumerThreadId]] = null
 
     override def beforeReleasingPartitions(partitionOwnership: java.util.Map[String, java.util.Set[java.lang.Integer]]) {
-      listenerCalled = true
+      beforeReleasingPartitionsCalled = true
       this.partitionOwnership = partitionOwnership
+    }
+
+    override def beforeStartingFetchers(consumerId: String, globalPartitionOwnership: java.util.Map[String, java.util.Map[java.lang.Integer, ConsumerThreadId]]) {
+      beforeStartingFetchersCalled = true
+      this.consumerId = consumerId
+      this.globalPartitionOwnership = globalPartitionOwnership
     }
   }
 

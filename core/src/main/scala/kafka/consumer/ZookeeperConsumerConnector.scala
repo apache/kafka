@@ -670,7 +670,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
          */
         closeFetchers(cluster, kafkaMessageAndMetadataStreams, myTopicThreadIdsMap)
         if (consumerRebalanceListener != null) {
-          info("Calling beforeReleasingPartitions() from rebalance listener.")
+          info("Invoking rebalance listener before relasing partition ownerships.")
           consumerRebalanceListener.beforeReleasingPartitions(
             if (topicRegistry.size == 0)
               new java.util.HashMap[String, java.util.Set[java.lang.Integer]]
@@ -682,12 +682,15 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         }
         releasePartitionOwnership(topicRegistry)
         val assignmentContext = new AssignmentContext(group, consumerIdString, config.excludeInternalTopics, zkClient)
-        val partitionOwnershipDecision = partitionAssignor.assign(assignmentContext)
+        val globalPartitionAssignment = partitionAssignor.assign(assignmentContext)
+        val partitionAssignment = Option(globalPartitionAssignment.get(assignmentContext.consumerId)).getOrElse(
+          mutable.HashMap.empty[TopicAndPartition, ConsumerThreadId]
+        )
         val currentTopicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]](
           valueFactory = Some((topic: String) => new Pool[Int, PartitionTopicInfo]))
 
         // fetch current offsets for all topic-partitions
-        val topicPartitions = partitionOwnershipDecision.keySet.toSeq
+        val topicPartitions = partitionAssignment.keySet.toSeq
 
         val offsetFetchResponseOpt = fetchOffsets(topicPartitions)
 
@@ -698,7 +701,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
           topicPartitions.foreach(topicAndPartition => {
             val (topic, partition) = topicAndPartition.asTuple
             val offset = offsetFetchResponse.requestInfo(topicAndPartition).offset
-            val threadId = partitionOwnershipDecision(topicAndPartition)
+            val threadId = partitionAssignment(topicAndPartition)
             addPartitionTopicInfo(currentTopicRegistry, partition, topic, offset, threadId)
           })
 
@@ -706,10 +709,10 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
            * move the partition ownership here, since that can be used to indicate a truly successful rebalancing attempt
            * A rebalancing attempt is completed successfully only after the fetchers have been started correctly
            */
-          if(reflectPartitionOwnershipDecision(partitionOwnershipDecision)) {
-            allTopicsOwnedPartitionsCount = partitionOwnershipDecision.size
+          if(reflectPartitionOwnershipDecision(partitionAssignment)) {
+            allTopicsOwnedPartitionsCount = partitionAssignment.size
 
-            partitionOwnershipDecision.view.groupBy { case(topicPartition, consumerThreadId) => topicPartition.topic }
+            partitionAssignment.view.groupBy { case(topicPartition, consumerThreadId) => topicPartition.topic }
                                       .foreach { case (topic, partitionThreadPairs) =>
               newGauge("OwnedPartitionsCount",
                 new Gauge[Int] {
@@ -719,6 +722,30 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
             }
 
             topicRegistry = currentTopicRegistry
+            // Invoke beforeStartingFetchers callback if the consumerRebalanceListener is set.
+            if (consumerRebalanceListener != null) {
+              info("Invoking rebalance listener before starting fetchers.")
+
+              // Partition assignor returns the global partition assignment organized as a map of [TopicPartition, ThreadId]
+              // per consumer, and we need to re-organize it to a map of [Partition, ThreadId] per topic before passing
+              // to the rebalance callback.
+              val partitionAssginmentGroupByTopic = globalPartitionAssignment.values.flatten.groupBy[String] {
+                case (topicPartition, _) => topicPartition.topic
+              }
+              val partitionAssigmentMapForCallback = partitionAssginmentGroupByTopic.map({
+                case (topic, partitionOwnerShips) =>
+                  val partitionOwnershipForTopicScalaMap = partitionOwnerShips.map({
+                    case (topicAndPartition, consumerThreadId) =>
+                      topicAndPartition.partition -> consumerThreadId
+                  })
+                  topic -> mapAsJavaMap(collection.mutable.Map(partitionOwnershipForTopicScalaMap.toSeq:_*))
+                    .asInstanceOf[java.util.Map[java.lang.Integer, ConsumerThreadId]]
+              })
+              consumerRebalanceListener.beforeStartingFetchers(
+                consumerIdString,
+                mapAsJavaMap(collection.mutable.Map(partitionAssigmentMapForCallback.toSeq:_*))
+              )
+            }
             updateFetcher(cluster)
             true
           } else {
@@ -792,9 +819,9 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
       }
     }
 
-    private def reflectPartitionOwnershipDecision(partitionOwnershipDecision: Map[TopicAndPartition, ConsumerThreadId]): Boolean = {
+    private def reflectPartitionOwnershipDecision(partitionAssignment: Map[TopicAndPartition, ConsumerThreadId]): Boolean = {
       var successfullyOwnedPartitions : List[(String, Int)] = Nil
-      val partitionOwnershipSuccessful = partitionOwnershipDecision.map { partitionOwner =>
+      val partitionOwnershipSuccessful = partitionAssignment.map { partitionOwner =>
         val topic = partitionOwner._1.topic
         val partition = partitionOwner._1.partition
         val consumerThreadId = partitionOwner._2

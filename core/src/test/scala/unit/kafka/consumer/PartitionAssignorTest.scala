@@ -164,7 +164,7 @@ private object PartitionAssignorTest extends Logging {
                               verifyAssignmentIsUniform: Boolean = false) {
     val assignments = scenario.subscriptions.map{ case(consumer, subscription)  =>
       val ctx = new AssignmentContext("g1", consumer, excludeInternalTopics = true, zkClient)
-      assignor.assign(ctx)
+      assignor.assign(ctx).get(consumer)
     }
 
     // check for uniqueness (i.e., any partition should be assigned to exactly one consumer stream)
