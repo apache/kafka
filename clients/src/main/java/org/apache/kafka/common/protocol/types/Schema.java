@@ -24,6 +24,11 @@ public class Schema extends Type {
     private final Field[] fields;
     private final Map<String, Field> fieldsByName;
 
+    /**
+     * Construct the schema with a given list of its field values
+     *
+     * @throws SchemaException If the given list have duplicate fields
+     */
     public Schema(Field... fs) {
         this.fields = new Field[fs.length];
         this.fieldsByName = new HashMap<String, Field>();

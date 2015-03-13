@@ -60,6 +60,7 @@ public class Struct {
      * 
      * @param field The field to look up
      * @return The value for that field.
+     * @throws SchemaException if the field has no value and has no default.
      */
     public Object get(Field field) {
         validateField(field);
@@ -71,6 +72,7 @@ public class Struct {
      * 
      * @param name The name of the field
      * @return The value in the record
+     * @throws SchemaException If no such field exists
      */
     public Object get(String name) {
         Field field = schema.get(name);
@@ -149,6 +151,7 @@ public class Struct {
      * 
      * @param field The field
      * @param value The value
+     * @throws SchemaException If the validation of the field failed
      */
     public Struct set(Field field, Object value) {
         validateField(field);
@@ -161,6 +164,7 @@ public class Struct {
      * 
      * @param name The name of the field
      * @param value The value to set
+     * @throws SchemaException If the field is not known
      */
     public Struct set(String name, Object value) {
         Field field = this.schema.get(name);
@@ -177,6 +181,7 @@ public class Struct {
      * 
      * @param field The field to create an instance of
      * @return The struct
+     * @throws SchemaException If the given field is not a container type
      */
     public Struct instance(Field field) {
         validateField(field);
@@ -195,6 +200,7 @@ public class Struct {
      * 
      * @param field The name of the field to create (field must be a schema type)
      * @return The struct
+     * @throws SchemaException If the given field is not a container type
      */
     public Struct instance(String field) {
         return instance(schema.get(field));
@@ -223,6 +229,8 @@ public class Struct {
 
     /**
      * Ensure the user doesn't try to access fields from the wrong schema
+     *
+     * @throws SchemaException If validation fails
      */
     private void validateField(Field field) {
         if (this.schema != field.schema)
@@ -233,6 +241,8 @@ public class Struct {
 
     /**
      * Validate the contents of this struct against its schema
+     *
+     * @throws SchemaException If validation fails
      */
     public void validate() {
         this.schema.validate(this);
