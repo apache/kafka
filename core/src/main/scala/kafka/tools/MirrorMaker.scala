@@ -170,6 +170,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     offsetCommitIntervalMs = options.valueOf(offsetCommitIntervalMsOpt).intValue()
     val numStreams = options.valueOf(numStreamsOpt).intValue()
 
+    Runtime.getRuntime.addShutdownHook(new Thread("MirrorMakerShutdownHook") {
+      override def run() {
+        cleanShutdown()
+      }
+    })
+    
     // create producer
     val producerProps = Utils.loadProps(options.valueOf(producerConfigOpt))
     // Defaults to no data loss settings.
@@ -254,12 +260,6 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         defaultMirrorMakerMessageHandler
       }
     }
-
-    Runtime.getRuntime.addShutdownHook(new Thread("MirrorMakerShutdownHook") {
-      override def run() {
-        cleanShutdown()
-      }
-    })
 
     mirrorMakerThreads.foreach(_.start())
     mirrorMakerThreads.foreach(_.awaitShutdown())
