@@ -27,6 +27,20 @@ set BASE_DIR=%CD%
 popd
 
 
+IF exist %BASE_DIR%\config\kafka-env.cmd (
+  call %BASE_DIR%\config\kafka-env.cmd
+)
+
+IF not exist %JAVA_HOME%\bin\java.exe (
+  echo Error: JAVA_HOME is incorrectly set.
+  goto :eof
+)
+
+
+IF ["%LOG_DIR%"] EQU [""] (
+  set LOG_DIR=%BASE_DIR%\logs
+)
+
 IF ["%SCALA_VERSION%"] EQU [""] (
   set SCALA_VERSION=2.10.5
 )
