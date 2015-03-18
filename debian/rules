@@ -7,8 +7,8 @@ SLF4J_VERSION = 1.7.7
 SLF4J = slf4j-$(SLF4J_VERSION)
 
 override_dh_auto_build:
-	# Build with scala 2.8.0 so that it matches with the scala version used to build our
-	# existing kafka 0.7.0 for our kafka7 deployment. The reason why we need this specific
+	# Build with scala 2.8.0 so that it matches with the scala version currently to build
+	# our existing kafka 0.7.0 for our kafka7 deployment. The reason why we need this specific
 	# build is to run the migration tool.
 	./gradlew -PscalaVersion=2.8.0 jar
 
