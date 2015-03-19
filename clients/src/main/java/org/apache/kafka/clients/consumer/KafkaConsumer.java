@@ -354,7 +354,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Metrics metrics;
     private final SubscriptionState subscriptions;
     private final Metadata metadata;
-    private final Heartbeat heartbeat;
     private final long retryBackoffMs;
     private final boolean autoCommit;
     private final long autoCommitIntervalMs;
@@ -446,7 +445,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         else
             this.rebalanceCallback = callback;
         this.time = new SystemTime();
-        this.heartbeat = new Heartbeat(config.getLong(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), time.milliseconds());
         this.autoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
         this.autoCommitIntervalMs = config.getLong(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
         this.lastCommitAttemptMs = time.milliseconds();
@@ -538,7 +536,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized void subscribe(String... topics) {
         ensureNotClosed();
-        log.debug("Subscribed to topic(s): ", Utils.join(topics, ", "));
+        log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
         for (String topic : topics)
             this.subscriptions.subscribe(topic);
         metadata.addTopics(topics);
@@ -555,7 +553,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized void subscribe(TopicPartition... partitions) {
         ensureNotClosed();
-        log.debug("Subscribed to partitions(s): ", Utils.join(partitions, ", "));
+        log.debug("Subscribed to partitions(s): {}", Utils.join(partitions, ", "));
         for (TopicPartition tp : partitions) {
             this.subscriptions.subscribe(tp);
             metadata.addTopics(tp.topic());
@@ -570,7 +568,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     public synchronized void unsubscribe(String... topics) {
         ensureNotClosed();
-        log.debug("Unsubscribed from topic(s): ", Utils.join(topics, ", "));
+        log.debug("Unsubscribed from topic(s): {}", Utils.join(topics, ", "));
         // throw an exception if the topic was never subscribed to
         for (String topic : topics)
             this.subscriptions.unsubscribe(topic);
@@ -584,7 +582,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     public synchronized void unsubscribe(TopicPartition... partitions) {
         ensureNotClosed();
-        log.debug("Unsubscribed from partitions(s): ", Utils.join(partitions, ", "));
+        log.debug("Unsubscribed from partitions(s): {}", Utils.join(partitions, ", "));
         // throw an exception if the partition was never subscribed to
         for (TopicPartition partition : partitions)
             this.subscriptions.unsubscribe(partition);
@@ -878,7 +876,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     // if the committed position is unknown reset the position
                     fetcher.resetOffset(tp);
                 } else {
-                    log.debug("Resetting offset for partition {} to committed offset");
+                    log.debug("Resetting offset for partition {} to the committed offset {}",
+                        tp, subscriptions.committed(tp));
                     subscriptions.seek(tp, subscriptions.committed(tp));
                 }
             }

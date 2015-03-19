@@ -258,7 +258,7 @@ public class Fetcher<K, V> {
             Node node = cluster.leaderFor(partition);
             // if there is a leader and no in-flight requests, issue a new fetch
             if (node != null && this.client.inFlightRequestCount(node.id()) == 0) {
-                Map<TopicPartition, FetchRequest.PartitionData> fetch = fetchable.get(node);
+                Map<TopicPartition, FetchRequest.PartitionData> fetch = fetchable.get(node.id());
                 if (fetch == null) {
                     fetch = new HashMap<TopicPartition, FetchRequest.PartitionData>();
                     fetchable.put(node.id(), fetch);

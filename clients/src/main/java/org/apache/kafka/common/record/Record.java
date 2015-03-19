@@ -317,12 +317,14 @@ public final class Record {
     }
 
     public String toString() {
-        return String.format("Record(magic = %d, attributes = %d, crc = %d, key = %d bytes, value = %d bytes)",
+        return String.format("Record(magic = %d, attributes = %d, compression = %s, crc = %d, key = %d bytes, value = %d bytes)",
                              magic(),
                              attributes(),
+                             compressionType(),
                              checksum(),
-                             key().limit(),
-                             value().limit());
+                             key() == null ? 0 : key().limit(),
+                             value() == null ? 0: value().limit());
+
     }
 
     public boolean equals(Object other) {

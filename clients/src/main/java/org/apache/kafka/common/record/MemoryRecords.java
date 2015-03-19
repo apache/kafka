@@ -234,7 +234,7 @@ public class MemoryRecords implements Records {
                         rec.limit(size);
                     } else {
                         byte[] recordBuffer = new byte[size];
-                        stream.read(recordBuffer, 0, size);
+                        stream.readFully(recordBuffer, 0, size);
                         rec = ByteBuffer.wrap(recordBuffer);
                     }
                     LogEntry entry = new LogEntry(offset, new Record(rec));
@@ -245,7 +245,9 @@ public class MemoryRecords implements Records {
                         return entry;
                     } else {
                         // init the inner iterator with the value payload of the message,
-                        // which will de-compress the payload to a set of messages
+                        // which will de-compress the payload to a set of messages;
+                        // since we assume nested compression is not allowed, the deep iterator
+                        // would not try to further decompress underlying messages
                         ByteBuffer value = entry.record().value();
                         innerIter = new RecordsIterator(value, compression, true);
                         return innerIter.next();
