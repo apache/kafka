@@ -14,3 +14,27 @@ project/sbt_project_definition.iml
 .#*
 rat.out
 TAGS
+
+# Directories #
+build/
+core/data
+ 
+# OS Files #
+.DS_Store
+ 
+# Package Files #
+*.jar
+*.war
+*.ear
+*.db
+
+# Intellji Files #
+.out
+.idea
+*.ipr
+*.iws
+*.iml
+*.MF
+
+# Gradle #
+.gradle
