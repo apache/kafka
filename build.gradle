@@ -304,6 +304,8 @@ project(':migration') {
     compile 'com.google.guava:guava:18.0'
 
     testCompile 'junit:junit:4.1'
+    testCompile 'org.mockito:mockito-core:1.+'
+    testCompile 'commons-io:commons-io:2.4'
 
     test {
       testLogging {
@@ -316,6 +318,16 @@ project(':migration') {
       test {
         output.resourcesDir = "build/classes/test"
       }
+    }
+
+    tasks.create(name: "copyDependantLibs", type: Copy) {
+      into "$buildDir/dependant-libs-${scalaVersion}"
+      from configurations.runtime
+    }
+
+
+    jar {
+      dependsOn 'copyDependantLibs'
     }
   }
 
