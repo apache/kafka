@@ -316,7 +316,11 @@ public class KafkaMigrationTool
             });
 
             // start consumer threads
+<<<<<<< HEAD
             logger.info("Starting " + numConsumers + " threads");
+=======
+            logger.info("Starting " + numConsumers + " migration threads");
+>>>>>>> [kafka] better error recovery in migration tool (part 2)
             for(Object stream: (List)retKafkaStreams) {
                 MigrationThread thread = new MigrationThread(
                     context, stream, producerDataChannel, threadId);
@@ -425,6 +429,7 @@ public class KafkaMigrationTool
 
         public void run() {
             try {
+                int count = 0;
                 Method MessageGetPayloadMethod_07 = KafkaMessageClass_07.getMethod("payload");
                 Method KafkaGetMessageMethod_07 = KafkaMessageAndMetatDataClass_07.getMethod("message");
                 Method KafkaGetTopicMethod_07 = KafkaMessageAndMetatDataClass_07.getMethod("topic");
@@ -441,11 +446,11 @@ public class KafkaMigrationTool
                     int size = ((ByteBuffer)payload_07).remaining();
                     byte[] bytes = new byte[size];
                     ((ByteBuffer)payload_07).get(bytes);
-                    if(logger.isDebugEnabled()) {
-                        logger.debug("Migration thread " + threadId + " sending message of size " +
+                    if(count % 100 == 0) {
+                        logger.info("Migration thread " + threadId + " sending message of size " +
                             bytes.length + " to topic " + topic);
                     }
-
+                    count++;
                     KeyedMessage<byte[], byte[]> producerData = new KeyedMessage((String)topic, null, bytes);
                     producerDataChannel.sendRequest(producerData);
                 }
