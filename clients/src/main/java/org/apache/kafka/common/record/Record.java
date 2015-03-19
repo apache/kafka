@@ -323,7 +323,7 @@ public final class Record {
                              compressionType(),
                              checksum(),
                              key() == null ? 0 : key().limit(),
-                             value() == null ? 0: value().limit());
+                             value() == null ? 0 : value().limit());
 
     }
 
