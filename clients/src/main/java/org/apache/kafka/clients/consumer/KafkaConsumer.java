@@ -119,7 +119,7 @@ import org.slf4j.LoggerFactory;
  * 
  * <pre>
  *     Properties props = new Properties();
- *     props.put(&quot;metadata.broker.list&quot;, &quot;localhost:9092&quot;);
+ *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
  *     props.put(&quot;group.id&quot;, &quot;test&quot;);
  *     props.put(&quot;enable.auto.commit&quot;, &quot;true&quot;);
  *     props.put(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
@@ -139,7 +139,7 @@ import org.slf4j.LoggerFactory;
  * the config <code>auto.commit.interval.ms</code>.
  * <p>
  * The connection to the cluster is bootstrapped by specifying a list of one or more brokers to contact using the
- * configuration <code>metadata.broker.list</code>. This list is just used to discover the rest of the brokers in the
+ * configuration <code>bootstrap.servers</code>. This list is just used to discover the rest of the brokers in the
  * cluster and need not be an exhaustive list of servers in the cluster (though you may want to specify more than one in
  * case there are servers down when the client is connecting).
  * <p>
@@ -171,7 +171,7 @@ import org.slf4j.LoggerFactory;
  * 
  * <pre>
  *     Properties props = new Properties();
- *     props.put(&quot;metadata.broker.list&quot;, &quot;localhost:9092&quot;);
+ *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
  *     props.put(&quot;group.id&quot;, &quot;test&quot;);
  *     props.put(&quot;enable.auto.commit&quot;, &quot;false&quot;);
  *     props.put(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
