@@ -382,8 +382,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 this.sender.wakeup();
             }
             return result.future;
-            // Handling exceptions and record the errors;
-            // For API exceptions return them in the future,
+            // handling exceptions and record the errors;
+            // for API exceptions return them in the future,
             // for other exceptions throw directly
         } catch (ApiException e) {
             log.debug("Exception occurred during message send:", e);
@@ -406,6 +406,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @param maxWaitMs The maximum time in ms for waiting on the metadata
      */
     private void waitOnMetadata(String topic, long maxWaitMs) throws InterruptedException {
+        // add topic to metadata topic list if it is not there already.
+        if (!this.metadata.containsTopic(topic))
+            this.metadata.add(topic);
+
         if (metadata.fetch().partitionsForTopic(topic) != null) {
             return;
         } else {
@@ -414,7 +418,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             while (metadata.fetch().partitionsForTopic(topic) == null) {
                 log.trace("Requesting metadata update for topic {}.", topic);
                 int version = metadata.requestUpdate();
-                metadata.add(topic);
                 sender.wakeup();
                 metadata.awaitUpdate(version, remainingWaitMs);
                 long elapsed = time.milliseconds() - begin;

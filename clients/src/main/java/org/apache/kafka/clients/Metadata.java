@@ -132,6 +132,15 @@ public final class Metadata {
     }
 
     /**
+     * Check if a topic is already in the topic set.
+     * @param topic topic to check
+     * @return true if the topic exists, false otherwise
+     */
+    public synchronized boolean containsTopic(String topic) {
+        return this.topics.contains(topic);
+    }
+
+    /**
      * Update the cluster metadata
      */
     public synchronized void update(Cluster cluster, long now) {
