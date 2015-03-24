@@ -1,0 +1,6 @@
+{
+    "project_id": "kafka-0.8.1",
+    "conduit_uri": "https://code.uberinternal.com/",
+    "git.default-relative-commit": "origin/0.8.1",
+    "arc.land.onto.default": "0.8.1"
+}

@@ -1,0 +1,43 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+SLF4J_VERSION = 1.7.7
+SLF4J = slf4j-$(SLF4J_VERSION)
+
+override_dh_auto_build:
+	# Build with scala 2.8.0 so that it matches with the scala version currently to build
+	# our existing kafka 0.7.0 for our kafka7 deployment. The reason why we need this specific
+	# build is to run the migration tool.
+	./gradlew -PscalaVersion=2.8.0 jar
+
+# Do not install init script automatically
+override_dh_installinit:
+
+DESTDIR = debian/kafka-0.8.1
+override_dh_auto_install:
+	install -m 755 -d $(DESTDIR)/etc/kafka-leaf
+	install -m 644 config/*.properties $(DESTDIR)/etc/kafka-leaf
+	install -m 755 -d $(DESTDIR)/usr/lib/kafka-leaf
+	for i in `ls | grep -vE config\|debian\|perf\|examples\|gradle\|system_test`; do \
+	    cp -r $$i $(DESTDIR)/usr/lib/kafka-leaf || exit $$?; \
+	    done
+	find $(DESTDIR)/usr/lib/kafka-leaf -type f -a \
+	    \( -name \*.java -o -name \*.class -o \
+	    -name \*.scala -o -name \*.gradle -o -name \*.MF -o -name \*.html \) \
+	    -print -delete
+	for i in `seq 10`; do \
+	    find $(DESTDIR) -type d -empty -print -exec rmdir '{}' ';' || :; \
+	    done
+	find $(DESTDIR)/usr/lib/kafka-leaf -type f -a \
+	    \( -name README\* -o -name LICENSE -o -name NOTICE -o -name HEADER \) \
+	    -print -delete || :
+	find $(DESTDIR)/usr/lib/kafka-leaf -type d -a \
+	    \( -name test -o -name src -o -name tmp \) \
+	    -print -exec rm -rf '{}' ';' || :
+	ln -s /etc/kafka-leaf $(DESTDIR)/usr/lib/kafka-leaf/config
+	ln -s /var/log/kafka-leaf $(DESTDIR)/usr/lib/kafka-leaf/logs
+	sed -i 's#/tmp/zookeeper#/var/lib/kafka-leaf/zookeeper#' $(DESTDIR)/etc/kafka-leaf/zookeeper.properties
+	sed -i 's#/tmp/kafka-logs#/var/lib/kafka-leaf/logs#' $(DESTDIR)/etc/kafka-leaf/server.properties
+	install -m 755 -d $(DESTDIR)/var/lib/kafka-leaf $(DESTDIR)/var/log/kafka-leaf
