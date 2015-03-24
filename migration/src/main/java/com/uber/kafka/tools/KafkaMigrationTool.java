@@ -316,11 +316,7 @@ public class KafkaMigrationTool
             });
 
             // start consumer threads
-<<<<<<< HEAD
-            logger.info("Starting " + numConsumers + " threads");
-=======
             logger.info("Starting " + numConsumers + " migration threads");
->>>>>>> [kafka] better error recovery in migration tool (part 2)
             for(Object stream: (List)retKafkaStreams) {
                 MigrationThread thread = new MigrationThread(
                     context, stream, producerDataChannel, threadId);
