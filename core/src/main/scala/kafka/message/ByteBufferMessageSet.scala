@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -20,12 +20,12 @@ package kafka.message
 import kafka.utils.Logging
 import java.nio.ByteBuffer
 import java.nio.channels._
-import java.io.{InputStream, ByteArrayOutputStream, DataOutputStream}
+import java.io.{InputStream, DataOutputStream}
 import java.util.concurrent.atomic.AtomicLong
 import kafka.utils.IteratorTemplate
 
 object ByteBufferMessageSet {
-  
+
   private def create(offsetCounter: AtomicLong, compressionCodec: CompressionCodec, messages: Message*): ByteBuffer = {
     if(messages.size == 0) {
       MessageSet.Empty.buffer
@@ -36,51 +36,54 @@ object ByteBufferMessageSet {
       buffer.rewind()
       buffer
     } else {
-      val byteArrayStream = new ByteArrayOutputStream(MessageSet.messageSetSize(messages))
-      val output = new DataOutputStream(CompressionFactory(compressionCodec, byteArrayStream))
       var offset = -1L
-      try {
-        for(message <- messages) {
-          offset = offsetCounter.getAndIncrement
-          output.writeLong(offset)
-          output.writeInt(message.size)
-          output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
+      val messageWriter = new MessageWriter(math.min(math.max(MessageSet.messageSetSize(messages) / 2, 1024), 1 << 16))
+      messageWriter.write(codec = compressionCodec) { outputStream =>
+        val output = new DataOutputStream(CompressionFactory(compressionCodec, outputStream))
+        try {
+          for (message <- messages) {
+            offset = offsetCounter.getAndIncrement
+            output.writeLong(offset)
+            output.writeInt(message.size)
+            output.write(message.buffer.array, message.buffer.arrayOffset, message.buffer.limit)
+          }
+        } finally {
+          output.close()
         }
-      } finally {
-        output.close()
       }
-      val bytes = byteArrayStream.toByteArray
-      val message = new Message(bytes, compressionCodec)
-      val buffer = ByteBuffer.allocate(message.size + MessageSet.LogOverhead)
-      writeMessage(buffer, message, offset)
+      val buffer = ByteBuffer.allocate(messageWriter.size + MessageSet.LogOverhead)
+      writeMessage(buffer, messageWriter, offset)
       buffer.rewind()
       buffer
     }
   }
-  
+
   def decompress(message: Message): ByteBufferMessageSet = {
-    val outputStream: ByteArrayOutputStream = new ByteArrayOutputStream
+    val outputStream = new BufferingOutputStream(math.min(math.max(message.size, 1024), 1 << 16))
     val inputStream: InputStream = new ByteBufferBackedInputStream(message.payload)
-    val intermediateBuffer = new Array[Byte](1024)
     val compressed = CompressionFactory(message.compressionCodec, inputStream)
     try {
-      Stream.continually(compressed.read(intermediateBuffer)).takeWhile(_ > 0).foreach { dataRead =>
-        outputStream.write(intermediateBuffer, 0, dataRead)
-      }
+      outputStream.write(compressed)
     } finally {
       compressed.close()
     }
     val outputBuffer = ByteBuffer.allocate(outputStream.size)
-    outputBuffer.put(outputStream.toByteArray)
+    outputStream.writeTo(outputBuffer)
     outputBuffer.rewind
     new ByteBufferMessageSet(outputBuffer)
   }
-    
+
   private[kafka] def writeMessage(buffer: ByteBuffer, message: Message, offset: Long) {
     buffer.putLong(offset)
     buffer.putInt(message.size)
     buffer.put(message.buffer)
     message.buffer.rewind()
+  }
+
+  private[kafka] def writeMessage(buffer: ByteBuffer, messageWriter: MessageWriter, offset: Long) {
+    buffer.putLong(offset)
+    buffer.putInt(messageWriter.size)
+    messageWriter.writeTo(buffer)
   }
 }
 
@@ -92,7 +95,7 @@ object ByteBufferMessageSet {
  * Option 1: From a ByteBuffer which already contains the serialized message set. Consumers will use this method.
  *
  * Option 2: Give it a list of messages along with instructions relating to serialization format. Producers will use this method.
- * 
+ *
  */
 class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Logging {
   private var shallowValidByteCount = -1
@@ -100,7 +103,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
   def this(compressionCodec: CompressionCodec, messages: Message*) {
     this(ByteBufferMessageSet.create(new AtomicLong(0), compressionCodec, messages:_*))
   }
-  
+
   def this(compressionCodec: CompressionCodec, offsetCounter: AtomicLong, messages: Message*) {
     this(ByteBufferMessageSet.create(offsetCounter, compressionCodec, messages:_*))
   }
@@ -123,7 +126,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
     }
     shallowValidByteCount
   }
-  
+
   /** Write the messages in this set to the given channel */
   def writeTo(channel: GatheringByteChannel, offset: Long, size: Int): Int = {
     // Ignore offset and size from input. We just want to write the whole buffer to the channel.
@@ -157,11 +160,11 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         val size = topIter.getInt()
         if(size < Message.MinHeaderSize)
           throw new InvalidMessageException("Message found with corrupt size (" + size + ")")
-        
+
         // we have an incomplete message
         if(topIter.remaining < size)
           return allDone()
-          
+
         // read the current message and check correctness
         val message = topIter.slice()
         message.limit(size)
@@ -261,7 +264,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
    */
   override def equals(other: Any): Boolean = {
     other match {
-      case that: ByteBufferMessageSet => 
+      case that: ByteBufferMessageSet =>
         buffer.equals(that.buffer)
       case _ => false
     }
