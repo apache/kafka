@@ -17,12 +17,13 @@
 
 package kafka.message
 
-import kafka.utils.Logging
+import kafka.utils.{IteratorTemplate, Logging}
+import kafka.common.KafkaException
+
 import java.nio.ByteBuffer
 import java.nio.channels._
-import java.io.{InputStream, DataOutputStream}
+import java.io._
 import java.util.concurrent.atomic.AtomicLong
-import kafka.utils.IteratorTemplate
 
 object ByteBufferMessageSet {
 
@@ -58,19 +59,42 @@ object ByteBufferMessageSet {
     }
   }
 
-  def decompress(message: Message): ByteBufferMessageSet = {
-    val outputStream = new BufferingOutputStream(math.min(math.max(message.size, 1024), 1 << 16))
-    val inputStream: InputStream = new ByteBufferBackedInputStream(message.payload)
-    val compressed = CompressionFactory(message.compressionCodec, inputStream)
-    try {
-      outputStream.write(compressed)
-    } finally {
-      compressed.close()
+  /** Deep iterator that decompresses the message sets in-place. */
+  def deepIterator(wrapperMessage: Message): Iterator[MessageAndOffset] = {
+    new IteratorTemplate[MessageAndOffset] {
+
+      val inputStream: InputStream = new ByteBufferBackedInputStream(wrapperMessage.payload)
+      val compressed: DataInputStream = new DataInputStream(CompressionFactory(wrapperMessage.compressionCodec, inputStream))
+
+      override def makeNext(): MessageAndOffset = {
+        try {
+          // read the offset
+          val offset = compressed.readLong()
+          // read record size
+          val size = compressed.readInt()
+
+          if (size < Message.MinHeaderSize)
+            throw new InvalidMessageException("Message found with corrupt size (" + size + ") in deep iterator")
+
+          // read the record into an intermediate record buffer
+          // and hence has to do extra copy
+          val bufferArray = new Array[Byte](size)
+          compressed.readFully(bufferArray, 0, size)
+          val buffer = ByteBuffer.wrap(bufferArray)
+
+          val newMessage = new Message(buffer)
+
+          // the decompressed message should not be a wrapper message since we do not allow nested compression
+          new MessageAndOffset(newMessage, offset)
+        } catch {
+          case eofe: EOFException =>
+            compressed.close()
+            allDone()
+          case ioe: IOException =>
+            throw new KafkaException(ioe)
+        }
+      }
     }
-    val outputBuffer = ByteBuffer.allocate(outputStream.size)
-    outputStream.writeTo(outputBuffer)
-    outputBuffer.rewind
-    new ByteBufferMessageSet(outputBuffer)
   }
 
   private[kafka] def writeMessage(buffer: ByteBuffer, message: Message, offset: Long) {
@@ -150,7 +174,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       var topIter = buffer.slice()
       var innerIter: Iterator[MessageAndOffset] = null
 
-      def innerDone():Boolean = (innerIter == null || !innerIter.hasNext)
+      def innerDone(): Boolean = (innerIter == null || !innerIter.hasNext)
 
       def makeNextOuter: MessageAndOffset = {
         // if there isn't at least an offset and size, we are done
@@ -159,7 +183,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
         val offset = topIter.getLong()
         val size = topIter.getInt()
         if(size < Message.MinHeaderSize)
-          throw new InvalidMessageException("Message found with corrupt size (" + size + ")")
+          throw new InvalidMessageException("Message found with corrupt size (" + size + ") in shallow iterator")
 
         // we have an incomplete message
         if(topIter.remaining < size)
@@ -179,7 +203,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
               innerIter = null
               new MessageAndOffset(newMessage, offset)
             case _ =>
-              innerIter = ByteBufferMessageSet.decompress(newMessage).internalIterator()
+              innerIter = ByteBufferMessageSet.deepIterator(newMessage)
               if(!innerIter.hasNext)
                 innerIter = null
               makeNext()
@@ -194,7 +218,7 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
           if(innerDone())
             makeNextOuter
           else
-            innerIter.next
+            innerIter.next()
         }
       }
 

@@ -269,13 +269,13 @@ class LogTest extends JUnitSuite {
     log.append(new ByteBufferMessageSet(DefaultCompressionCodec, new Message("hello".getBytes), new Message("there".getBytes)))
     log.append(new ByteBufferMessageSet(DefaultCompressionCodec, new Message("alpha".getBytes), new Message("beta".getBytes)))
 
-    def read(offset: Int) = ByteBufferMessageSet.decompress(log.read(offset, 4096).messageSet.head.message)
+    def read(offset: Int) = ByteBufferMessageSet.deepIterator(log.read(offset, 4096).messageSet.head.message)
 
     /* we should always get the first message in the compressed set when reading any offset in the set */
-    assertEquals("Read at offset 0 should produce 0", 0, read(0).head.offset)
-    assertEquals("Read at offset 1 should produce 0", 0, read(1).head.offset)
-    assertEquals("Read at offset 2 should produce 2", 2, read(2).head.offset)
-    assertEquals("Read at offset 3 should produce 2", 2, read(3).head.offset)
+    assertEquals("Read at offset 0 should produce 0", 0, read(0).next().offset)
+    assertEquals("Read at offset 1 should produce 0", 0, read(1).next().offset)
+    assertEquals("Read at offset 2 should produce 2", 2, read(2).next().offset)
+    assertEquals("Read at offset 3 should produce 2", 2, read(3).next().offset)
   }
 
   /**

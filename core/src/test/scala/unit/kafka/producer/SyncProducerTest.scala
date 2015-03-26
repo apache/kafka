@@ -31,7 +31,7 @@ import kafka.api.ProducerResponseStatus
 import kafka.common.{TopicAndPartition, ErrorMapping}
 
 class SyncProducerTest extends JUnit3Suite with KafkaServerTestHarness {
-  private var messageBytes =  new Array[Byte](2);
+  private val messageBytes =  new Array[Byte](2)
   // turning off controlled shutdown since testProducerCanTimeout() explicitly shuts down request handler pool.
   val configs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, false).head))
   val zookeeperConnect = TestZKUtils.zookeeperConnect

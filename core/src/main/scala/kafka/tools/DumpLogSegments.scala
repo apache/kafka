@@ -180,7 +180,7 @@ object DumpLogSegments {
         case NoCompressionCodec =>
           getSingleMessageIterator(messageAndOffset)
         case _ =>
-          ByteBufferMessageSet.decompress(message).iterator
+          ByteBufferMessageSet.deepIterator(message)
       }
     } else
       getSingleMessageIterator(messageAndOffset)
