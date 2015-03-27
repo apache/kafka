@@ -17,13 +17,17 @@
 
 package kafka.api
 
-import java.nio.ByteBuffer
-
 import kafka.api.ApiUtils._
 import kafka.utils.Logging
 import kafka.network.{BoundedByteBufferSend, RequestChannel}
+import kafka.common._
+import kafka.common.TopicAndPartition
 import kafka.network.RequestChannel.Response
-import kafka.common.{OffsetAndMetadata, ErrorMapping, OffsetMetadataAndError, TopicAndPartition}
+
+import scala.Some
+
+import java.nio.ByteBuffer
+
 object OffsetFetchRequest extends Logging {
   val CurrentVersion: Short = 0
   val DefaultClientId = ""
@@ -91,8 +95,7 @@ case class OffsetFetchRequest(groupId: String,
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     val responseMap = requestInfo.map {
       case (topicAndPartition) => (topicAndPartition, OffsetMetadataAndError(
-        offset = OffsetAndMetadata.InvalidOffset,
-        error = ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
+        ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])
       ))
     }.toMap
     val errorResponse = OffsetFetchResponse(requestInfo=responseMap, correlationId=correlationId)

@@ -89,31 +89,24 @@ public class Protocol {
     /* Produce api */
 
     public static final Schema TOPIC_PRODUCE_DATA_V0 = new Schema(new Field("topic", STRING),
-                                                                  new Field("data",
-                                                                            new ArrayOf(new Schema(new Field("partition",
-                                                                                                             INT32),
-                                                                                                   new Field("record_set",
-                                                                                                             BYTES)))));
+                                                                  new Field("data", new ArrayOf(new Schema(new Field("partition", INT32),
+                                                                                                     new Field("record_set", BYTES)))));
 
     public static final Schema PRODUCE_REQUEST_V0 = new Schema(new Field("acks",
-                                                                         INT16,
-                                                                         "The number of nodes that should replicate the produce before returning. -1 indicates the full ISR."),
-                                                               new Field("timeout",
-                                                                         INT32,
-                                                                         "The time to await a response in ms."),
-                                                               new Field("topic_data",
-                                                                         new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
+                                                                   INT16,
+                                                                   "The number of nodes that should replicate the produce before returning. -1 indicates the full ISR."),
+                                                               new Field("timeout", INT32, "The time to await a response in ms."),
+                                                               new Field("topic_data", new ArrayOf(TOPIC_PRODUCE_DATA_V0)));
 
     public static final Schema PRODUCE_RESPONSE_V0 = new Schema(new Field("responses",
-                                                                          new ArrayOf(new Schema(new Field("topic",
-                                                                                                           STRING),
-                                                                                                 new Field("partition_responses",
-                                                                                                           new ArrayOf(new Schema(new Field("partition",
-                                                                                                                                            INT32),
-                                                                                                                                  new Field("error_code",
-                                                                                                                                            INT16),
-                                                                                                                                  new Field("base_offset",
-                                                                                                                                            INT64))))))));
+                                                                    new ArrayOf(new Schema(new Field("topic", STRING),
+                                                                                           new Field("partition_responses",
+                                                                                                     new ArrayOf(new Schema(new Field("partition",
+                                                                                                                                      INT32),
+                                                                                                                            new Field("error_code",
+                                                                                                                                      INT16),
+                                                                                                                            new Field("base_offset",
+                                                                                                                                      INT64))))))));
 
     public static final Schema[] PRODUCE_REQUEST = new Schema[] {PRODUCE_REQUEST_V0};
     public static final Schema[] PRODUCE_RESPONSE = new Schema[] {PRODUCE_RESPONSE_V0};
@@ -132,11 +125,28 @@ public class Protocol {
                                                                                          STRING,
                                                                                          "Any associated metadata the client wants to keep."));
 
+    public static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V1 = new Schema(new Field("partition",
+                                                                                         INT32,
+                                                                                         "Topic partition id."),
+                                                                               new Field("offset",
+                                                                                         INT64,
+                                                                                         "Message offset to be committed."),
+                                                                               new Field("metadata",
+                                                                                         STRING,
+                                                                                         "Any associated metadata the client wants to keep."));
+
     public static final Schema OFFSET_COMMIT_REQUEST_TOPIC_V0 = new Schema(new Field("topic",
                                                                                      STRING,
                                                                                      "Topic to commit."),
                                                                            new Field("partitions",
                                                                                      new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V0),
+                                                                                     "Partitions to commit offsets."));
+
+    public static final Schema OFFSET_COMMIT_REQUEST_TOPIC_V1 = new Schema(new Field("topic",
+                                                                                     STRING,
+                                                                                     "Topic to commit."),
+                                                                           new Field("partitions",
+                                                                                     new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V1),
                                                                                      "Partitions to commit offsets."));
 
     public static final Schema OFFSET_COMMIT_REQUEST_V0 = new Schema(new Field("group_id",
@@ -159,10 +169,27 @@ public class Protocol {
                                                                                new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V0),
                                                                                "Topics to commit offsets."));
 
+    public static final Schema OFFSET_COMMIT_REQUEST_V2 = new Schema(new Field("group_id",
+                                                                               STRING,
+                                                                               "The consumer group id."),
+                                                                     new Field("group_generation_id",
+                                                                               INT32,
+                                                                               "The generation of the consumer group."),
+                                                                     new Field("consumer_id",
+                                                                               STRING,
+                                                                               "The consumer id assigned by the group coordinator."),
+                                                                     new Field("retention_time",
+                                                                               INT64,
+                                                                               "Time period in ms to retain the offset."),
+                                                                     new Field("topics",
+                                                                               new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V1),
+                                                                               "Topics to commit offsets."));
+
     public static final Schema OFFSET_COMMIT_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
                                                                                           INT32,
                                                                                           "Topic partition id."),
-                                                                                new Field("error_code", INT16));
+                                                                                new Field("error_code",
+                                                                                          INT16));
 
     public static final Schema OFFSET_COMMIT_RESPONSE_TOPIC_V0 = new Schema(new Field("topic", STRING),
                                                                             new Field("partition_responses",
@@ -171,9 +198,9 @@ public class Protocol {
     public static final Schema OFFSET_COMMIT_RESPONSE_V0 = new Schema(new Field("responses",
                                                                                 new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
 
-    public static final Schema[] OFFSET_COMMIT_REQUEST = new Schema[] {OFFSET_COMMIT_REQUEST_V0, OFFSET_COMMIT_REQUEST_V1};
-    /* The response types for both V0 and V1 of OFFSET_COMMIT_REQUEST are the same. */
-    public static final Schema[] OFFSET_COMMIT_RESPONSE = new Schema[] {OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V0};
+    public static final Schema[] OFFSET_COMMIT_REQUEST = new Schema[] {OFFSET_COMMIT_REQUEST_V0, OFFSET_COMMIT_REQUEST_V1, OFFSET_COMMIT_REQUEST_V2};
+    /* The response types for V0, V1 and V2 of OFFSET_COMMIT_REQUEST are the same. */
+    public static final Schema[] OFFSET_COMMIT_RESPONSE = new Schema[] {OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V0};
 
     /* Offset fetch api */
     public static final Schema OFFSET_FETCH_REQUEST_PARTITION_V0 = new Schema(new Field("partition",

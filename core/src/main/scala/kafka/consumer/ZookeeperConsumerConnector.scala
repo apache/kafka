@@ -400,7 +400,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
     val dirs = new ZKGroupTopicDirs(config.groupId, topicPartition.topic)
     val offsetString = readDataMaybeNull(zkClient, dirs.consumerOffsetDir + "/" + topicPartition.partition)._1
     offsetString match {
-      case Some(offsetStr) => (topicPartition, OffsetMetadataAndError(offsetStr.toLong, OffsetAndMetadata.NoMetadata, ErrorMapping.NoError))
+      case Some(offsetStr) => (topicPartition, OffsetMetadataAndError(offsetStr.toLong))
       case None => (topicPartition, OffsetMetadataAndError.NoOffset)
     }
   }

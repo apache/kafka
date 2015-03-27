@@ -42,7 +42,6 @@ import java.util.concurrent.TimeUnit
 import com.yammer.metrics.core.Gauge
 import org.I0Itec.zkclient.ZkClient
 
-
 /**
  * Configuration settings for in-built offset management
  * @param maxMetadataSize The maximum allowed metadata for any offset commit.
@@ -62,7 +61,7 @@ import org.I0Itec.zkclient.ZkClient
  */
 case class OffsetManagerConfig(maxMetadataSize: Int = OffsetManagerConfig.DefaultMaxMetadataSize,
                                loadBufferSize: Int = OffsetManagerConfig.DefaultLoadBufferSize,
-                               offsetsRetentionMs: Long = 24*60*60000L,
+                               offsetsRetentionMs: Long = OffsetManagerConfig.DefaultOffsetRetentionMs,
                                offsetsRetentionCheckIntervalMs: Long = OffsetManagerConfig.DefaultOffsetsRetentionCheckIntervalMs,
                                offsetsTopicNumPartitions: Int = OffsetManagerConfig.DefaultOffsetsTopicNumPartitions,
                                offsetsTopicSegmentBytes: Int = OffsetManagerConfig.DefaultOffsetsTopicSegmentBytes,
@@ -74,6 +73,7 @@ case class OffsetManagerConfig(maxMetadataSize: Int = OffsetManagerConfig.Defaul
 object OffsetManagerConfig {
   val DefaultMaxMetadataSize = 4096
   val DefaultLoadBufferSize = 5*1024*1024
+  val DefaultOffsetRetentionMs = 24*60*60*1000L
   val DefaultOffsetsRetentionCheckIntervalMs = 600000L
   val DefaultOffsetsTopicNumPartitions = 50
   val DefaultOffsetsTopicSegmentBytes = 100*1024*1024
@@ -120,9 +120,11 @@ class OffsetManager(val config: OffsetManagerConfig,
     debug("Compacting offsets cache.")
     val startMs = SystemTime.milliseconds
 
-    val staleOffsets = offsetsCache.filter(startMs - _._2.timestamp > config.offsetsRetentionMs)
+    val staleOffsets = offsetsCache.filter { case (groupTopicPartition, offsetAndMetadata) =>
+      offsetAndMetadata.expireTimestamp < startMs
+    }
 
-    debug("Found %d stale offsets (older than %d ms).".format(staleOffsets.size, config.offsetsRetentionMs))
+    debug("Found %d expired offsets.".format(staleOffsets.size))
 
     // delete the stale offsets from the table and generate tombstone messages to remove them from the log
     val tombstonesForPartition = staleOffsets.map { case(groupTopicAndPartition, offsetAndMetadata) =>
@@ -380,8 +382,17 @@ class OffsetManager(val config: OffsetManagerConfig,
                   else
                     trace("Ignoring redundant tombstone for %s.".format(key))
                 } else {
+                  // special handling for version 0:
+                  // set the expiration time stamp as commit time stamp + server default retention time
                   val value = OffsetManager.readMessageValue(msgAndOffset.message.payload)
-                  putOffset(key, value)
+                  putOffset(key, value.copy (
+                    expireTimestamp = {
+                      if (value.expireTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
+                        value.commitTimestamp + config.offsetsRetentionMs
+                      else
+                        value.expireTimestamp
+                    }
+                  ))
                   trace("Loaded offset %s for %s.".format(value, key))
                 }
                 currOffset = msgAndOffset.nextOffset
@@ -446,7 +457,7 @@ object OffsetManager {
 
   private case class KeyAndValueSchemas(keySchema: Schema, valueSchema: Schema)
 
-  private val CURRENT_OFFSET_SCHEMA_VERSION = 0.toShort
+  private val CURRENT_OFFSET_SCHEMA_VERSION = 1.toShort
 
   private val OFFSET_COMMIT_KEY_SCHEMA_V0 = new Schema(new Field("group", STRING),
                                                        new Field("topic", STRING),
@@ -458,12 +469,24 @@ object OffsetManager {
   private val OFFSET_COMMIT_VALUE_SCHEMA_V0 = new Schema(new Field("offset", INT64),
                                                          new Field("metadata", STRING, "Associated metadata.", ""),
                                                          new Field("timestamp", INT64))
-  private val VALUE_OFFSET_FIELD = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("offset")
-  private val VALUE_METADATA_FIELD = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("metadata")
-  private val VALUE_TIMESTAMP_FIELD = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("timestamp")
+
+  private val OFFSET_COMMIT_VALUE_SCHEMA_V1 = new Schema(new Field("offset", INT64),
+                                                         new Field("metadata", STRING, "Associated metadata.", ""),
+                                                         new Field("commit_timestamp", INT64),
+                                                         new Field("expire_timestamp", INT64))
+
+  private val VALUE_OFFSET_FIELD_V0 = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("offset")
+  private val VALUE_METADATA_FIELD_V0 = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("metadata")
+  private val VALUE_TIMESTAMP_FIELD_V0 = OFFSET_COMMIT_VALUE_SCHEMA_V0.get("timestamp")
+
+  private val VALUE_OFFSET_FIELD_V1 = OFFSET_COMMIT_VALUE_SCHEMA_V1.get("offset")
+  private val VALUE_METADATA_FIELD_V1 = OFFSET_COMMIT_VALUE_SCHEMA_V1.get("metadata")
+  private val VALUE_COMMIT_TIMESTAMP_FIELD_V1 = OFFSET_COMMIT_VALUE_SCHEMA_V1.get("commit_timestamp")
+  private val VALUE_EXPIRE_TIMESTAMP_FIELD_V1 = OFFSET_COMMIT_VALUE_SCHEMA_V1.get("expire_timestamp")
 
   // map of versions to schemas
-  private val OFFSET_SCHEMAS = Map(0 -> KeyAndValueSchemas(OFFSET_COMMIT_KEY_SCHEMA_V0, OFFSET_COMMIT_VALUE_SCHEMA_V0))
+  private val OFFSET_SCHEMAS = Map(0 -> KeyAndValueSchemas(OFFSET_COMMIT_KEY_SCHEMA_V0, OFFSET_COMMIT_VALUE_SCHEMA_V0),
+                                   1 -> KeyAndValueSchemas(OFFSET_COMMIT_KEY_SCHEMA_V0, OFFSET_COMMIT_VALUE_SCHEMA_V1))
 
   private val CURRENT_SCHEMA = schemaFor(CURRENT_OFFSET_SCHEMA_VERSION)
 
@@ -480,7 +503,7 @@ object OffsetManager {
    *
    * @return key for offset commit message
    */
-  def offsetCommitKey(group: String, topic: String, partition: Int, versionId: Short = 0): Array[Byte] = {
+  private def offsetCommitKey(group: String, topic: String, partition: Int, versionId: Short = 0): Array[Byte] = {
     val key = new Struct(CURRENT_SCHEMA.keySchema)
     key.set(KEY_GROUP_FIELD, group)
     key.set(KEY_TOPIC_FIELD, topic)
@@ -498,12 +521,13 @@ object OffsetManager {
    * @param offsetAndMetadata consumer's current offset and metadata
    * @return payload for offset commit message
    */
-  def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata): Array[Byte] = {
+  private def offsetCommitValue(offsetAndMetadata: OffsetAndMetadata): Array[Byte] = {
+    // generate commit value with schema version 1
     val value = new Struct(CURRENT_SCHEMA.valueSchema)
-    value.set(VALUE_OFFSET_FIELD, offsetAndMetadata.offset)
-    value.set(VALUE_METADATA_FIELD, offsetAndMetadata.metadata)
-    value.set(VALUE_TIMESTAMP_FIELD, offsetAndMetadata.timestamp)
-
+    value.set(VALUE_OFFSET_FIELD_V1, offsetAndMetadata.offset)
+    value.set(VALUE_METADATA_FIELD_V1, offsetAndMetadata.metadata)
+    value.set(VALUE_COMMIT_TIMESTAMP_FIELD_V1, offsetAndMetadata.commitTimestamp)
+    value.set(VALUE_EXPIRE_TIMESTAMP_FIELD_V1, offsetAndMetadata.expireTimestamp)
     val byteBuffer = ByteBuffer.allocate(2 /* version */ + value.sizeOf)
     byteBuffer.putShort(CURRENT_OFFSET_SCHEMA_VERSION)
     value.writeTo(byteBuffer)
@@ -516,7 +540,7 @@ object OffsetManager {
    * @param buffer input byte-buffer
    * @return an GroupTopicPartition object
    */
-  def readMessageKey(buffer: ByteBuffer): GroupTopicPartition = {
+  private def readMessageKey(buffer: ByteBuffer): GroupTopicPartition = {
     val version = buffer.getShort()
     val keySchema = schemaFor(version).keySchema
     val key = keySchema.read(buffer).asInstanceOf[Struct]
@@ -534,19 +558,40 @@ object OffsetManager {
    * @param buffer input byte-buffer
    * @return an offset-metadata object from the message
    */
-  def readMessageValue(buffer: ByteBuffer): OffsetAndMetadata = {
-    if(buffer == null) { // tombstone
+  private def readMessageValue(buffer: ByteBuffer): OffsetAndMetadata = {
+    val structAndVersion = readMessageValueStruct(buffer)
+
+    if (structAndVersion.value == null) { // tombstone
       null
+    } else {
+      if (structAndVersion.version == 0) {
+        val offset = structAndVersion.value.get(VALUE_OFFSET_FIELD_V0).asInstanceOf[Long]
+        val metadata = structAndVersion.value.get(VALUE_METADATA_FIELD_V0).asInstanceOf[String]
+        val timestamp = structAndVersion.value.get(VALUE_TIMESTAMP_FIELD_V0).asInstanceOf[Long]
+
+        OffsetAndMetadata(offset, metadata, timestamp)
+      } else if (structAndVersion.version == 1) {
+        val offset = structAndVersion.value.get(VALUE_OFFSET_FIELD_V1).asInstanceOf[Long]
+        val metadata = structAndVersion.value.get(VALUE_OFFSET_FIELD_V1).asInstanceOf[String]
+        val commitTimestamp = structAndVersion.value.get(VALUE_COMMIT_TIMESTAMP_FIELD_V1).asInstanceOf[Long]
+        val expireTimestamp = structAndVersion.value.get(VALUE_EXPIRE_TIMESTAMP_FIELD_V1).asInstanceOf[Long]
+
+        OffsetAndMetadata(offset, metadata, commitTimestamp, expireTimestamp)
+      } else {
+        throw new IllegalStateException("Unknown offset message version")
+      }
+    }
+  }
+
+  private def readMessageValueStruct(buffer: ByteBuffer): MessageValueStructAndVersion = {
+    if(buffer == null) { // tombstone
+      MessageValueStructAndVersion(null, -1)
     } else {
       val version = buffer.getShort()
       val valueSchema = schemaFor(version).valueSchema
       val value = valueSchema.read(buffer).asInstanceOf[Struct]
 
-      val offset = value.get(VALUE_OFFSET_FIELD).asInstanceOf[Long]
-      val metadata = value.get(VALUE_METADATA_FIELD).asInstanceOf[String]
-      val timestamp = value.get(VALUE_TIMESTAMP_FIELD).asInstanceOf[Long]
-
-      OffsetAndMetadata(offset, metadata, timestamp)
+      MessageValueStructAndVersion(value, version)
     }
   }
 
@@ -555,7 +600,7 @@ object OffsetManager {
   class OffsetsMessageFormatter extends MessageFormatter {
     def writeTo(key: Array[Byte], value: Array[Byte], output: PrintStream) {
       val formattedKey = if (key == null) "NULL" else OffsetManager.readMessageKey(ByteBuffer.wrap(key)).toString
-      val formattedValue = if (value == null) "NULL" else OffsetManager.readMessageValue(ByteBuffer.wrap(value)).toString
+      val formattedValue = if (value == null) "NULL" else OffsetManager.readMessageValueStruct(ByteBuffer.wrap(value)).value.toString
       output.write(formattedKey.getBytes)
       output.write("::".getBytes)
       output.write(formattedValue.getBytes)
@@ -564,6 +609,8 @@ object OffsetManager {
   }
 
 }
+
+case class MessageValueStructAndVersion(value: Struct, version: Short)
 
 case class GroupTopicPartition(group: String, topicPartition: TopicAndPartition) {
 

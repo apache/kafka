@@ -52,7 +52,7 @@ public class Struct {
         else if (field.defaultValue != Field.NO_DEFAULT)
             return field.defaultValue;
         else
-            throw new SchemaException("Missing value for field '" + field.name + " which has no default value.");
+            throw new SchemaException("Missing value for field '" + field.name + "' which has no default value.");
     }
 
     /**
@@ -191,7 +191,7 @@ public class Struct {
             ArrayOf array = (ArrayOf) field.type();
             return new Struct((Schema) array.type());
         } else {
-            throw new SchemaException("Field " + field.name + " is not a container type, it is of type " + field.type());
+            throw new SchemaException("Field '" + field.name + "' is not a container type, it is of type " + field.type());
         }
     }
 
@@ -234,7 +234,7 @@ public class Struct {
      */
     private void validateField(Field field) {
         if (this.schema != field.schema)
-            throw new SchemaException("Attempt to access field '" + field.name + " from a different schema instance.");
+            throw new SchemaException("Attempt to access field '" + field.name + "' from a different schema instance.");
         if (field.index > values.length)
             throw new SchemaException("Invalid field index: " + field.index);
     }

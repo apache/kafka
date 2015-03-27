@@ -149,12 +149,44 @@ class KafkaApis(val requestChannel: RequestChannel,
       val response = OffsetCommitResponse(commitStatus, offsetCommitRequest.correlationId)
       requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
     }
+
+    // compute the retention time based on the request version:
+    // if it is before v2 or not specified by user, we can use the default retention
+    val offsetRetention =
+      if (offsetCommitRequest.versionId <= 1 ||
+        offsetCommitRequest.retentionMs == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME) {
+        offsetManager.config.offsetsRetentionMs
+      } else {
+        offsetCommitRequest.retentionMs
+      }
+
+    // commit timestamp is always set to now.
+    // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
+    // expire timestamp is computed differently for v1 and v2.
+    //   - If v1 and no explicit commit timestamp is provided we use default expiration timestamp.
+    //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
+    //   - If v2 we use the default expiration timestamp
+    val currentTimestamp = SystemTime.milliseconds
+    val defaultExpireTimestamp = offsetRetention + currentTimestamp
+
+    val offsetData = offsetCommitRequest.requestInfo.mapValues(offsetAndMetadata =>
+      offsetAndMetadata.copy(
+        commitTimestamp = currentTimestamp,
+        expireTimestamp = {
+          if (offsetAndMetadata.commitTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
+            defaultExpireTimestamp
+          else
+            offsetRetention + offsetAndMetadata.commitTimestamp
+        }
+      )
+    )
+
     // call offset manager to store offsets
     offsetManager.storeOffsets(
       offsetCommitRequest.groupId,
       offsetCommitRequest.consumerId,
       offsetCommitRequest.groupGenerationId,
-      offsetCommitRequest.requestInfo,
+      offsetData,
       sendResponseCallback)
   }
 

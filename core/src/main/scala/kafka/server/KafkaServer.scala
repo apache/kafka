@@ -402,6 +402,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       maxMetadataSize = config.offsetMetadataMaxSize,
       loadBufferSize = config.offsetsLoadBufferSize,
       offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
+      offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
       offsetsTopicNumPartitions = config.offsetsTopicPartitions,
       offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
       offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,

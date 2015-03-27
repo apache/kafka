@@ -162,8 +162,12 @@ public final class Coordinator {
             Map<TopicPartition, OffsetCommitRequest.PartitionData> offsetData;
             offsetData = new HashMap<TopicPartition, OffsetCommitRequest.PartitionData>(offsets.size());
             for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet())
-                offsetData.put(entry.getKey(), new OffsetCommitRequest.PartitionData(entry.getValue(), now, ""));
-            OffsetCommitRequest req = new OffsetCommitRequest(this.groupId, this.generation, this.consumerId, offsetData);
+                offsetData.put(entry.getKey(), new OffsetCommitRequest.PartitionData(entry.getValue(), ""));
+            OffsetCommitRequest req = new OffsetCommitRequest(this.groupId,
+                this.generation,
+                this.consumerId,
+                OffsetCommitRequest.DEFAULT_RETENTION_TIME,
+                offsetData);
 
             // send request and possibly wait for response if it is blocking
             RequestCompletionHandler handler = new CommitOffsetCompletionHandler(offsets);

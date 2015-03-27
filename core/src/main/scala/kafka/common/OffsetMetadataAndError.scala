@@ -17,40 +17,60 @@
 
 package kafka.common
 
-case class OffsetAndMetadata(offset: Long,
-                             metadata: String = OffsetAndMetadata.NoMetadata,
-                             timestamp: Long = -1L) {
-  override def toString = "OffsetAndMetadata[%d,%s%s]"
-                          .format(offset,
-                                  if (metadata != null && metadata.length > 0) metadata else "NO_METADATA",
-                                  if (timestamp == -1) "" else "," + timestamp.toString)
+case class OffsetMetadata(offset: Long, metadata: String = OffsetMetadata.NoMetadata) {
+  override def toString = "OffsetMetadata[%d,%s]"
+    .format(offset,
+    if (metadata != null && metadata.length > 0) metadata else "NO_METADATA")
+}
+
+object OffsetMetadata {
+  val InvalidOffset: Long = -1L
+  val NoMetadata: String = ""
+
+  val InvalidOffsetMetadata = OffsetMetadata(OffsetMetadata.InvalidOffset, OffsetMetadata.NoMetadata)
+}
+
+case class OffsetAndMetadata(offsetMetadata: OffsetMetadata,
+                             commitTimestamp: Long = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP,
+                             expireTimestamp: Long = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP) {
+
+  def offset() = offsetMetadata.offset
+
+  def metadata() = offsetMetadata.metadata
+
+  override def toString = "[%s,CommitTime %d,ExpirationTime %d]".format(offsetMetadata, commitTimestamp, expireTimestamp)
 }
 
 object OffsetAndMetadata {
-  val InvalidOffset: Long = -1L
-  val NoMetadata: String = ""
-  val InvalidTime: Long = -1L
+  def apply(offset: Long, metadata: String, commitTimestamp: Long, expireTimestamp: Long) = new OffsetAndMetadata(OffsetMetadata(offset, metadata), commitTimestamp, expireTimestamp)
+
+  def apply(offset: Long, metadata: String, timestamp: Long) = new OffsetAndMetadata(OffsetMetadata(offset, metadata), timestamp)
+
+  def apply(offset: Long, metadata: String) = new OffsetAndMetadata(OffsetMetadata(offset, metadata))
+
+  def apply(offset: Long) = new OffsetAndMetadata(OffsetMetadata(offset, OffsetMetadata.NoMetadata))
 }
 
-case class OffsetMetadataAndError(offset: Long,
-                                  metadata: String = OffsetAndMetadata.NoMetadata,
-                                  error: Short = ErrorMapping.NoError) {
+case class OffsetMetadataAndError(offsetMetadata: OffsetMetadata, error: Short = ErrorMapping.NoError) {
+  def offset = offsetMetadata.offset
 
-  def this(offsetMetadata: OffsetAndMetadata, error: Short) =
-    this(offsetMetadata.offset, offsetMetadata.metadata, error)
+  def metadata = offsetMetadata.metadata
 
-  def this(error: Short) =
-    this(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, error)
-
-  def asTuple = (offset, metadata, error)
-
-  override def toString = "OffsetMetadataAndError[%d,%s,%d]".format(offset, metadata, error)
+  override def toString = "[%s,ErrorCode %d]".format(offsetMetadata, error)
 }
 
 object OffsetMetadataAndError {
-  val NoOffset = OffsetMetadataAndError(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, ErrorMapping.NoOffsetsCommittedCode)
-  val OffsetsLoading = OffsetMetadataAndError(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, ErrorMapping.OffsetsLoadInProgressCode)
-  val NotOffsetManagerForGroup = OffsetMetadataAndError(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, ErrorMapping.NotCoordinatorForConsumerCode)
-  val UnknownTopicOrPartition = OffsetMetadataAndError(OffsetAndMetadata.InvalidOffset, OffsetAndMetadata.NoMetadata, ErrorMapping.UnknownTopicOrPartitionCode)
+  val NoOffset = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, ErrorMapping.NoError)
+  val OffsetsLoading = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, ErrorMapping.OffsetsLoadInProgressCode)
+  val UnknownTopicOrPartition = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, ErrorMapping.UnknownTopicOrPartitionCode)
+  val NotOffsetManagerForGroup = OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, ErrorMapping.NotCoordinatorForConsumerCode)
+
+  def apply(offset: Long) = new OffsetMetadataAndError(OffsetMetadata(offset, OffsetMetadata.NoMetadata), ErrorMapping.NoError)
+
+  def apply(error: Short) = new OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata, error)
+
+  def apply(offset: Long, metadata: String, error: Short) = new OffsetMetadataAndError(OffsetMetadata(offset, metadata), error)
 }
+
+
 

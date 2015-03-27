@@ -163,10 +163,10 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       server.shutdown()
       server.awaitShutdown()
       server.shutdown()
-      assertTrue(true);
+      assertTrue(true)
     }
     catch{
-      case ex => fail()
+      case ex: Throwable => fail()
     }
   }
 }

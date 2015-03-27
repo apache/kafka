@@ -17,28 +17,33 @@
 
 package kafka.server
 
-import java.io.File
-import kafka.utils._
-import junit.framework.Assert._
-import java.util.Properties
-import kafka.consumer.SimpleConsumer
-import org.junit.{After, Before, Test}
-import kafka.zk.ZooKeeperTestHarness
-import org.scalatest.junit.JUnit3Suite
 import kafka.api.{ConsumerMetadataRequest, OffsetCommitRequest, OffsetFetchRequest}
+import kafka.consumer.SimpleConsumer
+import kafka.common.{OffsetMetadata, OffsetMetadataAndError, OffsetAndMetadata, ErrorMapping, TopicAndPartition}
+import kafka.utils._
 import kafka.utils.TestUtils._
-import kafka.common.{OffsetMetadataAndError, OffsetAndMetadata, ErrorMapping, TopicAndPartition}
+import kafka.zk.ZooKeeperTestHarness
+
+import org.junit.{After, Before, Test}
+import org.scalatest.junit.JUnit3Suite
+
+import java.util.Properties
+import java.io.File
+
 import scala.util.Random
 import scala.collection._
 
+import junit.framework.Assert._
+
 class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
   val random: Random = new Random()
+  val brokerPort: Int = 9099
+  val group = "test-group"
+  val retentionCheckInterval: Long = 100L
   var logDir: File = null
   var topicLogDir: File = null
   var server: KafkaServer = null
   var logSize: Int = 100
-  val brokerPort: Int = 9099
-  val group = "test-group"
   var simpleConsumer: SimpleConsumer = null
   var time: Time = new MockTime()
 
@@ -46,6 +51,8 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
   override def setUp() {
     super.setUp()
     val config: Properties = createBrokerConfig(1, brokerPort)
+    config.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
+    config.setProperty(KafkaConfig.OffsetsRetentionCheckIntervalMsProp, retentionCheckInterval.toString)
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
     time = new MockTime()
@@ -89,7 +96,7 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
     val fetchResponse = simpleConsumer.fetchOffsets(fetchRequest)
 
     assertEquals(ErrorMapping.NoError, fetchResponse.requestInfo.get(topicAndPartition).get.error)
-    assertEquals(OffsetAndMetadata.NoMetadata, fetchResponse.requestInfo.get(topicAndPartition).get.metadata)
+    assertEquals(OffsetMetadata.NoMetadata, fetchResponse.requestInfo.get(topicAndPartition).get.metadata)
     assertEquals(42L, fetchResponse.requestInfo.get(topicAndPartition).get.offset)
 
     // Commit a new offset
@@ -155,31 +162,37 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
     val fetchResponse = simpleConsumer.fetchOffsets(fetchRequest)
 
     assertEquals(ErrorMapping.NoError, fetchResponse.requestInfo.get(TopicAndPartition(topic1, 0)).get.error)
+
     assertEquals(ErrorMapping.NoError, fetchResponse.requestInfo.get(TopicAndPartition(topic2, 0)).get.error)
-    assertEquals(ErrorMapping.NoError, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 0)).get.error)
     assertEquals(ErrorMapping.NoError, fetchResponse.requestInfo.get(TopicAndPartition(topic2, 1)).get.error)
+
+    assertEquals(ErrorMapping.NoError, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 0)).get.error)
     assertEquals(ErrorMapping.UnknownTopicOrPartitionCode, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get.error)
-    assertEquals(ErrorMapping.NoOffsetsCommittedCode, fetchResponse.requestInfo.get(TopicAndPartition(topic4, 0)).get.error)
-    assertEquals(ErrorMapping.UnknownTopicOrPartitionCode, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get.error)
     assertEquals(OffsetMetadataAndError.UnknownTopicOrPartition, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get)
+
+    assertEquals(ErrorMapping.NoError, fetchResponse.requestInfo.get(TopicAndPartition(topic4, 0)).get.error)
     assertEquals(OffsetMetadataAndError.NoOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic4, 0)).get)
+
+    assertEquals(ErrorMapping.UnknownTopicOrPartitionCode, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get.error)
     assertEquals(OffsetMetadataAndError.UnknownTopicOrPartition, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get)
 
     assertEquals("metadata one", fetchResponse.requestInfo.get(TopicAndPartition(topic1, 0)).get.metadata)
     assertEquals("metadata two", fetchResponse.requestInfo.get(TopicAndPartition(topic2, 0)).get.metadata)
     assertEquals("metadata three", fetchResponse.requestInfo.get(TopicAndPartition(topic3, 0)).get.metadata)
-    assertEquals(OffsetAndMetadata.NoMetadata, fetchResponse.requestInfo.get(TopicAndPartition(topic2, 1)).get.metadata)
-    assertEquals(OffsetAndMetadata.NoMetadata, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get.metadata)
-    assertEquals(OffsetAndMetadata.NoMetadata, fetchResponse.requestInfo.get(TopicAndPartition(topic4, 0)).get.metadata)
-    assertEquals(OffsetAndMetadata.NoMetadata, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get.metadata)
+
+    assertEquals(OffsetMetadata.NoMetadata, fetchResponse.requestInfo.get(TopicAndPartition(topic2, 1)).get.metadata)
+    assertEquals(OffsetMetadata.NoMetadata, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get.metadata)
+    assertEquals(OffsetMetadata.NoMetadata, fetchResponse.requestInfo.get(TopicAndPartition(topic4, 0)).get.metadata)
+    assertEquals(OffsetMetadata.NoMetadata, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get.metadata)
 
     assertEquals(42L, fetchResponse.requestInfo.get(TopicAndPartition(topic1, 0)).get.offset)
     assertEquals(43L, fetchResponse.requestInfo.get(TopicAndPartition(topic2, 0)).get.offset)
     assertEquals(44L, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 0)).get.offset)
     assertEquals(45L, fetchResponse.requestInfo.get(TopicAndPartition(topic2, 1)).get.offset)
-    assertEquals(OffsetAndMetadata.InvalidOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get.offset)
-    assertEquals(OffsetAndMetadata.InvalidOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic4, 0)).get.offset)
-    assertEquals(OffsetAndMetadata.InvalidOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get.offset)
+
+    assertEquals(OffsetMetadata.InvalidOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic3, 1)).get.offset)
+    assertEquals(OffsetMetadata.InvalidOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic4, 0)).get.offset)
+    assertEquals(OffsetMetadata.InvalidOffset, fetchResponse.requestInfo.get(TopicAndPartition(topic5, 0)).get.offset)
   }
 
   @Test
@@ -204,6 +217,73 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
     val commitResponse1 = simpleConsumer.commitOffsets(commitRequest1)
 
     assertEquals(ErrorMapping.OffsetMetadataTooLargeCode, commitResponse1.commitStatus.get(topicAndPartition).get)
+  }
+
+  @Test
+  def testOffsetExpiration() {
+    // set up topic partition
+    val topic = "topic"
+    val topicPartition = TopicAndPartition(topic, 0)
+    createTopic(zkClient, topic, servers = Seq(server), numPartitions = 1)
+
+    val fetchRequest = OffsetFetchRequest(group, Seq(TopicAndPartition(topic, 0)))
+
+    // v0 version commit request with commit timestamp set to -1
+    // should not expire
+    val commitRequest0 = OffsetCommitRequest(
+      groupId = group,
+      requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(1L, "metadata", -1L)),
+      versionId = 0
+    )
+    assertEquals(ErrorMapping.NoError, simpleConsumer.commitOffsets(commitRequest0).commitStatus.get(topicPartition).get)
+    Thread.sleep(retentionCheckInterval * 2)
+    assertEquals(1L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
+
+    // v1 version commit request with commit timestamp set to -1
+    // should not expire
+    val commitRequest1 = OffsetCommitRequest(
+      groupId = group,
+      requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(2L, "metadata", -1L)),
+      versionId = 1
+    )
+    assertEquals(ErrorMapping.NoError, simpleConsumer.commitOffsets(commitRequest1).commitStatus.get(topicPartition).get)
+    Thread.sleep(retentionCheckInterval * 2)
+    assertEquals(2L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
+
+    // v1 version commit request with commit timestamp set to now - two days
+    // should expire
+    val commitRequest2 = OffsetCommitRequest(
+      groupId = group,
+      requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(3L, "metadata", SystemTime.milliseconds - 2*24*60*60*1000L)),
+      versionId = 1
+    )
+    assertEquals(ErrorMapping.NoError, simpleConsumer.commitOffsets(commitRequest2).commitStatus.get(topicPartition).get)
+    Thread.sleep(retentionCheckInterval * 2)
+    assertEquals(-1L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
+
+    // v2 version commit request with retention time set to 1 hour
+    // should not expire
+    val commitRequest3 = OffsetCommitRequest(
+      groupId = group,
+      requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(4L, "metadata", -1L)),
+      versionId = 2,
+      retentionMs = 1000 * 60 * 60L
+    )
+    assertEquals(ErrorMapping.NoError, simpleConsumer.commitOffsets(commitRequest3).commitStatus.get(topicPartition).get)
+    Thread.sleep(retentionCheckInterval * 2)
+    assertEquals(4L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
+
+    // v2 version commit request with retention time set to 0 second
+    // should expire
+    val commitRequest4 = OffsetCommitRequest(
+      groupId = "test-group",
+      requestInfo = immutable.Map(TopicAndPartition(topic, 0) -> OffsetAndMetadata(5L, "metadata", -1L)),
+      versionId = 2,
+      retentionMs = 0L
+    )
+    assertEquals(ErrorMapping.NoError, simpleConsumer.commitOffsets(commitRequest4).commitStatus.get(topicPartition).get)
+    Thread.sleep(retentionCheckInterval * 2)
+    assertEquals(-1L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
 
   }
 

@@ -65,7 +65,7 @@ object ReplicaManager {
 }
 
 class ReplicaManager(val config: KafkaConfig,
-                     time: Time,
+                     private val time: Time,
                      val zkClient: ZkClient,
                      scheduler: Scheduler,
                      val logManager: LogManager,

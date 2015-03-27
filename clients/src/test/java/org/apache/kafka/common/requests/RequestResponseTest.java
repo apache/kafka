@@ -140,8 +140,8 @@ public class RequestResponseTest {
 
     private AbstractRequestResponse createOffsetCommitRequest() {
         Map<TopicPartition, OffsetCommitRequest.PartitionData> commitData = new HashMap<TopicPartition, OffsetCommitRequest.PartitionData>();
-        commitData.put(new TopicPartition("test", 0), new OffsetCommitRequest.PartitionData(100, 1000000, ""));
-        return new OffsetCommitRequest("group1", 100, "consumer1", commitData);
+        commitData.put(new TopicPartition("test", 0), new OffsetCommitRequest.PartitionData(100, ""));
+        return new OffsetCommitRequest("group1", 100, "consumer1", 1000000, commitData);
     }
 
     private AbstractRequestResponse createOffsetCommitResponse() {
