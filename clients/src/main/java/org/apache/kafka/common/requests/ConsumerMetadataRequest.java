@@ -12,14 +12,16 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class ConsumerMetadataRequest extends AbstractRequestResponse {
+public class ConsumerMetadataRequest extends AbstractRequest {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.CONSUMER_METADATA.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
@@ -36,6 +38,11 @@ public class ConsumerMetadataRequest extends AbstractRequestResponse {
     public ConsumerMetadataRequest(Struct struct) {
         super(struct);
         groupId = struct.getString(GROUP_ID_KEY_NAME);
+    }
+
+    @Override
+    public AbstractRequestResponse getErrorResponse(Throwable e) {
+        return new ConsumerMetadataResponse(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code(), Node.noNode());
     }
 
     public String groupId() {

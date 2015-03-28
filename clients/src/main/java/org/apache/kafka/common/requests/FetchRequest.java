@@ -20,12 +20,13 @@ import java.util.Map;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
 
-public class FetchRequest extends AbstractRequestResponse {
+public class FetchRequest extends AbstractRequest {
     
     public static final int CONSUMER_REPLICA_ID = -1;
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.FETCH.id);
@@ -116,6 +117,20 @@ public class FetchRequest extends AbstractRequestResponse {
                 fetchData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
+    }
+
+    @Override
+    public AbstractRequestResponse getErrorResponse(Throwable e) {
+        Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
+
+        for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
+            FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e).code(),
+                                                                                            FetchResponse.INVALID_HIGHWATERMARK,
+                                                                                            FetchResponse.EMPTY_RECORD_SET);
+            responseData.put(entry.getKey(), partitionResponse);
+        }
+
+        return new FetchResponse(responseData);
     }
 
     public int replicaId() {

@@ -41,6 +41,9 @@ public class OffsetFetchResponse extends AbstractRequestResponse {
     private static final String METADATA_KEY_NAME = "metadata";
     private static final String ERROR_CODE_KEY_NAME = "error_code";
 
+    public static final long INVALID_OFFSET = -1L;
+    public static final String NO_METADATA = "";
+
     /**
      * Possible error code:
      *

@@ -17,6 +17,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.protocol.Errors;
 import org.junit.Test;
 
@@ -33,29 +34,38 @@ public class RequestResponseTest {
 
     @Test
     public void testSerialization() throws Exception {
-        List<AbstractRequestResponse> requestList = Arrays.asList(
+        List<AbstractRequestResponse> requestResponseList = Arrays.asList(
                 createRequestHeader(),
                 createResponseHeader(),
                 createConsumerMetadataRequest(),
+                createConsumerMetadataRequest().getErrorResponse(new UnknownServerException()),
                 createConsumerMetadataResponse(),
                 createFetchRequest(),
+                createFetchRequest().getErrorResponse(new UnknownServerException()),
                 createFetchResponse(),
                 createHeartBeatRequest(),
+                createHeartBeatRequest().getErrorResponse(new UnknownServerException()),
                 createHeartBeatResponse(),
                 createJoinGroupRequest(),
+                createJoinGroupRequest().getErrorResponse(new UnknownServerException()),
                 createJoinGroupResponse(),
                 createListOffsetRequest(),
+                createListOffsetRequest().getErrorResponse(new UnknownServerException()),
                 createListOffsetResponse(),
                 createMetadataRequest(),
+                createMetadataRequest().getErrorResponse(new UnknownServerException()),
                 createMetadataResponse(),
                 createOffsetCommitRequest(),
+                createOffsetCommitRequest().getErrorResponse(new UnknownServerException()),
                 createOffsetCommitResponse(),
                 createOffsetFetchRequest(),
+                createOffsetFetchRequest().getErrorResponse(new UnknownServerException()),
                 createOffsetFetchResponse(),
                 createProduceRequest(),
+                createProduceRequest().getErrorResponse(new UnknownServerException()),
                 createProduceResponse());
 
-        for (AbstractRequestResponse req: requestList) {
+        for (AbstractRequestResponse req: requestResponseList) {
             ByteBuffer buffer = ByteBuffer.allocate(req.sizeOf());
             req.writeTo(buffer);
             buffer.rewind();
@@ -75,7 +85,7 @@ public class RequestResponseTest {
         return new ResponseHeader(10);
     }
 
-    private AbstractRequestResponse createConsumerMetadataRequest() {
+    private AbstractRequest createConsumerMetadataRequest() {
         return new ConsumerMetadataRequest("test-group");
     }
 
@@ -83,7 +93,7 @@ public class RequestResponseTest {
         return new ConsumerMetadataResponse((short) 1, new Node(10, "host1", 2014));
     }
 
-    private AbstractRequestResponse createFetchRequest() {
+    private AbstractRequest createFetchRequest() {
         Map<TopicPartition, FetchRequest.PartitionData> fetchData = new HashMap<TopicPartition, FetchRequest.PartitionData>();
         fetchData.put(new TopicPartition("test1", 0), new FetchRequest.PartitionData(100, 1000000));
         fetchData.put(new TopicPartition("test2", 0), new FetchRequest.PartitionData(200, 1000000));
@@ -96,7 +106,7 @@ public class RequestResponseTest {
         return new FetchResponse(responseData);
     }
 
-    private AbstractRequestResponse createHeartBeatRequest() {
+    private AbstractRequest createHeartBeatRequest() {
         return new HeartbeatRequest("group1", 1, "consumer1");
     }
 
@@ -104,7 +114,7 @@ public class RequestResponseTest {
         return new HeartbeatResponse(Errors.NONE.code());
     }
 
-    private AbstractRequestResponse createJoinGroupRequest() {
+    private AbstractRequest createJoinGroupRequest() {
         return new JoinGroupRequest("group1", 30000, Arrays.asList("topic1"), "consumer1", "strategy1");
     }
 
@@ -112,7 +122,7 @@ public class RequestResponseTest {
         return new JoinGroupResponse(Errors.NONE.code(), 1, "consumer1", Arrays.asList(new TopicPartition("test11", 1), new TopicPartition("test2", 1)));
     }
 
-    private AbstractRequestResponse createListOffsetRequest() {
+    private AbstractRequest createListOffsetRequest() {
         Map<TopicPartition, ListOffsetRequest.PartitionData> offsetData = new HashMap<TopicPartition, ListOffsetRequest.PartitionData>();
         offsetData.put(new TopicPartition("test", 0), new ListOffsetRequest.PartitionData(1000000L, 10));
         return new ListOffsetRequest(-1, offsetData);
@@ -124,7 +134,7 @@ public class RequestResponseTest {
         return new ListOffsetResponse(responseData);
     }
 
-    private AbstractRequestResponse createMetadataRequest() {
+    private AbstractRequest createMetadataRequest() {
         return new MetadataRequest(Arrays.asList("topic1"));
     }
 
@@ -138,7 +148,7 @@ public class RequestResponseTest {
         return new MetadataResponse(cluster);
     }
 
-    private AbstractRequestResponse createOffsetCommitRequest() {
+    private AbstractRequest createOffsetCommitRequest() {
         Map<TopicPartition, OffsetCommitRequest.PartitionData> commitData = new HashMap<TopicPartition, OffsetCommitRequest.PartitionData>();
         commitData.put(new TopicPartition("test", 0), new OffsetCommitRequest.PartitionData(100, ""));
         return new OffsetCommitRequest("group1", 100, "consumer1", 1000000, commitData);
@@ -150,7 +160,7 @@ public class RequestResponseTest {
         return new OffsetCommitResponse(responseData);
     }
 
-    private AbstractRequestResponse createOffsetFetchRequest() {
+    private AbstractRequest createOffsetFetchRequest() {
         return new OffsetFetchRequest("group1", Arrays.asList(new TopicPartition("test11", 1)));
     }
 
@@ -160,10 +170,10 @@ public class RequestResponseTest {
         return new OffsetFetchResponse(responseData);
     }
 
-    private AbstractRequestResponse createProduceRequest() {
+    private AbstractRequest createProduceRequest() {
         Map<TopicPartition, ByteBuffer> produceData = new HashMap<TopicPartition, ByteBuffer>();
         produceData.put(new TopicPartition("test", 0), ByteBuffer.allocate(10));
-        return new ProduceRequest(Errors.NONE.code(), 5000, produceData);
+        return new ProduceRequest((short) 1, 5000, produceData);
     }
 
     private AbstractRequestResponse createProduceResponse() {

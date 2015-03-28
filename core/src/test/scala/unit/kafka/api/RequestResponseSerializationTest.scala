@@ -208,28 +208,6 @@ object SerializationTestUtils {
   def createConsumerMetadataResponse: ConsumerMetadataResponse = {
     ConsumerMetadataResponse(Some(brokers.head), ErrorMapping.NoError, 0)
   }
-
-  def createHeartbeatRequestAndHeader: HeartbeatRequestAndHeader = {
-    val body = new HeartbeatRequest("group1", 1, "consumer1")
-    HeartbeatRequestAndHeader(0.asInstanceOf[Short], 1, "", body)
-  }
-
-  def createHeartbeatResponseAndHeader: HeartbeatResponseAndHeader = {
-    val body = new HeartbeatResponse(0.asInstanceOf[Short])
-    HeartbeatResponseAndHeader(1, body)
-  }
-
-  def createJoinGroupRequestAndHeader: JoinGroupRequestAndHeader = {
-    import scala.collection.JavaConversions._
-    val body = new JoinGroupRequest("group1", 30000, List("topic1"), "consumer1", "strategy1");
-    JoinGroupRequestAndHeader(0.asInstanceOf[Short], 1, "", body)
-  }
-
-  def createJoinGroupResponseAndHeader: JoinGroupResponseAndHeader = {
-    import scala.collection.JavaConversions._
-    val body = new JoinGroupResponse(0.asInstanceOf[Short], 1, "consumer1", List(new TopicPartition("test11", 1)))
-    JoinGroupResponseAndHeader(1, body)
-  }
 }
 
 class RequestResponseSerializationTest extends JUnitSuite {
@@ -253,10 +231,6 @@ class RequestResponseSerializationTest extends JUnitSuite {
   private val consumerMetadataRequest = SerializationTestUtils.createConsumerMetadataRequest
   private val consumerMetadataResponse = SerializationTestUtils.createConsumerMetadataResponse
   private val consumerMetadataResponseNoCoordinator = ConsumerMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, 0)
-  private val heartbeatRequest = SerializationTestUtils.createHeartbeatRequestAndHeader
-  private val heartbeatResponse = SerializationTestUtils.createHeartbeatResponseAndHeader
-  private val joinGroupRequest = SerializationTestUtils.createJoinGroupRequestAndHeader
-  private val joinGroupResponse = SerializationTestUtils.createJoinGroupResponseAndHeader
 
   @Test
   def testSerializationAndDeserialization() {
@@ -269,8 +243,7 @@ class RequestResponseSerializationTest extends JUnitSuite {
                                offsetCommitRequestV0, offsetCommitRequestV1, offsetCommitRequestV2,
                                offsetCommitResponse, offsetFetchRequest, offsetFetchResponse,
                                consumerMetadataRequest, consumerMetadataResponse,
-                               consumerMetadataResponseNoCoordinator, heartbeatRequest,
-                               heartbeatResponse, joinGroupRequest, joinGroupResponse)
+                               consumerMetadataResponseNoCoordinator)
 
     requestsAndResponses.foreach { original =>
       val buffer = ByteBuffer.allocate(original.sizeInBytes)

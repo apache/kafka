@@ -20,6 +20,7 @@ import java.util.Map;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -28,7 +29,8 @@ import org.apache.kafka.common.utils.CollectionUtils;
 /**
  * This wrapper supports both v0 and v1 of OffsetCommitRequest.
  */
-public class OffsetCommitRequest extends AbstractRequestResponse {
+public class OffsetCommitRequest extends AbstractRequest {
+    
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.OFFSET_COMMIT.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String GENERATION_ID_KEY_NAME = "group_generation_id";
@@ -211,6 +213,15 @@ public class OffsetCommitRequest extends AbstractRequestResponse {
                 offsetData.put(new TopicPartition(topic, partition), partitionOffset);
             }
         }
+    }
+
+    @Override
+    public AbstractRequestResponse getErrorResponse(Throwable e) {
+        Map<TopicPartition, Short> responseData = new HashMap<TopicPartition, Short>();
+        for (Map.Entry<TopicPartition, PartitionData> entry: offsetData.entrySet()) {
+            responseData.put(entry.getKey(), Errors.forException(e).code());
+        }
+        return new OffsetCommitResponse(responseData);
     }
 
     public String groupId() {

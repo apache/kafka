@@ -15,6 +15,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -26,7 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ProduceRequest  extends AbstractRequestResponse {
+public class ProduceRequest  extends AbstractRequest {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.PRODUCE.id);
     private static final String ACKS_KEY_NAME = "acks";
@@ -86,6 +87,22 @@ public class ProduceRequest  extends AbstractRequestResponse {
         }
         acks = struct.getShort(ACKS_KEY_NAME);
         timeout = struct.getInt(TIMEOUT_KEY_NAME);
+    }
+
+    @Override
+    public AbstractRequestResponse getErrorResponse(Throwable e) {
+
+        /* In case the producer doesn't actually want any response */
+        if (acks == 0)
+            return null;
+
+        Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
+
+        for (Map.Entry<TopicPartition, ByteBuffer> entry: partitionRecords.entrySet()) {
+            responseMap.put(entry.getKey(), new ProduceResponse.PartitionResponse(Errors.forException(e).code(), ProduceResponse.INVALID_OFFSET));
+        }
+
+        return new ProduceResponse(responseMap);
     }
 
     public short acks() {

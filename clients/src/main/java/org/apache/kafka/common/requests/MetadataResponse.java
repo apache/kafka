@@ -67,6 +67,25 @@ public class MetadataResponse extends AbstractRequestResponse {
     private final Cluster cluster;
     private final Map<String, Errors> errors;
 
+    /* Constructor for error responses where most of the data, except error per topic, is irrelevant */
+    public MetadataResponse(Map<String, Errors> topicErrors) {
+        super(new Struct(CURRENT_SCHEMA));
+
+        struct.set(BROKERS_KEY_NAME, new ArrayList<Struct>().toArray());
+        List<Struct> topicArray = new ArrayList<Struct>();
+        for (Map.Entry<String, Errors> topicError : topicErrors.entrySet()) {
+            Struct topicData = struct.instance(TOPIC_METATDATA_KEY_NAME);
+            topicData.set(TOPIC_ERROR_CODE_KEY_NAME, topicError.getValue().code());
+            topicData.set(TOPIC_KEY_NAME, topicError.getKey());
+            topicData.set(PARTITION_METADATA_KEY_NAME, new ArrayList<Struct>().toArray());
+            topicArray.add(topicData);
+        }
+        struct.set(TOPIC_METATDATA_KEY_NAME, topicArray.toArray());
+
+        this.errors = topicErrors;
+        this.cluster = new Cluster(new ArrayList<Node>(), new ArrayList<PartitionInfo>());
+    }
+
     public MetadataResponse(Cluster cluster) {
         super(new Struct(CURRENT_SCHEMA));
 

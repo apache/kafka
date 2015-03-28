@@ -14,6 +14,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -21,13 +22,14 @@ import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
 /**
  * This wrapper supports both v0 and v1 of OffsetFetchRequest.
  */
-public class OffsetFetchRequest extends AbstractRequestResponse {
+public class OffsetFetchRequest extends AbstractRequest {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.OFFSET_FETCH.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
@@ -83,6 +85,19 @@ public class OffsetFetchRequest extends AbstractRequestResponse {
             }
         }
         groupId = struct.getString(GROUP_ID_KEY_NAME);
+    }
+
+    @Override
+    public AbstractRequestResponse getErrorResponse(Throwable e) {
+        Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData = new HashMap<TopicPartition, OffsetFetchResponse.PartitionData>();
+
+        for (TopicPartition partition: partitions) {
+            responseData.put(partition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+                                                                              OffsetFetchResponse.NO_METADATA,
+                                                                              Errors.forException(e).code()));
+        }
+
+        return new OffsetFetchResponse(responseData);
     }
 
     public String groupId() {

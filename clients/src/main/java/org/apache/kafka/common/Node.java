@@ -28,6 +28,10 @@ public class Node {
         this.port = port;
     }
 
+    public static Node noNode() {
+        return new Node(-1, "", -1);
+    }
+
     /**
      * The node id of this node
      */

@@ -14,14 +14,17 @@ package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
-public class MetadataRequest extends AbstractRequestResponse {
+public class MetadataRequest extends AbstractRequest {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.METADATA.id);
     private static final String TOPICS_KEY_NAME = "topics";
@@ -41,6 +44,15 @@ public class MetadataRequest extends AbstractRequestResponse {
         for (Object topicObj: topicArray) {
             topics.add((String) topicObj);
         }
+    }
+
+    @Override
+    public AbstractRequestResponse getErrorResponse(Throwable e) {
+        Map<String, Errors> topicErrors = new HashMap<String, Errors>();
+        for (String topic: topics) {
+            topicErrors.put(topic, Errors.forException(e));
+        }
+        return new MetadataResponse(topicErrors);
     }
 
     public List<String> topics() {

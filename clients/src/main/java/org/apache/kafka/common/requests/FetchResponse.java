@@ -55,6 +55,9 @@ public class FetchResponse extends AbstractRequestResponse {
     private static final String HIGH_WATERMARK_KEY_NAME = "high_watermark";
     private static final String RECORD_SET_KEY_NAME = "record_set";
 
+    public static final long INVALID_HIGHWATERMARK = -1L;
+    public static final ByteBuffer EMPTY_RECORD_SET = ByteBuffer.allocate(0);
+
     private final Map<TopicPartition, PartitionData> responseData;
 
     public static final class PartitionData {

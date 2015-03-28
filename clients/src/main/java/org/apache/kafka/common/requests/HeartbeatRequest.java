@@ -13,13 +13,14 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-public class HeartbeatRequest extends AbstractRequestResponse {
+public class HeartbeatRequest extends AbstractRequest {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.HEARTBEAT.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
@@ -61,5 +62,10 @@ public class HeartbeatRequest extends AbstractRequestResponse {
 
     public static HeartbeatRequest parse(ByteBuffer buffer) {
         return new HeartbeatRequest((Struct) CURRENT_SCHEMA.read(buffer));
+    }
+
+    @Override
+    public AbstractRequestResponse getErrorResponse(Throwable e) {
+        return new HeartbeatResponse(Errors.forException(e).code());
     }
 }

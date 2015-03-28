@@ -21,6 +21,7 @@ import java.nio._
 import java.nio.channels._
 import kafka.utils._
 import kafka.api.RequestOrResponse
+import org.apache.kafka.common.requests.{AbstractRequestResponse, ResponseHeader}
 
 @nonthreadsafe
 private[kafka] class BoundedByteBufferSend(val buffer: ByteBuffer) extends Send {
@@ -48,6 +49,13 @@ private[kafka] class BoundedByteBufferSend(val buffer: ByteBuffer) extends Send 
 
     request.writeTo(buffer)
     buffer.rewind()
+  }
+
+  def this(header: ResponseHeader, body: AbstractRequestResponse) = {
+    this(header.sizeOf + body.sizeOf)
+    header.writeTo(buffer)
+    body.writeTo(buffer)
+    buffer.rewind
   }
 
   

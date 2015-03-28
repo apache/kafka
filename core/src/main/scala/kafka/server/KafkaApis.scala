@@ -17,8 +17,7 @@
 
 package kafka.server
 
-import org.apache.kafka.common.requests.JoinGroupResponse
-import org.apache.kafka.common.requests.HeartbeatResponse
+import org.apache.kafka.common.requests.{JoinGroupResponse, JoinGroupRequest, HeartbeatRequest, HeartbeatResponse, ResponseHeader}
 import org.apache.kafka.common.TopicPartition
 
 import kafka.api._
@@ -74,7 +73,19 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     } catch {
       case e: Throwable =>
-        request.requestObj.handleError(e, requestChannel, request)
+        if ( request.requestObj != null)
+          request.requestObj.handleError(e, requestChannel, request)
+        else {
+          val response = request.body.getErrorResponse(e)
+          val respHeader = new ResponseHeader(request.header.correlationId)
+
+          /* If request doesn't have a default error response, we just close the connection.
+             For example, when produce request has acks set to 0 */
+          if (response == null)
+            requestChannel.closeConnection(request.processor, request)
+          else
+            requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(respHeader, response)))
+        }
         error("error when handling request %s".format(request.requestObj), e)
     } finally
       request.apiLocalCompleteTimeMs = SystemTime.milliseconds
@@ -484,40 +495,41 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleJoinGroupRequest(request: RequestChannel.Request) {
     import JavaConversions._
 
-    val joinGroupRequest = request.requestObj.asInstanceOf[JoinGroupRequestAndHeader]
+    val joinGroupRequest = request.body.asInstanceOf[JoinGroupRequest]
+    val respHeader = new ResponseHeader(request.header.correlationId)
 
     // the callback for sending a join-group response
     def sendResponseCallback(partitions: List[TopicAndPartition], generationId: Int, errorCode: Short) {
       val partitionList = partitions.map(tp => new TopicPartition(tp.topic, tp.partition)).toBuffer
-      val responseBody = new JoinGroupResponse(errorCode, generationId, joinGroupRequest.body.consumerId, partitionList)
-      val response = new JoinGroupResponseAndHeader(joinGroupRequest.correlationId, responseBody)
-      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+      val responseBody = new JoinGroupResponse(errorCode, generationId, joinGroupRequest.consumerId, partitionList)
+      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(respHeader, responseBody)))
     }
 
     // let the coordinator to handle join-group
     coordinator.consumerJoinGroup(
-      joinGroupRequest.body.groupId(),
-      joinGroupRequest.body.consumerId(),
-      joinGroupRequest.body.topics().toList,
-      joinGroupRequest.body.sessionTimeout(),
-      joinGroupRequest.body.strategy(),
+      joinGroupRequest.groupId(),
+      joinGroupRequest.consumerId(),
+      joinGroupRequest.topics().toList,
+      joinGroupRequest.sessionTimeout(),
+      joinGroupRequest.strategy(),
       sendResponseCallback)
   }
 
   def handleHeartbeatRequest(request: RequestChannel.Request) {
-    val heartbeatRequest = request.requestObj.asInstanceOf[HeartbeatRequestAndHeader]
+    val heartbeatRequest = request.body.asInstanceOf[HeartbeatRequest]
+    val respHeader = new ResponseHeader(request.header.correlationId)
 
     // the callback for sending a heartbeat response
     def sendResponseCallback(errorCode: Short) {
-      val response = new HeartbeatResponseAndHeader(heartbeatRequest.correlationId, new HeartbeatResponse(errorCode))
-      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+      val response = new HeartbeatResponse(errorCode)
+      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(respHeader, response)))
     }
 
     // let the coordinator to handle heartbeat
     coordinator.consumerHeartbeat(
-      heartbeatRequest.body.groupId(),
-      heartbeatRequest.body.consumerId(),
-      heartbeatRequest.body.groupGenerationId(),
+      heartbeatRequest.groupId(),
+      heartbeatRequest.consumerId(),
+      heartbeatRequest.groupGenerationId(),
       sendResponseCallback)
   }
 

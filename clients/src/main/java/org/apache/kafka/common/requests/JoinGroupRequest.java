@@ -13,6 +13,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -21,7 +22,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
-public class JoinGroupRequest extends AbstractRequestResponse {
+public class JoinGroupRequest extends AbstractRequest {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.JOIN_GROUP.id);
     private static final String GROUP_ID_KEY_NAME = "group_id";
@@ -86,5 +87,10 @@ public class JoinGroupRequest extends AbstractRequestResponse {
 
     public static JoinGroupRequest parse(ByteBuffer buffer) {
         return new JoinGroupRequest((Struct) CURRENT_SCHEMA.read(buffer));
+    }
+
+    @Override
+    public AbstractRequestResponse getErrorResponse(Throwable e) {
+        return new JoinGroupResponse(Errors.forException(e).code());
     }
 }

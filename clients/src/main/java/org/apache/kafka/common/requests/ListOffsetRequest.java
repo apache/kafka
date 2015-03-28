@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -29,7 +30,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class ListOffsetRequest extends AbstractRequestResponse {
+public class ListOffsetRequest extends AbstractRequest {
     
     private static final Schema CURRENT_SCHEMA = ProtoUtils.currentRequestSchema(ApiKeys.LIST_OFFSETS.id);
     private static final String REPLICA_ID_KEY_NAME = "replica_id";
@@ -103,6 +104,18 @@ public class ListOffsetRequest extends AbstractRequestResponse {
                 offsetData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
+    }
+
+    @Override
+    public AbstractRequestResponse getErrorResponse(Throwable e) {
+        Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<TopicPartition, ListOffsetResponse.PartitionData>();
+
+        for (Map.Entry<TopicPartition, PartitionData> entry: offsetData.entrySet()) {
+            ListOffsetResponse.PartitionData partitionResponse = new ListOffsetResponse.PartitionData(Errors.forException(e).code(), new ArrayList<Long>());
+            responseData.put(entry.getKey(), partitionResponse);
+        }
+
+        return new ListOffsetResponse(responseData);
     }
 
     public int replicaId() {

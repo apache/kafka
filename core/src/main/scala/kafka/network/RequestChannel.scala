@@ -26,6 +26,7 @@ import kafka.common.TopicAndPartition
 import kafka.utils.{Logging, SystemTime}
 import kafka.message.ByteBufferMessageSet
 import java.net._
+import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader}
 import org.apache.log4j.Logger
 
 
@@ -47,7 +48,23 @@ object RequestChannel extends Logging {
     @volatile var responseCompleteTimeMs = -1L
     @volatile var responseDequeueTimeMs = -1L
     val requestId = buffer.getShort()
-    val requestObj: RequestOrResponse = RequestKeys.deserializerForKey(requestId)(buffer)
+    val requestObj =
+      if ( RequestKeys.keyToNameAndDeserializerMap.contains(requestId))
+        RequestKeys.deserializerForKey(requestId)(buffer)
+      else
+        null
+    val header: RequestHeader =
+      if (requestObj == null) {
+        buffer.rewind
+        RequestHeader.parse(buffer)
+      } else
+        null
+    val body: AbstractRequest =
+      if (requestObj == null)
+        AbstractRequest.getRequest(header.apiKey, buffer)
+      else
+        null
+
     buffer = null
     private val requestLogger = Logger.getLogger("kafka.request.logger")
     trace("Processor %d received request : %s".format(processor, requestObj))
