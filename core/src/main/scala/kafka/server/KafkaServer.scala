@@ -137,28 +137,34 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   }
 
   private def initZk(): ZkClient = {
-    info("Connecting to zookeeper on " + config.zkConnect)
+    // If configuration contains exhibitor config we will create cxn to exhibitor,
+    // and use zookeeper connect string as a backup. Otherwise we will use the
+    // configured zookeeper connect string. In either case (exhibitor or direct zookeeper),
+    // if the zkConnect string contains a chroot/namespace, we will use that namespace for
+    // the zk connection we return.
+    info("Connecting to zookeeper on " + config.zkConnect +
+      (if (!config.exhibitorHosts.isEmpty) " (" + config.exhibitorHosts + ")" else ""))
 
-    val chroot = {
+    val curatorClient = ZkUtils.makeCuratorClient(config)
+
+    val namespace = {
       if (config.zkConnect.indexOf("/") > 0)
-        config.zkConnect.substring(config.zkConnect.indexOf("/"))
+        config.zkConnect.substring(config.zkConnect.indexOf("/") + 1)
       else
         ""
     }
 
-    if (chroot.length > 1) {
-      val zkConnForChrootCreation = config.zkConnect.substring(0, config.zkConnect.indexOf("/"))
-      val zkClientForChrootCreation = new ZkClient(zkConnForChrootCreation, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
-      ZkUtils.makeSurePersistentPathExists(zkClientForChrootCreation, chroot)
-      info("Created zookeeper path " + chroot)
+    if (namespace.length > 1) {
+      val zkClientForChrootCreation = ZkUtils.bridgeCurator(config, curatorClient.usingNamespace(null))
+      ZkUtils.makeSurePersistentPathExists(zkClientForChrootCreation, "/" + namespace)
+      info("Created zookeeper path /" + namespace)
       zkClientForChrootCreation.close()
     }
 
-    val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs, ZKStringSerializer)
+    val zkClient = ZkUtils.bridgeCurator(config, curatorClient)
     ZkUtils.setupCommonPaths(zkClient)
     zkClient
   }
-
 
   /**
    *  Forces some dynamic jmx beans to be registered on server startup.

@@ -1109,6 +1109,10 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
         controllerElector.elect
       }
     }
+
+    @throws(classOf[Exception])
+    def handleSessionEstablishmentError(error: Throwable): Unit = {
+    }
   }
 
   private def checkAndTriggerPartitionRebalance(): Unit = {

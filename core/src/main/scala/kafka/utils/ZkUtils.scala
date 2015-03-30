@@ -17,12 +17,18 @@
 
 package kafka.utils
 
+import com.netflix.curator.x.zkclientbridge.CuratorZKClientBridge
 import kafka.cluster.{Broker, Cluster}
 import kafka.consumer.{ConsumerThreadId, TopicCount}
+import kafka.server.KafkaConfig
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException,
   ZkMarshallingError, ZkBadVersionException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
+import org.apache.curator.ensemble.exhibitor.Exhibitors.BackupConnectionStringProvider
+import org.apache.curator.ensemble.exhibitor.{DefaultExhibitorRestClient, Exhibitors, ExhibitorEnsembleProvider}
+import org.apache.curator.framework.{CuratorFrameworkFactory, CuratorFramework}
+import org.apache.curator.retry.BoundedExponentialBackoffRetry
 import collection._
 import kafka.api.LeaderAndIsr
 import org.apache.zookeeper.data.Stat
@@ -30,10 +36,9 @@ import kafka.admin._
 import kafka.common.{KafkaException, NoEpochForPartitionException}
 import kafka.controller.ReassignedPartitionsContext
 import kafka.controller.KafkaController
-import scala.Some
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
-import scala.collection
+import collection.JavaConversions._
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -707,6 +712,66 @@ object ZkUtils extends Logging {
       }.flatten.toSet
     }
   }
+
+  /**
+   * Adapt a CuratorFramework instance to a ZkClient.
+   */
+  def bridgeCurator(config: ZKConfig, curator: CuratorFramework): ZkClient = {
+    new ZkClient(new CuratorZKClientBridge(curator),
+      config.zkConnectionTimeoutMs, ZKStringSerializer)
+  }
+
+  /**
+   * Make curator client using configured values but with the explicit provided zkConnect string and namespace.
+   */
+  def makeCuratorClient(config: ZKConfig): CuratorFramework = {
+    val useZkConnect = {
+      if (config.zkConnect.indexOf("/") > 0)
+        config.zkConnect.substring(0, config.zkConnect.indexOf("/"))
+      else
+        config.zkConnect
+    }
+    val useNamespace = {
+      if (config.zkConnect.indexOf("/") > 0)
+        config.zkConnect.substring(config.zkConnect.indexOf("/") + 1)
+      else
+        ""
+    }
+    val builder: CuratorFrameworkFactory.Builder = CuratorFrameworkFactory.builder
+    builder.connectionTimeoutMs(config.zkConnectionTimeoutMs)
+    builder.sessionTimeoutMs(config.zkSessionTimeoutMs)
+    builder.retryPolicy(new BoundedExponentialBackoffRetry(
+      config.zkRetryInterval,
+      config.zkRetryIntervalCeiling,
+      config.zkRetryTimes))
+    if (useNamespace != null && !useNamespace.isEmpty) {
+      builder.namespace(useNamespace)
+    }
+    if (config.exhibitorHosts.isEmpty) {
+      // no exhibitor configured; connect directly to zookeeper
+      builder.connectString(useZkConnect)
+    } else {
+      builder.ensembleProvider(
+        new ExhibitorEnsembleProvider(
+          new Exhibitors(
+            config.exhibitorHosts.split(",").toSeq,
+            config.exhibitorPort,
+            new BackupConnectionStringProvider {
+              // use zkconnect as backup cxn string
+              override def getBackupConnectionString: String = useZkConnect
+            }),
+          new DefaultExhibitorRestClient,
+          config.exhibitorPollUriPath,
+          config.exhibitorPollMs,
+          new BoundedExponentialBackoffRetry(
+            config.exhibitorRetryInterval,
+            config.exhibitorRetryIntervalCeiling,
+            config.exhibitorRetryTimes)))
+    }
+    val curator = builder.build()
+    curator.start()
+    curator
+  }
 }
 
 object ZKStringSerializer extends ZkSerializer {
@@ -737,7 +802,7 @@ class ZKGroupTopicDirs(group: String, topic: String) extends ZKGroupDirs(group) 
 
 class ZKConfig(props: VerifiableProperties) {
   /** ZK host string */
-  val zkConnect = props.getString("zookeeper.connect")
+  val zkConnect = props.getString("zookeeper.connect", "")
 
   /** zookeeper session timeout */
   val zkSessionTimeoutMs = props.getInt("zookeeper.session.timeout.ms", 6000)
@@ -745,6 +810,36 @@ class ZKConfig(props: VerifiableProperties) {
   /** the max time that the client waits to establish a connection to zookeeper */
   val zkConnectionTimeoutMs = props.getInt("zookeeper.connection.timeout.ms",zkSessionTimeoutMs)
 
+  /** zookeeper retry times */
+  val zkRetryTimes = props.getInt("zookeeper.retry.times", 5)
+
+  /** zookeeper retry interval */
+  val zkRetryInterval = props.getInt("zookeeper.retry.interval", 1000)
+
+  /** zookeeper retry interval */
+  val zkRetryIntervalCeiling = props.getInt("zookeeper.retry.interval.ceiling", 30000)
+
   /** how far a ZK follower can be behind a ZK leader */
   val zkSyncTimeMs = props.getInt("zookeeper.sync.time.ms", 2000)
+
+  /** Exhibitor host string */
+  val exhibitorHosts = props.getString("exhibitor.connect", "")
+
+  /** Exhibitor host port */
+  val exhibitorPort = props.getInt("exhibitor.port", 8080)
+
+  /** Exhbitor poll */
+  val exhibitorPollMs = props.getInt("exhibitor.poll.ms", 1000)
+
+  /** Exhibitor uri */
+  val exhibitorPollUriPath = props.getString("exhibitor.poll.uripath", "/exhibitor/v1/cluster/list")
+
+  /** Exhibitor retry times */
+  val exhibitorRetryTimes = props.getInt("exhibitor.retry.times", 5)
+
+  /** Exhibitor retry interval */
+  val exhibitorRetryInterval = props.getInt("exhibitor.retry.interval", 1000)
+
+  /** Exhibitor retry interval */
+  val exhibitorRetryIntervalCeiling = props.getInt("exhibitor.retry.interval.ceiling", 30000)
 }
