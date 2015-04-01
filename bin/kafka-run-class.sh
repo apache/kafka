@@ -32,7 +32,7 @@ if [ ! -d "$LOG_DIR" ]; then
 fi
 
 if [ -z "$SCALA_VERSION" ]; then
-	SCALA_VERSION=2.10.4
+	SCALA_VERSION=2.10.5
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
