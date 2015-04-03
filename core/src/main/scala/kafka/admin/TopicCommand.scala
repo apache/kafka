@@ -19,7 +19,7 @@ package kafka.admin
 
 import joptsimple._
 import java.util.Properties
-import kafka.common.AdminCommandFailedException
+import kafka.common.{Topic, AdminCommandFailedException}
 import kafka.utils._
 import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
@@ -143,15 +143,21 @@ object TopicCommand {
     }
     topics.foreach { topic =>
       try {
-        ZkUtils.createPersistentPath(zkClient, ZkUtils.getDeleteTopicPath(topic))
-        println("Topic %s is marked for deletion.".format(topic))
-        println("Note: This will have no impact if delete.topic.enable is not set to true.")
+        if (Topic.InternalTopics.contains(topic)) {
+          throw new AdminOperationException("Topic %s is a kafka internal topic and is not allowed to be marked for deletion.".format(topic));
+        } else {
+          ZkUtils.createPersistentPath(zkClient, ZkUtils.getDeleteTopicPath(topic))
+          println("Topic %s is marked for deletion.".format(topic))
+          println("Note: This will have no impact if delete.topic.enable is not set to true.")
+        }
       } catch {
         case e: ZkNodeExistsException =>
           println("Topic %s is already marked for deletion.".format(topic))
-        case e2: Throwable =>
+        case e: AdminOperationException =>
+          throw e
+        case e: Throwable =>
           throw new AdminOperationException("Error while deleting topic %s".format(topic))
-      }    
+      }
     }
   }
 

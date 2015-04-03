@@ -22,7 +22,7 @@ import org.scalatest.junit.JUnit3Suite
 import kafka.utils.Logging
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import kafka.server.KafkaConfig
+import kafka.server.{OffsetManager, KafkaConfig}
 import kafka.admin.TopicCommand.TopicCommandOptions
 import kafka.utils.ZkUtils
 
@@ -59,5 +59,44 @@ class TopicCommandTest extends JUnit3Suite with ZooKeeperTestHarness with Loggin
     val newProps = AdminUtils.fetchTopicConfig(zkClient, topic)
     assertTrue("Updated properties do not contain " + cleanupKey, newProps.containsKey(cleanupKey))
     assertTrue("Updated properties have incorrect value", newProps.getProperty(cleanupKey).equals(cleanupVal))
+  }
+
+  @Test
+  def testTopicDeletion() {
+    val normalTopic = "test"
+
+    val numPartitionsOriginal = 1
+
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    // create the NormalTopic
+    val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
+      "--replication-factor", "1",
+      "--topic", normalTopic))
+    TopicCommand.createTopic(zkClient, createOpts)
+
+    // delete the NormalTopic
+    val deleteOpts = new TopicCommandOptions(Array("--topic", normalTopic))
+    val deletePath = ZkUtils.getDeleteTopicPath(normalTopic)
+    assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.exists(deletePath))
+    TopicCommand.deleteTopic(zkClient, deleteOpts)
+    assertTrue("Delete path for topic should exist after deletion.", zkClient.exists(deletePath))
+
+    // create the offset topic
+    val createOffsetTopicOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
+      "--replication-factor", "1",
+      "--topic", OffsetManager.OffsetsTopicName))
+    TopicCommand.createTopic(zkClient, createOffsetTopicOpts)
+
+    // try to delete the OffsetManager.OffsetsTopicName and make sure it doesn't
+    val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", OffsetManager.OffsetsTopicName))
+    val deleteOffsetTopicPath = ZkUtils.getDeleteTopicPath(OffsetManager.OffsetsTopicName)
+    assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.exists(deleteOffsetTopicPath))
+    intercept[AdminOperationException] {
+        TopicCommand.deleteTopic(zkClient, deleteOffsetTopicOpts)
+    }
+    assertFalse("Delete path for topic shouldn't exist after deletion.", zkClient.exists(deleteOffsetTopicPath))
   }
 }
