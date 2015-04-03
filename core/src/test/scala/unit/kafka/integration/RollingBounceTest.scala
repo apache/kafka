@@ -40,7 +40,6 @@ class RollingBounceTest extends JUnit3Suite with ZooKeeperTestHarness {
   val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2)
   val configProps3 = TestUtils.createBrokerConfig(brokerId3, port3)
   val configProps4 = TestUtils.createBrokerConfig(brokerId4, port4)
-  configProps4.put("controlled.shutdown.retry.backoff.ms", "100")
 
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 

@@ -167,6 +167,7 @@ object TestUtils extends Logging {
     props.put("controller.socket.timeout.ms", "1500")
     props.put("controlled.shutdown.enable", enableControlledShutdown.toString)
     props.put("delete.topic.enable", enableDeleteTopic.toString)
+    props.put("controlled.shutdown.retry.backoff.ms", "100")
     props
   }
 
