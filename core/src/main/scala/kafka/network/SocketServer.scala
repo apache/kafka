@@ -429,7 +429,7 @@ private[kafka] class Processor(val id: Int,
    * Register any new connections that have been queued up
    */
   private def configureNewConnections() {
-    while(newConnections.size() > 0) {
+    while(!newConnections.isEmpty) {
       val channel = newConnections.poll()
       debug("Processor " + id + " listening to new connection from " + channel.socket.getRemoteSocketAddress)
       channel.register(selector, SelectionKey.OP_READ)
