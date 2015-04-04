@@ -27,18 +27,18 @@ import kafka.log.Log
 import org.junit.Assert._
 import kafka.utils._
 import java.util.concurrent.atomic.AtomicBoolean
+import kafka.message.MessageSet
+
 
 class IsrExpirationTest extends JUnit3Suite {
 
   var topicPartitionIsr: Map[(String, Int), Seq[Int]] = new HashMap[(String, Int), Seq[Int]]()
   val replicaLagTimeMaxMs = 100L
   val replicaFetchWaitMaxMs = 100
-  val replicaLagMaxMessages = 10L
 
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
   overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
-  overridingProps.put(KafkaConfig.ReplicaLagMaxMessagesProp, replicaLagMaxMessages.toString)
   val configs = TestUtils.createBrokerConfigs(2).map(KafkaConfig.fromProps(_, overridingProps))
   val topic = "foo"
 
@@ -56,6 +56,9 @@ class IsrExpirationTest extends JUnit3Suite {
     super.tearDown()
   }
 
+  /*
+   * Test the case where a follower is caught up but stops making requests to the leader. Once beyond the configured time limit, it should fall out of ISR
+   */
   def testIsrExpirationForStuckFollowers() {
     val log = getLogWithLogEndOffset(15L, 2) // set logEndOffset for leader to 15L
 
@@ -64,35 +67,83 @@ class IsrExpirationTest extends JUnit3Suite {
     assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas.map(_.brokerId))
     val leaderReplica = partition0.getReplica(configs.head.brokerId).get
 
-    // let the follower catch up to 10
-    (partition0.assignedReplicas() - leaderReplica).foreach(r => r.logEndOffset = new LogOffsetMetadata(10L))
-    var partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs, configs.head.replicaLagMaxMessages)
+    // let the follower catch up to the Leader logEndOffset (15)
+    (partition0.assignedReplicas() - leaderReplica).foreach(
+      r => r.updateLogReadResult(new LogReadResult(FetchDataInfo(new LogOffsetMetadata(15L),
+                                                                 MessageSet.Empty),
+                                                   -1L,
+                                                   -1,
+                                                   true)))
+    var partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
     assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR.map(_.brokerId))
 
     // let some time pass
     time.sleep(150)
 
-    // now follower (broker id 1) has caught up to only 10, while the leader is at 15 AND the follower hasn't
-    // pulled any data for > replicaMaxLagTimeMs ms. So it is stuck
-    partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs, configs.head.replicaLagMaxMessages)
+    // now follower hasn't pulled any data for > replicaMaxLagTimeMs ms. So it is stuck
+    partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
     assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR.map(_.brokerId))
     EasyMock.verify(log)
   }
 
+  /*
+   * Test the case where a follower never makes a fetch request. It should fall out of ISR because it will be declared stuck
+   */
+  def testIsrExpirationIfNoFetchRequestMade() {
+    val log = getLogWithLogEndOffset(15L, 1) // set logEndOffset for leader to 15L
+
+    // create one partition and all replicas
+    val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
+    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas.map(_.brokerId))
+    val leaderReplica = partition0.getReplica(configs.head.brokerId).get
+
+    // Let enough time pass for the replica to be considered stuck
+    time.sleep(150)
+
+    val partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
+    assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR.map(_.brokerId))
+    EasyMock.verify(log)
+  }
+
+  /*
+   * Test the case where a follower continually makes fetch requests but is unable to catch up. It should fall out of the ISR
+   * However, any time it makes a request to the LogEndOffset it should be back in the ISR
+   */
   def testIsrExpirationForSlowFollowers() {
     // create leader replica
-    val log = getLogWithLogEndOffset(15L, 1)
+    val log = getLogWithLogEndOffset(15L, 4)
     // add one partition
     val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
     assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas.map(_.brokerId))
     val leaderReplica = partition0.getReplica(configs.head.brokerId).get
-    // set remote replicas leo to something low, like 4
-    (partition0.assignedReplicas() - leaderReplica).foreach(r => r.logEndOffset = new LogOffsetMetadata(4L))
 
-    // now follower (broker id 1) has caught up to only 4, while the leader is at 15. Since the gap it larger than
-    // replicaMaxLagBytes, the follower is out of sync.
-    val partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs, configs.head.replicaLagMaxMessages)
+    // Make the remote replica not read to the end of log. It should be not be out of sync for at least 100 ms
+    for(replica <- (partition0.assignedReplicas() - leaderReplica))
+      replica.updateLogReadResult(new LogReadResult(FetchDataInfo(new LogOffsetMetadata(10L), MessageSet.Empty), -1L, -1, false))
+
+    // Simulate 2 fetch requests spanning more than 100 ms which do not read to the end of the log.
+    // The replicas will no longer be in ISR. We do 2 fetches because we want to simulate the case where the replica is lagging but is not stuck
+    var partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
+    assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR.map(_.brokerId))
+
+    time.sleep(75)
+
+    (partition0.assignedReplicas() - leaderReplica).foreach(
+      r => r.updateLogReadResult(new LogReadResult(FetchDataInfo(new LogOffsetMetadata(11L), MessageSet.Empty), -1L, -1, false)))
+    partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
+    assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR.map(_.brokerId))
+
+    time.sleep(75)
+
+    // The replicas will no longer be in ISR
+    partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
     assertEquals("Replica 1 should be out of sync", Set(configs.last.brokerId), partition0OSR.map(_.brokerId))
+
+    // Now actually make a fetch to the end of the log. The replicas should be back in ISR
+    (partition0.assignedReplicas() - leaderReplica).foreach(
+      r => r.updateLogReadResult(new LogReadResult(FetchDataInfo(new LogOffsetMetadata(15L), MessageSet.Empty), -1L, -1, true)))
+    partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
+    assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR.map(_.brokerId))
 
     EasyMock.verify(log)
   }

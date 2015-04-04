@@ -470,7 +470,7 @@ class Log(val dir: File,
   def convertToOffsetMetadata(offset: Long): LogOffsetMetadata = {
     try {
       val fetchDataInfo = read(offset, 1)
-      fetchDataInfo.fetchOffset
+      fetchDataInfo.fetchOffsetMetadata
     } catch {
       case e: OffsetOutOfRangeException => LogOffsetMetadata.UnknownOffsetMetadata
     }

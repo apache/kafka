@@ -87,7 +87,6 @@ object Defaults {
   val ControllerMessageQueueSize = Int.MaxValue
   val DefaultReplicationFactor = 1
   val ReplicaLagTimeMaxMs = 10000L
-  val ReplicaLagMaxMessages = 4000
   val ReplicaSocketTimeoutMs = ConsumerConfig.SocketTimeout
   val ReplicaSocketReceiveBufferBytes = ConsumerConfig.SocketBufferSize
   val ReplicaFetchMaxBytes = ConsumerConfig.FetchSize
@@ -194,7 +193,6 @@ object KafkaConfig {
   val ControllerMessageQueueSizeProp = "controller.message.queue.size"
   val DefaultReplicationFactorProp = "default.replication.factor"
   val ReplicaLagTimeMaxMsProp = "replica.lag.time.max.ms"
-  val ReplicaLagMaxMessagesProp = "replica.lag.max.messages"
   val ReplicaSocketTimeoutMsProp = "replica.socket.timeout.ms"
   val ReplicaSocketReceiveBufferBytesProp = "replica.socket.receive.buffer.bytes"
   val ReplicaFetchMaxBytesProp = "replica.fetch.max.bytes"
@@ -303,8 +301,8 @@ object KafkaConfig {
   val ControllerSocketTimeoutMsDoc = "The socket timeout for controller-to-broker channels"
   val ControllerMessageQueueSizeDoc = "The buffer size for controller-to-broker-channels"
   val DefaultReplicationFactorDoc = "default replication factors for automatically created topics"
-  val ReplicaLagTimeMaxMsDoc = "If a follower hasn't sent any fetch requests during this time, the leader will remove the follower from isr"
-  val ReplicaLagMaxMessagesDoc = "If the lag in messages between a leader and a follower exceeds this number, the leader will remove the follower from isr"
+  val ReplicaLagTimeMaxMsDoc = "If a follower hasn't sent any fetch requests or hasn't consumed up to the leaders log end offset for at least this time," +
+    " the leader will remove the follower from isr"
   val ReplicaSocketTimeoutMsDoc = "The socket timeout for network requests. Its value should be at least replica.fetch.wait.max.ms"
   val ReplicaSocketReceiveBufferBytesDoc = "The socket receive buffer for network requests"
   val ReplicaFetchMaxBytesDoc = "The number of byes of messages to attempt to fetch"
@@ -427,7 +425,6 @@ object KafkaConfig {
       .define(ControllerMessageQueueSizeProp, INT, Defaults.ControllerMessageQueueSize, MEDIUM, ControllerMessageQueueSizeDoc)
       .define(DefaultReplicationFactorProp, INT, Defaults.DefaultReplicationFactor, MEDIUM, DefaultReplicationFactorDoc)
       .define(ReplicaLagTimeMaxMsProp, LONG, Defaults.ReplicaLagTimeMaxMs, HIGH, ReplicaLagTimeMaxMsDoc)
-      .define(ReplicaLagMaxMessagesProp, LONG, Defaults.ReplicaLagMaxMessages, HIGH, ReplicaLagMaxMessagesDoc)
       .define(ReplicaSocketTimeoutMsProp, INT, Defaults.ReplicaSocketTimeoutMs, HIGH, ReplicaSocketTimeoutMsDoc)
       .define(ReplicaSocketReceiveBufferBytesProp, INT, Defaults.ReplicaSocketReceiveBufferBytes, HIGH, ReplicaSocketReceiveBufferBytesDoc)
       .define(ReplicaFetchMaxBytesProp, INT, Defaults.ReplicaFetchMaxBytes, HIGH, ReplicaFetchMaxBytesDoc)
@@ -546,7 +543,6 @@ object KafkaConfig {
       controllerMessageQueueSize = parsed.get(ControllerMessageQueueSizeProp).asInstanceOf[Int],
       defaultReplicationFactor = parsed.get(DefaultReplicationFactorProp).asInstanceOf[Int],
       replicaLagTimeMaxMs = parsed.get(ReplicaLagTimeMaxMsProp).asInstanceOf[Long],
-      replicaLagMaxMessages = parsed.get(ReplicaLagMaxMessagesProp).asInstanceOf[Long],
       replicaSocketTimeoutMs = parsed.get(ReplicaSocketTimeoutMsProp).asInstanceOf[Int],
       replicaSocketReceiveBufferBytes = parsed.get(ReplicaSocketReceiveBufferBytesProp).asInstanceOf[Int],
       replicaFetchMaxBytes = parsed.get(ReplicaFetchMaxBytesProp).asInstanceOf[Int],
@@ -687,7 +683,6 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
                   val controllerMessageQueueSize: Int = Defaults.ControllerMessageQueueSize,
                   val defaultReplicationFactor: Int = Defaults.DefaultReplicationFactor,
                   val replicaLagTimeMaxMs: Long = Defaults.ReplicaLagTimeMaxMs,
-                  val replicaLagMaxMessages: Long = Defaults.ReplicaLagMaxMessages,
                   val replicaSocketTimeoutMs: Int = Defaults.ReplicaSocketTimeoutMs,
                   val replicaSocketReceiveBufferBytes: Int = Defaults.ReplicaSocketReceiveBufferBytes,
                   val replicaFetchMaxBytes: Int = Defaults.ReplicaFetchMaxBytes,
@@ -856,7 +851,6 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
     props.put(ControllerMessageQueueSizeProp, controllerMessageQueueSize.toString)
     props.put(DefaultReplicationFactorProp, defaultReplicationFactor.toString)
     props.put(ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
-    props.put(ReplicaLagMaxMessagesProp, replicaLagMaxMessages.toString)
     props.put(ReplicaSocketTimeoutMsProp, replicaSocketTimeoutMs.toString)
     props.put(ReplicaSocketReceiveBufferBytesProp, replicaSocketReceiveBufferBytes.toString)
     props.put(ReplicaFetchMaxBytesProp, replicaFetchMaxBytes.toString)
