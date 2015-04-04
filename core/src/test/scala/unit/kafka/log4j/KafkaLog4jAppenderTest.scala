@@ -47,19 +47,16 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
 
   private val brokerZk = 0
 
-  private val ports = TestUtils.choosePorts(2)
-  private val portZk = ports(0)
-
   @Before
   override def setUp() {
     super.setUp()
 
-    val propsZk = TestUtils.createBrokerConfig(brokerZk, portZk)
+    val propsZk = TestUtils.createBrokerConfig(brokerZk, zkConnect)
     val logDirZkPath = propsZk.getProperty("log.dir")
     logDirZk = new File(logDirZkPath)
     config = KafkaConfig.fromProps(propsZk)
     server = TestUtils.createServer(config)
-    simpleConsumerZk = new SimpleConsumer("localhost", portZk, 1000000, 64 * 1024, "")
+    simpleConsumerZk = new SimpleConsumer("localhost", server.boundPort(), 1000000, 64 * 1024, "")
   }
 
   @After
@@ -94,7 +91,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
     props.put("log4j.appender.KAFKA.layout", "org.apache.log4j.PatternLayout")
     props.put("log4j.appender.KAFKA.layout.ConversionPattern", "%-5p: %c - %m%n")
-    props.put("log4j.appender.KAFKA.brokerList", TestUtils.getBrokerListStrFromConfigs(Seq(config)))
+    props.put("log4j.appender.KAFKA.brokerList", TestUtils.getBrokerListStrFromServers(Seq(server)))
     props.put("log4j.logger.kafka.log4j", "INFO, KAFKA")
 
     try {
@@ -129,7 +126,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
     props.put("log4j.appender.KAFKA", "kafka.producer.KafkaLog4jAppender")
     props.put("log4j.appender.KAFKA.layout", "org.apache.log4j.PatternLayout")
     props.put("log4j.appender.KAFKA.layout.ConversionPattern", "%-5p: %c - %m%n")
-    props.put("log4j.appender.KAFKA.BrokerList", TestUtils.getBrokerListStrFromConfigs(Seq(config)))
+    props.put("log4j.appender.KAFKA.BrokerList", TestUtils.getBrokerListStrFromServers(Seq(server)))
     props.put("log4j.appender.KAFKA.Topic", "test-topic")
     props.put("log4j.appender.KAFKA.RequiredNumAcks", "1")
     props.put("log4j.appender.KAFKA.SyncSend", "true")

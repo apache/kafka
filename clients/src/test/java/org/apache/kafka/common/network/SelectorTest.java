@@ -131,9 +131,12 @@ public class SelectorTest {
     @Test
     public void testConnectionRefused() throws Exception {
         int node = 0;
-        selector.connect(node, new InetSocketAddress("localhost", TestUtils.choosePort()), BUFFER_SIZE, BUFFER_SIZE);
+        ServerSocket nonListeningSocket = new ServerSocket(0);
+        int nonListeningPort = nonListeningSocket.getLocalPort();
+        selector.connect(node, new InetSocketAddress("localhost", nonListeningPort), BUFFER_SIZE, BUFFER_SIZE);
         while (selector.disconnected().contains(node))
             selector.poll(1000L);
+        nonListeningSocket.close();
     }
 
     /**
@@ -271,8 +274,8 @@ public class SelectorTest {
         private final List<Socket> sockets;
 
         public EchoServer() throws Exception {
-            this.port = TestUtils.choosePort();
-            this.serverSocket = new ServerSocket(port);
+            this.serverSocket = new ServerSocket(0);
+            this.port = this.serverSocket.getLocalPort();
             this.threads = Collections.synchronizedList(new ArrayList<Thread>());
             this.sockets = Collections.synchronizedList(new ArrayList<Socket>());
         }

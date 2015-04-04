@@ -37,7 +37,6 @@ import junit.framework.Assert._
 
 class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
   val random: Random = new Random()
-  val brokerPort: Int = 9099
   val group = "test-group"
   val retentionCheckInterval: Long = 100L
   var logDir: File = null
@@ -50,14 +49,14 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    val config: Properties = createBrokerConfig(1, brokerPort)
+    val config: Properties = createBrokerConfig(1, zkConnect)
     config.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     config.setProperty(KafkaConfig.OffsetsRetentionCheckIntervalMsProp, retentionCheckInterval.toString)
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
     time = new MockTime()
     server = TestUtils.createServer(KafkaConfig.fromProps(config), time)
-    simpleConsumer = new SimpleConsumer("localhost", brokerPort, 1000000, 64*1024, "test-client")
+    simpleConsumer = new SimpleConsumer("localhost", server.boundPort(), 1000000, 64*1024, "test-client")
     val consumerMetadataRequest = ConsumerMetadataRequest(group)
     Stream.continually {
       val consumerMetadataResponse = simpleConsumer.send(consumerMetadataRequest)

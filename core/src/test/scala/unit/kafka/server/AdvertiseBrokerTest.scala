@@ -30,7 +30,7 @@ class AdvertiseBrokerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   override def setUp() {
     super.setUp()
-    val props = TestUtils.createBrokerConfig(brokerId, TestUtils.choosePort())
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
     props.put("advertised.host.name", advertisedHostName)
     props.put("advertised.port", advertisedPort.toString)
     

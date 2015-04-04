@@ -16,6 +16,8 @@
   */
 package kafka.server
 
+import java.util.Properties
+
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{TestUtils, Utils}
 import org.junit.Test
@@ -24,12 +26,19 @@ import junit.framework.Assert._
 import java.io.File
 
 class ServerGenerateBrokerIdTest extends JUnit3Suite with ZooKeeperTestHarness {
-  var props1 = TestUtils.createBrokerConfig(-1, TestUtils.choosePort)
-  var config1 = KafkaConfig.fromProps(props1)
-  var props2 = TestUtils.createBrokerConfig(0, TestUtils.choosePort)
-  var config2 = KafkaConfig.fromProps(props2)
+  var props1: Properties = null
+  var config1: KafkaConfig = null
+  var props2: Properties = null
+  var config2: KafkaConfig = null
   val brokerMetaPropsFile = "meta.properties"
 
+  override def setUp() {
+    super.setUp()
+    props1 = TestUtils.createBrokerConfig(-1, zkConnect)
+    config1 = KafkaConfig.fromProps(props1)
+    props2 = TestUtils.createBrokerConfig(0, zkConnect)
+    config2 = KafkaConfig.fromProps(props2)
+  }
 
   @Test
   def testAutoGenerateBrokerId() {
@@ -51,7 +60,7 @@ class ServerGenerateBrokerIdTest extends JUnit3Suite with ZooKeeperTestHarness {
     // start the server with broker.id as part of config
     val server1 = new KafkaServer(config1)
     val server2 = new KafkaServer(config2)
-    val props3 = TestUtils.createBrokerConfig(-1, TestUtils.choosePort)
+    val props3 = TestUtils.createBrokerConfig(-1, zkConnect)
     val config3 = KafkaConfig.fromProps(props3)
     val server3 = new KafkaServer(config3)
     server1.startup()

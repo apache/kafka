@@ -19,8 +19,6 @@ package org.apache.kafka.test;
 import static java.util.Arrays.asList;
 
 import java.io.File;
-import java.io.IOException;
-import java.net.ServerSocket;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -57,32 +55,6 @@ public class TestUtils {
         for (int i = 0; i < partitions; i++)
             parts.add(new PartitionInfo(topic, i, ns[i % ns.length], ns, ns));
         return new Cluster(asList(ns), parts);
-    }
-
-    /**
-     * Choose a number of random available ports
-     */
-    public static int[] choosePorts(int count) {
-        try {
-            ServerSocket[] sockets = new ServerSocket[count];
-            int[] ports = new int[count];
-            for (int i = 0; i < count; i++) {
-                sockets[i] = new ServerSocket(0);
-                ports[i] = sockets[i].getLocalPort();
-            }
-            for (int i = 0; i < count; i++)
-                sockets[i].close();
-            return ports;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    /**
-     * Choose an available port
-     */
-    public static int choosePort() {
-        return choosePorts(1)[0];
     }
 
     /**

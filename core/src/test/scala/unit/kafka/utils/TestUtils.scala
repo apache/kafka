@@ -65,23 +65,13 @@ object TestUtils extends Logging {
   val seededRandom = new Random(192348092834L)
   val random = new Random()
 
-  /**
-   * Choose a number of random available ports
-   */
-  def choosePorts(count: Int): List[Int] = {
-    val sockets =
-      for(i <- 0 until count)
-      yield new ServerSocket(0)
-    val socketList = sockets.toList
-    val ports = socketList.map(_.getLocalPort)
-    socketList.map(_.close)
-    ports
-  }
+  /* 0 gives a random port; you can then retrieve the assigned port from the Socket object. */
+  val RandomPort = 0
 
-  /**
-   * Choose an available port
-   */
-  def choosePort(): Int = choosePorts(1).head
+  /** Port to use for unit tests that mock/don't require a real ZK server. */
+  val MockZkPort = 1
+  /** Zookeeper connection string to use for unit tests that mock/don't require a real ZK server. */
+  val MockZkConnect = "127.0.0.1:" + MockZkPort
 
   /**
    * Create a temporary directory
@@ -141,28 +131,29 @@ object TestUtils extends Logging {
    * Create a test config for the given node id
    */
   def createBrokerConfigs(numConfigs: Int,
+    zkConnect: String,
     enableControlledShutdown: Boolean = true,
-    enableDeleteTopic: Boolean = false): List[Properties] = {
-    for((port, node) <- choosePorts(numConfigs).zipWithIndex)
-    yield createBrokerConfig(node, port, enableControlledShutdown, enableDeleteTopic)
+    enableDeleteTopic: Boolean = false): Seq[Properties] = {
+    (0 until numConfigs).map(node => createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic))
   }
 
-  def getBrokerListStrFromConfigs(configs: Seq[KafkaConfig]): String = {
-    configs.map(c => formatAddress(c.hostName, c.port)).mkString(",")
+  def getBrokerListStrFromServers(servers: Seq[KafkaServer]): String = {
+    servers.map(s => formatAddress(s.config.hostName, s.boundPort())).mkString(",")
   }
 
   /**
    * Create a test config for the given node id
    */
-  def createBrokerConfig(nodeId: Int, port: Int = choosePort(),
+  def createBrokerConfig(nodeId: Int, zkConnect: String,
     enableControlledShutdown: Boolean = true,
-    enableDeleteTopic: Boolean = false): Properties = {
+    enableDeleteTopic: Boolean = false,
+    port: Int = RandomPort): Properties = {
     val props = new Properties
     if (nodeId >= 0) props.put("broker.id", nodeId.toString)
     props.put("host.name", "localhost")
     props.put("port", port.toString)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
-    props.put("zookeeper.connect", TestZKUtils.zookeeperConnect)
+    props.put("zookeeper.connect", zkConnect)
     props.put("replica.socket.timeout.ms", "1500")
     props.put("controller.socket.timeout.ms", "1500")
     props.put("controlled.shutdown.enable", enableControlledShutdown.toString)
@@ -756,7 +747,7 @@ object TestUtils extends Logging {
                    brokerState = new BrokerState())
   }
 
-  def sendMessagesToPartition(configs: Seq[KafkaConfig],
+  def sendMessagesToPartition(servers: Seq[KafkaServer],
                               topic: String,
                               partition: Int,
                               numMessages: Int,
@@ -765,7 +756,7 @@ object TestUtils extends Logging {
     val props = new Properties()
     props.put("compression.codec", compression.codec.toString)
     val producer: Producer[Int, String] =
-      createProducer(TestUtils.getBrokerListStrFromConfigs(configs),
+      createProducer(TestUtils.getBrokerListStrFromServers(servers),
         encoder = classOf[StringEncoder].getName,
         keyEncoder = classOf[IntEncoder].getName,
         partitioner = classOf[FixedValuePartitioner].getName,
@@ -778,7 +769,7 @@ object TestUtils extends Logging {
     ms.toList
   }
 
-  def sendMessages(configs: Seq[KafkaConfig],
+  def sendMessages(servers: Seq[KafkaServer],
                    topic: String,
                    producerId: String,
                    messagesPerNode: Int,
@@ -790,7 +781,7 @@ object TestUtils extends Logging {
     props.put("compression.codec", compression.codec.toString)
     props.put("client.id", producerId)
     val   producer: Producer[Int, String] =
-      createProducer(brokerList = TestUtils.getBrokerListStrFromConfigs(configs),
+      createProducer(brokerList = TestUtils.getBrokerListStrFromServers(servers),
         encoder = classOf[StringEncoder].getName,
         keyEncoder = classOf[IntEncoder].getName,
         partitioner = classOf[FixedValuePartitioner].getName,
@@ -846,10 +837,6 @@ object TestUtils extends Logging {
     }), "Cleaner offset for deleted partition should have been removed")
   }
 
-}
-
-object TestZKUtils {
-  val zookeeperConnect = "127.0.0.1:" + TestUtils.choosePort()
 }
 
 class IntEncoder(props: VerifiableProperties = null) extends Encoder[Int] {

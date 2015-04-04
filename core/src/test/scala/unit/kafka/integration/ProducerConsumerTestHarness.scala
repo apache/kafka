@@ -24,18 +24,17 @@ import kafka.utils.{StaticPartitioner, TestUtils}
 import kafka.serializer.StringEncoder
 
 trait ProducerConsumerTestHarness extends JUnit3Suite with KafkaServerTestHarness {
-    val port: Int
     val host = "localhost"
     var producer: Producer[String, String] = null
     var consumer: SimpleConsumer = null
 
   override def setUp() {
       super.setUp
-      producer = TestUtils.createProducer[String, String](TestUtils.getBrokerListStrFromConfigs(configs),
+      producer = TestUtils.createProducer[String, String](TestUtils.getBrokerListStrFromServers(servers),
         encoder = classOf[StringEncoder].getName,
         keyEncoder = classOf[StringEncoder].getName,
         partitioner = classOf[StaticPartitioner].getName)
-      consumer = new SimpleConsumer(host, port, 1000000, 64*1024, "")
+      consumer = new SimpleConsumer(host, servers(0).boundPort(), 1000000, 64*1024, "")
     }
 
    override def tearDown() {

@@ -22,20 +22,19 @@ import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils._
 import kafka.producer.KeyedMessage
 import kafka.serializer.StringEncoder
-import kafka.utils.TestUtils
-import junit.framework.Assert._
+import kafka.utils.{TestUtils}
 import kafka.common._
 
 class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
-  val props = createBrokerConfigs(2,false)
-  val configs = props.map(p => KafkaConfig.fromProps(p))
   var brokers: Seq[KafkaServer] = null
   val topic1 = "foo"
   val topic2 = "bar"
 
   override def setUp() {
     super.setUp()
-    brokers = configs.map(config => TestUtils.createServer(config))
+    brokers = createBrokerConfigs(2, zkConnect, false)
+      .map(KafkaConfig.fromProps)
+      .map(config => TestUtils.createServer(config))
   }
 
   override def tearDown() {
@@ -54,7 +53,7 @@ class ReplicaFetchTest extends JUnit3Suite with ZooKeeperTestHarness  {
     }
 
     // send test messages to leader
-    val producer = TestUtils.createProducer[String, String](TestUtils.getBrokerListStrFromConfigs(configs),
+    val producer = TestUtils.createProducer[String, String](TestUtils.getBrokerListStrFromServers(brokers),
                                                             encoder = classOf[StringEncoder].getName,
                                                             keyEncoder = classOf[StringEncoder].getName)
     val messages = testMessageList1.map(m => new KeyedMessage(topic1, m, m)) ++ testMessageList2.map(m => new KeyedMessage(topic2, m, m))

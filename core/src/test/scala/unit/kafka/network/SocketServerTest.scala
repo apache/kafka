@@ -36,7 +36,7 @@ class SocketServerTest extends JUnitSuite {
 
   val server: SocketServer = new SocketServer(0,
                                               host = null,
-                                              port = kafka.utils.TestUtils.choosePort,
+                                              port = 0,
                                               numProcessorThreads = 1,
                                               maxQueuedRequests = 50,
                                               sendBufferSize = 300000,
@@ -73,7 +73,7 @@ class SocketServerTest extends JUnitSuite {
     channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
   }
 
-  def connect(s:SocketServer = server) = new Socket("localhost", s.port)
+  def connect(s:SocketServer = server) = new Socket("localhost", s.boundPort)
 
   @After
   def cleanup() {
@@ -162,7 +162,7 @@ class SocketServerTest extends JUnitSuite {
     val overrides: Map[String, Int] = Map("localhost" -> overrideNum)
     val overrideServer: SocketServer = new SocketServer(0,
                                                 host = null,
-                                                port = kafka.utils.TestUtils.choosePort,
+                                                port = 0,
                                                 numProcessorThreads = 1,
                                                 maxQueuedRequests = 50,
                                                 sendBufferSize = 300000,

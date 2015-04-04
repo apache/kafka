@@ -157,7 +157,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         topicConfigManager.startup()
 
         /* tell everyone we are alive */
-        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, config.advertisedHostName, config.advertisedPort, config.zkSessionTimeoutMs, zkClient)
+        val advertisedPort = if (config.advertisedPort != 0) config.advertisedPort else socketServer.boundPort()
+        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, config.advertisedHostName, advertisedPort, config.zkSessionTimeoutMs, zkClient)
         kafkaHealthcheck.startup()
 
         /* register broker metrics */
@@ -356,6 +357,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   def awaitShutdown(): Unit = shutdownLatch.await()
 
   def getLogManager(): LogManager = logManager
+
+  def boundPort(): Int = socketServer.boundPort()
 
   private def createLogManager(zkClient: ZkClient, brokerState: BrokerState): LogManager = {
     val defaultLogConfig = LogConfig(segmentSize = config.logSegmentBytes,

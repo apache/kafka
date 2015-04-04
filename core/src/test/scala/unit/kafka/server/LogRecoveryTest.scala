@@ -19,8 +19,7 @@ package kafka.server
 import java.util.Properties
 
 import kafka.utils.TestUtils._
-import kafka.utils.IntEncoder
-import kafka.utils.{Utils, TestUtils}
+import kafka.utils.{IntEncoder, Utils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.common._
 import kafka.producer.{KeyedMessage, Producer}
@@ -43,38 +42,48 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
   overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
   overridingProps.put(KafkaConfig.ReplicaFetchMinBytesProp, replicaFetchMinBytes.toString)
 
-  val configs = TestUtils.createBrokerConfigs(2, false).map(KafkaConfig.fromProps(_, overridingProps))
+  var configs: Seq[KafkaConfig] = null
   val topic = "new-topic"
   val partitionId = 0
 
   var server1: KafkaServer = null
   var server2: KafkaServer = null
 
-  val configProps1 = configs.head
-  val configProps2 = configs.last
+  def configProps1 = configs.head
+  def configProps2 = configs.last
 
   val message = "hello"
 
   var producer: Producer[Int, String] = null
-  var hwFile1: OffsetCheckpoint = new OffsetCheckpoint(new File(configProps1.logDirs(0), ReplicaManager.HighWatermarkFilename))
-  var hwFile2: OffsetCheckpoint = new OffsetCheckpoint(new File(configProps2.logDirs(0), ReplicaManager.HighWatermarkFilename))
+  def hwFile1: OffsetCheckpoint = new OffsetCheckpoint(new File(configProps1.logDirs(0), ReplicaManager.HighWatermarkFilename))
+  def hwFile2: OffsetCheckpoint = new OffsetCheckpoint(new File(configProps2.logDirs(0), ReplicaManager.HighWatermarkFilename))
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
+
+  // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
+  // to use a new producer that knows the new ports
+  def updateProducer() = {
+    if (producer != null)
+      producer.close()
+    producer = TestUtils.createProducer[Int, String](TestUtils.getBrokerListStrFromServers(servers),
+      encoder = classOf[StringEncoder].getName,
+      keyEncoder = classOf[IntEncoder].getName)
+  }
 
   override def setUp() {
     super.setUp()
 
+    configs = TestUtils.createBrokerConfigs(2, zkConnect, false).map(KafkaConfig.fromProps(_, overridingProps))
+
     // start both servers
     server1 = TestUtils.createServer(configProps1)
     server2 = TestUtils.createServer(configProps2)
-    servers ++= List(server1, server2)
+    servers = List(server1, server2)
 
     // create topic with 1 partition, 2 replicas, one on each broker
     createTopic(zkClient, topic, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)
 
     // create the producer
-    producer = TestUtils.createProducer[Int, String](TestUtils.getBrokerListStrFromConfigs(configs),
-      encoder = classOf[StringEncoder].getName,
-      keyEncoder = classOf[IntEncoder].getName)
+    updateProducer()
   }
 
   override def tearDown() {
@@ -121,6 +130,8 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // bring the preferred replica back
     server1.startup()
+    // Update producer with new server settings
+    updateProducer()
 
     leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId)
     assertTrue("Leader must remain on broker 1, in case of zookeeper session expiration it can move to broker 0",
@@ -132,6 +143,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
 
     server2.startup()
+    updateProducer()
     leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = leader)
     assertTrue("Leader must remain on broker 0, in case of zookeeper session expiration it can move to broker 1",
       leader.isDefined && (leader.get == 0 || leader.get == 1))
@@ -181,6 +193,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))
 
     server2.startup()
+    updateProducer()
     // check if leader moves to the other server
     leader = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = leader)
     assertEquals("Leader must move to broker 1", 1, leader.getOrElse(-1))
@@ -189,6 +202,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // bring the preferred replica back
     server1.startup()
+    updateProducer()
 
     assertEquals(hw, hwFile1.read.getOrElse(TopicAndPartition(topic, 0), 0L))
     assertEquals(hw, hwFile2.read.getOrElse(TopicAndPartition(topic, 0), 0L))

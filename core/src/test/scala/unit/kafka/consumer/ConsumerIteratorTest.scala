@@ -30,7 +30,6 @@ import kafka.utils.TestUtils._
 import kafka.utils._
 import org.junit.Test
 import kafka.serializer._
-import kafka.cluster.{Broker, Cluster}
 import org.scalatest.junit.JUnit3Suite
 import kafka.integration.KafkaServerTestHarness
 
@@ -38,31 +37,27 @@ class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
 
   val numNodes = 1
 
-  val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.ZkConnectProp, TestZKUtils.zookeeperConnect)
-
-  val configs =
-    for(props <- TestUtils.createBrokerConfigs(numNodes))
-    yield KafkaConfig.fromProps(props, overridingProps)
+  def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps)
 
   val messages = new mutable.HashMap[Int, Seq[Message]]
   val topic = "topic"
   val group = "group1"
   val consumer0 = "consumer0"
   val consumedOffset = 5
-  val cluster = new Cluster(configs.map(c => new Broker(c.brokerId, "localhost", c.port)))
   val queue = new LinkedBlockingQueue[FetchedDataChunk]
-  val topicInfos = configs.map(c => new PartitionTopicInfo(topic,
-                                                           0,
-                                                           queue,
-                                                           new AtomicLong(consumedOffset),
-                                                           new AtomicLong(0),
-                                                           new AtomicInteger(0),
-                                                           ""))
-  val consumerConfig = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer0))
+  var topicInfos: Seq[PartitionTopicInfo] = null
+
+  def consumerConfig = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer0))
 
   override def setUp() {
-    super.setUp
+    super.setUp()
+    topicInfos = configs.map(c => new PartitionTopicInfo(topic,
+      0,
+      queue,
+      new AtomicLong(consumedOffset),
+      new AtomicLong(0),
+      new AtomicInteger(0),
+      ""))
     createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
   }
 

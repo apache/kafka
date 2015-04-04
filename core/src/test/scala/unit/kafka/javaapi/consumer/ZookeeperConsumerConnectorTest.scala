@@ -39,19 +39,14 @@ import junit.framework.Assert._
 
 
 class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHarness with ZooKeeperTestHarness with Logging {
-
-  val zookeeperConnect = zkConnect
   val numNodes = 2
   val numParts = 2
   val topic = "topic1"
 
   val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.ZkConnectProp, zookeeperConnect)
   overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
 
-  val configs =
-    for (props <- TestUtils.createBrokerConfigs(numNodes))
-    yield KafkaConfig.fromProps(props, overridingProps)
+  def generateConfigs() = TestUtils.createBrokerConfigs(numNodes, zkConnect).map(KafkaConfig.fromProps(_, overridingProps))
 
   val group = "group1"
   val consumer1 = "consumer1"
@@ -68,7 +63,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     val sentMessages1 = sendMessages(nMessages, "batch1")
 
     // create a consumer
-    val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zookeeperConnect, group, consumer1))
+    val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer1))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(toJavaMap(Map(topic -> numNodes*numParts/2)), new StringDecoder(), new StringDecoder())
 
@@ -93,7 +88,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
                    compressed: CompressionCodec): List[String] = {
     var messages: List[String] = Nil
     val producer: kafka.producer.Producer[Int, String] =
-      TestUtils.createProducer(TestUtils.getBrokerListStrFromConfigs(configs),
+      TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
         encoder = classOf[StringEncoder].getName,
         keyEncoder = classOf[IntEncoder].getName)
     val javaProducer: Producer[Int, String] = new kafka.javaapi.producer.Producer(producer)

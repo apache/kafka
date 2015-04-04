@@ -26,8 +26,7 @@ import kafka.admin.{AdminOperationException, AdminUtils}
 import org.scalatest.junit.JUnit3Suite
 
 class DynamicConfigChangeTest extends JUnit3Suite with KafkaServerTestHarness {
-  
-  override val configs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, TestUtils.choosePort)))
+  def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
   @Test
   def testConfigChange() {

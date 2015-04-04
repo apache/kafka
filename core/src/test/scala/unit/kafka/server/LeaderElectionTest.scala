@@ -31,17 +31,16 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1
 
-  val port1 = TestUtils.choosePort()
-  val port2 = TestUtils.choosePort()
-
-  val configProps1 = TestUtils.createBrokerConfig(brokerId1, port1, false)
-  val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2, false)
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 
   var staleControllerEpochDetected = false
 
   override def setUp() {
     super.setUp()
+
+    val configProps1 = TestUtils.createBrokerConfig(brokerId1, zkConnect, enableControlledShutdown = false)
+    val configProps2 = TestUtils.createBrokerConfig(brokerId2, zkConnect, enableControlledShutdown = false)
+
     // start both servers
     val server1 = TestUtils.createServer(KafkaConfig.fromProps(configProps1))
     val server2 = TestUtils.createServer(KafkaConfig.fromProps(configProps2))
@@ -117,8 +116,8 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // start another controller
     val controllerId = 2
-    val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, TestUtils.choosePort()))
-    val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", s.config.port))
+    val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
+    val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", s.boundPort()))
     val controllerContext = new ControllerContext(zkClient, 6000)
     controllerContext.liveBrokers = brokers.toSet
     val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig)

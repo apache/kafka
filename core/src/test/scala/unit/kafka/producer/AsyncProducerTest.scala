@@ -36,8 +36,10 @@ import scala.collection.mutable.ArrayBuffer
 import kafka.utils._
 
 class AsyncProducerTest extends JUnit3Suite {
-  val props = createBrokerConfigs(1)
-  val configs = props.map(p => KafkaConfig.fromProps(p))
+  // One of the few cases we can just set a fixed port because the producer is mocked out here since this uses mocks
+  val props = Seq(createBrokerConfig(1, "127.0.0.1:1", port=65534))
+  val configs = props.map(KafkaConfig.fromProps)
+  val brokerList = configs.map(c => org.apache.kafka.common.utils.Utils.formatAddress(c.hostName, c.port)).mkString(",")
 
   override def setUp() {
     super.setUp()
@@ -61,7 +63,7 @@ class AsyncProducerTest extends JUnit3Suite {
 
     val props = new Properties()
     props.put("serializer.class", "kafka.serializer.StringEncoder")
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
+    props.put("metadata.broker.list", brokerList)
     props.put("producer.type", "async")
     props.put("queue.buffering.max.messages", "10")
     props.put("batch.num.messages", "1")
@@ -86,7 +88,7 @@ class AsyncProducerTest extends JUnit3Suite {
   def testProduceAfterClosed() {
     val produceData = getProduceData(10)
     val producer = createProducer[String, String](
-      getBrokerListStrFromConfigs(configs),
+      brokerList,
       encoder = classOf[StringEncoder].getName)
 
     producer.close
@@ -162,7 +164,7 @@ class AsyncProducerTest extends JUnit3Suite {
     producerDataList.append(new KeyedMessage[Int,Message]("topic2", key = 4, message = new Message("msg5".getBytes)))
 
     val props = new Properties()
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
+    props.put("metadata.broker.list", brokerList)
     val broker1 = new Broker(0, "localhost", 9092)
     val broker2 = new Broker(1, "localhost", 9093)
 
@@ -212,7 +214,7 @@ class AsyncProducerTest extends JUnit3Suite {
   def testSerializeEvents() {
     val produceData = TestUtils.getMsgStrings(5).map(m => new KeyedMessage[String,String]("topic1",m))
     val props = new Properties()
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
+    props.put("metadata.broker.list", brokerList)
     val config = new ProducerConfig(props)
     // form expected partitions metadata
     val topic1Metadata = getTopicMetadata("topic1", 0, 0, "localhost", 9092)
@@ -244,7 +246,7 @@ class AsyncProducerTest extends JUnit3Suite {
     val producerDataList = new ArrayBuffer[KeyedMessage[String,Message]]
     producerDataList.append(new KeyedMessage[String,Message]("topic1", "key1", new Message("msg1".getBytes)))
     val props = new Properties()
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
+    props.put("metadata.broker.list", brokerList)
     val config = new ProducerConfig(props)
 
     // form expected partitions metadata
@@ -274,7 +276,7 @@ class AsyncProducerTest extends JUnit3Suite {
   @Test
   def testNoBroker() {
     val props = new Properties()
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
+    props.put("metadata.broker.list", brokerList)
 
     val config = new ProducerConfig(props)
     // create topic metadata with 0 partitions
@@ -308,7 +310,7 @@ class AsyncProducerTest extends JUnit3Suite {
     // no need to retry since the send will always fail
     props.put("message.send.max.retries", "0")
     val producer= createProducer[String, String](
-      brokerList = getBrokerListStrFromConfigs(configs),
+      brokerList = brokerList,
       encoder = classOf[DefaultEncoder].getName,
       keyEncoder = classOf[DefaultEncoder].getName,
       producerProps = props)
@@ -326,7 +328,7 @@ class AsyncProducerTest extends JUnit3Suite {
   @Test
   def testRandomPartitioner() {
     val props = new Properties()
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
+    props.put("metadata.broker.list", brokerList)
     val config = new ProducerConfig(props)
 
     // create topic metadata with 0 partitions
@@ -364,7 +366,7 @@ class AsyncProducerTest extends JUnit3Suite {
   @Test
   def testFailedSendRetryLogic() {
     val props = new Properties()
-    props.put("metadata.broker.list", TestUtils.getBrokerListStrFromConfigs(configs))
+    props.put("metadata.broker.list", brokerList)
     props.put("request.required.acks", "1")
     props.put("serializer.class", classOf[StringEncoder].getName.toString)
     props.put("key.serializer.class", classOf[NullEncoder[Int]].getName.toString)

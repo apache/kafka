@@ -31,14 +31,15 @@ import kafka.common.ErrorMapping
 import kafka.client.ClientUtils
 
 class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
-  val props = createBrokerConfigs(1)
-  val configs = props.map(p => KafkaConfig.fromProps(p))
   private var server1: KafkaServer = null
-  val brokers = configs.map(c => new Broker(c.brokerId,c.hostName,c.port))
+  var brokers: Seq[Broker] = null
 
   override def setUp() {
     super.setUp()
+    val props = createBrokerConfigs(1, zkConnect)
+    val configs = props.map(KafkaConfig.fromProps)
     server1 = TestUtils.createServer(configs.head)
+    brokers = Seq(new Broker(server1.config.brokerId, server1.config.hostName, server1.boundPort()))
   }
 
   override def tearDown() {

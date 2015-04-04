@@ -39,19 +39,18 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
   var topicLogDir: File = null
   var server: KafkaServer = null
   var logSize: Int = 100
-  val brokerPort: Int = 9099
   var simpleConsumer: SimpleConsumer = null
   var time: Time = new MockTime()
 
   @Before
   override def setUp() {
     super.setUp()
-    val config: Properties = createBrokerConfig(1, brokerPort)
+    val config: Properties = createBrokerConfig(1)
     val logDirPath = config.getProperty("log.dir")
     logDir = new File(logDirPath)
     time = new MockTime()
     server = TestUtils.createServer(KafkaConfig.fromProps(config), time)
-    simpleConsumer = new SimpleConsumer("localhost", brokerPort, 1000000, 64*1024, "")
+    simpleConsumer = new SimpleConsumer("localhost", server.boundPort(), 1000000, 64*1024, "")
   }
 
   @After
@@ -194,10 +193,10 @@ class LogOffsetTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(Seq(0L), consumerOffsets)
   }
 
-  private def createBrokerConfig(nodeId: Int, port: Int): Properties = {
+  private def createBrokerConfig(nodeId: Int): Properties = {
     val props = new Properties
     props.put("broker.id", nodeId.toString)
-    props.put("port", port.toString)
+    props.put("port", TestUtils.RandomPort.toString())
     props.put("log.dir", getLogDir.getAbsolutePath)
     props.put("log.flush.interval.messages", "1")
     props.put("enable.zookeeper", "false")

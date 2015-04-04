@@ -53,7 +53,7 @@ class ReplicationUtilsTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testUpdateLeaderAndIsr() {
-    val configs = TestUtils.createBrokerConfigs(1).map(KafkaConfig.fromProps)
+    val configs = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
     val log = EasyMock.createMock(classOf[kafka.log.Log])
     EasyMock.expect(log.logEndOffset).andReturn(20).anyTimes()
     EasyMock.expect(log)

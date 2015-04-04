@@ -146,72 +146,6 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     assertNull(this.consumers(0).partitionsFor("non-exist-topic"))
   }
 
-  def testConsumptionWithBrokerFailures() = consumeWithBrokerFailures(5)
-
-  /*
-   * 1. Produce a bunch of messages
-   * 2. Then consume the messages while killing and restarting brokers at random
-   */
-  def consumeWithBrokerFailures(numIters: Int) {
-    val numRecords = 1000
-    sendRecords(numRecords)
-    this.producers.map(_.close)
-
-    var consumed = 0
-    val consumer = this.consumers(0)
-    consumer.subscribe(topic)
-
-    val scheduler = new BounceBrokerScheduler(numIters)
-    scheduler.start()
-
-    while (scheduler.isRunning.get()) {
-      for (record <- consumer.poll(100)) {
-        assertEquals(consumed.toLong, record.offset())
-        consumed += 1
-      }
-      consumer.commit(CommitType.SYNC)
-
-      if (consumed == numRecords) {
-        consumer.seekToBeginning()
-        consumed = 0
-      }
-    }
-    scheduler.shutdown()
-  }
-
-  def testSeekAndCommitWithBrokerFailures() = seekAndCommitWithBrokerFailures(5)
-
-  def seekAndCommitWithBrokerFailures(numIters: Int) {
-    val numRecords = 1000
-    sendRecords(numRecords)
-    this.producers.map(_.close)
-
-    val consumer = this.consumers(0)
-    consumer.subscribe(tp)
-    consumer.seek(tp, 0)
-
-    val scheduler = new BounceBrokerScheduler(numIters)
-    scheduler.start()
-
-    while(scheduler.isRunning.get()) {
-      val coin = TestUtils.random.nextInt(3)
-      if (coin == 0) {
-        info("Seeking to end of log")
-        consumer.seekToEnd()
-        assertEquals(numRecords.toLong, consumer.position(tp))
-      } else if (coin == 1) {
-        val pos = TestUtils.random.nextInt(numRecords).toLong
-        info("Seeking to " + pos)
-        consumer.seek(tp, pos)
-        assertEquals(pos, consumer.position(tp))
-      } else if (coin == 2) {
-        info("Committing offset.")
-        consumer.commit(CommitType.SYNC)
-        assertEquals(consumer.position(tp), consumer.committed(tp))
-      }
-    }
-  }
-  
   def testPartitionReassignmentCallback() {
     val callback = new TestConsumerReassignmentCallback()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "200"); // timeout quickly to avoid slow test
@@ -253,23 +187,6 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
       info("onPartitionsRevoked called.")
       callsToRevoked += 1
     } 
-  }
-
-  private class BounceBrokerScheduler(val numIters: Int) extends ShutdownableThread("daemon-bounce-broker", false)
-  {
-    var iter: Int = 0
-
-    override def doWork(): Unit = {
-      killRandomBroker()
-      Thread.sleep(500)
-      restartDeadBrokers()
-
-      iter += 1
-      if (iter == numIters)
-        initiateShutdown()
-      else
-        Thread.sleep(500)
-    }
   }
 
   private def sendRecords(numRecords: Int) {

@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 class HighwatermarkPersistenceTest extends JUnit3Suite {
 
-  val configs = TestUtils.createBrokerConfigs(2).map(KafkaConfig.fromProps)
+  val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps)
   val topic = "foo"
   val logManagers = configs map { config =>
     TestUtils.createLogManager(

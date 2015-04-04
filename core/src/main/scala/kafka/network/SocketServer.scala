@@ -39,7 +39,7 @@ import com.yammer.metrics.core.{Gauge, Meter}
  */
 class SocketServer(val brokerId: Int,
                    val host: String,
-                   val port: Int,
+                   private val port: Int,
                    val numProcessorThreads: Int,
                    val maxQueuedRequests: Int,
                    val sendBufferSize: Int,
@@ -72,7 +72,7 @@ class SocketServer(val brokerId: Int,
                                     requestChannel,
                                     quotas,
                                     connectionsMaxIdleMs)
-      Utils.newThread("kafka-network-thread-%d-%d".format(port, i), processors(i), false).start()
+      Utils.newThread("kafka-network-thread-%d-%d".format(brokerId, i), processors(i), false).start()
     }
 
     newGauge("ResponsesBeingSent", new Gauge[Int] {
@@ -99,6 +99,12 @@ class SocketServer(val brokerId: Int,
     for(processor <- processors)
       processor.shutdown()
     info("Shutdown completed")
+  }
+
+  def boundPort(): Int = {
+    if (acceptor == null)
+      throw new KafkaException("Tried to check server's port before server was started")
+    acceptor.serverChannel.socket().getLocalPort
   }
 }
 
@@ -197,7 +203,7 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
  * Thread that accepts and configures new connections. There is only need for one of these
  */
 private[kafka] class Acceptor(val host: String, 
-                              val port: Int, 
+                              private val port: Int,
                               private val processors: Array[Processor],
                               val sendBufferSize: Int, 
                               val recvBufferSize: Int,

@@ -29,7 +29,7 @@ import kafka.admin.AdminUtils
 import kafka.common.FailedToSendMessageException
 import kafka.consumer.{Consumer, ConsumerConfig, ConsumerTimeoutException}
 import kafka.producer.{KeyedMessage, Producer}
-import kafka.serializer.{DefaultEncoder, StringEncoder}
+import kafka.serializer.StringEncoder
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.Utils
 import kafka.utils.TestUtils._
@@ -39,20 +39,12 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
   val brokerId1 = 0
   val brokerId2 = 1
 
-  val port1 = choosePort()
-  val port2 = choosePort()
-
   // controlled shutdown is needed for these tests, but we can trim the retry count and backoff interval to
   // reduce test execution time
   val enableControlledShutdown = true
-  val configProps1 = createBrokerConfig(brokerId1, port1)
-  val configProps2 = createBrokerConfig(brokerId2, port2)
 
-  for (configProps <- List(configProps1, configProps2)) {
-    configProps.put("controlled.shutdown.enable", String.valueOf(enableControlledShutdown))
-    configProps.put("controlled.shutdown.max.retries", String.valueOf(1))
-    configProps.put("controlled.shutdown.retry.backoff.ms", String.valueOf(1000))
-  }
+  var configProps1: Properties = null
+  var configProps2: Properties = null
 
   var configs: Seq[KafkaConfig] = Seq.empty[KafkaConfig]
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
@@ -68,6 +60,15 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   override def setUp() {
     super.setUp()
+
+    configProps1 = createBrokerConfig(brokerId1, zkConnect)
+    configProps2 = createBrokerConfig(brokerId2, zkConnect)
+
+    for (configProps <- List(configProps1, configProps2)) {
+      configProps.put("controlled.shutdown.enable", String.valueOf(enableControlledShutdown))
+      configProps.put("controlled.shutdown.max.retries", String.valueOf(1))
+      configProps.put("controlled.shutdown.retry.backoff.ms", String.valueOf(1000))
+    }
 
     // temporarily set loggers to a higher level so that tests run quietly
     kafkaApisLogger.setLevel(Level.FATAL)
@@ -254,7 +255,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   private def produceMessage(topic: String, message: String) = {
     val producer: Producer[String, Array[Byte]] = createProducer(
-      getBrokerListStrFromConfigs(configs),
+      getBrokerListStrFromServers(servers),
       keyEncoder = classOf[StringEncoder].getName)
     producer.send(new KeyedMessage[String, Array[Byte]](topic, topic, message.getBytes))
     producer.close()

@@ -30,7 +30,7 @@ class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testBrokerCreatesZKChroot {
     val brokerId = 0
     val zookeeperChroot = "/kafka-chroot-for-unittest"
-    val props = TestUtils.createBrokerConfig(brokerId, TestUtils.choosePort())
+    val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
     val zooKeeperConnect = props.get("zookeeper.connect")
     props.put("zookeeper.connect", zooKeeperConnect + zookeeperChroot)
     val server = TestUtils.createServer(KafkaConfig.fromProps(props))
@@ -47,11 +47,11 @@ class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
     // This shouldn't affect the existing broker registration.
 
     val brokerId = 0
-    val props1 = TestUtils.createBrokerConfig(brokerId)
+    val props1 = TestUtils.createBrokerConfig(brokerId, zkConnect)
     val server1 = TestUtils.createServer(KafkaConfig.fromProps(props1))
     val brokerRegistration = ZkUtils.readData(zkClient, ZkUtils.BrokerIdsPath + "/" + brokerId)._1
 
-    val props2 = TestUtils.createBrokerConfig(brokerId)
+    val props2 = TestUtils.createBrokerConfig(brokerId, zkConnect)
     try {
       TestUtils.createServer(KafkaConfig.fromProps(props2))
       fail("Registering a broker with a conflicting id should fail")

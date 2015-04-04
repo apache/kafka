@@ -96,7 +96,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val expectedReplicaAssignment = Map(0 -> List(0, 1, 2))
     val topic = "test"
     val topicAndPartition = TopicAndPartition(topic, 0)
-    val brokerConfigs = TestUtils.createBrokerConfigs(4, false)
+    val brokerConfigs = TestUtils.createBrokerConfigs(4, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
     // create brokers
     val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
@@ -224,7 +224,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val topicAndPartition = TopicAndPartition(topicName, 0)
     val topic = topicAndPartition.topic
 
-    val brokerConfigs = TestUtils.createBrokerConfigs(3, false)
+    val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
     brokerConfigs(0).setProperty("delete.topic.enable", "true")
     brokerConfigs(0).setProperty("log.cleaner.enable","true")
     brokerConfigs(0).setProperty("log.cleanup.policy","compact")
@@ -253,7 +253,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   private def createTestTopicAndCluster(topic: String): Seq[KafkaServer] = {
 
-    val brokerConfigs = TestUtils.createBrokerConfigs(3, false)
+    val brokerConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true")
     )
     createTestTopicAndCluster(topic,brokerConfigs)

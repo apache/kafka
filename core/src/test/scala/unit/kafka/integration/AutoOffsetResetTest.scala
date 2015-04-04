@@ -31,7 +31,7 @@ import junit.framework.Assert._
 
 class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
 
-  val configs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0)))
+  def generateConfigs() = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
 
   val topic = "test_topic"
   val group = "default_group"
@@ -78,7 +78,7 @@ class AutoOffsetResetTest extends JUnit3Suite with KafkaServerTestHarness with L
     TestUtils.createTopic(zkClient, topic, 1, 1, servers)
 
     val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(
-      TestUtils.getBrokerListStrFromConfigs(configs),
+      TestUtils.getBrokerListStrFromServers(servers),
       keyEncoder = classOf[StringEncoder].getName)
 
     for(i <- 0 until numMessages)

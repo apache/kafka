@@ -24,28 +24,38 @@ import kafka.utils.{Utils, TestUtils}
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.common.KafkaException
-import kafka.utils.TestUtils
 
 /**
  * A test harness that brings up some number of broker nodes
  */
 trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
-
-  val configs: List[KafkaConfig]
+  var instanceConfigs: Seq[KafkaConfig] = null
   var servers: Buffer[KafkaServer] = null
   var brokerList: String = null
   var alive: Array[Boolean] = null
-  
+
+  /**
+   * Implementations must override this method to return a set of KafkaConfigs. This method will be invoked for every
+   * test and should not reuse previous configurations unless they select their ports randomly when servers are started.
+   */
+  def generateConfigs(): Seq[KafkaConfig]
+
+  def configs: Seq[KafkaConfig] = {
+    if (instanceConfigs == null)
+      instanceConfigs = generateConfigs()
+    instanceConfigs
+  }
+
   def serverForId(id: Int) = servers.find(s => s.config.brokerId == id)
   
-  def bootstrapUrl = configs.map(c => c.hostName + ":" + c.port).mkString(",")
+  def bootstrapUrl = servers.map(s => s.config.hostName + ":" + s.boundPort()).mkString(",")
   
   override def setUp() {
     super.setUp
     if(configs.size <= 0)
-      throw new KafkaException("Must suply at least one server config.")
-    brokerList = TestUtils.getBrokerListStrFromConfigs(configs)
+      throw new KafkaException("Must supply at least one server config.")
     servers = configs.map(TestUtils.createServer(_)).toBuffer
+    brokerList = TestUtils.getBrokerListStrFromServers(servers)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
   }

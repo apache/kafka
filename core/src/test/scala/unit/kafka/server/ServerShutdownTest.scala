@@ -32,20 +32,23 @@ import org.scalatest.junit.JUnit3Suite
 import junit.framework.Assert._
 
 class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
-  val port = TestUtils.choosePort
-  val props = TestUtils.createBrokerConfig(0, port)
-  val config = KafkaConfig.fromProps(props)
-
+  var config: KafkaConfig = null
   val host = "localhost"
   val topic = "test"
   val sent1 = List("hello", "there")
   val sent2 = List("more", "messages")
 
+  override def setUp(): Unit = {
+    super.setUp()
+    val props = TestUtils.createBrokerConfig(0, zkConnect)
+    config = KafkaConfig.fromProps(props)
+  }
+
   @Test
   def testCleanShutdown() {
     var server = new KafkaServer(config)
     server.startup()
-    var producer = TestUtils.createProducer[Int, String](TestUtils.getBrokerListStrFromConfigs(Seq(config)),
+    var producer = TestUtils.createProducer[Int, String](TestUtils.getBrokerListStrFromServers(Seq(server)),
       encoder = classOf[StringEncoder].getName,
       keyEncoder = classOf[IntEncoder].getName)
 
@@ -71,10 +74,10 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     // wait for the broker to receive the update metadata request after startup
     TestUtils.waitUntilMetadataIsPropagated(Seq(server), topic, 0)
 
-    producer = TestUtils.createProducer[Int, String](TestUtils.getBrokerListStrFromConfigs(Seq(config)),
+    producer = TestUtils.createProducer[Int, String](TestUtils.getBrokerListStrFromServers(Seq(server)),
       encoder = classOf[StringEncoder].getName,
       keyEncoder = classOf[IntEncoder].getName)
-    val consumer = new SimpleConsumer(host, port, 1000000, 64*1024, "")
+    val consumer = new SimpleConsumer(host, server.boundPort(), 1000000, 64*1024, "")
 
     var fetchedMessage: ByteBufferMessageSet = null
     while(fetchedMessage == null || fetchedMessage.validBytes == 0) {
@@ -103,7 +106,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testCleanShutdownWithDeleteTopicEnabled() {
-    val newProps = TestUtils.createBrokerConfig(0, port)
+    val newProps = TestUtils.createBrokerConfig(0, zkConnect)
     newProps.setProperty("delete.topic.enable", "true")
     val newConfig = KafkaConfig.fromProps(newProps)
     val server = new KafkaServer(newConfig)
@@ -116,7 +119,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   @Test
   def testCleanShutdownAfterFailedStartup() {
-    val newProps = TestUtils.createBrokerConfig(0, port)
+    val newProps = TestUtils.createBrokerConfig(0, zkConnect)
     newProps.setProperty("zookeeper.connect", "fakehostthatwontresolve:65535")
     val newConfig = KafkaConfig.fromProps(newProps)
     val server = new KafkaServer(newConfig)

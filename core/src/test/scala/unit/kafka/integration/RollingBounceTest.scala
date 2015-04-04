@@ -25,35 +25,18 @@ import kafka.utils.{Utils, TestUtils}
 import kafka.server.{KafkaConfig, KafkaServer}
 
 class RollingBounceTest extends JUnit3Suite with ZooKeeperTestHarness {
-  val brokerId1 = 0
-  val brokerId2 = 1
-  val brokerId3 = 2
-  val brokerId4 = 3
-
-  val port1 = TestUtils.choosePort()
-  val port2 = TestUtils.choosePort()
-  val port3 = TestUtils.choosePort()
-  val port4 = TestUtils.choosePort()
-
-  // controlled.shutdown.enable is true by default
-  val configProps1 = TestUtils.createBrokerConfig(brokerId1, port1)
-  val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2)
-  val configProps3 = TestUtils.createBrokerConfig(brokerId3, port3)
-  val configProps4 = TestUtils.createBrokerConfig(brokerId4, port4)
-
-  var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
 
   val partitionId = 0
+  var servers: Seq[KafkaServer] = null
 
   override def setUp() {
     super.setUp()
+    // controlled.shutdown.enable is true by default
+    val configs = (0 until 4).map(i => TestUtils.createBrokerConfig(i, zkConnect))
+    configs(3).put("controlled.shutdown.retry.backoff.ms", "100")
+ 
     // start all the servers
-    val server1 = TestUtils.createServer(KafkaConfig.fromProps(configProps1))
-    val server2 = TestUtils.createServer(KafkaConfig.fromProps(configProps2))
-    val server3 = TestUtils.createServer(KafkaConfig.fromProps(configProps3))
-    val server4 = TestUtils.createServer(KafkaConfig.fromProps(configProps4))
-
-    servers ++= List(server1, server2, server3, server4)
+    servers = configs.map(c => TestUtils.createServer(KafkaConfig.fromProps(c)))
   }
 
   override def tearDown() {

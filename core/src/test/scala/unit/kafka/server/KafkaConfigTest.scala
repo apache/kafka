@@ -29,7 +29,7 @@ class KafkaConfigTest extends JUnit3Suite {
 
   @Test
   def testLogRetentionTimeHoursProvided() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("log.retention.hours", "1")
 
     val cfg = KafkaConfig.fromProps(props)
@@ -39,7 +39,7 @@ class KafkaConfigTest extends JUnit3Suite {
   
   @Test
   def testLogRetentionTimeMinutesProvided() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("log.retention.minutes", "30")
 
     val cfg = KafkaConfig.fromProps(props)
@@ -49,7 +49,7 @@ class KafkaConfigTest extends JUnit3Suite {
   
   @Test
   def testLogRetentionTimeMsProvided() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("log.retention.ms", "1800000")
 
     val cfg = KafkaConfig.fromProps(props)
@@ -59,7 +59,7 @@ class KafkaConfigTest extends JUnit3Suite {
   
   @Test
   def testLogRetentionTimeNoConfigProvided() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(24 * 7 * 60L * 60L * 1000L, cfg.logRetentionTimeMillis)
@@ -68,7 +68,7 @@ class KafkaConfigTest extends JUnit3Suite {
   
   @Test
   def testLogRetentionTimeBothMinutesAndHoursProvided() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("log.retention.minutes", "30")
     props.put("log.retention.hours", "1")
 
@@ -79,7 +79,7 @@ class KafkaConfigTest extends JUnit3Suite {
   
   @Test
   def testLogRetentionTimeBothMinutesAndMsProvided() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("log.retention.ms", "1800000")
     props.put("log.retention.minutes", "10")
 
@@ -93,7 +93,7 @@ class KafkaConfigTest extends JUnit3Suite {
     val port = 9999
     val hostName = "fake-host"
     
-    val props = TestUtils.createBrokerConfig(0, port)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = port)
     props.put("host.name", hostName)
     
     val serverConfig = KafkaConfig.fromProps(props)
@@ -108,7 +108,7 @@ class KafkaConfigTest extends JUnit3Suite {
     val advertisedHostName = "routable-host"
     val advertisedPort = 1234
     
-    val props = TestUtils.createBrokerConfig(0, port)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = port)
     props.put("advertised.host.name", advertisedHostName)
     props.put("advertised.port", advertisedPort.toString)
     
@@ -120,7 +120,7 @@ class KafkaConfigTest extends JUnit3Suite {
 
   @Test
   def testUncleanLeaderElectionDefault() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val serverConfig = KafkaConfig.fromProps(props)
 
     assertEquals(serverConfig.uncleanLeaderElectionEnable, true)
@@ -128,7 +128,7 @@ class KafkaConfigTest extends JUnit3Suite {
 
   @Test
   def testUncleanElectionDisabled() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("unclean.leader.election.enable", String.valueOf(false))
     val serverConfig = KafkaConfig.fromProps(props)
 
@@ -137,7 +137,7 @@ class KafkaConfigTest extends JUnit3Suite {
 
   @Test
   def testUncleanElectionEnabled() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("unclean.leader.election.enable", String.valueOf(true))
     val serverConfig = KafkaConfig.fromProps(props)
 
@@ -146,7 +146,7 @@ class KafkaConfigTest extends JUnit3Suite {
 
   @Test
   def testUncleanElectionInvalid() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("unclean.leader.election.enable", "invalid")
 
     intercept[ConfigException] {
@@ -156,7 +156,7 @@ class KafkaConfigTest extends JUnit3Suite {
   
   @Test
   def testLogRollTimeMsProvided() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("log.roll.ms", "1800000")
 
     val cfg = KafkaConfig.fromProps(props)
@@ -166,7 +166,7 @@ class KafkaConfigTest extends JUnit3Suite {
   
   @Test
   def testLogRollTimeBothMsAndHoursProvided() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("log.roll.ms", "1800000")
     props.put("log.roll.hours", "1")
 
@@ -177,7 +177,7 @@ class KafkaConfigTest extends JUnit3Suite {
     
   @Test
   def testLogRollTimeNoConfigProvided() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(24 * 7 * 60L * 60L * 1000L, cfg.logRollTimeMillis																									)
@@ -186,7 +186,7 @@ class KafkaConfigTest extends JUnit3Suite {
 
   @Test
   def testDefaultCompressionType() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     val serverConfig = KafkaConfig.fromProps(props)
 
     assertEquals(serverConfig.compressionType, "producer")
@@ -194,7 +194,7 @@ class KafkaConfigTest extends JUnit3Suite {
 
   @Test
   def testValidCompressionType() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("compression.type", "gzip")
     val serverConfig = KafkaConfig.fromProps(props)
 
@@ -203,7 +203,7 @@ class KafkaConfigTest extends JUnit3Suite {
 
   @Test
   def testInvalidCompressionType() {
-    val props = TestUtils.createBrokerConfig(0, 8181)
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
     props.put("compression.type", "abc")
     intercept[IllegalArgumentException] {
       KafkaConfig.fromProps(props)

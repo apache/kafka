@@ -17,7 +17,6 @@
 
 package kafka.producer
 
-import org.apache.kafka.common.config.ConfigException
 import org.scalatest.TestFailedException
 import org.scalatest.junit.JUnit3Suite
 import kafka.consumer.SimpleConsumer
@@ -40,8 +39,6 @@ import kafka.serializer.StringEncoder
 class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   private val brokerId1 = 0
   private val brokerId2 = 1
-  private val ports = TestUtils.choosePorts(2)
-  private val (port1, port2) = (ports(0), ports(1))
   private var server1: KafkaServer = null
   private var server2: KafkaServer = null
   private var consumer1: SimpleConsumer = null
@@ -49,26 +46,36 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   private val requestHandlerLogger = Logger.getLogger(classOf[KafkaRequestHandler])
   private var servers = List.empty[KafkaServer]
 
-  private val props1 = TestUtils.createBrokerConfig(brokerId1, port1, false)
-  props1.put("num.partitions", "4")
-  private val config1 = KafkaConfig.fromProps(props1)
-  private val props2 = TestUtils.createBrokerConfig(brokerId2, port2, false)
-  props2.put("num.partitions", "4")
-  private val config2 = KafkaConfig.fromProps(props2)
+  // Creation of consumers is deferred until they are actually needed. This allows us to kill brokers that use random
+  // ports and then get a consumer instance that will be pointed at the correct port
+  def getConsumer1() = {
+    if (consumer1 == null)
+      consumer1 = new SimpleConsumer("localhost", server1.boundPort(), 1000000, 64*1024, "")
+    consumer1
+  }
+
+  def getConsumer2() = {
+    if (consumer2 == null)
+      consumer2 = new SimpleConsumer("localhost", server2.boundPort(), 100, 64*1024, "")
+    consumer2
+  }
 
   override def setUp() {
     super.setUp()
     // set up 2 brokers with 4 partitions each
+    val props1 = TestUtils.createBrokerConfig(brokerId1, zkConnect, false)
+    props1.put("num.partitions", "4")
+    val config1 = KafkaConfig.fromProps(props1)
+    val props2 = TestUtils.createBrokerConfig(brokerId2, zkConnect, false)
+    props2.put("num.partitions", "4")
+    val config2 = KafkaConfig.fromProps(props2)
     server1 = TestUtils.createServer(config1)
     server2 = TestUtils.createServer(config2)
     servers = List(server1,server2)
 
     val props = new Properties()
     props.put("host", "localhost")
-    props.put("port", port1.toString)
-
-    consumer1 = new SimpleConsumer("localhost", port1, 1000000, 64*1024, "")
-    consumer2 = new SimpleConsumer("localhost", port2, 100, 64*1024, "")
+    props.put("port", server1.boundPort().toString)
 
     // temporarily set request handler logger to a higher level
     requestHandlerLogger.setLevel(Level.FATAL)
@@ -115,7 +122,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     }
 
     val producer2 = TestUtils.createProducer[String, String](
-      brokerList = "localhost:80," + TestUtils.getBrokerListStrFromConfigs(Seq(config1)),
+      brokerList = "localhost:80," + TestUtils.getBrokerListStrFromServers(Seq(server1)),
       encoder = classOf[StringEncoder].getName,
       keyEncoder = classOf[StringEncoder].getName)
 
@@ -128,7 +135,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     }
 
     val producer3 =  TestUtils.createProducer[String, String](
-      brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+      brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
       encoder = classOf[StringEncoder].getName,
       keyEncoder = classOf[StringEncoder].getName)
 
@@ -151,7 +158,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = servers)
 
     val producer1 = TestUtils.createProducer[String, String](
-      brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+      brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
       encoder = classOf[StringEncoder].getName,
       keyEncoder = classOf[StringEncoder].getName,
       partitioner = classOf[StaticPartitioner].getName,
@@ -166,10 +173,10 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     val leader = leaderOpt.get
 
     val messageSet = if(leader == server1.config.brokerId) {
-      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+      val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       response1.messageSet("new-topic", 0).iterator.toBuffer
     }else {
-      val response2 = consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+      val response2 = getConsumer2().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       response2.messageSet("new-topic", 0).iterator.toBuffer
     }
     assertEquals("Should have fetched 2 messages", 2, messageSet.size)
@@ -184,7 +191,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     try {
       val producer2 = TestUtils.createProducer[String, String](
-        brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+        brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
         encoder = classOf[StringEncoder].getName,
         keyEncoder = classOf[StringEncoder].getName,
         partitioner = classOf[StaticPartitioner].getName,
@@ -214,7 +221,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
                           servers = servers)
 
     val producer = TestUtils.createProducer[String, String](
-      brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+      brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
       encoder = classOf[StringEncoder].getName,
       keyEncoder = classOf[StringEncoder].getName,
       partitioner = classOf[StaticPartitioner].getName,
@@ -248,7 +255,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
 
     try {
       // cross check if broker 1 got the messages
-      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+      val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       val messageSet1 = response1.messageSet(topic, 0).iterator
       assertTrue("Message set should have 1 message", messageSet1.hasNext)
       assertEquals(new Message(bytes = "test1".getBytes, key = "test".getBytes), messageSet1.next.message)
@@ -268,7 +275,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
     props.put("message.send.max.retries", "0")
     props.put("client.id","ProducerTest-testAsyncSendCanCorrectlyFailWithTimeout")
     val producer = TestUtils.createProducer[String, String](
-      brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+      brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
       encoder = classOf[StringEncoder].getName,
       keyEncoder = classOf[StringEncoder].getName,
       partitioner = classOf[StaticPartitioner].getName,
@@ -283,7 +290,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
       // this message should be assigned to partition 0 whose leader is on broker 0
       producer.send(new KeyedMessage[String, String](topic, "test", "test"))
       // cross check if brokers got the messages
-      val response1 = consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
+      val response1 = getConsumer1().fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).build())
       val messageSet1 = response1.messageSet("new-topic", 0).iterator
       assertTrue("Message set should have 1 message", messageSet1.hasNext)
       assertEquals(new Message("test".getBytes), messageSet1.next.message)
@@ -315,7 +322,7 @@ class ProducerTest extends JUnit3Suite with ZooKeeperTestHarness with Logging{
   @Test
   def testSendNullMessage() {
     val producer = TestUtils.createProducer[String, String](
-      brokerList = TestUtils.getBrokerListStrFromConfigs(Seq(config1, config2)),
+      brokerList = TestUtils.getBrokerListStrFromServers(Seq(server1, server2)),
       encoder = classOf[StringEncoder].getName,
       keyEncoder = classOf[StringEncoder].getName,
       partitioner = classOf[StaticPartitioner].getName)

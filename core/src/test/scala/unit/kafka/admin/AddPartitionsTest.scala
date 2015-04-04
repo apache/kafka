@@ -27,21 +27,7 @@ import kafka.client.ClientUtils
 import kafka.server.{KafkaConfig, KafkaServer}
 
 class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
-  val brokerId1 = 0
-  val brokerId2 = 1
-  val brokerId3 = 2
-  val brokerId4 = 3
-
-  val port1 = TestUtils.choosePort()
-  val port2 = TestUtils.choosePort()
-  val port3 = TestUtils.choosePort()
-  val port4 = TestUtils.choosePort()
-
-  val configProps1 = TestUtils.createBrokerConfig(brokerId1, port1, false)
-  val configProps2 = TestUtils.createBrokerConfig(brokerId2, port2, false)
-  val configProps3 = TestUtils.createBrokerConfig(brokerId3, port3, false)
-  val configProps4 = TestUtils.createBrokerConfig(brokerId4, port4, false)
-
+  var configs: Seq[KafkaConfig] = null
   var servers: Seq[KafkaServer] = Seq.empty[KafkaServer]
   var brokers: Seq[Broker] = Seq.empty[Broker]
 
@@ -54,14 +40,11 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   override def setUp() {
     super.setUp()
-    // start all the servers
-    val server1 = TestUtils.createServer(KafkaConfig.fromProps(configProps1))
-    val server2 = TestUtils.createServer(KafkaConfig.fromProps(configProps2))
-    val server3 = TestUtils.createServer(KafkaConfig.fromProps(configProps3))
-    val server4 = TestUtils.createServer(KafkaConfig.fromProps(configProps4))
 
-    servers ++= List(server1, server2, server3, server4)
-    brokers = servers.map(s => new Broker(s.config.brokerId, s.config.hostName, s.config.port))
+    configs = (0 until 4).map(i => KafkaConfig.fromProps(TestUtils.createBrokerConfig(i, zkConnect, enableControlledShutdown = false)))
+    // start all the servers
+    servers = configs.map(c => TestUtils.createServer(c))
+    brokers = servers.map(s => new Broker(s.config.brokerId, s.config.hostName, s.boundPort))
 
     // create topics first
     createTopic(zkClient, topic1, partitionReplicaAssignment = Map(0->Seq(0,1)), servers = servers)

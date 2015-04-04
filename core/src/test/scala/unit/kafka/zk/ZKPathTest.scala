@@ -29,7 +29,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   val path: String = "/some_dir"
   val zkSessionTimeoutMs = 1000
-  val zkConnectWithInvalidRoot: String = zkConnect + "/ghost"
+  def zkConnectWithInvalidRoot: String = zkConnect + "/ghost"
 
   def testCreatePersistentPathThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,

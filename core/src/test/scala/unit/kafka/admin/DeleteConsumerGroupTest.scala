@@ -17,7 +17,7 @@
 package kafka.admin
 
 import org.scalatest.junit.JUnit3Suite
-import kafka.utils.{ZKGroupDirs, ZKGroupTopicDirs, ZkUtils, TestUtils}
+import kafka.utils._
 import kafka.server.KafkaConfig
 import org.junit.Test
 import kafka.consumer._
@@ -26,7 +26,7 @@ import kafka.integration.KafkaServerTestHarness
 
 
 class DeleteConsumerGroupTest extends JUnit3Suite with KafkaServerTestHarness {
-  val configs = TestUtils.createBrokerConfigs(3, false, true).map(KafkaConfig.fromProps)
+  def generateConfigs() = TestUtils.createBrokerConfigs(3, zkConnect, false, true).map(KafkaConfig.fromProps)
 
   @Test
   def testGroupWideDeleteInZK() {

@@ -38,7 +38,7 @@ class ReplicaManagerTest extends JUnit3Suite {
 
   @Test
   def testHighWaterMarkDirectoryMapping() {
-    val props = TestUtils.createBrokerConfig(1)
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
@@ -54,7 +54,7 @@ class ReplicaManagerTest extends JUnit3Suite {
 
   @Test
   def testHighwaterMarkRelativeDirectoryMapping() {
-    val props = TestUtils.createBrokerConfig(1)
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
     val config = KafkaConfig.fromProps(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
@@ -71,7 +71,7 @@ class ReplicaManagerTest extends JUnit3Suite {
 
   @Test
   def testIllegalRequiredAcks() {
-    val props = TestUtils.createBrokerConfig(1)
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
     val config = KafkaConfig.fromProps(props)
     val zkClient = EasyMock.createMock(classOf[ZkClient])
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)).toArray)
