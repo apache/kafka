@@ -35,7 +35,7 @@ object Mx4jLoader extends Logging {
   def maybeLoad(): Boolean = {
     val props = new VerifiableProperties(System.getProperties())
     if (props.getBoolean("kafka_mx4jenable", false))
-      false
+      return false
     val address = props.getString("mx4jaddress", "0.0.0.0")
     val port = props.getInt("mx4jport", 8082)
     try {
