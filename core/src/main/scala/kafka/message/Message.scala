@@ -86,7 +86,7 @@ class Message(val buffer: ByteBuffer) {
   /**
    * A constructor to create a Message
    * @param bytes The payload of the message
-   * @param compressionCodec The compression codec used on the contents of the message (if any)
+   * @param codec The compression codec used on the contents of the message (if any)
    * @param key The key of the message (null, if none)
    * @param payloadOffset The offset into the payload array used to extract payload
    * @param payloadSize The size of the payload to use

@@ -220,7 +220,7 @@ object Utils extends Logging {
 
   /**
    * Recursively delete the list of files/directories and any subfiles (if any exist)
-   * @param a sequence of files to be deleted
+   * @param files sequence of files to be deleted
    */
   def rm(files: Seq[String]): Unit = files.map(f => rm(new File(f)))
 
