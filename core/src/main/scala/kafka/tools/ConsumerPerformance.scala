@@ -61,6 +61,7 @@ object ConsumerPerformance {
       startMs = System.currentTimeMillis
       consume(consumer, config.numMessages, 1000, config, totalMessagesRead, totalBytesRead)
       endMs = System.currentTimeMillis
+      consumer.close()
     } else {
       import kafka.consumer.ConsumerConfig
       val consumerConfig = new ConsumerConfig(config.props)
@@ -80,6 +81,7 @@ object ConsumerPerformance {
       for (thread <- threadList)
         thread.join
       endMs = System.currentTimeMillis - consumerConfig.consumerTimeoutMs 
+      consumerConnector.shutdown()
     }
     val elapsedSecs = (endMs - startMs) / 1000.0
     if (!config.showDetailedStats) {
@@ -87,7 +89,6 @@ object ConsumerPerformance {
       println(("%s, %s, %.4f, %.4f, %d, %.4f").format(config.dateFormat.format(startMs), config.dateFormat.format(endMs),
         totalMBRead, totalMBRead / elapsedSecs, totalMessagesRead.get, totalMessagesRead.get / elapsedSecs))
     }
-    System.exit(0)
   }
   
   def consume(consumer: KafkaConsumer[Array[Byte], Array[Byte]], count: Long, timeout: Long, config: ConsumerPerfConfig, totalMessagesRead: AtomicLong, totalBytesRead: AtomicLong) {
