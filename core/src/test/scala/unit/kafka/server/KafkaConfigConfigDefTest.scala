@@ -18,9 +18,10 @@ package unit.kafka.server
 
 import java.util.Properties
 
+import kafka.api.ApiVersion
 import kafka.message._
 import kafka.server.{Defaults, KafkaConfig}
-import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{Assert, Test}
 import org.scalatest.junit.JUnit3Suite
 
@@ -172,8 +173,10 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
 
         case KafkaConfig.PortProp => expected.setProperty(name, "1234")
         case KafkaConfig.HostNameProp => expected.setProperty(name, nextString(10))
+        case KafkaConfig.ListenersProp => expected.setProperty(name, "PLAINTEXT://:9092")
         case KafkaConfig.AdvertisedHostNameProp => expected.setProperty(name, nextString(10))
         case KafkaConfig.AdvertisedPortProp => expected.setProperty(name, "4321")
+        case KafkaConfig.AdvertisedListenersProp => expected.setProperty(name, "PLAINTEXT://:2909")
         case KafkaConfig.SocketRequestMaxBytesProp => expected.setProperty(name, atLeastOneIntProp)
         case KafkaConfig.MaxConnectionsPerIpProp => expected.setProperty(name, atLeastOneIntProp)
         case KafkaConfig.MaxConnectionsPerIpOverridesProp => expected.setProperty(name, "127.0.0.1:2, 127.0.0.2:3")
@@ -204,6 +207,9 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
         case KafkaConfig.MinInSyncReplicasProp => expected.setProperty(name, atLeastOneIntProp)
         case KafkaConfig.AutoLeaderRebalanceEnableProp => expected.setProperty(name, randFrom("true", "false"))
         case KafkaConfig.UncleanLeaderElectionEnableProp => expected.setProperty(name, randFrom("true", "false"))
+        case KafkaConfig.InterBrokerSecurityProtocolProp => expected.setProperty(name, SecurityProtocol.PLAINTEXT.toString)
+        case KafkaConfig.InterBrokerProtocolVersionProp => expected.setProperty(name, ApiVersion.latestVersion.toString)
+
         case KafkaConfig.ControlledShutdownEnableProp => expected.setProperty(name, randFrom("true", "false"))
         case KafkaConfig.OffsetsLoadBufferSizeProp => expected.setProperty(name, atLeastOneIntProp)
         case KafkaConfig.OffsetsTopicPartitionsProp => expected.setProperty(name, atLeastOneIntProp)

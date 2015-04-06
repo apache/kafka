@@ -14,18 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package kafka.api
+package kafka.api
 
 import java.nio.ByteBuffer
+
 import kafka.api.ApiUtils._
-import kafka.cluster.Broker
-import kafka.common.{ErrorMapping, TopicAndPartition}
-import kafka.network.{BoundedByteBufferSend, RequestChannel}
+import kafka.cluster.{Broker, BrokerEndpoint}
+import kafka.common.{ErrorMapping, KafkaException, TopicAndPartition}
 import kafka.network.RequestChannel.Response
-import collection.Set
+import kafka.network.{BoundedByteBufferSend, RequestChannel}
+import org.apache.kafka.common.protocol.SecurityProtocol
+
+import scala.collection.Set
 
 object UpdateMetadataRequest {
-  val CurrentVersion = 0.shortValue
+  val CurrentVersion = 1.shortValue
   val IsInit: Boolean = true
   val NotInit: Boolean = false
   val DefaultAckTimeout: Int = 1000
@@ -48,7 +51,13 @@ object UpdateMetadataRequest {
     }
 
     val numAliveBrokers = buffer.getInt
-    val aliveBrokers = for(i <- 0 until numAliveBrokers) yield Broker.readFrom(buffer)
+
+    val aliveBrokers = versionId match {
+      case 0 => for(i <- 0 until numAliveBrokers) yield new Broker(BrokerEndpoint.readFrom(buffer),SecurityProtocol.PLAINTEXT)
+      case 1 => for(i <- 0 until numAliveBrokers) yield Broker.readFrom(buffer)
+      case v => throw new KafkaException( "Version " + v.toString + " is invalid for UpdateMetadataRequest. Valid versions are 0 or 1.")
+    }
+
     new UpdateMetadataRequest(versionId, correlationId, clientId, controllerId, controllerEpoch,
       partitionStateInfos.toMap, aliveBrokers.toSet)
   }
@@ -82,7 +91,12 @@ case class UpdateMetadataRequest (versionId: Short,
       value.writeTo(buffer)
     }
     buffer.putInt(aliveBrokers.size)
-    aliveBrokers.foreach(_.writeTo(buffer))
+
+    versionId match {
+      case 0 => aliveBrokers.foreach(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).writeTo(buffer))
+      case 1 => aliveBrokers.foreach(_.writeTo(buffer))
+      case v => throw new KafkaException( "Version " + v.toString + " is invalid for UpdateMetadataRequest. Valid versions are 0 or 1.")
+    }
   }
 
   def sizeInBytes(): Int = {
@@ -96,8 +110,15 @@ case class UpdateMetadataRequest (versionId: Short,
     for((key, value) <- partitionStateInfos)
       size += (2 + key.topic.length) /* topic */ + 4 /* partition */ + value.sizeInBytes /* partition state info */
     size += 4 /* number of alive brokers in the cluster */
-    for(broker <- aliveBrokers)
-      size += broker.sizeInBytes /* broker info */
+
+    versionId match  {
+      case 0 => for(broker <- aliveBrokers)
+        size += broker.getBrokerEndPoint(SecurityProtocol.PLAINTEXT).sizeInBytes /* broker info */
+      case 1 => for(broker  <- aliveBrokers)
+        size += broker.sizeInBytes
+      case v => throw new KafkaException( "Version " + v.toString + " is invalid for UpdateMetadataRequest. Valid versions are 0 or 1.")
+    }
+
     size
   }
 

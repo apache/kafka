@@ -436,6 +436,7 @@ def generate_overriden_props_files(testsuitePathname, testcaseEnv, systemTestEnv
                     addedCSVConfig["kafka.metrics.polling.interval.secs"] = "5"
                     addedCSVConfig["kafka.metrics.reporters"] = "kafka.metrics.KafkaCSVMetricsReporter"
                     addedCSVConfig["kafka.csv.metrics.reporter.enabled"] = "true"
+                    addedCSVConfig["listeners"] = "PLAINTEXT://localhost:"+tcCfg["port"]
 
                     if brokerVersion == "0.7":
                         addedCSVConfig["brokerid"] = tcCfg["brokerid"]

@@ -19,6 +19,8 @@ package kafka.network;
 
 import java.net._
 import java.io._
+import kafka.cluster.EndPoint
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 import java.util.Random
@@ -35,8 +37,8 @@ import scala.collection.Map
 class SocketServerTest extends JUnitSuite {
 
   val server: SocketServer = new SocketServer(0,
-                                              host = null,
-                                              port = 0,
+                                              Map(SecurityProtocol.PLAINTEXT -> EndPoint(null, 0, SecurityProtocol.PLAINTEXT),
+                                                  SecurityProtocol.TRACE -> EndPoint(null, 0, SecurityProtocol.TRACE)),
                                               numProcessorThreads = 1,
                                               maxQueuedRequests = 50,
                                               sendBufferSize = 300000,
@@ -73,7 +75,10 @@ class SocketServerTest extends JUnitSuite {
     channel.sendResponse(new RequestChannel.Response(request.processor, request, send))
   }
 
-  def connect(s:SocketServer = server) = new Socket("localhost", s.boundPort)
+  def connect(s:SocketServer = server, protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT) = {
+    new Socket("localhost", server.boundPort(protocol))
+  }
+
 
   @After
   def cleanup() {
@@ -81,7 +86,8 @@ class SocketServerTest extends JUnitSuite {
   }
   @Test
   def simpleRequest() {
-    val socket = connect()
+    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val traceSocket = connect(protocol = SecurityProtocol.TRACE)
     val correlationId = -1
     val clientId = SyncProducerConfig.DefaultClientId
     val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
@@ -95,9 +101,15 @@ class SocketServerTest extends JUnitSuite {
     val serializedBytes = new Array[Byte](byteBuffer.remaining)
     byteBuffer.get(serializedBytes)
 
-    sendRequest(socket, 0, serializedBytes)
+    // Test PLAINTEXT socket
+    sendRequest(plainSocket, 0, serializedBytes)
     processRequest(server.requestChannel)
-    assertEquals(serializedBytes.toSeq, receiveResponse(socket).toSeq)
+    assertEquals(serializedBytes.toSeq, receiveResponse(plainSocket).toSeq)
+
+    // Test TRACE socket
+    sendRequest(traceSocket, 0, serializedBytes)
+    processRequest(server.requestChannel)
+    assertEquals(serializedBytes.toSeq, receiveResponse(traceSocket).toSeq)
   }
 
   @Test(expected = classOf[IOException])
@@ -129,21 +141,38 @@ class SocketServerTest extends JUnitSuite {
       "Socket key should be available for reads")
   }
 
-  @Test(expected = classOf[IOException])
+  @Test
   def testSocketsCloseOnShutdown() {
     // open a connection
-    val socket = connect()
+    val plainSocket = connect(protocol = SecurityProtocol.PLAINTEXT)
+    val traceSocket = connect(protocol = SecurityProtocol.TRACE)
     val bytes = new Array[Byte](40)
     // send a request first to make sure the connection has been picked up by the socket server
-    sendRequest(socket, 0, bytes)
+    sendRequest(plainSocket, 0, bytes)
+    sendRequest(traceSocket, 0, bytes)
     processRequest(server.requestChannel)
+
+    // make sure the sockets are open
+    server.acceptors.values.map(acceptor => assertFalse(acceptor.serverChannel.socket.isClosed))
     // then shutdown the server
     server.shutdown()
 
     val largeChunkOfBytes = new Array[Byte](1000000)
     // doing a subsequent send should throw an exception as the connection should be closed.
     // send a large chunk of bytes to trigger a socket flush
-    sendRequest(socket, 0, largeChunkOfBytes)
+    try {
+      sendRequest(plainSocket, 0, largeChunkOfBytes)
+      fail("expected exception when writing to closed plain socket")
+    } catch {
+      case e: IOException => // expected
+    }
+
+    try {
+      sendRequest(traceSocket, 0, largeChunkOfBytes)
+      fail("expected exception when writing to closed trace socket")
+    } catch {
+      case e: IOException => // expected
+    }
   }
 
   @Test
@@ -161,8 +190,7 @@ class SocketServerTest extends JUnitSuite {
     val overrideNum = 6
     val overrides: Map[String, Int] = Map("localhost" -> overrideNum)
     val overrideServer: SocketServer = new SocketServer(0,
-                                                host = null,
-                                                port = 0,
+                                                Map(SecurityProtocol.PLAINTEXT -> EndPoint(null, 0, SecurityProtocol.PLAINTEXT)),
                                                 numProcessorThreads = 1,
                                                 maxQueuedRequests = 50,
                                                 sendBufferSize = 300000,

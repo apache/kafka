@@ -23,7 +23,7 @@ import junit.framework.Assert._
 import org.easymock.EasyMock
 import org.junit.Test
 import kafka.api._
-import kafka.cluster.Broker
+import kafka.cluster.{BrokerEndpoint, Broker}
 import kafka.common._
 import kafka.message._
 import kafka.producer.async._
@@ -165,8 +165,8 @@ class AsyncProducerTest extends JUnit3Suite {
 
     val props = new Properties()
     props.put("metadata.broker.list", brokerList)
-    val broker1 = new Broker(0, "localhost", 9092)
-    val broker2 = new Broker(1, "localhost", 9093)
+    val broker1 = new BrokerEndpoint(0, "localhost", 9092)
+    val broker2 = new BrokerEndpoint(1, "localhost", 9093)
 
     // form expected partitions metadata
     val partition1Metadata = new PartitionMetadata(0, Some(broker1), List(broker1, broker2))
@@ -469,7 +469,7 @@ class AsyncProducerTest extends JUnit3Suite {
   }
 
   private def getTopicMetadata(topic: String, partition: Seq[Int], brokerId: Int, brokerHost: String, brokerPort: Int): TopicMetadata = {
-    val broker1 = new Broker(brokerId, brokerHost, brokerPort)
+    val broker1 = new BrokerEndpoint(brokerId, brokerHost, brokerPort)
     new TopicMetadata(topic, partition.map(new PartitionMetadata(_, Some(broker1), List(broker1))))
   }
   

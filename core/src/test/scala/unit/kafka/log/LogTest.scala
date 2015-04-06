@@ -32,7 +32,7 @@ class LogTest extends JUnitSuite {
   var logDir: File = null
   val time = new MockTime(0)
   var config: KafkaConfig = null
-  val logConfig = LogConfig()
+  val logConfig = LogConfig()  
 
   @Before
   def setUp() {

@@ -17,15 +17,16 @@
 
 package kafka.server
 
-import org.scalatest.junit.JUnit3Suite
-import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.TestUtils._
 import junit.framework.Assert._
-import kafka.utils.{ZkUtils, Utils, TestUtils}
-import kafka.controller.{ControllerContext, LeaderIsrAndControllerEpoch, ControllerChannelManager}
+import kafka.api._
 import kafka.cluster.Broker
 import kafka.common.ErrorMapping
-import kafka.api._
+import kafka.controller.{ControllerChannelManager, ControllerContext, LeaderIsrAndControllerEpoch}
+import kafka.utils.TestUtils._
+import kafka.utils.{TestUtils, Utils, ZkUtils}
+import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.protocol.SecurityProtocol
+import org.scalatest.junit.JUnit3Suite
 
 class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
   val brokerId1 = 0
@@ -116,8 +117,11 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // start another controller
     val controllerId = 2
+
     val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
     val brokers = servers.map(s => new Broker(s.config.brokerId, "localhost", s.boundPort()))
+    val brokerEndPoints = brokers.map(b => b.getBrokerEndPoint(SecurityProtocol.PLAINTEXT))
+
     val controllerContext = new ControllerContext(zkClient, 6000)
     controllerContext.liveBrokers = brokers.toSet
     val controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig)
@@ -127,7 +131,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     leaderAndIsr.put((topic, partitionId),
       new LeaderIsrAndControllerEpoch(new LeaderAndIsr(brokerId2, List(brokerId1, brokerId2)), 2))
     val partitionStateInfo = leaderAndIsr.mapValues(l => new PartitionStateInfo(l, Set(0,1))).toMap
-    val leaderAndIsrRequest = new LeaderAndIsrRequest(partitionStateInfo, brokers.toSet, controllerId,
+    val leaderAndIsrRequest = new LeaderAndIsrRequest(partitionStateInfo, brokerEndPoints.toSet, controllerId,
                                                       staleControllerEpoch, 0, "")
 
     controllerChannelManager.sendRequest(brokerId2, leaderAndIsrRequest, staleControllerEpochCallback)

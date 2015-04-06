@@ -14,7 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package kafka.client
+package kafka.client
+
+import org.apache.kafka.common.protocol.SecurityProtocol
 
 import scala.collection._
 import kafka.cluster._
@@ -24,11 +26,10 @@ import kafka.common.{ErrorMapping, KafkaException}
 import kafka.utils.{Utils, Logging}
 import java.util.Properties
 import util.Random
- import kafka.network.BlockingChannel
- import kafka.utils.ZkUtils._
- import org.I0Itec.zkclient.ZkClient
- import java.io.IOException
-import org.apache.kafka.common.utils.Utils.{getHost, getPort}
+import kafka.network.BlockingChannel
+import kafka.utils.ZkUtils._
+import org.I0Itec.zkclient.ZkClient
+import java.io.IOException
 
  /**
  * Helper functions common to clients (producer, consumer, or admin)
@@ -42,7 +43,7 @@ object ClientUtils extends Logging{
    * @param producerConfig The producer's config
    * @return topic metadata response
    */
-  def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], producerConfig: ProducerConfig, correlationId: Int): TopicMetadataResponse = {
+  def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndpoint], producerConfig: ProducerConfig, correlationId: Int): TopicMetadataResponse = {
     var fetchMetaDataSucceeded: Boolean = false
     var i: Int = 0
     val topicMetadataRequest = new TopicMetadataRequest(TopicMetadataRequest.CurrentVersion, correlationId, producerConfig.clientId, topics.toSeq)
@@ -83,7 +84,7 @@ object ClientUtils extends Logging{
    * @param clientId The client's identifier
    * @return topic metadata response
    */
-  def fetchTopicMetadata(topics: Set[String], brokers: Seq[Broker], clientId: String, timeoutMs: Int,
+  def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndpoint], clientId: String, timeoutMs: Int,
                          correlationId: Int = 0): TopicMetadataResponse = {
     val props = new Properties()
     props.put("metadata.broker.list", brokers.map(_.connectionString).mkString(","))
@@ -96,11 +97,11 @@ object ClientUtils extends Logging{
   /**
    * Parse a list of broker urls in the form host1:port1, host2:port2, ... 
    */
-  def parseBrokerList(brokerListStr: String): Seq[Broker] = {
+  def parseBrokerList(brokerListStr: String): Seq[BrokerEndpoint] = {
     val brokersStr = Utils.parseCsvList(brokerListStr)
 
     brokersStr.zipWithIndex.map { case (address, brokerId) =>
-      new Broker(brokerId, getHost(address), getPort(address))
+      BrokerEndpoint.createBrokerEndPoint(brokerId, address)
     }
   }
 
@@ -111,7 +112,7 @@ object ClientUtils extends Logging{
      var channel: BlockingChannel = null
      var connected = false
      while (!connected) {
-       val allBrokers = getAllBrokersInCluster(zkClient)
+       val allBrokers = getAllBrokerEndPointsForChannel(zkClient, SecurityProtocol.PLAINTEXT)
        Random.shuffle(allBrokers).find { broker =>
          trace("Connecting to broker %s:%d.".format(broker.host, broker.port))
          try {
@@ -143,7 +144,7 @@ object ClientUtils extends Logging{
 
      while (!offsetManagerChannelOpt.isDefined) {
 
-       var coordinatorOpt: Option[Broker] = None
+       var coordinatorOpt: Option[BrokerEndpoint] = None
 
        while (!coordinatorOpt.isDefined) {
          try {

@@ -3,6 +3,7 @@ package other.kafka
 import org.I0Itec.zkclient.ZkClient
 import kafka.api._
 import kafka.utils.{ShutdownableThread, ZKStringSerializer}
+import org.apache.kafka.common.protocol.SecurityProtocol
 import scala.collection._
 import kafka.client.ClientUtils
 import joptsimple.OptionParser
@@ -12,7 +13,6 @@ import scala.util.Random
 import java.io.IOException
 import kafka.metrics.{KafkaTimer, KafkaMetricsGroup}
 import java.util.concurrent.TimeUnit
-import com.yammer.metrics.core.Gauge
 import java.util.concurrent.atomic.AtomicInteger
 import java.nio.channels.ClosedByInterruptException
 

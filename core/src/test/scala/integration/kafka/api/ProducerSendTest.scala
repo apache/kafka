@@ -17,8 +17,6 @@
 
 package kafka.api
 
-import java.lang.{Integer, IllegalArgumentException}
-
 import org.apache.kafka.clients.producer._
 import org.scalatest.junit.JUnit3Suite
 import org.junit.Test

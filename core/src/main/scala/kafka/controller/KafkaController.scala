@@ -19,7 +19,6 @@ package kafka.controller
 import collection._
 import collection.Set
 import com.yammer.metrics.core.Gauge
-import java.lang.{IllegalStateException, Object}
 import java.util.concurrent.TimeUnit
 import kafka.admin.AdminUtils
 import kafka.admin.PreferredReplicaLeaderElectionCommand
@@ -36,9 +35,7 @@ import org.I0Itec.zkclient.{IZkDataListener, IZkStateListener, ZkClient}
 import org.I0Itec.zkclient.exception.{ZkNodeExistsException, ZkNoNodeException}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
-import scala.None
 import kafka.server._
-import scala.Some
 import kafka.common.TopicAndPartition
 
 class ControllerContext(val zkClient: ZkClient,
@@ -212,7 +209,11 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
 
   def epoch = controllerContext.epoch
 
-  def clientId = "id_%d-host_%s-port_%d".format(config.brokerId, config.hostName, config.port)
+  def clientId = {
+    val listeners = config.listeners
+    val controllerListener = listeners.get(config.interBrokerSecurityProtocol)
+    "id_%d-host_%s-port_%d".format(config.brokerId, controllerListener.get.host, controllerListener.get.port)
+  }
 
   /**
    * On clean shutdown, the controller first determines the partitions that the

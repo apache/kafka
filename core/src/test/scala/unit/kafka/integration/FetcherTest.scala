@@ -28,7 +28,6 @@ import org.scalatest.junit.JUnit3Suite
 import kafka.consumer._
 import kafka.serializer._
 import kafka.producer.{KeyedMessage, Producer}
-import kafka.utils.TestUtils._
 import kafka.utils.TestUtils
 
 class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
@@ -37,14 +36,13 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
 
   val messages = new mutable.HashMap[Int, Seq[Array[Byte]]]
   val topic = "topic"
-
   val queue = new LinkedBlockingQueue[FetchedDataChunk]
 
   var fetcher: ConsumerFetcherManager = null
 
   override def setUp() {
     super.setUp
-    createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = Map(0 -> Seq(configs.head.brokerId)), servers = servers)
 
     val cluster = new Cluster(servers.map(s => new Broker(s.config.brokerId, "localhost", s.boundPort())))
 

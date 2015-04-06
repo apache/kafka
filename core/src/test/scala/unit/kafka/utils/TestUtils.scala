@@ -18,12 +18,12 @@
 package kafka.utils
 
 import java.io._
-import java.net._
 import java.nio._
 import java.nio.channels._
 import java.util.Random
 import java.util.Properties
 
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.utils.Utils._
 
 import collection.mutable.ListBuffer
@@ -45,7 +45,6 @@ import kafka.log._
 import junit.framework.AssertionFailedError
 import junit.framework.Assert._
 import org.apache.kafka.clients.producer.KafkaProducer
-import collection.Iterable
 
 import scala.collection.Map
 import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -150,8 +149,7 @@ object TestUtils extends Logging {
     port: Int = RandomPort): Properties = {
     val props = new Properties
     if (nodeId >= 0) props.put("broker.id", nodeId.toString)
-    props.put("host.name", "localhost")
-    props.put("port", port.toString)
+    props.put("listeners", "PLAINTEXT://localhost:"+port.toString)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
     props.put("zookeeper.connect", zkConnect)
     props.put("replica.socket.timeout.ms", "1500")
@@ -466,13 +464,13 @@ object TestUtils extends Logging {
   }
 
   def createBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
-    val brokers = ids.map(id => new Broker(id, "localhost", 6667))
-    brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, b.id, b.host, b.port, 6000, jmxPort = -1))
+    val brokers = ids.map(id => new Broker(id, "localhost", 6667, SecurityProtocol.PLAINTEXT))
+    brokers.foreach(b => ZkUtils.registerBrokerInZk(zkClient, b.id, "localhost", 6667, b.endPoints, 6000, jmxPort = -1))
     brokers
   }
 
   def deleteBrokersInZk(zkClient: ZkClient, ids: Seq[Int]): Seq[Broker] = {
-    val brokers = ids.map(id => new Broker(id, "localhost", 6667))
+    val brokers = ids.map(id => new Broker(id, "localhost", 6667, SecurityProtocol.PLAINTEXT))
     brokers.foreach(b => ZkUtils.deletePath(zkClient, ZkUtils.BrokerIdsPath + "/" + b))
     brokers
   }

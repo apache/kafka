@@ -18,14 +18,16 @@
 package kafka.admin
 
 import kafka.common._
-import kafka.cluster.Broker
+import kafka.cluster.{BrokerEndpoint, Broker}
+
 import kafka.log.LogConfig
 import kafka.utils._
 import kafka.api.{TopicMetadata, PartitionMetadata}
 
 import java.util.Random
 import java.util.Properties
-import scala.Some
+import org.apache.kafka.common.protocol.SecurityProtocol
+
 import scala.Predef._
 import scala.collection._
 import mutable.ListBuffer
@@ -341,7 +343,9 @@ object AdminUtils extends Logging {
     topics.map(topic => fetchTopicMetadataFromZk(topic, zkClient, cachedBrokerInfo))
   }
 
-  private def fetchTopicMetadataFromZk(topic: String, zkClient: ZkClient, cachedBrokerInfo: mutable.HashMap[Int, Broker]): TopicMetadata = {
+
+
+  private def fetchTopicMetadataFromZk(topic: String, zkClient: ZkClient, cachedBrokerInfo: mutable.HashMap[Int, Broker], protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): TopicMetadata = {
     if(ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic))) {
       val topicPartitionAssignment = ZkUtils.getPartitionAssignmentForTopics(zkClient, List(topic)).get(topic).get
       val sortedPartitions = topicPartitionAssignment.toList.sortWith((m1, m2) => m1._1 < m2._1)
@@ -352,22 +356,22 @@ object AdminUtils extends Logging {
         val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
         debug("replicas = " + replicas + ", in sync replicas = " + inSyncReplicas + ", leader = " + leader)
 
-        var leaderInfo: Option[Broker] = None
-        var replicaInfo: Seq[Broker] = Nil
-        var isrInfo: Seq[Broker] = Nil
+        var leaderInfo: Option[BrokerEndpoint] = None
+        var replicaInfo: Seq[BrokerEndpoint] = Nil
+        var isrInfo: Seq[BrokerEndpoint] = Nil
         try {
           leaderInfo = leader match {
             case Some(l) =>
               try {
-                Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l)).head)
+                Some(getBrokerInfoFromCache(zkClient, cachedBrokerInfo, List(l)).head.getBrokerEndPoint(protocol))
               } catch {
                 case e: Throwable => throw new LeaderNotAvailableException("Leader not available for partition [%s,%d]".format(topic, partition), e)
               }
             case None => throw new LeaderNotAvailableException("No leader exists for partition " + partition)
           }
           try {
-            replicaInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, replicas.map(id => id.toInt))
-            isrInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, inSyncReplicas)
+            replicaInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, replicas).map(_.getBrokerEndPoint(protocol))
+            isrInfo = getBrokerInfoFromCache(zkClient, cachedBrokerInfo, inSyncReplicas).map(_.getBrokerEndPoint(protocol))
           } catch {
             case e: Throwable => throw new ReplicaNotAvailableException(e)
           }

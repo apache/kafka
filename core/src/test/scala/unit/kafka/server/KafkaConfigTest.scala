@@ -17,13 +17,15 @@
 
 package kafka.server
 
-import org.apache.kafka.common.config.ConfigException
-import org.junit.Test
+import java.util.Properties
+
 import junit.framework.Assert._
+import kafka.api.{ApiVersion, KAFKA_082}
+import kafka.utils.{TestUtils, Utils}
+import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.protocol.SecurityProtocol
+import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
-import kafka.utils.TestUtils
-import kafka.message.GZIPCompressionCodec
-import kafka.message.NoCompressionCodec
 
 class KafkaConfigTest extends JUnit3Suite {
 
@@ -34,7 +36,6 @@ class KafkaConfigTest extends JUnit3Suite {
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(60L * 60L * 1000L, cfg.logRetentionTimeMillis)
-
   }
   
   @Test
@@ -44,7 +45,6 @@ class KafkaConfigTest extends JUnit3Suite {
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(30 * 60L * 1000L, cfg.logRetentionTimeMillis)
-
   }
   
   @Test
@@ -54,7 +54,6 @@ class KafkaConfigTest extends JUnit3Suite {
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(30 * 60L * 1000L, cfg.logRetentionTimeMillis)
-
   }
   
   @Test
@@ -63,7 +62,6 @@ class KafkaConfigTest extends JUnit3Suite {
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(24 * 7 * 60L * 60L * 1000L, cfg.logRetentionTimeMillis)
-
   }
   
   @Test
@@ -74,7 +72,6 @@ class KafkaConfigTest extends JUnit3Suite {
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRetentionTimeMillis)
-
   }
   
   @Test
@@ -85,37 +82,129 @@ class KafkaConfigTest extends JUnit3Suite {
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRetentionTimeMillis)
-
   }
 
   @Test
   def testAdvertiseDefaults() {
-    val port = 9999
+    val port = "9999"
     val hostName = "fake-host"
-    
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = port)
+
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.remove("listeners")
     props.put("host.name", hostName)
-    
+    props.put("port", port)
     val serverConfig = KafkaConfig.fromProps(props)
-    
-    assertEquals(serverConfig.advertisedHostName, hostName)
-    assertEquals(serverConfig.advertisedPort, port)
+    val endpoints = serverConfig.advertisedListeners
+    val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
+    assertEquals(endpoint.host, hostName)
+    assertEquals(endpoint.port, port.toInt)
   }
 
   @Test
   def testAdvertiseConfigured() {
-    val port = 9999
+    val port = "9999"
     val advertisedHostName = "routable-host"
-    val advertisedPort = 1234
-    
-    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = port)
+    val advertisedPort = "1234"
+
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("advertised.host.name", advertisedHostName)
     props.put("advertised.port", advertisedPort.toString)
-    
+
     val serverConfig = KafkaConfig.fromProps(props)
+    val endpoints = serverConfig.advertisedListeners
+    val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
     
-    assertEquals(serverConfig.advertisedHostName, advertisedHostName)
-    assertEquals(serverConfig.advertisedPort, advertisedPort)
+    assertEquals(endpoint.host, advertisedHostName)
+    assertEquals(endpoint.port, advertisedPort.toInt)
+  }
+
+
+  @Test
+  def testDuplicateListeners() {
+    val props = new Properties()
+    props.put("broker.id", "1")
+    props.put("zookeeper.connect", "localhost:2181")
+
+    // listeners with duplicate port
+    props.put("listeners", "PLAINTEXT://localhost:9091,TRACE://localhost:9091")
+    assert(!isValidKafkaConfig(props))
+
+    // listeners with duplicate protocol
+    props.put("listeners", "PLAINTEXT://localhost:9091,PLAINTEXT://localhost:9092")
+    assert(!isValidKafkaConfig(props))
+
+    // advertised listeners with duplicate port
+    props.put("advertised,listeners", "PLAINTEXT://localhost:9091,TRACE://localhost:9091")
+    assert(!isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testBadListenerProtocol() {
+    val props = new Properties()
+    props.put("broker.id", "1")
+    props.put("zookeeper.connect", "localhost:2181")
+    props.put("listeners", "BAD://localhost:9091")
+
+    assert(!isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testListenerDefaults() {
+    val props = new Properties()
+    props.put("broker.id", "1")
+    props.put("zookeeper.connect", "localhost:2181")
+
+    // configuration with host and port, but no listeners
+    props.put("host.name", "myhost")
+    props.put("port", "1111")
+
+    val conf = KafkaConfig.fromProps(props)
+    assertEquals(Utils.listenerListToEndPoints("PLAINTEXT://myhost:1111"), conf.listeners)
+
+    // configuration with null host
+    props.remove("host.name")
+
+    val conf2 = KafkaConfig.fromProps(props)
+    assertEquals(Utils.listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
+    assertEquals(Utils.listenerListToEndPoints("PLAINTEXT://:1111"), conf2.advertisedListeners)
+    assertEquals(null, conf2.listeners(SecurityProtocol.PLAINTEXT).host)
+
+    // configuration with advertised host and port, and no advertised listeners
+    props.put("advertised.host.name", "otherhost")
+    props.put("advertised.port", "2222")
+
+    val conf3 = KafkaConfig.fromProps(props)
+    assertEquals(conf3.advertisedListeners, Utils.listenerListToEndPoints("PLAINTEXT://otherhost:2222"))
+  }
+
+  @Test
+  def testVersionConfiguration() {
+    val props = new Properties()
+    props.put("broker.id", "1")
+    props.put("zookeeper.connect", "localhost:2181")
+    val conf = KafkaConfig.fromProps(props)
+    assertEquals(ApiVersion.latestVersion, conf.interBrokerProtocolVersion)
+
+    props.put("inter.broker.protocol.version","0.8.2.0")
+    val conf2 = KafkaConfig.fromProps(props)
+    assertEquals(KAFKA_082, conf2.interBrokerProtocolVersion)
+
+    // check that 0.8.2.0 is the same as 0.8.2.1
+    props.put("inter.broker.protocol.version","0.8.2.1")
+    val conf3 = KafkaConfig.fromProps(props)
+    assertEquals(KAFKA_082, conf3.interBrokerProtocolVersion)
+
+    //check that latest is newer than 0.8.2
+    assert(ApiVersion.latestVersion.onOrAfter(conf3.interBrokerProtocolVersion))
+  }
+
+  private def isValidKafkaConfig(props: Properties): Boolean = {
+    try {
+      KafkaConfig.fromProps(props)
+      true
+    } catch {
+      case e: IllegalArgumentException => false
+    }
   }
 
   @Test
@@ -161,7 +250,6 @@ class KafkaConfigTest extends JUnit3Suite {
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(30 * 60L * 1000L, cfg.logRollTimeMillis)
-
   }
   
   @Test
@@ -172,7 +260,6 @@ class KafkaConfigTest extends JUnit3Suite {
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRollTimeMillis)
-
   }
     
   @Test
@@ -181,7 +268,6 @@ class KafkaConfigTest extends JUnit3Suite {
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(24 * 7 * 60L * 60L * 1000L, cfg.logRollTimeMillis																									)
-
   }
 
   @Test

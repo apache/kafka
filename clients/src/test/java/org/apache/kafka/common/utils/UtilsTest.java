@@ -31,9 +31,9 @@ public class UtilsTest {
     @Test
     public void testGetHost() {
         assertEquals("127.0.0.1", getHost("127.0.0.1:8000"));
-        assertEquals("mydomain.com", getHost("mydomain.com:8080"));
+        assertEquals("mydomain.com", getHost("PLAINTEXT://mydomain.com:8080"));
         assertEquals("::1", getHost("[::1]:1234"));
-        assertEquals("2001:db8:85a3:8d3:1319:8a2e:370:7348", getHost("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678"));
+        assertEquals("2001:db8:85a3:8d3:1319:8a2e:370:7348", getHost("PLAINTEXT://[2001:db8:85a3:8d3:1319:8a2e:370:7348]:5678"));
     }
 
     @Test

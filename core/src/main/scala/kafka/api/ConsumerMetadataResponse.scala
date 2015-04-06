@@ -18,18 +18,18 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.cluster.Broker
+import kafka.cluster.BrokerEndpoint
 import kafka.common.ErrorMapping
 
 object ConsumerMetadataResponse {
   val CurrentVersion = 0
 
-  private val NoBrokerOpt = Some(Broker(id = -1, host = "", port = -1))
+  private val NoBrokerEndpointOpt = Some(BrokerEndpoint(id = -1, host = "", port = -1))
   
   def readFrom(buffer: ByteBuffer) = {
     val correlationId = buffer.getInt
     val errorCode = buffer.getShort
-    val broker = Broker.readFrom(buffer)
+    val broker = BrokerEndpoint.readFrom(buffer)
     val coordinatorOpt = if (errorCode == ErrorMapping.NoError)
       Some(broker)
     else
@@ -40,18 +40,18 @@ object ConsumerMetadataResponse {
   
 }
 
-case class ConsumerMetadataResponse (coordinatorOpt: Option[Broker], errorCode: Short, correlationId: Int)
+case class ConsumerMetadataResponse (coordinatorOpt: Option[BrokerEndpoint], errorCode: Short, correlationId: Int)
   extends RequestOrResponse() {
 
   def sizeInBytes =
     4 + /* correlationId */
     2 + /* error code */
-    coordinatorOpt.orElse(ConsumerMetadataResponse.NoBrokerOpt).get.sizeInBytes
+    coordinatorOpt.orElse(ConsumerMetadataResponse.NoBrokerEndpointOpt).get.sizeInBytes
 
   def writeTo(buffer: ByteBuffer) {
     buffer.putInt(correlationId)
     buffer.putShort(errorCode)
-    coordinatorOpt.orElse(ConsumerMetadataResponse.NoBrokerOpt).foreach(_.writeTo(buffer))
+    coordinatorOpt.orElse(ConsumerMetadataResponse.NoBrokerEndpointOpt).foreach(_.writeTo(buffer))
   }
 
   def describe(details: Boolean) = toString

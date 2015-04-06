@@ -21,7 +21,7 @@ package kafka.api
 import java.nio._
 import kafka.utils._
 import kafka.api.ApiUtils._
-import kafka.cluster.Broker
+import kafka.cluster.BrokerEndpoint
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.network.{BoundedByteBufferSend, RequestChannel}
 import kafka.common.ErrorMapping
@@ -120,9 +120,9 @@ object LeaderAndIsrRequest {
     }
 
     val leadersCount = buffer.getInt
-    var leaders = Set[Broker]()
+    var leaders = Set[BrokerEndpoint]()
     for (i <- 0 until leadersCount)
-      leaders += Broker.readFrom(buffer)
+      leaders += BrokerEndpoint.readFrom(buffer)
 
     new LeaderAndIsrRequest(versionId, correlationId, clientId, controllerId, controllerEpoch, partitionStateInfos.toMap, leaders)
   }
@@ -134,10 +134,10 @@ case class LeaderAndIsrRequest (versionId: Short,
                                 controllerId: Int,
                                 controllerEpoch: Int,
                                 partitionStateInfos: Map[(String, Int), PartitionStateInfo],
-                                leaders: Set[Broker])
+                                leaders: Set[BrokerEndpoint])
     extends RequestOrResponse(Some(RequestKeys.LeaderAndIsrKey)) {
 
-  def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo], leaders: Set[Broker], controllerId: Int,
+  def this(partitionStateInfos: Map[(String, Int), PartitionStateInfo], leaders: Set[BrokerEndpoint], controllerId: Int,
            controllerEpoch: Int, correlationId: Int, clientId: String) = {
     this(LeaderAndIsrRequest.CurrentVersion, correlationId, clientId,
          controllerId, controllerEpoch, partitionStateInfos, leaders)

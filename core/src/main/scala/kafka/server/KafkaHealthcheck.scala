@@ -17,7 +17,9 @@
 
 package kafka.server
 
+import kafka.cluster.EndPoint
 import kafka.utils._
+import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.zookeeper.Watcher.Event.KeeperState
 import org.I0Itec.zkclient.{IZkStateListener, ZkClient}
 import java.net.InetAddress
@@ -31,9 +33,8 @@ import java.net.InetAddress
  * Right now our definition of health is fairly naive. If we register in zk we are healthy, otherwise
  * we are dead.
  */
-class KafkaHealthcheck(private val brokerId: Int, 
-                       private val advertisedHost: String, 
-                       private val advertisedPort: Int,
+class KafkaHealthcheck(private val brokerId: Int,
+                       private val advertisedEndpoints: Map[SecurityProtocol, EndPoint],
                        private val zkSessionTimeoutMs: Int,
                        private val zkClient: ZkClient) extends Logging {
 
@@ -49,13 +50,19 @@ class KafkaHealthcheck(private val brokerId: Int,
    * Register this broker as "alive" in zookeeper
    */
   def register() {
-    val advertisedHostName = 
-      if(advertisedHost == null || advertisedHost.trim.isEmpty) 
-        InetAddress.getLocalHost.getCanonicalHostName 
-      else
-        advertisedHost
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
-    ZkUtils.registerBrokerInZk(zkClient, brokerId, advertisedHostName, advertisedPort, zkSessionTimeoutMs, jmxPort)
+    val updatedEndpoints = advertisedEndpoints.mapValues(endpoint =>
+      if (endpoint.host == null || endpoint.host.trim.isEmpty)
+        EndPoint(InetAddress.getLocalHost.getCanonicalHostName, endpoint.port, endpoint.protocolType)
+      else
+        endpoint
+    )
+
+    // the default host and port are here for compatibility with older client
+    // only PLAINTEXT is supported as default
+    // if the broker doesn't listen on PLAINTEXT protocol, an empty endpoint will be registered and older clients will be unable to connect
+    val plaintextEndpoint = updatedEndpoints.getOrElse(SecurityProtocol.PLAINTEXT, new EndPoint(null,-1,null))
+    ZkUtils.registerBrokerInZk(zkClient, brokerId, plaintextEndpoint.host, plaintextEndpoint.port, updatedEndpoints, zkSessionTimeoutMs, jmxPort)
   }
 
   /**

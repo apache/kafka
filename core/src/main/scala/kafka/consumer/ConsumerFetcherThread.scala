@@ -17,7 +17,7 @@
 
 package kafka.consumer
 
-import kafka.cluster.Broker
+import kafka.cluster.BrokerEndpoint
 import kafka.server.AbstractFetcherThread
 import kafka.message.ByteBufferMessageSet
 import kafka.api.{Request, OffsetRequest, FetchResponsePartitionData}
@@ -26,7 +26,7 @@ import kafka.common.TopicAndPartition
 
 class ConsumerFetcherThread(name: String,
                             val config: ConsumerConfig,
-                            sourceBroker: Broker,
+                            sourceBroker: BrokerEndpoint,
                             partitionMap: Map[TopicAndPartition, PartitionTopicInfo],
                             val consumerFetcherManager: ConsumerFetcherManager)
         extends AbstractFetcherThread(name = name,

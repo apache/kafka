@@ -5,7 +5,7 @@
                   "04":"At the end it verifies the log size and contents",
                   "05":"Use a consumer to verify no message loss.",
                   "06":"Producer dimensions : mode:async, acks:1, comp:1",
-                  "07":"Log segment size    : 20480"
+                  "07":"Log segment size    : 10000000"
   },
   "testcase_args": {
     "broker_type": "leader",
@@ -29,7 +29,7 @@
       "entity_id": "1",
       "port": "9091",
       "broker.id": "1",
-      "log.segment.bytes": "20480",
+      "log.segment.bytes": "10000000",
       "log.dir": "/tmp/kafka_server_1_logs",
       "default.replication.factor": "3",
       "num.partitions": "3",
@@ -40,7 +40,7 @@
       "entity_id": "2",
       "port": "9092",
       "broker.id": "2",
-      "log.segment.bytes": "20480",
+      "log.segment.bytes": "10000000",
       "log.dir": "/tmp/kafka_server_2_logs",
       "default.replication.factor": "3",
       "num.partitions": "3",
@@ -51,7 +51,7 @@
       "entity_id": "3",
       "port": "9093",
       "broker.id": "3",
-      "log.segment.bytes": "20480",
+      "log.segment.bytes": "10000000",
       "log.dir": "/tmp/kafka_server_3_logs",
       "default.replication.factor": "3",
       "num.partitions": "3",

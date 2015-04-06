@@ -27,7 +27,9 @@ import org.apache.kafka.common.KafkaException;
 
 public class Utils {
 
-    private static final Pattern HOST_PORT_PATTERN = Pattern.compile("\\[?(.+?)\\]?:(\\d+)");
+    // This matches URIs of formats: host:port and protocol:\\host:port
+    // IPv6 is supported with [ip] pattern
+    private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-z\\-.:]*)\\]?:([0-9]+)");
 
     public static final String NL = System.getProperty("line.separator");
 

@@ -24,9 +24,13 @@ import java.nio.channels._
 import java.util.concurrent.locks.{ReadWriteLock, Lock}
 import java.lang.management._
 import javax.management._
+
+import org.apache.kafka.common.protocol.SecurityProtocol
+
 import scala.collection._
 import scala.collection.mutable
 import java.util.Properties
+import kafka.cluster.EndPoint
 import kafka.common.KafkaException
 import kafka.common.KafkaStorageException
 
@@ -606,5 +610,10 @@ object Utils extends Logging {
       .map{ case (k,l) => (k,l.size)}
       .filter{ case (k,l) => (l > 1) }
       .keys
+  }
+
+  def listenerListToEndPoints(listeners: String): immutable.Map[SecurityProtocol, EndPoint] = {
+    val listenerList = parseCsvList(listeners)
+    listenerList.map(listener => EndPoint.createEndPoint(listener)).map(ep => ep.protocolType -> ep).toMap
   }
 }

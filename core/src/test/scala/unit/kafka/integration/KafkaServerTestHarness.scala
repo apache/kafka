@@ -18,9 +18,10 @@
 package kafka.integration
 
 import java.util.Arrays
+
 import scala.collection.mutable.Buffer
 import kafka.server._
-import kafka.utils.{Utils, TestUtils}
+import kafka.utils.{TestUtils, Utils}
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.common.KafkaException
@@ -47,8 +48,9 @@ trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   def serverForId(id: Int) = servers.find(s => s.config.brokerId == id)
-  
+
   def bootstrapUrl = servers.map(s => s.config.hostName + ":" + s.boundPort()).mkString(",")
+
   
   override def setUp() {
     super.setUp

@@ -19,12 +19,14 @@ package kafka.server
 
 import java.util.Properties
 
+import kafka.api.ApiVersion
+import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.Utils
 import org.apache.kafka.common.config.ConfigDef
-
-import scala.collection.{JavaConversions, Map}
+import org.apache.kafka.common.protocol.SecurityProtocol
+import scala.collection.{immutable, JavaConversions, Map}
 
 object Defaults {
   /** ********* Zookeeper Configuration ***********/
@@ -101,6 +103,8 @@ object Defaults {
   val LeaderImbalancePerBrokerPercentage = 10
   val LeaderImbalanceCheckIntervalSeconds = 300
   val UncleanLeaderElectionEnable = true
+  val InterBrokerSecurityProtocol = SecurityProtocol.PLAINTEXT.toString
+  val InterBrokerProtocolVersion = ApiVersion.latestVersion.toString
 
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetries = 3
@@ -142,8 +146,10 @@ object KafkaConfig {
   /** ********* Socket Server Configuration ***********/
   val PortProp = "port"
   val HostNameProp = "host.name"
+  val ListenersProp = "listeners"
   val AdvertisedHostNameProp: String = "advertised.host.name"
   val AdvertisedPortProp = "advertised.port"
+  val AdvertisedListenersProp = "advertised.listeners"
   val SocketSendBufferBytesProp = "socket.send.buffer.bytes"
   val SocketReceiveBufferBytesProp = "socket.receive.buffer.bytes"
   val SocketRequestMaxBytesProp = "socket.request.max.bytes"
@@ -207,6 +213,8 @@ object KafkaConfig {
   val LeaderImbalancePerBrokerPercentageProp = "leader.imbalance.per.broker.percentage"
   val LeaderImbalanceCheckIntervalSecondsProp = "leader.imbalance.check.interval.seconds"
   val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
+  val InterBrokerSecurityProtocolProp = "security.inter.broker.protocol"
+  val InterBrokerProtocolVersionProp = "inter.broker.protocol.version"
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetriesProp = "controlled.shutdown.max.retries"
   val ControlledShutdownRetryBackoffMsProp = "controlled.shutdown.retry.backoff.ms"
@@ -246,6 +254,12 @@ object KafkaConfig {
   /** ********* Socket Server Configuration ***********/
   val PortDoc = "the port to listen and accept connections on"
   val HostNameDoc = "hostname of broker. If this is set, it will only bind to this address. If this is not set, it will bind to all interfaces"
+  val ListenersDoc = "Listener List - Comma-separated list of URIs we will listen on and their protocols.\n" +
+          " Specify hostname as 0.0.0.0 to bind to all interfaces.\n" +
+          " Leave hostname empty to bind to default interface.\n" +
+          " Examples of legal listener lists:\n" +
+          " PLAINTEXT://myhost:9092,TRACE://:9091\n" +
+          " PLAINTEXT://0.0.0.0:9092, TRACE://localhost:9093\n"
   val AdvertisedHostNameDoc = "Hostname to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
     "need to be different from the interface to which the broker binds. If this is not set, " +
     "it will use the value for \"host.name\" if configured. Otherwise " +
@@ -253,6 +267,9 @@ object KafkaConfig {
   val AdvertisedPortDoc = "The port to publish to ZooKeeper for clients to use. In IaaS environments, this may " +
     "need to be different from the port to which the broker binds. If this is not set, " +
     "it will publish the same port that the broker binds to."
+  val AdvertisedListenersDoc = "Listeners to publish to ZooKeeper for clients to use, if different than the listeners above." +
+          " In IaaS environments, this may need to be different from the interface to which the broker binds." +
+          " If this is not set, the value for \"listeners\" will be used."
   val SocketSendBufferBytesDoc = "The SO_SNDBUF buffer of the socket sever sockets"
   val SocketReceiveBufferBytesDoc = "The SO_RCVBUF buffer of the socket sever sockets"
   val SocketRequestMaxBytesDoc = "The maximum number of bytes in a socket request"
@@ -319,6 +336,10 @@ object KafkaConfig {
   val LeaderImbalancePerBrokerPercentageDoc = "The ratio of leader imbalance allowed per broker. The controller would trigger a leader balance if it goes above this value per broker. The value is specified in percentage."
   val LeaderImbalanceCheckIntervalSecondsDoc = "The frequency with which the partition rebalance check is triggered by the controller"
   val UncleanLeaderElectionEnableDoc = "Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss"
+  val InterBrokerSecurityProtocolDoc = "Security protocol used to communicate between brokers. Defaults to plain text."
+  val InterBrokerProtocolVersionDoc = "Specify which version of the inter-broker protocol will be used.\n" +
+          " This is typically bumped after all brokers were upgraded to a new version.\n" +
+          " Example of some valid values are: 0.8.0, 0.8.1, 0.8.1.1, 0.8.2, 0.8.2.0, 0.8.2.1, 0.8.3, 0.8.3.0. Check ApiVersion for the full list."
   /** ********* Controlled shutdown configuration ***********/
   val ControlledShutdownMaxRetriesDoc = "Controlled shutdown can fail for multiple reasons. This determines the number of retries when such failure happens"
   val ControlledShutdownRetryBackoffMsDoc = "Before each retry, the system needs time to recover from the state that caused the previous failure (Controller fail over, replica lag etc). This config determines the amount of time to wait before retrying."
@@ -350,7 +371,6 @@ object KafkaConfig {
     import ConfigDef.ValidString._
     import ConfigDef.Type._
     import ConfigDef.Importance._
-    import java.util.Arrays.asList
 
     new ConfigDef()
 
@@ -372,8 +392,10 @@ object KafkaConfig {
       /** ********* Socket Server Configuration ***********/
       .define(PortProp, INT, Defaults.Port, HIGH, PortDoc)
       .define(HostNameProp, STRING, Defaults.HostName, HIGH, HostNameDoc)
+      .define(ListenersProp, STRING, HIGH, ListenersDoc, false)
       .define(AdvertisedHostNameProp, STRING, HIGH, AdvertisedHostNameDoc, false)
       .define(AdvertisedPortProp, INT, HIGH, AdvertisedPortDoc, false)
+      .define(AdvertisedListenersProp, STRING, HIGH, AdvertisedListenersDoc, false)
       .define(SocketSendBufferBytesProp, INT, Defaults.SocketSendBufferBytes, HIGH, SocketSendBufferBytesDoc)
       .define(SocketReceiveBufferBytesProp, INT, Defaults.SocketReceiveBufferBytes, HIGH, SocketReceiveBufferBytesDoc)
       .define(SocketRequestMaxBytesProp, INT, Defaults.SocketRequestMaxBytes, atLeast(1), HIGH, SocketRequestMaxBytesDoc)
@@ -439,7 +461,8 @@ object KafkaConfig {
       .define(LeaderImbalancePerBrokerPercentageProp, INT, Defaults.LeaderImbalancePerBrokerPercentage, HIGH, LeaderImbalancePerBrokerPercentageDoc)
       .define(LeaderImbalanceCheckIntervalSecondsProp, INT, Defaults.LeaderImbalanceCheckIntervalSeconds, HIGH, LeaderImbalanceCheckIntervalSecondsDoc)
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable, HIGH, UncleanLeaderElectionEnableDoc)
-
+      .define(InterBrokerSecurityProtocolProp, STRING, Defaults.InterBrokerSecurityProtocol, MEDIUM, InterBrokerSecurityProtocolDoc)
+      .define(InterBrokerProtocolVersionProp, STRING, Defaults.InterBrokerProtocolVersion, MEDIUM, InterBrokerProtocolVersionDoc)
       /** ********* Controlled shutdown configuration ***********/
       .define(ControlledShutdownMaxRetriesProp, INT, Defaults.ControlledShutdownMaxRetries, MEDIUM, ControlledShutdownMaxRetriesDoc)
       .define(ControlledShutdownRetryBackoffMsProp, INT, Defaults.ControlledShutdownRetryBackoffMs, MEDIUM, ControlledShutdownRetryBackoffMsDoc)
@@ -490,8 +513,10 @@ object KafkaConfig {
       /** ********* Socket Server Configuration ***********/
       port = parsed.get(PortProp).asInstanceOf[Int],
       hostName = parsed.get(HostNameProp).asInstanceOf[String],
+      _listeners = Option(parsed.get(ListenersProp)).map(_.asInstanceOf[String]),
       _advertisedHostName = Option(parsed.get(AdvertisedHostNameProp)).map(_.asInstanceOf[String]),
       _advertisedPort = Option(parsed.get(AdvertisedPortProp)).map(_.asInstanceOf[Int]),
+      _advertisedListeners = Option(parsed.get(AdvertisedListenersProp)).map(_.asInstanceOf[String]),
       socketSendBufferBytes = parsed.get(SocketSendBufferBytesProp).asInstanceOf[Int],
       socketReceiveBufferBytes = parsed.get(SocketReceiveBufferBytesProp).asInstanceOf[Int],
       socketRequestMaxBytes = parsed.get(SocketRequestMaxBytesProp).asInstanceOf[Int],
@@ -557,7 +582,8 @@ object KafkaConfig {
       leaderImbalancePerBrokerPercentage = parsed.get(LeaderImbalancePerBrokerPercentageProp).asInstanceOf[Int],
       leaderImbalanceCheckIntervalSeconds = parsed.get(LeaderImbalanceCheckIntervalSecondsProp).asInstanceOf[Int],
       uncleanLeaderElectionEnable = parsed.get(UncleanLeaderElectionEnableProp).asInstanceOf[Boolean],
-
+      interBrokerSecurityProtocol = SecurityProtocol.valueOf(parsed.get(InterBrokerSecurityProtocolProp).asInstanceOf[String]),
+      interBrokerProtocolVersion =  ApiVersion(parsed.get(InterBrokerProtocolVersionProp).asInstanceOf[String]),
       /** ********* Controlled shutdown configuration ***********/
       controlledShutdownMaxRetries = parsed.get(ControlledShutdownMaxRetriesProp).asInstanceOf[Int],
       controlledShutdownRetryBackoffMs = parsed.get(ControlledShutdownRetryBackoffMsProp).asInstanceOf[Int],
@@ -628,8 +654,10 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
                   /** ********* Socket Server Configuration ***********/
                   val port: Int = Defaults.Port,
                   val hostName: String = Defaults.HostName,
+                  private val _listeners: Option[String] = None,
                   private val _advertisedHostName: Option[String] = None,
                   private val _advertisedPort: Option[Int] = None,
+                  private val _advertisedListeners: Option[String] = None,
                   val socketSendBufferBytes: Int = Defaults.SocketSendBufferBytes,
                   val socketReceiveBufferBytes: Int = Defaults.SocketReceiveBufferBytes,
                   val socketRequestMaxBytes: Int = Defaults.SocketRequestMaxBytes,
@@ -697,6 +725,8 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
                   val leaderImbalancePerBrokerPercentage: Int = Defaults.LeaderImbalancePerBrokerPercentage,
                   val leaderImbalanceCheckIntervalSeconds: Int = Defaults.LeaderImbalanceCheckIntervalSeconds,
                   val uncleanLeaderElectionEnable: Boolean = Defaults.UncleanLeaderElectionEnable,
+                  val interBrokerSecurityProtocol: SecurityProtocol = SecurityProtocol.valueOf(Defaults.InterBrokerSecurityProtocol),
+                  val interBrokerProtocolVersion: ApiVersion = ApiVersion(Defaults.InterBrokerProtocolVersion),
 
                   /** ********* Controlled shutdown configuration ***********/
                   val controlledShutdownMaxRetries: Int = Defaults.ControlledShutdownMaxRetries,
@@ -721,8 +751,10 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
 
   val zkConnectionTimeoutMs: Int = _zkConnectionTimeoutMs.getOrElse(zkSessionTimeoutMs)
 
+  val listeners = getListeners()
   val advertisedHostName: String = _advertisedHostName.getOrElse(hostName)
   val advertisedPort: Int = _advertisedPort.getOrElse(port)
+  val advertisedListeners = getAdvertisedListeners()
   val logDirs = Utils.parseCsvList(_logDirs.getOrElse(_logDir))
 
   val logRollTimeMillis = _logRollTimeMillis.getOrElse(60 * 60 * 1000L * logRollTimeHours)
@@ -730,14 +762,6 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
   val logRetentionTimeMillis = getLogRetentionTimeMillis
 
   val logFlushIntervalMs = _logFlushIntervalMs.getOrElse(logFlushSchedulerIntervalMs)
-
-  private def getMap(propName: String, propValue: String): Map[String, String] = {
-    try {
-      Utils.parseCsvMap(propValue)
-    } catch {
-      case e: Exception => throw new IllegalArgumentException("Error parsing configuration property '%s': %s".format(propName, e.getMessage))
-    }
-  }
 
   val maxConnectionsPerIpOverrides: Map[String, Int] =
     getMap(KafkaConfig.MaxConnectionsPerIpOverridesProp, _maxConnectionsPerIpOverrides).map { case (k, v) => (k, v.toInt)}
@@ -753,6 +777,56 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
       }
     )
   }
+
+  private def getMap(propName: String, propValue: String): Map[String, String] = {
+    try {
+      Utils.parseCsvMap(propValue)
+    } catch {
+      case e: Exception => throw new IllegalArgumentException("Error parsing configuration property '%s': %s".format(propName, e.getMessage))
+    }
+  }
+
+  private def validateUniquePortAndProtocol(listeners: String) {
+
+    val endpoints = try {
+      val listenerList = Utils.parseCsvList(listeners)
+      listenerList.map(listener => EndPoint.createEndPoint(listener))
+    } catch {
+      case e: Exception => throw new IllegalArgumentException("Error creating broker listeners from '%s': %s".format(listeners, e.getMessage))
+    }
+    val distinctPorts = endpoints.map(ep => ep.port).distinct
+    val distinctProtocols = endpoints.map(ep => ep.protocolType).distinct
+
+    require(distinctPorts.size == endpoints.size, "Each listener must have a different port")
+    require(distinctProtocols.size == endpoints.size, "Each listener must have a different protocol")
+  }
+
+  // If the user did not define listeners but did define host or port, let's use them in backward compatible way
+  // If none of those are defined, we default to PLAINTEXT://:9092
+  private def getListeners(): immutable.Map[SecurityProtocol, EndPoint] = {
+    if (_listeners.isDefined) {
+      validateUniquePortAndProtocol(_listeners.get)
+      Utils.listenerListToEndPoints(_listeners.get)
+    } else {
+      Utils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port)
+    }
+  }
+
+  // If the user defined advertised listeners, we use those
+  // If he didn't but did define advertised host or port, we'll use those and fill in the missing value from regular host / port or defaults
+  // If none of these are defined, we'll use the listeners
+  private def getAdvertisedListeners(): immutable.Map[SecurityProtocol, EndPoint] = {
+    if (_advertisedListeners.isDefined) {
+      validateUniquePortAndProtocol(_advertisedListeners.get)
+      Utils.listenerListToEndPoints(_advertisedListeners.get)
+    } else if (_advertisedHostName.isDefined || _advertisedPort.isDefined ) {
+      Utils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName  + ":" + advertisedPort)
+    } else {
+      getListeners()
+    }
+  }
+
+
 
   validateValues()
 
@@ -797,8 +871,10 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
     /** ********* Socket Server Configuration ***********/
     props.put(PortProp, port.toString)
     props.put(HostNameProp, hostName)
+    _listeners.foreach(props.put(ListenersProp, _))
     _advertisedHostName.foreach(props.put(AdvertisedHostNameProp, _))
     _advertisedPort.foreach(value => props.put(AdvertisedPortProp, value.toString))
+    _advertisedListeners.foreach(props.put(AdvertisedListenersProp, _))
     props.put(SocketSendBufferBytesProp, socketSendBufferBytes.toString)
     props.put(SocketReceiveBufferBytesProp, socketReceiveBufferBytes.toString)
     props.put(SocketRequestMaxBytesProp, socketRequestMaxBytes.toString)
@@ -865,6 +941,9 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
     props.put(LeaderImbalancePerBrokerPercentageProp, leaderImbalancePerBrokerPercentage.toString)
     props.put(LeaderImbalanceCheckIntervalSecondsProp, leaderImbalanceCheckIntervalSeconds.toString)
     props.put(UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)
+    props.put(InterBrokerSecurityProtocolProp, interBrokerSecurityProtocol.toString)
+    props.put(InterBrokerProtocolVersionProp, interBrokerProtocolVersion.toString)
+
 
     /** ********* Controlled shutdown configuration ***********/
     props.put(ControlledShutdownMaxRetriesProp, controlledShutdownMaxRetries.toString)

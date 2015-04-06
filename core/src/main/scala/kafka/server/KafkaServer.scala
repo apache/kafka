@@ -25,10 +25,11 @@ import kafka.utils._
 import java.util.concurrent._
 import atomic.{AtomicInteger, AtomicBoolean}
 import java.io.File
+
 import collection.mutable
 import org.I0Itec.zkclient.ZkClient
 import kafka.controller.{ControllerStats, KafkaController}
-import kafka.cluster.Broker
+import kafka.cluster.{EndPoint, Broker}
 import kafka.api.{ControlledShutdownResponse, ControlledShutdownRequest}
 import kafka.common.{ErrorMapping, InconsistentBrokerIdException, GenerateBrokerIdException}
 import kafka.network.{Receive, BlockingChannel, SocketServer}
@@ -117,57 +118,61 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
         socketServer = new SocketServer(config.brokerId,
-          config.hostName,
-          config.port,
-          config.numNetworkThreads,
-          config.queuedMaxRequests,
-          config.socketSendBufferBytes,
-          config.socketReceiveBufferBytes,
-          config.socketRequestMaxBytes,
-          config.maxConnectionsPerIp,
-          config.connectionsMaxIdleMs,
-          config.maxConnectionsPerIpOverrides)
-        socketServer.startup()
+                                        config.listeners,
+                                        config.numNetworkThreads,
+                                        config.queuedMaxRequests,
+                                        config.socketSendBufferBytes,
+                                        config.socketReceiveBufferBytes,
+                                        config.socketRequestMaxBytes,
+                                        config.maxConnectionsPerIp,
+                                        config.connectionsMaxIdleMs,
+                                        config.maxConnectionsPerIpOverrides)
+          socketServer.startup()
 
-        /* start replica manager */
-        replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler, logManager, isShuttingDown)
-        replicaManager.startup()
+          /* start replica manager */
+          replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler, logManager, isShuttingDown)
+          replicaManager.startup()
 
-        /* start offset manager */
-        offsetManager = createOffsetManager()
+          /* start offset manager */
+          offsetManager = createOffsetManager()
 
-        /* start kafka controller */
-        kafkaController = new KafkaController(config, zkClient, brokerState)
-        kafkaController.startup()
+          /* start kafka controller */
+          kafkaController = new KafkaController(config, zkClient, brokerState)
+          kafkaController.startup()
 
-        /* start kafka coordinator */
-        consumerCoordinator = new ConsumerCoordinator(config, zkClient)
-        consumerCoordinator.startup()
+          /* start kafka coordinator */
+          consumerCoordinator = new ConsumerCoordinator(config, zkClient)
+          consumerCoordinator.startup()
 
-        /* start processing requests */
-        apis = new KafkaApis(socketServer.requestChannel, replicaManager, offsetManager, consumerCoordinator,
-          kafkaController, zkClient, config.brokerId, config, metadataCache)
-        requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
-        brokerState.newState(RunningAsBroker)
+          /* start processing requests */
+          apis = new KafkaApis(socketServer.requestChannel, replicaManager, offsetManager, consumerCoordinator,
+            kafkaController, zkClient, config.brokerId, config, metadataCache)
+          requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
+          brokerState.newState(RunningAsBroker)
 
-        Mx4jLoader.maybeLoad()
+          Mx4jLoader.maybeLoad()
 
-        /* start topic config manager */
-        topicConfigManager = new TopicConfigManager(zkClient, logManager)
-        topicConfigManager.startup()
+          /* start topic config manager */
+          topicConfigManager = new TopicConfigManager(zkClient, logManager)
+          topicConfigManager.startup()
 
-        /* tell everyone we are alive */
-        val advertisedPort = if (config.advertisedPort != 0) config.advertisedPort else socketServer.boundPort()
-        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, config.advertisedHostName, advertisedPort, config.zkSessionTimeoutMs, zkClient)
-        kafkaHealthcheck.startup()
+          /* tell everyone we are alive */
+          val listeners = config.advertisedListeners.map {case(protocol, endpoint) =>
+            if (endpoint.port == 0)
+              (protocol, EndPoint(endpoint.host, socketServer.boundPort(), endpoint.protocolType))
+            else
+              (protocol, endpoint)
+          }
+          kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, config.zkSessionTimeoutMs, zkClient)
+          kafkaHealthcheck.startup()
 
-        /* register broker metrics */
-        registerStats()
+          /* register broker metrics */
+          registerStats()
 
-        shutdownLatch = new CountDownLatch(1)
-        startupComplete.set(true)
-        isStartingUp.set(false)
-        info("started")
+          shutdownLatch = new CountDownLatch(1)
+          startupComplete.set(true)
+          isStartingUp.set(false)
+          info("started")
       }
     }
     catch {
@@ -243,7 +248,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                 if (channel != null) {
                   channel.disconnect()
                 }
-                channel = new BlockingChannel(broker.host, broker.port,
+                channel = new BlockingChannel(broker.getBrokerEndPoint(config.interBrokerSecurityProtocol).host,
+                  broker.getBrokerEndPoint(config.interBrokerSecurityProtocol).port,
                   BlockingChannel.UseDefaultBufferSize,
                   BlockingChannel.UseDefaultBufferSize,
                   config.controllerSocketTimeoutMs)
@@ -421,7 +427,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
     * <li> config has broker.id and meta.properties contains broker.id if they don't match throws InconsistentBrokerIdException
     * <li> config has broker.id and there is no meta.properties file, creates new meta.properties and stores broker.id
     * <ol>
-    * @returns A brokerId.
+    * @return A brokerId.
     */
   private def getBrokerId: Int =  {
     var brokerId = config.brokerId

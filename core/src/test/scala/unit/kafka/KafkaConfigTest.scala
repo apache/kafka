@@ -65,14 +65,14 @@ class KafkaTest {
     assertEquals(2, config2.brokerId)
 
     // We should be also able to set completely new property
-    val config3 = Kafka.getKafkaConfigFromArgs(Array(propertiesFile, "--override", "port=1987"))
+    val config3 = Kafka.getKafkaConfigFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact"))
     assertEquals(1, config3.brokerId)
-    assertEquals(1987, config3.port)
+    assertEquals("compact", config3.logCleanupPolicy)
 
     // We should be also able to set several properties
-    val config4 = Kafka.getKafkaConfigFromArgs(Array(propertiesFile, "--override", "port=1987", "--override", "broker.id=2"))
+    val config4 = Kafka.getKafkaConfigFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact", "--override", "broker.id=2"))
     assertEquals(2, config4.brokerId)
-    assertEquals(1987, config4.port)
+    assertEquals("compact", config4.logCleanupPolicy)
   }
 
   @Test(expected = classOf[ExitCalled])
