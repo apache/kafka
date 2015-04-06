@@ -18,8 +18,9 @@
 package kafka
 
 import consumer.ConsumerConfig
-import utils.{ZKStringSerializer, ZkUtils, Utils}
+import utils.{ZKStringSerializer, ZkUtils}
 import org.I0Itec.zkclient.ZkClient
+import org.apache.kafka.common.utils.Utils
 
 object DeleteZKPath {
   def main(args: Array[String]) {

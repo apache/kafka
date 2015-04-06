@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.types.{Struct, Schema, Field}
 import org.apache.kafka.common.protocol.types.Type.STRING
 import org.apache.kafka.common.protocol.types.Type.INT32
 import org.apache.kafka.common.protocol.types.Type.INT64
+import org.apache.kafka.common.utils.Utils
 
 import kafka.utils._
 import kafka.common._

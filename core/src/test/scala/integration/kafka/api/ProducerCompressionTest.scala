@@ -32,7 +32,7 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.consumer.SimpleConsumer
 import kafka.message.Message
 import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.{Utils, TestUtils}
+import kafka.utils.{CoreUtils, TestUtils}
 
 
 @RunWith(value = classOf[Parameterized])
@@ -56,7 +56,7 @@ class ProducerCompressionTest(compression: String) extends JUnit3Suite with ZooK
   @After
   override def tearDown() {
     server.shutdown
-    Utils.rm(server.config.logDirs)
+    CoreUtils.rm(server.config.logDirs)
     super.tearDown()
   }
 

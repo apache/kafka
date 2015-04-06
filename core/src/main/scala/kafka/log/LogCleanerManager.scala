@@ -24,7 +24,7 @@ import kafka.utils.{Logging, Pool}
 import kafka.server.OffsetCheckpoint
 import collection.mutable
 import java.util.concurrent.locks.ReentrantLock
-import kafka.utils.Utils._
+import kafka.utils.CoreUtils._
 import java.util.concurrent.TimeUnit
 import kafka.common.{LogCleaningAbortedException, TopicAndPartition}
 

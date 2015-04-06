@@ -23,7 +23,7 @@ import kafka.cluster._
 import kafka.api._
 import kafka.producer._
 import kafka.common.{ErrorMapping, KafkaException}
-import kafka.utils.{Utils, Logging}
+import kafka.utils.{CoreUtils, Logging}
 import java.util.Properties
 import util.Random
 import kafka.network.BlockingChannel
@@ -98,7 +98,7 @@ object ClientUtils extends Logging{
    * Parse a list of broker urls in the form host1:port1, host2:port2, ... 
    */
   def parseBrokerList(brokerListStr: String): Seq[BrokerEndpoint] = {
-    val brokersStr = Utils.parseCsvList(brokerListStr)
+    val brokersStr = CoreUtils.parseCsvList(brokerListStr)
 
     brokersStr.zipWithIndex.map { case (address, brokerId) =>
       BrokerEndpoint.createBrokerEndPoint(brokerId, address)

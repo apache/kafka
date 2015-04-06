@@ -397,7 +397,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
       checkConfig(2*maxMessageSize, 2 * retentionMs)
     } finally {
       server.shutdown()
-      server.config.logDirs.map(Utils.rm(_))
+      server.config.logDirs.map(CoreUtils.rm(_))
     }
   }
 

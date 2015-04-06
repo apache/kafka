@@ -19,7 +19,7 @@ package kafka.server
 
 import org.scalatest.junit.JUnit3Suite
 import kafka.utils.ZkUtils
-import kafka.utils.Utils
+import kafka.utils.CoreUtils
 import kafka.utils.TestUtils
 
 import kafka.zk.ZooKeeperTestHarness
@@ -39,7 +39,7 @@ class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue(pathExists)
 
     server.shutdown()
-    Utils.rm(server.config.logDirs)
+    CoreUtils.rm(server.config.logDirs)
   }
 
   def testConflictBrokerRegistration {
@@ -64,6 +64,6 @@ class ServerStartupTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(brokerRegistration, ZkUtils.readData(zkClient, ZkUtils.BrokerIdsPath + "/" + brokerId)._1)
 
     server1.shutdown()
-    Utils.rm(server1.config.logDirs)
+    CoreUtils.rm(server1.config.logDirs)
   }
 }

@@ -22,6 +22,7 @@ import kafka.utils._
 import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.TimeUnit
 import com.yammer.metrics.core.Meter
+import org.apache.kafka.common.utils.Utils
 
 /**
  * A thread that answers kafka requests.

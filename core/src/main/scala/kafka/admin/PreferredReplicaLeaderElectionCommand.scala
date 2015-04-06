@@ -22,7 +22,7 @@ import org.I0Itec.zkclient.ZkClient
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import kafka.common.{TopicAndPartition, AdminCommandFailedException}
 import collection._
-import mutable.ListBuffer
+import org.apache.kafka.common.utils.Utils
 
 object PreferredReplicaLeaderElectionCommand extends Logging {
 
@@ -84,7 +84,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
               val partition = p.get("partition").get.asInstanceOf[Int]
               TopicAndPartition(topic, partition)
             }
-            val duplicatePartitions = Utils.duplicates(partitions)
+            val duplicatePartitions = CoreUtils.duplicates(partitions)
             val partitionsSet = partitions.toSet
             if (duplicatePartitions.nonEmpty)
               throw new AdminOperationException("Preferred replica election data contains duplicate partitions: %s".format(duplicatePartitions.mkString(",")))

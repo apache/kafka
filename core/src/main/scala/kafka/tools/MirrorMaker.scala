@@ -24,16 +24,18 @@ import java.util.{Collections, Properties}
 
 import com.yammer.metrics.core.Gauge
 import joptsimple.OptionParser
-import kafka.consumer.{KafkaStream, Blacklist, ConsumerConfig, ConsumerThreadId, ConsumerTimeoutException, TopicFilter, Whitelist, ZookeeperConsumerConnector}
+import kafka.consumer.{Blacklist, ConsumerConfig, ConsumerThreadId, ConsumerTimeoutException, TopicFilter, Whitelist, ZookeeperConsumerConnector}
 import kafka.javaapi.consumer.ConsumerRebalanceListener
 import kafka.message.MessageAndMetadata
 import kafka.metrics.KafkaMetricsGroup
 import kafka.serializer.DefaultDecoder
-import kafka.utils.{CommandLineUtils, Logging, Utils}
+import kafka.utils.{CommandLineUtils, Logging, CoreUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
+import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConversions._
+
 
 /**
  * The mirror maker has the following architecture:
@@ -207,9 +209,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     val customRebalanceListener = {
       if (customRebalanceListenerClass != null) {
         if (rebalanceListenerArgs != null)
-          Some(Utils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass, rebalanceListenerArgs))
+          Some(CoreUtils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass, rebalanceListenerArgs))
         else
-          Some(Utils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass))
+          Some(CoreUtils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass))
       } else {
         None
       }
@@ -237,9 +239,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     messageHandler = {
       if (customMessageHandlerClass != null) {
         if (messageHandlerArgs != null)
-          Utils.createObject[MirrorMakerMessageHandler](customMessageHandlerClass, messageHandlerArgs)
+          CoreUtils.createObject[MirrorMakerMessageHandler](customMessageHandlerClass, messageHandlerArgs)
         else
-          Utils.createObject[MirrorMakerMessageHandler](customMessageHandlerClass)
+          CoreUtils.createObject[MirrorMakerMessageHandler](customMessageHandlerClass)
       } else {
         defaultMirrorMakerMessageHandler
       }

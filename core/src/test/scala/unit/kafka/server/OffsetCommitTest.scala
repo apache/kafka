@@ -71,7 +71,7 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
   override def tearDown() {
     simpleConsumer.close
     server.shutdown
-    Utils.rm(logDir)
+    CoreUtils.rm(logDir)
     super.tearDown()
   }
 

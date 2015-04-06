@@ -21,12 +21,13 @@ import kafka.common._
 import kafka.message.{NoCompressionCodec, Message, ByteBufferMessageSet}
 import kafka.producer._
 import kafka.serializer.Encoder
-import kafka.utils.{Utils, Logging, SystemTime}
+import kafka.utils.{CoreUtils, Logging, SystemTime}
 import scala.util.Random
 import scala.collection.{Seq, Map}
 import scala.collection.mutable.{ArrayBuffer, HashMap, Set}
 import java.util.concurrent.atomic._
 import kafka.api.{TopicMetadata, ProducerRequest}
+import org.apache.kafka.common.utils.Utils
 
 class DefaultEventHandler[K,V](config: ProducerConfig,
                                private val partitioner: Partitioner,
@@ -64,7 +65,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
       topicMetadataToRefresh ++= outstandingProduceRequests.map(_.topic)
       if (topicMetadataRefreshInterval >= 0 &&
           SystemTime.milliseconds - lastTopicMetadataRefreshTime > topicMetadataRefreshInterval) {
-        Utils.swallowError(brokerPartitionInfo.updateInfo(topicMetadataToRefresh.toSet, correlationId.getAndIncrement))
+        CoreUtils.swallowError(brokerPartitionInfo.updateInfo(topicMetadataToRefresh.toSet, correlationId.getAndIncrement))
         sendPartitionPerTopicCache.clear()
         topicMetadataToRefresh.clear
         lastTopicMetadataRefreshTime = SystemTime.milliseconds
@@ -75,7 +76,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
         // back off and update the topic metadata cache before attempting another send operation
         Thread.sleep(config.retryBackoffMs)
         // get topics of the outstanding produce requests and refresh metadata for those
-        Utils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.topic).toSet, correlationId.getAndIncrement))
+        CoreUtils.swallowError(brokerPartitionInfo.updateInfo(outstandingProduceRequests.map(_.topic).toSet, correlationId.getAndIncrement))
         sendPartitionPerTopicCache.clear()
         remainingRetries -= 1
         producerStats.resendRate.mark()
@@ -262,7 +263,7 @@ class DefaultEventHandler[K,V](config: ProducerConfig,
           if (logger.isTraceEnabled) {
             val successfullySentData = response.status.filter(_._2.error == ErrorMapping.NoError)
             successfullySentData.foreach(m => messagesPerTopic(m._1).foreach(message =>
-              trace("Successfully sent message: %s".format(if(message.message.isNull) null else Utils.readString(message.message.payload)))))
+              trace("Successfully sent message: %s".format(if(message.message.isNull) null else message.message.toString()))))
           }
           val failedPartitionsAndStatus = response.status.filter(_._2.error != ErrorMapping.NoError).toSeq
           failedTopicPartitions = failedPartitionsAndStatus.map(partitionStatus => partitionStatus._1)

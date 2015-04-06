@@ -23,7 +23,7 @@ import kafka.api.ApiVersion
 import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
-import kafka.utils.Utils
+import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.protocol.SecurityProtocol
 import scala.collection.{immutable, JavaConversions, Map}
@@ -492,7 +492,7 @@ object KafkaConfig {
    * Parse the given properties instance into a KafkaConfig object
    */
   def fromProps(props: Properties): KafkaConfig = {
-    import kafka.utils.Utils.evaluateDefaults
+    import kafka.utils.CoreUtils.evaluateDefaults
     val parsed = configDef.parse(evaluateDefaults(props))
     new KafkaConfig(
       /** ********* Zookeeper Configuration ***********/
@@ -755,7 +755,7 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
   val advertisedHostName: String = _advertisedHostName.getOrElse(hostName)
   val advertisedPort: Int = _advertisedPort.getOrElse(port)
   val advertisedListeners = getAdvertisedListeners()
-  val logDirs = Utils.parseCsvList(_logDirs.getOrElse(_logDir))
+  val logDirs = CoreUtils.parseCsvList(_logDirs.getOrElse(_logDir))
 
   val logRollTimeMillis = _logRollTimeMillis.getOrElse(60 * 60 * 1000L * logRollTimeHours)
   val logRollTimeJitterMillis = _logRollTimeJitterMillis.getOrElse(60 * 60 * 1000L * logRollTimeJitterHours)
@@ -780,7 +780,7 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
 
   private def getMap(propName: String, propValue: String): Map[String, String] = {
     try {
-      Utils.parseCsvMap(propValue)
+      CoreUtils.parseCsvMap(propValue)
     } catch {
       case e: Exception => throw new IllegalArgumentException("Error parsing configuration property '%s': %s".format(propName, e.getMessage))
     }
@@ -789,7 +789,7 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
   private def validateUniquePortAndProtocol(listeners: String) {
 
     val endpoints = try {
-      val listenerList = Utils.parseCsvList(listeners)
+      val listenerList = CoreUtils.parseCsvList(listeners)
       listenerList.map(listener => EndPoint.createEndPoint(listener))
     } catch {
       case e: Exception => throw new IllegalArgumentException("Error creating broker listeners from '%s': %s".format(listeners, e.getMessage))
@@ -806,9 +806,9 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
   private def getListeners(): immutable.Map[SecurityProtocol, EndPoint] = {
     if (_listeners.isDefined) {
       validateUniquePortAndProtocol(_listeners.get)
-      Utils.listenerListToEndPoints(_listeners.get)
+      CoreUtils.listenerListToEndPoints(_listeners.get)
     } else {
-      Utils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port)
+      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + hostName + ":" + port)
     }
   }
 
@@ -818,9 +818,9 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
   private def getAdvertisedListeners(): immutable.Map[SecurityProtocol, EndPoint] = {
     if (_advertisedListeners.isDefined) {
       validateUniquePortAndProtocol(_advertisedListeners.get)
-      Utils.listenerListToEndPoints(_advertisedListeners.get)
+      CoreUtils.listenerListToEndPoints(_advertisedListeners.get)
     } else if (_advertisedHostName.isDefined || _advertisedPort.isDefined ) {
-      Utils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName  + ":" + advertisedPort)
+      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName  + ":" + advertisedPort)
     } else {
       getListeners()
     }

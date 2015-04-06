@@ -136,12 +136,12 @@ class Log(val dir: File,
         // we crashed in the middle of a swap operation, to recover:
         // if a log, swap it in and delete the .index file
         // if an index just delete it, it will be rebuilt
-        val baseName = new File(Utils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
+        val baseName = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
         if(baseName.getPath.endsWith(IndexFileSuffix)) {
           file.delete()
         } else if(baseName.getPath.endsWith(LogFileSuffix)){
           // delete the index
-          val index = new File(Utils.replaceSuffix(baseName.getPath, LogFileSuffix, IndexFileSuffix))
+          val index = new File(CoreUtils.replaceSuffix(baseName.getPath, LogFileSuffix, IndexFileSuffix))
           index.delete()
           // complete the swap operation
           val renamed = file.renameTo(baseName)
@@ -627,7 +627,7 @@ class Log(val dir: File,
       removeLogMetrics()
       logSegments.foreach(_.delete())
       segments.clear()
-      Utils.rm(dir)
+      CoreUtils.rm(dir)
     }
   }
 

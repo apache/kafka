@@ -24,8 +24,9 @@ import org.apache.log4j.Logger
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
 import kafka.common.KafkaException
-import kafka.utils.Utils.inLock
+import kafka.utils.CoreUtils.inLock
 import org.junit.Test
+import org.apache.kafka.common.utils.Utils
 
 
 class UtilsTest extends JUnitSuite {
@@ -34,13 +35,13 @@ class UtilsTest extends JUnitSuite {
 
   @Test
   def testSwallow() {
-    Utils.swallow(logger.info, throw new KafkaException("test"))
+    CoreUtils.swallow(logger.info, throw new KafkaException("test"))
   }
 
   @Test
   def testCircularIterator() {
     val l = List(1, 2)
-    val itl = Utils.circularIterator(l)
+    val itl = CoreUtils.circularIterator(l)
     assertEquals(1, itl.next())
     assertEquals(2, itl.next())
     assertEquals(1, itl.next())
@@ -48,7 +49,7 @@ class UtilsTest extends JUnitSuite {
     assertFalse(itl.hasDefiniteSize)
 
     val s = Set(1, 2)
-    val its = Utils.circularIterator(s)
+    val its = CoreUtils.circularIterator(s)
     assertEquals(1, its.next())
     assertEquals(2, its.next())
     assertEquals(1, its.next())
@@ -75,10 +76,10 @@ class UtilsTest extends JUnitSuite {
 
   @Test
   def testReplaceSuffix() {
-    assertEquals("blah.foo.text", Utils.replaceSuffix("blah.foo.txt", ".txt", ".text"))
-    assertEquals("blah.foo", Utils.replaceSuffix("blah.foo.txt", ".txt", ""))
-    assertEquals("txt.txt", Utils.replaceSuffix("txt.txt.txt", ".txt", ""))
-    assertEquals("foo.txt", Utils.replaceSuffix("foo", "", ".txt"))
+    assertEquals("blah.foo.text", CoreUtils.replaceSuffix("blah.foo.txt", ".txt", ".text"))
+    assertEquals("blah.foo", CoreUtils.replaceSuffix("blah.foo.txt", ".txt", ""))
+    assertEquals("txt.txt", CoreUtils.replaceSuffix("txt.txt.txt", ".txt", ""))
+    assertEquals("foo.txt", CoreUtils.replaceSuffix("foo", "", ".txt"))
   }
 
   @Test
@@ -87,7 +88,7 @@ class UtilsTest extends JUnitSuite {
     val buffer = ByteBuffer.allocate(4 * values.size)
     for(i <- 0 until values.length) {
       buffer.putInt(i*4, values(i))
-      assertEquals("Written value should match read value.", values(i), Utils.readInt(buffer.array, i*4))
+      assertEquals("Written value should match read value.", values(i), CoreUtils.readInt(buffer.array, i*4))
     }
   }
 
@@ -95,8 +96,8 @@ class UtilsTest extends JUnitSuite {
   def testCsvList() {
     val emptyString:String = ""
     val nullString:String = null
-    val emptyList = Utils.parseCsvList(emptyString)
-    val emptyListFromNullString = Utils.parseCsvList(nullString)
+    val emptyList = CoreUtils.parseCsvList(emptyString)
+    val emptyListFromNullString = CoreUtils.parseCsvList(nullString)
     val emptyStringList = Seq.empty[String]
     assertTrue(emptyList!=null)
     assertTrue(emptyListFromNullString!=null)
@@ -107,32 +108,32 @@ class UtilsTest extends JUnitSuite {
   @Test
   def testCsvMap() {
     val emptyString: String = ""
-    val emptyMap = Utils.parseCsvMap(emptyString)
+    val emptyMap = CoreUtils.parseCsvMap(emptyString)
     val emptyStringMap = Map.empty[String, String]
     assertTrue(emptyMap != null)
     assertTrue(emptyStringMap.equals(emptyStringMap))
 
     val kvPairsIpV6: String = "a:b:c:v,a:b:c:v"
-    val ipv6Map = Utils.parseCsvMap(kvPairsIpV6)
+    val ipv6Map = CoreUtils.parseCsvMap(kvPairsIpV6)
     for (m <- ipv6Map) {
       assertTrue(m._1.equals("a:b:c"))
       assertTrue(m._2.equals("v"))
     }
 
     val singleEntry:String = "key:value"
-    val singleMap = Utils.parseCsvMap(singleEntry)
+    val singleMap = CoreUtils.parseCsvMap(singleEntry)
     val value = singleMap.getOrElse("key", 0)
     assertTrue(value.equals("value"))
 
     val kvPairsIpV4: String = "192.168.2.1/30:allow, 192.168.2.1/30:allow"
-    val ipv4Map = Utils.parseCsvMap(kvPairsIpV4)
+    val ipv4Map = CoreUtils.parseCsvMap(kvPairsIpV4)
     for (m <- ipv4Map) {
       assertTrue(m._1.equals("192.168.2.1/30"))
       assertTrue(m._2.equals("allow"))
     }
 
     val kvPairsSpaces: String = "key:value      , key:   value"
-    val spaceMap = Utils.parseCsvMap(kvPairsSpaces)
+    val spaceMap = CoreUtils.parseCsvMap(kvPairsSpaces)
     for (m <- spaceMap) {
       assertTrue(m._1.equals("key"))
       assertTrue(m._2.equals("value"))

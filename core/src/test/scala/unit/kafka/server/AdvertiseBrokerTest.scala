@@ -18,7 +18,7 @@
 package kafka.server
 
 import junit.framework.Assert._
-import kafka.utils.{TestUtils, Utils, ZkUtils}
+import kafka.utils.{TestUtils, CoreUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.scalatest.junit.JUnit3Suite
@@ -41,7 +41,7 @@ class AdvertiseBrokerTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   override def tearDown() {
     server.shutdown()
-    Utils.rm(server.config.logDirs)
+    CoreUtils.rm(server.config.logDirs)
     super.tearDown()
   }
   

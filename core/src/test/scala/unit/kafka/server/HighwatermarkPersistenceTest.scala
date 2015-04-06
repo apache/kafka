@@ -25,7 +25,7 @@ import org.junit._
 import org.junit.Assert._
 import kafka.common._
 import kafka.cluster.Replica
-import kafka.utils.{SystemTime, KafkaScheduler, TestUtils, MockTime, Utils}
+import kafka.utils.{SystemTime, KafkaScheduler, TestUtils, MockTime, CoreUtils}
 import java.util.concurrent.atomic.AtomicBoolean
 
 class HighwatermarkPersistenceTest extends JUnit3Suite {
@@ -41,7 +41,7 @@ class HighwatermarkPersistenceTest extends JUnit3Suite {
   @After
   def teardown() {
     for(manager <- logManagers; dir <- manager.logDirs)
-      Utils.rm(dir)
+      CoreUtils.rm(dir)
   }
 
   def testHighWatermarkPersistenceSinglePartition() {

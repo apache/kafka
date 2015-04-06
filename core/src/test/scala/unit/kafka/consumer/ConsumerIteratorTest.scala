@@ -81,7 +81,7 @@ class ConsumerIteratorTest extends JUnit3Suite with KafkaServerTestHarness {
     assertFalse(iter.hasNext)
     assertEquals(0, queue.size) // Shutdown command has been consumed.
     assertEquals(5, receivedMessages.size)
-    val unconsumed = messageSet.filter(_.offset >= consumedOffset).map(m => Utils.readString(m.message.payload))
+    val unconsumed = messageSet.filter(_.offset >= consumedOffset).map(m => TestUtils.readString(m.message.payload))
     assertEquals(unconsumed, receivedMessages)
   }
 

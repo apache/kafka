@@ -20,7 +20,7 @@ package kafka.server
 import java.io._
 import java.util.Properties
 import kafka.utils._
-
+import org.apache.kafka.common.utils.Utils
 
 case class BrokerMetadata(brokerId: Int)
 

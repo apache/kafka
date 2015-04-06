@@ -27,6 +27,7 @@ import kafka.common._
 import kafka.utils._
 import kafka.message._
 import java.util.concurrent.atomic.AtomicLong
+import org.apache.kafka.common.utils.Utils
 
 /**
  * Unit tests for the log cleaning logic
@@ -40,7 +41,7 @@ class CleanerTest extends JUnitSuite {
   
   @After
   def teardown() {
-    Utils.rm(dir)
+    CoreUtils.rm(dir)
   }
   
   /**
@@ -123,7 +124,7 @@ class CleanerTest extends JUnitSuite {
   
   /* extract all the keys from a log */
   def keysInLog(log: Log): Iterable[Int] =
-    log.logSegments.flatMap(s => s.log.filter(!_.message.isNull).filter(_.message.hasKey).map(m => Utils.readString(m.message.key).toInt))
+    log.logSegments.flatMap(s => s.log.filter(!_.message.isNull).filter(_.message.hasKey).map(m => TestUtils.readString(m.message.key).toInt))
 
   def unkeyedMessageCountInLog(log: Log) =
     log.logSegments.map(s => s.log.filter(!_.message.isNull).count(m => !m.message.hasKey)).sum

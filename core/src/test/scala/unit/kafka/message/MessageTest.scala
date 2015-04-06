@@ -24,7 +24,8 @@ import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{Before, Test}
 import kafka.utils.TestUtils
-import kafka.utils.Utils
+import kafka.utils.CoreUtils
+import org.apache.kafka.common.utils.Utils
 
 case class MessageTestVal(val key: Array[Byte], 
                           val payload: Array[Byte], 

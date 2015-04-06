@@ -17,7 +17,7 @@
 package kafka.controller
 
 import kafka.network.{Receive, BlockingChannel}
-import kafka.utils.{Utils, Logging, ShutdownableThread}
+import kafka.utils.{CoreUtils, Logging, ShutdownableThread}
 import collection.mutable.HashMap
 import kafka.cluster.Broker
 import java.util.concurrent.{LinkedBlockingQueue, BlockingQueue}
@@ -140,7 +140,7 @@ class RequestSendThread(val controllerId: Int,
               connectToBroker(toBroker, channel)
               isSendSuccessful = false
               // backoff before retrying the connection and send
-              Utils.swallowTrace(Thread.sleep(300))
+              CoreUtils.swallowTrace(Thread.sleep(300))
           }
         }
         if (receive != null) {

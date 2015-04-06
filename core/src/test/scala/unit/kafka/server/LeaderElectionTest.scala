@@ -19,11 +19,11 @@ package kafka.server
 
 import junit.framework.Assert._
 import kafka.api._
+import kafka.utils.{TestUtils, ZkUtils, CoreUtils}
 import kafka.cluster.Broker
 import kafka.common.ErrorMapping
 import kafka.controller.{ControllerChannelManager, ControllerContext, LeaderIsrAndControllerEpoch}
 import kafka.utils.TestUtils._
-import kafka.utils.{TestUtils, Utils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.scalatest.junit.JUnit3Suite
@@ -50,7 +50,7 @@ class LeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   override def tearDown() {
     servers.map(server => server.shutdown())
-    servers.map(server => Utils.rm(server.config.logDirs))
+    servers.map(server => CoreUtils.rm(server.config.logDirs))
     super.tearDown()
   }
 

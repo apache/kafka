@@ -24,7 +24,7 @@ import java.nio.channels._
 import java.util.concurrent.locks._
 import java.util.concurrent.atomic._
 import kafka.utils._
-import kafka.utils.Utils.inLock
+import kafka.utils.CoreUtils.inLock
 import kafka.common.InvalidOffsetException
 
 /**
@@ -81,7 +81,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
           idx.position(roundToExactMultiple(idx.limit, 8))
         idx
       } finally {
-        Utils.swallow(raf.close())
+        CoreUtils.swallow(raf.close())
       }
     }
   
@@ -287,7 +287,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
         this.maxEntries = this.mmap.limit / 8
         this.mmap.position(position)
       } finally {
-        Utils.swallow(raf.close())
+        CoreUtils.swallow(raf.close())
       }
     }
   }
@@ -319,7 +319,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
   def delete(): Boolean = {
     info("Deleting index " + this.file.getAbsolutePath)
     if(Os.isWindows)
-      Utils.swallow(forceUnmap(this.mmap))
+      CoreUtils.swallow(forceUnmap(this.mmap))
     this.file.delete()
   }
   

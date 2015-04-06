@@ -18,11 +18,10 @@
 package kafka.tools
 
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord, KafkaProducer}
-
 import kafka.consumer._
-
 import java.util.Properties
 import java.util.Arrays
+import scala.Option.option2Iterable
 
 object TestEndToEndLatency {
   def main(args: Array[String]) {

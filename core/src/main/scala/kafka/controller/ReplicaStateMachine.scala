@@ -24,7 +24,7 @@ import kafka.utils.{ZkUtils, ReplicationUtils, Logging}
 import org.I0Itec.zkclient.IZkChildListener
 import org.apache.log4j.Logger
 import kafka.controller.Callbacks._
-import kafka.utils.Utils._
+import kafka.utils.CoreUtils._
 
 /**
  * This class represents the state machine for replicas. It defines the states that a replica can be in, and

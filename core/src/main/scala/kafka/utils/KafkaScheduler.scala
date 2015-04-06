@@ -19,7 +19,7 @@ package kafka.utils
 
 import java.util.concurrent._
 import atomic._
-import collection.mutable.HashMap
+import org.apache.kafka.common.utils.Utils
 
 /**
  * A scheduler for running jobs
@@ -102,7 +102,7 @@ class KafkaScheduler(val threads: Int,
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
     this synchronized {
       ensureStarted
-      val runnable = Utils.runnable {
+      val runnable = CoreUtils.runnable {
         try {
           trace("Begining execution of scheduled task '%s'.".format(name))
           fun()

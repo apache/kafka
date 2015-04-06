@@ -45,7 +45,7 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
 
   @After
   def tearDown() {
-    Utils.rm(logDir)
+    CoreUtils.rm(logDir)
   }
 
   /**

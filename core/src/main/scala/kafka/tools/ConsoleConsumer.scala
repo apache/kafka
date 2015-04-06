@@ -28,6 +28,7 @@ import kafka.serializer._
 import kafka.utils._
 import kafka.metrics.KafkaMetricsReporter
 import kafka.consumer.{Blacklist,Whitelist,ConsumerConfig,Consumer}
+import org.apache.kafka.common.utils.Utils
 
 /**
  * Consumer that dumps messages out to standard out.

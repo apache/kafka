@@ -26,7 +26,7 @@ import kafka.controller.KafkaController.StateChangeLogger
 import org.apache.kafka.common.protocol.SecurityProtocol
 import scala.collection.{Seq, Set, mutable}
 import kafka.utils.Logging
-import kafka.utils.Utils._
+import kafka.utils.CoreUtils._
 
 import java.util.concurrent.locks.ReentrantReadWriteLock
 

@@ -21,7 +21,7 @@ import org.apache.zookeeper.server.ZooKeeperServer
 import org.apache.zookeeper.server.NIOServerCnxnFactory
 import kafka.utils.TestUtils
 import java.net.InetSocketAddress
-import kafka.utils.Utils
+import kafka.utils.CoreUtils
 import org.apache.kafka.common.utils.Utils.getPort
 
 class EmbeddedZookeeper() {
@@ -36,10 +36,10 @@ class EmbeddedZookeeper() {
   val port = zookeeper.getClientPort()
 
   def shutdown() {
-    Utils.swallow(zookeeper.shutdown())
-    Utils.swallow(factory.shutdown())
-    Utils.rm(logDir)
-    Utils.rm(snapshotDir)
+    CoreUtils.swallow(zookeeper.shutdown())
+    CoreUtils.swallow(factory.shutdown())
+    CoreUtils.rm(logDir)
+    CoreUtils.rm(snapshotDir)
   }
   
 }

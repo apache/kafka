@@ -50,7 +50,7 @@ object StressTestLog {
         running.set(false)
         writer.join()
         reader.join()
-        Utils.rm(dir)
+        CoreUtils.rm(dir)
       }
     })
     

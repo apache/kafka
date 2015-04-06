@@ -43,7 +43,7 @@ class LogTest extends JUnitSuite {
 
   @After
   def tearDown() {
-    Utils.rm(logDir)
+    CoreUtils.rm(logDir)
   }
   
   def createEmptyLogs(dir: File, offsets: Int*) {
@@ -714,7 +714,7 @@ class LogTest extends JUnitSuite {
       log = new Log(logDir, config, recoveryPoint, time.scheduler, time)
       assertEquals(numMessages, log.logEndOffset)
       assertEquals("Messages in the log after recovery should be the same.", messages, log.logSegments.flatMap(_.log.iterator.toList))
-      Utils.rm(logDir)
+      CoreUtils.rm(logDir)
     }
   }
 

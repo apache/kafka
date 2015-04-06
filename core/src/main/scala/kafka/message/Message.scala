@@ -20,6 +20,7 @@ package kafka.message
 import java.nio._
 import scala.math._
 import kafka.utils._
+import org.apache.kafka.common.utils.Utils
 
 /**
  * Constants related to messages
@@ -146,7 +147,7 @@ class Message(val buffer: ByteBuffer) {
    * Compute the checksum of the message from the message contents
    */
   def computeChecksum(): Long = 
-    Utils.crc32(buffer.array, buffer.arrayOffset + MagicOffset,  buffer.limit - MagicOffset)
+    CoreUtils.crc32(buffer.array, buffer.arrayOffset + MagicOffset,  buffer.limit - MagicOffset)
   
   /**
    * Retrieve the previously computed CRC for this message

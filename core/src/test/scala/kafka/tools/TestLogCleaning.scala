@@ -132,12 +132,12 @@ object TestLogCleaning {
     for(file <- dir.list.sorted; if file.endsWith(Log.LogFileSuffix)) {
       val ms = new FileMessageSet(new File(dir, file))
       for(entry <- ms) {
-        val key = Utils.readString(entry.message.key)
+        val key = TestUtils.readString(entry.message.key)
         val content = 
           if(entry.message.isNull)
             null
           else
-            Utils.readString(entry.message.payload)
+            TestUtils.readString(entry.message.payload)
         println("offset = %s, key = %s, content = %s".format(entry.offset, key, content))
       }
     }

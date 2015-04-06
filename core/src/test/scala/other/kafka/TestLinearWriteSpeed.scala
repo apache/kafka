@@ -193,7 +193,7 @@ object TestLinearWriteSpeed {
   }
   
   class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: ByteBufferMessageSet) extends Writable {
-    Utils.rm(dir)
+    CoreUtils.rm(dir)
     val log = new Log(dir, config, 0L, scheduler, SystemTime)
     def write(): Int = {
       log.append(messages, true)
@@ -201,7 +201,7 @@ object TestLinearWriteSpeed {
     }
     def close() {
       log.close()
-      Utils.rm(log.dir)
+      CoreUtils.rm(log.dir)
     }
   }
   

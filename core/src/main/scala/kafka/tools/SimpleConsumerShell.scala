@@ -25,6 +25,7 @@ import kafka.api.{OffsetRequest, FetchRequestBuilder, Request}
 import kafka.cluster.BrokerEndpoint
 import scala.collection.JavaConversions._
 import kafka.common.TopicAndPartition
+import org.apache.kafka.common.utils.Utils
 
 /**
  * Command line program to dump out messages to standard out using the simple consumer

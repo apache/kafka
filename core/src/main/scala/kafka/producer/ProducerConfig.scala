@@ -19,8 +19,8 @@ package kafka.producer
 
 import async.AsyncProducerConfig
 import java.util.Properties
-import kafka.utils.{Utils, VerifiableProperties}
-import kafka.message.{CompressionCodec, NoCompressionCodec}
+import kafka.utils.{CoreUtils, VerifiableProperties}
+import kafka.message.NoCompressionCodec
 import kafka.common.{InvalidConfigException, Config}
 
 object ProducerConfig extends Config {
@@ -90,7 +90,7 @@ class ProducerConfig private (val props: VerifiableProperties)
    *
    *  If the compression codec is NoCompressionCodec, compression is disabled for all topics
    */
-  val compressedTopics = Utils.parseCsvList(props.getString("compressed.topics", null))
+  val compressedTopics = CoreUtils.parseCsvList(props.getString("compressed.topics", null))
 
   /** The leader may be unavailable transiently, which can fail the sending of a message.
     *  This property specifies the number of retries when such failures occur.

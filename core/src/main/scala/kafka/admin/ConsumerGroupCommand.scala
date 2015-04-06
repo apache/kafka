@@ -30,6 +30,7 @@ import joptsimple.{OptionSpec, OptionParser}
 import scala.collection.{Set, mutable}
 import kafka.consumer.SimpleConsumer
 import collection.JavaConversions._
+import org.apache.kafka.common.utils.Utils
 
 
 object ConsumerGroupCommand {

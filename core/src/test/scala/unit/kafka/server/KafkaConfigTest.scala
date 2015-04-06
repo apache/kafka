@@ -21,7 +21,7 @@ import java.util.Properties
 
 import junit.framework.Assert._
 import kafka.api.{ApiVersion, KAFKA_082}
-import kafka.utils.{TestUtils, Utils}
+import kafka.utils.{TestUtils, CoreUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.Test
@@ -159,14 +159,14 @@ class KafkaConfigTest extends JUnit3Suite {
     props.put("port", "1111")
 
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(Utils.listenerListToEndPoints("PLAINTEXT://myhost:1111"), conf.listeners)
+    assertEquals(CoreUtils.listenerListToEndPoints("PLAINTEXT://myhost:1111"), conf.listeners)
 
     // configuration with null host
     props.remove("host.name")
 
     val conf2 = KafkaConfig.fromProps(props)
-    assertEquals(Utils.listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
-    assertEquals(Utils.listenerListToEndPoints("PLAINTEXT://:1111"), conf2.advertisedListeners)
+    assertEquals(CoreUtils.listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
+    assertEquals(CoreUtils.listenerListToEndPoints("PLAINTEXT://:1111"), conf2.advertisedListeners)
     assertEquals(null, conf2.listeners(SecurityProtocol.PLAINTEXT).host)
 
     // configuration with advertised host and port, and no advertised listeners
@@ -174,7 +174,7 @@ class KafkaConfigTest extends JUnit3Suite {
     props.put("advertised.port", "2222")
 
     val conf3 = KafkaConfig.fromProps(props)
-    assertEquals(conf3.advertisedListeners, Utils.listenerListToEndPoints("PLAINTEXT://otherhost:2222"))
+    assertEquals(conf3.advertisedListeners, CoreUtils.listenerListToEndPoints("PLAINTEXT://otherhost:2222"))
   }
 
   @Test

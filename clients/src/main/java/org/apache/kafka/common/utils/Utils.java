@@ -14,15 +14,26 @@ package org.apache.kafka.common.utils;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.File;
+import java.io.FileInputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
+import java.io.FileNotFoundException;
+import java.io.StringWriter;
+import java.io.PrintWriter;
 import java.nio.ByteBuffer;
+import java.nio.MappedByteBuffer;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Properties;
+import java.nio.channels.FileChannel;
+import java.nio.charset.Charset;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.apache.kafka.common.KafkaException;
 
 public class Utils {
@@ -32,6 +43,8 @@ public class Utils {
     private static final Pattern HOST_PORT_PATTERN = Pattern.compile(".*?\\[?([0-9a-z\\-.:]*)\\]?:([0-9]+)");
 
     public static final String NL = System.getProperty("line.separator");
+
+    private static final Logger log = LoggerFactory.getLogger(Utils.class);
 
     /**
      * Turn the given UTF8 byte array into a string
@@ -330,7 +343,7 @@ public class Utils {
                 ? "[" + host + "]:" + port // IPv6
                 : host + ":" + port;
     }
-    
+
     /**
      * Create a string representation of an array joined by the given separator
      * @param strs The array of items
@@ -356,5 +369,114 @@ public class Utils {
                 sb.append(seperator);  
         }
         return sb.toString();
+    }
+
+    /**
+     * Read a properties file from the given path
+     * @param filename The path of the file to read
+     */
+    public static Properties loadProps(String filename) throws IOException, FileNotFoundException {
+        Properties props = new Properties();
+        InputStream propStream = null;
+        try {
+            propStream = new FileInputStream(filename);
+            props.load(propStream);
+        } finally {
+            if (propStream != null)
+                propStream.close();
+        }
+        return props;
+    }
+
+    /**
+     * Get the stack trace from an exception as a string
+     */
+    public static String stackTrace(Throwable e) {
+        StringWriter sw = new StringWriter();
+        PrintWriter pw = new PrintWriter(sw);
+        e.printStackTrace(pw);
+        return sw.toString();
+    }
+
+    /**
+     * Create a new thread
+     * @param name The name of the thread
+     * @param runnable The work for the thread to do
+     * @param daemon Should the thread block JVM shutdown?
+     * @return The unstarted thread
+     */
+    public static Thread newThread(String name, Runnable runnable, Boolean daemon) {
+        Thread thread = new Thread(runnable, name);
+        thread.setDaemon(daemon);
+        thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
+            public void uncaughtException(Thread t, Throwable e) {
+                log.error("Uncaught exception in thread '" + t.getName() + "':", e);
+            }
+        });
+        return thread;
+    }
+
+    /**
+     * Create a daemon thread
+     * @param name The name of the thread
+     * @param runnable The runnable to execute in the background
+     * @return The unstarted thread
+     */
+    public static Thread daemonThread(String name, Runnable runnable) {
+        return newThread(name, runnable, true);
+    }
+
+    /**
+     * Print an error message and shutdown the JVM
+     * @param message The error message
+     */
+    public static void croak(String message) {
+        System.err.println(message);
+        System.exit(1);
+    }
+
+    /**
+     * Read a buffer into a Byte array for the given offset and length
+     */
+    public static byte[] readBytes(ByteBuffer buffer, int offset, int length) {
+        byte[] dest = new byte[length];
+        if (buffer.hasArray()) {
+            System.arraycopy(buffer.array(), buffer.arrayOffset() + offset, dest, 0, length);
+        } else {
+            buffer.mark();
+            buffer.position(offset);
+            buffer.get(dest, 0, length);
+            buffer.reset();
+        }
+        return dest;
+    }
+
+    /**
+     * Read the given byte buffer into a Byte array
+     */
+    public static byte[] readBytes(ByteBuffer buffer) {
+        return Utils.readBytes(buffer, 0, buffer.limit());
+    }
+
+    /**
+     * Attempt to read a file as a string
+     * @throws IOException 
+     */
+    public static String readFileAsString(String path, Charset charset) throws IOException {
+        if (charset == null) charset = Charset.defaultCharset();
+        FileInputStream stream = new FileInputStream(new File(path));
+        String result = new String();
+        try {
+            FileChannel fc = stream.getChannel();
+            MappedByteBuffer bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size());
+            result = charset.decode(bb).toString();
+        } finally {
+            stream.close();
+        }
+        return result;
+    }
+
+    public static String readFileAsString(String path) throws IOException {
+        return Utils.readFileAsString(path, Charset.defaultCharset());
     }
 }

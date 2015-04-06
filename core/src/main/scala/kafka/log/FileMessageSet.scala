@@ -66,12 +66,12 @@ class FileMessageSet private[kafka](@volatile var file: File,
    * Create a file message set with no slicing
    */
   def this(file: File) = 
-    this(file, Utils.openChannel(file, mutable = true))
+    this(file, CoreUtils.openChannel(file, mutable = true))
 
   /**
    * Create a file message set with mutable option
    */
-  def this(file: File, mutable: Boolean) = this(file, Utils.openChannel(file, mutable))
+  def this(file: File, mutable: Boolean) = this(file, CoreUtils.openChannel(file, mutable))
   
   /**
    * Create a slice view of the file message set that begins and ends at the given byte offsets
@@ -231,7 +231,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
    * @return True iff this message set was deleted.
    */
   def delete(): Boolean = {
-    Utils.swallow(channel.close())
+    CoreUtils.swallow(channel.close())
     file.delete()
   }
 

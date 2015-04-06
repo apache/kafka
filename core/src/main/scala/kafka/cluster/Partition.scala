@@ -18,7 +18,7 @@ package kafka.cluster
 
 import kafka.common._
 import kafka.utils._
-import kafka.utils.Utils.{inReadLock,inWriteLock}
+import kafka.utils.CoreUtils.{inReadLock,inWriteLock}
 import kafka.admin.AdminUtils
 import kafka.api.{PartitionStateInfo, LeaderAndIsr}
 import kafka.log.LogConfig

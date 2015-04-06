@@ -33,6 +33,8 @@ import java.util.Properties
 import kafka.cluster.EndPoint
 import kafka.common.KafkaException
 import kafka.common.KafkaStorageException
+import org.apache.kafka.common.utils.Crc32
+import org.apache.kafka.common.utils.Utils
 
 
 /**
@@ -46,7 +48,7 @@ import kafka.common.KafkaStorageException
  * 2. It is the most general possible utility, not just the thing you needed in one particular place
  * 3. You have tests for it if it is nontrivial in any way
  */
-object Utils extends Logging {
+object CoreUtils extends Logging {
 
   /**
    * Wrap the given function in a java.lang.Runnable
@@ -60,101 +62,12 @@ object Utils extends Logging {
 
   /**
    * Create a daemon thread
-   * @param runnable The runnable to execute in the background
-   * @return The unstarted thread
-   */
-  def daemonThread(runnable: Runnable): Thread =
-    newThread(runnable, true)
-
-  /**
-   * Create a daemon thread
-   * @param name The name of the thread
-   * @param runnable The runnable to execute in the background
-   * @return The unstarted thread
-   */
-  def daemonThread(name: String, runnable: Runnable): Thread =
-    newThread(name, runnable, true)
-
-  /**
-   * Create a daemon thread
    * @param name The name of the thread
    * @param fun The runction to execute in the thread
    * @return The unstarted thread
    */
   def daemonThread(name: String, fun: () => Unit): Thread =
-    daemonThread(name, runnable(fun))
-
-  /**
-   * Create a new thread
-   * @param name The name of the thread
-   * @param runnable The work for the thread to do
-   * @param daemon Should the thread block JVM shutdown?
-   * @return The unstarted thread
-   */
-  def newThread(name: String, runnable: Runnable, daemon: Boolean): Thread = {
-    val thread = new Thread(runnable, name)
-    thread.setDaemon(daemon)
-    thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-      def uncaughtException(t: Thread, e: Throwable) {
-        error("Uncaught exception in thread '" + t.getName + "':", e)
-      }
-    })
-    thread
-  }
-
-  /**
-   * Create a new thread
-   * @param runnable The work for the thread to do
-   * @param daemon Should the thread block JVM shutdown?
-   * @return The unstarted thread
-   */
-  def newThread(runnable: Runnable, daemon: Boolean): Thread = {
-    val thread = new Thread(runnable)
-    thread.setDaemon(daemon)
-    thread.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-      def uncaughtException(t: Thread, e: Throwable) {
-        error("Uncaught exception in thread '" + t.getName + "':", e)
-      }
-    })
-    thread
-  }
-
-  /**
-   * Read the given byte buffer into a byte array
-   */
-  def readBytes(buffer: ByteBuffer): Array[Byte] = readBytes(buffer, 0, buffer.limit)
-
-  /**
-   * Read a byte array from the given offset and size in the buffer
-   */
-  def readBytes(buffer: ByteBuffer, offset: Int, size: Int): Array[Byte] = {
-    val dest = new Array[Byte](size)
-    if(buffer.hasArray) {
-      System.arraycopy(buffer.array, buffer.arrayOffset() + offset, dest, 0, size)
-    } else {
-      buffer.mark()
-      buffer.get(dest)
-      buffer.reset()
-    }
-    dest
-  }
-
-  /**
-   * Read a properties file from the given path
-   * @param filename The path of the file to read
-   */
-   def loadProps(filename: String): Properties = {
-     val props = new Properties()
-     var propStream: InputStream = null
-     try {
-       propStream = new FileInputStream(filename)
-       props.load(propStream)
-     } finally {
-       if(propStream != null)
-         propStream.close
-     }
-     props
-   }
+    Utils.daemonThread(name, runnable(fun))
 
   /**
    * Open a channel for the given file
@@ -177,43 +90,6 @@ object Utils extends Logging {
     } catch {
       case e: Throwable => log(e.getMessage(), e)
     }
-  }
-
-  /**
-   * Test if two byte buffers are equal. In this case equality means having
-   * the same bytes from the current position to the limit
-   */
-  def equal(b1: ByteBuffer, b2: ByteBuffer): Boolean = {
-    // two byte buffers are equal if their position is the same,
-    // their remaining bytes are the same, and their contents are the same
-    if(b1.position != b2.position)
-      return false
-    if(b1.remaining != b2.remaining)
-      return false
-    for(i <- 0 until b1.remaining)
-      if(b1.get(i) != b2.get(i))
-        return false
-    return true
-  }
-
-  /**
-   * Translate the given buffer into a string
-   * @param buffer The buffer to translate
-   * @param encoding The encoding to use in translating bytes to characters
-   */
-  def readString(buffer: ByteBuffer, encoding: String = Charset.defaultCharset.toString): String = {
-    val bytes = new Array[Byte](buffer.remaining)
-    buffer.get(bytes)
-    new String(bytes, encoding)
-  }
-
-  /**
-   * Print an error message and shutdown the JVM
-   * @param message The error message
-   */
-  def croak(message: String) {
-    System.err.println(message)
-    System.exit(1)
   }
 
   /**
@@ -289,42 +165,6 @@ object Utils extends Logging {
   }
 
   /**
-   * Read an unsigned integer from the current position in the buffer,
-   * incrementing the position by 4 bytes
-   * @param buffer The buffer to read from
-   * @return The integer read, as a long to avoid signedness
-   */
-  def readUnsignedInt(buffer: ByteBuffer): Long =
-    buffer.getInt() & 0xffffffffL
-
-  /**
-   * Read an unsigned integer from the given position without modifying the buffers
-   * position
-   * @param buffer the buffer to read from
-   * @param index the index from which to read the integer
-   * @return The integer read, as a long to avoid signedness
-   */
-  def readUnsignedInt(buffer: ByteBuffer, index: Int): Long =
-    buffer.getInt(index) & 0xffffffffL
-
-  /**
-   * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
-   * @param buffer The buffer to write to
-   * @param value The value to write
-   */
-  def writetUnsignedInt(buffer: ByteBuffer, value: Long): Unit =
-    buffer.putInt((value & 0xffffffffL).asInstanceOf[Int])
-
-  /**
-   * Write the given long value as a 4 byte unsigned integer. Overflow is ignored.
-   * @param buffer The buffer to write to
-   * @param index The position in the buffer at which to begin writing
-   * @param value The value to write
-   */
-  def writeUnsignedInt(buffer: ByteBuffer, index: Int, value: Long): Unit =
-    buffer.putInt(index, (value & 0xffffffffL).asInstanceOf[Int])
-
-  /**
    * Compute the CRC32 of the byte array
    * @param bytes The array to compute the checksum for
    * @return The CRC32
@@ -345,38 +185,6 @@ object Utils extends Logging {
   }
 
   /**
-   * Compute the hash code for the given items
-   */
-  def hashcode(as: Any*): Int = {
-    if(as == null)
-      return 0
-    var h = 1
-    var i = 0
-    while(i < as.length) {
-      if(as(i) != null) {
-        h = 31 * h + as(i).hashCode
-        i += 1
-      }
-    }
-    return h
-  }
-
-  /**
-   * Group the given values by keys extracted with the given function
-   */
-  def groupby[K,V](vals: Iterable[V], f: V => K): Map[K,List[V]] = {
-    val m = new mutable.HashMap[K, List[V]]
-    for(v <- vals) {
-      val k = f(v)
-      m.get(k) match {
-        case Some(l: List[V]) => m.put(k, v :: l)
-        case None => m.put(k, List(v))
-      }
-    }
-    m
-  }
-
-  /**
    * Read some bytes into the provided buffer, and return the number of bytes read. If the
    * channel has been closed or we get -1 on the read for any reason, throw an EOFException
    */
@@ -385,27 +193,6 @@ object Utils extends Logging {
       case -1 => throw new EOFException("Received -1 when reading from channel, socket has likely been closed.")
       case n: Int => n
     }
-  }
-
-  /**
-   * Throw an exception if the given value is null, else return it. You can use this like:
-   * val myValue = Utils.notNull(expressionThatShouldntBeNull)
-   */
-  def notNull[V](v: V) = {
-    if(v == null)
-      throw new KafkaException("Value cannot be null.")
-    else
-      v
-  }
-
-  /**
-   * Get the stack trace from an exception as a string
-   */
-  def stackTrace(e: Throwable): String = {
-    val sw = new StringWriter
-    val pw = new PrintWriter(sw)
-    e.printStackTrace(pw)
-    sw.toString()
   }
 
   /**
@@ -447,11 +234,6 @@ object Utils extends Logging {
   }
 
   /**
-   * Is the given string null or empty ("")?
-   */
-  def nullOrEmpty(s: String): Boolean = s == null || s.equals("")
-
-  /**
    * Create a circular (looping) iterator over a collection.
    * @param coll An iterable over the underlying collection.
    * @return A circular iterator over the collection.
@@ -463,56 +245,12 @@ object Utils extends Logging {
   }
 
   /**
-   * Attempt to read a file as a string
-   */
-  def readFileAsString(path: String, charset: Charset = Charset.defaultCharset()): String = {
-    val stream = new FileInputStream(new File(path))
-    try {
-      val fc = stream.getChannel()
-      val bb = fc.map(FileChannel.MapMode.READ_ONLY, 0, fc.size())
-      charset.decode(bb).toString()
-    }
-    finally {
-      stream.close()
-    }
-  }
-
-  /**
-   * Get the absolute value of the given number. If the number is Int.MinValue return 0.
-   * This is different from java.lang.Math.abs or scala.math.abs in that they return Int.MinValue (!).
-   */
-  def abs(n: Int) = if(n == Integer.MIN_VALUE) 0 else math.abs(n)
-
-  /**
    * Replace the given string suffix with the new suffix. If the string doesn't end with the given suffix throw an exception.
    */
   def replaceSuffix(s: String, oldSuffix: String, newSuffix: String): String = {
     if(!s.endsWith(oldSuffix))
       throw new IllegalArgumentException("Expected string to end with '%s' but string is '%s'".format(oldSuffix, s))
     s.substring(0, s.length - oldSuffix.length) + newSuffix
-  }
-
-  /**
-   * Create a file with the given path
-   * @param path The path to create
-   * @throws KafkaStorageException If the file create fails
-   * @return The created file
-   */
-  def createFile(path: String): File = {
-    val f = new File(path)
-    val created = f.createNewFile()
-    if(!created)
-      throw new KafkaStorageException("Failed to create file %s.".format(path))
-    f
-  }
-
-  /**
-   * Turn a properties map into a string
-   */
-  def asString(props: Properties): String = {
-    val writer = new StringWriter()
-    props.store(writer, "")
-    writer.toString
   }
 
   /**
@@ -539,16 +277,6 @@ object Utils extends Logging {
       evaluated.put(name, props.getProperty(name))
     }
     evaluated
-  }
-
-  /**
-   * Read some properties with the given default values
-   */
-  def readProps(s: String, defaults: Properties): Properties = {
-    val reader = new StringReader(s)
-    val props = new Properties(defaults)
-    props.load(reader)
-    props
   }
 
   /**

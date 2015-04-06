@@ -22,6 +22,7 @@ import java.nio._
 import java.nio.channels._
 import java.util.Random
 import java.util.Properties
+import charset.Charset
 
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.utils.Utils._
@@ -82,7 +83,7 @@ object TestUtils extends Logging {
 
     Runtime.getRuntime().addShutdownHook(new Thread() {
       override def run() = {
-        Utils.rm(f)
+        CoreUtils.rm(f)
       }
     })
 
@@ -833,6 +834,17 @@ object TestUtils extends Logging {
       }
       checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))
     }), "Cleaner offset for deleted partition should have been removed")
+  }
+
+  /**
+   * Translate the given buffer into a string
+   * @param buffer The buffer to translate
+   * @param encoding The encoding to use in translating bytes to characters
+   */
+  def readString(buffer: ByteBuffer, encoding: String = Charset.defaultCharset.toString): String = {
+    val bytes = new Array[Byte](buffer.remaining)
+    buffer.get(bytes)
+    new String(bytes, encoding)
   }
 
 }

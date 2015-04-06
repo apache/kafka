@@ -82,8 +82,8 @@ class LogCleanerIntegrationTest extends JUnitSuite {
   
   def readFromLog(log: Log): Iterable[(Int, Int)] = {
     for(segment <- log.logSegments; message <- segment.log) yield {
-      val key = Utils.readString(message.message.key).toInt
-      val value = Utils.readString(message.message.payload).toInt
+      val key = TestUtils.readString(message.message.key).toInt
+      val value = TestUtils.readString(message.message.payload).toInt
       key -> value
     }
   }
@@ -99,7 +99,7 @@ class LogCleanerIntegrationTest extends JUnitSuite {
     
   @After
   def teardown() {
-    Utils.rm(logDir)
+    CoreUtils.rm(logDir)
   }
   
   /* create a cleaner instance and logs with the given parameters */

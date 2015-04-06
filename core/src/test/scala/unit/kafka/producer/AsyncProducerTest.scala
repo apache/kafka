@@ -231,11 +231,11 @@ class AsyncProducerTest extends JUnit3Suite {
                                                          topicPartitionInfos = topicPartitionInfos)
 
     val serializedData = handler.serialize(produceData)
-    val deserializedData = serializedData.map(d => new KeyedMessage[String,String](d.topic, Utils.readString(d.message.payload)))
+    val deserializedData = serializedData.map(d => new KeyedMessage[String,String](d.topic, TestUtils.readString(d.message.payload)))
 
     // Test that the serialize handles seq from a Stream
     val streamedSerializedData = handler.serialize(Stream(produceData:_*))
-    val deserializedStreamData = streamedSerializedData.map(d => new KeyedMessage[String,String](d.topic, Utils.readString(d.message.payload)))
+    val deserializedStreamData = streamedSerializedData.map(d => new KeyedMessage[String,String](d.topic, TestUtils.readString(d.message.payload)))
 
     TestUtils.checkEquals(produceData.iterator, deserializedData.iterator)
     TestUtils.checkEquals(produceData.iterator, deserializedStreamData.iterator)

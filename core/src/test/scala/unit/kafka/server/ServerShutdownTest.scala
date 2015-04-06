@@ -19,7 +19,7 @@ package kafka.server
 import kafka.zk.ZooKeeperTestHarness
 import kafka.consumer.SimpleConsumer
 import kafka.producer._
-import kafka.utils.{IntEncoder, TestUtils, Utils}
+import kafka.utils.{IntEncoder, TestUtils, CoreUtils}
 import kafka.utils.TestUtils._
 import kafka.api.FetchRequestBuilder
 import kafka.message.ByteBufferMessageSet
@@ -84,7 +84,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, 10000).maxWait(0).build())
       fetchedMessage = fetched.messageSet(topic, 0)
     }
-    assertEquals(sent1, fetchedMessage.map(m => Utils.readString(m.message.payload)))
+    assertEquals(sent1, fetchedMessage.map(m => TestUtils.readString(m.message.payload)))
     val newOffset = fetchedMessage.last.nextOffset
 
     // send some more messages
@@ -95,12 +95,12 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
       val fetched = consumer.fetch(new FetchRequestBuilder().addFetch(topic, 0, newOffset, 10000).build())
       fetchedMessage = fetched.messageSet(topic, 0)
     }
-    assertEquals(sent2, fetchedMessage.map(m => Utils.readString(m.message.payload)))
+    assertEquals(sent2, fetchedMessage.map(m => TestUtils.readString(m.message.payload)))
 
     consumer.close()
     producer.close()
     server.shutdown()
-    Utils.rm(server.config.logDirs)
+    CoreUtils.rm(server.config.logDirs)
     verifyNonDaemonThreadsStatus
   }
 
@@ -113,7 +113,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
     server.startup()
     server.shutdown()
     server.awaitShutdown()
-    Utils.rm(server.config.logDirs)
+    CoreUtils.rm(server.config.logDirs)
     verifyNonDaemonThreadsStatus
   }
 
@@ -141,7 +141,7 @@ class ServerShutdownTest extends JUnit3Suite with ZooKeeperTestHarness {
         server.shutdown()
       server.awaitShutdown()
     }
-    Utils.rm(server.config.logDirs)
+    CoreUtils.rm(server.config.logDirs)
     verifyNonDaemonThreadsStatus
   }
 

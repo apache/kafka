@@ -17,7 +17,7 @@
 package kafka.server
 
 import kafka.utils.ZkUtils._
-import kafka.utils.Utils._
+import kafka.utils.CoreUtils._
 import kafka.utils.{Json, SystemTime, Logging}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
 import org.I0Itec.zkclient.IZkDataListener

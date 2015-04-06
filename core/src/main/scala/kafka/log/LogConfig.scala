@@ -197,7 +197,7 @@ object LogConfig {
    * Parse the given properties instance into a LogConfig object
    */
   def fromProps(props: Properties): LogConfig = {
-    import kafka.utils.Utils.evaluateDefaults
+    import kafka.utils.CoreUtils.evaluateDefaults
     val parsed = configDef.parse(evaluateDefaults(props))
     new LogConfig(segmentSize = parsed.get(SegmentBytesProp).asInstanceOf[Int],
                   segmentMs = parsed.get(SegmentMsProp).asInstanceOf[Long],

@@ -21,7 +21,8 @@ import scala.collection.JavaConversions._
 import joptsimple.OptionParser
 import metrics.KafkaMetricsReporter
 import server.{KafkaConfig, KafkaServerStartable, KafkaServer}
-import kafka.utils.{VerifiableProperties, CommandLineUtils, Utils, Logging}
+import kafka.utils.{VerifiableProperties, CommandLineUtils, Logging}
+import org.apache.kafka.common.utils.Utils
 
 object Kafka extends Logging {
 

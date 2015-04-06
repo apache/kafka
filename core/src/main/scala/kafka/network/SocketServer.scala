@@ -33,6 +33,7 @@ import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import com.yammer.metrics.core.{Gauge, Meter}
+import org.apache.kafka.common.utils.Utils
 
 /**
  * An NIO socket server. The threading model is

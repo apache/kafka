@@ -17,11 +17,13 @@
 
 package kafka.cluster
 
+import kafka.utils.CoreUtils._
+import kafka.utils.Json
+import kafka.api.ApiUtils._
 import java.nio.ByteBuffer
 
 import kafka.common.{BrokerEndPointNotAvailableException, BrokerNotAvailableException, KafkaException}
 import kafka.utils.Json
-import kafka.utils.Utils._
 import org.apache.kafka.common.protocol.SecurityProtocol
 
 /**
@@ -139,14 +141,4 @@ case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) {
     }
   }
 
-  override def equals(obj: Any): Boolean = {
-    obj match {
-      case null => false
-      // Yes, Scala compares lists element by element
-      case n: Broker => id == n.id && endPoints == n.endPoints
-      case _ => false
-    }
-  }
-
-  override def hashCode(): Int = hashcode(id, endPoints)
 }

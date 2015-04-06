@@ -25,9 +25,8 @@ import kafka.common.{LeaderElectionNotNeededException, TopicAndPartition, StateC
 import kafka.utils.{Logging, ZkUtils, ReplicationUtils}
 import org.I0Itec.zkclient.{IZkDataListener, IZkChildListener}
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
-import org.apache.log4j.Logger
 import kafka.controller.Callbacks.CallbackBuilder
-import kafka.utils.Utils._
+import kafka.utils.CoreUtils._
 
 /**
  * This class represents the state machine for partitions. It defines the states that a partition can be in, and

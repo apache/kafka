@@ -51,7 +51,7 @@ private[kafka] class BoundedByteBufferReceive(val maxSize: Int) extends Receive 
     var read = 0
     // have we read the request size yet?
     if(sizeBuffer.remaining > 0)
-      read += Utils.read(channel, sizeBuffer)
+      read += CoreUtils.read(channel, sizeBuffer)
     // have we allocated the request buffer yet?
     if(contentBuffer == null && !sizeBuffer.hasRemaining) {
       sizeBuffer.rewind()
@@ -64,7 +64,7 @@ private[kafka] class BoundedByteBufferReceive(val maxSize: Int) extends Receive 
     }
     // if we have a buffer read some stuff into it
     if(contentBuffer != null) {
-      read = Utils.read(channel, contentBuffer)
+      read = CoreUtils.read(channel, contentBuffer)
       // did we get everything?
       if(!contentBuffer.hasRemaining) {
         contentBuffer.rewind()

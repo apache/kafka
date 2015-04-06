@@ -18,7 +18,7 @@ package kafka.controller
 
 import collection.mutable
 import kafka.utils.{ShutdownableThread, Logging, ZkUtils}
-import kafka.utils.Utils._
+import kafka.utils.CoreUtils._
 import collection.Set
 import kafka.common.{ErrorMapping, TopicAndPartition}
 import kafka.api.{StopReplicaResponse, RequestOrResponse}

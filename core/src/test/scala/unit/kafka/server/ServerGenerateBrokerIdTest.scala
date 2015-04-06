@@ -19,7 +19,7 @@ package kafka.server
 import java.util.Properties
 
 import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.{TestUtils, Utils}
+import kafka.utils.{TestUtils, CoreUtils}
 import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
 import junit.framework.Assert._
@@ -51,7 +51,7 @@ class ServerGenerateBrokerIdTest extends JUnit3Suite with ZooKeeperTestHarness {
     server1.startup()
     assertEquals(server1.config.brokerId, 1001)
     server1.shutdown()
-    Utils.rm(server1.config.logDirs)
+    CoreUtils.rm(server1.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus
   }
 
@@ -75,9 +75,9 @@ class ServerGenerateBrokerIdTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertTrue(verifyBrokerMetadata(server1.config.logDirs,1001))
     assertTrue(verifyBrokerMetadata(server2.config.logDirs,0))
     assertTrue(verifyBrokerMetadata(server3.config.logDirs,1002))
-    Utils.rm(server1.config.logDirs)
-    Utils.rm(server2.config.logDirs)
-    Utils.rm(server3.config.logDirs)
+    CoreUtils.rm(server1.config.logDirs)
+    CoreUtils.rm(server2.config.logDirs)
+    CoreUtils.rm(server3.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus
   }
 
@@ -100,7 +100,7 @@ class ServerGenerateBrokerIdTest extends JUnit3Suite with ZooKeeperTestHarness {
     server1.startup()
     server1.shutdown()
     assertTrue(verifyBrokerMetadata(config1.logDirs, 1001))
-    Utils.rm(server1.config.logDirs)
+    CoreUtils.rm(server1.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus
   }
 
@@ -117,7 +117,7 @@ class ServerGenerateBrokerIdTest extends JUnit3Suite with ZooKeeperTestHarness {
       case e: kafka.common.InconsistentBrokerIdException => //success
     }
     server1.shutdown()
-    Utils.rm(server1.config.logDirs)
+    CoreUtils.rm(server1.config.logDirs)
     TestUtils.verifyNonDaemonThreadsStatus
   }
 

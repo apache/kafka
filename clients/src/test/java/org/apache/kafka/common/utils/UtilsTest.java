@@ -18,6 +18,7 @@ package org.apache.kafka.common.utils;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.nio.ByteBuffer;
 
 import org.junit.Test;
 
@@ -66,5 +67,37 @@ public class UtilsTest {
         assertEquals(10, Utils.abs(10));
         assertEquals(0, Utils.abs(0));
         assertEquals(1, Utils.abs(-1));
+    }
+
+    private void subTest(ByteBuffer buffer) {
+        // The first byte should be 'A'
+        assertEquals('A', (Utils.readBytes(buffer, 0, 1))[0]);
+
+        // The offset is 2, so the first 2 bytes should be skipped.
+        byte[] results = Utils.readBytes(buffer, 2, 3);
+        assertEquals('y', results[0]);
+        assertEquals(' ', results[1]);
+        assertEquals('S', results[2]);
+        assertEquals(3, results.length);
+
+        // test readBytes without offset and length specified.
+        results = Utils.readBytes(buffer);
+        assertEquals('A', results[0]);
+        assertEquals('t', results[buffer.limit() - 1]);
+        assertEquals(buffer.limit(), results.length);
+    }
+
+    @Test
+    public void testReadBytes() {
+        byte[] myvar = "Any String you want".getBytes();
+        ByteBuffer buffer = ByteBuffer.allocate(myvar.length);
+        buffer.put(myvar);
+        buffer.rewind();
+
+        this.subTest(buffer);
+
+        // test readonly buffer, different path
+        buffer = ByteBuffer.wrap(myvar).asReadOnlyBuffer();
+        this.subTest(buffer);
     }
 }

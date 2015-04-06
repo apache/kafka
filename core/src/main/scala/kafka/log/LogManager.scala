@@ -132,7 +132,7 @@ class LogManager(val logDirs: Array[File],
         dirContent <- Option(dir.listFiles).toList
         logDir <- dirContent if logDir.isDirectory
       } yield {
-        Utils.runnable {
+        CoreUtils.runnable {
           debug("Loading log '" + logDir.getName + "'")
 
           val topicPartition = Log.parseTopicPartitionName(logDir)
@@ -210,7 +210,7 @@ class LogManager(val logDirs: Array[File],
 
     // stop the cleaner first
     if (cleaner != null) {
-      Utils.swallow(cleaner.shutdown())
+      CoreUtils.swallow(cleaner.shutdown())
     }
 
     // close logs in each dir
@@ -223,7 +223,7 @@ class LogManager(val logDirs: Array[File],
       val logsInDir = logsByDir.getOrElse(dir.toString, Map()).values
 
       val jobsForDir = logsInDir map { log =>
-        Utils.runnable {
+        CoreUtils.runnable {
           // flush the log to ensure latest possible recovery point
           log.flush()
           log.close()
@@ -244,7 +244,7 @@ class LogManager(val logDirs: Array[File],
 
         // mark that the shutdown was clean by creating marker file
         debug("Writing clean shutdown marker at " + dir)
-        Utils.swallow(new File(dir, Log.CleanShutdownFile).createNewFile())
+        CoreUtils.swallow(new File(dir, Log.CleanShutdownFile).createNewFile())
       }
     } catch {
       case e: ExecutionException => {

@@ -21,7 +21,7 @@ import java.util.Arrays
 
 import scala.collection.mutable.Buffer
 import kafka.server._
-import kafka.utils.{TestUtils, Utils}
+import kafka.utils.{CoreUtils, TestUtils}
 import org.scalatest.junit.JUnit3Suite
 import kafka.zk.ZooKeeperTestHarness
 import kafka.common.KafkaException
@@ -64,7 +64,7 @@ trait KafkaServerTestHarness extends JUnit3Suite with ZooKeeperTestHarness {
 
   override def tearDown() {
     servers.map(server => server.shutdown())
-    servers.map(server => server.config.logDirs.map(Utils.rm(_)))
+    servers.map(server => server.config.logDirs.map(CoreUtils.rm(_)))
     super.tearDown
   }
   

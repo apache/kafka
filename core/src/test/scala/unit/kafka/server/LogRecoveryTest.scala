@@ -19,7 +19,7 @@ package kafka.server
 import java.util.Properties
 
 import kafka.utils.TestUtils._
-import kafka.utils.{IntEncoder, Utils, TestUtils}
+import kafka.utils.{IntEncoder, CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import kafka.common._
 import kafka.producer.{KeyedMessage, Producer}
@@ -90,7 +90,7 @@ class LogRecoveryTest extends JUnit3Suite with ZooKeeperTestHarness {
     producer.close()
     for(server <- servers) {
       server.shutdown()
-      Utils.rm(server.config.logDirs(0))
+      CoreUtils.rm(server.config.logDirs(0))
     }
     super.tearDown()
   }

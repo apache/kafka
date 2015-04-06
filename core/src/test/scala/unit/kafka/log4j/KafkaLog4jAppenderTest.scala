@@ -19,7 +19,7 @@ package kafka.log4j
 
 import kafka.consumer.SimpleConsumer
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.{TestUtils, Utils, Logging}
+import kafka.utils.{TestUtils, CoreUtils, Logging}
 import kafka.api.FetchRequestBuilder
 import kafka.producer.async.MissingConfigException
 import kafka.serializer.Encoder
@@ -63,7 +63,7 @@ class KafkaLog4jAppenderTest extends JUnit3Suite with ZooKeeperTestHarness with 
   override def tearDown() {
     simpleConsumerZk.close
     server.shutdown
-    Utils.rm(logDirZk)
+    CoreUtils.rm(logDirZk)
     super.tearDown()
   }
 

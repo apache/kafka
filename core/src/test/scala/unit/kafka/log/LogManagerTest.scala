@@ -47,8 +47,8 @@ class LogManagerTest extends JUnit3Suite {
   override def tearDown() {
     if(logManager != null)
       logManager.shutdown()
-    Utils.rm(logDir)
-    logManager.logDirs.map(Utils.rm(_))
+    CoreUtils.rm(logDir)
+    logManager.logDirs.map(CoreUtils.rm(_))
     super.tearDown()
   }
   

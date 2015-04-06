@@ -21,7 +21,6 @@ import joptsimple.*;
 import kafka.javaapi.producer.Producer;
 import kafka.producer.KeyedMessage;
 import kafka.producer.ProducerConfig;
-import kafka.utils.Utils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -39,6 +38,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.apache.kafka.common.utils.Utils;
 
 
 /**

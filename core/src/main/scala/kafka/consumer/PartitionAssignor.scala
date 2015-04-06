@@ -19,7 +19,7 @@ package kafka.consumer
 
 import org.I0Itec.zkclient.ZkClient
 import kafka.common.TopicAndPartition
-import kafka.utils.{Pool, Utils, ZkUtils, Logging}
+import kafka.utils.{Pool, CoreUtils, ZkUtils, Logging}
 
 import scala.collection.mutable
 
@@ -88,7 +88,7 @@ class RoundRobinAssignor() extends PartitionAssignor with Logging {
             "Topic %s has the following available consumer streams: %s\n".format(headTopic, headThreadIdSet))
       }
 
-      val threadAssignor = Utils.circularIterator(headThreadIdSet.toSeq.sorted)
+      val threadAssignor = CoreUtils.circularIterator(headThreadIdSet.toSeq.sorted)
 
       info("Starting round-robin assignment with consumers " + ctx.consumers)
       val allTopicPartitions = ctx.partitionsForTopic.flatMap { case (topic, partitions) =>

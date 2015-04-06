@@ -254,10 +254,10 @@ class LogSegment(val log: FileMessageSet,
    * Change the suffix for the index and log file for this log segment
    */
   def changeFileSuffixes(oldSuffix: String, newSuffix: String) {
-    val logRenamed = log.renameTo(new File(Utils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
+    val logRenamed = log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
     if(!logRenamed)
       throw new KafkaStorageException("Failed to change the log file suffix from %s to %s for log segment %d".format(oldSuffix, newSuffix, baseOffset))
-    val indexRenamed = index.renameTo(new File(Utils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
+    val indexRenamed = index.renameTo(new File(CoreUtils.replaceSuffix(index.file.getPath, oldSuffix, newSuffix)))
     if(!indexRenamed)
       throw new KafkaStorageException("Failed to change the index file suffix from %s to %s for log segment %d".format(oldSuffix, newSuffix, baseOffset))
   }
@@ -266,8 +266,8 @@ class LogSegment(val log: FileMessageSet,
    * Close this log segment
    */
   def close() {
-    Utils.swallow(index.close)
-    Utils.swallow(log.close)
+    CoreUtils.swallow(index.close)
+    CoreUtils.swallow(log.close)
   }
   
   /**
