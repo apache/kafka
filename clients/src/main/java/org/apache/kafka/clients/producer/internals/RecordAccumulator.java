@@ -59,6 +59,7 @@ public final class RecordAccumulator {
     private volatile AtomicInteger flushesInProgress;
     private int drainIndex;
     private final int batchSize;
+    private final CompressionType compression;
     private final long lingerMs;
     private final long retryBackoffMs;
     private final BufferPool free;
@@ -71,6 +72,7 @@ public final class RecordAccumulator {
      * 
      * @param batchSize The size to use when allocating {@link org.apache.kafka.common.record.MemoryRecords} instances
      * @param totalSize The maximum memory the record accumulator can use.
+     * @param compression The compression codec for the records
      * @param lingerMs An artificial delay time to add before declaring a records instance that isn't full ready for
      *        sending. This allows time for more records to arrive. Setting a non-zero lingerMs will trade off some
      *        latency for potentially better throughput due to more batching (and hence fewer, larger requests).
@@ -84,6 +86,7 @@ public final class RecordAccumulator {
      */
     public RecordAccumulator(int batchSize,
                              long totalSize,
+                             CompressionType compression,
                              long lingerMs,
                              long retryBackoffMs,
                              boolean blockOnBufferFull,
@@ -94,6 +97,7 @@ public final class RecordAccumulator {
         this.closed = false;
         this.flushesInProgress = new AtomicInteger(0);
         this.batchSize = batchSize;
+        this.compression = compression;
         this.lingerMs = lingerMs;
         this.retryBackoffMs = retryBackoffMs;
         this.batches = new CopyOnWriteMap<TopicPartition, Deque<RecordBatch>>();
@@ -139,10 +143,9 @@ public final class RecordAccumulator {
      * @param tp The topic/partition to which this record is being sent
      * @param key The key for the record
      * @param value The value for the record
-     * @param compression The compression codec for the record
      * @param callback The user-supplied callback to execute when the request is complete
      */
-    public RecordAppendResult append(TopicPartition tp, byte[] key, byte[] value, CompressionType compression, Callback callback) throws InterruptedException {
+    public RecordAppendResult append(TopicPartition tp, byte[] key, byte[] value, Callback callback) throws InterruptedException {
         if (closed)
             throw new IllegalStateException("Cannot send after the producer is closed.");
         // check if we have an in-progress batch
