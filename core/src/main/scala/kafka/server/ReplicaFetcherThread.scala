@@ -120,6 +120,6 @@ class ReplicaFetcherThread(name:String,
 
   // any logic for partitions whose leader has changed
   def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition]) {
-    // no handler needed since the controller will make the changes accordingly
+    delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs)
   }
 }
