@@ -18,7 +18,7 @@
 package kafka.api
 
 
-import kafka.cluster.{BrokerEndpoint, EndPoint, Broker}
+import kafka.cluster.{BrokerEndPoint, EndPoint, Broker}
 import kafka.common.{OffsetAndMetadata, ErrorMapping, OffsetMetadataAndError}
 import kafka.common._
 import kafka.message.{Message, ByteBufferMessageSet}
@@ -122,7 +122,7 @@ object SerializationTestUtils {
     val leaderAndIsr2 = new LeaderIsrAndControllerEpoch(new LeaderAndIsr(leader2, 1, isr2, 2), 1)
     val map = Map(((topic1, 0), PartitionStateInfo(leaderAndIsr1, isr1.toSet)),
                   ((topic2, 0), PartitionStateInfo(leaderAndIsr2, isr2.toSet)))
-    new LeaderAndIsrRequest(map.toMap, collection.immutable.Set[BrokerEndpoint](), 0, 1, 0, "")
+    new LeaderAndIsrRequest(map.toMap, collection.immutable.Set[BrokerEndPoint](), 0, 1, 0, "")
   }
 
   def createTestLeaderAndIsrResponse() : LeaderAndIsrResponse = {

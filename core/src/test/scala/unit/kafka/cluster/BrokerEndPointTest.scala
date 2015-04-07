@@ -91,12 +91,12 @@ class BrokerEndPointTest extends JUnit3Suite with Logging {
   @Test
   def testBrokerEndpointFromURI() = {
     var connectionString = "localhost:9092"
-    var endpoint = BrokerEndpoint.createBrokerEndPoint(1, connectionString)
+    var endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
     assert(endpoint.host == "localhost")
     assert(endpoint.port == 9092)
     // also test for ipv6
     connectionString = "[::1]:9092"
-    endpoint = BrokerEndpoint.createBrokerEndPoint(1, connectionString)
+    endpoint = BrokerEndPoint.createBrokerEndPoint(1, connectionString)
     assert(endpoint.host == "::1")
     assert(endpoint.port == 9092)
   }

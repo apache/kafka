@@ -18,14 +18,14 @@
 package kafka.server
 
 import kafka.admin.AdminUtils
-import kafka.cluster.BrokerEndpoint
+import kafka.cluster.BrokerEndPoint
 import kafka.log.LogConfig
 import kafka.message.ByteBufferMessageSet
 import kafka.api.{OffsetRequest, FetchResponsePartitionData}
 import kafka.common.{KafkaStorageException, TopicAndPartition}
 
 class ReplicaFetcherThread(name:String,
-                           sourceBroker: BrokerEndpoint,
+                           sourceBroker: BrokerEndPoint,
                            brokerConfig: KafkaConfig,
                            replicaMgr: ReplicaManager)
   extends AbstractFetcherThread(name = name,

@@ -18,7 +18,7 @@
 package kafka.admin
 
 import kafka.common._
-import kafka.cluster.{BrokerEndpoint, Broker}
+import kafka.cluster.{BrokerEndPoint, Broker}
 
 import kafka.log.LogConfig
 import kafka.utils._
@@ -356,9 +356,9 @@ object AdminUtils extends Logging {
         val leader = ZkUtils.getLeaderForPartition(zkClient, topic, partition)
         debug("replicas = " + replicas + ", in sync replicas = " + inSyncReplicas + ", leader = " + leader)
 
-        var leaderInfo: Option[BrokerEndpoint] = None
-        var replicaInfo: Seq[BrokerEndpoint] = Nil
-        var isrInfo: Seq[BrokerEndpoint] = Nil
+        var leaderInfo: Option[BrokerEndPoint] = None
+        var replicaInfo: Seq[BrokerEndPoint] = Nil
+        var isrInfo: Seq[BrokerEndPoint] = Nil
         try {
           leaderInfo = leader match {
             case Some(l) =>

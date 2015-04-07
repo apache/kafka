@@ -43,7 +43,7 @@ object ClientUtils extends Logging{
    * @param producerConfig The producer's config
    * @return topic metadata response
    */
-  def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndpoint], producerConfig: ProducerConfig, correlationId: Int): TopicMetadataResponse = {
+  def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndPoint], producerConfig: ProducerConfig, correlationId: Int): TopicMetadataResponse = {
     var fetchMetaDataSucceeded: Boolean = false
     var i: Int = 0
     val topicMetadataRequest = new TopicMetadataRequest(TopicMetadataRequest.CurrentVersion, correlationId, producerConfig.clientId, topics.toSeq)
@@ -84,7 +84,7 @@ object ClientUtils extends Logging{
    * @param clientId The client's identifier
    * @return topic metadata response
    */
-  def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndpoint], clientId: String, timeoutMs: Int,
+  def fetchTopicMetadata(topics: Set[String], brokers: Seq[BrokerEndPoint], clientId: String, timeoutMs: Int,
                          correlationId: Int = 0): TopicMetadataResponse = {
     val props = new Properties()
     props.put("metadata.broker.list", brokers.map(_.connectionString).mkString(","))
@@ -97,11 +97,11 @@ object ClientUtils extends Logging{
   /**
    * Parse a list of broker urls in the form host1:port1, host2:port2, ... 
    */
-  def parseBrokerList(brokerListStr: String): Seq[BrokerEndpoint] = {
+  def parseBrokerList(brokerListStr: String): Seq[BrokerEndPoint] = {
     val brokersStr = CoreUtils.parseCsvList(brokerListStr)
 
     brokersStr.zipWithIndex.map { case (address, brokerId) =>
-      BrokerEndpoint.createBrokerEndPoint(brokerId, address)
+      BrokerEndPoint.createBrokerEndPoint(brokerId, address)
     }
   }
 
@@ -144,7 +144,7 @@ object ClientUtils extends Logging{
 
      while (!offsetManagerChannelOpt.isDefined) {
 
-       var coordinatorOpt: Option[BrokerEndpoint] = None
+       var coordinatorOpt: Option[BrokerEndPoint] = None
 
        while (!coordinatorOpt.isDefined) {
          try {

@@ -18,18 +18,18 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.cluster.BrokerEndpoint
+import kafka.cluster.BrokerEndPoint
 import kafka.common.ErrorMapping
 
 object ConsumerMetadataResponse {
   val CurrentVersion = 0
 
-  private val NoBrokerEndpointOpt = Some(BrokerEndpoint(id = -1, host = "", port = -1))
+  private val NoBrokerEndpointOpt = Some(BrokerEndPoint(id = -1, host = "", port = -1))
   
   def readFrom(buffer: ByteBuffer) = {
     val correlationId = buffer.getInt
     val errorCode = buffer.getShort
-    val broker = BrokerEndpoint.readFrom(buffer)
+    val broker = BrokerEndPoint.readFrom(buffer)
     val coordinatorOpt = if (errorCode == ErrorMapping.NoError)
       Some(broker)
     else
@@ -40,7 +40,7 @@ object ConsumerMetadataResponse {
   
 }
 
-case class ConsumerMetadataResponse (coordinatorOpt: Option[BrokerEndpoint], errorCode: Short, correlationId: Int)
+case class ConsumerMetadataResponse (coordinatorOpt: Option[BrokerEndPoint], errorCode: Short, correlationId: Int)
   extends RequestOrResponse() {
 
   def sizeInBytes =

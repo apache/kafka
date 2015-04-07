@@ -17,7 +17,7 @@
 
 package kafka.api
 
-import kafka.cluster.BrokerEndpoint
+import kafka.cluster.BrokerEndPoint
 import java.nio.ByteBuffer
 import kafka.api.ApiUtils._
 import kafka.utils.Logging
@@ -27,7 +27,7 @@ object TopicMetadata {
   
   val NoLeaderNodeId = -1
 
-  def readFrom(buffer: ByteBuffer, brokers: Map[Int, BrokerEndpoint]): TopicMetadata = {
+  def readFrom(buffer: ByteBuffer, brokers: Map[Int, BrokerEndPoint]): TopicMetadata = {
     val errorCode = readShortInRange(buffer, "error code", (-1, Short.MaxValue))
     val topic = readShortString(buffer)
     val numPartitions = readIntInRange(buffer, "number of partitions", (0, Int.MaxValue))
@@ -88,7 +88,7 @@ case class TopicMetadata(topic: String, partitionsMetadata: Seq[PartitionMetadat
 
 object PartitionMetadata {
 
-  def readFrom(buffer: ByteBuffer, brokers: Map[Int, BrokerEndpoint]): PartitionMetadata = {
+  def readFrom(buffer: ByteBuffer, brokers: Map[Int, BrokerEndPoint]): PartitionMetadata = {
     val errorCode = readShortInRange(buffer, "error code", (-1, Short.MaxValue))
     val partitionId = readIntInRange(buffer, "partition id", (0, Int.MaxValue)) /* partition id */
     val leaderId = buffer.getInt
@@ -109,9 +109,9 @@ object PartitionMetadata {
 }
 
 case class PartitionMetadata(partitionId: Int, 
-                             val leader: Option[BrokerEndpoint],
-                             replicas: Seq[BrokerEndpoint],
-                             isr: Seq[BrokerEndpoint] = Seq.empty,
+                             val leader: Option[BrokerEndPoint],
+                             replicas: Seq[BrokerEndPoint],
+                             isr: Seq[BrokerEndPoint] = Seq.empty,
                              errorCode: Short = ErrorMapping.NoError) extends Logging {
   def sizeInBytes: Int = {
     2 /* error code */ + 

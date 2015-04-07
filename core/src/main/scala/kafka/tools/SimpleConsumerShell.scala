@@ -22,7 +22,7 @@ import kafka.utils._
 import kafka.consumer._
 import kafka.client.ClientUtils
 import kafka.api.{OffsetRequest, FetchRequestBuilder, Request}
-import kafka.cluster.BrokerEndpoint
+import kafka.cluster.BrokerEndPoint
 import scala.collection.JavaConversions._
 import kafka.common.TopicAndPartition
 import org.apache.kafka.common.utils.Utils
@@ -143,8 +143,8 @@ object SimpleConsumerShell extends Logging {
     }
 
     // validating replica id and initializing target broker
-    var fetchTargetBroker: BrokerEndpoint = null
-    var replicaOpt: Option[BrokerEndpoint] = null
+    var fetchTargetBroker: BrokerEndPoint = null
+    var replicaOpt: Option[BrokerEndPoint] = null
     if(replicaId == UseLeaderReplica) {
       replicaOpt = partitionMetadataOpt.get.leader
       if(!replicaOpt.isDefined) {

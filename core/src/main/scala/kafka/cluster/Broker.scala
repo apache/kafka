@@ -110,7 +110,7 @@ case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) {
     this(id, Map(protocol -> EndPoint(host, port, protocol)))
   }
 
-  def this(bep: BrokerEndpoint, protocol: SecurityProtocol) = {
+  def this(bep: BrokerEndPoint, protocol: SecurityProtocol) = {
     this(bep.id, bep.host, bep.port, protocol)
   }
 
@@ -132,10 +132,10 @@ case class Broker(id: Int, endPoints: Map[SecurityProtocol, EndPoint]) {
     endPoints.contains(protocolType)
   }
 
-  def getBrokerEndPoint(protocolType: SecurityProtocol): BrokerEndpoint = {
+  def getBrokerEndPoint(protocolType: SecurityProtocol): BrokerEndPoint = {
     val endpoint = endPoints.get(protocolType)
     endpoint match {
-      case Some(endpoint) => new BrokerEndpoint(id, endpoint.host, endpoint.port)
+      case Some(endpoint) => new BrokerEndPoint(id, endpoint.host, endpoint.port)
       case None =>
         throw new BrokerEndPointNotAvailableException("End point %s not found for broker %d".format(protocolType,id))
     }

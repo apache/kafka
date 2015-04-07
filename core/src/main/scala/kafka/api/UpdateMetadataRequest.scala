@@ -19,7 +19,7 @@ package kafka.api
 import java.nio.ByteBuffer
 
 import kafka.api.ApiUtils._
-import kafka.cluster.{Broker, BrokerEndpoint}
+import kafka.cluster.{Broker, BrokerEndPoint}
 import kafka.common.{ErrorMapping, KafkaException, TopicAndPartition}
 import kafka.network.RequestChannel.Response
 import kafka.network.{BoundedByteBufferSend, RequestChannel}
@@ -53,7 +53,7 @@ object UpdateMetadataRequest {
     val numAliveBrokers = buffer.getInt
 
     val aliveBrokers = versionId match {
-      case 0 => for(i <- 0 until numAliveBrokers) yield new Broker(BrokerEndpoint.readFrom(buffer),SecurityProtocol.PLAINTEXT)
+      case 0 => for(i <- 0 until numAliveBrokers) yield new Broker(BrokerEndPoint.readFrom(buffer),SecurityProtocol.PLAINTEXT)
       case 1 => for(i <- 0 until numAliveBrokers) yield Broker.readFrom(buffer)
       case v => throw new KafkaException( "Version " + v.toString + " is invalid for UpdateMetadataRequest. Valid versions are 0 or 1.")
     }

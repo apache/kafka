@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.cluster.{BrokerEndpoint,Broker}
+import kafka.cluster.{BrokerEndPoint,Broker}
 import kafka.common.{ErrorMapping, ReplicaNotAvailableException, LeaderNotAvailableException}
 import kafka.common.TopicAndPartition
 
@@ -54,10 +54,10 @@ private[server] class MetadataCache(brokerId: Int) extends Logging {
           val partitionMetadata = partitionStateInfos.map {
             case (partitionId, partitionState) =>
               val replicas = partitionState.allReplicas
-              val replicaInfo: Seq[BrokerEndpoint] = replicas.map(aliveBrokers.getOrElse(_, null)).filter(_ != null).toSeq.map(_.getBrokerEndPoint(protocol))
-              var leaderInfo: Option[BrokerEndpoint] = None
+              val replicaInfo: Seq[BrokerEndPoint] = replicas.map(aliveBrokers.getOrElse(_, null)).filter(_ != null).toSeq.map(_.getBrokerEndPoint(protocol))
+              var leaderInfo: Option[BrokerEndPoint] = None
               var leaderBrokerInfo: Option[Broker] = None
-              var isrInfo: Seq[BrokerEndpoint] = Nil
+              var isrInfo: Seq[BrokerEndPoint] = Nil
               val leaderIsrAndEpoch = partitionState.leaderIsrAndControllerEpoch
               val leader = leaderIsrAndEpoch.leaderAndIsr.leader
               val isr = leaderIsrAndEpoch.leaderAndIsr.isr

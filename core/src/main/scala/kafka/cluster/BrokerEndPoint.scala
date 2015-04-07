@@ -22,24 +22,24 @@ import kafka.api.ApiUtils._
 import kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils._
 
-object BrokerEndpoint {
-  def createBrokerEndPoint(brokerId: Int, connectionString: String): BrokerEndpoint = {
+object BrokerEndPoint {
+  def createBrokerEndPoint(brokerId: Int, connectionString: String): BrokerEndPoint = {
 
     // BrokerEndPoint URI is host:port or [ipv6_host]:port
     // Note that unlike EndPoint (or listener) this URI has no security information.
     val uriParseExp = """\[?([0-9a-z\-.:]*)\]?:([0-9]+)""".r
 
     connectionString match {
-      case uriParseExp(host, port) => new BrokerEndpoint(brokerId, host, port.toInt)
+      case uriParseExp(host, port) => new BrokerEndPoint(brokerId, host, port.toInt)
       case _ => throw new KafkaException("Unable to parse " + connectionString + " to a broker endpoint")
     }
   }
 
-  def readFrom(buffer: ByteBuffer): BrokerEndpoint = {
+  def readFrom(buffer: ByteBuffer): BrokerEndPoint = {
     val brokerId = buffer.getInt()
     val host = readShortString(buffer)
     val port = buffer.getInt()
-    BrokerEndpoint(brokerId, host, port)
+    BrokerEndPoint(brokerId, host, port)
   }
 }
 
@@ -50,7 +50,7 @@ object BrokerEndpoint {
  * Clients should know which security protocol to use from configuration.
  * This allows us to keep the wire protocol with the clients unchanged where the protocol is not needed.
  */
-case class BrokerEndpoint(id: Int, host: String, port: Int) {
+case class BrokerEndPoint(id: Int, host: String, port: Int) {
 
   def connectionString(): String = formatAddress(host, port)
 

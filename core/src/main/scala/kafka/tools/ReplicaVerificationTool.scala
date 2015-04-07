@@ -18,7 +18,7 @@
 package kafka.tools
 
 import joptsimple.OptionParser
-import kafka.cluster.BrokerEndpoint
+import kafka.cluster.BrokerEndPoint
 import kafka.message.{MessageSet, MessageAndOffset, ByteBufferMessageSet}
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
@@ -197,7 +197,7 @@ private case class MessageInfo(replicaId: Int, offset: Long, nextOffset: Long, c
 private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPartition, Int],
                             leadersPerBroker: Map[Int, Seq[TopicAndPartition]],
                             expectedNumFetchers: Int,
-                            brokerMap: Map[Int, BrokerEndpoint],
+                            brokerMap: Map[Int, BrokerEndPoint],
                             initialOffsetTime: Long,
                             reportInterval: Long) extends Logging {
   private val fetchOffsetMap = new Pool[TopicAndPartition, Long]
@@ -335,7 +335,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicAndPartition: Map[TopicAndPa
   }
 }
 
-private class ReplicaFetcher(name: String, sourceBroker: BrokerEndpoint, topicAndPartitions: Iterable[TopicAndPartition],
+private class ReplicaFetcher(name: String, sourceBroker: BrokerEndPoint, topicAndPartitions: Iterable[TopicAndPartition],
                              replicaBuffer: ReplicaBuffer, socketTimeout: Int, socketBufferSize: Int,
                              fetchSize: Int, maxWait: Int, minBytes: Int, doVerification: Boolean)
   extends ShutdownableThread(name) {

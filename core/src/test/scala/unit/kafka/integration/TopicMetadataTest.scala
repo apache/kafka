@@ -23,7 +23,7 @@ import kafka.zk.ZooKeeperTestHarness
 import kafka.admin.AdminUtils
 import java.nio.ByteBuffer
 import junit.framework.Assert._
-import kafka.cluster.{BrokerEndpoint, Broker}
+import kafka.cluster.{BrokerEndPoint, Broker}
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.server.{KafkaServer, KafkaConfig}
@@ -33,7 +33,7 @@ import kafka.client.ClientUtils
 
 class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   private var server1: KafkaServer = null
-  var brokerEndPoints: Seq[BrokerEndpoint] = null
+  var brokerEndPoints: Seq[BrokerEndPoint] = null
 
   override def setUp() {
     super.setUp()
