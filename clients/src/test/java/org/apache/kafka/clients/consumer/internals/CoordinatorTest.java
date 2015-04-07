@@ -244,7 +244,7 @@ public class CoordinatorTest {
         assertEquals(100L, (long) coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds()).get(tp));
 
         // fetch with no fetchable offsets
-        client.prepareResponse(offsetFetchResponse(tp, Errors.NO_OFFSETS_FETCHABLE.code(), "", 100L));
+        client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", -1L));
         assertEquals(0, coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds()).size());
 
         // fetch with offset topic unknown

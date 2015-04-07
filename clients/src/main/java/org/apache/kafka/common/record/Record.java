@@ -324,7 +324,6 @@ public final class Record {
                              checksum(),
                              key() == null ? 0 : key().limit(),
                              value() == null ? 0 : value().limit());
-
     }
 
     public boolean equals(Object other) {

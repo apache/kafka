@@ -234,16 +234,14 @@ public final class Coordinator {
                         coordinatorDead();
                         offsetsReady = false;
                         Utils.sleep(this.retryBackoffMs);
-                    } else if (data.errorCode == Errors.NO_OFFSETS_FETCHABLE.code()
-                            || data.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
+                    } else if (data.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
                         // just ignore this partition
-                        log.debug("No committed offset for partition " + tp);
+                        log.debug("Unknown topic or partition for " + tp);
                     } else {
                         throw new IllegalStateException("Unexpected error code " + data.errorCode + " while fetching offset");
                     }
                 } else if (data.offset >= 0) {
-                    // record the position with the offset (-1 seems to indicate no
-                    // such offset known)
+                    // record the position with the offset (-1 indicates no committed offset to fetch)
                     offsets.put(tp, data.offset);
                 } else {
                     log.debug("No committed offset for partition " + tp);

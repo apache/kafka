@@ -69,9 +69,7 @@ public enum Errors {
     INVALID_REQUIRED_ACKS(21,
             new InvalidRequiredAcksException("Produce request specified an invalid value for required acks.")),
     ILLEGAL_GENERATION(22,
-            new ApiException("Specified consumer generation id is not valid.")),
-    NO_OFFSETS_FETCHABLE(23,
-            new ApiException("No offsets have been committed so far."));
+            new ApiException("Specified consumer generation id is not valid."));
 
     private static Map<Class<?>, Errors> classToError = new HashMap<Class<?>, Errors>();
     private static Map<Short, Errors> codeToError = new HashMap<Short, Errors>();
