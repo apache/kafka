@@ -111,7 +111,6 @@ class ReplicaManager(val config: KafkaConfig,
   val delayedFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
     purgatoryName = "Fetch", config.brokerId, config.fetchPurgatoryPurgeIntervalRequests)
 
-
   newGauge(
     "LeaderCount",
     new Gauge[Int] {

@@ -18,11 +18,15 @@
 package kafka.server
 
 import kafka.utils._
+import kafka.utils.timer._
 import kafka.metrics.KafkaMetricsGroup
 
-import java.util
+import java.util.LinkedList
 import java.util.concurrent._
 import java.util.concurrent.atomic._
+
+import org.apache.kafka.common.utils.Utils
+
 import scala.collection._
 
 import com.yammer.metrics.core.Gauge
@@ -41,7 +45,10 @@ import com.yammer.metrics.core.Gauge
  *
  * A subclass of DelayedOperation needs to provide an implementation of both onComplete() and tryComplete().
  */
-abstract class DelayedOperation(delayMs: Long) extends DelayedItem(delayMs) {
+abstract class DelayedOperation(delayMs: Long) extends TimerTask with Logging {
+
+  override val expirationMs = delayMs + System.currentTimeMillis()
+
   private val completed = new AtomicBoolean(false)
 
   /*
@@ -58,6 +65,8 @@ abstract class DelayedOperation(delayMs: Long) extends DelayedItem(delayMs) {
    */
   def forceComplete(): Boolean = {
     if (completed.compareAndSet(false, true)) {
+      // cancel the timeout timer
+      cancel()
       onComplete()
       true
     } else {
@@ -71,7 +80,7 @@ abstract class DelayedOperation(delayMs: Long) extends DelayedItem(delayMs) {
   def isCompleted(): Boolean = completed.get()
 
   /**
-   * Call-back to execute when a delayed operation expires, but before completion.
+   * Call-back to execute when a delayed operation gets expired and hence forced to complete.
    */
   def onExpiration(): Unit
 
@@ -89,6 +98,14 @@ abstract class DelayedOperation(delayMs: Long) extends DelayedItem(delayMs) {
    * This function needs to be defined in subclasses
    */
   def tryComplete(): Boolean
+
+  /*
+   * run() method defines a task that is executed on timeout
+   */
+  override def run(): Unit = {
+    if (forceComplete())
+      onExpiration()
+  }
 }
 
 /**
@@ -97,11 +114,21 @@ abstract class DelayedOperation(delayMs: Long) extends DelayedItem(delayMs) {
 class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, brokerId: Int = 0, purgeInterval: Int = 1000)
         extends Logging with KafkaMetricsGroup {
 
+  // timeout timer
+  private[this] val executor = Executors.newFixedThreadPool(1, new ThreadFactory() {
+    def newThread(runnable: Runnable): Thread =
+      Utils.newThread("executor-"+purgatoryName, runnable, false)
+  })
+  private[this] val timeoutTimer = new Timer(executor)
+
   /* a list of operation watching keys */
   private val watchersForKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers))
 
+  // the number of estimated total operations in the purgatory
+  private[this] val estimatedTotalOperations = new AtomicInteger(0)
+
   /* background thread expiring operations that have timed out */
-  private val expirationReaper = new ExpiredOperationReaper
+  private val expirationReaper = new ExpiredOperationReaper()
 
   private val metricsTags = Map("delayedOperation" -> purgatoryName)
 
@@ -153,12 +180,18 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
     if (isCompletedByMe)
       return true
 
+    var watchCreated = false
     for(key <- watchKeys) {
       // If the operation is already completed, stop adding it to the rest of the watcher list.
       if (operation.isCompleted())
         return false
       val watchers = watchersFor(key)
       watchers.watch(operation)
+
+      if (!watchCreated) {
+        watchCreated = true
+        estimatedTotalOperations.incrementAndGet()
+      }
     }
 
     isCompletedByMe = operation synchronized operation.tryComplete()
@@ -166,8 +199,13 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
       return true
 
     // if it cannot be completed by now and hence is watched, add to the expire queue also
-    if (! operation.isCompleted())
-      expirationReaper.enqueue(operation)
+    if (! operation.isCompleted()) {
+      timeoutTimer.add(operation)
+      if (operation.isCompleted()) {
+        // cancel the timer task
+        operation.cancel()
+      }
+    }
 
     false
   }
@@ -196,7 +234,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
   /**
    * Return the number of delayed operations in the expiry queue
    */
-  def delayed() = expirationReaper.delayed
+  def delayed() = timeoutTimer.size
 
   /*
    * Return the watch list of the given key
@@ -208,52 +246,51 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
    */
   def shutdown() {
     expirationReaper.shutdown()
+    executor.shutdown()
   }
 
   /**
    * A linked list of watched delayed operations based on some key
    */
   private class Watchers {
-    private val operations = new util.LinkedList[T]
 
-    def watched = operations.size()
+    private[this] val operations = new LinkedList[T]()
+
+    def watched(): Int = operations synchronized operations.size
 
     // add the element to watch
     def watch(t: T) {
-      synchronized {
-        operations.add(t)
-      }
+      operations synchronized operations.add(t)
     }
 
     // traverse the list and try to complete some watched elements
     def tryCompleteWatched(): Int = {
-      var completed = 0
-      synchronized {
+
+      operations synchronized {
+        var completed = 0
         val iter = operations.iterator()
-        while(iter.hasNext) {
-          val curr = iter.next
-          if (curr.isCompleted()) {
+        while (iter.hasNext) {
+          val curr = iter.next()
+          if (curr.isCompleted) {
             // another thread has completed this operation, just remove it
             iter.remove()
-          } else {
-            if(curr synchronized curr.tryComplete()) {
-              iter.remove()
-              completed += 1
-            }
+          } else if (curr synchronized curr.tryComplete()) {
+            completed += 1
+            iter.remove()
           }
         }
+        completed
       }
-      completed
     }
 
     // traverse the list and purge elements that are already completed by others
     def purgeCompleted(): Int = {
       var purged = 0
-      synchronized {
+      operations synchronized {
         val iter = operations.iterator()
         while (iter.hasNext) {
-          val curr = iter.next
-          if(curr.isCompleted()) {
+          val curr = iter.next()
+          if (curr.isCompleted) {
             iter.remove()
             purged += 1
           }
@@ -270,70 +307,20 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
     "ExpirationReaper-%d".format(brokerId),
     false) {
 
-    /* The queue storing all delayed operations */
-    private val delayedQueue = new DelayQueue[T]
-
-    /*
-     * Return the number of delayed operations kept by the reaper
-     */
-    def delayed() = delayedQueue.size()
-
-    /*
-     * Add an operation to be expired
-     */
-    def enqueue(t: T) {
-      delayedQueue.add(t)
-    }
-
-    /**
-     * Try to get the next expired event and force completing it
-     */
-    private def expireNext() {
-      val curr = delayedQueue.poll(200L, TimeUnit.MILLISECONDS)
-      if (curr != null.asInstanceOf[T]) {
-        // if there is an expired operation, try to force complete it
-        val completedByMe: Boolean = curr synchronized {
-          curr.onExpiration()
-          curr.forceComplete()
-        }
-        if (completedByMe)
-          debug("Force complete expired delayed operation %s".format(curr))
-      }
-    }
-
-    /**
-     * Delete all satisfied events from the delay queue and the watcher lists
-     */
-    private def purgeCompleted(): Int = {
-      var purged = 0
-
-      // purge the delayed queue
-      val iter = delayedQueue.iterator()
-      while (iter.hasNext) {
-        val curr = iter.next()
-        if (curr.isCompleted()) {
-          iter.remove()
-          purged += 1
-        }
-      }
-
-      purged
-    }
-
     override def doWork() {
-      // try to get the next expired operation and force completing it
-      expireNext()
-      // see if we need to purge the watch lists
-      if (DelayedOperationPurgatory.this.watched() >= purgeInterval) {
+      timeoutTimer.advanceClock(200L)
+
+      // Trigger a purge if the number of completed but still being watched operations is larger than
+      // the purge threshold. That number is computed by the difference btw the estimated total number of
+      // operations and the number of pending delayed operations.
+      if (estimatedTotalOperations.get - delayed > purgeInterval) {
+        // now set estimatedTotalOperations to delayed (the number of pending operations) since we are going to
+        // clean up watchers. Note that, if more operations are completed during the clean up, we may end up with
+        // a little overestimated total number of operations.
+        estimatedTotalOperations.getAndSet(delayed)
         debug("Begin purging watch lists")
         val purged = watchersForKey.values.map(_.purgeCompleted()).sum
         debug("Purged %d elements from watch lists.".format(purged))
-      }
-      // see if we need to purge the delayed operation queue
-      if (delayed() >= purgeInterval) {
-        debug("Begin purging delayed queue")
-        val purged = purgeCompleted()
-        debug("Purged %d operations from delayed queue.".format(purged))
       }
     }
   }
