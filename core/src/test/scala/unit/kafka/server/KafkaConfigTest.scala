@@ -32,7 +32,7 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testLogRetentionTimeHoursProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put("log.retention.hours", "1")
+    props.put(KafkaConfig.LogRetentionTimeHoursProp, "1")
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(60L * 60L * 1000L, cfg.logRetentionTimeMillis)
@@ -41,7 +41,7 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testLogRetentionTimeMinutesProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put("log.retention.minutes", "30")
+    props.put(KafkaConfig.LogRetentionTimeMinutesProp, "30")
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(30 * 60L * 1000L, cfg.logRetentionTimeMillis)
@@ -50,7 +50,7 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testLogRetentionTimeMsProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put("log.retention.ms", "1800000")
+    props.put(KafkaConfig.LogRetentionTimeMillisProp, "1800000")
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(30 * 60L * 1000L, cfg.logRetentionTimeMillis)
@@ -67,8 +67,8 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testLogRetentionTimeBothMinutesAndHoursProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put("log.retention.minutes", "30")
-    props.put("log.retention.hours", "1")
+    props.put(KafkaConfig.LogRetentionTimeMinutesProp, "30")
+    props.put(KafkaConfig.LogRetentionTimeHoursProp, "1")
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRetentionTimeMillis)
@@ -77,8 +77,8 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testLogRetentionTimeBothMinutesAndMsProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put("log.retention.ms", "1800000")
-    props.put("log.retention.minutes", "10")
+    props.put(KafkaConfig.LogRetentionTimeMillisProp, "1800000")
+    props.put(KafkaConfig.LogRetentionTimeMinutesProp, "10")
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRetentionTimeMillis)
@@ -90,9 +90,9 @@ class KafkaConfigTest extends JUnit3Suite {
     val hostName = "fake-host"
 
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.remove("listeners")
-    props.put("host.name", hostName)
-    props.put("port", port)
+    props.remove(KafkaConfig.ListenersProp)
+    props.put(KafkaConfig.HostNameProp, hostName)
+    props.put(KafkaConfig.PortProp, port)
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
     val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
@@ -107,8 +107,8 @@ class KafkaConfigTest extends JUnit3Suite {
     val advertisedPort = "1234"
 
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
-    props.put("advertised.host.name", advertisedHostName)
-    props.put("advertised.port", advertisedPort.toString)
+    props.put(KafkaConfig.AdvertisedHostNameProp, advertisedHostName)
+    props.put(KafkaConfig.AdvertisedPortProp, advertisedPort.toString)
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
@@ -122,28 +122,28 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testDuplicateListeners() {
     val props = new Properties()
-    props.put("broker.id", "1")
-    props.put("zookeeper.connect", "localhost:2181")
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
 
     // listeners with duplicate port
-    props.put("listeners", "PLAINTEXT://localhost:9091,TRACE://localhost:9091")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,TRACE://localhost:9091")
     assert(!isValidKafkaConfig(props))
 
     // listeners with duplicate protocol
-    props.put("listeners", "PLAINTEXT://localhost:9091,PLAINTEXT://localhost:9092")
+    props.put(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9091,PLAINTEXT://localhost:9092")
     assert(!isValidKafkaConfig(props))
 
     // advertised listeners with duplicate port
-    props.put("advertised,listeners", "PLAINTEXT://localhost:9091,TRACE://localhost:9091")
+    props.put(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9091,TRACE://localhost:9091")
     assert(!isValidKafkaConfig(props))
   }
 
   @Test
   def testBadListenerProtocol() {
     val props = new Properties()
-    props.put("broker.id", "1")
-    props.put("zookeeper.connect", "localhost:2181")
-    props.put("listeners", "BAD://localhost:9091")
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
+    props.put(KafkaConfig.ListenersProp, "BAD://localhost:9091")
 
     assert(!isValidKafkaConfig(props))
   }
@@ -151,18 +151,18 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testListenerDefaults() {
     val props = new Properties()
-    props.put("broker.id", "1")
-    props.put("zookeeper.connect", "localhost:2181")
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
 
     // configuration with host and port, but no listeners
-    props.put("host.name", "myhost")
-    props.put("port", "1111")
+    props.put(KafkaConfig.HostNameProp, "myhost")
+    props.put(KafkaConfig.PortProp, "1111")
 
     val conf = KafkaConfig.fromProps(props)
     assertEquals(CoreUtils.listenerListToEndPoints("PLAINTEXT://myhost:1111"), conf.listeners)
 
     // configuration with null host
-    props.remove("host.name")
+    props.remove(KafkaConfig.HostNameProp)
 
     val conf2 = KafkaConfig.fromProps(props)
     assertEquals(CoreUtils.listenerListToEndPoints("PLAINTEXT://:1111"), conf2.listeners)
@@ -170,8 +170,8 @@ class KafkaConfigTest extends JUnit3Suite {
     assertEquals(null, conf2.listeners(SecurityProtocol.PLAINTEXT).host)
 
     // configuration with advertised host and port, and no advertised listeners
-    props.put("advertised.host.name", "otherhost")
-    props.put("advertised.port", "2222")
+    props.put(KafkaConfig.AdvertisedHostNameProp, "otherhost")
+    props.put(KafkaConfig.AdvertisedPortProp, "2222")
 
     val conf3 = KafkaConfig.fromProps(props)
     assertEquals(conf3.advertisedListeners, CoreUtils.listenerListToEndPoints("PLAINTEXT://otherhost:2222"))
@@ -180,17 +180,17 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testVersionConfiguration() {
     val props = new Properties()
-    props.put("broker.id", "1")
-    props.put("zookeeper.connect", "localhost:2181")
+    props.put(KafkaConfig.BrokerIdProp, "1")
+    props.put(KafkaConfig.ZkConnectProp, "localhost:2181")
     val conf = KafkaConfig.fromProps(props)
     assertEquals(ApiVersion.latestVersion, conf.interBrokerProtocolVersion)
 
-    props.put("inter.broker.protocol.version","0.8.2.0")
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp,"0.8.2.0")
     val conf2 = KafkaConfig.fromProps(props)
     assertEquals(KAFKA_082, conf2.interBrokerProtocolVersion)
 
     // check that 0.8.2.0 is the same as 0.8.2.1
-    props.put("inter.broker.protocol.version","0.8.2.1")
+    props.put(KafkaConfig.InterBrokerProtocolVersionProp,"0.8.2.1")
     val conf3 = KafkaConfig.fromProps(props)
     assertEquals(KAFKA_082, conf3.interBrokerProtocolVersion)
 
@@ -218,7 +218,7 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testUncleanElectionDisabled() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put("unclean.leader.election.enable", String.valueOf(false))
+    props.put(KafkaConfig.UncleanLeaderElectionEnableProp, String.valueOf(false))
     val serverConfig = KafkaConfig.fromProps(props)
 
     assertEquals(serverConfig.uncleanLeaderElectionEnable, false)
@@ -227,7 +227,7 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testUncleanElectionEnabled() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put("unclean.leader.election.enable", String.valueOf(true))
+    props.put(KafkaConfig.UncleanLeaderElectionEnableProp, String.valueOf(true))
     val serverConfig = KafkaConfig.fromProps(props)
 
     assertEquals(serverConfig.uncleanLeaderElectionEnable, true)
@@ -236,7 +236,7 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testUncleanElectionInvalid() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put("unclean.leader.election.enable", "invalid")
+    props.put(KafkaConfig.UncleanLeaderElectionEnableProp, "invalid")
 
     intercept[ConfigException] {
       KafkaConfig.fromProps(props)
@@ -246,7 +246,7 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testLogRollTimeMsProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put("log.roll.ms", "1800000")
+    props.put(KafkaConfig.LogRollTimeMillisProp, "1800000")
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals(30 * 60L * 1000L, cfg.logRollTimeMillis)
@@ -255,8 +255,8 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testLogRollTimeBothMsAndHoursProvided() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put("log.roll.ms", "1800000")
-    props.put("log.roll.hours", "1")
+    props.put(KafkaConfig.LogRollTimeMillisProp, "1800000")
+    props.put(KafkaConfig.LogRollTimeHoursProp, "1")
 
     val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRollTimeMillis)
@@ -290,7 +290,7 @@ class KafkaConfigTest extends JUnit3Suite {
   @Test
   def testInvalidCompressionType() {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
-    props.put("compression.type", "abc")
+    props.put(KafkaConfig.CompressionTypeProp, "abc")
     intercept[IllegalArgumentException] {
       KafkaConfig.fromProps(props)
     }
