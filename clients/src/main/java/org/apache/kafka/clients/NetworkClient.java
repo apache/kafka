@@ -214,7 +214,7 @@ public class NetworkClient implements KafkaClient {
         // if there is no node available to connect, back off refreshing metadata
         long metadataTimeout = Math.max(Math.max(timeToNextMetadataUpdate, timeToNextReconnectAttempt),
                                         waitForMetadataFetch);
-        if (!this.metadataFetchInProgress && metadataTimeout == 0)
+        if (metadataTimeout == 0)
             maybeUpdateMetadata(now);
         // do the I/O
         try {
