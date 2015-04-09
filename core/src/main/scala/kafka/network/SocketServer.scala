@@ -308,6 +308,7 @@ private[kafka] class Acceptor(val host: String,
       connectionQuotas.inc(socketChannel.socket().getInetAddress)
       socketChannel.configureBlocking(false)
       socketChannel.socket().setTcpNoDelay(true)
+      socketChannel.socket().setKeepAlive(true)
       socketChannel.socket().setSendBufferSize(sendBufferSize)
 
       debug("Accepted connection from %s on %s. sendBufferSize [actual|requested]: [%d|%d] recvBufferSize [actual|requested]: [%d|%d]"
