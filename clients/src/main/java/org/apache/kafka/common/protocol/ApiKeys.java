@@ -20,17 +20,19 @@ package org.apache.kafka.common.protocol;
  * Identifiers for all the Kafka APIs
  */
 public enum ApiKeys {
-    PRODUCE(0, "produce"),
-    FETCH(1, "fetch"),
-    LIST_OFFSETS(2, "list_offsets"),
-    METADATA(3, "metadata"),
-    LEADER_AND_ISR(4, "leader_and_isr"),
-    STOP_REPLICA(5, "stop_replica"),
-    OFFSET_COMMIT(8, "offset_commit"),
-    OFFSET_FETCH(9, "offset_fetch"),
-    CONSUMER_METADATA(10, "consumer_metadata"),
-    JOIN_GROUP(11, "join_group"),
-    HEARTBEAT(12, "heartbeat");
+    PRODUCE(0, "Produce"),
+    FETCH(1, "Fetch"),
+    LIST_OFFSETS(2, "Offsets"),
+    METADATA(3, "Metadata"),
+    LEADER_AND_ISR(4, "LeaderAndIsr"),
+    STOP_REPLICA(5, "StopReplica"),
+    UPDATE_METADATA_KEY(6, "UpdateMetadata"),
+    CONTROLLED_SHUTDOWN_KEY(7, "ControlledShutdown"),
+    OFFSET_COMMIT(8, "OffsetCommit"),
+    OFFSET_FETCH(9, "OffsetFetch"),
+    CONSUMER_METADATA(10, "ConsumerMetadata"),
+    JOIN_GROUP(11, "JoinGroup"),
+    HEARTBEAT(12, "Heartbeat");
 
     private static ApiKeys[] codeToType;
     public static final int MAX_API_KEY;
