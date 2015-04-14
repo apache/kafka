@@ -573,7 +573,7 @@ object OffsetManager {
         OffsetAndMetadata(offset, metadata, timestamp)
       } else if (structAndVersion.version == 1) {
         val offset = structAndVersion.value.get(VALUE_OFFSET_FIELD_V1).asInstanceOf[Long]
-        val metadata = structAndVersion.value.get(VALUE_OFFSET_FIELD_V1).asInstanceOf[String]
+        val metadata = structAndVersion.value.get(VALUE_METADATA_FIELD_V1).asInstanceOf[String]
         val commitTimestamp = structAndVersion.value.get(VALUE_COMMIT_TIMESTAMP_FIELD_V1).asInstanceOf[Long]
         val expireTimestamp = structAndVersion.value.get(VALUE_EXPIRE_TIMESTAMP_FIELD_V1).asInstanceOf[Long]
 
