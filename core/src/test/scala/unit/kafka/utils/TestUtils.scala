@@ -36,7 +36,7 @@ import kafka.producer._
 import kafka.message._
 import kafka.api._
 import kafka.cluster.Broker
-import kafka.consumer.{KafkaStream, ConsumerConfig}
+import kafka.consumer.{ConsumerTimeoutException, KafkaStream, ConsumerConfig}
 import kafka.serializer.{StringEncoder, DefaultEncoder, Encoder}
 import kafka.common.TopicAndPartition
 import kafka.admin.AdminUtils
@@ -745,71 +745,97 @@ object TestUtils extends Logging {
                    time = time,
                    brokerState = new BrokerState())
   }
-
-  def sendMessagesToPartition(servers: Seq[KafkaServer],
-                              topic: String,
-                              partition: Int,
-                              numMessages: Int,
-                              compression: CompressionCodec = NoCompressionCodec): List[String] = {
+  def sendMessages(servers: Seq[KafkaServer],
+                   topic: String,
+                   numMessages: Int,
+                   partition: Int = -1,
+                   compression: CompressionCodec = NoCompressionCodec): List[String] = {
     val header = "test-%d".format(partition)
     val props = new Properties()
     props.put("compression.codec", compression.codec.toString)
-    val producer: Producer[Int, String] =
-      createProducer(TestUtils.getBrokerListStrFromServers(servers),
-        encoder = classOf[StringEncoder].getName,
-        keyEncoder = classOf[IntEncoder].getName,
-        partitioner = classOf[FixedValuePartitioner].getName,
-        producerProps = props)
-
     val ms = 0.until(numMessages).map(x => header + "-" + x)
-    producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)):_*)
-    debug("Sent %d messages for partition [%s,%d]".format(ms.size, topic, partition))
-    producer.close()
-    ms.toList
-  }
 
-  def sendMessages(servers: Seq[KafkaServer],
-                   topic: String,
-                   producerId: String,
-                   messagesPerNode: Int,
-                   header: String,
-                   compression: CompressionCodec,
-                   numParts: Int): List[String]= {
-    var messages: List[String] = Nil
-    val props = new Properties()
-    props.put("compression.codec", compression.codec.toString)
-    props.put("client.id", producerId)
-    val   producer: Producer[Int, String] =
-      createProducer(brokerList = TestUtils.getBrokerListStrFromServers(servers),
-        encoder = classOf[StringEncoder].getName,
-        keyEncoder = classOf[IntEncoder].getName,
-        partitioner = classOf[FixedValuePartitioner].getName,
-        producerProps = props)
+    // Specific Partition
+    if (partition >= 0) {
+      val producer: Producer[Int, String] =
+        createProducer(TestUtils.getBrokerListStrFromServers(servers),
+          encoder = classOf[StringEncoder].getName,
+          keyEncoder = classOf[IntEncoder].getName,
+          partitioner = classOf[FixedValuePartitioner].getName,
+          producerProps = props)
 
-    for (partition <- 0 until numParts) {
-      val ms = 0.until(messagesPerNode).map(x => header + "-" + partition + "-" + x)
       producer.send(ms.map(m => new KeyedMessage[Int, String](topic, partition, m)):_*)
-      messages ++= ms
       debug("Sent %d messages for partition [%s,%d]".format(ms.size, topic, partition))
+      producer.close()
+      ms.toList
+    } else {
+      // Use topic as the key to determine partition
+      val producer: Producer[String, String] = createProducer(
+        TestUtils.getBrokerListStrFromServers(servers),
+        encoder = classOf[StringEncoder].getName,
+        keyEncoder = classOf[StringEncoder].getName,
+        partitioner = classOf[DefaultPartitioner].getName,
+        producerProps = props)
+      producer.send(ms.map(m => new KeyedMessage[String, String](topic, topic, m)):_*)
+      producer.close()
+      debug("Sent %d messages for topic [%s]".format(ms.size, topic))
+      ms.toList
     }
-    producer.close()
-    messages
+
   }
 
-  def getMessages(nMessagesPerThread: Int,
-                  topicMessageStreams: Map[String, List[KafkaStream[String, String]]]): List[String] = {
+  def sendMessage(servers: Seq[KafkaServer],
+                  topic: String,
+                  message: String) = {
+
+    val producer: Producer[String, String] =
+      createProducer(TestUtils.getBrokerListStrFromServers(servers),
+        encoder = classOf[StringEncoder].getName(),
+        keyEncoder = classOf[StringEncoder].getName())
+
+    producer.send(new KeyedMessage[String, String](topic, topic, message))
+    producer.close()
+  }
+
+  /**
+   * Consume all messages (or a specific number of messages)
+   * @param topicMessageStreams the Topic Message Streams
+   * @param nMessagesPerThread an optional field to specify the exact number of messages to be returned.
+   *                           ConsumerTimeoutException will be thrown if there are no messages to be consumed.
+   *                           If not specified, then all available messages will be consumed, and no exception is thrown.
+   *
+   *
+   * @return the list of messages consumed.
+   */
+  def getMessages(topicMessageStreams: Map[String, List[KafkaStream[String, String]]],
+                     nMessagesPerThread: Int = -1): List[String] = {
+
     var messages: List[String] = Nil
+    val shouldGetAllMessages = nMessagesPerThread < 0
     for ((topic, messageStreams) <- topicMessageStreams) {
       for (messageStream <- messageStreams) {
-        val iterator = messageStream.iterator
-        for (i <- 0 until nMessagesPerThread) {
-          assertTrue(iterator.hasNext)
-          val message = iterator.next.message
-          messages ::= message
-          debug("received message: " + message)
+        val iterator = messageStream.iterator()
+        try {
+          var i = 0
+          while ((shouldGetAllMessages && iterator.hasNext()) || (i < nMessagesPerThread)) {
+            assertTrue(iterator.hasNext)
+            val message = iterator.next.message // will throw a timeout exception if the message isn't there
+            messages ::= message
+            debug("received message: " + message)
+            i += 1
+          }
+        } catch {
+          case e: ConsumerTimeoutException =>
+            if (shouldGetAllMessages) {
+              // swallow the exception
+              debug("consumer timed out after receiving " + messages.length + " message(s).")
+            } else {
+              throw e
+            }
         }
       }
     }
+
     messages.reverse
   }
 

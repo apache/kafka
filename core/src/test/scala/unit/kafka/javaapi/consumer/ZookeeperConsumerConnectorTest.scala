@@ -60,7 +60,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     TestUtils.createTopic(zkClient, topic, numParts, 1, servers)
 
     // send some messages to each broker
-    val sentMessages1 = sendMessages(nMessages, "batch1")
+    val sentMessages1 = sendMessages(servers, nMessages, "batch1")
 
     // create a consumer
     val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumer1))
@@ -82,32 +82,24 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
-  def sendMessages(conf: KafkaConfig,
+  def sendMessages(servers: Seq[KafkaServer],
                    messagesPerNode: Int,
-                   header: String,
-                   compressed: CompressionCodec): List[String] = {
+                   header: String): List[String] = {
     var messages: List[String] = Nil
-    val producer: kafka.producer.Producer[Int, String] =
-      TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
-        encoder = classOf[StringEncoder].getName,
-        keyEncoder = classOf[IntEncoder].getName)
-    val javaProducer: Producer[Int, String] = new kafka.javaapi.producer.Producer(producer)
-    for (partition <- 0 until numParts) {
-      val ms = 0.until(messagesPerNode).map(x => header + conf.brokerId + "-" + partition + "-" + x)
-      messages ++= ms
-      import JavaConversions._
-      javaProducer.send(ms.map(new KeyedMessage[Int, String](topic, partition, _)): java.util.List[KeyedMessage[Int, String]])
+    for(server <- servers) {
+      val producer: kafka.producer.Producer[Int, String] =
+        TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
+          encoder = classOf[StringEncoder].getName,
+          keyEncoder = classOf[IntEncoder].getName)
+      val javaProducer: Producer[Int, String] = new kafka.javaapi.producer.Producer(producer)
+      for (partition <- 0 until numParts) {
+        val ms = 0.until(messagesPerNode).map(x => header + server.config.brokerId + "-" + partition + "-" + x)
+        messages ++= ms
+        import JavaConversions._
+        javaProducer.send(ms.map(new KeyedMessage[Int, String](topic, partition, _)): java.util.List[KeyedMessage[Int, String]])
+      }
+      javaProducer.close
     }
-    javaProducer.close
-    messages
-  }
-
-  def sendMessages(messagesPerNode: Int,
-                   header: String,
-                   compressed: CompressionCodec = NoCompressionCodec): List[String] = {
-    var messages: List[String] = Nil
-    for(conf <- configs)
-      messages ++= sendMessages(conf, messagesPerNode, header, compressed)
     messages
   }
 
@@ -115,18 +107,8 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
                   jTopicMessageStreams: java.util.Map[String, java.util.List[KafkaStream[String, String]]]): List[String] = {
     var messages: List[String] = Nil
     import scala.collection.JavaConversions._
-    val topicMessageStreams: collection.mutable.Map[String, java.util.List[KafkaStream[String, String]]] = jTopicMessageStreams
-    for ((topic, messageStreams) <- topicMessageStreams) {
-      for (messageStream <- messageStreams) {
-        val iterator = messageStream.iterator
-        for (i <- 0 until nMessagesPerThread) {
-          assertTrue(iterator.hasNext)
-          val message = iterator.next.message
-          messages ::= message
-          debug("received message: " + message)
-        }
-      }
-    }
+    val topicMessageStreams = jTopicMessageStreams.mapValues(_.toList)
+    messages = TestUtils.getMessages(topicMessageStreams, nMessagesPerThread)
     messages
   }
 

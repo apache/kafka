@@ -77,12 +77,12 @@ class MetricsTest extends JUnit3Suite with KafkaServerTestHarness with Logging {
   }
 
   def createAndShutdownStep(group: String, consumerId: String, producerId: String): Unit = {
-    val sentMessages1 = sendMessages(servers, topic, producerId, nMessages, "batch1", NoCompressionCodec, 1)
+    val sentMessages1 = sendMessages(servers, topic, nMessages)
     // create a consumer
     val consumerConfig1 = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, group, consumerId))
     val zkConsumerConnector1 = new ZookeeperConsumerConnector(consumerConfig1, true)
     val topicMessageStreams1 = zkConsumerConnector1.createMessageStreams(Map(topic -> 1), new StringDecoder(), new StringDecoder())
-    val receivedMessages1 = getMessages(nMessages, topicMessageStreams1)
+    val receivedMessages1 = getMessages(topicMessageStreams1, nMessages)
 
     zkConsumerConnector1.shutdown()
   }

@@ -29,7 +29,7 @@ import kafka.admin.AdminUtils
 import kafka.common.FailedToSendMessageException
 import kafka.consumer.{Consumer, ConsumerConfig, ConsumerTimeoutException}
 import kafka.producer.{KeyedMessage, Producer}
-import kafka.serializer.StringEncoder
+import kafka.serializer.StringDecoder
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.CoreUtils
 import kafka.utils.TestUtils._
@@ -175,14 +175,14 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
     debug("Follower for " + topic  + " is: %s".format(followerId))
 
-    produceMessage(topic, "first")
+    sendMessage(servers, topic, "first")
     waitUntilMetadataIsPropagated(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic))
 
     // shutdown follower server
     servers.filter(server => server.config.brokerId == followerId).map(server => shutdownServer(server))
 
-    produceMessage(topic, "second")
+    sendMessage(servers, topic, "second")
     assertEquals(List("first", "second"), consumeAllMessages(topic))
 
     // shutdown leader and then restart follower
@@ -192,7 +192,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     // wait until new leader is (uncleanly) elected
     waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, newLeaderOpt = Some(followerId))
 
-    produceMessage(topic, "third")
+    sendMessage(servers, topic, "third")
 
     // second message was lost due to unclean election
     assertEquals(List("first", "third"), consumeAllMessages(topic))
@@ -210,14 +210,14 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     val followerId = if (leaderId == brokerId1) brokerId2 else brokerId1
     debug("Follower for " + topic  + " is: %s".format(followerId))
 
-    produceMessage(topic, "first")
+    sendMessage(servers, topic, "first")
     waitUntilMetadataIsPropagated(servers, topic, partitionId)
     assertEquals(List("first"), consumeAllMessages(topic))
 
     // shutdown follower server
     servers.filter(server => server.config.brokerId == followerId).map(server => shutdownServer(server))
 
-    produceMessage(topic, "second")
+    sendMessage(servers, topic, "second")
     assertEquals(List("first", "second"), consumeAllMessages(topic))
 
     // shutdown leader and then restart follower
@@ -229,7 +229,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     // message production and consumption should both fail while leader is down
     intercept[FailedToSendMessageException] {
-      produceMessage(topic, "third")
+      sendMessage(servers, topic, "third")
     }
     assertEquals(List.empty[String], consumeAllMessages(topic))
 
@@ -237,7 +237,7 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     servers.filter(server => server.config.brokerId == leaderId).map(server => server.startup())
     waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, newLeaderOpt = Some(leaderId))
 
-    produceMessage(topic, "third")
+    sendMessage(servers, topic, "third")
     waitUntilMetadataIsPropagated(servers, topic, partitionId)
     servers.filter(server => server.config.brokerId == leaderId).map(server => shutdownServer(server))
 
@@ -253,33 +253,16 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
     server.awaitShutdown()
   }
 
-  private def produceMessage(topic: String, message: String) = {
-    val producer: Producer[String, Array[Byte]] = createProducer(
-      getBrokerListStrFromServers(servers),
-      keyEncoder = classOf[StringEncoder].getName)
-    producer.send(new KeyedMessage[String, Array[Byte]](topic, topic, message.getBytes))
-    producer.close()
-  }
-
   private def consumeAllMessages(topic: String) : List[String] = {
     // use a fresh consumer group every time so that we don't need to mess with disabling auto-commit or
     // resetting the ZK offset
     val consumerProps = createConsumerProperties(zkConnect, "group" + random.nextLong, "id", 1000)
     val consumerConnector = Consumer.create(new ConsumerConfig(consumerProps))
-    val messageStream = consumerConnector.createMessageStreams(Map(topic -> 1))(topic).head
+    val messageStream = consumerConnector.createMessageStreams(Map(topic -> 1), new StringDecoder(), new StringDecoder())
 
-    val messages = new MutableList[String]
-    val iter = messageStream.iterator
-    try {
-      while(iter.hasNext()) {
-        messages += new String(iter.next.message) // will throw a timeout exception if the message isn't there
-      }
-    } catch {
-      case e: ConsumerTimeoutException =>
-        debug("consumer timed out after receiving " + messages.length + " message(s).")
-    } finally {
-      consumerConnector.shutdown
-    }
-    messages.toList
+    val messages = getMessages(messageStream)
+    consumerConnector.shutdown
+
+    messages
   }
 }

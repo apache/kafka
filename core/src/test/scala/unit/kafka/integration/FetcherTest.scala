@@ -66,31 +66,16 @@ class FetcherTest extends JUnit3Suite with KafkaServerTestHarness {
 
   def testFetcher() {
     val perNode = 2
-    var count = sendMessages(perNode)
+    var count = TestUtils.sendMessages(servers, topic, perNode).size
 
     fetch(count)
     assertQueueEmpty()
-    count = sendMessages(perNode)
+    count = TestUtils.sendMessages(servers, topic, perNode).size
     fetch(count)
     assertQueueEmpty()
   }
 
   def assertQueueEmpty(): Unit = assertEquals(0, queue.size)
-
-  def sendMessages(messagesPerNode: Int): Int = {
-    var count = 0
-    for(conf <- configs) {
-      val producer: Producer[String, Array[Byte]] = TestUtils.createProducer(
-        TestUtils.getBrokerListStrFromServers(servers),
-        keyEncoder = classOf[StringEncoder].getName)
-      val ms = 0.until(messagesPerNode).map(x => (conf.brokerId * 5 + x).toString.getBytes).toArray
-      messages += conf.brokerId -> ms
-      producer.send(ms.map(m => new KeyedMessage[String, Array[Byte]](topic, topic, m)):_*)
-      producer.close()
-      count += ms.size
-    }
-    count
-  }
 
   def fetch(expected: Int) {
     var count = 0
