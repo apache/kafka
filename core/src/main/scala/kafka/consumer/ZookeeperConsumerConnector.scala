@@ -684,9 +684,7 @@ private[kafka] class ZookeeperConsumerConnector(val config: ConsumerConfig,
         releasePartitionOwnership(topicRegistry)
         val assignmentContext = new AssignmentContext(group, consumerIdString, config.excludeInternalTopics, zkClient)
         val globalPartitionAssignment = partitionAssignor.assign(assignmentContext)
-        val partitionAssignment = Option(globalPartitionAssignment.get(assignmentContext.consumerId)).getOrElse(
-          mutable.HashMap.empty[TopicAndPartition, ConsumerThreadId]
-        )
+        val partitionAssignment = globalPartitionAssignment.get(assignmentContext.consumerId)
         val currentTopicRegistry = new Pool[String, Pool[Int, PartitionTopicInfo]](
           valueFactory = Some((topic: String) => new Pool[Int, PartitionTopicInfo]))
 
