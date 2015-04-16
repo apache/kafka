@@ -18,6 +18,7 @@
 package kafka
 
 import java.lang.management.ManagementFactory
+import java.lang.management.OperatingSystemMXBean
 import java.util.Random
 import java.util.concurrent._
 
@@ -84,11 +85,7 @@ object TestPurgatoryPerformance {
     val verbose = options.valueOf(verboseOpt).booleanValue
 
     val gcMXBeans = ManagementFactory.getGarbageCollectorMXBeans().sortBy(_.getName)
-    val osMXBean = try {
-      Some(ManagementFactory.getOperatingSystemMXBean().asInstanceOf[com.sun.management.OperatingSystemMXBean])
-    } catch {
-      case _: Throwable => None
-    }
+    val osMXBean = ManagementFactory.getOperatingSystemMXBean
     val latencySamples = new LatencySamples(1000000, pct75, pct50)
     val intervalSamples = new IntervalSamples(1000000, requestRate)
 
@@ -97,7 +94,7 @@ object TestPurgatoryPerformance {
 
     val gcNames = gcMXBeans.map(_.getName)
 
-    val initialCpuTimeNano = osMXBean.map(x => x.getProcessCpuTime)
+    val initialCpuTimeNano = getProcessCpuTimeNanos(osMXBean)
     val latch = new CountDownLatch(numRequests)
     val start = System.currentTimeMillis
     val keys = (0 until numKeys).map(i => "fakeKey%d".format(i))
@@ -142,13 +139,26 @@ object TestPurgatoryPerformance {
     val targetRate = numRequests.toDouble * 1000d / (requestArrivalTime - start).toDouble
     val actualRate = numRequests.toDouble * 1000d / (end - start).toDouble
 
-    val cpuTime = osMXBean.map(x => (x.getProcessCpuTime - initialCpuTimeNano.get) / 1000000L)
+    val cpuTime = getProcessCpuTimeNanos(osMXBean).map(x => (x - initialCpuTimeNano.get) / 1000000L)
     val gcCounts = gcMXBeans.map(_.getCollectionCount)
     val gcTimes = gcMXBeans.map(_.getCollectionTime)
 
     println("%d %f %f %d %s %s".format(done - start, targetRate, actualRate, cpuTime.getOrElse(-1L), gcCounts.mkString(" "), gcTimes.mkString(" ")))
 
     purgatory.shutdown()
+  }
+
+  // Use JRE-specific class to get process CPU time
+  private def getProcessCpuTimeNanos(osMXBean : OperatingSystemMXBean) = {
+    try {
+      Some(Class.forName("com.sun.management.OperatingSystemMXBean").getMethod("getProcessCpuTime").invoke(osMXBean).asInstanceOf[Long])
+    } catch {
+      case _: Throwable => try {
+        Some(Class.forName("com.ibm.lang.management.OperatingSystemMXBean").getMethod("getProcessCpuTimeByNS").invoke(osMXBean).asInstanceOf[Long])
+      } catch {
+        case _: Throwable => None
+      }
+    }
   }
 
   // log-normal distribution (http://en.wikipedia.org/wiki/Log-normal_distribution)
