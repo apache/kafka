@@ -126,6 +126,11 @@ object ConsoleConsumer extends Logging {
     consumerProps.put("auto.offset.reset", if(options.has(resetBeginningOpt)) "smallest" else "largest")
     consumerProps.put("zookeeper.connect", options.valueOf(zkConnectOpt))
 
+    if (!checkZkPathExists(options.valueOf(zkConnectOpt),"/brokers/ids")) {
+      System.err.println("No brokers found.")
+      System.exit(1)
+    }
+
     if (!options.has(deleteConsumerOffsetsOpt) && options.has(resetBeginningOpt) &&
        checkZkPathExists(options.valueOf(zkConnectOpt),"/consumers/" + consumerProps.getProperty("group.id")+ "/offsets")) {
       System.err.println("Found previous offset information for this group "+consumerProps.getProperty("group.id")
