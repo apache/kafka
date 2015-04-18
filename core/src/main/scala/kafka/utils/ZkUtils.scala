@@ -231,7 +231,7 @@ object ZkUtils extends Logging {
    */
   def makeSurePersistentPathExists(client: ZkClient, path: String) {
     if (!client.exists(path))
-      new ZkPath(client).createPersistent(path, true) // won't throw NoNodeException or NodeExistsException
+      ZkPath.createPersistent(client, path, true) //won't throw NoNodeException or NodeExistsException
   }
 
   /**
@@ -240,7 +240,7 @@ object ZkUtils extends Logging {
   private def createParentPath(client: ZkClient, path: String): Unit = {
     val parentDir = path.substring(0, path.lastIndexOf('/'))
     if (parentDir.length != 0) {
-      new ZkPath(client).createPersistent(parentDir, true)
+      ZkPath.createPersistent(client, parentDir, true)
     }
   }
 
@@ -248,13 +248,12 @@ object ZkUtils extends Logging {
    * Create an ephemeral node with the given path and data. Create parents if necessary.
    */
   private def createEphemeralPath(client: ZkClient, path: String, data: String): Unit = {
-    val zkPath = new ZkPath(client)
     try {
-      zkPath.createEphemeral(path, data)
+      ZkPath.createEphemeral(client, path, data)
     } catch {
       case e: ZkNoNodeException => {
         createParentPath(client, path)
-        zkPath.createEphemeral(path, data)
+        ZkPath.createEphemeral(client, path, data)
       }
     }
   }
@@ -333,19 +332,18 @@ object ZkUtils extends Logging {
    * Create an persistent node with the given path and data. Create parents if necessary.
    */
   def createPersistentPath(client: ZkClient, path: String, data: String = ""): Unit = {
-    val zkPath = new ZkPath(client)
     try {
-      zkPath.createPersistent(path, data)
+      ZkPath.createPersistent(client, path, data)
     } catch {
       case e: ZkNoNodeException => {
         createParentPath(client, path)
-        zkPath.createPersistent(path, data)
+        ZkPath.createPersistent(client, path, data)
       }
     }
   }
 
   def createSequentialPersistentPath(client: ZkClient, path: String, data: String = ""): String = {
-    new ZkPath(client).createPersistentSequential(path, data)
+    ZkPath.createPersistentSequential(client, path, data)
   }
 
   /**
@@ -360,7 +358,7 @@ object ZkUtils extends Logging {
       case e: ZkNoNodeException => {
         createParentPath(client, path)
         try {
-          new ZkPath(client).createPersistent(path, data)
+          ZkPath.createPersistent(client, path, data)
         } catch {
           case e: ZkNodeExistsException =>
             client.writeData(path, data)
@@ -431,7 +429,7 @@ object ZkUtils extends Logging {
     } catch {
       case e: ZkNoNodeException => {
         createParentPath(client, path)
-        new ZkPath(client).createEphemeral(path, data)
+        ZkPath.createEphemeral(client, path, data)
       }
       case e2: Throwable => throw e2
     }
@@ -829,24 +827,40 @@ class ZKConfig(props: VerifiableProperties) {
   val zkSyncTimeMs = props.getInt("zookeeper.sync.time.ms", 2000)
 }
 
-class ZkPath(client: ZkClient) {
-  if (!client.exists("/")) {
-    throw new ConfigException("Zookeeper namespace does not exist")
+object ZkPath {
+  @volatile private var isNamespacePresent: Boolean = false
+
+  def checkNamespace(client: ZkClient) {
+    if(isNamespacePresent)
+      return
+
+    if (!client.exists("/")) {
+      throw new ConfigException("Zookeeper namespace does not exist")
+    }
+    isNamespacePresent = true
   }
 
-  def createPersistent(path: String, data: Object) {
+  def resetNamespaceCheckedState {
+    isNamespacePresent = false
+  }
+
+  def createPersistent(client: ZkClient, path: String, data: Object) {
+    checkNamespace(client)
     client.createPersistent(path, data)
   }
 
-  def createPersistent(path: String, createParents: Boolean) {
+  def createPersistent(client: ZkClient, path: String, createParents: Boolean) {
+    checkNamespace(client)
     client.createPersistent(path, createParents)
   }
 
-  def createEphemeral(path: String, data: Object) {
+  def createEphemeral(client: ZkClient, path: String, data: Object) {
+    checkNamespace(client)
     client.createEphemeral(path, data)
   }
 
-  def createPersistentSequential(path: String, data: Object): String = {
+  def createPersistentSequential(client: ZkClient, path: String, data: Object): String = {
+    checkNamespace(client)
     client.createPersistentSequential(path, data)
   }
 }

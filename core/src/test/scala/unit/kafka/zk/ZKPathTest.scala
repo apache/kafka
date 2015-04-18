@@ -19,7 +19,7 @@ package unit.kafka.zk
 
 import junit.framework.Assert
 import kafka.consumer.ConsumerConfig
-import kafka.utils.{TestUtils, ZKStringSerializer, ZkUtils}
+import kafka.utils.{ZkPath, TestUtils, ZKStringSerializer, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.config.ConfigException
@@ -38,6 +38,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       config.zkConnectionTimeoutMs,
       ZKStringSerializer)
     try {
+      ZkPath.resetNamespaceCheckedState
       ZkUtils.createPersistentPath(zkClient, path)
       fail("Failed to throw ConfigException for missing zookeeper root node")
     } catch {
@@ -51,6 +52,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
     var zkClient = new ZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
       ZKStringSerializer)
     try {
+      ZkPath.resetNamespaceCheckedState
       ZkUtils.createPersistentPath(zkClient, path)
     } catch {
       case exception: Throwable => fail("Failed to create persistent path")
@@ -66,6 +68,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       config.zkConnectionTimeoutMs,
       ZKStringSerializer)
     try {
+      ZkPath.resetNamespaceCheckedState
       ZkUtils.makeSurePersistentPathExists(zkClient, path)
       fail("Failed to throw ConfigException for missing zookeeper root node")
     } catch {
@@ -79,6 +82,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
     var zkClient = new ZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
       ZKStringSerializer)
     try {
+      ZkPath.resetNamespaceCheckedState
       ZkUtils.makeSurePersistentPathExists(zkClient, path)
     } catch {
       case exception: Throwable => fail("Failed to create persistent path")
@@ -94,6 +98,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       config.zkConnectionTimeoutMs,
       ZKStringSerializer)
     try {
+      ZkPath.resetNamespaceCheckedState
       ZkUtils.createEphemeralPathExpectConflict(zkClient, path, "somedata")
       fail("Failed to throw ConfigException for missing zookeeper root node")
     } catch {
@@ -107,6 +112,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
     var zkClient = new ZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
       ZKStringSerializer)
     try {
+      ZkPath.resetNamespaceCheckedState
       ZkUtils.createEphemeralPathExpectConflict(zkClient, path, "somedata")
     } catch {
       case exception: Throwable => fail("Failed to create ephemeral path")
@@ -122,6 +128,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       config.zkConnectionTimeoutMs,
       ZKStringSerializer)
     try {
+      ZkPath.resetNamespaceCheckedState
       ZkUtils.createSequentialPersistentPath(zkClient, path)
       fail("Failed to throw ConfigException for missing zookeeper root node")
     } catch {
@@ -137,6 +144,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     var actualPath: String = ""
     try {
+      ZkPath.resetNamespaceCheckedState
       actualPath = ZkUtils.createSequentialPersistentPath(zkClient, path)
     } catch {
       case exception: Throwable => fail("Failed to create persistent path")
