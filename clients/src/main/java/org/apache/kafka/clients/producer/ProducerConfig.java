@@ -29,7 +29,7 @@ import org.apache.kafka.common.serialization.Serializer;
 
 /**
  * Configuration for the Kafka Producer. Documentation for these configurations can be found in the <a
- * href="http://kafka.apache.org/documentation.html#new-producer">Kafka documentation</a>
+ * href="http://kafka.apache.org/documentation.html#newproducerconfigs">Kafka documentation</a>
  */
 public class ProducerConfig extends AbstractConfig {
 
