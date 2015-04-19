@@ -370,7 +370,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     def makeConfig(messageSize: Int, retentionMs: Long) = {
       var props = new Properties()
       props.setProperty(LogConfig.MaxMessageBytesProp, messageSize.toString)
-      props.setProperty(LogConfig.RententionMsProp, retentionMs.toString)
+      props.setProperty(LogConfig.RetentionMsProp, retentionMs.toString)
       props
     }
 

@@ -15,12 +15,14 @@
  * limitations under the License.
  */
 
-package kafka.log
+package unit.kafka.log
 
-import org.apache.kafka.common.config.ConfigException
-import org.scalatest.junit.JUnit3Suite
-import org.junit.{Assert, Test}
 import java.util.Properties
+
+import kafka.log.{Defaults, LogConfig}
+import org.apache.kafka.common.config.ConfigException
+import org.junit.{Assert, Test}
+import org.scalatest.junit.JUnit3Suite
 
 class LogConfigTest extends JUnit3Suite {
 
@@ -56,6 +58,7 @@ class LogConfigTest extends JUnit3Suite {
         case LogConfig.MinCleanableDirtyRatioProp => expected.setProperty(name, "%.1f".format(nextDouble * .9 + .1))
         case LogConfig.MinInSyncReplicasProp => expected.setProperty(name, (nextInt(Int.MaxValue - 1) + 1).toString)
         case LogConfig.RetentionBytesProp => expected.setProperty(name, nextInt().toString)
+        case LogConfig.RetentionMsProp => expected.setProperty(name, nextLong().toString)
         case positiveIntProperty => expected.setProperty(name, nextInt(Int.MaxValue).toString)
       }
     })
@@ -70,6 +73,7 @@ class LogConfigTest extends JUnit3Suite {
       name match {
         case LogConfig.UncleanLeaderElectionEnableProp  => return
         case LogConfig.RetentionBytesProp => assertPropertyInvalid(name, "not_a_number")
+        case LogConfig.RetentionMsProp => assertPropertyInvalid(name, "not_a_number" )
         case LogConfig.CleanupPolicyProp => assertPropertyInvalid(name, "true", "foobar");
         case LogConfig.MinCleanableDirtyRatioProp => assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2")
         case LogConfig.MinInSyncReplicasProp => assertPropertyInvalid(name, "not_a_number", "0", "-1")

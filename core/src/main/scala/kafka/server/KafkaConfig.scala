@@ -417,7 +417,7 @@ object KafkaConfig {
 
       .define(LogRetentionTimeMillisProp, LONG, HIGH, LogRetentionTimeMillisDoc, false)
       .define(LogRetentionTimeMinutesProp, INT, HIGH, LogRetentionTimeMinsDoc, false)
-      .define(LogRetentionTimeHoursProp, INT, Defaults.LogRetentionHours, atLeast(1), HIGH, LogRetentionTimeHoursDoc)
+      .define(LogRetentionTimeHoursProp, INT, Defaults.LogRetentionHours, HIGH, LogRetentionTimeHoursDoc)
 
       .define(LogRetentionBytesProp, LONG, Defaults.LogRetentionBytes, HIGH, LogRetentionBytesDoc)
       .define(LogCleanupIntervalMsProp, LONG, Defaults.LogCleanupIntervalMs, atLeast(1), MEDIUM, LogCleanupIntervalMsDoc)
@@ -770,12 +770,16 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
     val millisInMinute = 60L * 1000L
     val millisInHour = 60L * millisInMinute
 
-    _logRetentionTimeMillis.getOrElse(
-      _logRetentionTimeMins match {
-        case Some(mins) => millisInMinute * mins
-        case None => millisInHour * logRetentionTimeHours
-      }
-    )
+    val millis = {
+      _logRetentionTimeMillis.getOrElse(
+        _logRetentionTimeMins match {
+          case Some(mins) => millisInMinute * mins
+          case None => millisInHour * logRetentionTimeHours
+        }
+      )
+    }
+    if (millis < 0) return -1
+    millis
   }
 
   private def getMap(propName: String, propValue: String): Map[String, String] = {
@@ -834,8 +838,10 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
     require(brokerId >= -1 && brokerId <= maxReservedBrokerId, "broker.id must be equal or greater than -1 and not greater than reserved.broker.max.id")
     require(logRollTimeMillis >= 1, "log.roll.ms must be equal or greater than 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be equal or greater than 0")
-    require(logRetentionTimeMillis >= 1, "log.retention.ms must be equal or greater than 1")
-    require(_logRetentionTimeMins.forall(_ >= 1), "log.retention.minutes must be equal or greater than 1")
+
+    require(_logRetentionTimeMins.forall(_ >= 1)|| _logRetentionTimeMins.forall(_ .equals(-1)), "log.retention.minutes must be unlimited (-1) or, equal or greater than 1")
+    require(logRetentionTimeHours >= 1 || logRetentionTimeHours == -1, "log.retention.hours must be unlimited (-1) or, equal or greater than 1")
+    require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, equal or greater than 1")
 
     require(logDirs.size > 0)
     require(logCleanerDedupeBufferSize / logCleanerThreads > 1024 * 1024, "log.cleaner.dedupe.buffer.size must be at least 1MB per cleaner thread.")

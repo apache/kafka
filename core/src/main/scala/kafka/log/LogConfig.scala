@@ -21,8 +21,6 @@ import java.util.Properties
 import org.apache.kafka.common.utils.Utils
 import scala.collection._
 import org.apache.kafka.common.config.ConfigDef
-import kafka.common._
-import scala.collection.JavaConversions._
 import kafka.message.BrokerCompressionCodec
 
 object Defaults {
@@ -93,7 +91,7 @@ case class LogConfig(val segmentSize: Int = Defaults.SegmentSize,
     props.put(FlushMessagesProp, flushInterval.toString)
     props.put(FlushMsProp, flushMs.toString)
     props.put(RetentionBytesProp, retentionSize.toString)
-    props.put(RententionMsProp, retentionMs.toString)
+    props.put(RetentionMsProp, retentionMs.toString)
     props.put(MaxMessageBytesProp, maxMessageSize.toString)
     props.put(IndexIntervalBytesProp, indexInterval.toString)
     props.put(DeleteRetentionMsProp, deleteRetentionMs.toString)
@@ -122,7 +120,7 @@ object LogConfig {
   val FlushMessagesProp = "flush.messages"
   val FlushMsProp = "flush.ms"
   val RetentionBytesProp = "retention.bytes"
-  val RententionMsProp = "retention.ms"
+  val RetentionMsProp = "retention.ms"
   val MaxMessageBytesProp = "max.message.bytes"
   val IndexIntervalBytesProp = "index.interval.bytes"
   val DeleteRetentionMsProp = "delete.retention.ms"
@@ -172,7 +170,8 @@ object LogConfig {
       .define(FlushMsProp, LONG, Defaults.FlushMs, atLeast(0), MEDIUM, FlushMsDoc)
       // can be negative. See kafka.log.LogManager.cleanupSegmentsToMaintainSize
       .define(RetentionBytesProp, LONG, Defaults.RetentionSize, MEDIUM, RetentionSizeDoc)
-      .define(RententionMsProp, LONG, Defaults.RetentionMs, atLeast(0), MEDIUM, RetentionMsDoc)
+      // can be negative. See kafka.log.LogManager.cleanupExpiredSegments
+      .define(RetentionMsProp, LONG, Defaults.RetentionMs, MEDIUM, RetentionMsDoc)
       .define(MaxMessageBytesProp, INT, Defaults.MaxMessageSize, atLeast(0), MEDIUM, MaxMessageSizeDoc)
       .define(IndexIntervalBytesProp, INT, Defaults.IndexInterval, atLeast(0), MEDIUM,  IndexIntervalDoc)
       .define(DeleteRetentionMsProp, LONG, Defaults.DeleteRetentionMs, atLeast(0), MEDIUM, DeleteRetentionMsDoc)
@@ -206,7 +205,7 @@ object LogConfig {
                   flushInterval = parsed.get(FlushMessagesProp).asInstanceOf[Long],
                   flushMs = parsed.get(FlushMsProp).asInstanceOf[Long],
                   retentionSize = parsed.get(RetentionBytesProp).asInstanceOf[Long],
-                  retentionMs = parsed.get(RententionMsProp).asInstanceOf[Long],
+                  retentionMs = parsed.get(RetentionMsProp).asInstanceOf[Long],
                   maxMessageSize = parsed.get(MaxMessageBytesProp).asInstanceOf[Int],
                   indexInterval = parsed.get(IndexIntervalBytesProp).asInstanceOf[Int],
                   fileDeleteDelayMs = parsed.get(FileDeleteDelayMsProp).asInstanceOf[Long],
