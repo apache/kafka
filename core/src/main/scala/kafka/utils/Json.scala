@@ -46,24 +46,25 @@ object Json extends Logging {
       case n: Number => n.toString
       case m: Map[_, _] => 
         "{" + 
-          m.map(elem => 
-            elem match {
-            case t: Tuple2[_,_] => encode(t._1) + ":" + encode(t._2)
-            case _ => throw new IllegalArgumentException("Invalid map element (" + elem + ") in " + obj)
-          }).mkString(",") + 
-      "}"
+          m.map {
+            case (k, v) => encode(k) + ":" + encode(v)
+            case elem => throw new IllegalArgumentException("Invalid map element (" + elem + ") in " + obj)
+          }.mkString(",") +
+        "}"
       case a: Array[_] => encode(a.toSeq)
       case i: Iterable[_] => "[" + i.map(encode).mkString(",") + "]"
-      case other: AnyRef => throw new IllegalArgumentException("Unknown arguement of type " + other.getClass + ": " + other)
+      case other: AnyRef => throw new IllegalArgumentException("Unknown argument of type " + other.getClass + ": " + other)
     }
   }
 
   /** Provides extension methods for `JsObject` */
   implicit class RichJsObject(val value: JsObject) extends AnyVal {
+
     def fieldOption[T: JsonReader](fieldName: String): Option[T] = value.fields.get(fieldName).flatMap { fieldValue =>
       try Some(fieldValue.convertTo[T])
       catch { case e: DeserializationException => None }
     }
+
   }
 
   /** Provides extension methods for `JsValue` */
