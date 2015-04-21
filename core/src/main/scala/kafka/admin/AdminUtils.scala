@@ -22,11 +22,13 @@ import kafka.cluster.{BrokerEndPoint, Broker}
 
 import kafka.log.LogConfig
 import kafka.utils._
+import Json._
 import kafka.api.{TopicMetadata, PartitionMetadata}
 
 import java.util.Random
 import java.util.Properties
 import org.apache.kafka.common.protocol.SecurityProtocol
+import spray.json.JsObject
 
 import scala.Predef._
 import scala.collection._
@@ -312,21 +314,19 @@ object AdminUtils extends Logging {
    * Read the topic config (if any) from zk
    */
   def fetchTopicConfig(zkClient: ZkClient, topic: String): Properties = {
+    import spray.json.DefaultJsonProtocol._
     val str: String = zkClient.readData(ZkUtils.getTopicConfigPath(topic), true)
     val props = new Properties()
-    if(str != null) {
-      Json.parseFull(str) match {
-        case None => // there are no config overrides
-        case Some(map: Map[String, _]) => 
-          require(map("version") == 1)
-          map.get("config") match {
-            case Some(config: Map[String, String]) =>
-              for((k,v) <- config)
-                props.setProperty(k, v)
-            case _ => throw new IllegalArgumentException("Invalid topic config: " + str)
-          }
-
-        case o => throw new IllegalArgumentException("Unexpected value in config: "  + str)
+    if (str != null) {
+      Json.parseFull(str).foreach { jsValue =>
+        val jsObject = jsValue.asJsObjectOption.getOrElse {
+          throw new IllegalArgumentException("Unexpected value in config: " + str)
+        }
+        require(jsObject.fields("version").convertTo[Int] == 1)
+        val config = jsObject.fieldOption[JsObject]("config").getOrElse {
+          throw new IllegalArgumentException("Invalid topic config: " + str)
+        }
+        config.fields.foreach { case (k, v) => props.setProperty(k, v.convertTo[String]) }
       }
     }
     props

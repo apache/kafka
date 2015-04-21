@@ -34,6 +34,8 @@ import kafka.controller.ReassignedPartitionsContext
 import kafka.controller.KafkaController
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
+import spray.json._
+import DefaultJsonProtocol._
 
 object ZkUtils extends Logging {
   val ConsumersPath = "/consumers"
@@ -98,16 +100,10 @@ object ZkUtils extends Logging {
   }
 
   def getLeaderForPartition(zkClient: ZkClient, topic: String, partition: Int): Option[Int] = {
-    val leaderAndIsrOpt = readDataMaybeNull(zkClient, getTopicPartitionLeaderAndIsrPath(topic, partition))._1
-    leaderAndIsrOpt match {
-      case Some(leaderAndIsr) =>
-        Json.parseFull(leaderAndIsr) match {
-          case Some(m) =>
-            Some(m.asInstanceOf[Map[String, Any]].get("leader").get.asInstanceOf[Int])
-          case None => None
-        }
-      case None => None
-    }
+    for {
+      leaderAndIsr <- readDataMaybeNull(zkClient, getTopicPartitionLeaderAndIsrPath(topic, partition))._1
+      json <- Json.parseFull(leaderAndIsr)
+    } yield json.asJsObject.fields("leader").convertTo[Int]
   }
 
   /**
@@ -121,7 +117,7 @@ object ZkUtils extends Logging {
       case Some(leaderAndIsr) =>
         Json.parseFull(leaderAndIsr) match {
           case None => throw new NoEpochForPartitionException("No epoch, leaderAndISR data for partition [%s,%d] is invalid".format(topic, partition))
-          case Some(m) => m.asInstanceOf[Map[String, Any]].get("leader_epoch").get.asInstanceOf[Int]
+          case Some(js) => js.asJsObject.fields("leader_epoch").convertTo[Int]
         }
       case None => throw new NoEpochForPartitionException("No epoch, ISR path for partition [%s,%d] is empty"
         .format(topic, partition))
@@ -144,7 +140,7 @@ object ZkUtils extends Logging {
     leaderAndIsrOpt match {
       case Some(leaderAndIsr) =>
         Json.parseFull(leaderAndIsr) match {
-          case Some(m) => m.asInstanceOf[Map[String, Any]].get("isr").get.asInstanceOf[Seq[Int]]
+          case Some(js) => js.asJsObject.fields("isr").convertTo[Seq[Int]]
           case None => Seq.empty[Int]
         }
       case None => Seq.empty[Int]
@@ -155,21 +151,13 @@ object ZkUtils extends Logging {
    * Gets the assigned replicas (AR) for a specific topic and partition
    */
   def getReplicasForPartition(zkClient: ZkClient, topic: String, partition: Int): Seq[Int] = {
-    val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
-    jsonPartitionMapOpt match {
-      case Some(jsonPartitionMap) =>
-        Json.parseFull(jsonPartitionMap) match {
-          case Some(m) => m.asInstanceOf[Map[String, Any]].get("partitions") match {
-            case Some(replicaMap) => replicaMap.asInstanceOf[Map[String, Seq[Int]]].get(partition.toString) match {
-              case Some(seq) => seq
-              case None => Seq.empty[Int]
-            }
-            case None => Seq.empty[Int]
-          }
-          case None => Seq.empty[Int]
-        }
-      case None => Seq.empty[Int]
-    }
+    val seqOpt = for {
+      jsonPartitionMap <- readDataMaybeNull(zkClient, getTopicPath(topic))._1
+      js <- Json.parseFull(jsonPartitionMap)
+      replicaMap <- js.asJsObject.fields.get("partitions")
+      seq <- replicaMap.asJsObject.fields.get(partition.toString)
+    } yield seq.convertTo[Seq[Int]]
+    seqOpt.getOrElse(Seq.empty)
   }
 
   /**
@@ -535,22 +523,15 @@ object ZkUtils extends Logging {
   def getReplicaAssignmentForTopics(zkClient: ZkClient, topics: Seq[String]): mutable.Map[TopicAndPartition, Seq[Int]] = {
     val ret = new mutable.HashMap[TopicAndPartition, Seq[Int]]
     topics.foreach { topic =>
-      val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
-      jsonPartitionMapOpt match {
-        case Some(jsonPartitionMap) =>
-          Json.parseFull(jsonPartitionMap) match {
-            case Some(m) => m.asInstanceOf[Map[String, Any]].get("partitions") match {
-              case Some(repl)  =>
-                val replicaMap = repl.asInstanceOf[Map[String, Seq[Int]]]
-                for((partition, replicas) <- replicaMap){
-                  ret.put(TopicAndPartition(topic, partition.toInt), replicas)
-                  debug("Replicas assigned to topic [%s], partition [%s] are [%s]".format(topic, partition, replicas))
-                }
-              case None =>
+      readDataMaybeNull(zkClient, getTopicPath(topic))._1.foreach { jsonPartitionMap =>
+        Json.parseFull(jsonPartitionMap).foreach { js =>
+          js.asJsObject.fields.get("partitions").foreach { repl =>
+            repl.asJsObject.fields.foreach { case (partition, replicas) =>
+              ret.put(TopicAndPartition(topic, partition.toInt), replicas.convertTo[Seq[Int]])
+              debug("Replicas assigned to topic [%s], partition [%s] are [%s]".format(topic, partition, replicas))
             }
-            case None =>
           }
-        case None =>
+        }
       }
     }
     ret
@@ -558,21 +539,13 @@ object ZkUtils extends Logging {
 
   def getPartitionAssignmentForTopics(zkClient: ZkClient, topics: Seq[String]): mutable.Map[String, collection.Map[Int, Seq[Int]]] = {
     val ret = new mutable.HashMap[String, Map[Int, Seq[Int]]]()
-    topics.foreach{ topic =>
-      val jsonPartitionMapOpt = readDataMaybeNull(zkClient, getTopicPath(topic))._1
-      val partitionMap = jsonPartitionMapOpt match {
-        case Some(jsonPartitionMap) =>
-          Json.parseFull(jsonPartitionMap) match {
-            case Some(m) => m.asInstanceOf[Map[String, Any]].get("partitions") match {
-              case Some(replicaMap) =>
-                val m1 = replicaMap.asInstanceOf[Map[String, Seq[Int]]]
-                m1.map(p => (p._1.toInt, p._2))
-              case None => Map[Int, Seq[Int]]()
-            }
-            case None => Map[Int, Seq[Int]]()
-          }
-        case None => Map[Int, Seq[Int]]()
-      }
+    topics.foreach { topic =>
+      val partitionMapOpt = for {
+        jsonPartitionMap <- readDataMaybeNull(zkClient, getTopicPath(topic))._1
+        js <- Json.parseFull(jsonPartitionMap)
+        replicaMap <- js.asJsObject.fields.get("partitions")
+      } yield replicaMap.asJsObject.fields.map { case (k, v) => (k.toInt, v.convertTo[Seq[Int]]) }
+      val partitionMap = partitionMapOpt.getOrElse(Map.empty)
       debug("Partition map for /brokers/topics/%s is %s".format(topic, partitionMap))
       ret += (topic -> partitionMap)
     }
@@ -601,21 +574,17 @@ object ZkUtils extends Logging {
 
   // Parses without deduplicating keys so the the data can be checked before allowing reassignment to proceed
   def parsePartitionReassignmentDataWithoutDedup(jsonData: String): Seq[(TopicAndPartition, Seq[Int])] = {
-    Json.parseFull(jsonData) match {
-      case Some(m) =>
-        m.asInstanceOf[Map[String, Any]].get("partitions") match {
-          case Some(partitionsSeq) =>
-            partitionsSeq.asInstanceOf[Seq[Map[String, Any]]].map(p => {
-              val topic = p.get("topic").get.asInstanceOf[String]
-              val partition = p.get("partition").get.asInstanceOf[Int]
-              val newReplicas = p.get("replicas").get.asInstanceOf[Seq[Int]]
-              TopicAndPartition(topic, partition) -> newReplicas
-            })
-          case None =>
-            Seq.empty
-        }
-      case None =>
-        Seq.empty
+    import Json._
+    for {
+      js <- Json.parseFull(jsonData).toSeq
+      partitionsSeq <- js.asJsObject.fields.get("partitions").toSeq
+      p <- partitionsSeq.asJsArray.elements
+    } yield {
+      val partitionFields = p.asJsObject.fields
+      val topic = partitionFields("topic").convertTo[String]
+      val partition = partitionFields("partition").convertTo[Int]
+      val newReplicas = partitionFields("replicas").convertTo[Seq[Int]]
+      TopicAndPartition(topic, partition) -> newReplicas
     }
   }
 
@@ -624,21 +593,12 @@ object ZkUtils extends Logging {
   }
 
   def parseTopicsData(jsonData: String): Seq[String] = {
-    var topics = List.empty[String]
-    Json.parseFull(jsonData) match {
-      case Some(m) =>
-        m.asInstanceOf[Map[String, Any]].get("topics") match {
-          case Some(partitionsSeq) =>
-            val mapPartitionSeq = partitionsSeq.asInstanceOf[Seq[Map[String, Any]]]
-            mapPartitionSeq.foreach(p => {
-              val topic = p.get("topic").get.asInstanceOf[String]
-              topics ++= List(topic)
-            })
-          case None =>
-        }
-      case None =>
-    }
-    topics
+    import Json._
+    for {
+      js <- Json.parseFull(jsonData).toSeq
+      partitionsSeq <- js.asJsObject.fields.get("topics").toSeq
+      p <- partitionsSeq.asJsArray.elements
+    } yield p.asJsObject.fields("topic").convertTo[String]
   }
 
   def getPartitionReassignmentZkData(partitionsToBeReassigned: Map[TopicAndPartition, Seq[Int]]): String = {
