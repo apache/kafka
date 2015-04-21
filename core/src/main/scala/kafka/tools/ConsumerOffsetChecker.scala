@@ -42,10 +42,10 @@ object ConsumerOffsetChecker extends Logging {
       ZkUtils.readDataMaybeNull(zkClient, ZkUtils.BrokerIdsPath + "/" + bid)._1 match {
         case Some(brokerInfoString) =>
           Json.parseFull(brokerInfoString) match {
-            case Some(m) =>
-              val brokerInfo = m.asInstanceOf[Map[String, Any]]
-              val host = brokerInfo.get("host").get.asInstanceOf[String]
-              val port = brokerInfo.get("port").get.asInstanceOf[Int]
+            case Some(js) =>
+              val brokerInfo = js.asJsonObject
+              val host = brokerInfo("host").to[String]
+              val port = brokerInfo("port").to[Int]
               Some(new SimpleConsumer(host, port, 10000, 100000, "ConsumerOffsetChecker"))
             case None =>
               throw new BrokerNotAvailableException("Broker id %d does not exist".format(bid))

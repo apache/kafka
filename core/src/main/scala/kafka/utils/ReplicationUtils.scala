@@ -77,12 +77,12 @@ object ReplicationUtils extends Logging {
 
   private def parseLeaderAndIsr(leaderAndIsrStr: String, path: String, stat: Stat)
       : Option[LeaderIsrAndControllerEpoch] = {
-    Json.parseFull(leaderAndIsrStr).flatMap {m =>
-      val leaderIsrAndEpochInfo = m.asInstanceOf[Map[String, Any]]
-      val leader = leaderIsrAndEpochInfo.get("leader").get.asInstanceOf[Int]
-      val epoch = leaderIsrAndEpochInfo.get("leader_epoch").get.asInstanceOf[Int]
-      val isr = leaderIsrAndEpochInfo.get("isr").get.asInstanceOf[List[Int]]
-      val controllerEpoch = leaderIsrAndEpochInfo.get("controller_epoch").get.asInstanceOf[Int]
+    Json.parseFull(leaderAndIsrStr).flatMap { js =>
+      val leaderIsrAndEpochInfo = js.asJsonObject
+      val leader = leaderIsrAndEpochInfo("leader").to[Int]
+      val epoch = leaderIsrAndEpochInfo("leader_epoch").to[Int]
+      val isr = leaderIsrAndEpochInfo("isr").to[List[Int]]
+      val controllerEpoch = leaderIsrAndEpochInfo("controller_epoch").to[Int]
       val zkPathVersion = stat.getVersion
       debug("Leader %d, Epoch %d, Isr %s, Zk path version %d for leaderAndIsrPath %s".format(leader, epoch,
         isr.toString(), zkPathVersion, path))

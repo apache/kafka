@@ -14,34 +14,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package kafka.utils
+package kafka.utils
 
-import kafka.common._
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.ObjectMapper
+import kafka.utils.json.JsonValue
 import scala.collection._
-import util.parsing.json.JSON
 
 /**
  *  A wrapper that synchronizes JSON in scala, which is not threadsafe.
  */
-object Json extends Logging {
-  val myConversionFunc = {input : String => input.toInt}
-  JSON.globalNumberParser = myConversionFunc
-  val lock = new Object
+object Json {
+
+  private val mapper = new ObjectMapper()
 
   /**
    * Parse a JSON string into an object
    */
-  def parseFull(input: String): Option[Any] = {
-    lock synchronized {
-      try {
-        JSON.parseFull(input)
-      } catch {
-        case t: Throwable =>
-          throw new KafkaException("Can't parse json string: %s".format(input), t)
-      }
-    }
-  }
-  
+  def parseFull(input: String): Option[JsonValue] =
+    try Option(mapper.readTree(input)).map(JsonValue(_))
+    catch { case e: JsonProcessingException => None }
+
   /**
    * Encode an object into a JSON string. This method accepts any type T where
    *   T => null | Boolean | String | Number | Map[String, T] | Array[T] | Iterable[T]
@@ -68,4 +61,5 @@ object Json extends Logging {
       case other: AnyRef => throw new IllegalArgumentException("Unknown arguement of type " + other.getClass + ": " + other)
     }
   }
+
 }
