@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.io.Closeable;
 import java.util.List;
 
 import org.apache.kafka.common.Node;
@@ -21,7 +22,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 /**
  * The interface for {@link NetworkClient}
  */
-public interface KafkaClient {
+public interface KafkaClient extends Closeable {
 
     /**
      * Check if we are currently ready to send another request to the given node but don't attempt to connect if we
@@ -129,10 +130,5 @@ public interface KafkaClient {
      * Wake up the client if it is currently blocked waiting for I/O
      */
     public void wakeup();
-
-    /**
-     * Close the client and disconnect from all nodes
-     */
-    public void close();
 
 }

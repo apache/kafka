@@ -139,8 +139,11 @@ public class Sender implements Runnable {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
         }
-
-        this.client.close();
+        try {
+            this.client.close();
+        } catch (Exception e) {
+            log.error("Failed to close network client", e);
+        }
 
         log.debug("Shutdown of Kafka producer I/O thread has completed.");
     }

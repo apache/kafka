@@ -24,6 +24,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
@@ -32,6 +33,7 @@ import org.apache.kafka.clients.consumer.internals.Coordinator;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -346,6 +348,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     private final Coordinator coordinator;
+    private final Deserializer<K> keyDeserializer;
+    private final Deserializer<V> valueDeserializer;
     private final Fetcher<K, V> fetcher;
 
     private final Time time;
@@ -437,74 +441,97 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                           ConsumerRebalanceCallback callback,
                           Deserializer<K> keyDeserializer,
                           Deserializer<V> valueDeserializer) {
-        log.debug("Starting the Kafka consumer");
-        if (callback == null)
-            this.rebalanceCallback = config.getConfiguredInstance(ConsumerConfig.CONSUMER_REBALANCE_CALLBACK_CLASS_CONFIG,
-                                                                  ConsumerRebalanceCallback.class);
-        else
-            this.rebalanceCallback = callback;
-        this.time = new SystemTime();
-        this.autoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
-        this.autoCommitIntervalMs = config.getLong(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
-        this.lastCommitAttemptMs = time.milliseconds();
+        try {
+            log.debug("Starting the Kafka consumer");
+            if (callback == null)
+                this.rebalanceCallback = config.getConfiguredInstance(ConsumerConfig.CONSUMER_REBALANCE_CALLBACK_CLASS_CONFIG,
+                        ConsumerRebalanceCallback.class);
+            else
+                this.rebalanceCallback = callback;
+            this.time = new SystemTime();
+            this.autoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
+            this.autoCommitIntervalMs = config.getLong(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
+            this.lastCommitAttemptMs = time.milliseconds();
 
-        MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
-                                                      .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
-                                                                  TimeUnit.MILLISECONDS);
-        String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
-        String jmxPrefix = "kafka.consumer";
-        if (clientId.length() <= 0)
-          clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
-        List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                                                                        MetricsReporter.class);
-        reporters.add(new JmxReporter(jmxPrefix));
-        this.metrics = new Metrics(metricConfig, reporters, time);
-        this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
-        this.metadata = new Metadata(retryBackoffMs, config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG));
-        List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
-        this.metadata.update(Cluster.bootstrap(addresses), 0);
+            MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
+                    .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG),
+                            TimeUnit.MILLISECONDS);
+            String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
+            String jmxPrefix = "kafka.consumer";
+            if (clientId.length() <= 0)
+                clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
+            List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
+                    MetricsReporter.class);
+            reporters.add(new JmxReporter(jmxPrefix));
+            this.metrics = new Metrics(metricConfig, reporters, time);
+            this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
+            this.metadata = new Metadata(retryBackoffMs, config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG));
+            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
+            this.metadata.update(Cluster.bootstrap(addresses), 0);
 
-        String metricGrpPrefix = "consumer";
-        Map<String, String> metricsTags = new LinkedHashMap<String, String>();
-        metricsTags.put("client-id", clientId);
-        this.client = new NetworkClient(new Selector(metrics, time, metricGrpPrefix, metricsTags),
-                                        this.metadata,
-                                        clientId,
-                                        100, // a fixed large enough value will suffice
-                                        config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
-                                        config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
-                                        config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG));
-        this.subscriptions = new SubscriptionState();
-        this.coordinator = new Coordinator(this.client,
-                                           config.getString(ConsumerConfig.GROUP_ID_CONFIG),
-                                           this.retryBackoffMs,
-                                           config.getLong(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
-                                           config.getString(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
-                                           this.metadata,
-                                           this.subscriptions,
-                                           metrics,
-                                           metricGrpPrefix,
-                                           metricsTags,
-                                           this.time);
-        this.fetcher = new Fetcher<K, V>(this.client,
-                                              this.retryBackoffMs,
-                                              config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
-                                              config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG),
-                                              config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG),
-                                              config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG),
-                                              config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(),
-                                              keyDeserializer == null ? config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class) : keyDeserializer,
-                                              valueDeserializer == null ? config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class) : valueDeserializer,
-                                              this.metadata,
-                                              this.subscriptions,
-                                              metrics,
-                                              metricGrpPrefix,
-                                              metricsTags,
-                                              this.time);
+            String metricGrpPrefix = "consumer";
+            Map<String, String> metricsTags = new LinkedHashMap<String, String>();
+            metricsTags.put("client-id", clientId);
+            this.client = new NetworkClient(new Selector(metrics, time, metricGrpPrefix, metricsTags),
+                    this.metadata,
+                    clientId,
+                    100, // a fixed large enough value will suffice
+                    config.getLong(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG),
+                    config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
+                    config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG));
+            this.subscriptions = new SubscriptionState();
+            this.coordinator = new Coordinator(this.client,
+                    config.getString(ConsumerConfig.GROUP_ID_CONFIG),
+                    this.retryBackoffMs,
+                    config.getLong(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
+                    config.getString(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
+                    this.metadata,
+                    this.subscriptions,
+                    metrics,
+                    metricGrpPrefix,
+                    metricsTags,
+                    this.time);
 
-        config.logUnused();
+            if (keyDeserializer == null) {
+                this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
+                        Deserializer.class);
+                this.keyDeserializer.configure(config.originals(), false);
+            } else {
+                this.keyDeserializer = keyDeserializer;
+            }
+            if (valueDeserializer == null) {
+                this.valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
+                        Deserializer.class);
+                this.valueDeserializer.configure(config.originals(), false);
+            } else {
+                this.valueDeserializer = valueDeserializer;
+            }
+            this.fetcher = new Fetcher<K, V>(this.client,
+                    this.retryBackoffMs,
+                    config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
+                    config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG),
+                    config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG),
+                    config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG),
+                    config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(),
+                    this.keyDeserializer,
+                    this.valueDeserializer,
+                    this.metadata,
+                    this.subscriptions,
+                    metrics,
+                    metricGrpPrefix,
+                    metricsTags,
+                    this.time);
 
-        log.debug("Kafka consumer created");
+            config.logUnused();
+
+            log.debug("Kafka consumer created");
+        } catch (Throwable t) {
+            // call close methods if internal objects are already constructed
+            // this is to prevent resource leak. see KAFKA-2121
+            close(true);
+            // now propagate the exception
+            throw new KafkaException("Failed to construct kafka consumer", t);
+        }
     }
 
     /**
@@ -806,12 +833,23 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized void close() {
-        log.trace("Closing the Kafka consumer.");
-        this.closed = true;
-        this.metrics.close();
-        this.client.close();
-        log.debug("The Kafka consumer has closed.");
+        close(false);
     }
+
+    private void close(boolean swallowException) {
+        log.trace("Closing the Kafka consumer.");
+        AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
+        this.closed = true;
+        ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
+        ClientUtils.closeQuietly(client, "consumer network client", firstException);
+        ClientUtils.closeQuietly(keyDeserializer, "consumer key deserializer", firstException);
+        ClientUtils.closeQuietly(valueDeserializer, "consumer value deserializer", firstException);
+        log.debug("The Kafka consumer has closed.");
+        if (firstException.get() != null && !swallowException) {
+            throw new KafkaException("Failed to close kafka consumer", firstException.get());
+        }
+    }
+
 
     private boolean shouldAutoCommit(long now) {
         return this.autoCommit && this.lastCommitAttemptMs <= now - this.autoCommitIntervalMs;
