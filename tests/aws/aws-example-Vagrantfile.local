@@ -1,0 +1,9 @@
+ec3_instance_type = "m3.medium"
+enable_dns = true
+mode = "test"
+num_workers = 1
+ec2_keypair_name =
+ec2_keypair_file =
+ec2_security_groups = ['ducttape-insecure']
+ec2_region = 'us-west-2'
+ec2_ami = "ami-29ebb519"
