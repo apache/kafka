@@ -203,6 +203,44 @@ public class RecordAccumulatorTest {
         // but have leaders with other sendable data.
         assertTrue("Next check time should be defined by node2, at most linger time", result.nextReadyCheckDelayMs <= lingerMs);
     }
+
+    @Test
+    public void testRetryBackoff() throws Exception {
+        long lingerMs = Long.MAX_VALUE / 4;
+        long retryBackoffMs = Long.MAX_VALUE / 2;
+        final RecordAccumulator accum = new RecordAccumulator(1024, 10 * 1024, CompressionType.NONE, lingerMs, retryBackoffMs, false, metrics, time, metricTags);
+
+        long now = time.milliseconds();
+        accum.append(tp1, key, value, null);
+        RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, now + lingerMs + 1);
+        assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
+        Map<Integer, List<RecordBatch>> batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, now + lingerMs + 1);
+        assertEquals("Node1 should be the only ready node.", 1, batches.size());
+        assertEquals("Partition 0 should only have one batch drained.", 1, batches.get(0).size());
+
+        // Reenqueue the batch
+        now = time.milliseconds();
+        accum.reenqueue(batches.get(0).get(0), now);
+
+        // Put message for partition 1 into accumulator
+        accum.append(tp2, key, value, null);
+        result = accum.ready(cluster, now + lingerMs + 1);
+        assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
+
+        // tp1 should backoff while tp2 should not
+        batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, now + lingerMs + 1);
+        assertEquals("Node1 should be the only ready node.", 1, batches.size());
+        assertEquals("Node1 should only have one batch drained.", 1, batches.get(0).size());
+        assertEquals("Node1 should only have one batch for partition 1.", tp2, batches.get(0).get(0).topicPartition);
+
+        // Partition 0 can be drained after retry backoff
+        result = accum.ready(cluster, now + retryBackoffMs + 1);
+        assertEquals("Node1 should be ready", Collections.singleton(node1), result.readyNodes);
+        batches = accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, now + retryBackoffMs + 1);
+        assertEquals("Node1 should be the only ready node.", 1, batches.size());
+        assertEquals("Node1 should only have one batch drained.", 1, batches.get(0).size());
+        assertEquals("Node1 should only have one batch for partition 0.", tp1, batches.get(0).get(0).topicPartition);
+    }
     
     @Test
     public void testFlush() throws Exception {

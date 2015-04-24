@@ -292,17 +292,21 @@ public final class RecordAccumulator {
                     synchronized (deque) {
                         RecordBatch first = deque.peekFirst();
                         if (first != null) {
-                            if (size + first.records.sizeInBytes() > maxSize && !ready.isEmpty()) {
-                                // there is a rare case that a single batch size is larger than the request size due
-                                // to compression; in this case we will still eventually send this batch in a single
-                                // request
-                                break;
-                            } else {
-                                RecordBatch batch = deque.pollFirst();
-                                batch.records.close();
-                                size += batch.records.sizeInBytes();
-                                ready.add(batch);
-                                batch.drainedMs = now;
+                            boolean backoff = first.attempts > 0 && first.lastAttemptMs + retryBackoffMs > now;
+                            // Only drain the batch if it is not during backoff period.
+                            if (!backoff) {
+                                if (size + first.records.sizeInBytes() > maxSize && !ready.isEmpty()) {
+                                    // there is a rare case that a single batch size is larger than the request size due
+                                    // to compression; in this case we will still eventually send this batch in a single
+                                    // request
+                                    break;
+                                } else {
+                                    RecordBatch batch = deque.pollFirst();
+                                    batch.records.close();
+                                    size += batch.records.sizeInBytes();
+                                    ready.add(batch);
+                                    batch.drainedMs = now;
+                                }
                             }
                         }
                     }
