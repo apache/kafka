@@ -47,6 +47,8 @@ subprojects {
   apply plugin: 'maven'
   apply plugin: 'signing'
 
+  sourceCompatibility = 1.6
+
   licenseTest.onlyIf { isVerificationRequired(project) }
 
   uploadArchives {
