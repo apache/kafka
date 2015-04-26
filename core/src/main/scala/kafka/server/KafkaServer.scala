@@ -381,6 +381,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                      fileDeleteDelayMs = config.logDeleteDelayMs,
                                      minCleanableRatio = config.logCleanerMinCleanRatio,
                                      compact = config.logCleanupPolicy.trim.toLowerCase == "compact",
+                                     minInSyncReplicas = config.minInSyncReplicas,
                                      compressionType = config.compressionType)
     val defaultProps = defaultLogConfig.toProps
     val configs = AdminUtils.fetchAllTopicConfigs(zkClient).mapValues(LogConfig.fromProps(defaultProps, _))
