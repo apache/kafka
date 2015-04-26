@@ -17,9 +17,18 @@
 package kafka.utils
 
 import junit.framework.Assert._
-import org.junit.{Test, After, Before}
+import org.junit.Test
+import spray.json._
 
 class JsonTest {
+
+  @Test
+  def testJsonParse() {
+    assertEquals(Json.parseFull("{}"), Some(JsObject()))
+    assertEquals(Json.parseFull("""{"foo":"bar"s}"""), None)
+    assertEquals(Json.parseFull("""{"foo":"bar", "is_enabled":true}"""), Some(JsObject("foo" -> JsString("bar"), "is_enabled" -> JsTrue)))
+    assertEquals(Json.parseFull("[1, 2, 3]"), Some(JsArray(Vector(1, 2, 3).map(JsNumber(_)))))
+  }
 
   @Test
   def testJsonEncoding() {

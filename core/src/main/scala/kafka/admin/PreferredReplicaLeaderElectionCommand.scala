@@ -75,13 +75,15 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
   def parsePreferredReplicaElectionData(jsonString: String): immutable.Set[TopicAndPartition] = {
     Json.parseFull(jsonString) match {
-      case Some(m) =>
-        m.asInstanceOf[Map[String, Any]].get("partitions") match {
+      case Some(js) =>
+        js.asJsObject.fields.get("partitions") match {
           case Some(partitionsList) =>
-            val partitionsRaw = partitionsList.asInstanceOf[List[Map[String, Any]]]
+            import Json._
+            import spray.json.DefaultJsonProtocol._
+            val partitionsRaw = partitionsList.asJsArray.elements.map(_.asJsObject.fields)
             val partitions = partitionsRaw.map { p =>
-              val topic = p.get("topic").get.asInstanceOf[String]
-              val partition = p.get("partition").get.asInstanceOf[Int]
+              val topic = p("topic").convertTo[String]
+              val partition = p("partition").convertTo[Int]
               TopicAndPartition(topic, partition)
             }
             val duplicatePartitions = CoreUtils.duplicates(partitions)
