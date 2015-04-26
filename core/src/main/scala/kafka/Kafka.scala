@@ -68,7 +68,9 @@ object Kafka extends Logging {
       kafkaServerStartable.awaitShutdown
     }
     catch {
-      case e: Throwable => fatal(e)
+      case e: Throwable =>
+        fatal(e)
+        System.exit(1)
     }
     System.exit(0)
   }
