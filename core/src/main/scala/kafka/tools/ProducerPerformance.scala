@@ -235,7 +235,7 @@ object ProducerPerformance extends Logging {
 
       val seqMsgString = String.format("%1$-" + msgSize + "s", msgHeader).replace(' ', 'x')
       debug(seqMsgString)
-      return seqMsgString.getBytes()
+      seqMsgString.getBytes()
     }
 
     private def generateProducerData(topic: String, messageId: Long): Array[Byte] = {

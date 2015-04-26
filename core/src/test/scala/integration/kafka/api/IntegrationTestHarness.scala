@@ -44,7 +44,7 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
 
   override def generateConfigs() = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect)
-    cfgs.map(_.putAll(serverConfig))
+    cfgs.foreach(_.putAll(serverConfig))
     cfgs.map(KafkaConfig.fromProps)
   }
 
@@ -70,8 +70,8 @@ trait IntegrationTestHarness extends KafkaServerTestHarness {
   }
   
   override def tearDown() {
-    producers.map(_.close())
-    consumers.map(_.close())
+    producers.foreach(_.close())
+    consumers.foreach(_.close())
     super.tearDown()
   }
 

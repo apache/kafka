@@ -46,10 +46,10 @@ object TopicMetadataRequest extends Logging {
   }
 }
 
-case class TopicMetadataRequest(val versionId: Short,
-                                val correlationId: Int,
-                                val clientId: String,
-                                val topics: Seq[String])
+case class TopicMetadataRequest(versionId: Short,
+                                correlationId: Int,
+                                clientId: String,
+                                topics: Seq[String])
  extends RequestOrResponse(Some(RequestKeys.MetadataKey)){
 
   def this(topics: Seq[String], correlationId: Int) =

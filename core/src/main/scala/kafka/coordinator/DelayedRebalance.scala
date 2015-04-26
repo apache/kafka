@@ -41,8 +41,7 @@ class DelayedRebalance(sessionTimeout: Long,
 
   /* check if all known consumers have requested to re-join group */
   override def tryComplete(): Boolean = {
-    allConsumersJoinedGroup.set(groupRegistry.memberRegistries.values.foldLeft
-      (true) ((agg, cur) => agg && cur.joinGroupReceived.get()))
+    allConsumersJoinedGroup.set(groupRegistry.memberRegistries.values.forall(_.joinGroupReceived.get()))
 
     if (allConsumersJoinedGroup.get())
       forceComplete()

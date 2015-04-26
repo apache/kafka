@@ -12,14 +12,14 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.AbstractIterator;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.AbstractIterator;
 
 /**
  * A container that holds the list {@link ConsumerRecord} per partition for a
@@ -55,7 +55,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
             throw new IllegalArgumentException("Topic must be non-null.");
         List<List<ConsumerRecord<K, V>>> recs = new ArrayList<List<ConsumerRecord<K, V>>>();
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : records.entrySet()) {
-            if (entry.getKey().equals(topic))
+            if (entry.getKey().topic().equals(topic))
                 recs.add(entry.getValue());
         }
         return new ConcatenatedIterable<K, V>(recs);

@@ -498,7 +498,7 @@ object ZkUtils extends Logging {
     try {
       client.getChildren(path)
     } catch {
-      case e: ZkNoNodeException => return Nil
+      case e: ZkNoNodeException => Nil
       case e2: Throwable => throw e2
     }
   }
@@ -728,21 +728,19 @@ object ZkUtils extends Logging {
   def getSequenceId(client: ZkClient, path: String): Int = {
     try {
       val stat = client.writeDataReturnStat(path, "", -1)
-      return stat.getVersion
+      stat.getVersion
     } catch {
       case e: ZkNoNodeException => {
         createParentPath(client, BrokerSequenceIdPath)
         try {
           client.createPersistent(BrokerSequenceIdPath, "")
-          return 0
+          0
         } catch {
           case e: ZkNodeExistsException =>
             val stat = client.writeDataReturnStat(BrokerSequenceIdPath, "", -1)
-            return stat.getVersion
-          case e2: Throwable => throw e2
+            stat.getVersion
         }
       }
-      case e2: Throwable => throw e2
     }
   }
 

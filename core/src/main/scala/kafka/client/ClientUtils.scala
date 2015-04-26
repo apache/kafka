@@ -74,7 +74,7 @@ object ClientUtils extends Logging{
     } else {
       debug("Successfully fetched metadata for %d topic(s) %s".format(topics.size, topics))
     }
-    return topicMetadataResponse
+    topicMetadataResponse
   }
 
   /**

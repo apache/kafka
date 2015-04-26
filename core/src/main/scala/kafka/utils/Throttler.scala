@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.utils;
+package kafka.utils
 
 import kafka.metrics.KafkaMetricsGroup
 import java.util.concurrent.TimeUnit

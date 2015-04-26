@@ -309,8 +309,8 @@ class ControllerBrokerRequestBatch(controller: KafkaController) extends  Logging
     }
     updateMetadataRequestMap.clear()
     stopReplicaRequestMap foreach { case(broker, replicaInfoList) =>
-      val stopReplicaWithDelete = replicaInfoList.filter(p => p.deletePartition == true).map(i => i.replica).toSet
-      val stopReplicaWithoutDelete = replicaInfoList.filter(p => p.deletePartition == false).map(i => i.replica).toSet
+      val stopReplicaWithDelete = replicaInfoList.filter(_.deletePartition).map(_.replica).toSet
+      val stopReplicaWithoutDelete = replicaInfoList.filterNot(_.deletePartition).map(_.replica).toSet
       debug("The stop replica request (delete = true) sent to broker %d is %s"
         .format(broker, stopReplicaWithDelete.mkString(",")))
       debug("The stop replica request (delete = false) sent to broker %d is %s"

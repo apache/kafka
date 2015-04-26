@@ -396,7 +396,7 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-    return new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
+    new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
   }
 
   /**
@@ -417,7 +417,7 @@ object TestUtils extends Logging {
     consumerProps.put(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, "200")
     consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    return new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
+    new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
   }
 
   /**
@@ -457,9 +457,9 @@ object TestUtils extends Logging {
     new IteratorTemplate[Message] {
       override def makeNext(): Message = {
         if (iter.hasNext)
-          return iter.next.message
+          iter.next.message
         else
-          return allDone()
+          allDone()
       }
     }
   }
@@ -579,7 +579,7 @@ object TestUtils extends Logging {
       fail("Timing out after %d ms since leader is not elected or changed for partition [%s,%d]"
            .format(timeoutMs, topic, partition))
 
-    return leader
+    leader
   }
 
   /**

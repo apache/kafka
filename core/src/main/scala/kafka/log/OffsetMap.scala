@@ -69,7 +69,7 @@ class SkimpyOffsetMap(val memory: Int, val hashAlgorithm: String = "MD5") extend
   /**
    * The maximum number of entries this map can contain
    */
-  val slots: Int = (memory / bytesPerEntry).toInt
+  val slots: Int = memory / bytesPerEntry
   
   /**
    * Associate this offset to the given key.

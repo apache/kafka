@@ -49,7 +49,7 @@ public enum SecurityProtocol {
     }
 
     public static String getName(int id) {
-        return CODE_TO_SECURITY_PROTOCOL.get(id).name;
+        return CODE_TO_SECURITY_PROTOCOL.get((short) id).name;
     }
 
     public static List<String> getNames() {

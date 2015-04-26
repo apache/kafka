@@ -89,7 +89,7 @@ object ImportZkOffsets extends Logging {
       s = br.readLine()
     }
     
-    return partOffsetsMap
+    partOffsetsMap
   }
   
   private def updateZkOffsets(zkClient: ZkClient, partitionOffsets: Map[String,String]): Unit = {

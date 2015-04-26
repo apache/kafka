@@ -458,7 +458,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       checkpoint.write(new BrokerMetadata(brokerId))
     }
 
-    return brokerId
+    brokerId
   }
 
   private def generateBrokerId: Int = {

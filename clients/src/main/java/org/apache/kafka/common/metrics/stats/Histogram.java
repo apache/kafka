@@ -58,7 +58,7 @@ public class Histogram {
 
     @Override
     public String toString() {
-        StringBuilder b = new StringBuilder('{');
+        StringBuilder b = new StringBuilder("{");
         for (int i = 0; i < this.hist.length - 1; i++) {
             b.append(String.format("%.10f", binScheme.fromBin(i)));
             b.append(':');

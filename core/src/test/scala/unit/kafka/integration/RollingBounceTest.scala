@@ -40,8 +40,8 @@ class RollingBounceTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   override def tearDown() {
-    servers.map(server => server.shutdown())
-    servers.map(server => CoreUtils.rm(server.config.logDirs))
+    servers.foreach(_.shutdown())
+    servers.foreach(server => CoreUtils.rm(server.config.logDirs))
     super.tearDown()
   }
 

@@ -71,7 +71,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   def consumeWithBrokerFailures(numIters: Int) {
     val numRecords = 1000
     sendRecords(numRecords)
-    this.producers.map(_.close)
+    this.producers.foreach(_.close)
 
     var consumed = 0
     val consumer = this.consumers(0)
@@ -100,7 +100,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   def seekAndCommitWithBrokerFailures(numIters: Int) {
     val numRecords = 1000
     sendRecords(numRecords)
-    this.producers.map(_.close)
+    this.producers.foreach(_.close)
 
     val consumer = this.consumers(0)
     consumer.subscribe(tp)

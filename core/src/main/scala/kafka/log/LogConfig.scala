@@ -63,23 +63,23 @@ object Defaults {
  * @param compressionType compressionType for a given topic
  *
  */
-case class LogConfig(val segmentSize: Int = Defaults.SegmentSize,
-                     val segmentMs: Long = Defaults.SegmentMs,
-                     val segmentJitterMs: Long = Defaults.SegmentJitterMs,
-                     val flushInterval: Long = Defaults.FlushInterval,
-                     val flushMs: Long = Defaults.FlushMs,
-                     val retentionSize: Long = Defaults.RetentionSize,
-                     val retentionMs: Long = Defaults.RetentionMs,
-                     val maxMessageSize: Int = Defaults.MaxMessageSize,
-                     val maxIndexSize: Int = Defaults.MaxIndexSize,
-                     val indexInterval: Int = Defaults.IndexInterval,
-                     val fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs,
-                     val deleteRetentionMs: Long = Defaults.DeleteRetentionMs,
-                     val minCleanableRatio: Double = Defaults.MinCleanableDirtyRatio,
-                     val compact: Boolean = Defaults.Compact,
-                     val uncleanLeaderElectionEnable: Boolean = Defaults.UncleanLeaderElectionEnable,
-                     val minInSyncReplicas: Int = Defaults.MinInSyncReplicas,
-                     val compressionType: String = Defaults.CompressionType) {
+case class LogConfig(segmentSize: Int = Defaults.SegmentSize,
+                     segmentMs: Long = Defaults.SegmentMs,
+                     segmentJitterMs: Long = Defaults.SegmentJitterMs,
+                     flushInterval: Long = Defaults.FlushInterval,
+                     flushMs: Long = Defaults.FlushMs,
+                     retentionSize: Long = Defaults.RetentionSize,
+                     retentionMs: Long = Defaults.RetentionMs,
+                     maxMessageSize: Int = Defaults.MaxMessageSize,
+                     maxIndexSize: Int = Defaults.MaxIndexSize,
+                     indexInterval: Int = Defaults.IndexInterval,
+                     fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs,
+                     deleteRetentionMs: Long = Defaults.DeleteRetentionMs,
+                     minCleanableRatio: Double = Defaults.MinCleanableDirtyRatio,
+                     compact: Boolean = Defaults.Compact,
+                     uncleanLeaderElectionEnable: Boolean = Defaults.UncleanLeaderElectionEnable,
+                     minInSyncReplicas: Int = Defaults.MinInSyncReplicas,
+                     compressionType: String = Defaults.CompressionType) {
 
   def toProps: Properties = {
     val props = new Properties()

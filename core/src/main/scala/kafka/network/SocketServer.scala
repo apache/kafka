@@ -87,7 +87,7 @@ class SocketServer(val brokerId: Int,
           quotas,
           connectionsMaxIdleMs,
           portToProtocol)
-        Utils.newThread("kafka-network-thread-%d-%d".format(brokerId, i), processors(i), false).start();
+        Utils.newThread("kafka-network-thread-%d-%d".format(brokerId, i), processors(i), false).start()
       }
     }
 
@@ -244,7 +244,7 @@ private[kafka] class Acceptor(val host: String,
    * Accept loop that checks for new connection attempts
    */
   def run() {
-    serverChannel.register(selector, SelectionKey.OP_ACCEPT);
+    serverChannel.register(selector, SelectionKey.OP_ACCEPT)
     startupComplete()
     var currentProcessor = 0
     while(isRunning) {
@@ -480,7 +480,7 @@ private[kafka] class Processor(val id: Int,
       key.attach(receive)
     }
     val read = receive.readFrom(socketChannel)
-    val address = socketChannel.socket.getRemoteSocketAddress();
+    val address = socketChannel.socket.getRemoteSocketAddress()
     trace(read + " bytes read from " + address)
     if(read < 0) {
       close(key)

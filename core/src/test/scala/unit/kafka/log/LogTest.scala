@@ -107,7 +107,7 @@ class LogTest extends JUnitSuite {
 
     time.sleep(log.config.segmentMs - maxJitter)
     log.append(set)
-    assertEquals("Log does not roll on this append because it occurs earlier than max jitter", 1, log.numberOfSegments);
+    assertEquals("Log does not roll on this append because it occurs earlier than max jitter", 1, log.numberOfSegments)
     time.sleep(maxJitter - log.activeSegment.rollJitterMs + 1)
     log.append(set)
     assertEquals("Log should roll after segmentMs adjusted by random jitter", 2, log.numberOfSegments)
@@ -302,7 +302,7 @@ class LogTest extends JUnitSuite {
       assertEquals("Still no change in the logEndOffset", currOffset, log.logEndOffset)
       assertEquals("Should still be able to append and should get the logEndOffset assigned to the new append",
                    currOffset,
-                   log.append(TestUtils.singleMessageSet("hello".toString.getBytes)).firstOffset)
+                   log.append(TestUtils.singleMessageSet("hello".getBytes)).firstOffset)
 
       // cleanup the log
       log.delete()
@@ -752,7 +752,7 @@ class LogTest extends JUnitSuite {
     val topic: String = "test_topic"
     val partition:String = "143"
     val dir: File = new File(logDir + topicPartitionName(topic, partition))
-    val topicAndPartition = Log.parseTopicPartitionName(dir);
+    val topicAndPartition = Log.parseTopicPartitionName(dir)
     assertEquals(topic, topicAndPartition.asTuple._1)
     assertEquals(partition.toInt, topicAndPartition.asTuple._2)
   }
@@ -761,7 +761,7 @@ class LogTest extends JUnitSuite {
   def testParseTopicPartitionNameForEmptyName() {
     try {
       val dir: File = new File("")
-      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      val topicAndPartition = Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case e: Exception => // its GOOD!
@@ -772,7 +772,7 @@ class LogTest extends JUnitSuite {
   def testParseTopicPartitionNameForNull() {
     try {
       val dir: File = null
-      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      val topicAndPartition = Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir)
     } catch {
       case e: Exception => // its GOOD!
@@ -785,7 +785,7 @@ class LogTest extends JUnitSuite {
     val partition:String = "1999"
     val dir: File = new File(logDir + File.separator + topic + partition)
     try {
-      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      val topicAndPartition = Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case e: Exception => // its GOOD!
@@ -798,7 +798,7 @@ class LogTest extends JUnitSuite {
     val partition:String = "1999"
     val dir: File = new File(logDir + topicPartitionName(topic, partition))
     try {
-      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      val topicAndPartition = Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case e: Exception => // its GOOD!
@@ -811,7 +811,7 @@ class LogTest extends JUnitSuite {
     val partition:String = ""
     val dir: File = new File(logDir + topicPartitionName(topic, partition))
     try {
-      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      val topicAndPartition = Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case e: Exception => // its GOOD!

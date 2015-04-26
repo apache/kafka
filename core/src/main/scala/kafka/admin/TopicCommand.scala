@@ -143,7 +143,7 @@ object TopicCommand {
     topics.foreach { topic =>
       try {
         if (Topic.InternalTopics.contains(topic)) {
-          throw new AdminOperationException("Topic %s is a kafka internal topic and is not allowed to be marked for deletion.".format(topic));
+          throw new AdminOperationException("Topic %s is a kafka internal topic and is not allowed to be marked for deletion.".format(topic))
         } else {
           ZkUtils.createPersistentPath(zkClient, ZkUtils.getDeleteTopicPath(topic))
           println("Topic %s is marked for deletion.".format(topic))

@@ -58,7 +58,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       case exception: Throwable => fail("Failed to create persistent path")
     }
 
-    Assert.assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path));
+    Assert.assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path))
   }
 
   def testMakeSurePersistsPathExistsThrowsException {
@@ -88,7 +88,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       case exception: Throwable => fail("Failed to create persistent path")
     }
 
-    Assert.assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path));
+    Assert.assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, path))
   }
 
   def testCreateEphemeralPathThrowsException {
@@ -118,7 +118,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       case exception: Throwable => fail("Failed to create ephemeral path")
     }
 
-    Assert.assertTrue("Failed to create ephemeral path", ZkUtils.pathExists(zkClient, path));
+    Assert.assertTrue("Failed to create ephemeral path", ZkUtils.pathExists(zkClient, path))
   }
 
   def testCreatePersistentSequentialThrowsException {
@@ -150,6 +150,6 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
       case exception: Throwable => fail("Failed to create persistent path")
     }
 
-    Assert.assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, actualPath));
+    Assert.assertTrue("Failed to create persistent path", ZkUtils.pathExists(zkClient, actualPath))
   }
 }
