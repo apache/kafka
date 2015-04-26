@@ -196,7 +196,6 @@ object KafkaConfig {
   val MinInSyncReplicasProp = "min.insync.replicas"
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsProp = "controller.socket.timeout.ms"
-  val ControllerMessageQueueSizeProp = "controller.message.queue.size"
   val DefaultReplicationFactorProp = "default.replication.factor"
   val ReplicaLagTimeMaxMsProp = "replica.lag.time.max.ms"
   val ReplicaSocketTimeoutMsProp = "replica.socket.timeout.ms"
@@ -444,7 +443,6 @@ object KafkaConfig {
 
       /** ********* Replication configuration ***********/
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.ControllerSocketTimeoutMs, MEDIUM, ControllerSocketTimeoutMsDoc)
-      .define(ControllerMessageQueueSizeProp, INT, Defaults.ControllerMessageQueueSize, MEDIUM, ControllerMessageQueueSizeDoc)
       .define(DefaultReplicationFactorProp, INT, Defaults.DefaultReplicationFactor, MEDIUM, DefaultReplicationFactorDoc)
       .define(ReplicaLagTimeMaxMsProp, LONG, Defaults.ReplicaLagTimeMaxMs, HIGH, ReplicaLagTimeMaxMsDoc)
       .define(ReplicaSocketTimeoutMsProp, INT, Defaults.ReplicaSocketTimeoutMs, HIGH, ReplicaSocketTimeoutMsDoc)
@@ -565,7 +563,6 @@ object KafkaConfig {
 
       /** ********* Replication configuration ***********/
       controllerSocketTimeoutMs = parsed.get(ControllerSocketTimeoutMsProp).asInstanceOf[Int],
-      controllerMessageQueueSize = parsed.get(ControllerMessageQueueSizeProp).asInstanceOf[Int],
       defaultReplicationFactor = parsed.get(DefaultReplicationFactorProp).asInstanceOf[Int],
       replicaLagTimeMaxMs = parsed.get(ReplicaLagTimeMaxMsProp).asInstanceOf[Long],
       replicaSocketTimeoutMs = parsed.get(ReplicaSocketTimeoutMsProp).asInstanceOf[Int],
@@ -708,7 +705,6 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
 
                   /** ********* Replication configuration ***********/
                   val controllerSocketTimeoutMs: Int = Defaults.ControllerSocketTimeoutMs,
-                  val controllerMessageQueueSize: Int = Defaults.ControllerMessageQueueSize,
                   val defaultReplicationFactor: Int = Defaults.DefaultReplicationFactor,
                   val replicaLagTimeMaxMs: Long = Defaults.ReplicaLagTimeMaxMs,
                   val replicaSocketTimeoutMs: Int = Defaults.ReplicaSocketTimeoutMs,
@@ -930,7 +926,6 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
 
     /** ********* Replication configuration ***********/
     props.put(ControllerSocketTimeoutMsProp, controllerSocketTimeoutMs.toString)
-    props.put(ControllerMessageQueueSizeProp, controllerMessageQueueSize.toString)
     props.put(DefaultReplicationFactorProp, defaultReplicationFactor.toString)
     props.put(ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
     props.put(ReplicaSocketTimeoutMsProp, replicaSocketTimeoutMs.toString)

@@ -76,7 +76,7 @@ class ControllerChannelManager (private val controllerContext: ControllerContext
   }
 
   private def addNewBroker(broker: Broker) {
-    val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)](config.controllerMessageQueueSize)
+    val messageQueue = new LinkedBlockingQueue[(RequestOrResponse, (RequestOrResponse) => Unit)]()
     debug("Controller %d trying to connect to broker %d".format(config.brokerId,broker.id))
     val brokerEndPoint = broker.getBrokerEndPoint(config.interBrokerSecurityProtocol)
     val channel = new BlockingChannel(brokerEndPoint.host, brokerEndPoint.port,
