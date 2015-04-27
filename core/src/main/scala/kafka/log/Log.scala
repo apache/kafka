@@ -122,9 +122,10 @@ class Log(val dir: File,
   private def loadSegments() {
     // create the log directory if it doesn't exist
     dir.mkdirs()
+    var swapFiles = Set[File]()
     
     // first do a pass through the files in the log directory and remove any temporary files 
-    // and complete any interrupted swap operations
+    // and find any interrupted swap operations
     for(file <- dir.listFiles if file.isFile) {
       if(!file.canRead)
         throw new IOException("Could not read file " + file)
@@ -134,7 +135,7 @@ class Log(val dir: File,
         file.delete()
       } else if(filename.endsWith(SwapFileSuffix)) {
         // we crashed in the middle of a swap operation, to recover:
-        // if a log, swap it in and delete the .index file
+        // if a log, delete the .index file, complete the swap operation later
         // if an index just delete it, it will be rebuilt
         val baseName = new File(CoreUtils.replaceSuffix(file.getPath, SwapFileSuffix, ""))
         if(baseName.getPath.endsWith(IndexFileSuffix)) {
@@ -143,12 +144,7 @@ class Log(val dir: File,
           // delete the index
           val index = new File(CoreUtils.replaceSuffix(baseName.getPath, LogFileSuffix, IndexFileSuffix))
           index.delete()
-          // complete the swap operation
-          val renamed = file.renameTo(baseName)
-          if(renamed)
-            info("Found log file %s from interrupted swap operation, repairing.".format(file.getPath))
-          else
-            throw new KafkaException("Failed to rename file %s.".format(file.getPath))
+          swapFiles += file
         }
       }
     }
@@ -179,6 +175,27 @@ class Log(val dir: File,
         }
         segments.put(start, segment)
       }
+    }
+    
+    // Finally, complete any interrupted swap operations. To be crash-safe,
+    // log files that are replaced by the swap segment should be renamed to .deleted
+    // before the swap file is restored as the new segment file.
+    for (swapFile <- swapFiles) {
+      val logFile = new File(CoreUtils.replaceSuffix(swapFile.getPath, SwapFileSuffix, ""))
+      val fileName = logFile.getName
+      val startOffset = fileName.substring(0, fileName.length - LogFileSuffix.length).toLong
+      val indexFile = new File(CoreUtils.replaceSuffix(logFile.getPath, LogFileSuffix, IndexFileSuffix) + SwapFileSuffix)
+      val index =  new OffsetIndex(file = indexFile, baseOffset = startOffset, maxIndexSize = config.maxIndexSize)
+      val swapSegment = new LogSegment(new FileMessageSet(file = swapFile),
+                                       index = index,
+                                       baseOffset = startOffset,
+                                       indexIntervalBytes = config.indexInterval,
+                                       rollJitterMs = config.randomSegmentJitter,
+                                       time = time)
+      info("Found log file %s from interrupted swap operation, repairing.".format(swapFile.getPath))
+      swapSegment.recover(config.maxMessageSize)
+      val oldSegments = logSegments(swapSegment.baseOffset, swapSegment.nextOffset)
+      replaceSegments(swapSegment, oldSegments.toSeq, isRecoveredSwapFile = true)
     }
 
     if(logSegments.size == 0) {
@@ -748,14 +765,32 @@ class Log(val dir: File,
    * Swap a new segment in place and delete one or more existing segments in a crash-safe manner. The old segments will
    * be asynchronously deleted.
    * 
+   * The sequence of operations is:
+   * <ol>
+   *   <li> Cleaner creates new segment with suffix .cleaned and invokes replaceSegments().
+   *        If broker crashes at this point, the clean-and-swap operation is aborted and
+   *        the .cleaned file is deleted on recovery in loadSegments().
+   *   <li> New segment is renamed .swap. If the broker crashes after this point before the whole
+   *        operation is completed, the swap operation is resumed on recovery as described in the next step.
+   *   <li> Old segment files are renamed to .deleted and asynchronous delete is scheduled.
+   *        If the broker crashes, any .deleted files left behind are deleted on recovery in loadSegments().
+   *        replaceSegments() is then invoked to complete the swap with newSegment recreated from
+   *        the .swap file and oldSegments containing segments which were not renamed before the crash.
+   *   <li> Swap segment is renamed to replace the existing segment, completing this operation.
+   *        If the broker crashes, any .deleted files which may be left behind are deleted
+   *        on recovery in loadSegments().
+   * </ol>
+   * 
    * @param newSegment The new log segment to add to the log
    * @param oldSegments The old log segments to delete from the log
+   * @param isRecoveredSwapFile true if the new segment was created from a swap file during recovery after a crash
    */
-  private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment]) {
+  private[log] def replaceSegments(newSegment: LogSegment, oldSegments: Seq[LogSegment], isRecoveredSwapFile : Boolean = false) {
     lock synchronized {
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
-      newSegment.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix)
+      if (!isRecoveredSwapFile)
+        newSegment.changeFileSuffixes(Log.CleanedFileSuffix, Log.SwapFileSuffix)
       addSegment(newSegment)
         
       // delete the old files

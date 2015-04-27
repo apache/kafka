@@ -275,6 +275,105 @@ class CleanerTest extends JUnitSuite {
     checkRange(map, segments(3).baseOffset.toInt, log.logEndOffset.toInt)
   }
   
+  
+  /**
+   * Tests recovery if broker crashes at the following stages during the cleaning sequence
+   * <ol>
+   *   <li> Cleaner has created .cleaned log containing multiple segments, swap sequence not yet started
+   *   <li> .cleaned log renamed to .swap, old segment files not yet renamed to .deleted
+   *   <li> .cleaned log renamed to .swap, old segment files renamed to .deleted, but not yet deleted
+   *   <li> .swap suffix removed, completing the swap, but async delete of .deleted files not yet complete
+   * </ol>
+   */
+  @Test
+  def testRecoveryAfterCrash() {
+    val cleaner = makeCleaner(Int.MaxValue)
+    val config = logConfig.copy(segmentSize = 300, indexInterval = 1, fileDeleteDelayMs = 10)
+      
+    def recoverAndCheck(config: LogConfig, expectedKeys : Iterable[Int]) : Log = {   
+      // Recover log file and check that after recovery, keys are as expected
+      // and all temporary files have been deleted
+      val recoveredLog = makeLog(config = config)
+      time.sleep(config.fileDeleteDelayMs + 1)
+      for (file <- dir.listFiles) {
+        assertFalse("Unexpected .deleted file after recovery", file.getName.endsWith(Log.DeletedFileSuffix))
+        assertFalse("Unexpected .cleaned file after recovery", file.getName.endsWith(Log.CleanedFileSuffix))
+        assertFalse("Unexpected .swap file after recovery", file.getName.endsWith(Log.SwapFileSuffix))
+      }
+      assertEquals(expectedKeys, keysInLog(recoveredLog))
+      recoveredLog
+    }
+    
+    // create a log and append some messages
+    var log = makeLog(config = config)
+    var messageCount = 0
+    while(log.numberOfSegments < 10) {
+      log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
+      messageCount += 1
+    }
+    val allKeys = keysInLog(log)
+    
+    // pretend we have odd-numbered keys
+    val offsetMap = new FakeOffsetMap(Int.MaxValue)
+    for (k <- 1 until messageCount by 2)
+      offsetMap.put(key(k), Long.MaxValue)
+     
+    // clean the log
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L)
+    var cleanedKeys = keysInLog(log)
+    
+    // 1) Simulate recovery just after .cleaned file is created, before rename to .swap
+    //    On recovery, clean operation is aborted. All messages should be present in the log
+    log.logSegments.head.changeFileSuffixes("", Log.CleanedFileSuffix)
+    for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
+      file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+    }
+    log = recoverAndCheck(config, allKeys)
+    
+    // clean again
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L)
+    cleanedKeys = keysInLog(log)
+    
+    // 2) Simulate recovery just after swap file is created, before old segment files are
+    //    renamed to .deleted. Clean operation is resumed during recovery. 
+    log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
+    for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
+      file.renameTo(new File(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
+    }   
+    log = recoverAndCheck(config, cleanedKeys)
+    
+    // add some more messages and clean the log again
+    while(log.numberOfSegments < 10) {
+      log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
+      messageCount += 1
+    }
+    for (k <- 1 until messageCount by 2)
+      offsetMap.put(key(k), Long.MaxValue)    
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L)
+    cleanedKeys = keysInLog(log)
+    
+    // 3) Simulate recovery after swap file is created and old segments files are renamed
+    //    to .deleted. Clean operation is resumed during recovery.
+    log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
+    log = recoverAndCheck(config, cleanedKeys)
+    
+    // add some more messages and clean the log again
+    while(log.numberOfSegments < 10) {
+      log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
+      messageCount += 1
+    }
+    for (k <- 1 until messageCount by 2)
+      offsetMap.put(key(k), Long.MaxValue)    
+    cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L)
+    cleanedKeys = keysInLog(log)
+    
+    // 4) Simulate recovery after swap is complete, but async deletion
+    //    is not yet complete. Clean operation is resumed during recovery.
+    recoverAndCheck(config, cleanedKeys)
+    
+  }
+  
+  
   def makeLog(dir: File = dir, config: LogConfig = logConfig) =
     new Log(dir = dir, config = config, recoveryPoint = 0L, scheduler = time.scheduler, time = time)
 
