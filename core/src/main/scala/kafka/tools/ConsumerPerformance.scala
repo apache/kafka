@@ -22,11 +22,8 @@ import java.util.concurrent.atomic.AtomicLong
 import java.nio.channels.ClosedByInterruptException
 import org.apache.log4j.Logger
 import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.common.record.Record
-import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import kafka.message.Message
-import kafka.utils.{ZkUtils, CommandLineUtils}
+import kafka.utils.CommandLineUtils
 import java.util.{ Random, Properties }
 import kafka.consumer.Consumer
 import kafka.consumer.ConsumerConnector
@@ -44,8 +41,8 @@ object ConsumerPerformance {
 
     val config = new ConsumerPerfConfig(args)
     logger.info("Starting consumer...")
-    var totalMessagesRead = new AtomicLong(0)
-    var totalBytesRead = new AtomicLong(0)
+    val totalMessagesRead = new AtomicLong(0)
+    val totalBytesRead = new AtomicLong(0)
 
     if (!config.hideHeader) {
       if (!config.showDetailedStats)
@@ -177,7 +174,7 @@ object ConsumerPerformance {
 
     val options = parser.parse(args: _*)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
+    CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt)
    
     val useNewConsumer = options.has(useNewConsumerOpt)
     
@@ -193,7 +190,7 @@ object ConsumerPerformance {
       props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer])
       props.put(ConsumerConfig.CHECK_CRCS_CONFIG, "false")
     } else {
-      CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
+      CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, numMessagesOpt)
       props.put("group.id", options.valueOf(groupIdOpt))
       props.put("socket.receive.buffer.bytes", options.valueOf(socketBufferSizeOpt).toString)
       props.put("fetch.message.max.bytes", options.valueOf(fetchSizeOpt).toString)
