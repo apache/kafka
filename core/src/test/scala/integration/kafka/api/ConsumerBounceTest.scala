@@ -106,6 +106,9 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     consumer.subscribe(tp)
     consumer.seek(tp, 0)
 
+    // sleep for a while to guarantee followers have synced the last HW with leader
+    Thread.sleep(1000)
+
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
 
