@@ -495,7 +495,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (keyDeserializer == null) {
                 this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
                         Deserializer.class);
-                this.keyDeserializer.configure(config.originals(), false);
+                this.keyDeserializer.configure(config.originals(), true);
             } else {
                 this.keyDeserializer = keyDeserializer;
             }
