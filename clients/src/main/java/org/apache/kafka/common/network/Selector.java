@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -31,6 +31,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.MetricName;
@@ -40,6 +41,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,25 +53,25 @@ import org.slf4j.LoggerFactory;
  * responses.
  * <p>
  * A connection can be added to the selector associated with an integer id by doing
- * 
+ *
  * <pre>
  * selector.connect(42, new InetSocketAddress(&quot;google.com&quot;, server.port), 64000, 64000);
  * </pre>
- * 
+ *
  * The connect call does not block on the creation of the TCP connection, so the connect method only begins initiating
  * the connection. The successful invocation of this method does not mean a valid connection has been established.
- * 
+ *
  * Sending requests, receiving responses, processing connection completions, and disconnections on the existing
  * connections are all done using the <code>poll()</code> call.
- * 
+ *
  * <pre>
  * List&lt;NetworkRequest&gt; requestsToSend = Arrays.asList(new NetworkRequest(0, myBytes), new NetworkRequest(1, myOtherBytes));
  * selector.poll(TIMEOUT_MS, requestsToSend);
  * </pre>
- * 
+ *
  * The selector maintains several lists that are reset by each call to <code>poll()</code> which are available via
  * various getters. These are reset by each call to <code>poll()</code>.
- * 
+ *
  * This class is not thread safe!
  */
 public class Selector implements Selectable {
@@ -78,6 +80,7 @@ public class Selector implements Selectable {
 
     private final java.nio.channels.Selector selector;
     private final Map<Integer, SelectionKey> keys;
+    private final Map<SelectionKey, Channel> channels;
     private final List<NetworkSend> completedSends;
     private final List<NetworkReceive> completedReceives;
     private final List<Integer> disconnected;
@@ -87,11 +90,14 @@ public class Selector implements Selectable {
     private final SelectorMetrics sensors;
     private final String metricGrpPrefix;
     private final Map<String, String> metricTags;
+    private final SecurityConfig securityConfig;
+    private final SecurityProtocol securityProtocol;
+    private SSLFactory sslFactory = null;
 
     /**
      * Create a new selector
      */
-    public Selector(Metrics metrics, Time time, String metricGrpPrefix, Map<String, String> metricTags) {
+    public Selector(Metrics metrics, Time time, String metricGrpPrefix, Map<String, String> metricTags, SecurityConfig securityConfig) {
         try {
             this.selector = java.nio.channels.Selector.open();
         } catch (IOException e) {
@@ -101,12 +107,24 @@ public class Selector implements Selectable {
         this.metricGrpPrefix = metricGrpPrefix;
         this.metricTags = metricTags;
         this.keys = new HashMap<Integer, SelectionKey>();
+        this.channels = new HashMap<SelectionKey, Channel>();
         this.completedSends = new ArrayList<NetworkSend>();
         this.completedReceives = new ArrayList<NetworkReceive>();
         this.connected = new ArrayList<Integer>();
         this.disconnected = new ArrayList<Integer>();
         this.failedSends = new ArrayList<Integer>();
         this.sensors = new SelectorMetrics(metrics);
+        this.securityConfig = securityConfig;
+        this.securityProtocol = SecurityProtocol.valueOf(securityConfig.getString(SecurityConfig.SECURITY_PROTOCOL_CONFIG));
+        try {
+            if (securityProtocol == SecurityProtocol.SSL) {
+                this.sslFactory = new SSLFactory(SSLFactory.Mode.CLIENT);
+                this.sslFactory.init(this.securityConfig);
+            }
+        } catch (Exception e) {
+            throw new KafkaException(e);
+        }
+
     }
 
     /**
@@ -127,25 +145,37 @@ public class Selector implements Selectable {
         if (this.keys.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id);
 
-        SocketChannel channel = SocketChannel.open();
-        channel.configureBlocking(false);
-        Socket socket = channel.socket();
+        SocketChannel socketChannel = SocketChannel.open();
+        socketChannel.configureBlocking(false);
+        Socket socket = socketChannel.socket();
         socket.setKeepAlive(true);
         socket.setSendBufferSize(sendBufferSize);
         socket.setReceiveBufferSize(receiveBufferSize);
         socket.setTcpNoDelay(true);
         try {
-            channel.connect(address);
+            socketChannel.connect(address);
         } catch (UnresolvedAddressException e) {
-            channel.close();
+            socketChannel.close();
             throw new IOException("Can't resolve address: " + address, e);
         } catch (IOException e) {
-            channel.close();
+            socketChannel.close();
             throw e;
         }
-        SelectionKey key = channel.register(this.selector, SelectionKey.OP_CONNECT);
+
+        TransportLayer transportLayer;
+        if (securityProtocol == SecurityProtocol.SSL) {
+            transportLayer = new SSLTransportLayer(socketChannel,
+                                                    sslFactory.createSSLEngine(socket.getInetAddress().getHostName(),
+                                                                               socket.getPort()));
+        } else {
+            transportLayer = new PlainTextTransportLayer(socketChannel);
+        }
+        Authenticator authenticator = new DefaultAuthenticator(transportLayer);
+        Channel channel = new Channel(transportLayer, authenticator);
+        SelectionKey key = socketChannel.register(this.selector, SelectionKey.OP_CONNECT);
         key.attach(new Transmissions(id));
         this.keys.put(id, key);
+        this.channels.put(key, channel);
     }
 
     /**
@@ -202,12 +232,12 @@ public class Selector implements Selectable {
     /**
      * Do whatever I/O can be done on each connection without blocking. This includes completing connections, completing
      * disconnections, initiating new sends, or making progress on in-progress sends or receives.
-     * 
+     *
      * When this call is completed the user can check for completed sends, receives, connections or disconnects using
      * {@link #completedSends()}, {@link #completedReceives()}, {@link #connected()}, {@link #disconnected()}. These
      * lists will be cleared at the beginning of each {@link #poll(long, List)} call and repopulated by the call if any
      * completed I/O.
-     * 
+     *
      * @param timeout The amount of time to wait, in milliseconds. If negative, wait indefinitely.
      * @throws IllegalStateException If a send is given for which we have no existing connection or for which there is
      *         already an in-progress send
@@ -230,7 +260,7 @@ public class Selector implements Selectable {
                 iter.remove();
 
                 Transmissions transmissions = transmissions(key);
-                SocketChannel channel = channel(key);
+                Channel channel = channel(key);
 
                 // register all per-broker metrics at once
                 sensors.maybeRegisterNodeMetrics(transmissions.id);
@@ -242,29 +272,46 @@ public class Selector implements Selectable {
                         key.interestOps(key.interestOps() & ~SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
                         this.connected.add(transmissions.id);
                         this.sensors.connectionCreated.record();
+
                     }
 
                     /* read from any connections that have readable data */
                     if (key.isReadable()) {
-                        if (!transmissions.hasReceive())
-                            transmissions.receive = new NetworkReceive(transmissions.id);
-                        transmissions.receive.readFrom(channel);
-                        if (transmissions.receive.complete()) {
-                            transmissions.receive.payload().rewind();
-                            this.completedReceives.add(transmissions.receive);
-                            this.sensors.recordBytesReceived(transmissions.id, transmissions.receive.payload().limit());
-                            transmissions.clearReceive();
+                        if (!channel.isReady()) {
+                            int status = channel.connect(key.isReadable(), key.isWritable());
+                            if (status == 0)
+                                key.interestOps(key.interestOps() & ~SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
+                            else
+                                key.interestOps(status);
+                        } else {
+                            if (!transmissions.hasReceive())
+                                transmissions.receive = new NetworkReceive(transmissions.id);
+                            transmissions.receive.readFrom(channel);
+                            if (transmissions.receive.complete()) {
+                                transmissions.receive.payload().rewind();
+                                this.completedReceives.add(transmissions.receive);
+                                this.sensors.recordBytesReceived(transmissions.id, transmissions.receive.payload().limit());
+                                transmissions.clearReceive();
+                            }
                         }
                     }
 
                     /* write to any sockets that have space in their buffer and for which we have data */
                     if (key.isWritable()) {
-                        transmissions.send.writeTo(channel);
-                        if (transmissions.send.remaining() <= 0) {
-                            this.completedSends.add(transmissions.send);
-                            this.sensors.recordBytesSent(transmissions.id, transmissions.send.size());
-                            transmissions.clearSend();
-                            key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
+                        if (!channel.isReady()) {
+                            int status = channel.connect(key.isReadable(), key.isWritable());
+                            if (status == 0)
+                                key.interestOps(key.interestOps() & ~SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
+                            else
+                                key.interestOps(status);
+                        } else {
+                            transmissions.send.writeTo(channel);
+                            if (transmissions.send.remaining() <= 0) {
+                                this.completedSends.add(transmissions.send);
+                                this.sensors.recordBytesSent(transmissions.id, transmissions.send.size());
+                                transmissions.clearSend();
+                                key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
+                            }
                         }
                     }
 
@@ -287,9 +334,9 @@ public class Selector implements Selectable {
         long endIo = time.nanoseconds();
         this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
     }
-    
-    private String socketDescription(SocketChannel channel) {
-        Socket socket = channel.socket();
+
+    private String socketDescription(Channel channel) {
+        Socket socket = channel.socketChannel().socket();
         if (socket == null)
             return "[unconnected socket]";
         else if (socket.getInetAddress() != null)
@@ -362,7 +409,7 @@ public class Selector implements Selectable {
 
     /**
      * Check for data, waiting up to the given timeout.
-     * 
+     *
      * @param ms Length of time to wait, in milliseconds. If negative, wait indefinitely.
      * @return The number of keys ready
      * @throws IOException
@@ -380,7 +427,8 @@ public class Selector implements Selectable {
      * Begin closing this connection
      */
     private void close(SelectionKey key) {
-        SocketChannel channel = channel(key);
+        Channel channel = channel(key);
+        this.channels.remove(key);
         Transmissions trans = transmissions(key);
         if (trans != null) {
             this.keys.remove(trans.id);
@@ -390,7 +438,6 @@ public class Selector implements Selectable {
         key.attach(null);
         key.cancel();
         try {
-            channel.socket().close();
             channel.close();
         } catch (IOException e) {
             log.error("Exception closing connection to node {}:", trans.id, e);
@@ -418,8 +465,8 @@ public class Selector implements Selectable {
     /**
      * Get the socket channel associated with this selection key
      */
-    private SocketChannel channel(SelectionKey key) {
-        return (SocketChannel) key.channel();
+    private Channel channel(SelectionKey key) {
+        return this.channels.get(key);
     }
 
     /**

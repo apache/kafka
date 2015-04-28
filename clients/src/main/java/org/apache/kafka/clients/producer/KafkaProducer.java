@@ -32,6 +32,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -138,6 +139,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
     private final ProducerConfig producerConfig;
+    private final SecurityConfig securityConfig;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -214,6 +216,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
+            this.securityConfig = ClientUtils.parseSecurityConfig(config.getString(ProducerConfig.SECURITY_CONFIG_FILE_CONFIG));
             Map<String, String> metricTags = new LinkedHashMap<String, String>();
             metricTags.put("client-id", clientId);
             this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
@@ -228,7 +231,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
 
-            NetworkClient client = new NetworkClient(new Selector(this.metrics, time, "producer", metricTags),
+            NetworkClient client = new NetworkClient(new Selector(this.metrics, time, "producer", metricTags, securityConfig),
                     this.metadata,
                     clientId,
                     config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),

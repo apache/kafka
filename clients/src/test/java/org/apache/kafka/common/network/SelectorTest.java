@@ -15,18 +15,14 @@ package org.apache.kafka.common.network;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
-import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.List;
 
+import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -47,9 +43,10 @@ public class SelectorTest {
 
     @Before
     public void setup() throws Exception {
-        this.server = new EchoServer();
+        SecurityConfig securityConfig = ClientUtils.parseSecurityConfig("");
+        this.server = new EchoServer(securityConfig);
         this.server.start();
-        this.selector = new Selector(new Metrics(), new MockTime() , "MetricGroup", new LinkedHashMap<String, String>());
+        this.selector = new Selector(new Metrics(), new MockTime() , "MetricGroup", new LinkedHashMap<String, String>(), securityConfig);
     }
 
     @After
@@ -264,71 +261,5 @@ public class SelectorTest {
         return new String(Utils.toArray(receive.payload()));
     }
 
-    /**
-     * A simple server that takes size delimited byte arrays and just echos them back to the sender.
-     */
-    static class EchoServer extends Thread {
-        public final int port;
-        private final ServerSocket serverSocket;
-        private final List<Thread> threads;
-        private final List<Socket> sockets;
-
-        public EchoServer() throws Exception {
-            this.serverSocket = new ServerSocket(0);
-            this.port = this.serverSocket.getLocalPort();
-            this.threads = Collections.synchronizedList(new ArrayList<Thread>());
-            this.sockets = Collections.synchronizedList(new ArrayList<Socket>());
-        }
-
-        public void run() {
-            try {
-                while (true) {
-                    final Socket socket = serverSocket.accept();
-                    sockets.add(socket);
-                    Thread thread = new Thread() {
-                        public void run() {
-                            try {
-                                DataInputStream input = new DataInputStream(socket.getInputStream());
-                                DataOutputStream output = new DataOutputStream(socket.getOutputStream());
-                                while (socket.isConnected() && !socket.isClosed()) {
-                                    int size = input.readInt();
-                                    byte[] bytes = new byte[size];
-                                    input.readFully(bytes);
-                                    output.writeInt(size);
-                                    output.write(bytes);
-                                    output.flush();
-                                }
-                            } catch (IOException e) {
-                                // ignore
-                            } finally {
-                                try {
-                                    socket.close();
-                                } catch (IOException e) {
-                                    // ignore
-                                }
-                            }
-                        }
-                    };
-                    thread.start();
-                    threads.add(thread);
-                }
-            } catch (IOException e) {
-                // ignore
-            }
-        }
-
-        public void closeConnections() throws IOException {
-            for (Socket socket : sockets)
-                socket.close();
-        }
-
-        public void close() throws IOException, InterruptedException {
-            this.serverSocket.close();
-            closeConnections();
-            for (Thread t : threads)
-                t.join();
-            join();
-        }
-    }
 
 }

@@ -55,4 +55,6 @@ public class CommonClientConfigs {
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
     public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>MetricReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
 
+    public static final String SECURITY_CONFIG_FILE_CONFIG = "security.config.file";
+    public static final String SECURITY_CONFIG_FILE_DOC = "Kafka client security related config file.";
 }

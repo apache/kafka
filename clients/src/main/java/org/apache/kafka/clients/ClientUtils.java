@@ -13,17 +13,22 @@
 package org.apache.kafka.clients;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.common.utils.Utils.loadProps;
+
 
 public class ClientUtils {
     private static final Logger log = LoggerFactory.getLogger(ClientUtils.class);
@@ -60,5 +65,14 @@ public class ClientUtils {
                 log.error("Failed to close " + name, t);
             }
         }
+    }
+
+    public static SecurityConfig parseSecurityConfig(String securityConfigFile) throws IOException {
+        Properties securityProps = new Properties();
+        if (securityConfigFile == null || securityConfigFile == "") {
+            return new SecurityConfig(securityProps);
+        }
+        securityProps = loadProps(securityConfigFile);
+        return new SecurityConfig(securityProps);
     }
 }

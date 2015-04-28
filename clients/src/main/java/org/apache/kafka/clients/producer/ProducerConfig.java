@@ -169,6 +169,11 @@ public class ProducerConfig extends AbstractConfig {
     public static final String VALUE_SERIALIZER_CLASS_CONFIG = "value.serializer";
     private static final String VALUE_SERIALIZER_CLASS_DOC = "Serializer class for value that implements the <code>Serializer</code> interface.";
 
+    /** <code>security.config.file </code> */
+    public static final String SECURITY_CONFIG_FILE_CONFIG = CommonClientConfigs.SECURITY_CONFIG_FILE_CONFIG;
+    private static final String SECURITY_CONFIG_FILE_DOC = CommonClientConfigs.SECURITY_CONFIG_FILE_DOC;
+
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG, Type.LIST, Importance.HIGH, CommonClientConfigs.BOOSTRAP_SERVERS_DOC)
                                 .define(BUFFER_MEMORY_CONFIG, Type.LONG, 32 * 1024 * 1024L, atLeast(0L), Importance.HIGH, BUFFER_MEMORY_DOC)
@@ -217,7 +222,8 @@ public class ProducerConfig extends AbstractConfig {
                                         Importance.LOW,
                                         MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC)
                                 .define(KEY_SERIALIZER_CLASS_CONFIG, Type.CLASS, Importance.HIGH, KEY_SERIALIZER_CLASS_DOC)
-                                .define(VALUE_SERIALIZER_CLASS_CONFIG, Type.CLASS, Importance.HIGH, VALUE_SERIALIZER_CLASS_DOC);
+                                .define(VALUE_SERIALIZER_CLASS_CONFIG, Type.CLASS, Importance.HIGH, VALUE_SERIALIZER_CLASS_DOC)
+                                .define(SECURITY_CONFIG_FILE_CONFIG, Type.STRING, "", Importance.MEDIUM, SECURITY_CONFIG_FILE_DOC);
     }
 
     public static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,

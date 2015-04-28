@@ -33,7 +33,6 @@
     <!-- code cleanup -->
     <module name="UnusedImports"/>
     <module name="RedundantImport"/>
-    <module name="IllegalImport" />
     <module name="EqualsHashCode"/>
     <module name="SimplifyBooleanExpression"/>
     <module name="OneStatementPerLine"/>

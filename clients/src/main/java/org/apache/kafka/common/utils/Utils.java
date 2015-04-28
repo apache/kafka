@@ -479,4 +479,15 @@ public class Utils {
     public static String readFileAsString(String path) throws IOException {
         return Utils.readFileAsString(path, Charset.defaultCharset());
     }
+
+    public static ByteBuffer ensureCapacity(ByteBuffer existingBuffer, int newLength) {
+        if (newLength > existingBuffer.capacity()) {
+            ByteBuffer newBuffer = ByteBuffer.allocate(newLength);
+            existingBuffer.flip();
+            newBuffer.put(existingBuffer);
+            return newBuffer;
+        }
+        return existingBuffer;
+    }
+
 }

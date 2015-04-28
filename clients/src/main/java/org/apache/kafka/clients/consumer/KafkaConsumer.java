@@ -37,6 +37,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.MetricName;
@@ -361,6 +362,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final boolean autoCommit;
     private final long autoCommitIntervalMs;
     private final ConsumerRebalanceCallback rebalanceCallback;
+    private final SecurityConfig securityConfig;
     private long lastCommitAttemptMs;
     private boolean closed = false;
 
@@ -472,7 +474,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             String metricGrpPrefix = "consumer";
             Map<String, String> metricsTags = new LinkedHashMap<String, String>();
             metricsTags.put("client-id", clientId);
-            this.client = new NetworkClient(new Selector(metrics, time, metricGrpPrefix, metricsTags),
+            this.securityConfig = ClientUtils.parseSecurityConfig(config.getString(ConsumerConfig.SECURITY_CONFIG_FILE_CONFIG));
+            this.client = new NetworkClient(new Selector(metrics, time, metricGrpPrefix, metricsTags, securityConfig),
                     this.metadata,
                     clientId,
                     100, // a fixed large enough value will suffice
