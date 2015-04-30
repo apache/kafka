@@ -95,6 +95,12 @@ object MirrorMaker extends Logging {
       .describedAs("Java regex (String)")
       .ofType(classOf[String])
 
+    val prefixOpt = parser.accepts("prefix",
+      "Rename the topic in the destination to have <prefix> at the front")
+      .withRequiredArg()
+      .ofType(classOf[java.lang.String])
+      .defaultsTo("")
+
     val helpOpt = parser.accepts("help", "Print this message.")
     
     if(args.length == 0)
@@ -116,6 +122,7 @@ object MirrorMaker extends Logging {
     val numProducers = options.valueOf(numProducersOpt).intValue()
     val numStreams = options.valueOf(numStreamsOpt).intValue()
     val bufferSize = options.valueOf(bufferSizeOpt).intValue()
+    val prefix = options.valueOf(prefixOpt)
 
     // create consumer streams
     connectors = options.valuesOf(consumerConfigOpt).toList
@@ -140,7 +147,7 @@ object MirrorMaker extends Logging {
       }
       else
         new OldProducer(producerProps)
-      new ProducerThread(mirrorDataChannel, producer, i)
+      new ProducerThread(mirrorDataChannel, producer, i, prefix)
     })
 
     // create consumer threads
@@ -288,7 +295,8 @@ object MirrorMaker extends Logging {
 
   class ProducerThread (val dataChannel: DataChannel,
                         val producer: BaseProducer,
-                        val threadId: Int) extends Thread with Logging with KafkaMetricsGroup {
+                        val threadId: Int,
+			val prefix: String) extends Thread with Logging with KafkaMetricsGroup {
     private val threadName = "mirrormaker-producer-" + threadId
     private val shutdownComplete: CountDownLatch = new CountDownLatch(1)
     private var isCleanShutdown: Boolean = true
@@ -306,7 +314,7 @@ object MirrorMaker extends Logging {
             info("Received shutdown message")
             return
           }
-          producer.send(data.topic(), data.key(), data.value())
+          producer.send(prefix + data.topic(), data.key(), data.value())
         }
       } catch {
         case t: Throwable => {
