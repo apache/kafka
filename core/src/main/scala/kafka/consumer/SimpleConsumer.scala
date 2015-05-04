@@ -17,6 +17,9 @@
 
 package kafka.consumer
 
+
+import java.nio.channels.ClosedByInterruptException
+
 import kafka.api._
 import kafka.network._
 import kafka.utils._
@@ -70,6 +73,8 @@ class SimpleConsumer(val host: String,
         blockingChannel.send(request)
         response = blockingChannel.receive()
       } catch {
+        case e : ClosedByInterruptException =>
+          throw e
         case e : Throwable =>
           info("Reconnect due to socket error: %s".format(e.toString))
           // retry once
