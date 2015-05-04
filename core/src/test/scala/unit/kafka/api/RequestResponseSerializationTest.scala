@@ -204,8 +204,8 @@ object SerializationTestUtils {
       versionId = 0,
       groupId = "group 1",
       requestInfo = collection.immutable.Map(
-        TopicAndPartition(topic1, 0) -> OffsetAndMetadata(42L, "some metadata", SystemTime.milliseconds),
-        TopicAndPartition(topic1, 1) -> OffsetAndMetadata(100L, OffsetMetadata.NoMetadata, SystemTime.milliseconds)
+        TopicAndPartition(topic1, 0) -> OffsetAndMetadata(42L, "some metadata"),
+        TopicAndPartition(topic1, 1) -> OffsetAndMetadata(100L, OffsetMetadata.NoMetadata)
       ))
   }
 

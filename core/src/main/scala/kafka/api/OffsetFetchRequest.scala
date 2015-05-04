@@ -29,7 +29,7 @@ import scala.Some
 import java.nio.ByteBuffer
 
 object OffsetFetchRequest extends Logging {
-  val CurrentVersion: Short = 0
+  val CurrentVersion: Short = 1
   val DefaultClientId = ""
 
   def readFrom(buffer: ByteBuffer): OffsetFetchRequest = {

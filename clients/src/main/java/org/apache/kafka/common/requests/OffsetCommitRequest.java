@@ -68,7 +68,7 @@ public class OffsetCommitRequest extends AbstractRequest {
 
     public static final class PartitionData {
         @Deprecated
-        public final long timestamp;                // for V0, V1
+        public final long timestamp;                // for V1
 
         public final long offset;
         public final String metadata;
@@ -93,6 +93,7 @@ public class OffsetCommitRequest extends AbstractRequest {
     @Deprecated
     public OffsetCommitRequest(String groupId, Map<TopicPartition, PartitionData> offsetData) {
         super(new Struct(ProtoUtils.requestSchema(ApiKeys.OFFSET_COMMIT.id, 0)));
+
         initCommonFields(groupId, offsetData);
         this.groupId = groupId;
         this.generationId = DEFAULT_GENERATION_ID;
@@ -159,7 +160,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                 Struct partitionData = topicData.instance(PARTITIONS_KEY_NAME);
                 partitionData.set(PARTITION_KEY_NAME, partitionEntry.getKey());
                 partitionData.set(COMMIT_OFFSET_KEY_NAME, fetchPartitionData.offset);
-                // Only for v0 and v1
+                // Only for v1
                 if (partitionData.hasField(TIMESTAMP_KEY_NAME))
                     partitionData.set(TIMESTAMP_KEY_NAME, fetchPartitionData.timestamp);
                 partitionData.set(METADATA_KEY_NAME, fetchPartitionData.metadata);
@@ -203,7 +204,7 @@ public class OffsetCommitRequest extends AbstractRequest {
                 long offset = partitionDataStruct.getLong(COMMIT_OFFSET_KEY_NAME);
                 String metadata = partitionDataStruct.getString(METADATA_KEY_NAME);
                 PartitionData partitionOffset;
-                // This field only exists in v0 and v1
+                // This field only exists in v1
                 if (partitionDataStruct.hasField(TIMESTAMP_KEY_NAME)) {
                     long timestamp = partitionDataStruct.getLong(TIMESTAMP_KEY_NAME);
                     partitionOffset = new PartitionData(offset, timestamp, metadata);

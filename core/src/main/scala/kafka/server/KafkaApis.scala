@@ -28,7 +28,7 @@ import kafka.coordinator.ConsumerCoordinator
 import kafka.log._
 import kafka.network._
 import kafka.network.RequestChannel.Response
-import kafka.utils.{SystemTime, Logging}
+import kafka.utils.{ZkUtils, ZKGroupTopicDirs, SystemTime, Logging}
 
 import scala.collection._
 
@@ -161,44 +161,70 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
     }
 
-    // compute the retention time based on the request version:
-    // if it is before v2 or not specified by user, we can use the default retention
-    val offsetRetention =
-      if (offsetCommitRequest.versionId <= 1 ||
-        offsetCommitRequest.retentionMs == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME) {
-        offsetManager.config.offsetsRetentionMs
-      } else {
-        offsetCommitRequest.retentionMs
+    if (offsetCommitRequest.versionId == 0) {
+      // for version 0 always store offsets to ZK
+      val responseInfo = offsetCommitRequest.requestInfo.map {
+        case (topicAndPartition, metaAndError) => {
+          val topicDirs = new ZKGroupTopicDirs(offsetCommitRequest.groupId, topicAndPartition.topic)
+          try {
+            if (metadataCache.getTopicMetadata(Set(topicAndPartition.topic), request.securityProtocol).size <= 0) {
+              (topicAndPartition, ErrorMapping.UnknownTopicOrPartitionCode)
+            } else if (metaAndError.metadata != null && metaAndError.metadata.length > config.offsetMetadataMaxSize) {
+              (topicAndPartition, ErrorMapping.OffsetMetadataTooLargeCode)
+            } else {
+              ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" +
+                topicAndPartition.partition, metaAndError.offset.toString)
+              (topicAndPartition, ErrorMapping.NoError)
+            }
+          } catch {
+            case e: Throwable => (topicAndPartition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+          }
+        }
       }
 
-    // commit timestamp is always set to now.
-    // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
-    // expire timestamp is computed differently for v1 and v2.
-    //   - If v1 and no explicit commit timestamp is provided we use default expiration timestamp.
-    //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
-    //   - If v2 we use the default expiration timestamp
-    val currentTimestamp = SystemTime.milliseconds
-    val defaultExpireTimestamp = offsetRetention + currentTimestamp
+      sendResponseCallback(responseInfo)
+    } else {
+      // for version 1 and beyond store offsets in offset manager
 
-    val offsetData = offsetCommitRequest.requestInfo.mapValues(offsetAndMetadata =>
-      offsetAndMetadata.copy(
-        commitTimestamp = currentTimestamp,
-        expireTimestamp = {
-          if (offsetAndMetadata.commitTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
-            defaultExpireTimestamp
-          else
-            offsetRetention + offsetAndMetadata.commitTimestamp
+      // compute the retention time based on the request version:
+      // if it is v1 or not specified by user, we can use the default retention
+      val offsetRetention =
+        if (offsetCommitRequest.versionId <= 1 ||
+          offsetCommitRequest.retentionMs == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME) {
+          offsetManager.config.offsetsRetentionMs
+        } else {
+          offsetCommitRequest.retentionMs
         }
-      )
-    )
 
-    // call offset manager to store offsets
-    offsetManager.storeOffsets(
-      offsetCommitRequest.groupId,
-      offsetCommitRequest.consumerId,
-      offsetCommitRequest.groupGenerationId,
-      offsetData,
-      sendResponseCallback)
+      // commit timestamp is always set to now.
+      // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
+      // expire timestamp is computed differently for v1 and v2.
+      //   - If v1 and no explicit commit timestamp is provided we use default expiration timestamp.
+      //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
+      //   - If v2 we use the default expiration timestamp
+      val currentTimestamp = SystemTime.milliseconds
+      val defaultExpireTimestamp = offsetRetention + currentTimestamp
+
+      val offsetData = offsetCommitRequest.requestInfo.mapValues(offsetAndMetadata =>
+        offsetAndMetadata.copy(
+          commitTimestamp = currentTimestamp,
+          expireTimestamp = {
+            if (offsetAndMetadata.commitTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
+              defaultExpireTimestamp
+            else
+              offsetRetention + offsetAndMetadata.commitTimestamp
+          }
+        )
+      )
+
+      // call offset manager to store offsets
+      offsetManager.storeOffsets(
+        offsetCommitRequest.groupId,
+        offsetCommitRequest.consumerId,
+        offsetCommitRequest.groupGenerationId,
+        offsetData,
+        sendResponseCallback)
+    }
   }
 
   /**
@@ -449,21 +475,46 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleOffsetFetchRequest(request: RequestChannel.Request) {
     val offsetFetchRequest = request.requestObj.asInstanceOf[OffsetFetchRequest]
 
-    val (unknownTopicPartitions, knownTopicPartitions) = offsetFetchRequest.requestInfo.partition(topicAndPartition =>
-      metadataCache.getPartitionInfo(topicAndPartition.topic, topicAndPartition.partition).isEmpty
-    )
-    val unknownStatus = unknownTopicPartitions.map(topicAndPartition => (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)).toMap
-    val knownStatus =
-      if (knownTopicPartitions.size > 0)
-        offsetManager.getOffsets(offsetFetchRequest.groupId, knownTopicPartitions).toMap
-      else
-        Map.empty[TopicAndPartition, OffsetMetadataAndError]
-    val status = unknownStatus ++ knownStatus
+    val response = if (offsetFetchRequest.versionId == 0) {
+      // version 0 reads offsets from ZK
+      val responseInfo = offsetFetchRequest.requestInfo.map( topicAndPartition => {
+        val topicDirs = new ZKGroupTopicDirs(offsetFetchRequest.groupId, topicAndPartition.topic)
+        try {
+          if (metadataCache.getTopicMetadata(Set(topicAndPartition.topic), request.securityProtocol).size <= 0) {
+            (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)
+          } else {
+            val payloadOpt = ZkUtils.readDataMaybeNull(zkClient, topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1
+            payloadOpt match {
+              case Some(payload) => (topicAndPartition, OffsetMetadataAndError(payload.toLong))
+              case None => (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)
+            }
+          }
+        } catch {
+          case e: Throwable =>
+            (topicAndPartition, OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata,
+              ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])))
+        }
+      })
 
-    val response = OffsetFetchResponse(status, offsetFetchRequest.correlationId)
+      OffsetFetchResponse(collection.immutable.Map(responseInfo: _*), offsetFetchRequest.correlationId)
+    } else {
+      // version 1 reads offsets from Kafka
+      val (unknownTopicPartitions, knownTopicPartitions) = offsetFetchRequest.requestInfo.partition(topicAndPartition =>
+        metadataCache.getPartitionInfo(topicAndPartition.topic, topicAndPartition.partition).isEmpty
+      )
+      val unknownStatus = unknownTopicPartitions.map(topicAndPartition => (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)).toMap
+      val knownStatus =
+        if (knownTopicPartitions.size > 0)
+          offsetManager.getOffsets(offsetFetchRequest.groupId, knownTopicPartitions).toMap
+        else
+          Map.empty[TopicAndPartition, OffsetMetadataAndError]
+      val status = unknownStatus ++ knownStatus
+
+      OffsetFetchResponse(status, offsetFetchRequest.correlationId)
+    }
 
     trace("Sending offset fetch response %s for correlation id %d to client %s."
-          .format(response, offsetFetchRequest.correlationId, offsetFetchRequest.clientId))
+      .format(response, offsetFetchRequest.correlationId, offsetFetchRequest.clientId))
     requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
   }
 

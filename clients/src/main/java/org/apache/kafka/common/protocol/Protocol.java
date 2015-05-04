@@ -118,6 +118,16 @@ public class Protocol {
                                                                                new Field("offset",
                                                                                          INT64,
                                                                                          "Message offset to be committed."),
+                                                                               new Field("metadata",
+                                                                                         STRING,
+                                                                                         "Any associated metadata the client wants to keep."));
+
+    public static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V1 = new Schema(new Field("partition",
+                                                                                         INT32,
+                                                                                         "Topic partition id."),
+                                                                               new Field("offset",
+                                                                                         INT64,
+                                                                                         "Message offset to be committed."),
                                                                                new Field("timestamp",
                                                                                          INT64,
                                                                                          "Timestamp of the commit"),
@@ -125,7 +135,7 @@ public class Protocol {
                                                                                          STRING,
                                                                                          "Any associated metadata the client wants to keep."));
 
-    public static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V1 = new Schema(new Field("partition",
+    public static final Schema OFFSET_COMMIT_REQUEST_PARTITION_V2 = new Schema(new Field("partition",
                                                                                          INT32,
                                                                                          "Topic partition id."),
                                                                                new Field("offset",
@@ -149,6 +159,13 @@ public class Protocol {
                                                                                      new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V1),
                                                                                      "Partitions to commit offsets."));
 
+    public static final Schema OFFSET_COMMIT_REQUEST_TOPIC_V2 = new Schema(new Field("topic",
+                                                                                     STRING,
+                                                                                     "Topic to commit."),
+                                                                           new Field("partitions",
+                                                                                     new ArrayOf(OFFSET_COMMIT_REQUEST_PARTITION_V2),
+                                                                                     "Partitions to commit offsets."));
+
     public static final Schema OFFSET_COMMIT_REQUEST_V0 = new Schema(new Field("group_id",
                                                                                STRING,
                                                                                "The consumer group id."),
@@ -166,7 +183,7 @@ public class Protocol {
                                                                                STRING,
                                                                                "The consumer id assigned by the group coordinator."),
                                                                      new Field("topics",
-                                                                               new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V0),
+                                                                               new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V1),
                                                                                "Topics to commit offsets."));
 
     public static final Schema OFFSET_COMMIT_REQUEST_V2 = new Schema(new Field("group_id",
@@ -182,7 +199,7 @@ public class Protocol {
                                                                                INT64,
                                                                                "Time period in ms to retain the offset."),
                                                                      new Field("topics",
-                                                                               new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V1),
+                                                                               new ArrayOf(OFFSET_COMMIT_REQUEST_TOPIC_V2),
                                                                                "Topics to commit offsets."));
 
     public static final Schema OFFSET_COMMIT_RESPONSE_PARTITION_V0 = new Schema(new Field("partition",
@@ -199,10 +216,20 @@ public class Protocol {
                                                                                 new ArrayOf(OFFSET_COMMIT_RESPONSE_TOPIC_V0)));
 
     public static final Schema[] OFFSET_COMMIT_REQUEST = new Schema[] {OFFSET_COMMIT_REQUEST_V0, OFFSET_COMMIT_REQUEST_V1, OFFSET_COMMIT_REQUEST_V2};
+
     /* The response types for V0, V1 and V2 of OFFSET_COMMIT_REQUEST are the same. */
-    public static final Schema[] OFFSET_COMMIT_RESPONSE = new Schema[] {OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V0};
+    public static final Schema OFFSET_COMMIT_RESPONSE_V1 = OFFSET_COMMIT_RESPONSE_V0;
+    public static final Schema OFFSET_COMMIT_RESPONSE_V2 = OFFSET_COMMIT_RESPONSE_V0;
+
+    public static final Schema[] OFFSET_COMMIT_RESPONSE = new Schema[] {OFFSET_COMMIT_RESPONSE_V0, OFFSET_COMMIT_RESPONSE_V1, OFFSET_COMMIT_RESPONSE_V2};
 
     /* Offset fetch api */
+
+    /*
+     * Wire formats of version 0 and 1 are the same, but with different functionality.
+     * Version 0 will read the offsets from ZK;
+     * Version 1 will read the offsets from Kafka.
+     */
     public static final Schema OFFSET_FETCH_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
                                                                                         INT32,
                                                                                         "Topic partition id."));
@@ -239,8 +266,11 @@ public class Protocol {
     public static final Schema OFFSET_FETCH_RESPONSE_V0 = new Schema(new Field("responses",
                                                                                new ArrayOf(OFFSET_FETCH_RESPONSE_TOPIC_V0)));
 
-    public static final Schema[] OFFSET_FETCH_REQUEST = new Schema[] {OFFSET_FETCH_REQUEST_V0};
-    public static final Schema[] OFFSET_FETCH_RESPONSE = new Schema[] {OFFSET_FETCH_RESPONSE_V0};
+    public static final Schema OFFSET_FETCH_REQUEST_V1 = OFFSET_FETCH_REQUEST_V0;
+    public static final Schema OFFSET_FETCH_RESPONSE_V1 = OFFSET_FETCH_RESPONSE_V0;
+
+    public static final Schema[] OFFSET_FETCH_REQUEST = new Schema[] {OFFSET_FETCH_REQUEST_V0, OFFSET_FETCH_REQUEST_V1};
+    public static final Schema[] OFFSET_FETCH_RESPONSE = new Schema[] {OFFSET_FETCH_RESPONSE_V0, OFFSET_FETCH_RESPONSE_V1};
 
     /* List offset api */
     public static final Schema LIST_OFFSET_REQUEST_PARTITION_V0 = new Schema(new Field("partition",
