@@ -89,6 +89,11 @@ class KafkaHealthcheck(private val brokerId: Int,
       info("done re-registering broker")
       info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
     }
+
+    @throws(classOf[RuntimeException])
+    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+      throw new RuntimeException("zkClient reconnection failed, is zookeeper having issues?", error)
+    }
   }
 
 }

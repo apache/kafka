@@ -1112,6 +1112,11 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
         controllerElector.elect
       }
     }
+
+    @throws(classOf[RuntimeException])
+    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+      throw new RuntimeException("zkClient reconnection failed, is zookeeper having issues?", error)
+    }
   }
 
   private def checkAndTriggerPartitionRebalance(): Unit = {

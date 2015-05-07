@@ -93,6 +93,11 @@ class ZookeeperTopicEventWatcher(val zkClient: ZkClient,
         }
       }
     }
+
+    @throws(classOf[RuntimeException])
+    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+      throw new RuntimeException("zkClient reconnection failed, is zookeeper having issues?", error)
+    }
   }
 }
 
