@@ -38,4 +38,6 @@ public interface Serializer<T> extends Closeable {
      */
     public byte[] serialize(String topic, T data);
 
+    @Override
+    public void close();
 }

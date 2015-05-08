@@ -33,13 +33,14 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "some.invalid.hostname.foo.bar:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
 
-        MockMetricsReporter.CLOSE_COUNT.set(0);
+        final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
+        final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
         try {
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<byte[], byte[]>(
                     props, null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         } catch (KafkaException e) {
-            Assert.assertEquals(1, MockMetricsReporter.CLOSE_COUNT.get());
-            MockMetricsReporter.CLOSE_COUNT.set(0);
+            Assert.assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
+            Assert.assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
             Assert.assertEquals("Failed to construct kafka consumer", e.getMessage());
             return;
         }

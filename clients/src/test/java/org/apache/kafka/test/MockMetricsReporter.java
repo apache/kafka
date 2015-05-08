@@ -24,6 +24,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockMetricsReporter implements MetricsReporter {
+    public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
     public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
 
     public MockMetricsReporter() {
@@ -32,7 +33,7 @@ public class MockMetricsReporter implements MetricsReporter {
 
     @Override
     public void init(List<KafkaMetric> metrics) {
-
+        INIT_COUNT.incrementAndGet();
     }
 
     @Override
