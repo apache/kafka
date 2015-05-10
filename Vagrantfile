@@ -79,6 +79,17 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     end
   end
 
+  ## Provider-specific settings, libvirt
+  config.vm.provider :libvirt do |v,override|
+    override.vm.box = "fedora21"
+    override.vm.box_url = "http://citozin.com/fedora21.box"
+    override.hostmanager.ignore_private_ip = false
+
+    v.memory = ram_megabytes.to_s
+    v.nested = true
+    v.volume_cache = 'none'
+  end
+
   config.vm.provider :aws do |aws,override|
     # The "box" is specified as an AMI
     override.vm.box = "dummy"

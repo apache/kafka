@@ -17,23 +17,33 @@
 
 set -e
 
-if [ -z `which javac` ]; then
-    apt-get -y update
-    apt-get install -y software-properties-common python-software-properties
-    add-apt-repository -y ppa:webupd8team/java
-    apt-get -y update
-
-    # Try to share cache. See Vagrantfile for details
-    mkdir -p /var/cache/oracle-jdk7-installer
-    if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
-        find /tmp/oracle-jdk7-installer-cache/ -not -empty -exec cp '{}' /var/cache/oracle-jdk7-installer/ \;
+if [ $(cat /etc/system-release | grep -oE 'Fedora release [[:digit:]]+') == 'Fedora release 21' ]
+then #working with fedora 21
+    if [ -z `which javac` ]
+    then
+      # oracle jdk installation
+      yum install java-1.8.0-openjdk java-1.8.0-openjdk-devel -y
     fi
+else # working with ubuntu. Default
 
-    /bin/echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
-    apt-get -y install oracle-java7-installer oracle-java7-set-default
+    if [ -z `which javac` ]; then
+        apt-get -y update
+        apt-get install -y software-properties-common python-software-properties
+        add-apt-repository -y ppa:webupd8team/java
+        apt-get -y update
 
-    if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
-        cp -R /var/cache/oracle-jdk7-installer/* /tmp/oracle-jdk7-installer-cache
+        # Try to share cache. See Vagrantfile for details
+        mkdir -p /var/cache/oracle-jdk7-installer
+        if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
+            find /tmp/oracle-jdk7-installer-cache/ -not -empty -exec cp '{}' /var/cache/oracle-jdk7-installer/ \;
+        fi
+
+        /bin/echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
+        apt-get -y install oracle-java7-installer oracle-java7-set-default
+
+        if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
+            cp -R /var/cache/oracle-jdk7-installer/* /tmp/oracle-jdk7-installer-cache
+        fi
     fi
 fi
 
