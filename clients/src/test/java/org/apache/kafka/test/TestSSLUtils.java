@@ -17,19 +17,8 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.common.config.SecurityConfig;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.network.SSLFactory;
-import sun.security.x509.AlgorithmId;
-import sun.security.x509.CertificateAlgorithmId;
-import sun.security.x509.CertificateIssuerName;
-import sun.security.x509.CertificateSerialNumber;
-import sun.security.x509.CertificateSubjectName;
-import sun.security.x509.CertificateValidity;
-import sun.security.x509.CertificateVersion;
-import sun.security.x509.CertificateX509Key;
-import sun.security.x509.X500Name;
-import sun.security.x509.X509CertImpl;
-import sun.security.x509.X509CertInfo;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -41,14 +30,19 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.NoSuchAlgorithmException;
-import java.security.PrivateKey;
 import java.security.SecureRandom;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
+import java.security.InvalidKeyException;
+import java.security.NoSuchProviderException;
+import java.security.SignatureException;
+import java.security.cert.CertificateEncodingException;
+import javax.security.auth.x500.X500Principal;
+import org.bouncycastle.x509.X509V1CertificateGenerator;
+
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Properties;
 
 
 public class TestSSLUtils {
@@ -66,36 +60,24 @@ public class TestSSLUtils {
      * @throws GeneralSecurityException thrown if an Security error ocurred.
      */
     public static X509Certificate generateCertificate(String dn, KeyPair pair,
-                                                      int days, String algorithm) throws GeneralSecurityException, IOException {
-        PrivateKey privkey = pair.getPrivate();
-        X509CertInfo info = new X509CertInfo();
+                                                      int days, String algorithm)
+        throws CertificateEncodingException, InvalidKeyException, IllegalStateException,
+               NoSuchProviderException, NoSuchAlgorithmException, SignatureException {
         Date from = new Date();
         Date to = new Date(from.getTime() + days * 86400000L);
-        CertificateValidity interval = new CertificateValidity(from, to);
         BigInteger sn = new BigInteger(64, new SecureRandom());
-        X500Name owner = new X500Name(dn);
+        KeyPair keyPair = pair;
+        X509V1CertificateGenerator certGen = new X509V1CertificateGenerator();
+        X500Principal  dnName = new X500Principal(dn);
 
-        info.set(X509CertInfo.VALIDITY, interval);
-        info.set(X509CertInfo.SERIAL_NUMBER, new CertificateSerialNumber(sn));
-        info.set(X509CertInfo.SUBJECT, new CertificateSubjectName(owner));
-        info.set(X509CertInfo.ISSUER, new CertificateIssuerName(owner));
-        info.set(X509CertInfo.KEY, new CertificateX509Key(pair.getPublic()));
-        info
-                .set(X509CertInfo.VERSION, new CertificateVersion(CertificateVersion.V3));
-        AlgorithmId algo = new AlgorithmId(AlgorithmId.md5WithRSAEncryption_oid);
-        info.set(X509CertInfo.ALGORITHM_ID, new CertificateAlgorithmId(algo));
-
-        // Sign the cert to identify the algorithm that's used.
-        X509CertImpl cert = new X509CertImpl(info);
-        cert.sign(privkey, algorithm);
-
-        // Update the algorith, and resign.
-        algo = (AlgorithmId) cert.get(X509CertImpl.SIG_ALG);
-        info
-                .set(CertificateAlgorithmId.NAME + "." + CertificateAlgorithmId.ALGORITHM,
-                        algo);
-        cert = new X509CertImpl(info);
-        cert.sign(privkey, algorithm);
+        certGen.setSerialNumber(sn);
+        certGen.setIssuerDN(dnName);
+        certGen.setNotBefore(from);
+        certGen.setNotAfter(to);
+        certGen.setSubjectDN(dnName);
+        certGen.setPublicKey(keyPair.getPublic());
+        certGen.setSignatureAlgorithm(algorithm);
+        X509Certificate cert = certGen.generate(pair.getPrivate());
         return cert;
     }
 
@@ -168,41 +150,72 @@ public class TestSSLUtils {
         saveKeyStore(ks, filename, password);
     }
 
-    public static SecurityConfig createSSLConfigFile(SSLFactory.Mode mode, String trustStoreFileClient) throws IOException, GeneralSecurityException {
-        Properties securityConfigProps = new Properties();
+    public static Map<String, X509Certificate> createX509Certificates(KeyPair keyPair)
+        throws GeneralSecurityException {
         Map<String, X509Certificate> certs = new HashMap<String, X509Certificate>();
-        KeyPair keyPair = generateKeyPair("RSA");
         X509Certificate cert = generateCertificate("CN=localhost, O=localhost", keyPair, 30, "SHA1withRSA");
-        String password = "test";
+        certs.put("localhost", cert);
+        return certs;
+    }
 
-        if (mode == SSLFactory.Mode.SERVER) {
-            File keyStoreFile = File.createTempFile("keystore", ".jks");
-            createKeyStore(keyStoreFile.getPath(), password, password, "localhost", keyPair.getPrivate(), cert);
-            certs.put("localhost", cert);
-            securityConfigProps.put(SecurityConfig.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath());
-            securityConfigProps.put(SecurityConfig.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
-            securityConfigProps.put(SecurityConfig.SSL_KEYMANAGER_ALGORITHM_CONFIG, "SunX509");
-            securityConfigProps.put(SecurityConfig.SSL_KEYSTORE_PASSWORD_CONFIG, password);
-            securityConfigProps.put(SecurityConfig.SSL_KEY_PASSWORD_CONFIG, password);
+    public static Map<String, Object> createSSLConfig(SSLFactory.Mode mode, File keyStoreFile, String password, String keyPassword,
+                                                      File trustStoreFile, String trustStorePassword, boolean useClientCert) {
+        Map<String, Object> sslConfigs = new HashMap<String, Object>();
+        sslConfigs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL"); // kafka security protocol
+        sslConfigs.put(CommonClientConfigs.SSL_PROTOCOL_CONFIG, "TLS"); // protocol to create SSLContext
 
-            File trustStoreFile = File.createTempFile("truststore", ".jks");
-            createTrustStore(trustStoreFile.getPath(), password, certs);
-
-            securityConfigProps.put(SecurityConfig.SECURITY_PROTOCOL_CONFIG, "SSL");
-            securityConfigProps.put(SecurityConfig.SSL_CLIENT_REQUIRE_CERT_CONFIG, "false");
-            securityConfigProps.put(SecurityConfig.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
-            securityConfigProps.put(SecurityConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG, password);
-            securityConfigProps.put(SecurityConfig.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
-        } else {
-            securityConfigProps.put(SecurityConfig.SECURITY_PROTOCOL_CONFIG, "SSL");
-            securityConfigProps.put(SecurityConfig.SSL_CLIENT_REQUIRE_CERT_CONFIG, "false");
-            securityConfigProps.put(SecurityConfig.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFileClient);
-            securityConfigProps.put(SecurityConfig.SSL_TRUSTSTORE_PASSWORD_CONFIG, password);
-            securityConfigProps.put(SecurityConfig.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
+        if (mode == SSLFactory.Mode.SERVER || (mode == SSLFactory.Mode.CLIENT && keyStoreFile != null)) {
+            sslConfigs.put(CommonClientConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath());
+            sslConfigs.put(CommonClientConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
+            sslConfigs.put(CommonClientConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, "SunX509");
+            sslConfigs.put(CommonClientConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, password);
+            sslConfigs.put(CommonClientConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
         }
 
-        securityConfigProps.put(SecurityConfig.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, "SunX509");
-        return new SecurityConfig(securityConfigProps);
+        sslConfigs.put(CommonClientConfigs.SSL_CLIENT_REQUIRE_CERT_CONFIG, useClientCert);
+        sslConfigs.put(CommonClientConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
+        sslConfigs.put(CommonClientConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
+        sslConfigs.put(CommonClientConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
+        sslConfigs.put(CommonClientConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, "SunX509");
+        return sslConfigs;
+    }
+
+    public static Map<SSLFactory.Mode, Map<String, ?>> createSSLConfigs(boolean useClientCert, boolean trustStore)
+        throws IOException, GeneralSecurityException {
+        Map<SSLFactory.Mode, Map<String, ?>> sslConfigs = new HashMap<SSLFactory.Mode, Map<String, ?>>();
+        Map<String, X509Certificate> certs = new HashMap<String, X509Certificate>();
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        File clientKeyStoreFile = null;
+        File serverKeyStoreFile = File.createTempFile("serverKS", ".jks");
+        String clientPassword = "ClientPassword";
+        String serverPassword = "ServerPassword";
+        String trustStorePassword = "TrustStorePassword";
+
+        if (useClientCert) {
+            clientKeyStoreFile = File.createTempFile("clientKS", ".jks");
+            KeyPair cKP = generateKeyPair("RSA");
+            X509Certificate cCert = generateCertificate("CN=localhost, O=client", cKP, 30, "SHA1withRSA");
+            createKeyStore(clientKeyStoreFile.getPath(), clientPassword, "client", cKP.getPrivate(), cCert);
+            certs.put("client", cCert);
+        }
+
+        KeyPair sKP = generateKeyPair("RSA");
+        X509Certificate sCert = generateCertificate("CN=localhost, O=server", sKP, 30,
+                                                    "SHA1withRSA");
+        createKeyStore(serverKeyStoreFile.getPath(), serverPassword, serverPassword, "server", sKP.getPrivate(), sCert);
+        certs.put("server", sCert);
+
+        if (trustStore) {
+            createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
+        }
+
+        Map<String, Object> clientSSLConfig = createSSLConfig(SSLFactory.Mode.CLIENT, clientKeyStoreFile, clientPassword,
+                                                              clientPassword, trustStoreFile, trustStorePassword, useClientCert);
+        Map<String, Object> serverSSLConfig = createSSLConfig(SSLFactory.Mode.SERVER, serverKeyStoreFile, serverPassword,
+                                                              serverPassword, trustStoreFile, trustStorePassword, useClientCert);
+        sslConfigs.put(SSLFactory.Mode.CLIENT, clientSSLConfig);
+        sslConfigs.put(SSLFactory.Mode.SERVER, serverSSLConfig);
+        return sslConfigs;
     }
 
 }

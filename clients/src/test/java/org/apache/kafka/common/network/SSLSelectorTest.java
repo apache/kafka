@@ -14,12 +14,12 @@ package org.apache.kafka.common.network;
 
 import static org.junit.Assert.assertEquals;
 
+import java.util.Map;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 
-import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestSSLUtils;
@@ -42,12 +42,10 @@ public class SSLSelectorTest {
 
     @Before
     public void setup() throws Exception {
-        SecurityConfig serverSecurityConfig = TestSSLUtils.createSSLConfigFile(SSLFactory.Mode.SERVER, null);
-        this.server = new EchoServer(serverSecurityConfig);
+        Map<SSLFactory.Mode, Map<String, ?>> sslConfigs = TestSSLUtils.createSSLConfigs(false, true);
+        this.server = new EchoServer(sslConfigs.get(SSLFactory.Mode.SERVER));
         this.server.start();
-        String trustStoreServer = serverSecurityConfig.getString(SecurityConfig.SSL_TRUSTSTORE_LOCATION_CONFIG);
-        SecurityConfig clientSecurityConfig = TestSSLUtils.createSSLConfigFile(SSLFactory.Mode.CLIENT, trustStoreServer);
-        this.selector = new Selector(new Metrics(), new MockTime(), "MetricGroup", new LinkedHashMap<String, String>(), clientSecurityConfig);
+        this.selector = new Selector(new Metrics(), new MockTime(), "MetricGroup", new LinkedHashMap<String, String>(), sslConfigs.get(SSLFactory.Mode.CLIENT));
     }
 
     @After
@@ -67,6 +65,44 @@ public class SSLSelectorTest {
         String big = TestUtils.randomString(10 * BUFFER_SIZE);
         assertEquals(big, blockingRequest(node, big));
     }
+
+
+    /**
+     * Validate that when the server disconnects, a client send ends up with that node in the disconnected list.
+     */
+    @Test
+    public void testServerDisconnect() throws Exception {
+        int node = 0;
+        // connect and do a simple request
+        blockingConnect(node);
+        assertEquals("hello", blockingRequest(node, "hello"));
+
+        // disconnect
+        this.server.closeConnections();
+        while (!selector.disconnected().contains(node))
+            selector.poll(1000L);
+
+        // reconnect and do another request
+        blockingConnect(node);
+        assertEquals("hello", blockingRequest(node, "hello"));
+    }
+
+
+     /**
+     * Tests wrap BUFFER_OVERFLOW  and unwrap BUFFER_UNDERFLOW
+     * @throws Exception
+     */
+    @Test
+    public void testLargeMessageSequence() throws Exception {
+        int bufferSize = 512 * 1024;
+        int node = 0;
+        int reqs = 50;
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        String requestPrefix = TestUtils.randomString(bufferSize);
+        sendAndReceive(node, requestPrefix, 0, reqs);
+    }
+
 
     private String blockingRequest(int node, String s) throws IOException {
         selector.send(createSend(node, s));
@@ -94,4 +130,26 @@ public class SSLSelectorTest {
             selector.poll(10000L);
     }
 
+
+    private void sendAndReceive(int node, String requestPrefix, int startIndex, int endIndex) throws Exception {
+        int requests = startIndex;
+        int responses = startIndex;
+        selector.send(createSend(node, requestPrefix + "-" + startIndex));
+        requests++;
+        while (responses < endIndex) {
+            // do the i/o
+            selector.poll(0L);
+            assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
+
+            // handle requests and responses of the fast node
+            for (NetworkReceive receive : selector.completedReceives()) {
+                assertEquals(requestPrefix + "-" + responses, asString(receive));
+                responses++;
+            }
+
+            for (int i = 0; i < selector.completedSends().size() && requests < endIndex; i++, requests++) {
+                selector.send(createSend(node, requestPrefix + "-" + requests));
+            }
+        }
+    }
 }

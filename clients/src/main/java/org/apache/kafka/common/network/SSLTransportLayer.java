@@ -27,9 +27,12 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLPeerUnverifiedException;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.util.concurrent.ExecutorService;
 
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -41,25 +44,27 @@ import org.slf4j.LoggerFactory;
 
 public class SSLTransportLayer implements TransportLayer {
     private static final Logger log = LoggerFactory.getLogger(SSLTransportLayer.class);
-    SocketChannel socketChannel;
-    SSLEngine sslEngine;
-    HandshakeStatus handshakeStatus = null;
-    SSLEngineResult handshakeResult = null;
-    boolean handshakeComplete = false;
-    boolean closed = false;
-    boolean closing = false;
-    ByteBuffer netInBuffer = null;
-    ByteBuffer netOutBuffer = null;
-    ByteBuffer appReadBuffer = null;
-    ByteBuffer appWriteBuffer = null;
-    ByteBuffer emptyBuf = ByteBuffer.allocate(0);
-    DataInputStream inStream = null;
-    DataOutputStream outStream = null;
+    protected SSLEngine sslEngine;
 
+    private SocketChannel socketChannel;
+    private HandshakeStatus handshakeStatus;
+    private SSLEngineResult handshakeResult;
+    private boolean handshakeComplete = false;
+    private boolean closed = false;
+    private boolean closing = false;
+    private ByteBuffer netInBuffer;
+    private ByteBuffer netOutBuffer;
+    private ByteBuffer appReadBuffer;
+    private ByteBuffer appWriteBuffer;
+    private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
+    private DataInputStream inStream;
+    private DataOutputStream outStream;
+    private ExecutorService executorService;
 
-    public SSLTransportLayer(SocketChannel socketChannel, SSLEngine sslEngine) throws IOException {
+    public SSLTransportLayer(SocketChannel socketChannel, SSLEngine sslEngine, ExecutorService executorService) throws IOException {
         this.socketChannel = socketChannel;
         this.sslEngine = sslEngine;
+        this.executorService = executorService;
         this.netInBuffer = ByteBuffer.allocateDirect(sslEngine.getSession().getPacketBufferSize());
         this.netOutBuffer = ByteBuffer.allocateDirect(sslEngine.getSession().getPacketBufferSize());
         this.appWriteBuffer = ByteBuffer.allocateDirect(sslEngine.getSession().getApplicationBufferSize());
@@ -116,56 +121,60 @@ public class SSLTransportLayer implements TransportLayer {
         if (handshakeComplete) return 0; //we have done our initial handshake
 
         if (!flush(netOutBuffer)) return SelectionKey.OP_WRITE;
-
-        switch(handshakeStatus) {
-            case NOT_HANDSHAKING:
-                // SSLEnginge.getHandshakeStatus is transient and it doesn't record FINISHED status properly
-                if (handshakeResult.getHandshakeStatus() == HandshakeStatus.FINISHED) {
+        try {
+            switch(handshakeStatus) {
+                case NOT_HANDSHAKING:
+                    // SSLEnginge.getHandshakeStatus is transient and it doesn't record FINISHED status properly
+                    if (handshakeResult.getHandshakeStatus() == HandshakeStatus.FINISHED) {
+                        handshakeComplete = !netOutBuffer.hasRemaining();
+                        if (handshakeComplete)
+                            return 0;
+                        else
+                            return SelectionKey.OP_WRITE;
+                    } else {
+                        throw new IOException("NOT_HANDSHAKING during handshake");
+                    }
+                case FINISHED:
+                    //we are complete if we have delivered the last package
                     handshakeComplete = !netOutBuffer.hasRemaining();
-                    if (handshakeComplete)
-                        return 0;
-                    else
+                    //return 0 if we are complete, otherwise we still have data to write
+                    if (handshakeComplete) return 0;
+                    else return SelectionKey.OP_WRITE;
+                case NEED_WRAP:
+                    handshakeResult = handshakeWrap(write);
+                    if (handshakeResult.getStatus() == Status.OK) {
+                        if (handshakeStatus == HandshakeStatus.NEED_TASK)
+                            handshakeStatus = tasks();
+                    } else {
+                        //wrap should always work with our buffers
+                        throw new IOException("Unexpected status [" + handshakeResult.getStatus() + "] during handshake WRAP.");
+                    }
+                    if (handshakeStatus != HandshakeStatus.NEED_UNWRAP || (!flush(netOutBuffer)))
                         return SelectionKey.OP_WRITE;
-                } else {
-                    //should never happen
-                    throw new IOException("NOT_HANDSHAKING during handshake");
-                }
-            case FINISHED:
-                //we are complete if we have delivered the last package
-                handshakeComplete = !netOutBuffer.hasRemaining();
-                //return 0 if we are complete, otherwise we still have data to write
-                if (handshakeComplete) return 0;
-                else return SelectionKey.OP_WRITE;
-            case NEED_WRAP:
-                handshakeResult = handshakeWrap(write);
-                if (handshakeResult.getStatus() == Status.OK) {
-                    if (handshakeStatus == HandshakeStatus.NEED_TASK)
-                        handshakeStatus = tasks();
-                } else {
-                    //wrap should always work with our buffers
-                    throw new IOException("Unexpected status [" + handshakeResult.getStatus() + "] during handshake WRAP.");
-                }
-                if (handshakeStatus != HandshakeStatus.NEED_UNWRAP || (!flush(netOutBuffer)))
-                    return SelectionKey.OP_WRITE;
-                //fall down to NEED_UNWRAP on the same call, will result in a
-                //BUFFER_UNDERFLOW if it needs data
-            case NEED_UNWRAP:
-                handshakeResult = handshakeUnwrap(read);
-                if (handshakeResult.getStatus() == Status.OK) {
-                    if (handshakeStatus == HandshakeStatus.NEED_TASK)
-                        handshakeStatus = tasks();
-                } else if (handshakeResult.getStatus() == Status.BUFFER_UNDERFLOW) {
-                    return SelectionKey.OP_READ;
-                } else {
-                    throw new IOException(String.format("Unexpected status [%s] during handshake UNWRAP", handshakeStatus));
-                }
-                break;
-            case NEED_TASK:
-                handshakeStatus = tasks();
-                break;
-            default:
-                throw new IllegalStateException(String.format("Unexpected status [%s]", handshakeStatus));
+                    //fall down to NEED_UNWRAP on the same call, will result in a
+                    //BUFFER_UNDERFLOW if it needs data
+                case NEED_UNWRAP:
+                    handshakeResult = handshakeUnwrap(read);
+                    if (handshakeResult.getStatus() == Status.OK) {
+                        if (handshakeStatus == HandshakeStatus.NEED_TASK)
+                            handshakeStatus = tasks();
+                    } else if (handshakeResult.getStatus() == Status.BUFFER_UNDERFLOW) {
+                        return SelectionKey.OP_READ;
+                    } else {
+                        throw new IOException(String.format("Unexpected status [%s] during handshake UNWRAP", handshakeStatus));
+                    }
+                    break;
+                case NEED_TASK:
+                    handshakeStatus = tasks();
+                    break;
+                default:
+                    throw new IllegalStateException(String.format("Unexpected status [%s]", handshakeStatus));
+            }
+        } catch (SSLException e) {
+            handshakeFailure();
+            throw e;
         }
+
         //return 0 if we are complete, otherwise re-register for any activity that
         //would cause this method to be called again.
         if (handshakeComplete) return 0;
@@ -173,12 +182,22 @@ public class SSLTransportLayer implements TransportLayer {
     }
 
     /**
-     * Executes all the tasks needed on the same thread.
+     * Executes all the tasks needed on the executorservice thread.
      * @return HandshakeStatus
      */
     private HandshakeStatus tasks() {
-        Runnable r = null;
-        while ((r = sslEngine.getDelegatedTask()) != null) r.run();
+        for (;;) {
+            final Runnable task = sslEngine.getDelegatedTask();
+            if (task == null)
+                break;
+
+            executorService.submit(new Runnable() {
+                    @Override
+                    public void run() {
+                        task.run();
+                    }
+                });
+        }
         return sslEngine.getHandshakeStatus();
     }
 
@@ -237,10 +256,6 @@ public class SSLTransportLayer implements TransportLayer {
     }
 
 
-    public int getOutboundRemaining() {
-        return netOutBuffer.remaining();
-    }
-
     /**
     * Sends a SSL close message, will not physically close the connection here.<br>
     * @throws IOException if an I/O error occurs
@@ -283,7 +298,7 @@ public class SSLTransportLayer implements TransportLayer {
     * @param dst The buffer into which bytes are to be transferred
     * @return The number of bytes read, possible zero or -1 if the channel has reached end-of-stream
     * @throws IOException if some other I/O error occurs
-    * @throws IllegalStateException if the destination buffer is different than appBufHandler.getReadBuffer()
+    * @throws IllegalStateException if handshake is not complete.
     */
     public int read(ByteBuffer dst) throws IOException {
         if (closing || closed) return -1;
@@ -305,16 +320,10 @@ public class SSLTransportLayer implements TransportLayer {
                 if (unwrap.getHandshakeStatus() == HandshakeStatus.NEED_TASK) tasks();
                 //if we need more network data, than return for now.
                 if (unwrap.getStatus() == Status.BUFFER_UNDERFLOW) return readFromAppBuffer(dst);
-            } else if (unwrap.getStatus() == Status.BUFFER_OVERFLOW && read > 0) {
+            } else if (unwrap.getStatus() == Status.BUFFER_OVERFLOW) {
                 appReadBuffer = Utils.ensureCapacity(appReadBuffer, applicationBufferSize());
-                //buffer overflow can happen, if we have read data, then
                 //empty out the dst buffer before we do another read
                 return readFromAppBuffer(dst);
-            } else {
-                //here we should trap BUFFER_OVERFLOW and call expand on the buffer
-                // for now, throw an exception, as we initialized the buffers
-                // in constructor
-                throw new IOException(String.format("Unable to unwrap data, invalid status [%s]", unwrap.getStatus()));
             }
         } while(netInBuffer.position() != 0);
         return readFromAppBuffer(dst);
@@ -335,7 +344,6 @@ public class SSLTransportLayer implements TransportLayer {
         return totalRead;
     }
 
-
     /**
     * Writes a sequence of bytes to this channel from the given buffer.
     *
@@ -346,24 +354,20 @@ public class SSLTransportLayer implements TransportLayer {
 
     public int write(ByteBuffer src) throws IOException {
         int written = 0;
-        if (src == this.netOutBuffer)
-            written = socketChannel.write(src);
-        else {
-            if (closing || closed) throw new IOException("Channel is in closing state");
-            if (!flush(netOutBuffer))
-                return written;
-            netOutBuffer.clear();
-            SSLEngineResult result = sslEngine.wrap(src, netOutBuffer);
-            written = result.bytesConsumed();
-            netOutBuffer.flip();
-            if (result.getStatus() == Status.OK) {
-                if (result.getHandshakeStatus() == HandshakeStatus.NEED_TASK)
-                    tasks();
-            } else {
-                throw new IOException(String.format("Unable to wrap data, invalid status %s", result.getStatus()));
-            }
-            flush(netOutBuffer);
+        if (closing || closed) throw new IOException("Channel is in closing state");
+        if (!flush(netOutBuffer))
+            return written;
+        netOutBuffer.clear();
+        SSLEngineResult result = sslEngine.wrap(src, netOutBuffer);
+        written = result.bytesConsumed();
+        netOutBuffer.flip();
+        if (result.getStatus() == Status.OK) {
+            if (result.getHandshakeStatus() == HandshakeStatus.NEED_TASK)
+                tasks();
+        } else {
+            throw new IOException(String.format("Unable to wrap data, invalid status %s", result.getStatus()));
         }
+        flush(netOutBuffer);
         return written;
     }
 
@@ -396,9 +400,12 @@ public class SSLTransportLayer implements TransportLayer {
         return outStream;
     }
 
-    public Principal getPeerPrincipal() {
-        //return sslEngine.getSession().getPeerPrincipal();
-        return null;
+    public Principal getPeerPrincipal() throws IOException {
+        try {
+            return sslEngine.getSession().getPeerPrincipal();
+        } catch (SSLPeerUnverifiedException se) {
+            throw new IOException(String.format("Unable to retrieve getPeerPrincipal due to %s", se));
+        }
     }
 
     private int readFromAppBuffer(ByteBuffer dst) {
@@ -426,5 +433,15 @@ public class SSLTransportLayer implements TransportLayer {
 
     private int applicationBufferSize() {
         return sslEngine.getSession().getApplicationBufferSize();
+    }
+
+    private void handshakeFailure() {
+        //Release all resources such as internal buffers that SSLEngine is managing
+        sslEngine.closeOutbound();
+        try {
+            sslEngine.closeInbound();
+        } catch (SSLException e) {
+            log.debug("SSLEngine.closeInBound() raised an exception.",  e);
+        }
     }
 }

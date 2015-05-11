@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -19,6 +19,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -147,7 +148,7 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String CHECK_CRCS_CONFIG = "check.crcs";
     private static final String CHECK_CRCS_DOC = "Automatically check the CRC32 of the records consumed. This ensures no on-the-wire or on-disk corruption to the messages occurred. This check adds some overhead, so it may be disabled in cases seeking extreme performance.";
-    
+
     /** <code>key.deserializer</code> */
     public static final String KEY_DESERIALIZER_CLASS_CONFIG = "key.deserializer";
     private static final String KEY_DESERIALIZER_CLASS_DOC = "Deserializer class for key that implements the <code>Deserializer</code> interface.";
@@ -256,7 +257,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.BOOLEAN,
                                         true,
                                         Importance.LOW,
-                                        CHECK_CRCS_DOC)                                
+                                        CHECK_CRCS_DOC)
                                 .define(METRICS_SAMPLE_WINDOW_MS_CONFIG,
                                         Type.LONG,
                                         30000,
@@ -282,11 +283,20 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.CLASS,
                                         Importance.HIGH,
                                         VALUE_DESERIALIZER_CLASS_DOC)
-                                .define(SECURITY_CONFIG_FILE_CONFIG,
-                                        Type.STRING,
-                                        "",
-                                        Importance.MEDIUM,
-                                        SECURITY_CONFIG_FILE_DOC);
+                                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, Type.STRING, SecurityProtocol.PLAINTEXT.toString(), Importance.MEDIUM, CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(CommonClientConfigs.SSL_PROTOCOL_CONFIG, Type.STRING, "TLS", Importance.MEDIUM, CommonClientConfigs.SSL_PROTOCOL_DOC)
+                                .define(CommonClientConfigs.SSL_CIPHER_SUITES_CONFIG, Type.LIST, "", Importance.LOW, CommonClientConfigs.SSL_CIPHER_SUITES_DOC)
+                                .define(CommonClientConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Type.LIST, "TLSv1.2, TLSv1.1, TLSv1", Importance.MEDIUM, CommonClientConfigs.SSL_ENABLED_PROTOCOLS_DOC)
+                                .define(CommonClientConfigs.SSL_KEYSTORE_TYPE_CONFIG, Type.STRING, "JKS", Importance.MEDIUM, CommonClientConfigs.SSL_KEYSTORE_TYPE_DOC)
+                                .define(CommonClientConfigs.SSL_KEYSTORE_LOCATION_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_KEYSTORE_LOCATION_DOC, false)
+                                .define(CommonClientConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_KEYSTORE_PASSWORD_DOC, false)
+                                .define(CommonClientConfigs.SSL_KEY_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_KEY_PASSWORD_DOC, false)
+                                .define(CommonClientConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, Type.STRING, "JKS", Importance.MEDIUM, CommonClientConfigs.SSL_TRUSTSTORE_TYPE_DOC)
+                                .define(CommonClientConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_TRUSTSTORE_LOCATION_DOC, false)
+                                .define(CommonClientConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_TRUSTSTORE_PASSWORD_DOC, false)
+                                .define(CommonClientConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, Type.STRING, "SunX509", Importance.LOW, CommonClientConfigs.SSL_KEYMANAGER_ALGORITHM_DOC)
+                                .define(CommonClientConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, Type.STRING, "SunX509", Importance.LOW, CommonClientConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC)
+                                .define(CommonClientConfigs.SSL_CLIENT_REQUIRE_CERT_CONFIG, Type.BOOLEAN, false, Importance.MEDIUM, CommonClientConfigs.SSL_CLIENT_REQUIRE_CERT_DOC);
     }
 
     public static Map<String, Object> addDeserializerToConfig(Map<String, Object> configs,

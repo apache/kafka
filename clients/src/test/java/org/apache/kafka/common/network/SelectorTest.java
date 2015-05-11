@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -15,14 +15,14 @@ package org.apache.kafka.common.network;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 
-import org.apache.kafka.clients.ClientUtils;
-import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -43,10 +43,10 @@ public class SelectorTest {
 
     @Before
     public void setup() throws Exception {
-        SecurityConfig securityConfig = ClientUtils.parseSecurityConfig("");
-        this.server = new EchoServer(securityConfig);
+        Map<String, ?> configs = new HashMap<String, Object>();
+        this.server = new EchoServer(configs);
         this.server.start();
-        this.selector = new Selector(new Metrics(), new MockTime() , "MetricGroup", new LinkedHashMap<String, String>(), securityConfig);
+        this.selector = new Selector(new Metrics(), new MockTime() , "MetricGroup", new LinkedHashMap<String, String>(), configs);
     }
 
     @After

@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -37,7 +37,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.MetricName;
@@ -63,7 +62,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * The consumer is thread safe but generally will be used only from within a single thread. The consumer client has no
  * threads of it's own, all work is done in the caller's thread when calls are made on the various methods exposed.
- * 
+ *
  * <h3>Offsets and Consumer Position</h3>
  * Kafka maintains a numerical offset for each record in a partition. This offset acts as a kind of unique identifier of
  * a record within that partition, and also denotes the position of the consumer in the partition. That is, a consumer
@@ -81,9 +80,9 @@ import org.slf4j.LoggerFactory;
  * <p>
  * This distinction gives the consumer control over when a record is considered consumed. It is discussed in further
  * detail below.
- * 
+ *
  * <h3>Consumer Groups</h3>
- * 
+ *
  * Kafka uses the concept of <i>consumer groups</i> to allow a pool of processes to divide up the work of consuming and
  * processing records. These processes can either be running on the same machine or, as is more likely, they can be
  * distributed over many machines to provide additional scalability and fault tolerance for processing.
@@ -112,14 +111,14 @@ import org.slf4j.LoggerFactory;
  * <p>
  * It is also possible for the consumer to manually specify the partitions it subscribes to, which disables this dynamic
  * partition balancing.
- * 
+ *
  * <h3>Usage Examples</h3>
  * The consumer APIs offer flexibility to cover a variety of consumption use cases. Here are some examples to
  * demonstrate how to use them.
- * 
+ *
  * <h4>Simple Processing</h4>
  * This example demonstrates the simplest usage of Kafka's consumer api.
- * 
+ *
  * <pre>
  *     Properties props = new Properties();
  *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
@@ -137,7 +136,7 @@ import org.slf4j.LoggerFactory;
  *             System.out.printf(&quot;offset = %d, key = %s, value = %s&quot;, record.offset(), record.key(), record.value());
  *     }
  * </pre>
- * 
+ *
  * Setting <code>enable.auto.commit</code> means that offsets are committed automatically with a frequency controlled by
  * the config <code>auto.commit.interval.ms</code>.
  * <p>
@@ -157,9 +156,9 @@ import org.slf4j.LoggerFactory;
  * <p>
  * The serializers settings specify how to turn the objects the user provides into bytes. By specifying the string
  * serializers we are saying that our record's key and value will just be simple strings.
- * 
+ *
  * <h4>Controlling When Messages Are Considered Consumed</h4>
- * 
+ *
  * In this example we will consume a batch of records and batch them up in memory, when we have sufficient records
  * batched we will insert them into a database. If we allowed offsets to auto commit as in the previous example messages
  * would be considered consumed after they were given out by the consumer, and it would be possible that our process
@@ -171,7 +170,7 @@ import org.slf4j.LoggerFactory;
  * would consume from last committed offset and would repeat the insert of the last batch of data. Used in this way
  * Kafka provides what is often called "at-least once delivery" guarantees, as each message will likely be delivered one
  * time but in failure cases could be duplicated.
- * 
+ *
  * <pre>
  *     Properties props = new Properties();
  *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
@@ -197,9 +196,9 @@ import org.slf4j.LoggerFactory;
  *         }
  *     }
  * </pre>
- * 
+ *
  * <h4>Subscribing To Specific Partitions</h4>
- * 
+ *
  * In the previous examples we subscribed to the topics we were interested in and let Kafka give our particular process
  * a fair share of the partitions for those topics. This provides a simple load balancing mechanism so multiple
  * instances of our program can divided up the work of processing records.
@@ -219,7 +218,7 @@ import org.slf4j.LoggerFactory;
  * <p>
  * This mode is easy to specify, rather than subscribing to the topic, the consumer just subscribes to particular
  * partitions:
- * 
+ *
  * <pre>
  *     String topic = &quot;foo&quot;;
  *     TopicPartition partition0 = new TopicPartition(topic, 0);
@@ -227,15 +226,15 @@ import org.slf4j.LoggerFactory;
  *     consumer.subscribe(partition0);
  *     consumer.subscribe(partition1);
  * </pre>
- * 
+ *
  * The group that the consumer specifies is still used for committing offsets, but now the set of partitions will only
  * be changed if the consumer specifies new partitions, and no attempt at failure detection will be made.
  * <p>
  * It isn't possible to mix both subscription to specific partitions (with no load balancing) and to topics (with load
  * balancing) using the same consumer instance.
- * 
+ *
  * <h4>Managing Your Own Offsets</h4>
- * 
+ *
  * The consumer application need not use Kafka's built-in offset storage, it can store offsets in a store of it's own
  * choosing. The primary use case for this is allowing the application to store both the offset and the results of the
  * consumption in the same system in a way that both the results and offsets are stored atomically. This is not always
@@ -255,14 +254,14 @@ import org.slf4j.LoggerFactory;
  * This means that in this case the indexing process that comes back having lost recent updates just resumes indexing
  * from what it has ensuring that no updates are lost.
  * </ul>
- * 
+ *
  * Each record comes with it's own offset, so to manage your own offset you just need to do the following:
  * <ol>
  * <li>Configure <code>enable.auto.commit=false</code>
  * <li>Use the offset provided with each {@link ConsumerRecord} to save your position.
  * <li>On restart restore the position of the consumer using {@link #seek(TopicPartition, long)}.
  * </ol>
- * 
+ *
  * This type of usage is simplest when the partition assignment is also done manually (this would be likely in the
  * search index use case described above). If the partition assignment is done automatically special care will also be
  * needed to handle the case where partition assignments change. This can be handled using a special callback specified
@@ -275,9 +274,9 @@ import org.slf4j.LoggerFactory;
  * <p>
  * Another common use for {@link ConsumerRebalanceCallback} is to flush any caches the application maintains for
  * partitions that are moved elsewhere.
- * 
+ *
  * <h4>Controlling The Consumer's Position</h4>
- * 
+ *
  * In most use cases the consumer will simply consume records from beginning to end, periodically committing it's
  * position (either automatically or manually). However Kafka allows the consumer to manually control it's position,
  * moving forward or backwards in a partition at will. This means a consumer can re-consume older records, or skip to
@@ -292,20 +291,20 @@ import org.slf4j.LoggerFactory;
  * the consumer will want to initialize it's position on start-up to whatever is contained in the local store. Likewise
  * if the local state is destroyed (say because the disk is lost) the state may be recreated on a new machine by
  * reconsuming all the data and recreating the state (assuming that Kafka is retaining sufficient history).
- * 
+ *
  * Kafka allows specifying the position using {@link #seek(TopicPartition, long)} to specify the new position. Special
  * methods for seeking to the earliest and latest offset the server maintains are also available (
  * {@link #seekToBeginning(TopicPartition...)} and {@link #seekToEnd(TopicPartition...)} respectively).
- * 
+ *
  * <h3>Multithreaded Processing</h3>
- * 
+ *
  * The Kafka consumer is threadsafe but coarsely synchronized. All network I/O happens in the thread of the application
  * making the call. We have intentionally avoided implementing a particular threading model for processing.
  * <p>
  * This leaves several options for implementing multi-threaded processing of records.
- * 
+ *
  * <h4>1. One Consumer Per Thread</h4>
- * 
+ *
  * A simple option is to give each thread it's own consumer instance. Here are the pros and cons of this approach:
  * <ul>
  * <li><b>PRO</b>: It is the easiest to implement
@@ -318,13 +317,13 @@ import org.slf4j.LoggerFactory;
  * which can cause some drop in I/O throughput.
  * <li><b>CON</b>: The number of total threads across all processes will be limited by the total number of partitions.
  * </ul>
- * 
+ *
  * <h4>2. Decouple Consumption and Processing</h4>
- * 
+ *
  * Another alternative is to have one or more consumer threads that do all data consumption and hands off
  * {@link ConsumerRecords} instances to a blocking queue consumed by a pool of processor threads that actually handle
  * the record processing.
- * 
+ *
  * This option likewise has pros and cons:
  * <ul>
  * <li><b>PRO</b>: This option allows independently scaling the number of consumers and processors. This makes it
@@ -335,11 +334,11 @@ import org.slf4j.LoggerFactory;
  * <li><b>CON</b>: Manually committing the position becomes harder as it requires that all threads co-ordinate to ensure
  * that processing is complete for that partition.
  * </ul>
- * 
+ *
  * There are many possible variations on this approach. For example each processor thread can have it's own queue, and
  * the consumer threads can hash into these queues using the TopicPartition to ensure in-order consumption and simplify
  * commit.
- * 
+ *
  */
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
@@ -362,7 +361,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final boolean autoCommit;
     private final long autoCommitIntervalMs;
     private final ConsumerRebalanceCallback rebalanceCallback;
-    private final SecurityConfig securityConfig;
     private long lastCommitAttemptMs;
     private boolean closed = false;
 
@@ -373,7 +371,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * string "42" or the integer 42).
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}
-     * 
+     *
      * @param configs The consumer configs
      */
     public KafkaConsumer(Map<String, Object> configs) {
@@ -385,7 +383,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * {@link ConsumerRebalanceCallback} implementation, a key and a value {@link Deserializer}.
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}
-     * 
+     *
      * @param configs The consumer configs
      * @param callback A callback interface that the user can implement to manage customized offsets on the start and
      *            end of every rebalance operation.
@@ -419,7 +417,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * {@link ConsumerRebalanceCallback} implementation, a key and a value {@link Deserializer}.
      * <p>
      * Valid configuration strings are documented at {@link ConsumerConfig}
-     * 
+     *
      * @param properties The consumer configuration properties
      * @param callback A callback interface that the user can implement to manage customized offsets on the start and
      *            end of every rebalance operation.
@@ -470,12 +468,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.metadata = new Metadata(retryBackoffMs, config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG));
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), 0);
-
             String metricGrpPrefix = "consumer";
             Map<String, String> metricsTags = new LinkedHashMap<String, String>();
             metricsTags.put("client-id", clientId);
-            this.securityConfig = ClientUtils.parseSecurityConfig(config.getString(ConsumerConfig.SECURITY_CONFIG_FILE_CONFIG));
-            this.client = new NetworkClient(new Selector(metrics, time, metricGrpPrefix, metricsTags, securityConfig),
+
+            this.client = new NetworkClient(new Selector(metrics, time, metricGrpPrefix, metricsTags, config.values()),
                     this.metadata,
                     clientId,
                     100, // a fixed large enough value will suffice
@@ -559,7 +556,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <li>An existing member of the consumer group dies
      * <li>A new member is added to an existing consumer group via the join API
      * </ul>
-     * 
+     *
      * @param topics A variable list of topics that the consumer wants to subscribe to
      */
     @Override
@@ -576,7 +573,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * functionality. As such, there will be no rebalance operation triggered when group membership or cluster and topic
      * metadata change.
      * <p>
-     * 
+     *
      * @param partitions Partitions to incrementally subscribe to
      */
     @Override
@@ -592,7 +589,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Unsubscribe from the specific topics. This will trigger a rebalance operation and records for this topic will not
      * be returned from the next {@link #poll(long) poll()} onwards
-     * 
+     *
      * @param topics Topics to unsubscribe from
      */
     public synchronized void unsubscribe(String... topics) {
@@ -606,7 +603,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Unsubscribe from the specific topic partitions. records for these partitions will not be returned from the next
      * {@link #poll(long) poll()} onwards
-     * 
+     *
      * @param partitions Partitions to unsubscribe from
      */
     public synchronized void unsubscribe(TopicPartition... partitions) {
@@ -625,11 +622,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If {@link #seek(TopicPartition, long)} is used, it will use the specified offsets on startup and on every
      * rebalance, to consume data from that offset sequentially on every poll. If not, it will use the last checkpointed
      * offset using {@link #commit(Map, CommitType) commit(offsets, sync)} for the subscribed list of partitions.
-     * 
+     *
      * @param timeout The time, in milliseconds, spent waiting in poll if data is not available. If 0, waits
      *            indefinitely. Must not be negative
      * @return map of topic to records since the last fetch for the subscribed list of topics and partitions
-     * 
+     *
      * @throws NoOffsetForPartitionException If there is no stored offset for a subscribed partition and no automatic
      *             offset reset policy has been configured.
      */
@@ -683,7 +680,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * A non-blocking commit will attempt to commit offsets asychronously. No error will be thrown if the commit fails.
      * A blocking commit will wait for a response acknowledging the commit. In the event of an error it will retry until
      * the commit succeeds.
-     * 
+     *
      * @param offsets The list of offsets per partition that should be committed to Kafka.
      * @param commitType Control whether the commit is blocking
      */
@@ -708,7 +705,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * This commits offsets only to Kafka. The offsets committed using this API will be used on the first fetch after
      * every rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
-     * 
+     *
      * @param commitType Whether or not the commit should block until it is acknowledged.
      */
     @Override
@@ -757,7 +754,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Returns the offset of the <i>next record</i> that will be fetched (if a record with that offset exists).
-     * 
+     *
      * @param partition The partition to get the position for
      * @return The offset
      * @throws NoOffsetForPartitionException If a position hasn't been set for a given partition, and no reset policy is
@@ -782,7 +779,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * This call may block to do a remote call if the partition in question isn't assigned to this consumer or if the
      * consumer hasn't yet initialized it's cache of committed offsets.
-     * 
+     *
      * @param partition The partition to check
      * @return The last committed offset or null if no offset has been committed
      * @throws NoOffsetForPartitionException If no offset has ever been committed by any process for the given
@@ -818,7 +815,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Get metadata about the partitions for a given topic. This method will issue a remote call to the server if it
      * does not already have any metadata about the given topic.
-     * 
+     *
      * @param topic The topic to get partition metadata for
      * @return The list of partitions
      */

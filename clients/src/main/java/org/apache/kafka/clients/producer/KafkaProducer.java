@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -32,7 +32,6 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
@@ -74,11 +73,11 @@ import org.slf4j.LoggerFactory;
  * props.put("buffer.memory", 33554432);
  * props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
  * props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
- * 
+ *
  * Producer<String, String> producer = new KafkaProducer(props);
  * for(int i = 0; i < 100; i++)
  *     producer.send(new ProducerRecord<String, String>("my-topic", Integer.toString(i), Integer.toString(i)));
- * 
+ *
  * producer.close();
  * }</pre>
  * <p>
@@ -93,25 +92,25 @@ import org.slf4j.LoggerFactory;
  * we have specified will result in blocking on the full commit of the record, the slowest but most durable setting.
  * <p>
  * If the request fails, the producer can automatically retry, though since we have specified <code>retries</code>
- * as 0 it won't. Enabling retries also opens up the possibility of duplicates (see the documentation on 
+ * as 0 it won't. Enabling retries also opens up the possibility of duplicates (see the documentation on
  * <a href="http://kafka.apache.org/documentation.html#semantics">message delivery semantics</a> for details).
  * <p>
- * The producer maintains buffers of unsent records for each partition. These buffers are of a size specified by 
+ * The producer maintains buffers of unsent records for each partition. These buffers are of a size specified by
  * the <code>batch.size</code> config. Making this larger can result in more batching, but requires more memory (since we will
  * generally have one of these buffers for each active partition).
  * <p>
- * By default a buffer is available to send immediately even if there is additional unused space in the buffer. However if you 
+ * By default a buffer is available to send immediately even if there is additional unused space in the buffer. However if you
  * want to reduce the number of requests you can set <code>linger.ms</code> to something greater than 0. This will
- * instruct the producer to wait up to that number of milliseconds before sending a request in hope that more records will 
- * arrive to fill up the same batch. This is analogous to Nagle's algorithm in TCP. For example, in the code snippet above, 
- * likely all 100 records would be sent in a single request since we set our linger time to 1 millisecond. However this setting 
- * would add 1 millisecond of latency to our request waiting for more records to arrive if we didn't fill up the buffer. Note that 
- * records that arrive close together in time will generally batch together even with <code>linger.ms=0</code> so under heavy load 
+ * instruct the producer to wait up to that number of milliseconds before sending a request in hope that more records will
+ * arrive to fill up the same batch. This is analogous to Nagle's algorithm in TCP. For example, in the code snippet above,
+ * likely all 100 records would be sent in a single request since we set our linger time to 1 millisecond. However this setting
+ * would add 1 millisecond of latency to our request waiting for more records to arrive if we didn't fill up the buffer. Note that
+ * records that arrive close together in time will generally batch together even with <code>linger.ms=0</code> so under heavy load
  * batching will occur regardless of the linger configuration; however setting this to something larger than 0 can lead to fewer, more
  * efficient requests when not under maximal load at the cost of a small amount of latency.
  * <p>
  * The <code>buffer.memory</code> controls the total amount of memory available to the producer for buffering. If records
- * are sent faster than they can be transmitted to the server then this buffer space will be exhausted. When the buffer space is 
+ * are sent faster than they can be transmitted to the server then this buffer space will be exhausted. When the buffer space is
  * exhausted additional send calls will block. For uses where you want to avoid any blocking you can set <code>block.on.buffer.full=false</code> which
  * will cause the send call to result in an exception.
  * <p>
@@ -139,7 +138,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
     private final ProducerConfig producerConfig;
-    private final SecurityConfig securityConfig;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -216,7 +214,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compressionType = CompressionType.forName(config.getString(ProducerConfig.COMPRESSION_TYPE_CONFIG));
-            this.securityConfig = ClientUtils.parseSecurityConfig(config.getString(ProducerConfig.SECURITY_CONFIG_FILE_CONFIG));
             Map<String, String> metricTags = new LinkedHashMap<String, String>();
             metricTags.put("client-id", clientId);
             this.accumulator = new RecordAccumulator(config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
@@ -231,7 +228,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
 
-            NetworkClient client = new NetworkClient(new Selector(this.metrics, time, "producer", metricTags, securityConfig),
+            NetworkClient client = new NetworkClient(new Selector(this.metrics, time, "producer", metricTags, config.values()),
                     this.metadata,
                     clientId,
                     config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
@@ -288,7 +285,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>. 
+     * Asynchronously send a record to a topic. Equivalent to <code>send(record, null)</code>.
      * See {@link #send(ProducerRecord, Callback)} for details.
      */
     @Override
@@ -308,11 +305,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * <p>
      * Since the send call is asynchronous it returns a {@link java.util.concurrent.Future Future} for the
      * {@link RecordMetadata} that will be assigned to this record. Invoking {@link java.util.concurrent.Future#get()
-     * get()} on this future will block until the associated request completes and then return the metadata for the record 
+     * get()} on this future will block until the associated request completes and then return the metadata for the record
      * or throw any exception that occurred while sending the record.
      * <p>
      * If you want to simulate a simple blocking call you can call the <code>get()</code> method immediately:
-     * 
+     *
      * <pre>
      * {@code
      * byte[] key = "key".getBytes();
@@ -323,7 +320,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * <p>
      * Fully non-blocking usage can make use of the {@link Callback} parameter to provide a callback that
      * will be invoked when the request is complete.
-     * 
+     *
      * <pre>
      * {@code
      * ProducerRecord<byte[],byte[]> record = new ProducerRecord<byte[],byte[]>("the-topic", key, value);
@@ -337,10 +334,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *               });
      * }
      * </pre>
-     * 
+     *
      * Callbacks for records being sent to the same partition are guaranteed to execute in order. That is, in the
      * following example <code>callback1</code> is guaranteed to execute before <code>callback2</code>:
-     * 
+     *
      * <pre>
      * {@code
      * producer.send(new ProducerRecord<byte[],byte[]>(topic, partition, key1, value1), callback1);
@@ -352,15 +349,15 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * they will delay the sending of messages from other threads. If you want to execute blocking or computationally
      * expensive callbacks it is recommended to use your own {@link java.util.concurrent.Executor} in the callback body
      * to parallelize processing.
-     * 
+     *
      * @param record The record to send
      * @param callback A user-supplied callback to execute when the record has been acknowledged by the server (null
      *        indicates no callback)
-     *        
+     *
      * @throws InterruptException If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
      * @throws BufferExhaustedException If <code>block.on.buffer.full=false</code> and the buffer is full.
-     * 
+     *
      */
     @Override
     public Future<RecordMetadata> send(ProducerRecord<K, V> record, Callback callback) {
@@ -455,12 +452,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                                               ProducerConfig.BUFFER_MEMORY_CONFIG +
                                               " configuration.");
     }
-    
+
     /**
-     * Invoking this method makes all buffered records immediately available to send (even if <code>linger.ms</code> is 
+     * Invoking this method makes all buffered records immediately available to send (even if <code>linger.ms</code> is
      * greater than 0) and blocks on the completion of the requests associated with these records. The post-condition
-     * of <code>flush()</code> is that any previously sent record will have completed (e.g. <code>Future.isDone() == true</code>). 
-     * A request is considered completed when it is successfully acknowledged 
+     * of <code>flush()</code> is that any previously sent record will have completed (e.g. <code>Future.isDone() == true</code>).
+     * A request is considered completed when it is successfully acknowledged
      * according to the <code>acks</code> configuration you have specified or else it results in an error.
      * <p>
      * Other threads can continue sending records while one thread is blocked waiting for a flush call to complete,
@@ -478,10 +475,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * consumer.commit();
      * }
      * </pre>
-     * 
+     *
      * Note that the above example may drop records if the produce request fails. If we want to ensure that this does not occur
      * we need to set <code>retries=&lt;large_number&gt;</code> in our config.
-     * 
+     *
      * @throws InterruptException If the thread is interrupted while blocked
      */
     @Override

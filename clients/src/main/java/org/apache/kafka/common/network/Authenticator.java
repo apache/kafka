@@ -43,7 +43,7 @@ public interface Authenticator {
     /**
      * Returns UserPrincipal after authentication is established
      */
-    UserPrincipal userPrincipal();
+    UserPrincipal userPrincipal() throws IOException;
 
 
     /**

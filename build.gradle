@@ -4,9 +4,9 @@
 // The ASF licenses this file to You under the Apache License, Version 2.0
 // (the "License"); you may not use this file except in compliance with
 // the License.  You may obtain a copy of the License at
-// 
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -109,7 +109,7 @@ subprojects {
     archives srcJar
     archives javadocJar
   }
-  
+
   plugins.withType(ScalaPlugin) {
     //source jar should also contain scala source:
     srcJar.from sourceSets.main.scala
@@ -250,9 +250,9 @@ project(':core') {
     into "$buildDir/dependant-libs-${scalaVersion}"
   }
 
-  tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) { 
+  tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${baseScalaVersion}-${version}"
-    compression = Compression.GZIP 
+    compression = Compression.GZIP
     from(project.file("../bin")) { into "bin/" }
     from(project.file("../config")) { into "config/" }
     from '../LICENSE'
@@ -354,6 +354,7 @@ project(':clients') {
     compile "org.slf4j:slf4j-api:1.7.6"
     compile 'org.xerial.snappy:snappy-java:1.1.1.6'
     compile 'net.jpountz.lz4:lz4:1.2.0'
+    compile 'org.bouncycastle:bcprov-jdk16:1.46'
 
     testCompile 'com.novocode:junit-interface:0.9'
     testRuntime "$slf4jlog4j"
@@ -382,7 +383,7 @@ project(':clients') {
   artifacts {
     archives testJar
   }
-  
+
   checkstyle {
      configFile = new File(rootDir, "checkstyle/checkstyle.xml")
   }

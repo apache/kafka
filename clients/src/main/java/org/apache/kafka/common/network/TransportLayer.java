@@ -82,5 +82,5 @@ public interface TransportLayer {
 
     boolean flush(ByteBuffer buffer) throws IOException;
 
-    Principal getPeerPrincipal();
+    Principal getPeerPrincipal() throws IOException;
 }

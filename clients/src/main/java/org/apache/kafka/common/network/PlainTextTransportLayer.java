@@ -42,7 +42,6 @@ public class PlainTextTransportLayer implements TransportLayer {
 
     public PlainTextTransportLayer(SocketChannel socketChannel) throws IOException {
         this.socketChannel = socketChannel;
-
     }
 
 
@@ -141,7 +140,7 @@ public class PlainTextTransportLayer implements TransportLayer {
         return outStream;
     }
 
-    public Principal getPeerPrincipal() {
+    public Principal getPeerPrincipal() throws IOException {
         return new UserPrincipal("ANONYMOUS");
     }
 

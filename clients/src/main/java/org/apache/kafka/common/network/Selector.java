@@ -29,9 +29,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.MetricName;
@@ -43,6 +44,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -90,14 +92,14 @@ public class Selector implements Selectable {
     private final SelectorMetrics sensors;
     private final String metricGrpPrefix;
     private final Map<String, String> metricTags;
-    private final SecurityConfig securityConfig;
     private final SecurityProtocol securityProtocol;
     private SSLFactory sslFactory = null;
+    private ExecutorService executorService = null;
 
     /**
      * Create a new selector
      */
-    public Selector(Metrics metrics, Time time, String metricGrpPrefix, Map<String, String> metricTags, SecurityConfig securityConfig) {
+    public Selector(Metrics metrics, Time time, String metricGrpPrefix, Map<String, String> metricTags, Map<String, ?> configs) {
         try {
             this.selector = java.nio.channels.Selector.open();
         } catch (IOException e) {
@@ -114,17 +116,13 @@ public class Selector implements Selectable {
         this.disconnected = new ArrayList<Integer>();
         this.failedSends = new ArrayList<Integer>();
         this.sensors = new SelectorMetrics(metrics);
-        this.securityConfig = securityConfig;
-        this.securityProtocol = SecurityProtocol.valueOf(securityConfig.getString(SecurityConfig.SECURITY_PROTOCOL_CONFIG));
-        try {
-            if (securityProtocol == SecurityProtocol.SSL) {
-                this.sslFactory = new SSLFactory(SSLFactory.Mode.CLIENT);
-                this.sslFactory.init(this.securityConfig);
-            }
-        } catch (Exception e) {
-            throw new KafkaException(e);
+        this.securityProtocol = configs.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG) ?
+            SecurityProtocol.valueOf((String) configs.get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG)) : SecurityProtocol.PLAINTEXT;
+        if (securityProtocol == SecurityProtocol.SSL) {
+            this.executorService = Executors.newScheduledThreadPool(1);
+            this.sslFactory = new SSLFactory(SSLFactory.Mode.CLIENT);
+            this.sslFactory.configure(configs);
         }
-
     }
 
     /**
@@ -166,7 +164,8 @@ public class Selector implements Selectable {
         if (securityProtocol == SecurityProtocol.SSL) {
             transportLayer = new SSLTransportLayer(socketChannel,
                                                     sslFactory.createSSLEngine(socket.getInetAddress().getHostName(),
-                                                                               socket.getPort()));
+                                                                               socket.getPort()),
+                                                   executorService);
         } else {
             transportLayer = new PlainTextTransportLayer(socketChannel);
         }
@@ -206,8 +205,12 @@ public class Selector implements Selectable {
             close(key);
         try {
             this.selector.close();
+            if (this.executorService != null)
+                this.executorService.shutdown();
         } catch (IOException e) {
             log.error("Exception closing selector:", e);
+        } catch (SecurityException se) {
+            log.error("Exception closing selector:", se);
         }
     }
 
@@ -463,7 +466,7 @@ public class Selector implements Selectable {
     }
 
     /**
-     * Get the socket channel associated with this selection key
+     * Get the Channel associated with this selection key
      */
     private Channel channel(SelectionKey key) {
         return this.channels.get(key);

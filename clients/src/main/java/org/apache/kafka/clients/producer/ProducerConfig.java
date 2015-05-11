@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.protocol.SecurityProtocol;
 
 /**
  * Configuration for the Kafka Producer. Documentation for these configurations can be found in the <a
@@ -51,7 +52,7 @@ public class ProducerConfig extends AbstractConfig {
     /** <code>metadata.max.age.ms</code> */
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
     private static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;
-            
+
     /** <code>batch.size</code> */
     public static final String BATCH_SIZE_CONFIG = "batch.size";
     private static final String BATCH_SIZE_DOC = "The producer will attempt to batch records together into fewer requests whenever multiple records are being sent" + " to the same partition. This helps performance on both the client and the server. This configuration controls the "
@@ -169,9 +170,6 @@ public class ProducerConfig extends AbstractConfig {
     public static final String VALUE_SERIALIZER_CLASS_CONFIG = "value.serializer";
     private static final String VALUE_SERIALIZER_CLASS_DOC = "Serializer class for value that implements the <code>Serializer</code> interface.";
 
-    /** <code>security.config.file </code> */
-    public static final String SECURITY_CONFIG_FILE_CONFIG = CommonClientConfigs.SECURITY_CONFIG_FILE_CONFIG;
-    private static final String SECURITY_CONFIG_FILE_DOC = CommonClientConfigs.SECURITY_CONFIG_FILE_DOC;
 
 
     static {
@@ -223,7 +221,20 @@ public class ProducerConfig extends AbstractConfig {
                                         MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION_DOC)
                                 .define(KEY_SERIALIZER_CLASS_CONFIG, Type.CLASS, Importance.HIGH, KEY_SERIALIZER_CLASS_DOC)
                                 .define(VALUE_SERIALIZER_CLASS_CONFIG, Type.CLASS, Importance.HIGH, VALUE_SERIALIZER_CLASS_DOC)
-                                .define(SECURITY_CONFIG_FILE_CONFIG, Type.STRING, "", Importance.MEDIUM, SECURITY_CONFIG_FILE_DOC);
+                                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, Type.STRING, SecurityProtocol.PLAINTEXT.toString(), Importance.MEDIUM, CommonClientConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(CommonClientConfigs.SSL_PROTOCOL_CONFIG, Type.STRING, "TLS", Importance.MEDIUM, CommonClientConfigs.SSL_PROTOCOL_DOC)
+                                .define(CommonClientConfigs.SSL_CIPHER_SUITES_CONFIG, Type.LIST, "", Importance.LOW, CommonClientConfigs.SSL_CIPHER_SUITES_DOC)
+                                .define(CommonClientConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Type.LIST, "TLSv1.2, TLSv1.1, TLSv1", Importance.MEDIUM, CommonClientConfigs.SSL_ENABLED_PROTOCOLS_DOC)
+                                .define(CommonClientConfigs.SSL_KEYSTORE_TYPE_CONFIG, Type.STRING, "JKS", Importance.MEDIUM, CommonClientConfigs.SSL_KEYSTORE_TYPE_DOC)
+                                .define(CommonClientConfigs.SSL_KEYSTORE_LOCATION_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_KEYSTORE_LOCATION_DOC, false)
+                                .define(CommonClientConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_KEYSTORE_PASSWORD_DOC, false)
+                                .define(CommonClientConfigs.SSL_KEY_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_KEY_PASSWORD_DOC, false)
+                                .define(CommonClientConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, Type.STRING, "JKS", Importance.MEDIUM, CommonClientConfigs.SSL_TRUSTSTORE_TYPE_DOC)
+                                .define(CommonClientConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_TRUSTSTORE_LOCATION_DOC, false)
+                                .define(CommonClientConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_TRUSTSTORE_PASSWORD_DOC, false)
+                                .define(CommonClientConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, Type.STRING, "SunX509", Importance.LOW, CommonClientConfigs.SSL_KEYMANAGER_ALGORITHM_DOC)
+                                .define(CommonClientConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, Type.STRING, "SunX509", Importance.LOW, CommonClientConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC)
+                                .define(CommonClientConfigs.SSL_CLIENT_REQUIRE_CERT_CONFIG, Type.BOOLEAN, false, Importance.MEDIUM, CommonClientConfigs.SSL_CLIENT_REQUIRE_CERT_DOC);
     }
 
     public static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,

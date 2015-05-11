@@ -12,7 +12,7 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.common.config.SecurityConfig;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 
 import java.io.DataInputStream;
@@ -22,8 +22,9 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Map;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicBoolean;
+
 
 
 /**
@@ -34,17 +35,16 @@ class EchoServer extends Thread {
     private final ServerSocket serverSocket;
     private final List<Thread> threads;
     private final List<Socket> sockets;
-    private SecurityProtocol protocol;
+    private SecurityProtocol protocol = SecurityProtocol.PLAINTEXT;
     private SSLFactory sslFactory;
-    private final AtomicBoolean startHandshake = new AtomicBoolean();
 
-    public EchoServer(SecurityConfig securityConfig) throws Exception {
-        this.protocol =  SecurityProtocol.valueOf(securityConfig.getString(SecurityConfig.SECURITY_PROTOCOL_CONFIG));
+    public EchoServer(Map<String, ?> configs) throws Exception {
+        this.protocol =  configs.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG) ?
+            SecurityProtocol.valueOf((String) configs.get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG)) : SecurityProtocol.PLAINTEXT;
         if (protocol == SecurityProtocol.SSL) {
             this.sslFactory = new SSLFactory(SSLFactory.Mode.SERVER);
-            this.sslFactory.init(securityConfig);
+            this.sslFactory.configure(configs);
             this.serverSocket = sslFactory.createSSLServerSocketFactory().createServerSocket(0);
-            this.startHandshake.set(true);
         } else {
             this.serverSocket = new ServerSocket(0);
         }

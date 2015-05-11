@@ -34,7 +34,7 @@ public class DefaultAuthenticator implements Authenticator {
         return 0;
     }
 
-    public UserPrincipal userPrincipal() {
+    public UserPrincipal userPrincipal() throws IOException {
         return new UserPrincipal(transportLayer.getPeerPrincipal().toString());
     }
 
