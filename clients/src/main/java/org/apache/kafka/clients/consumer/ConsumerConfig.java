@@ -280,7 +280,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         VALUE_DESERIALIZER_CLASS_DOC)
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, Type.STRING, SecurityProtocol.PLAINTEXT.toString(), Importance.MEDIUM, CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .define(CommonClientConfigs.SSL_PROTOCOL_CONFIG, Type.STRING, "TLS", Importance.MEDIUM, CommonClientConfigs.SSL_PROTOCOL_DOC)
-                                .define(CommonClientConfigs.SSL_CIPHER_SUITES_CONFIG, Type.LIST, "", Importance.LOW, CommonClientConfigs.SSL_CIPHER_SUITES_DOC)
+                                .define(CommonClientConfigs.SSL_CIPHER_SUITES_CONFIG, Type.LIST, Importance.LOW, CommonClientConfigs.SSL_CIPHER_SUITES_DOC, false)
                                 .define(CommonClientConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Type.LIST, "TLSv1.2, TLSv1.1, TLSv1", Importance.MEDIUM, CommonClientConfigs.SSL_ENABLED_PROTOCOLS_DOC)
                                 .define(CommonClientConfigs.SSL_KEYSTORE_TYPE_CONFIG, Type.STRING, "JKS", Importance.MEDIUM, CommonClientConfigs.SSL_KEYSTORE_TYPE_DOC)
                                 .define(CommonClientConfigs.SSL_KEYSTORE_LOCATION_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_KEYSTORE_LOCATION_DOC, false)

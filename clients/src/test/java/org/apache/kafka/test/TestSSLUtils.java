@@ -43,6 +43,8 @@ import org.bouncycastle.x509.X509V1CertificateGenerator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
 
 
 public class TestSSLUtils {
@@ -177,6 +179,11 @@ public class TestSSLUtils {
         sslConfigs.put(CommonClientConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
         sslConfigs.put(CommonClientConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
         sslConfigs.put(CommonClientConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, "SunX509");
+
+        List<String> enabledProtocols  = new ArrayList<String>();
+        enabledProtocols.add("TLSv1.2");
+        sslConfigs.put(CommonClientConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
+
         return sslConfigs;
     }
 

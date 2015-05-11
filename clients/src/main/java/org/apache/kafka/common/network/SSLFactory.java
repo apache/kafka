@@ -54,10 +54,17 @@ public class SSLFactory implements Configurable {
     @Override
     public void configure(Map<String, ?> configs) throws KafkaException {
         this.protocol =  (String) configs.get(CommonClientConfigs.SSL_PROTOCOL_CONFIG);
-        if (configs.get(CommonClientConfigs.SSL_CIPHER_SUITES_CONFIG) != null)
-            this.cipherSuites = (String[]) ((List<String>) configs.get(CommonClientConfigs.SSL_CIPHER_SUITES_CONFIG)).toArray();
-        if (configs.get(CommonClientConfigs.SSL_ENABLED_PROTOCOLS_CONFIG) != null)
-            this.enabledProtocols = (String[]) ((List<String>) configs.get(CommonClientConfigs.SSL_ENABLED_PROTOCOLS_CONFIG)).toArray();
+
+        if (configs.get(CommonClientConfigs.SSL_CIPHER_SUITES_CONFIG) != null) {
+            List<String> cipherSuitesList = (List<String>) configs.get(CommonClientConfigs.SSL_CIPHER_SUITES_CONFIG);
+            this.cipherSuites = (String[]) cipherSuitesList.toArray(new String[cipherSuitesList.size()]);
+        }
+
+        if (configs.get(CommonClientConfigs.SSL_ENABLED_PROTOCOLS_CONFIG) != null) {
+            List<String> enabledProtocolsList = (List<String>) configs.get(CommonClientConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
+            this.enabledProtocols =  (String[]) enabledProtocolsList.toArray(new String[enabledProtocolsList.size()]);
+        }
+
         this.requireClientCert = (Boolean) configs.get(CommonClientConfigs.SSL_CLIENT_REQUIRE_CERT_CONFIG);
         this.kmfAlgorithm = (String) configs.get(CommonClientConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
         this.tmfAlgorithm = (String) configs.get(CommonClientConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
@@ -73,7 +80,6 @@ public class SSLFactory implements Configurable {
         try {
             this.sslContext = createSSLContext();
         } catch (Exception e) {
-            e.printStackTrace();
             throw new KafkaException(e);
         }
     }
