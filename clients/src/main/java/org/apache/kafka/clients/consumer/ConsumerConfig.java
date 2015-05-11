@@ -157,11 +157,6 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String VALUE_DESERIALIZER_CLASS_CONFIG = "value.deserializer";
     private static final String VALUE_DESERIALIZER_CLASS_DOC = "Deserializer class for value that implements the <code>Deserializer</code> interface.";
 
-    /** <code>security.config.file </code> */
-    public static final String SECURITY_CONFIG_FILE_CONFIG = CommonClientConfigs.SECURITY_CONFIG_FILE_CONFIG;
-    private static final String SECURITY_CONFIG_FILE_DOC = CommonClientConfigs.SECURITY_CONFIG_FILE_DOC;
-
-
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
