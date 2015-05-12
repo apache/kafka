@@ -76,6 +76,7 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
   }
 
   override def doWork() {
+    var fetchRequest: FetchRequest = null
 
     inLock(partitionMapLock) {
       partitionMap.foreach {
@@ -84,16 +85,16 @@ abstract class AbstractFetcherThread(name: String, clientId: String, sourceBroke
             fetchRequestBuilder.addFetch(topicAndPartition.topic, topicAndPartition.partition,
               partitionFetchState.offset, fetchSize)
       }
+
+      fetchRequest = fetchRequestBuilder.build()
+      if (fetchRequest.requestInfo.isEmpty) {
+        trace("There are no active partitions. Back off for %d ms before sending a fetch request".format(fetchBackOffMs))
+        partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
+      }
     }
 
-    val fetchRequest = fetchRequestBuilder.build()
-
-    if (!fetchRequest.requestInfo.isEmpty)
+    if(!fetchRequest.requestInfo.isEmpty)
       processFetchRequest(fetchRequest)
-    else {
-      trace("There are no active partitions. Back off for %d ms before sending a fetch request".format(fetchBackOffMs))
-      partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
-    }
   }
 
   private def processFetchRequest(fetchRequest: FetchRequest) {
