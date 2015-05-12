@@ -27,7 +27,7 @@ import java.nio.channels.ScatteringByteChannel;
 import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.SocketChannel;
 
-import com.sun.security.auth.UserPrincipal;
+import java.security.Principal;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,7 +45,6 @@ public class Channel implements ScatteringByteChannel, GatheringByteChannel {
     public Channel(TransportLayer transportLayer, Authenticator authenticator) throws IOException {
         this.transportLayer = transportLayer;
         this.authenticator = authenticator;
-        this.authenticator.init();
     }
 
     public void close() throws IOException {
@@ -58,8 +57,8 @@ public class Channel implements ScatteringByteChannel, GatheringByteChannel {
      * Incase of PLAINTEXT and No Authentication returns ANONYMOUS as the userPrincipal
      * If SSL used without any SASL Authentication returns SSLSession.peerPrincipal
      */
-    public UserPrincipal userPrincipal() throws IOException {
-        return authenticator.userPrincipal();
+    public Principal principal() throws IOException {
+        return authenticator.principal();
     }
 
     public int connect(boolean read, boolean write) throws IOException {

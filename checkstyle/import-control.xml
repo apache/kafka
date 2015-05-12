@@ -26,7 +26,6 @@
 	<allow pkg="javax.management" />
 	<allow pkg="org.slf4j" />
 	<allow pkg="org.junit" />
-	<allow pkg="com.sun" />
 	<allow pkg="javax.net.ssl" />
 	<allow pkg="javax.security.auth.x500" />
 
@@ -41,13 +40,9 @@
 		<disallow pkg="org.apache.kafka.clients" />
 		<allow pkg="org.apache.kafka.common" exact-match="true" />
 		<allow pkg="org.apache.kafka.test" />
-		<allow pkg="org.apache.kafka.common.config" />
-		<allow pkg="org.apache.kafka.common.network" />
 
 		<subpackage name="config">
 			<allow pkg="org.apache.kafka.common.config" />
-			<allow pkg="org.apache.kafka.common.network" />
-			<allow pkg="org.apache.kafka.common.protocol" />
 			<!-- for testing -->
 			<allow pkg="org.apache.kafka.common.metrics" />
 		</subpackage>
@@ -57,11 +52,16 @@
 		</subpackage>
 
 		<subpackage name="network">
+      <allow pkg="org.apache.kafka.common.security.auth" />
+      <allow pkg="org.apache.kafka.clients.CommonClientConfigs" />
+      <allow pkg="org.apache.kafka.common.protocol" />
+      <allow pkg="org.apache.kafka.clients" />
 			<allow pkg="org.apache.kafka.common.metrics" />
-			<allow pkg="org.apache.kafka.common.config" />
-			<allow pkg="org.apache.kafka.common.protocol" />
-			<allow pkg="org.apache.kafka.clients" />
 		</subpackage>
+
+    <subpackage name="security">
+      <allow pkg="org.apache.kafka.common.network" />
+    </subpackage>
 
 		<subpackage name="protocol">
 			<allow pkg="org.apache.kafka.common.errors" />
@@ -91,7 +91,6 @@
 		<allow pkg="org.slf4j" />
 		<allow pkg="org.apache.kafka.clients" exact-match="true"/>
 		<allow pkg="org.apache.kafka.test" />
-		<allow pkg="org.apache.kafka.common.protocol" />
 
 		<subpackage name="consumer">
 			<allow pkg="org.apache.kafka.clients.consumer" />

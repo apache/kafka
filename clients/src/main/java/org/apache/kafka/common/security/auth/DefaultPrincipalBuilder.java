@@ -15,40 +15,23 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.network;
+package org.apache.kafka.common.security.auth;
 
-/*
- * Authentication for Channel
- */
-
-import java.io.IOException;
 import java.security.Principal;
 
+import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.KafkaException;
 
-public interface Authenticator {
 
-    /**
-     * Closes this Authenticator
-     *
-     * @throws IOException if any I/O error occurs
-     */
-    void close() throws IOException;
+public class DefaultPrincipalBuilder implements PrincipalBuilder {
 
-    /**
-     * Returns Principal after authentication is established
-     */
-    Principal principal() throws KafkaException;
-
-    /**
-     * Does authentication and returns SelectionKey.OP if further communication needed
-     * If no further authentication needs to be done return 0.
-     */
-    int authenticate(boolean read, boolean write) throws IOException;
-
-    /**
-     * returns true if authentication is complete otherwise returns false;
-     */
-    boolean isComplete();
+    public Principal buildPrincipal(TransportLayer transportLayer, Authenticator authenticator) throws KafkaException {
+        try {
+            return transportLayer.peerPrincipal();
+        } catch (Exception e) {
+            throw new KafkaException("Failed to build principal due to: ", e);
+        }
+    }
 
 }

@@ -43,6 +43,8 @@ import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.security.auth.PrincipalBuilder;
+import org.apache.kafka.common.security.auth.DefaultPrincipalBuilder;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.slf4j.Logger;
@@ -169,7 +171,8 @@ public class Selector implements Selectable {
         } else {
             transportLayer = new PlainTextTransportLayer(socketChannel);
         }
-        Authenticator authenticator = new DefaultAuthenticator(transportLayer);
+        PrincipalBuilder principalBuilder = new DefaultPrincipalBuilder();
+        Authenticator authenticator = new DefaultAuthenticator(transportLayer, principalBuilder);
         Channel channel = new Channel(transportLayer, authenticator);
         SelectionKey key = socketChannel.register(this.selector, SelectionKey.OP_CONNECT);
         key.attach(new Transmissions(id));

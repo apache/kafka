@@ -15,40 +15,40 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.common.network;
+package org.apache.kafka.common.security.auth;
 
-/*
- * Authentication for Channel
- */
-
-import java.io.IOException;
 import java.security.Principal;
 
-import org.apache.kafka.common.KafkaException;
+public class KafkaPrincipal implements Principal {
+    private final String name;
 
-public interface Authenticator {
+    public KafkaPrincipal(String name) {
+        if (name == null)
+            throw new IllegalArgumentException("name is null");
+        this.name = name;
+    }
 
-    /**
-     * Closes this Authenticator
-     *
-     * @throws IOException if any I/O error occurs
-     */
-    void close() throws IOException;
+    public boolean equals(Object object) {
+        if (this == object)
+            return true;
 
-    /**
-     * Returns Principal after authentication is established
-     */
-    Principal principal() throws KafkaException;
+        if (object instanceof KafkaPrincipal) {
+            return name.equals(((KafkaPrincipal) object).getName());
+        }
 
-    /**
-     * Does authentication and returns SelectionKey.OP if further communication needed
-     * If no further authentication needs to be done return 0.
-     */
-    int authenticate(boolean read, boolean write) throws IOException;
+        return false;
+    }
 
-    /**
-     * returns true if authentication is complete otherwise returns false;
-     */
-    boolean isComplete();
+    public int hashCode() {
+        return name.hashCode();
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public String toString() {
+        return name;
+    }
 
 }

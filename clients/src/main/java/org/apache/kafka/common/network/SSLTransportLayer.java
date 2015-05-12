@@ -28,6 +28,7 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
 import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLPeerUnverifiedException;
 
 import java.io.DataInputStream;
@@ -267,7 +268,7 @@ public class SSLTransportLayer implements TransportLayer {
         sslEngine.closeOutbound();
 
         if (!flush(netOutBuffer)) {
-            throw new IOException("Remaining data in the network buffer, can't send SSL close message, force a close with close(true) instead");
+            throw new IOException("Remaining data in the network buffer, can't send SSL close message.");
         }
         //prep the buffer for the close message
         netOutBuffer.clear();
@@ -400,12 +401,18 @@ public class SSLTransportLayer implements TransportLayer {
         return outStream;
     }
 
-    public Principal getPeerPrincipal() throws IOException {
+    public Principal peerPrincipal() throws IOException {
         try {
             return sslEngine.getSession().getPeerPrincipal();
         } catch (SSLPeerUnverifiedException se) {
             throw new IOException(String.format("Unable to retrieve getPeerPrincipal due to %s", se));
         }
+    }
+
+    public SSLSession sslSession() throws IllegalStateException, UnsupportedOperationException {
+        if (!handshakeComplete)
+            throw new IllegalStateException("Handshake incomplete.");
+        return sslEngine.getSession();
     }
 
     private int readFromAppBuffer(ByteBuffer dst) {

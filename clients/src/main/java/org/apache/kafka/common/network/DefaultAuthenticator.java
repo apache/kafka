@@ -17,25 +17,34 @@
 
 package org.apache.kafka.common.network;
 
-import com.sun.security.auth.UserPrincipal;
+import java.security.Principal;
 import java.io.IOException;
+
+import org.apache.kafka.common.security.auth.PrincipalBuilder;
+import org.apache.kafka.common.KafkaException;
 
 public class DefaultAuthenticator implements Authenticator {
 
     TransportLayer transportLayer;
+    PrincipalBuilder principalBuilder;
+    Principal principal;
 
-    public DefaultAuthenticator(TransportLayer transportLayer) {
+    public DefaultAuthenticator(TransportLayer transportLayer, PrincipalBuilder principalBuilder) {
         this.transportLayer = transportLayer;
+        this.principalBuilder = principalBuilder;
     }
 
-    public void init() {}
-
+    /*
+     * No-Op for default authenticator
+     */
     public int authenticate(boolean read, boolean write) throws IOException {
         return 0;
     }
 
-    public UserPrincipal userPrincipal() throws IOException {
-        return new UserPrincipal(transportLayer.getPeerPrincipal().toString());
+    public Principal principal() throws KafkaException {
+        if (principal != null)
+            principal = principalBuilder.buildPrincipal(transportLayer, this);
+        return principal;
     }
 
     public void close() throws IOException {}
