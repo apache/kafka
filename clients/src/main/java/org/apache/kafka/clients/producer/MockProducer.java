@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.Partitioner;
@@ -144,6 +145,10 @@ public class MockProducer implements Producer<byte[], byte[]> {
 
     @Override
     public void close() {
+    }
+
+    @Override
+    public void close(long timeout, TimeUnit timeUnit) {
     }
 
     /**

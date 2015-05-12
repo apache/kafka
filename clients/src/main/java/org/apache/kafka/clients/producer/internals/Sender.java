@@ -83,6 +83,9 @@ public class Sender implements Runnable {
     /* true while the sender thread is still running */
     private volatile boolean running;
 
+    /* true when the caller wants to ignore all unsent/inflight messages and force close.  */
+    private volatile boolean forceClose;
+
     /* metrics */
     private final SenderMetrics sensors;
 
@@ -132,12 +135,17 @@ public class Sender implements Runnable {
         // okay we stopped accepting requests but there may still be
         // requests in the accumulator or waiting for acknowledgment,
         // wait until these are completed.
-        while (this.accumulator.hasUnsent() || this.client.inFlightRequestCount() > 0) {
+        while (!forceClose && (this.accumulator.hasUnsent() || this.client.inFlightRequestCount() > 0)) {
             try {
                 run(time.milliseconds());
             } catch (Exception e) {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
+        }
+        if (forceClose) {
+            // We need to fail all the incomplete batches and wake up the threads waiting on
+            // the futures.
+            this.accumulator.abortIncompleteBatches();
         }
         try {
             this.client.close();
@@ -181,7 +189,6 @@ public class Sender implements Runnable {
                                                                          now);
         sensors.updateProduceRequestMetrics(batches);
         List<ClientRequest> requests = createProduceRequests(batches, now);
-
         // If we have any nodes that are ready to send + have sendable data, poll with 0 timeout so this can immediately
         // loop and try sending more data. Otherwise, the timeout is determined by nodes that have partitions with data
         // that isn't yet sendable (e.g. lingering, backing off). Note that this specifically does not include nodes
@@ -209,6 +216,14 @@ public class Sender implements Runnable {
         this.running = false;
         this.accumulator.close();
         this.wakeup();
+    }
+
+    /**
+     * Closes the sender without sending out any pending messages.
+     */
+    public void forceClose() {
+        this.forceClose = true;
+        initiateClose();
     }
 
     /**

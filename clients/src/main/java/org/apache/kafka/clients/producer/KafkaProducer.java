@@ -265,13 +265,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             } else {
                 this.valueSerializer = valueSerializer;
             }
-
             config.logUnused();
             log.debug("Kafka producer started");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed
             // this is to prevent resource leak. see KAFKA-2121
-            close(true);
+            close(0, TimeUnit.MILLISECONDS, true);
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka producer", t);
         }
@@ -518,40 +517,87 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     /**
      * Close this producer. This method blocks until all previously sent requests complete.
+     * This method is equivalent to <code>close(Long.MAX_VALUE, TimeUnit.MILLISECONDS)</code>.
+     * <p>
+     * <strong>If close() is called from {@link Callback}, a warning message will be logged and close(0, TimeUnit.MILLISECONDS)
+     * will be called instead. We do this because the sender thread would otherwise try to join itself and
+     * block forever.</strong>
+     * <p/>
      * @throws InterruptException If the thread is interrupted while blocked
      */
     @Override
     public void close() {
-        close(false);
+        close(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
     }
 
-    private void close(boolean swallowException) {
-        log.trace("Closing the Kafka producer.");
+    /**
+     * This method waits up to <code>timeout</code> for the producer to complete the sending of all incomplete requests.
+     * <p>
+     * If the producer is unable to complete all requests before the timeout expires, this method will fail
+     * any unsent and unacknowledged records immediately.
+     * <p>
+     * If invoked from within a {@link Callback} this method will not block and will be equivalent to
+     * <code>close(0, TimeUnit.MILLISECONDS)</code>. This is done since no further sending will happen while
+     * blocking the I/O thread of the producer.
+     *
+     * @param timeout The maximum time to wait for producer to complete any pending requests. The value should be
+     *                non-negative. Specifying a timeout of zero means do not wait for pending send requests to complete.
+     * @param timeUnit The time unit for the <code>timeout</code>
+     * @throws InterruptException If the thread is interrupted while blocked
+     * @throws IllegalArgumentException If the <code>timeout</code> is negative.
+     */
+    @Override
+    public void close(long timeout, TimeUnit timeUnit) {
+        close(timeout, timeUnit, false);
+    }
+    
+    private void close(long timeout, TimeUnit timeUnit, boolean swallowException) {
+        if (timeout < 0)
+            throw new IllegalArgumentException("The timeout cannot be negative.");
+
+        log.info("Closing the Kafka producer with timeoutMillis = {} ms.", timeUnit.toMillis(timeout));
         // this will keep track of the first encountered exception
         AtomicReference<Throwable> firstException = new AtomicReference<Throwable>();
-        if (this.sender != null) {
-            try {
-                this.sender.initiateClose();
-            } catch (Throwable t) {
-                firstException.compareAndSet(null, t);
-                log.error("Failed to close sender", t);
+        boolean invokedFromCallback = Thread.currentThread() == this.ioThread;
+        if (timeout > 0) {
+            if (invokedFromCallback) {
+                log.warn("Overriding close timeout {} ms to 0 ms in order to prevent useless blocking due to self-join. " +
+                    "This means you have incorrectly invoked close with a non-zero timeout from the producer call-back.", timeout);
+            } else {
+                // Try to close gracefully.
+                if (this.sender != null)
+                    this.sender.initiateClose();
+                if (this.ioThread != null) {
+                    try {
+                        this.ioThread.join(timeUnit.toMillis(timeout));
+                    } catch (InterruptedException t) {
+                        firstException.compareAndSet(null, t);
+                        log.error("Interrupted while joining ioThread", t);
+                    }
+                }
             }
         }
-        if (this.ioThread != null) {
-            try {
-                this.ioThread.join();
-            } catch (InterruptedException t) {
-                firstException.compareAndSet(null, t);
-                log.error("Interrupted while joining ioThread", t);
+
+        if (this.sender != null && this.ioThread != null && this.ioThread.isAlive()) {
+            log.info("Proceeding to force close the producer since pending requests could not be completed " +
+                "within timeout {} ms.", timeout);
+            this.sender.forceClose();
+            // Only join the sender thread when not calling from callback.
+            if (!invokedFromCallback) {
+                try {
+                    this.ioThread.join();
+                } catch (InterruptedException e) {
+                    firstException.compareAndSet(null, e);
+                }
             }
         }
+
         ClientUtils.closeQuietly(metrics, "producer metrics", firstException);
         ClientUtils.closeQuietly(keySerializer, "producer keySerializer", firstException);
         ClientUtils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
         log.debug("The Kafka producer has closed.");
-        if (firstException.get() != null && !swallowException) {
+        if (firstException.get() != null && !swallowException)
             throw new KafkaException("Failed to close kafka producer", firstException.get());
-        }
     }
 
     private static class FutureFailure implements Future<RecordMetadata> {

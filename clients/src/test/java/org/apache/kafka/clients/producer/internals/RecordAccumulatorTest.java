@@ -26,7 +26,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.kafka.clients.producer.Callback;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -263,6 +266,29 @@ public class RecordAccumulatorTest {
         // should be complete with no unsent records.
         accum.awaitFlushCompletion();
         assertFalse(accum.hasUnsent());
+    }
+
+    @Test
+    public void testAbortIncompleteBatches() throws Exception {
+        long lingerMs = Long.MAX_VALUE;
+        final AtomicInteger numExceptionReceivedInCallback = new AtomicInteger(0);
+        final RecordAccumulator accum = new RecordAccumulator(4 * 1024, 64 * 1024, CompressionType.NONE, lingerMs, 100L, false, metrics, time, metricTags);
+        class TestCallback implements Callback {
+            @Override
+            public void onCompletion(RecordMetadata metadata, Exception exception) {
+                assertTrue(exception.getMessage().equals("Producer is closed forcefully."));
+                numExceptionReceivedInCallback.incrementAndGet();
+            }
+        }
+        for (int i = 0; i < 100; i++)
+            accum.append(new TopicPartition(topic, i % 3), key, value, new TestCallback());
+        RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
+        assertEquals("No nodes should be ready.", 0, result.readyNodes.size());
+
+        accum.abortIncompleteBatches();
+        assertEquals(numExceptionReceivedInCallback.get(), 100);
+        assertFalse(accum.hasUnsent());
+
     }
 
 }
