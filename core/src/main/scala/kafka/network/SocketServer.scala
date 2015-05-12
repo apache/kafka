@@ -384,7 +384,7 @@ private[kafka] class Processor(val id: Int,
               throw new IllegalStateException("Unrecognized key state for processor thread.")
           } catch {
             case e: EOFException => {
-              info("Closing socket connection to %s.".format(channelFor(key).socket.getInetAddress))
+              debug("Closing socket connection to %s.".format(channelFor(key).socket.getInetAddress))
               close(key)
             } case e: InvalidRequestException => {
               info("Closing socket connection to %s due to invalid request: %s".format(channelFor(key).socket.getInetAddress, e.getMessage))

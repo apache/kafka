@@ -656,7 +656,7 @@ object ZkUtils extends Logging {
         val jsonData = getPartitionReassignmentZkData(partitionsToBeReassigned)
         try {
           updatePersistentPath(zkClient, zkPath, jsonData)
-          info("Updated partition reassignment path with %s".format(jsonData))
+          debug("Updated partition reassignment path with %s".format(jsonData))
         } catch {
           case nne: ZkNoNodeException =>
             ZkUtils.createPersistentPath(zkClient, zkPath, jsonData)
