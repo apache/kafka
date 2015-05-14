@@ -30,7 +30,6 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.common.TopicAndPartition
 import kafka.tools.MessageFormatter
 
-import scala.Some
 import scala.collection._
 import java.io.PrintStream
 import java.util.concurrent.atomic.AtomicBoolean

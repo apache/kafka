@@ -25,7 +25,6 @@ import kafka.server.KafkaConfig
 import collection.mutable
 import kafka.api._
 import org.apache.log4j.Logger
-import scala.Some
 import kafka.common.TopicAndPartition
 import kafka.api.RequestOrResponse
 import collection.Set

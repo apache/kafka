@@ -29,12 +29,10 @@ import kafka.message.MessageSet
 import java.util.concurrent.atomic.AtomicBoolean
 import java.io.{IOException, File}
 import java.util.concurrent.TimeUnit
-import scala.Predef._
 import scala.collection._
 import scala.collection.mutable.HashMap
 import scala.collection.Map
 import scala.collection.Set
-import scala.Some
 
 import org.I0Itec.zkclient.ZkClient
 import com.yammer.metrics.core.Gauge

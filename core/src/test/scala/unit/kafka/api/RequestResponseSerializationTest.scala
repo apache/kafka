@@ -27,7 +27,6 @@ import kafka.common.{OffsetAndMetadata, ErrorMapping, OffsetMetadataAndError}
 import kafka.utils.SystemTime
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.protocol.ApiKeys
-import scala.Some
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.common.TopicAndPartition
 import org.apache.kafka.common.TopicPartition

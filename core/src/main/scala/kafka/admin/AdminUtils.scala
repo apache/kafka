@@ -29,9 +29,7 @@ import scala.collection._
 import mutable.ListBuffer
 import scala.collection.mutable
 import kafka.common._
-import scala.Predef._
 import collection.Map
-import scala.Some
 import collection.Set
 
 object AdminUtils extends Logging {

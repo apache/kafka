@@ -22,7 +22,6 @@ import kafka.controller.LeaderIsrAndControllerEpoch
 import org.apache.zookeeper.data.Stat
 import org.I0Itec.zkclient.ZkClient
 
-import scala.Some
 import scala.collection._
 
 object ReplicationUtils extends Logging {

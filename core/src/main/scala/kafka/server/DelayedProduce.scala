@@ -23,7 +23,6 @@ import kafka.common.TopicAndPartition
 import kafka.utils.Logging
 import kafka.network.RequestChannel
 
-import scala.Some
 import scala.collection.immutable.Map
 import scala.collection.Seq
 
