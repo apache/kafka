@@ -96,7 +96,7 @@ public final class Coordinator {
         this.time = time;
         this.client = client;
         this.generation = -1;
-        this.consumerId = "";
+        this.consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID;
         this.groupId = groupId;
         this.metadata = metadata;
         this.consumerCoordinator = null;
@@ -132,6 +132,7 @@ public final class Coordinator {
         // TODO: needs to handle disconnects and errors, should not just throw exceptions
         Errors.forCode(response.errorCode()).maybeThrow();
         this.consumerId = response.consumerId();
+        this.generation = response.generationId();
 
         // set the flag to refresh last committed offsets
         this.subscriptions.needRefreshCommits();

@@ -141,7 +141,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
           kafkaController.startup()
 
           /* start kafka coordinator */
-          consumerCoordinator = new ConsumerCoordinator(config, zkClient)
+          consumerCoordinator = new ConsumerCoordinator(config, zkClient, offsetManager)
           consumerCoordinator.startup()
 
           /* start processing requests */

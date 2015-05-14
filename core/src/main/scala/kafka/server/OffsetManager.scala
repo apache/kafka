@@ -430,7 +430,7 @@ class OffsetManager(val config: OffsetManagerConfig,
     hw
   }
 
-  private def leaderIsLocal(partition: Int) = { getHighWatermark(partition) != -1L }
+  def leaderIsLocal(partition: Int) = { getHighWatermark(partition) != -1L }
 
   /**
    * When this broker becomes a follower for an offsets topic partition clear out the cache for groups that belong to

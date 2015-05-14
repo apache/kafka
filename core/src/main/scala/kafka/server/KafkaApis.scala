@@ -550,17 +550,19 @@ class KafkaApis(val requestChannel: RequestChannel,
     val respHeader = new ResponseHeader(request.header.correlationId)
 
     // the callback for sending a join-group response
-    def sendResponseCallback(partitions: List[TopicAndPartition], generationId: Int, errorCode: Short) {
+    def sendResponseCallback(partitions: Set[TopicAndPartition], consumerId: String, generationId: Int, errorCode: Short) {
       val partitionList = partitions.map(tp => new TopicPartition(tp.topic, tp.partition)).toBuffer
-      val responseBody = new JoinGroupResponse(errorCode, generationId, joinGroupRequest.consumerId, partitionList)
+      val responseBody = new JoinGroupResponse(errorCode, generationId, consumerId, partitionList)
+      trace("Sending join group response %s for correlation id %d to client %s."
+        .format(responseBody, request.header.correlationId, request.header.clientId))
       requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(respHeader, responseBody)))
     }
 
     // let the coordinator to handle join-group
-    coordinator.consumerJoinGroup(
+    coordinator.handleJoinGroup(
       joinGroupRequest.groupId(),
       joinGroupRequest.consumerId(),
-      joinGroupRequest.topics().toList,
+      joinGroupRequest.topics().toSet,
       joinGroupRequest.sessionTimeout(),
       joinGroupRequest.strategy(),
       sendResponseCallback)
@@ -572,12 +574,14 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for sending a heartbeat response
     def sendResponseCallback(errorCode: Short) {
-      val response = new HeartbeatResponse(errorCode)
-      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(respHeader, response)))
+      val responseBody = new HeartbeatResponse(errorCode)
+      trace("Sending heartbeat response %s for correlation id %d to client %s."
+        .format(responseBody, request.header.correlationId, request.header.clientId))
+      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(respHeader, responseBody)))
     }
 
     // let the coordinator to handle heartbeat
-    coordinator.consumerHeartbeat(
+    coordinator.handleHeartbeat(
       heartbeatRequest.groupId(),
       heartbeatRequest.consumerId(),
       heartbeatRequest.groupGenerationId(),

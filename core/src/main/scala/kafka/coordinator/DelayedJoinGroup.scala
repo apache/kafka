@@ -17,6 +17,7 @@
 
 package kafka.coordinator
 
+import kafka.common.TopicAndPartition
 import kafka.server.DelayedOperation
 
 /**
@@ -26,23 +27,13 @@ import kafka.server.DelayedOperation
  * join-group operations will be completed by sending back the response with the
  * calculated partition assignment.
  */
-class DelayedJoinGroup(sessionTimeout: Long,
-                       consumerRegistry: ConsumerRegistry,
-                       responseCallback: => Unit) extends DelayedOperation(sessionTimeout) {
-
-  /* always successfully complete the operation once called */
-  override def tryComplete(): Boolean = {
-    forceComplete()
-  }
-
-  override def onExpiration() {
-    // TODO
-  }
-
-  /* always assume the partition is already assigned as this delayed operation should never time-out */
-  override def onComplete() {
-
-    // TODO
-    responseCallback
-  }
+private[coordinator] class DelayedJoinGroup(consumerCoordinator: ConsumerCoordinator,
+                                            group: Group,
+                                            consumer: Consumer,
+                                            sessionTimeout: Long,
+                                            responseCallback:(Set[TopicAndPartition], String, Int, Short) => Unit)
+  extends DelayedOperation(sessionTimeout) {
+  override def tryComplete(): Boolean = consumerCoordinator.tryCompleteJoinGroup(group, forceComplete)
+  override def onExpiration() = consumerCoordinator.onExpirationJoinGroup()
+  override def onComplete() = consumerCoordinator.onCompleteJoinGroup(group, consumer, responseCallback)
 }

@@ -18,8 +18,6 @@
 package kafka.coordinator
 
 import kafka.server.DelayedOperation
-import java.util.concurrent.atomic.AtomicBoolean
-
 
 /**
  * Delayed rebalance operations that are added to the purgatory when group is preparing for rebalance
@@ -31,35 +29,12 @@ import java.util.concurrent.atomic.AtomicBoolean
  * the group are marked as failed, and complete this operation to proceed rebalance with
  * the rest of the group.
  */
-class DelayedRebalance(sessionTimeout: Long,
-                       groupRegistry: GroupRegistry,
-                       rebalanceCallback: String => Unit,
-                       failureCallback: (String, String) => Unit)
+private[coordinator] class DelayedRebalance(consumerCoordinator: ConsumerCoordinator,
+                                            group: Group,
+                                            sessionTimeout: Long)
   extends DelayedOperation(sessionTimeout) {
 
-  val allConsumersJoinedGroup = new AtomicBoolean(false)
-
-  /* check if all known consumers have requested to re-join group */
-  override def tryComplete(): Boolean = {
-    allConsumersJoinedGroup.set(groupRegistry.memberRegistries.values.forall(_.joinGroupReceived.get()))
-
-    if (allConsumersJoinedGroup.get())
-      forceComplete()
-    else
-      false
-  }
-
-  override def onExpiration() {
-    // TODO
-  }
-
-  /* mark consumers that have not re-joined group as failed and proceed to rebalance the rest of the group */
-  override def onComplete() {
-    groupRegistry.memberRegistries.values.foreach(consumerRegistry =>
-      if (!consumerRegistry.joinGroupReceived.get())
-        failureCallback(groupRegistry.groupId, consumerRegistry.consumerId)
-    )
-
-    rebalanceCallback(groupRegistry.groupId)
-  }
+  override def tryComplete(): Boolean = consumerCoordinator.tryCompleteRebalance(group, forceComplete)
+  override def onExpiration() = consumerCoordinator.onExpirationRebalance()
+  override def onComplete() = consumerCoordinator.onCompleteRebalance(group)
 }

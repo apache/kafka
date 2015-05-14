@@ -17,20 +17,27 @@
 
 package kafka.coordinator
 
-import scala.collection.mutable
+import kafka.common.TopicAndPartition
+import kafka.utils.nonthreadsafe
 
 /**
- * A bucket of consumers that are scheduled for heartbeat expiration.
+ * A consumer contains the following metadata:
  *
- * The motivation behind this is to avoid expensive fine-grained per-consumer
- * heartbeat expiration but use coarsen-grained methods that group consumers
- * with similar deadline together. This will result in some consumers not
- * being expired for heartbeats in time but is tolerable.
+ * Heartbeat metadata:
+ * 1. negotiated heartbeat session timeout
+ * 2. timestamp of the latest heartbeat
+ *
+ * Subscription metadata:
+ * 1. subscribed topics
+ * 2. assigned partitions for the subscribed topics
  */
-class HeartbeatBucket(val startMs: Long, endMs: Long) {
+@nonthreadsafe
+private[coordinator] class Consumer(val consumerId: String,
+                                    val groupId: String,
+                                    var topics: Set[String],
+                                    val sessionTimeoutMs: Int) {
 
-  /* The list of consumers that are contained in this bucket */
-  val consumerRegistryList = new mutable.HashSet[ConsumerRegistry]
-
-  // TODO
+  var awaitingRebalance = false
+  var assignedTopicPartitions = Set.empty[TopicAndPartition]
+  var latestHeartbeat: Long = -1
 }
