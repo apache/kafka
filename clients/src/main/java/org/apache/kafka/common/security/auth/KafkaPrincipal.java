@@ -28,6 +28,7 @@ public class KafkaPrincipal implements Principal {
         this.name = name;
     }
 
+    @Override
     public boolean equals(Object object) {
         if (this == object)
             return true;
@@ -39,14 +40,17 @@ public class KafkaPrincipal implements Principal {
         return false;
     }
 
+    @Override
     public int hashCode() {
         return name.hashCode();
     }
 
+    @Override
     public String getName() {
         return name;
     }
 
+    @Override
     public String toString() {
         return name;
     }

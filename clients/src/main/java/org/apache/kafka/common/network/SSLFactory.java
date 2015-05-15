@@ -27,7 +27,7 @@ import javax.net.ssl.*;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.SecurityConfigs;
 
 
 public class SSLFactory implements Configurable {
@@ -42,8 +42,10 @@ public class SSLFactory implements Configurable {
     private SecurityStore truststore;
     private String[] cipherSuites;
     private String[] enabledProtocols;
+    private String endpointIdentification;
     private SSLContext sslContext;
-    private boolean requireClientCert;
+    private boolean needClientAuth;
+    private boolean wantClientAuth;
     private Mode mode;
 
 
@@ -53,30 +55,44 @@ public class SSLFactory implements Configurable {
 
     @Override
     public void configure(Map<String, ?> configs) throws KafkaException {
-        this.protocol =  (String) configs.get(CommonClientConfigs.SSL_PROTOCOL_CONFIG);
+        this.protocol =  (String) configs.get(SecurityConfigs.SSL_PROTOCOL_CONFIG);
+        this.provider = (String) configs.get(SecurityConfigs.SSL_PROVIDER_CONFIG);
 
-        if (configs.get(CommonClientConfigs.SSL_CIPHER_SUITES_CONFIG) != null) {
-            List<String> cipherSuitesList = (List<String>) configs.get(CommonClientConfigs.SSL_CIPHER_SUITES_CONFIG);
+        if (configs.get(SecurityConfigs.SSL_CIPHER_SUITES_CONFIG) != null) {
+            List<String> cipherSuitesList = (List<String>) configs.get(SecurityConfigs.SSL_CIPHER_SUITES_CONFIG);
             this.cipherSuites = (String[]) cipherSuitesList.toArray(new String[cipherSuitesList.size()]);
         }
 
-        if (configs.get(CommonClientConfigs.SSL_ENABLED_PROTOCOLS_CONFIG) != null) {
-            List<String> enabledProtocolsList = (List<String>) configs.get(CommonClientConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
+        if (configs.get(SecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG) != null) {
+            List<String> enabledProtocolsList = (List<String>) configs.get(SecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
             this.enabledProtocols =  (String[]) enabledProtocolsList.toArray(new String[enabledProtocolsList.size()]);
         }
 
-        this.requireClientCert = (Boolean) configs.get(CommonClientConfigs.SSL_CLIENT_REQUIRE_CERT_CONFIG);
-        this.kmfAlgorithm = (String) configs.get(CommonClientConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
-        this.tmfAlgorithm = (String) configs.get(CommonClientConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
-        if ((mode == Mode.CLIENT && requireClientCert) || (mode == Mode.SERVER)) {
-            createKeystore((String) configs.get(CommonClientConfigs.SSL_KEYSTORE_TYPE_CONFIG),
-                           (String) configs.get(CommonClientConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
-                           (String) configs.get(CommonClientConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
-                           (String) configs.get(CommonClientConfigs.SSL_KEY_PASSWORD_CONFIG));
+        if (configs.containsKey(SecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)) {
+            this.endpointIdentification = (String) configs.get(SecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
         }
-        createTruststore((String) configs.get(CommonClientConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
-                         (String) configs.get(CommonClientConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
-                         (String) configs.get(CommonClientConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+
+        if (configs.containsKey(SecurityConfigs.SSL_NEED_CLIENT_AUTH_CONFIG)) {
+            this.needClientAuth = (Boolean) configs.get(SecurityConfigs.SSL_NEED_CLIENT_AUTH_CONFIG);
+        }
+
+        if (configs.containsKey(SecurityConfigs.SSL_WANT_CLIENT_AUTH_CONFIG)) {
+            this.wantClientAuth = (Boolean) configs.get(SecurityConfigs.SSL_WANT_CLIENT_AUTH_CONFIG);
+        }
+
+        this.kmfAlgorithm = (String) configs.get(SecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
+        this.tmfAlgorithm = (String) configs.get(SecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
+
+        if (checkKeyStoreConfigs(configs)) {
+            createKeystore((String) configs.get(SecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG),
+                           (String) configs.get(SecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
+                           (String) configs.get(SecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
+                           (String) configs.get(SecurityConfigs.SSL_KEY_PASSWORD_CONFIG));
+        }
+
+        createTruststore((String) configs.get(SecurityConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
+                         (String) configs.get(SecurityConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
+                         (String) configs.get(SecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
         try {
             this.sslContext = createSSLContext();
         } catch (Exception e) {
@@ -114,41 +130,30 @@ public class SSLFactory implements Configurable {
     public SSLEngine createSSLEngine(String peerHost, int peerPort) {
         SSLEngine sslEngine = sslContext.createSSLEngine(peerHost, peerPort);
         if (cipherSuites != null) sslEngine.setEnabledCipherSuites(cipherSuites);
+        if (enabledProtocols != null) sslEngine.setEnabledProtocols(enabledProtocols);
+
         if (mode == Mode.SERVER) {
             sslEngine.setUseClientMode(false);
+            if (needClientAuth)
+                sslEngine.setNeedClientAuth(needClientAuth);
+            else if (wantClientAuth)
+                sslEngine.setNeedClientAuth(wantClientAuth);
         } else {
             sslEngine.setUseClientMode(true);
-            sslEngine.setNeedClientAuth(requireClientCert);
+            SSLParameters sslParams = sslEngine.getSSLParameters();
+            sslParams.setEndpointIdentificationAlgorithm(endpointIdentification);
+            sslEngine.setSSLParameters(sslParams);
         }
-        if (enabledProtocols != null) sslEngine.setEnabledProtocols(enabledProtocols);
         return sslEngine;
     }
 
     /**
-     * Returns a configured SSLServerSocketFactory.
-     *
-     * @return the configured SSLSocketFactory.
-     * @throws GeneralSecurityException thrown if the SSLSocketFactory could not
-     * be initialized.
-     * @throws IOException thrown if and IO error occurred while loading
-     * the server keystore.
+     * Returns a configured SSLContext.
+     * @return SSLContext.
      */
-    public SSLServerSocketFactory createSSLServerSocketFactory() throws GeneralSecurityException, IOException {
-        if (mode != Mode.SERVER) {
-            throw new IllegalStateException("Factory is in CLIENT mode");
-        }
-        return sslContext.getServerSocketFactory();
+    public SSLContext sslContext() {
+        return sslContext;
     }
-
-    /**
-     * Returns if client certificates are required or not.
-     *
-     * @return if client certificates are required or not.
-     */
-    public boolean isClientCertRequired() {
-        return requireClientCert;
-    }
-
 
     private void createKeystore(String type, String path, String password, String keyPassword) {
         if (path == null && password != null) {
@@ -171,6 +176,12 @@ public class SSLFactory implements Configurable {
         }
     }
 
+    private boolean checkKeyStoreConfigs(Map<String, ?> configs) {
+        return  configs.containsKey(SecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG) &&
+                configs.containsKey(SecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG) &&
+                configs.containsKey(SecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) &&
+                configs.containsKey(SecurityConfigs.SSL_KEY_PASSWORD_CONFIG);
+    }
 
     private class SecurityStore {
         private final String type;

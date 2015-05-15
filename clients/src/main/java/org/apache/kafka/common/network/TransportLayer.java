@@ -27,7 +27,6 @@ import java.nio.channels.SocketChannel;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 
-import javax.net.ssl.SSLSession;
 import java.security.Principal;
 
 
@@ -40,12 +39,6 @@ public interface TransportLayer {
      */
     void close() throws IOException;
 
-
-    /**
-     * Tells wheather or not this channel is open.
-     */
-    boolean isOpen();
-
     /**
      * Writes a sequence of bytes to this channel from the given buffer.
      */
@@ -55,34 +48,52 @@ public interface TransportLayer {
 
     long write(ByteBuffer[] srcs, int offset, int length) throws IOException;
 
+    /**
+     * Reads sequence of bytes from the channel to the given buffer.
+     */
     int read(ByteBuffer dst) throws IOException;
 
     long read(ByteBuffer[] dsts) throws IOException;
 
     long read(ByteBuffer[] dsts, int offset, int length) throws IOException;
 
+
+    /**
+     * Returns true if the channel has handshake and authenticaiton done.
+     */
     boolean isReady();
 
-    boolean finishConnect() throws IOException;
+    /**
+     * Retruns true if socketChannel is open.
+     */
+    boolean isOpen();
 
+    /**
+     * calls internal socketChannel.finishConnect()
+     */
+    void finishConnect() throws IOException;
+
+    /**
+     * disconnect socketChannel
+     */
+    void disconnect();
+
+    /**
+     * returns underlying socketChannel
+     */
     SocketChannel socketChannel();
 
     /**
      * Performs SSL handshake hence is a no-op for the non-secure
      * implementation
-     * @param read Unused in non-secure implementation
-     * @param write Unused in non-secure implementation
-     * @return Always return 0
      * @throws IOException
     */
-    int handshake(boolean read, boolean write) throws IOException;
+    void handshake() throws IOException;
+
 
     DataInputStream inStream() throws IOException;
 
     DataOutputStream outStream() throws IOException;
-
-    boolean flush(ByteBuffer buffer) throws IOException;
-
 
     /**
      * returns SSLSession.getPeerPrinicpal if SSLTransportLayer used
@@ -90,10 +101,8 @@ public interface TransportLayer {
      */
     Principal peerPrincipal() throws IOException;
 
-    /**
-     * returns a SSL Session after the handshake is established
-     * throws IlleagalStateException if the handshake is not established
-     * throws UnsupportedOperationException for non-secure implementation
-     */
-    SSLSession sslSession() throws IllegalStateException, UnsupportedOperationException;
+    void addInterestOps(int ops);
+
+    void removeInterestOps(int ops);
+
 }

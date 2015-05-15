@@ -13,17 +13,29 @@
 package org.apache.kafka.common.network;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Semaphore;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.util.LinkedHashMap;
+import java.nio.channels.SocketChannel;
+import java.nio.channels.SelectionKey;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLEngineResult;
 
+import org.apache.kafka.common.config.SecurityConfigs;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.test.TestSSLUtils;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestSSLUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -38,14 +50,22 @@ public class SSLSelectorTest {
     private static final int BUFFER_SIZE = 4 * 1024;
 
     private EchoServer server;
-    private Selectable selector;
+    private Selector selector;
+    private ChannelBuilder channelBuilder;
 
     @Before
     public void setup() throws Exception {
-        Map<SSLFactory.Mode, Map<String, ?>> sslConfigs = TestSSLUtils.createSSLConfigs(false, true);
-        this.server = new EchoServer(sslConfigs.get(SSLFactory.Mode.SERVER));
+        Map<SSLFactory.Mode, Map<String, Object>> sslConfigs = TestSSLUtils.createSSLConfigs(false, true);
+        Map<String, Object> sslServerConfigs = sslConfigs.get(SSLFactory.Mode.SERVER);
+        sslServerConfigs.put(SecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SecurityConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
+        this.server = new EchoServer(sslServerConfigs);
         this.server.start();
-        this.selector = new Selector(new Metrics(), new MockTime(), "MetricGroup", new LinkedHashMap<String, String>(), sslConfigs.get(SSLFactory.Mode.CLIENT));
+        Map<String, Object> sslClientConfigs = sslConfigs.get(SSLFactory.Mode.CLIENT);
+        sslClientConfigs.put(SecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SecurityConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
+
+        this.channelBuilder = new MockSSLChannelBuilder();
+        this.channelBuilder.configure(sslClientConfigs);
+        this.selector = new Selector(new Metrics(), new MockTime(), "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
     }
 
     @After
@@ -88,6 +108,23 @@ public class SSLSelectorTest {
     }
 
 
+    /**
+     * Validate that the client can intentionally disconnect and reconnect
+     */
+    @Test
+    public void testClientDisconnect() throws Exception {
+        int node = 0;
+        blockingConnect(node);
+        selector.disconnect(node);
+        selector.send(createSend(node, "hello1"));
+        selector.poll(10L);
+        assertEquals("Request should not have succeeded", 0, selector.completedSends().size());
+        assertEquals("There should be a disconnect", 1, selector.disconnected().size());
+        assertTrue("The disconnect should be from our node", selector.disconnected().contains(node));
+        blockingConnect(node);
+        assertEquals("hello2", blockingRequest(node, "hello2"));
+    }
+
      /**
      * Tests wrap BUFFER_OVERFLOW  and unwrap BUFFER_UNDERFLOW
      * @throws Exception
@@ -103,10 +140,128 @@ public class SSLSelectorTest {
         sendAndReceive(node, requestPrefix, 0, reqs);
     }
 
+    /**
+     * Test sending an empty string
+     */
+    @Test
+    public void testEmptyRequest() throws Exception {
+        int node = 0;
+        blockingConnect(node);
+        assertEquals("", blockingRequest(node, ""));
+    }
+
+    @Test
+    public void testMute() throws Exception {
+        blockingConnect(0);
+        blockingConnect(1);
+
+        selector.send(createSend(0, "hello"));
+        selector.send(createSend(1, "hi"));
+        selector.mute(1);
+
+        while (selector.completedReceives().isEmpty())
+            selector.poll(5);
+        assertEquals("We should have only one response", 1, selector.completedReceives().size());
+        assertEquals("The response should not be from the muted node", 0, selector.completedReceives().get(0).source());
+        selector.unmute(1);
+        do {
+            selector.poll(5);
+        } while (selector.completedReceives().isEmpty());
+        assertEquals("We should have only one response", 1, selector.completedReceives().size());
+        assertEquals("The response should be from the previously muted node", 1, selector.completedReceives().get(0).source());
+    }
+
+    /**
+     * Tests that SSL renegotiation initiated by the server are handled correctly by the client
+     * @throws Exception
+     */
+    @Test
+    public void testRenegotiation() throws Exception {
+        int reqs = 500;
+        int node = 0;
+
+        // create connections
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        // send echo requests and receive responses
+        int requests = 0;
+        int responses = 0;
+        int renegotiates = 0;
+        selector.send(createSend(node, node + "-" + 0));
+        requests++;
+
+        // loop until we complete all requests
+        while (responses < reqs) {
+            selector.poll(0L);
+            if (responses >= 100 && renegotiates == 0) {
+                renegotiates++;
+                server.renegotiate();
+            }
+            assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
+
+            // handle any responses we may have gotten
+            for (NetworkReceive receive : selector.completedReceives()) {
+                String[] pieces = asString(receive).split("-");
+                assertEquals("Receive text should be in the form 'conn-counter'", 2, pieces.length);
+                assertEquals("Check the source", receive.source(), Integer.parseInt(pieces[0]));
+                assertEquals("Receive ByteBuffer position should be at 0", 0, receive.payload().position());
+                assertEquals("Check the request counter", responses, Integer.parseInt(pieces[1]));
+                responses++;
+            }
+
+            // prepare new sends for the next round
+            for (int i = 0; i < selector.completedSends().size() && requests < reqs; i++, requests++) {
+                selector.send(createSend(node, node + "-" + requests));
+            }
+        }
+    }
+
+    @Test
+    public void testLongDeferredTasks() throws Exception {
+        final int fastNode = 0;
+        final int slowNode = 1;
+
+        // create connections
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        selector.connect(fastNode, addr, BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect(slowNode, addr, BUFFER_SIZE, BUFFER_SIZE);
+
+        sendAndReceive(fastNode, String.valueOf(fastNode), 0, 10);
+        sendAndReceive(slowNode, String.valueOf(slowNode), 0, 10);
+
+        Semaphore delegatedTaskSemaphore = new Semaphore(0);
+        Channel channel = selector.channelForId(slowNode);
+        MockSSLTransportLayer sslTransportLayer = (MockSSLTransportLayer) channel.transportLayer();
+
+        sslTransportLayer.delegatedTaskSemaphore = delegatedTaskSemaphore;
+        // set renegotiate flag and send a message to trigger renegotiation on the slow channel
+        server.renegotiate();
+        selector.send(createSend(slowNode, String.valueOf(slowNode) + "-" + 11));
+        while (sslTransportLayer.engine.getHandshakeStatus() != SSLEngineResult.HandshakeStatus.NEED_TASK) {
+            selector.poll(1L);
+        }
+
+        // Slow channel is now blocked on the delegated task. Check that fast channel is able to make progress
+        sendAndReceive(fastNode, String.valueOf(fastNode), 10, 20);
+
+        // Allow slow channel to continue and check that it works as expected
+        delegatedTaskSemaphore.release(10);
+        selector.send(createSend(slowNode, String.valueOf(slowNode) + "-" + 12));
+        int responses = 11;
+        while (responses <= 12) {
+            selector.poll(0L);
+            for (NetworkReceive receive : selector.completedReceives()) {
+                assertEquals(slowNode + "-" + responses, asString(receive));
+                responses++;
+            }
+        }
+    }
+
+
 
     private String blockingRequest(int node, String s) throws IOException {
         selector.send(createSend(node, s));
-        selector.poll(1000L);
         while (true) {
             selector.poll(1000L);
             for (NetworkReceive receive : selector.completedReceives())
@@ -152,4 +307,75 @@ public class SSLSelectorTest {
             }
         }
     }
+
+    // Channel builder with MockSSLTransportLayer.
+    private static class MockSSLChannelBuilder implements ChannelBuilder {
+        private SSLFactory sslFactory;
+        private ExecutorService executorService;
+        private PrincipalBuilder principalBuilder;
+
+        public void configure(Map<String, ?> configs) throws KafkaException {
+            try {
+                this.executorService = Executors.newScheduledThreadPool(1);
+                this.sslFactory = new SSLFactory(SSLFactory.Mode.CLIENT);
+                this.sslFactory.configure(configs);
+                this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
+                this.principalBuilder.configure(configs);
+            } catch (Exception e) {
+                throw new KafkaException(e);
+            }
+        }
+
+
+        @Override
+        public Channel buildChannel(SelectionKey key) throws KafkaException {
+            Channel channel = null;
+            try {
+                SocketChannel socketChannel = (SocketChannel) key.channel();
+                MockSSLTransportLayer transportLayer = new MockSSLTransportLayer(key,
+                                                                                 sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
+                                                                                                    socketChannel.socket().getPort()),
+                                                                                 executorService);
+                Authenticator authenticator = new DefaultAuthenticator(transportLayer, this.principalBuilder);
+                channel = new Channel(transportLayer, authenticator);
+            } catch (Exception e) {
+                throw new KafkaException(e);
+            }
+            return channel;
+        }
+
+        public void close()  {
+            this.executorService.shutdown();
+            this.principalBuilder.close();
+        }
+    }
+
+    private static class MockSSLTransportLayer extends SSLTransportLayer {
+        private final SSLEngine engine;
+        private boolean engineClosed;
+        private Semaphore delegatedTaskSemaphore;
+
+        public MockSSLTransportLayer(SelectionKey key, SSLEngine engine, ExecutorService executorService) throws IOException {
+            super(key, engine, executorService);
+            this.engine = engine;
+        }
+
+        @Override
+        protected Runnable delegatedTask() {
+            final Runnable task = super.delegatedTask();
+            return task == null ? null : new Runnable() {
+                @Override
+                public void run() {
+                    if (delegatedTaskSemaphore != null) {
+                        try {
+                            delegatedTaskSemaphore.acquire();
+                        } catch (InterruptedException e) {
+                        }
+                    }
+                    task.run();
+                }
+            };
+        }
+    }
+
 }

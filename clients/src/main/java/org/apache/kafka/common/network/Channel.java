@@ -26,15 +26,13 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ScatteringByteChannel;
 import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.SocketChannel;
+import java.nio.channels.SelectionKey;
 
 import java.security.Principal;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- *
- */
 
 public class Channel implements ScatteringByteChannel, GatheringByteChannel {
     private static final Logger log = LoggerFactory.getLogger(Channel.class);
@@ -54,31 +52,37 @@ public class Channel implements ScatteringByteChannel, GatheringByteChannel {
 
     /**
      * returns user principal for the session
-     * Incase of PLAINTEXT and No Authentication returns ANONYMOUS as the userPrincipal
+     * In case of PLAINTEXT and No Authentication returns ANONYMOUS as the userPrincipal
+     * If SSL used than
      * If SSL used without any SASL Authentication returns SSLSession.peerPrincipal
      */
     public Principal principal() throws IOException {
         return authenticator.principal();
     }
 
-    public int connect(boolean read, boolean write) throws IOException {
+    public void connect() throws IOException {
         if (transportLayer.isReady() && authenticator.isComplete())
-            return 0;
-        int status = 0;
+            return;
         if (!transportLayer.isReady())
-            status = transportLayer.handshake(read, write);
-        if (status == 0 && !authenticator.isComplete())
-            status = authenticator.authenticate(read, write);
-        return status;
+            transportLayer.handshake();
+        if (transportLayer.isReady() && !authenticator.isComplete())
+            authenticator.authenticate();
     }
 
+    public void disconnect() {
+        transportLayer.disconnect();
+    }
 
     public boolean isOpen() {
-        return transportLayer.isOpen();
+        return transportLayer.socketChannel().isOpen();
     }
 
     public SocketChannel socketChannel() {
         return transportLayer.socketChannel();
+    }
+
+    public TransportLayer transportLayer() {
+        return transportLayer;
     }
 
     /**
@@ -114,8 +118,24 @@ public class Channel implements ScatteringByteChannel, GatheringByteChannel {
         return transportLayer.read(dsts, offset, length);
     }
 
-    public boolean finishConnect() throws IOException {
-        return transportLayer.finishConnect();
+    public void finishConnect() throws IOException {
+        transportLayer.finishConnect();
+    }
+
+    public void addInterestOps(int ops) {
+        transportLayer.addInterestOps(ops);
+    }
+
+    public void removeInterestOps(int ops) {
+        transportLayer.removeInterestOps(ops);
+    }
+
+    public void mute() {
+        transportLayer.removeInterestOps(SelectionKey.OP_READ);
+    }
+
+    public void unmute() {
+        transportLayer.addInterestOps(SelectionKey.OP_READ);
     }
 
     public boolean isReady() {

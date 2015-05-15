@@ -21,6 +21,7 @@ import org.apache.kafka.test.TestSSLUtils;
 import org.junit.Test;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 
 
@@ -32,24 +33,26 @@ public class SSLFactoryTest {
 
     @Test
     public void testSSLFactoryConfiguration() throws Exception {
-        Map<SSLFactory.Mode, Map<String, ?>> sslConfigs = TestSSLUtils.createSSLConfigs(false, true);
-        Map<String, ?> serverSSLConfig = sslConfigs.get(SSLFactory.Mode.SERVER);
+        Map<SSLFactory.Mode, Map<String, Object>> sslConfigs = TestSSLUtils.createSSLConfigs(false, true);
+        Map<String, Object> serverSSLConfig = sslConfigs.get(SSLFactory.Mode.SERVER);
         SSLFactory sslFactory = new SSLFactory(SSLFactory.Mode.SERVER);
         sslFactory.configure(serverSSLConfig);
-        SSLEngine engine = sslFactory.createSSLEngine("localhost", 9093);
+        //host and port are hints
+        SSLEngine engine = sslFactory.createSSLEngine("localhost", 0);
         assertNotNull(engine);
         String[] expectedProtocols = {"TLSv1.2"};
-        assertEquals(expectedProtocols, engine.getEnabledProtocols());
+        assertArrayEquals(expectedProtocols, engine.getEnabledProtocols());
         assertEquals(false, engine.getUseClientMode());
     }
 
     @Test
     public void testClientMode() throws Exception {
-        Map<SSLFactory.Mode, Map<String, ?>> sslConfigs = TestSSLUtils.createSSLConfigs(false, true);
-        Map<String, ?> clientSSLConfig = sslConfigs.get(SSLFactory.Mode.CLIENT);
+        Map<SSLFactory.Mode, Map<String, Object>> sslConfigs = TestSSLUtils.createSSLConfigs(false, true);
+        Map<String, Object> clientSSLConfig = sslConfigs.get(SSLFactory.Mode.CLIENT);
         SSLFactory sslFactory = new SSLFactory(SSLFactory.Mode.CLIENT);
         sslFactory.configure(clientSSLConfig);
-        SSLEngine engine = sslFactory.createSSLEngine("localhost", 9093);
+        //host and port are hints
+        SSLEngine engine = sslFactory.createSSLEngine("localhost", 0);
         assertTrue(engine.getUseClientMode());
     }
 

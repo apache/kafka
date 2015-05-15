@@ -44,6 +44,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selector;
+import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.Records;
@@ -227,8 +228,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     metricTags);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), time.milliseconds());
-
-            NetworkClient client = new NetworkClient(new Selector(this.metrics, time, "producer", metricTags, config.values()),
+            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
+            NetworkClient client = new NetworkClient(new Selector(this.metrics, time, "producer", metricTags, channelBuilder),
                     this.metadata,
                     clientId,
                     config.getInt(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION),
@@ -550,7 +551,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void close(long timeout, TimeUnit timeUnit) {
         close(timeout, timeUnit, false);
     }
-    
+
     private void close(long timeout, TimeUnit timeUnit, boolean swallowException) {
         if (timeout < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");

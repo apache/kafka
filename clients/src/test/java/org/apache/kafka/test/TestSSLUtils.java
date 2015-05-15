@@ -17,28 +17,36 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.SecurityConfigs;
 import org.apache.kafka.common.network.SSLFactory;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.math.BigInteger;
-import java.security.GeneralSecurityException;
-import java.security.Key;
-import java.security.KeyPair;
-import java.security.KeyPairGenerator;
-import java.security.KeyStore;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
+import javax.net.ssl.TrustManagerFactory;
+import java.security.*;
 import java.security.cert.Certificate;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
-import java.security.InvalidKeyException;
-import java.security.NoSuchProviderException;
-import java.security.SignatureException;
-import java.security.cert.CertificateEncodingException;
-import javax.security.auth.x500.X500Principal;
-import org.bouncycastle.x509.X509V1CertificateGenerator;
+
+import org.bouncycastle.asn1.x500.X500Name;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.cert.X509CertificateHolder;
+import org.bouncycastle.cert.X509v1CertificateBuilder;
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
+import org.bouncycastle.crypto.params.AsymmetricKeyParameter;
+import org.bouncycastle.crypto.util.PrivateKeyFactory;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.operator.ContentSigner;
+import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
+import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
+import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder;
+
+
+
+
 
 import java.util.Date;
 import java.util.HashMap;
@@ -63,24 +71,28 @@ public class TestSSLUtils {
      */
     public static X509Certificate generateCertificate(String dn, KeyPair pair,
                                                       int days, String algorithm)
-        throws CertificateEncodingException, InvalidKeyException, IllegalStateException,
-               NoSuchProviderException, NoSuchAlgorithmException, SignatureException {
-        Date from = new Date();
-        Date to = new Date(from.getTime() + days * 86400000L);
-        BigInteger sn = new BigInteger(64, new SecureRandom());
-        KeyPair keyPair = pair;
-        X509V1CertificateGenerator certGen = new X509V1CertificateGenerator();
-        X500Principal  dnName = new X500Principal(dn);
+        throws  CertificateException {
 
-        certGen.setSerialNumber(sn);
-        certGen.setIssuerDN(dnName);
-        certGen.setNotBefore(from);
-        certGen.setNotAfter(to);
-        certGen.setSubjectDN(dnName);
-        certGen.setPublicKey(keyPair.getPublic());
-        certGen.setSignatureAlgorithm(algorithm);
-        X509Certificate cert = certGen.generate(pair.getPrivate());
-        return cert;
+        try {
+            Security.addProvider(new BouncyCastleProvider());
+            AlgorithmIdentifier sigAlgId = new DefaultSignatureAlgorithmIdentifierFinder().find(algorithm);
+            AlgorithmIdentifier digAlgId = new DefaultDigestAlgorithmIdentifierFinder().find(sigAlgId);
+            AsymmetricKeyParameter privateKeyAsymKeyParam = PrivateKeyFactory.createKey(pair.getPrivate().getEncoded());
+            SubjectPublicKeyInfo subPubKeyInfo = SubjectPublicKeyInfo.getInstance(pair.getPublic().getEncoded());
+            ContentSigner sigGen = new BcRSAContentSignerBuilder(sigAlgId, digAlgId).build(privateKeyAsymKeyParam);
+            X500Name name = new X500Name(dn);
+            Date from = new Date();
+            Date to = new Date(from.getTime() + days * 86400000L);
+            BigInteger sn = new BigInteger(64, new SecureRandom());
+
+            X509v1CertificateBuilder v1CertGen = new X509v1CertificateBuilder(name, sn, from, to, name, subPubKeyInfo);
+            X509CertificateHolder certificateHolder = v1CertGen.build(sigGen);
+            return new JcaX509CertificateConverter().setProvider("BC").getCertificate(certificateHolder);
+        } catch (CertificateException ce) {
+            throw ce;
+        } catch (Exception e) {
+            throw new CertificateException(e);
+        }
     }
 
     public static KeyPair generateKeyPair(String algorithm) throws NoSuchAlgorithmException {
@@ -163,33 +175,33 @@ public class TestSSLUtils {
     public static Map<String, Object> createSSLConfig(SSLFactory.Mode mode, File keyStoreFile, String password, String keyPassword,
                                                       File trustStoreFile, String trustStorePassword, boolean useClientCert) {
         Map<String, Object> sslConfigs = new HashMap<String, Object>();
-        sslConfigs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL"); // kafka security protocol
-        sslConfigs.put(CommonClientConfigs.SSL_PROTOCOL_CONFIG, "TLS"); // protocol to create SSLContext
+        sslConfigs.put(SecurityConfigs.SECURITY_PROTOCOL_CONFIG, "SSL"); // kafka security protocol
+        sslConfigs.put(SecurityConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2"); // protocol to create SSLContext
 
         if (mode == SSLFactory.Mode.SERVER || (mode == SSLFactory.Mode.CLIENT && keyStoreFile != null)) {
-            sslConfigs.put(CommonClientConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath());
-            sslConfigs.put(CommonClientConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
-            sslConfigs.put(CommonClientConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, "SunX509");
-            sslConfigs.put(CommonClientConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, password);
-            sslConfigs.put(CommonClientConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
+            sslConfigs.put(SecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath());
+            sslConfigs.put(SecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
+            sslConfigs.put(SecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
+            sslConfigs.put(SecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, password);
+            sslConfigs.put(SecurityConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
         }
 
-        sslConfigs.put(CommonClientConfigs.SSL_CLIENT_REQUIRE_CERT_CONFIG, useClientCert);
-        sslConfigs.put(CommonClientConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
-        sslConfigs.put(CommonClientConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
-        sslConfigs.put(CommonClientConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
-        sslConfigs.put(CommonClientConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, "SunX509");
+        sslConfigs.put(SecurityConfigs.SSL_CLIENT_REQUIRE_CERT_CONFIG, useClientCert);
+        sslConfigs.put(SecurityConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
+        sslConfigs.put(SecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
+        sslConfigs.put(SecurityConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
+        sslConfigs.put(SecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
 
         List<String> enabledProtocols  = new ArrayList<String>();
         enabledProtocols.add("TLSv1.2");
-        sslConfigs.put(CommonClientConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
+        sslConfigs.put(SecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
 
         return sslConfigs;
     }
 
-    public static Map<SSLFactory.Mode, Map<String, ?>> createSSLConfigs(boolean useClientCert, boolean trustStore)
+    public static Map<SSLFactory.Mode, Map<String, Object>> createSSLConfigs(boolean useClientCert, boolean trustStore)
         throws IOException, GeneralSecurityException {
-        Map<SSLFactory.Mode, Map<String, ?>> sslConfigs = new HashMap<SSLFactory.Mode, Map<String, ?>>();
+        Map<SSLFactory.Mode, Map<String, Object>> sslConfigs = new HashMap<SSLFactory.Mode, Map<String, Object>>();
         Map<String, X509Certificate> certs = new HashMap<String, X509Certificate>();
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         File clientKeyStoreFile = null;

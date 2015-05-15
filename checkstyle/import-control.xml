@@ -52,16 +52,15 @@
 		</subpackage>
 
 		<subpackage name="network">
-      <allow pkg="org.apache.kafka.common.security.auth" />
-      <allow pkg="org.apache.kafka.clients.CommonClientConfigs" />
-      <allow pkg="org.apache.kafka.common.protocol" />
-      <allow pkg="org.apache.kafka.clients" />
+      		<allow pkg="org.apache.kafka.common.security.auth" />
+      		<allow pkg="org.apache.kafka.common.protocol" />
+      		<allow pkg="org.apache.kafka.common.config" />
 			<allow pkg="org.apache.kafka.common.metrics" />
 		</subpackage>
 
-    <subpackage name="security">
-      <allow pkg="org.apache.kafka.common.network" />
-    </subpackage>
+    	<subpackage name="security">
+      		<allow pkg="org.apache.kafka.common.network" />
+    	</subpackage>
 
 		<subpackage name="protocol">
 			<allow pkg="org.apache.kafka.common.errors" />
@@ -108,7 +107,7 @@
 
 	<subpackage name="test">
 		<allow pkg="org.apache.kafka" />
-    <allow pkg="org.bouncycastle.x509" />
+    	<allow pkg="org.bouncycastle" />
 	</subpackage>
 
 </import-control>

@@ -26,8 +26,8 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.nio.channels.SelectionKey;
 
-import javax.net.ssl.SSLSession;
 import java.security.Principal;
 
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -37,14 +37,16 @@ import org.slf4j.LoggerFactory;
 
 public class PlainTextTransportLayer implements TransportLayer {
     private static final Logger log = LoggerFactory.getLogger(PlainTextTransportLayer.class);
-    SocketChannel socketChannel = null;
-    DataInputStream inStream = null;
-    DataOutputStream outStream = null;
+    private SelectionKey key;
+    private SocketChannel socketChannel;
+    private DataInputStream inStream;
+    private DataOutputStream outStream;
+    private final Principal principal = new KafkaPrincipal("ANONYMOUS");
 
-    public PlainTextTransportLayer(SocketChannel socketChannel) throws IOException {
-        this.socketChannel = socketChannel;
+    public PlainTextTransportLayer(SelectionKey key) throws IOException {
+        this.key = key;
+        this.socketChannel = (SocketChannel) key.channel();
     }
-
 
     /**
      * Closes this channel
@@ -56,26 +58,8 @@ public class PlainTextTransportLayer implements TransportLayer {
         socketChannel.close();
     }
 
-    /**
-    * Flushes the buffer to the network, non blocking
-    * @param buf ByteBuffer
-    * @return boolean true if the buffer has been emptied out, false otherwise
-    * @throws IOException
-    */
-    public boolean flush(ByteBuffer buf) throws IOException {
-        int remaining = buf.remaining();
-        if (remaining > 0) {
-            int written = socketChannel.write(buf);
-            return written >= remaining;
-        }
-        return true;
-    }
-
-    /**
-     * Tells wheter or not this channel is open.
-     */
-    public boolean isOpen() {
-        return socketChannel.isOpen();
+    public void disconnect() {
+        key.cancel();
     }
 
     /**
@@ -113,21 +97,20 @@ public class PlainTextTransportLayer implements TransportLayer {
         return socketChannel;
     }
 
-    public boolean finishConnect() throws IOException {
-        return socketChannel.finishConnect();
+    public void finishConnect() throws IOException {
+        socketChannel.finishConnect();
+        int ops = key.interestOps();
+        ops &= ~SelectionKey.OP_CONNECT;
+        ops |= SelectionKey.OP_READ;
+        key.interestOps(ops);
     }
 
     /**
      * Performs SSL handshake hence is a no-op for the non-secure
      * implementation
-     * @param read Unused in non-secure implementation
-     * @param write Unused in non-secure implementation
-     * @return Always return 0
      * @throws IOException
     */
-    public int handshake(boolean read, boolean write) throws IOException {
-        return 0;
-    }
+    public void handshake() throws IOException {}
 
     public DataInputStream inStream() throws IOException {
         if (inStream == null)
@@ -142,11 +125,15 @@ public class PlainTextTransportLayer implements TransportLayer {
     }
 
     public Principal peerPrincipal() throws IOException {
-        return new KafkaPrincipal("ANONYMOUS");
+        return principal;
     }
 
-    public SSLSession sslSession() throws IllegalStateException, UnsupportedOperationException {
-        throw new UnsupportedOperationException("sslSession not supported for PlainTextTransportLayer");
+    public void addInterestOps(int ops) {
+        key.interestOps(key.interestOps() | ops);
+    }
+
+    public void removeInterestOps(int ops) {
+        key.interestOps(key.interestOps() & ~ops);
     }
 
 }

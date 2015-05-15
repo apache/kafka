@@ -354,8 +354,8 @@ project(':clients') {
     compile "org.slf4j:slf4j-api:1.7.6"
     compile 'org.xerial.snappy:snappy-java:1.1.1.6'
     compile 'net.jpountz.lz4:lz4:1.2.0'
-    compile 'org.bouncycastle:bcprov-jdk16:1.46'
 
+    testCompile 'org.bouncycastle:bcpkix-jdk15on:1.52'
     testCompile 'com.novocode:junit-interface:0.9'
     testRuntime "$slf4jlog4j"
   }
@@ -385,7 +385,7 @@ project(':clients') {
   }
 
   checkstyle {
-     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }

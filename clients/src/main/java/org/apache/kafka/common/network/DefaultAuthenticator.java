@@ -25,31 +25,39 @@ import org.apache.kafka.common.KafkaException;
 
 public class DefaultAuthenticator implements Authenticator {
 
-    TransportLayer transportLayer;
-    PrincipalBuilder principalBuilder;
-    Principal principal;
+    private TransportLayer transportLayer;
+    private PrincipalBuilder principalBuilder;
+    private Principal principal;
 
     public DefaultAuthenticator(TransportLayer transportLayer, PrincipalBuilder principalBuilder) {
         this.transportLayer = transportLayer;
         this.principalBuilder = principalBuilder;
     }
 
-    /*
+    /**
      * No-Op for default authenticator
      */
-    public int authenticate(boolean read, boolean write) throws IOException {
-        return 0;
-    }
+    public void authenticate() throws IOException {}
 
+    /**
+     * Constructs Principal using configured principalBuilder.
+     * @return Principal
+     * @throws KafkaException
+     */
     public Principal principal() throws KafkaException {
-        if (principal != null)
+        if (principal == null)
             principal = principalBuilder.buildPrincipal(transportLayer, this);
         return principal;
     }
 
     public void close() throws IOException {}
 
+    /**
+     * DefaultAuthenticator doesn't implement any additional authentication.
+     * @returns true
+     */
     public boolean isComplete() {
         return true;
     }
+
 }

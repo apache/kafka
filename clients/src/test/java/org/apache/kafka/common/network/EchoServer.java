@@ -12,9 +12,11 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.SecurityConfigs;
 import org.apache.kafka.common.protocol.SecurityProtocol;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSocket;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -24,7 +26,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Map;
 import java.util.List;
-
+import java.util.concurrent.atomic.AtomicBoolean;
 
 
 /**
@@ -37,14 +39,16 @@ class EchoServer extends Thread {
     private final List<Socket> sockets;
     private SecurityProtocol protocol = SecurityProtocol.PLAINTEXT;
     private SSLFactory sslFactory;
+    private final AtomicBoolean renegotiate = new AtomicBoolean();
 
     public EchoServer(Map<String, ?> configs) throws Exception {
-        this.protocol =  configs.containsKey(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG) ?
-            SecurityProtocol.valueOf((String) configs.get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG)) : SecurityProtocol.PLAINTEXT;
+        this.protocol =  configs.containsKey(SecurityConfigs.SECURITY_PROTOCOL_CONFIG) ?
+            SecurityProtocol.valueOf((String) configs.get(SecurityConfigs.SECURITY_PROTOCOL_CONFIG)) : SecurityProtocol.PLAINTEXT;
         if (protocol == SecurityProtocol.SSL) {
             this.sslFactory = new SSLFactory(SSLFactory.Mode.SERVER);
             this.sslFactory.configure(configs);
-            this.serverSocket = sslFactory.createSSLServerSocketFactory().createServerSocket(0);
+            SSLContext sslContext = this.sslFactory.sslContext();
+            this.serverSocket = sslContext.getServerSocketFactory().createServerSocket(0);
         } else {
             this.serverSocket = new ServerSocket(0);
         }
@@ -53,6 +57,9 @@ class EchoServer extends Thread {
         this.sockets = Collections.synchronizedList(new ArrayList<Socket>());
     }
 
+    public void renegotiate() {
+        renegotiate.set(true);
+    }
 
     @Override
     public void run() {
@@ -68,6 +75,10 @@ class EchoServer extends Thread {
                             DataOutputStream output = new DataOutputStream(socket.getOutputStream());
                             while (socket.isConnected() && !socket.isClosed()) {
                                 int size = input.readInt();
+                                if (renegotiate.get()) {
+                                    renegotiate.set(false);
+                                    ((SSLSocket) socket).startHandshake();
+                                }
                                 byte[] bytes = new byte[size];
                                 input.readFully(bytes);
                                 output.writeInt(size);

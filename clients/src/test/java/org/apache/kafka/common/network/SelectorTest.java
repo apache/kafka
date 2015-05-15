@@ -24,6 +24,7 @@ import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.config.SecurityConfigs;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -40,13 +41,17 @@ public class SelectorTest {
 
     private EchoServer server;
     private Selectable selector;
+    private ChannelBuilder channelBuilder;
 
     @Before
     public void setup() throws Exception {
-        Map<String, ?> configs = new HashMap<String, Object>();
+        Map<String, Object> configs = new HashMap<String, Object>();
+        configs.put(SecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SecurityConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         this.server = new EchoServer(configs);
         this.server.start();
-        this.selector = new Selector(new Metrics(), new MockTime() , "MetricGroup", new LinkedHashMap<String, String>(), configs);
+        this.channelBuilder = new PlainTextChannelBuilder();
+        this.channelBuilder.configure(configs);
+        this.selector = new Selector(new Metrics(), new MockTime() , "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
     }
 
     @After
@@ -196,6 +201,17 @@ public class SelectorTest {
         assertEquals(big, blockingRequest(node, big));
     }
 
+    @Test
+    public void testShortMessageSequence() throws Exception {
+        int bufferSize = 512 * 1024;
+        int node = 0;
+        int reqs = 50;
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
+        String requestPrefix = "hello-wordl";
+        sendAndReceive(node, requestPrefix, 0, reqs);
+    }
+
     /**
      * Test sending an empty string
      */
@@ -259,6 +275,28 @@ public class SelectorTest {
 
     private String asString(NetworkReceive receive) {
         return new String(Utils.toArray(receive.payload()));
+    }
+
+    private void sendAndReceive(int node, String requestPrefix, int startIndex, int endIndex) throws Exception {
+        int requests = startIndex;
+        int responses = startIndex;
+        selector.send(createSend(node, requestPrefix + "-" + startIndex));
+        requests++;
+        while (responses < endIndex) {
+            // do the i/o
+            selector.poll(0L);
+            assertEquals("No disconnects should have occurred.", 0, selector.disconnected().size());
+
+            // handle requests and responses of the fast node
+            for (NetworkReceive receive : selector.completedReceives()) {
+                assertEquals(requestPrefix + "-" + responses, asString(receive));
+                responses++;
+            }
+
+            for (int i = 0; i < selector.completedSends().size() && requests < endIndex; i++, requests++) {
+                selector.send(createSend(node, requestPrefix + "-" + requests));
+            }
+        }
     }
 
 

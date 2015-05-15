@@ -19,7 +19,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.config.SecurityConfigs;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -278,20 +278,23 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.CLASS,
                                         Importance.HIGH,
                                         VALUE_DESERIALIZER_CLASS_DOC)
-                                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, Type.STRING, SecurityProtocol.PLAINTEXT.toString(), Importance.MEDIUM, CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-                                .define(CommonClientConfigs.SSL_PROTOCOL_CONFIG, Type.STRING, "TLS", Importance.MEDIUM, CommonClientConfigs.SSL_PROTOCOL_DOC)
-                                .define(CommonClientConfigs.SSL_CIPHER_SUITES_CONFIG, Type.LIST, Importance.LOW, CommonClientConfigs.SSL_CIPHER_SUITES_DOC, false)
-                                .define(CommonClientConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Type.LIST, "TLSv1.2, TLSv1.1, TLSv1", Importance.MEDIUM, CommonClientConfigs.SSL_ENABLED_PROTOCOLS_DOC)
-                                .define(CommonClientConfigs.SSL_KEYSTORE_TYPE_CONFIG, Type.STRING, "JKS", Importance.MEDIUM, CommonClientConfigs.SSL_KEYSTORE_TYPE_DOC)
-                                .define(CommonClientConfigs.SSL_KEYSTORE_LOCATION_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_KEYSTORE_LOCATION_DOC, false)
-                                .define(CommonClientConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_KEYSTORE_PASSWORD_DOC, false)
-                                .define(CommonClientConfigs.SSL_KEY_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_KEY_PASSWORD_DOC, false)
-                                .define(CommonClientConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, Type.STRING, "JKS", Importance.MEDIUM, CommonClientConfigs.SSL_TRUSTSTORE_TYPE_DOC)
-                                .define(CommonClientConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_TRUSTSTORE_LOCATION_DOC, false)
-                                .define(CommonClientConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, CommonClientConfigs.SSL_TRUSTSTORE_PASSWORD_DOC, false)
-                                .define(CommonClientConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, Type.STRING, "SunX509", Importance.LOW, CommonClientConfigs.SSL_KEYMANAGER_ALGORITHM_DOC)
-                                .define(CommonClientConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, Type.STRING, "SunX509", Importance.LOW, CommonClientConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC)
-                                .define(CommonClientConfigs.SSL_CLIENT_REQUIRE_CERT_CONFIG, Type.BOOLEAN, false, Importance.MEDIUM, CommonClientConfigs.SSL_CLIENT_REQUIRE_CERT_DOC);
+                                .define(SecurityConfigs.SECURITY_PROTOCOL_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SECURITY_PROTOCOL, Importance.MEDIUM, SecurityConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(SecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Type.CLASS, SecurityConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS, Importance.LOW, SecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC)
+                                .define(SecurityConfigs.SSL_PROTOCOL_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_PROTOCOL, Importance.MEDIUM, SecurityConfigs.SSL_PROTOCOL_DOC)
+                                .define(SecurityConfigs.SSL_PROVIDER_CONFIG, Type.STRING, Importance.MEDIUM, SecurityConfigs.SSL_PROVIDER_DOC, false)
+                                .define(SecurityConfigs.SSL_CIPHER_SUITES_CONFIG, Type.LIST, Importance.LOW, SecurityConfigs.SSL_CIPHER_SUITES_DOC, false)
+                                .define(SecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Type.LIST, SecurityConfigs.DEFAULT_ENABLED_PROTOCOLS, Importance.MEDIUM, SecurityConfigs.SSL_ENABLED_PROTOCOLS_DOC)
+                                .define(SecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_KEYSTORE_TYPE, Importance.MEDIUM, SecurityConfigs.SSL_KEYSTORE_TYPE_DOC)
+                                .define(SecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG, Type.STRING, Importance.HIGH, SecurityConfigs.SSL_KEYSTORE_LOCATION_DOC, false)
+                                .define(SecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, SecurityConfigs.SSL_KEYSTORE_PASSWORD_DOC, false)
+                                .define(SecurityConfigs.SSL_KEY_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, SecurityConfigs.SSL_KEY_PASSWORD_DOC, false)
+                                .define(SecurityConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE, Importance.MEDIUM, SecurityConfigs.SSL_TRUSTSTORE_TYPE_DOC)
+                                .define(SecurityConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_TRUSTSTORE_LOCATION, Importance.HIGH, SecurityConfigs.SSL_TRUSTSTORE_LOCATION_DOC)
+                                .define(SecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_TRUSTSTORE_PASSWORD, Importance.HIGH, SecurityConfigs.SSL_TRUSTSTORE_PASSWORD_DOC)
+                                .define(SecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, Importance.LOW, SecurityConfigs.SSL_KEYMANAGER_ALGORITHM_DOC)
+                                .define(SecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, Importance.LOW, SecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC)
+                                .define(SecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, Type.STRING, Importance.LOW, SecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC, false);
+
     }
 
     public static Map<String, Object> addDeserializerToConfig(Map<String, Object> configs,

@@ -44,6 +44,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.network.Selector;
+import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -471,8 +472,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             String metricGrpPrefix = "consumer";
             Map<String, String> metricsTags = new LinkedHashMap<String, String>();
             metricsTags.put("client-id", clientId);
-
-            this.client = new NetworkClient(new Selector(metrics, time, metricGrpPrefix, metricsTags, config.values()),
+            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
+            this.client = new NetworkClient(new Selector(metrics, time, metricGrpPrefix, metricsTags, channelBuilder),
                     this.metadata,
                     clientId,
                     100, // a fixed large enough value will suffice

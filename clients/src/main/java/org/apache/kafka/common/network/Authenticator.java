@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.network;
 
-/*
+/**
  * Authentication for Channel
  */
 
@@ -41,10 +41,10 @@ public interface Authenticator {
     Principal principal() throws KafkaException;
 
     /**
-     * Does authentication and returns SelectionKey.OP if further communication needed
-     * If no further authentication needs to be done return 0.
+     * Implements any authentication mechanism. Use transportLayer to read or write tokens.
+     * If no further authentication needs to be done returns.
      */
-    int authenticate(boolean read, boolean write) throws IOException;
+    void authenticate() throws IOException;
 
     /**
      * returns true if authentication is complete otherwise returns false;

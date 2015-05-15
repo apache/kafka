@@ -16,8 +16,14 @@ import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.apache.kafka.common.protocol.SecurityProtocol;
+import org.apache.kafka.common.network.ChannelBuilder;
+import org.apache.kafka.common.network.SSLChannelBuilder;
+import org.apache.kafka.common.network.PlainTextChannelBuilder;
+import org.apache.kafka.common.config.SecurityConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +67,25 @@ public class ClientUtils {
                 log.error("Failed to close " + name, t);
             }
         }
+    }
+
+    /**
+     * @param configs client/server configs
+     * returns ChannelBuilder configured channelBuilder based on the configs.
+     */
+    public static ChannelBuilder createChannelBuilder(Map<String, ?> configs) {
+        ChannelBuilder channelBuilder = null;
+        SecurityProtocol securityProtocol = configs.containsKey(SecurityConfigs.SECURITY_PROTOCOL_CONFIG) ?
+            SecurityProtocol.valueOf((String) configs.get(SecurityConfigs.SECURITY_PROTOCOL_CONFIG)) : SecurityProtocol.PLAINTEXT;
+
+        if (securityProtocol == SecurityProtocol.SSL) {
+            channelBuilder = new SSLChannelBuilder();
+        } else {
+            channelBuilder = new PlainTextChannelBuilder();
+        }
+
+        channelBuilder.configure(configs);
+        return channelBuilder;
     }
 
 }
