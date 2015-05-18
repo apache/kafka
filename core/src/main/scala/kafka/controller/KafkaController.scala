@@ -1112,6 +1112,10 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
         controllerElector.elect
       }
     }
+
+    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+      //no-op handleSessionEstablishmentError in KafkaHealthCheck should System.exit and log the error.
+    }
   }
 
   private def checkAndTriggerPartitionRebalance(): Unit = {
