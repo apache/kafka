@@ -66,25 +66,21 @@ private[coordinator] object PartitionAssignor {
  * The assignment will be:
  * C0 -> [t0p0, t0p2, t1p1]
  * C1 -> [t0p1, t1p0, t1p2]
- *
- * roundrobin assignment is allowed only if the set of subscribed topics is identical for every consumer within the group.
  */
 private[coordinator] class RoundRobinAssignor extends PartitionAssignor {
   override def assign(topicsPerConsumer: Map[String, Set[String]],
                       partitionsPerTopic: Map[String, Int]): Map[String, Set[TopicAndPartition]] = {
-    val consumersHaveIdenticalTopics = topicsPerConsumer.values.toSet.size == 1
-    require(consumersHaveIdenticalTopics,
-      "roundrobin assignment is allowed only if all consumers in the group subscribe to the same topics")
     val consumers = topicsPerConsumer.keys.toSeq.sorted
-    val topics = topicsPerConsumer.head._2
-    val consumerAssignor = CoreUtils.circularIterator(consumers)
+    val topics = topicsPerConsumer.values.flatten.toSeq.distinct.sorted
 
-    val allTopicPartitions = topics.toSeq.flatMap { topic =>
+    val allTopicPartitions = topics.flatMap { topic =>
       val numPartitionsForTopic = partitionsPerTopic(topic)
       (0 until numPartitionsForTopic).map(partition => TopicAndPartition(topic, partition))
     }
 
+    var consumerAssignor = CoreUtils.circularIterator(consumers)
     val consumerPartitionPairs = allTopicPartitions.map { topicAndPartition =>
+      consumerAssignor = consumerAssignor.dropWhile(consumerId => !topicsPerConsumer(consumerId).contains(topicAndPartition.topic))
       val consumer = consumerAssignor.next()
       (consumer, topicAndPartition)
     }

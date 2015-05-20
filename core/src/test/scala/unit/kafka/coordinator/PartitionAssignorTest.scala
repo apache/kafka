@@ -259,8 +259,8 @@ class PartitionAssignorTest extends JUnitSuite {
     assertEquals(expected, actual)
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
-  def testRoundRobinAssignorCannotAssignWithMixedTopics() {
+  @Test
+  def testRoundRobinAssignorMultipleConsumersMixedTopics() {
     val topic1 = "topic1"
     val topic2 = "topic2"
     val consumer1 = "consumer1"
@@ -271,7 +271,12 @@ class PartitionAssignorTest extends JUnitSuite {
     val assignor = new RoundRobinAssignor()
     val topicsPerConsumer = Map(consumer1 -> Set(topic1), consumer2 -> Set(topic1, topic2), consumer3 -> Set(topic1))
     val partitionsPerTopic = Map(topic1 -> numTopic1Partitions, topic2 -> numTopic2Partitions)
-    assignor.assign(topicsPerConsumer, partitionsPerTopic)
+    val actual = assignor.assign(topicsPerConsumer, partitionsPerTopic)
+    val expected = Map(
+      consumer1 -> topicAndPartitions(Map(topic1 -> Set(0))),
+      consumer2 -> topicAndPartitions(Map(topic1 -> Set(1), topic2 -> Set(0, 1))),
+      consumer3 -> topicAndPartitions(Map(topic1 -> Set(2))))
+    assertEquals(expected, actual)
   }
 
   @Test
