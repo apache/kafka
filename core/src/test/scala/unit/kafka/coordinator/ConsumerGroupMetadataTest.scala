@@ -24,12 +24,12 @@ import org.scalatest.junit.JUnitSuite
 /**
  * Test group state transitions
  */
-class GroupTest extends JUnitSuite {
-  var group: Group = null
+class ConsumerGroupMetadataTest extends JUnitSuite {
+  var group: ConsumerGroupMetadata = null
 
   @Before
   def setUp() {
-    group = new Group("test", "range")
+    group = new ConsumerGroupMetadata("test", "range")
   }
 
   @Test
@@ -161,7 +161,7 @@ class GroupTest extends JUnitSuite {
     group.transitionTo(Rebalancing)
   }
 
-  private def assertState(group: Group, targetState: GroupState) {
+  private def assertState(group: ConsumerGroupMetadata, targetState: GroupState) {
     val states: Set[GroupState] = Set(Stable, PreparingRebalance, Rebalancing, Dead)
     val otherStates = states - targetState
     otherStates.foreach { otherState =>

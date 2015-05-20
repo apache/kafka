@@ -63,7 +63,7 @@ private[coordinator] case object Dead extends GroupState { val state: Byte = 4 }
 
 
 /**
- * A group contains the following metadata:
+ * Group contains the following metadata:
  *
  *  Membership metadata:
  *  1. Consumers registered in this group
@@ -74,8 +74,8 @@ private[coordinator] case object Dead extends GroupState { val state: Byte = 4 }
  *  2. generation id
  */
 @nonthreadsafe
-private[coordinator] class Group(val groupId: String,
-                                 val partitionAssignmentStrategy: String) {
+private[coordinator] class ConsumerGroupMetadata(val groupId: String,
+                                                 val partitionAssignmentStrategy: String) {
 
   private val validPreviousStates: Map[GroupState, Set[GroupState]] =
     Map(Dead -> Set(PreparingRebalance),
@@ -83,7 +83,7 @@ private[coordinator] class Group(val groupId: String,
       PreparingRebalance -> Set(Stable),
       Rebalancing -> Set(PreparingRebalance))
 
-  private val consumers = new mutable.HashMap[String, Consumer]
+  private val consumers = new mutable.HashMap[String, ConsumerMetadata]
   private var state: GroupState = Stable
   var generationId = 0
 
@@ -91,7 +91,7 @@ private[coordinator] class Group(val groupId: String,
   def has(consumerId: String) = consumers.contains(consumerId)
   def get(consumerId: String) = consumers(consumerId)
 
-  def add(consumerId: String, consumer: Consumer) {
+  def add(consumerId: String, consumer: ConsumerMetadata) {
     consumers.put(consumerId, consumer)
   }
 
@@ -105,9 +105,9 @@ private[coordinator] class Group(val groupId: String,
 
   def topics = consumers.values.flatMap(_.topics).toSet
 
-  def allConsumersRejoined = consumers.values.forall(_.awaitingRebalance)
+  def notYetRejoinedConsumers = consumers.values.filter(_.awaitingRebalanceCallback == null).toList
 
-  def notYetRejoinedConsumers = consumers.values.filter(!_.awaitingRebalance).toList
+  def allConsumers = consumers.values.toList
 
   def rebalanceTimeout = consumers.values.foldLeft(0) {(timeout, consumer) =>
     timeout.max(consumer.sessionTimeoutMs)

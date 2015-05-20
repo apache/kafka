@@ -48,7 +48,6 @@ class ConsumerCoordinator(val config: KafkaConfig,
   private val isActive = new AtomicBoolean(false)
 
   private var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = null
-  private var joinGroupPurgatory: DelayedOperationPurgatory[DelayedJoinGroup] = null
   private var rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance] = null
   private var coordinatorMetadata: CoordinatorMetadata = null
 
@@ -63,7 +62,6 @@ class ConsumerCoordinator(val config: KafkaConfig,
   def startup() {
     info("Starting up.")
     heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
-    joinGroupPurgatory = new DelayedOperationPurgatory[DelayedJoinGroup]("JoinGroup", config.brokerId)
     rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", config.brokerId)
     coordinatorMetadata = new CoordinatorMetadata(config, zkClient, maybePrepareRebalance)
     isActive.set(true)
@@ -79,7 +77,6 @@ class ConsumerCoordinator(val config: KafkaConfig,
     isActive.set(false)
     coordinatorMetadata.shutdown()
     heartbeatPurgatory.shutdown()
-    joinGroupPurgatory.shutdown()
     rebalancePurgatory.shutdown()
     info("Shutdown complete.")
   }
@@ -113,7 +110,7 @@ class ConsumerCoordinator(val config: KafkaConfig,
     }
   }
 
-  private def doJoinGroup(group: Group,
+  private def doJoinGroup(group: ConsumerGroupMetadata,
                           consumerId: String,
                           topics: Set[String],
                           sessionTimeoutMs: Int,
@@ -154,14 +151,10 @@ class ConsumerCoordinator(val config: KafkaConfig,
           }
         }
 
-        consumer.awaitingRebalance = true
-
-        val delayedJoinGroup = new DelayedJoinGroup(this, group, consumer, 2 * MaxSessionTimeoutMs, responseCallback)
-        val consumerGroupKey = ConsumerGroupKey(group.groupId)
-        joinGroupPurgatory.tryCompleteElseWatch(delayedJoinGroup, Seq(consumerGroupKey))
+        consumer.awaitingRebalanceCallback = responseCallback
 
         if (group.is(PreparingRebalance))
-          rebalancePurgatory.checkAndComplete(consumerGroupKey)
+          rebalancePurgatory.checkAndComplete(ConsumerGroupKey(group.groupId))
       }
     }
   }
@@ -199,34 +192,36 @@ class ConsumerCoordinator(val config: KafkaConfig,
   /**
    * Complete existing DelayedHeartbeats for the given consumer and schedule the next one
    */
-  private def completeAndScheduleNextHeartbeatExpiration(group: Group, consumer: Consumer) {
+  private def completeAndScheduleNextHeartbeatExpiration(group: ConsumerGroupMetadata, consumer: ConsumerMetadata) {
+    // complete current heartbeat expectation
     consumer.latestHeartbeat = SystemTime.milliseconds
     val consumerKey = ConsumerKey(consumer.groupId, consumer.consumerId)
-    // TODO: can we fix DelayedOperationPurgatory to remove keys in watchersForKey with empty watchers list?
     heartbeatPurgatory.checkAndComplete(consumerKey)
-    val heartbeatDeadline = consumer.latestHeartbeat + consumer.sessionTimeoutMs
-    val delayedHeartbeat = new DelayedHeartbeat(this, group, consumer, heartbeatDeadline, consumer.sessionTimeoutMs)
+
+    // reschedule the next heartbeat expiration deadline
+    val newHeartbeatDeadline = consumer.latestHeartbeat + consumer.sessionTimeoutMs
+    val delayedHeartbeat = new DelayedHeartbeat(this, group, consumer, newHeartbeatDeadline, consumer.sessionTimeoutMs)
     heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(consumerKey))
   }
 
   private def addConsumer(consumerId: String,
                           topics: Set[String],
                           sessionTimeoutMs: Int,
-                          group: Group) = {
-    val consumer = new Consumer(consumerId, group.groupId, topics, sessionTimeoutMs)
+                          group: ConsumerGroupMetadata) = {
+    val consumer = new ConsumerMetadata(consumerId, group.groupId, topics, sessionTimeoutMs)
     val topicsToBind = topics -- group.topics
     group.add(consumer.consumerId, consumer)
     coordinatorMetadata.bindGroupToTopics(group.groupId, topicsToBind)
     consumer
   }
 
-  private def removeConsumer(group: Group, consumer: Consumer) {
+  private def removeConsumer(group: ConsumerGroupMetadata, consumer: ConsumerMetadata) {
     group.remove(consumer.consumerId)
     val topicsToUnbind = consumer.topics -- group.topics
     coordinatorMetadata.unbindGroupFromTopics(group.groupId, topicsToUnbind)
   }
 
-  private def updateConsumer(group: Group, consumer: Consumer, topics: Set[String]) {
+  private def updateConsumer(group: ConsumerGroupMetadata, consumer: ConsumerMetadata, topics: Set[String]) {
     val topicsToBind = topics -- group.topics
     group.remove(consumer.consumerId)
     val topicsToUnbind = consumer.topics -- group.topics
@@ -235,14 +230,14 @@ class ConsumerCoordinator(val config: KafkaConfig,
     coordinatorMetadata.bindAndUnbindGroupFromTopics(group.groupId, topicsToBind, topicsToUnbind)
   }
 
-  private def maybePrepareRebalance(group: Group) {
+  private def maybePrepareRebalance(group: ConsumerGroupMetadata) {
     group synchronized {
       if (group.canRebalance)
         prepareRebalance(group)
     }
   }
 
-  private def prepareRebalance(group: Group) {
+  private def prepareRebalance(group: ConsumerGroupMetadata) {
     group.transitionTo(PreparingRebalance)
     group.generationId += 1
     info("Preparing to rebalance group %s generation %s".format(group.groupId, group.generationId))
@@ -253,7 +248,9 @@ class ConsumerCoordinator(val config: KafkaConfig,
     rebalancePurgatory.tryCompleteElseWatch(delayedRebalance, Seq(consumerGroupKey))
   }
 
-  private def rebalance(group: Group) {
+  private def rebalance(group: ConsumerGroupMetadata) {
+    assert(group.notYetRejoinedConsumers == List.empty[ConsumerMetadata])
+
     group.transitionTo(Rebalancing)
     info("Rebalancing group %s generation %s".format(group.groupId, group.generationId))
 
@@ -263,11 +260,9 @@ class ConsumerCoordinator(val config: KafkaConfig,
 
     group.transitionTo(Stable)
     info("Stabilized group %s generation %s".format(group.groupId, group.generationId))
-    val consumerGroupKey = ConsumerGroupKey(group.groupId)
-    joinGroupPurgatory.checkAndComplete(consumerGroupKey)
   }
 
-  private def onConsumerHeartbeatExpired(group: Group, consumer: Consumer) {
+  private def onConsumerHeartbeatExpired(group: ConsumerGroupMetadata, consumer: ConsumerMetadata) {
     trace("Consumer %s in group %s has failed".format(consumer.consumerId, group.groupId))
     removeConsumer(group, consumer)
     maybePrepareRebalance(group)
@@ -275,7 +270,7 @@ class ConsumerCoordinator(val config: KafkaConfig,
 
   private def isCoordinatorForGroup(groupId: String) = offsetManager.leaderIsLocal(offsetManager.partitionFor(groupId))
 
-  private def reassignPartitions(group: Group) = {
+  private def reassignPartitions(group: ConsumerGroupMetadata) = {
     val assignor = PartitionAssignor.createInstance(group.partitionAssignmentStrategy)
     val topicsPerConsumer = group.topicsPerConsumer
     val partitionsPerTopic = coordinatorMetadata.partitionsPerTopic
@@ -286,31 +281,9 @@ class ConsumerCoordinator(val config: KafkaConfig,
     assignedPartitionsPerConsumer
   }
 
-  def tryCompleteJoinGroup(group: Group, forceComplete: () => Boolean) = {
+  def tryCompleteRebalance(group: ConsumerGroupMetadata, forceComplete: () => Boolean) = {
     group synchronized {
-      if (group.is(Stable))
-        forceComplete()
-      else false
-    }
-  }
-
-  def onExpirationJoinGroup() {
-    throw new IllegalStateException("DelayedJoinGroup should never expire")
-  }
-
-  def onCompleteJoinGroup(group: Group,
-                          consumer: Consumer,
-                          responseCallback:(Set[TopicAndPartition], String, Int, Short) => Unit) {
-    group synchronized {
-      consumer.awaitingRebalance = false
-      completeAndScheduleNextHeartbeatExpiration(group, consumer)
-      responseCallback(consumer.assignedTopicPartitions, consumer.consumerId, group.generationId, Errors.NONE.code)
-    }
-  }
-
-  def tryCompleteRebalance(group: Group, forceComplete: () => Boolean) = {
-    group synchronized {
-      if (group.allConsumersRejoined)
+      if (group.notYetRejoinedConsumers == List.empty[ConsumerMetadata])
         forceComplete()
       else false
     }
@@ -320,7 +293,7 @@ class ConsumerCoordinator(val config: KafkaConfig,
     // TODO: add metrics for rebalance timeouts
   }
 
-  def onCompleteRebalance(group: Group) {
+  def onCompleteRebalance(group: ConsumerGroupMetadata) {
     group synchronized {
       val failedConsumers = group.notYetRejoinedConsumers
       if (group.isEmpty || !failedConsumers.isEmpty) {
@@ -335,12 +308,22 @@ class ConsumerCoordinator(val config: KafkaConfig,
           coordinatorMetadata.removeGroup(group.groupId, group.topics)
         }
       }
-      if (!group.is(Dead))
+      if (!group.is(Dead)) {
+        // assign partitions to existing consumers of the group according to the partitioning strategy
         rebalance(group)
+
+        // trigger the awaiting join group response callback for all the consumers after rebalancing
+        for (consumer <- group.allConsumers) {
+          assert(consumer.awaitingRebalanceCallback != null)
+          consumer.awaitingRebalanceCallback(consumer.assignedTopicPartitions, consumer.consumerId, group.generationId, Errors.NONE.code)
+          consumer.awaitingRebalanceCallback = null
+          completeAndScheduleNextHeartbeatExpiration(group, consumer)
+        }
+      }
     }
   }
 
-  def tryCompleteHeartbeat(group: Group, consumer: Consumer, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
+  def tryCompleteHeartbeat(group: ConsumerGroupMetadata, consumer: ConsumerMetadata, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
     group synchronized {
       if (shouldKeepConsumerAlive(consumer, heartbeatDeadline))
         forceComplete()
@@ -348,7 +331,7 @@ class ConsumerCoordinator(val config: KafkaConfig,
     }
   }
 
-  def onExpirationHeartbeat(group: Group, consumer: Consumer, heartbeatDeadline: Long) {
+  def onExpirationHeartbeat(group: ConsumerGroupMetadata, consumer: ConsumerMetadata, heartbeatDeadline: Long) {
     group synchronized {
       if (!shouldKeepConsumerAlive(consumer, heartbeatDeadline))
         onConsumerHeartbeatExpired(group, consumer)
@@ -357,6 +340,6 @@ class ConsumerCoordinator(val config: KafkaConfig,
 
   def onCompleteHeartbeat() {}
 
-  private def shouldKeepConsumerAlive(consumer: Consumer, heartbeatDeadline: Long) =
-    consumer.awaitingRebalance || consumer.latestHeartbeat > heartbeatDeadline - consumer.sessionTimeoutMs
+  private def shouldKeepConsumerAlive(consumer: ConsumerMetadata, heartbeatDeadline: Long) =
+    consumer.awaitingRebalanceCallback != null || consumer.latestHeartbeat + consumer.sessionTimeoutMs > heartbeatDeadline
 }

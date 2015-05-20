@@ -21,7 +21,7 @@ import kafka.common.TopicAndPartition
 import kafka.utils.nonthreadsafe
 
 /**
- * A consumer contains the following metadata:
+ * Consumer metadata contains the following metadata:
  *
  * Heartbeat metadata:
  * 1. negotiated heartbeat session timeout
@@ -30,14 +30,20 @@ import kafka.utils.nonthreadsafe
  * Subscription metadata:
  * 1. subscribed topics
  * 2. assigned partitions for the subscribed topics
+ *
+ * In addition, it also contains the following state information:
+ *
+ * 1. Awaiting rebalance callback: when the consumer group is in the prepare-rebalance state,
+ *                                 its rebalance callback will be kept in the metadata if the
+ *                                 consumer has sent the join group request
  */
 @nonthreadsafe
-private[coordinator] class Consumer(val consumerId: String,
-                                    val groupId: String,
-                                    var topics: Set[String],
-                                    val sessionTimeoutMs: Int) {
+private[coordinator] class ConsumerMetadata(val consumerId: String,
+                                            val groupId: String,
+                                            var topics: Set[String],
+                                            val sessionTimeoutMs: Int) {
 
-  var awaitingRebalance = false
+  var awaitingRebalanceCallback: (Set[TopicAndPartition], String, Int, Short) => Unit = null
   var assignedTopicPartitions = Set.empty[TopicAndPartition]
   var latestHeartbeat: Long = -1
 }

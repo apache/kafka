@@ -34,7 +34,7 @@ import scala.collection.mutable
 @threadsafe
 private[coordinator] class CoordinatorMetadata(config: KafkaConfig,
                                                zkClient: ZkClient,
-                                               maybePrepareRebalance: Group => Unit) {
+                                               maybePrepareRebalance: ConsumerGroupMetadata => Unit) {
 
   /**
    * NOTE: If a group lock and coordinatorLock are simultaneously needed,
@@ -45,7 +45,7 @@ private[coordinator] class CoordinatorMetadata(config: KafkaConfig,
   /**
    * These should be guarded by metadataLock
    */
-  private val groups = new mutable.HashMap[String, Group]
+  private val groups = new mutable.HashMap[String, ConsumerGroupMetadata]
   private val groupsPerTopic = new mutable.HashMap[String, Set[String]]
   private val topicPartitionCounts = new mutable.HashMap[String, Int]
   private val topicPartitionChangeListeners = new mutable.HashMap[String, TopicPartitionChangeListener]
@@ -80,7 +80,7 @@ private[coordinator] class CoordinatorMetadata(config: KafkaConfig,
    */
   def addGroup(groupId: String, partitionAssignmentStrategy: String) = {
     inWriteLock(metadataLock) {
-      groups.getOrElseUpdate(groupId, new Group(groupId, partitionAssignmentStrategy))
+      groups.getOrElseUpdate(groupId, new ConsumerGroupMetadata(groupId, partitionAssignmentStrategy))
     }
   }
 
@@ -195,7 +195,7 @@ private[coordinator] class CoordinatorMetadata(config: KafkaConfig,
           topicPartitionCounts.put(topic, numPartitions)
           groupsPerTopic(topic).map(groupId => groups(groupId))
         }
-        else Set.empty[Group]
+        else Set.empty[ConsumerGroupMetadata]
       }
       groupsToRebalance.foreach(maybePrepareRebalance)
     }
@@ -212,7 +212,7 @@ private[coordinator] class CoordinatorMetadata(config: KafkaConfig,
           topicPartitionCounts.put(topic, 0)
           groupsPerTopic(topic).map(groupId => groups(groupId))
         }
-        else Set.empty[Group]
+        else Set.empty[ConsumerGroupMetadata]
       }
       groupsToRebalance.foreach(maybePrepareRebalance)
     }

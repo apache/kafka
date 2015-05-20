@@ -30,7 +30,7 @@ import kafka.server.DelayedOperation
  * the rest of the group.
  */
 private[coordinator] class DelayedRebalance(consumerCoordinator: ConsumerCoordinator,
-                                            group: Group,
+                                            group: ConsumerGroupMetadata,
                                             sessionTimeout: Long)
   extends DelayedOperation(sessionTimeout) {
 

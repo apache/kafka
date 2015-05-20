@@ -24,8 +24,8 @@ import kafka.server.DelayedOperation
  * Heartbeats are paused during rebalance.
  */
 private[coordinator] class DelayedHeartbeat(consumerCoordinator: ConsumerCoordinator,
-                                            group: Group,
-                                            consumer: Consumer,
+                                            group: ConsumerGroupMetadata,
+                                            consumer: ConsumerMetadata,
                                             heartbeatDeadline: Long,
                                             sessionTimeout: Long)
   extends DelayedOperation(sessionTimeout) {
