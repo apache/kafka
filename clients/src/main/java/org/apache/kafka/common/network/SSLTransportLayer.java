@@ -324,10 +324,6 @@ public class SSLTransportLayer implements TransportLayer {
         closed = !netWriteBuffer.hasRemaining() && (handshake.getHandshakeStatus() != HandshakeStatus.NEED_WRAP);
     }
 
-    public boolean isOpen() {
-        return socketChannel.isOpen();
-    }
-
     public boolean isReady() {
         return handshakeComplete;
     }

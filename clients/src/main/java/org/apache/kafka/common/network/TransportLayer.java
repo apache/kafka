@@ -64,11 +64,6 @@ public interface TransportLayer {
     boolean isReady();
 
     /**
-     * Retruns true if socketChannel is open.
-     */
-    boolean isOpen();
-
-    /**
      * calls internal socketChannel.finishConnect()
      */
     void finishConnect() throws IOException;
