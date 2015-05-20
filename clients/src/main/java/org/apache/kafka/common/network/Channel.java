@@ -53,7 +53,6 @@ public class Channel implements ScatteringByteChannel, GatheringByteChannel {
     /**
      * returns user principal for the session
      * In case of PLAINTEXT and No Authentication returns ANONYMOUS as the userPrincipal
-     * If SSL used than
      * If SSL used without any SASL Authentication returns SSLSession.peerPrincipal
      */
     public Principal principal() throws IOException {
