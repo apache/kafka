@@ -337,6 +337,7 @@ class LogTest extends JUnitSuite {
     val messageSetWithUnkeyedMessage = new ByteBufferMessageSet(NoCompressionCodec, unkeyedMessage, keyedMessage)
     val messageSetWithOneUnkeyedMessage = new ByteBufferMessageSet(NoCompressionCodec, unkeyedMessage)
     val messageSetWithCompressedKeyedMessage = new ByteBufferMessageSet(GZIPCompressionCodec, keyedMessage)
+    val messageSetWithCompressedUnkeyedMessage = new ByteBufferMessageSet(GZIPCompressionCodec, keyedMessage, unkeyedMessage)
 
     val messageSetWithKeyedMessage = new ByteBufferMessageSet(NoCompressionCodec, keyedMessage)
     val messageSetWithKeyedMessages = new ByteBufferMessageSet(NoCompressionCodec, keyedMessage, anotherKeyedMessage)
@@ -356,8 +357,8 @@ class LogTest extends JUnitSuite {
       case e: InvalidMessageException => // this is good
     }
     try {
-      log.append(messageSetWithCompressedKeyedMessage)
-      fail("Compacted topics cannot accept compressed messages.")
+      log.append(messageSetWithCompressedUnkeyedMessage)
+      fail("Compacted topics cannot accept a message without a key.")
     } catch {
       case e: InvalidMessageException => // this is good
     }
@@ -365,25 +366,7 @@ class LogTest extends JUnitSuite {
     // the following should succeed without any InvalidMessageException
     log.append(messageSetWithKeyedMessage)
     log.append(messageSetWithKeyedMessages)
-
-    // test that a compacted topic with broker-side compression type set to uncompressed can accept compressed messages
-    val uncompressedLog = new Log(logDir, logConfig.copy(compact = true, compressionType = "uncompressed"),
-                                  recoveryPoint = 0L, time.scheduler, time)
-    uncompressedLog.append(messageSetWithCompressedKeyedMessage)
-    uncompressedLog.append(messageSetWithKeyedMessage)
-    uncompressedLog.append(messageSetWithKeyedMessages)
-    try {
-      uncompressedLog.append(messageSetWithUnkeyedMessage)
-      fail("Compacted topics cannot accept a message without a key.")
-    } catch {
-      case e: InvalidMessageException => // this is good
-    }
-    try {
-      uncompressedLog.append(messageSetWithOneUnkeyedMessage)
-      fail("Compacted topics cannot accept a message without a key.")
-    } catch {
-      case e: InvalidMessageException => // this is good
-    }
+    log.append(messageSetWithCompressedKeyedMessage)
   }
 
   /**
