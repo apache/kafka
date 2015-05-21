@@ -27,7 +27,7 @@
 	<allow pkg="javax.management" />
 	<allow pkg="org.slf4j" />
 	<allow pkg="org.junit" />
-  <allow pkg="javax.net.ssl" />
+	<allow pkg="javax.net.ssl" />
 
 	<!-- no one depends on the server -->
 	<disallow pkg="kafka" />
@@ -52,11 +52,15 @@
 		</subpackage>
 
 		<subpackage name="network">
-      <allow pkg="org.apache.kafka.common.security.auth" />
-		  <allow pkg="org.apache.kafka.common.protocol" />
-		  <allow pkg="org.apache.kafka.common.config" />
+			<allow pkg="org.apache.kafka.common.security.auth" />
+			<allow pkg="org.apache.kafka.common.protocol" />
+			<allow pkg="org.apache.kafka.common.config" />
 			<allow pkg="org.apache.kafka.common.metrics" />
 		</subpackage>
+
+		<subpackage name="security">
+                        <allow pkg="org.apache.kafka.common.network" />
+                </subpackage>
 
 		<subpackage name="protocol">
 			<allow pkg="org.apache.kafka.common.errors" />
@@ -102,7 +106,7 @@
 
 	<subpackage name="test">
 		<allow pkg="org.apache.kafka" />
-    <allow pkg="org.bouncycastle" />
+		<allow pkg="org.bouncycastle" />
 	</subpackage>
 
 </import-control>
