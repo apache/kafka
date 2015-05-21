@@ -1,6 +1,6 @@
 <!DOCTYPE import-control PUBLIC
-    "-//Puppy Crawl//DTD Import Control 1.1//EN"
-    "http://www.puppycrawl.com/dtds/import_control_1_1.dtd">
+"-//Puppy Crawl//DTD Import Control 1.1//EN"
+"http://www.puppycrawl.com/dtds/import_control_1_1.dtd">
 <!--
 // Licensed to the Apache Software Foundation (ASF) under one or more
 // contributor license agreements.  See the NOTICE file distributed with
@@ -17,6 +17,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 -->
+
 <import-control pkg="org.apache.kafka">
 
 	<!-- THINK HARD ABOUT THE LAYERING OF THE PROJECT BEFORE CHANGING THIS FILE -->
@@ -26,8 +27,7 @@
 	<allow pkg="javax.management" />
 	<allow pkg="org.slf4j" />
 	<allow pkg="org.junit" />
-	<allow pkg="javax.net.ssl" />
-	<allow pkg="javax.security.auth.x500" />
+  <allow pkg="javax.net.ssl" />
 
 	<!-- no one depends on the server -->
 	<disallow pkg="kafka" />
@@ -52,15 +52,11 @@
 		</subpackage>
 
 		<subpackage name="network">
-      		<allow pkg="org.apache.kafka.common.security.auth" />
-      		<allow pkg="org.apache.kafka.common.protocol" />
-      		<allow pkg="org.apache.kafka.common.config" />
+      <allow pkg="org.apache.kafka.common.security.auth" />
+		  <allow pkg="org.apache.kafka.common.protocol" />
+		  <allow pkg="org.apache.kafka.common.config" />
 			<allow pkg="org.apache.kafka.common.metrics" />
 		</subpackage>
-
-    	<subpackage name="security">
-      		<allow pkg="org.apache.kafka.common.network" />
-    	</subpackage>
 
 		<subpackage name="protocol">
 			<allow pkg="org.apache.kafka.common.errors" />
@@ -82,7 +78,6 @@
 		<subpackage name="serialization">
 			<allow class="org.apache.kafka.common.errors.SerializationException" />
 		</subpackage>
-
 	</subpackage>
 
 	<subpackage name="clients">
@@ -107,7 +102,7 @@
 
 	<subpackage name="test">
 		<allow pkg="org.apache.kafka" />
-    	<allow pkg="org.bouncycastle" />
+    <allow pkg="org.bouncycastle" />
 	</subpackage>
 
 </import-control>

@@ -66,8 +66,7 @@ public class TestSSLUtils {
      * @param days how many days from now the Certificate is valid for
      * @param algorithm the signing algorithm, eg "SHA1withRSA"
      * @return the self-signed certificate
-     * @throws IOException thrown if an IO error ocurred.
-     * @throws GeneralSecurityException thrown if an Security error ocurred.
+     * @throws CertificateException thrown if a security error or an IO error ocurred.
      */
     public static X509Certificate generateCertificate(String dn, KeyPair pair,
                                                       int days, String algorithm)
