@@ -209,7 +209,7 @@ object ConsoleConsumer extends Logging {
 
   def checkZkPathExists(zkUrl: String, path: String): Boolean = {
     try {
-      val zk = new ZkClient(zkUrl, 30*1000,30*1000, ZKStringSerializer)
+      val zk = ZkUtils.createZkClient(zkUrl, 30*1000,30*1000);
       zk.exists(path)
     } catch {
       case _: Throwable => false

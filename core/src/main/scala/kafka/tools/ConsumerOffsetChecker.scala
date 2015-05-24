@@ -149,7 +149,7 @@ object ConsumerOffsetChecker extends Logging {
     var zkClient: ZkClient = null
     var channel: BlockingChannel = null
     try {
-      zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+      zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
 
       val topicList = topics match {
         case Some(x) => x.split(",").view.toList

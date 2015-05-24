@@ -2,7 +2,7 @@ package other.kafka
 
 import org.I0Itec.zkclient.ZkClient
 import kafka.api._
-import kafka.utils.{ShutdownableThread, ZKStringSerializer}
+import kafka.utils.{ZkUtils, ShutdownableThread}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import scala.collection._
 import kafka.client.ClientUtils
@@ -238,7 +238,7 @@ object TestOffsetManager {
     var fetchThread: FetchThread = null
     var statsThread: StatsThread = null
     try {
-      zkClient = new ZkClient(zookeeper, 6000, 2000, ZKStringSerializer)
+      zkClient = ZkUtils.createZkClient(zookeeper, 6000, 2000)
       commitThreads = (0 to (threadCount-1)).map { threadId =>
         new CommitThread(threadId, partitionCount, commitIntervalMs, zkClient)
       }

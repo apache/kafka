@@ -19,7 +19,7 @@ package kafka.zk
 
 import org.scalatest.junit.JUnit3Suite
 import org.I0Itec.zkclient.ZkClient
-import kafka.utils.{ZKStringSerializer, CoreUtils}
+import kafka.utils.{ZkUtils, CoreUtils}
 
 trait ZooKeeperTestHarness extends JUnit3Suite {
   var zkPort: Int = -1
@@ -34,7 +34,7 @@ trait ZooKeeperTestHarness extends JUnit3Suite {
     super.setUp
     zookeeper = new EmbeddedZookeeper()
     zkPort = zookeeper.port
-    zkClient = new ZkClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, ZKStringSerializer)
+    zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeout, zkConnectionTimeout)
   }
 
   override def tearDown() {

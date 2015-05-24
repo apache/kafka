@@ -38,7 +38,7 @@ object ReassignPartitionsCommand extends Logging {
     CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.zkConnectOpt)
 
     val zkConnect = opts.options.valueOf(opts.zkConnectOpt)
-    var zkClient: ZkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+    var zkClient: ZkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
     try {
       if(opts.options.has(opts.verifyOpt))
         verifyAssignment(zkClient, opts)

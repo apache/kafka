@@ -48,7 +48,7 @@ object ConsumerGroupCommand {
 
     opts.checkArgs()
 
-    val zkClient = new ZkClient(opts.options.valueOf(opts.zkConnectOpt), 30000, 30000, ZKStringSerializer)
+    val zkClient = ZkUtils.createZkClient(opts.options.valueOf(opts.zkConnectOpt), 30000, 30000)
 
     try {
       if (opts.options.has(opts.listOpt))
