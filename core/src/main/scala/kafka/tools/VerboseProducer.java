@@ -131,13 +131,17 @@ public class VerboseProducer {
     return "{\"producer\": \"VerboseProducer\", " 
            + "\"exception\": \"" + e.getClass() + "\"," 
            + "\"message\": \"" + e.getMessage() + "\","
+           + "\"topic\": \"" + this.topic + "\","
            + "\"value\": \"" + value + "\""
            + "}";
     
   }
   
-  String successString(String value) {
+  String successString(String value, RecordMetadata recordMetadata) {
     return "{\"producer\": \"VerboseProducer\", "
+           + "\"topic\": \"" + this.topic + "\","
+           + "\"partition\": \"" + recordMetadata.partition() + "\","
+           + "\"offset\": \"" + recordMetadata.offset() + "\","
            + "\"value\": \"" + value + "\""
            + "}";
   }
@@ -154,7 +158,7 @@ public class VerboseProducer {
     
     public void onCompletion(RecordMetadata recordMetadata, Exception e) {
       if (e == null) {
-        System.out.println(successString(this.value));
+        System.out.println(successString(this.value, recordMetadata));
       }
       else {
         System.out.println(errorString(e, this.value));
