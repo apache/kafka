@@ -77,8 +77,7 @@ public class Selector implements Selectable {
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
     private final java.nio.channels.Selector selector;
-    private final Map<Integer, SelectionKey> keys;
-    private final Map<SelectionKey, Channel> channels;
+    private final Map<Integer, Channel> channels;
     private final List<NetworkSend> completedSends;
     private final List<NetworkReceive> completedReceives;
     private final List<Integer> disconnected;
@@ -103,8 +102,7 @@ public class Selector implements Selectable {
         this.time = time;
         this.metricGrpPrefix = metricGrpPrefix;
         this.metricTags = metricTags;
-        this.keys = new HashMap<Integer, SelectionKey>();
-        this.channels = new HashMap<SelectionKey, Channel>();
+        this.channels = new HashMap<Integer, Channel>();
         this.completedSends = new ArrayList<NetworkSend>();
         this.completedReceives = new ArrayList<NetworkReceive>();
         this.connected = new ArrayList<Integer>();
@@ -129,16 +127,15 @@ public class Selector implements Selectable {
      */
     @Override
     public void connect(int id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
-        if (this.keys.containsKey(id))
+        if (this.channels.containsKey(id))
             throw new IllegalStateException("There is already a connection for id " + id);
 
         SocketChannel socketChannel = SocketChannel.open();
         socketChannel.configureBlocking(false);
-        Socket socket = socketChannel.socket();
-        socket.setKeepAlive(true);
-        socket.setSendBufferSize(sendBufferSize);
-        socket.setReceiveBufferSize(receiveBufferSize);
-        socket.setTcpNoDelay(true);
+        socketChannel.socket().setKeepAlive(true);
+        socketChannel.socket().setSendBufferSize(sendBufferSize);
+        socketChannel.socket().setReceiveBufferSize(receiveBufferSize);
+        socketChannel.socket().setTcpNoDelay(true);
         try {
             socketChannel.connect(address);
         } catch (UnresolvedAddressException e) {
@@ -150,10 +147,9 @@ public class Selector implements Selectable {
         }
 
         SelectionKey key = socketChannel.register(this.selector, SelectionKey.OP_CONNECT);
-        key.attach(new Transmissions(id));
-        Channel channel = channelBuilder.buildChannel(key);
-        this.keys.put(id, key);
-        this.channels.put(key, channel);
+        Channel channel = channelBuilder.buildChannel(id, key);
+        key.attach(channel);
+        this.channels.put(id, channel);
     }
 
     /**
@@ -181,7 +177,7 @@ public class Selector implements Selectable {
     @Override
     public void close() {
         for (SelectionKey key : this.selector.keys())
-            close(key);
+            close(channel(key));
         try {
             this.selector.close();
         } catch (IOException e) {
@@ -196,17 +192,15 @@ public class Selector implements Selectable {
      * @param send The request to send
      */
     public void send(NetworkSend send) {
-        SelectionKey key = keyForId(send.destination());
-        Channel channel = channel(key);
-        Transmissions transmissions = transmissions(key);
-        if (transmissions.hasSend())
-            throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress.");
-        transmissions.send = send;
+        Channel channel = channelForId(send.destination());
+        if (channel == null) {
+            throw new IllegalStateException("channel is not connected");
+        }
         try {
-            channel.addInterestOps(SelectionKey.OP_WRITE);
+            channel.setSend(send);
         } catch (CancelledKeyException e) {
-            close(key);
             this.failedSends.add(send.destination());
+            close(channel);
         }
     }
 
@@ -239,62 +233,56 @@ public class Selector implements Selectable {
             while (iter.hasNext()) {
                 SelectionKey key = iter.next();
                 iter.remove();
-
-                Transmissions transmissions = transmissions(key);
                 Channel channel = channel(key);
 
                 // register all per-broker metrics at once
-                sensors.maybeRegisterNodeMetrics(transmissions.id);
+                sensors.maybeRegisterNodeMetrics(channel.id());
 
                 try {
                     /* complete any connections that have finished their handshake */
                     if (key.isConnectable()) {
                         channel.finishConnect();
-                        this.connected.add(transmissions.id);
+                        this.connected.add(channel.id());
                         this.sensors.connectionCreated.record();
                     }
 
+                    /* if channel is not ready finish prepare */
                     if (!channel.isReady()) {
-                        channel.connect();
-                    } else {
-                        /* read from any connections that have readable data */
-                        if (key.isReadable()) {
-                            if (!transmissions.hasReceive())
-                                transmissions.receive = new NetworkReceive(transmissions.id);
-                            while (transmissions.receive.readFrom(channel) > 0 && transmissions.receive.complete()) {
-                                transmissions.receive.payload().rewind();
-                                this.completedReceives.add(transmissions.receive);
-                                this.sensors.recordBytesReceived(transmissions.id, transmissions.receive.payload().limit());
-                                transmissions.clearReceive();
-                                if (!transmissions.hasReceive())
-                                    transmissions.receive = new NetworkReceive(transmissions.id);
-                            }
-                        }
+                        channel.prepare();
+                    }
 
-                        /* write to any sockets that have space in their buffer and for which we have data */
-                        if (key.isWritable()) {
-                            transmissions.send.writeTo(channel);
-                            if (transmissions.send.remaining() <= 0) {
-                                this.completedSends.add(transmissions.send);
-                                this.sensors.recordBytesSent(transmissions.id, transmissions.send.size());
-                                transmissions.clearSend();
-                                channel.removeInterestOps(SelectionKey.OP_WRITE);
-                            }
+                     /* if channel is ready read from any connections that have readable data */
+                    if (key.isReadable() && channel.isReady()) {
+                        NetworkReceive networkReceive;
+                        while ((networkReceive = channel.read()) != null) {
+                            networkReceive.payload().rewind();
+                            this.completedReceives.add(networkReceive);
+                            this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
                         }
                     }
+
+                    /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
+                    if (key.isWritable() && channel.isReady()) {
+                        NetworkSend networkSend = channel.write();
+                        if (networkSend != null) {
+                            this.completedSends.add(networkSend);
+                            this.sensors.recordBytesSent(channel.id(), networkSend.size());
+                        }
+                    }
+
                     /* cancel any defunct sockets */
                     if (!key.isValid()) {
-                        close(key);
-                        this.disconnected.add(transmissions.id);
+                        close(channel(key));
+                        this.disconnected.add(channel.id());
                     }
                 } catch (IOException e) {
-                    String desc = socketDescription(channel);
+                    String desc = channel.socketDescription();
                     if (e instanceof EOFException || e instanceof ConnectException)
                         log.info("Connection {} disconnected", desc);
                     else
                         log.warn("Error in I/O with connection to {}", desc, e);
-                    close(key);
-                    this.disconnected.add(transmissions.id);
+                    close(channel(key));
+                    this.disconnected.add(channel.id());
                 }
             }
         }
@@ -302,15 +290,6 @@ public class Selector implements Selectable {
         this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
     }
 
-    private String socketDescription(Channel channel) {
-        Socket socket = channel.socketChannel().socket();
-        if (socket == null)
-            return "[unconnected socket]";
-        else if (socket.getInetAddress() != null)
-            return socket.getInetAddress().toString();
-        else
-            return socket.getLocalAddress().toString();
-    }
 
     @Override
     public List<NetworkSend> completedSends() {
@@ -334,34 +313,34 @@ public class Selector implements Selectable {
 
     @Override
     public void mute(int id) {
-        mute(this.keyForId(id));
+        Channel channel = channelForId(id);
+        mute(channel);
     }
 
-    private void mute(SelectionKey key) {
-        Channel channel = channel(key);
+    private void mute(Channel channel) {
         channel.mute();
     }
 
     @Override
     public void unmute(int id) {
-        unmute(this.keyForId(id));
+        Channel channel = channelForId(id);
+        unmute(channel);
     }
 
-    private void unmute(SelectionKey key) {
-        Channel channel = channel(key);
+    private void unmute(Channel channel) {
         channel.unmute();
     }
 
     @Override
     public void muteAll() {
-        for (SelectionKey key : this.keys.values())
-            mute(key);
+        for (Channel channel : this.channels.values())
+            mute(channel);
     }
 
     @Override
     public void unmuteAll() {
-        for (SelectionKey key : this.keys.values())
-            unmute(key);
+        for (Channel channel : this.channels.values())
+            unmute(channel);
     }
 
     /**
@@ -395,80 +374,25 @@ public class Selector implements Selectable {
     /**
      * Begin closing this connection
      */
-    private void close(SelectionKey key) {
-        Channel channel = channel(key);
-        this.channels.remove(key);
-        Transmissions trans = transmissions(key);
-        if (trans != null) {
-            this.keys.remove(trans.id);
-            trans.clearReceive();
-            trans.clearSend();
-        }
-        key.attach(null);
-        key.cancel();
+    private void close(Channel channel) {
+        this.channels.remove(channel.id());
         try {
             channel.close();
         } catch (IOException e) {
-            log.error("Exception closing connection to node {}:", trans.id, e);
+            log.error("Exception closing connection to node {}:", channel.id(), e);
         }
         this.sensors.connectionClosed.record();
-    }
-
-    /**
-     * Get the selection key associated with this numeric id
-     */
-    private SelectionKey keyForId(int id) {
-        SelectionKey key = this.keys.get(id);
-        if (key == null)
-            throw new IllegalStateException("Attempt to write to socket for which there is no open connection.");
-        return key;
-    }
-
-    /**
-     * Get the transmissions for the given connection
-     */
-    private Transmissions transmissions(SelectionKey key) {
-        return (Transmissions) key.attachment();
     }
 
     /**
      * Get the Channel associated with this selection key
      */
     private Channel channel(SelectionKey key) {
-        return this.channels.get(key);
+        return (Channel) key.attachment();
     }
 
     protected Channel channelForId(int id) {
-        return channel(keyForId(id));
-    }
-
-    /**
-     * The id and in-progress send and receive associated with a connection
-     */
-    private static class Transmissions {
-        public int id;
-        public NetworkSend send;
-        public NetworkReceive receive;
-
-        public Transmissions(int id) {
-            this.id = id;
-        }
-
-        public boolean hasSend() {
-            return this.send != null;
-        }
-
-        public void clearSend() {
-            this.send = null;
-        }
-
-        public boolean hasReceive() {
-            return this.receive != null;
-        }
-
-        public void clearReceive() {
-            this.receive = null;
-        }
+        return channels.get(id);
     }
 
     private class SelectorMetrics {
@@ -530,7 +454,7 @@ public class Selector implements Selectable {
             metricName = new MetricName("connection-count", metricGrpName, "The current number of active connections.", metricTags);
             this.metrics.addMetric(metricName, new Measurable() {
                 public double measure(MetricConfig config, long now) {
-                    return keys.size();
+                    return channels.size();
                 }
             });
         }

@@ -58,6 +58,10 @@ public class PlainTextTransportLayer implements TransportLayer {
         socketChannel.close();
     }
 
+    public boolean isOpen() {
+        return socketChannel.isOpen();
+    }
+
     public void disconnect() {
         key.cancel();
     }

@@ -202,15 +202,17 @@ public class SelectorTest {
     }
 
     @Test
-    public void testShortMessageSequence() throws Exception {
+    public void testLargeMessageSequence() throws Exception {
         int bufferSize = 512 * 1024;
         int node = 0;
         int reqs = 50;
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
-        String requestPrefix = "hello-wordl";
+        String requestPrefix = TestUtils.randomString(bufferSize);
         sendAndReceive(node, requestPrefix, 0, reqs);
     }
+
+
 
     /**
      * Test sending an empty string

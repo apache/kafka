@@ -22,6 +22,8 @@ package org.apache.kafka.common.network;
  */
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ScatteringByteChannel;
+import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.SocketChannel;
 
 import java.io.DataInputStream;
@@ -30,33 +32,7 @@ import java.io.DataOutputStream;
 import java.security.Principal;
 
 
-public interface TransportLayer {
-
-    /**
-     * Closes this channel
-     *
-     * @throws IOException If and I/O error occurs
-     */
-    void close() throws IOException;
-
-    /**
-     * Writes a sequence of bytes to this channel from the given buffer.
-     */
-    int write(ByteBuffer src) throws IOException;
-
-    long write(ByteBuffer[] srcs) throws IOException;
-
-    long write(ByteBuffer[] srcs, int offset, int length) throws IOException;
-
-    /**
-     * Reads sequence of bytes from the channel to the given buffer.
-     */
-    int read(ByteBuffer dst) throws IOException;
-
-    long read(ByteBuffer[] dsts) throws IOException;
-
-    long read(ByteBuffer[] dsts, int offset, int length) throws IOException;
-
+public interface TransportLayer extends ScatteringByteChannel, GatheringByteChannel {
 
     /**
      * Returns true if the channel has handshake and authenticaiton done.
