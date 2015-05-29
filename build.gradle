@@ -30,7 +30,7 @@ allprojects {
 }
 
 ext {
-    gradleVersion = "2.0"
+    gradleVersion = "2.4"
 }
 
 def isVerificationRequired(project) {
