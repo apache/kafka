@@ -93,6 +93,9 @@ Please note for this to work you should create/update `~/.gradle/gradle.properti
     signing.password=
     signing.secretKeyRingFile=
 
+### Publishing the jars without signing to a local repository ###
+    ./gradlew -Dorg.gradle.project.skipSigning=true -Dorg.gradle.project.mavenUrl=file://path/to/repo uploadArchivesAll
+
 ### Building the test jar ###
     ./gradlew testJar
 
