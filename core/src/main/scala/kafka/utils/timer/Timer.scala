@@ -51,8 +51,9 @@ class Timer(taskExecutor: ExecutorService, tickMs: Long = 1, wheelSize: Int = 20
 
   private def addTimerTaskEntry(timerTaskEntry: TimerTaskEntry): Unit = {
     if (!timingWheel.add(timerTaskEntry)) {
-      // already expired
-      taskExecutor.submit(timerTaskEntry.timerTask)
+      // Already expired or cancelled
+      if (!timerTaskEntry.cancelled)
+        taskExecutor.submit(timerTaskEntry.timerTask)
     }
   }
 
