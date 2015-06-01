@@ -139,7 +139,7 @@ public class MetadataToStdoutProducer {
 
     JSONObject obj = new JSONObject();
     obj.put("producer", "MetadataToStdoutProducer");
-    obj.put("exception", e.getClass());
+    obj.put("exception", e.getClass().toString());
     obj.put("message", e.getMessage());
     obj.put("topic", this.topic);
     obj.put("key", key);
