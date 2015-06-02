@@ -92,6 +92,8 @@
 		<subpackage name="tools">
 			<allow pkg="org.apache.kafka.clients.producer" />
 			<allow pkg="org.apache.kafka.clients.consumer" />
+            <allow pkg="org.json.simple" />
+            <allow pkg="joptsimple" />
 		</subpackage>
 	</subpackage>
 
