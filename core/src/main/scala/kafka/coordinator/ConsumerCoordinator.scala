@@ -25,11 +25,6 @@ import org.apache.kafka.common.requests.JoinGroupRequest
 import org.I0Itec.zkclient.ZkClient
 import java.util.concurrent.atomic.AtomicBoolean
 
-// TODO: expose MinSessionTimeoutMs and MaxSessionTimeoutMs in broker configs
-object ConsumerCoordinator {
-  private val MinSessionTimeoutMs = 6000
-  private val MaxSessionTimeoutMs = 30000
-}
 
 /**
  * ConsumerCoordinator handles consumer group and consumer offset management.
@@ -41,7 +36,6 @@ object ConsumerCoordinator {
 class ConsumerCoordinator(val config: KafkaConfig,
                           val zkClient: ZkClient,
                           val offsetManager: OffsetManager) extends Logging {
-  import ConsumerCoordinator._
 
   this.logIdent = "[ConsumerCoordinator " + config.brokerId + "]: "
 
@@ -93,15 +87,18 @@ class ConsumerCoordinator(val config: KafkaConfig,
       responseCallback(Set.empty, consumerId, 0, Errors.NOT_COORDINATOR_FOR_CONSUMER.code)
     } else if (!PartitionAssignor.strategies.contains(partitionAssignmentStrategy)) {
       responseCallback(Set.empty, consumerId, 0, Errors.UNKNOWN_PARTITION_ASSIGNMENT_STRATEGY.code)
-    } else if (sessionTimeoutMs < MinSessionTimeoutMs || sessionTimeoutMs > MaxSessionTimeoutMs) {
+    } else if (sessionTimeoutMs < config.consumerMinSessionTimeoutMs || sessionTimeoutMs > config.consumerMaxSessionTimeoutMs) {
       responseCallback(Set.empty, consumerId, 0, Errors.INVALID_SESSION_TIMEOUT.code)
     } else {
-      val group = coordinatorMetadata.getGroup(groupId)
+      // only try to create the group if the group is not unknown AND
+      // the consumer id is UNKNOWN, if consumer is specified but group does not
+      // exist we should reject the request
+      var group = coordinatorMetadata.getGroup(groupId)
       if (group == null) {
         if (consumerId != JoinGroupRequest.UNKNOWN_CONSUMER_ID) {
           responseCallback(Set.empty, consumerId, 0, Errors.UNKNOWN_CONSUMER_ID.code)
         } else {
-          val group = coordinatorMetadata.addGroup(groupId, partitionAssignmentStrategy)
+          group = coordinatorMetadata.addGroup(groupId, partitionAssignmentStrategy)
           doJoinGroup(group, consumerId, topics, sessionTimeoutMs, partitionAssignmentStrategy, responseCallback)
         }
       } else {
@@ -118,10 +115,16 @@ class ConsumerCoordinator(val config: KafkaConfig,
                           responseCallback:(Set[TopicAndPartition], String, Int, Short) => Unit) {
     group synchronized {
       if (group.is(Dead)) {
+        // if the group is marked as dead, it means some other thread has just removed the group
+        // from the coordinator metadata; this is likely that the group has migrated to some other
+        // coordinator OR the group is in a transient unstable phase. Let the consumer to retry
+        // joining without specified consumer id,
         responseCallback(Set.empty, consumerId, 0, Errors.UNKNOWN_CONSUMER_ID.code)
       } else if (partitionAssignmentStrategy != group.partitionAssignmentStrategy) {
         responseCallback(Set.empty, consumerId, 0, Errors.INCONSISTENT_PARTITION_ASSIGNMENT_STRATEGY.code)
       } else if (consumerId != JoinGroupRequest.UNKNOWN_CONSUMER_ID && !group.has(consumerId)) {
+        // if the consumer trying to register with a un-recognized id, send the response to let
+        // it reset its consumer id and retry
         responseCallback(Set.empty, consumerId, 0, Errors.UNKNOWN_CONSUMER_ID.code)
       } else if (group.has(consumerId) && group.is(Stable) && topics == group.get(consumerId).topics) {
         /*
@@ -170,6 +173,10 @@ class ConsumerCoordinator(val config: KafkaConfig,
     } else {
       val group = coordinatorMetadata.getGroup(groupId)
       if (group == null) {
+        // if the group is marked as dead, it means some other thread has just removed the group
+        // from the coordinator metadata; this is likely that the group has migrated to some other
+        // coordinator OR the group is in a transient unstable phase. Let the consumer to retry
+        // joining without specified consumer id,
         responseCallback(Errors.UNKNOWN_CONSUMER_ID.code)
       } else {
         group synchronized {
@@ -304,7 +311,7 @@ class ConsumerCoordinator(val config: KafkaConfig,
 
         if (group.isEmpty) {
           group.transitionTo(Dead)
-          info("Group %s generation %s is dead".format(group.groupId, group.generationId))
+          info("Group %s generation %s is dead and removed".format(group.groupId, group.generationId))
           coordinatorMetadata.removeGroup(group.groupId, group.topics)
         }
       }

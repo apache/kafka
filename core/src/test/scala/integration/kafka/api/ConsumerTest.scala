@@ -24,8 +24,8 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException
 
-import kafka.utils.{ShutdownableThread, TestUtils, Logging}
-import kafka.server.OffsetManager
+import kafka.utils.{TestUtils, Logging}
+import kafka.server.{KafkaConfig, OffsetManager}
 
 import java.util.ArrayList
 import org.junit.Assert._
@@ -47,9 +47,10 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   val tp = new TopicPartition(topic, part)
 
   // configure the servers and clients
-  this.serverConfig.setProperty("controlled.shutdown.enable", "false") // speed up shutdown
-  this.serverConfig.setProperty("offsets.topic.replication.factor", "3") // don't want to lose offset
-  this.serverConfig.setProperty("offsets.topic.num.partitions", "1")
+  this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
+  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
+  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
+  this.serverConfig.setProperty(KafkaConfig.ConsumerMinSessionTimeoutMsProp, "100") // set small enough session timeout
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
   this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
@@ -146,8 +147,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     assertNull(this.consumers(0).partitionsFor("non-exist-topic"))
   }
 
-  // TODO: fix test after fixing consumer-side Coordinator logic
-  def failingTestPartitionReassignmentCallback() {
+  def testPartitionReassignmentCallback() {
     val callback = new TestConsumerReassignmentCallback()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "200"); // timeout quickly to avoid slow test
     val consumer0 = new KafkaConsumer(this.consumerConfig, callback, new ByteArrayDeserializer(), new ByteArrayDeserializer())

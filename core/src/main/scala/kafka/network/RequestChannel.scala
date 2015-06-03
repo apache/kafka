@@ -49,11 +49,14 @@ object RequestChannel extends Logging {
     @volatile var responseCompleteTimeMs = -1L
     @volatile var responseDequeueTimeMs = -1L
     val requestId = buffer.getShort()
+    // for server-side request / response format
+    // TODO: this will be removed once we migrated to client-side format
     val requestObj =
       if ( RequestKeys.keyToNameAndDeserializerMap.contains(requestId))
         RequestKeys.deserializerForKey(requestId)(buffer)
       else
         null
+    // for client-side request / response format
     val header: RequestHeader =
       if (requestObj == null) {
         buffer.rewind
@@ -68,7 +71,7 @@ object RequestChannel extends Logging {
 
     buffer = null
     private val requestLogger = Logger.getLogger("kafka.request.logger")
-    trace("Processor %d received request : %s".format(processor, requestObj))
+    trace("Processor %d received request : %s".format(processor, if (requestObj != null) requestObj.describe(false) else header.toString + " : " + body.toString))
 
     def updateRequestMetrics() {
       val endTimeMs = SystemTime.milliseconds
@@ -101,10 +104,10 @@ object RequestChannel extends Logging {
       }
       if(requestLogger.isTraceEnabled)
         requestLogger.trace("Completed request:%s from client %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
-          .format(requestObj.describe(true), remoteAddress, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
+          .format(if (requestObj != null) requestObj.describe(true) else header.toString + " : " + body.toString, remoteAddress, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
       else if(requestLogger.isDebugEnabled) {
         requestLogger.debug("Completed request:%s from client %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
-          .format(requestObj.describe(false), remoteAddress, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
+          .format(if (requestObj != null) requestObj.describe(false) else header.toString + " : " + body.toString, remoteAddress, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
       }
     }
   }

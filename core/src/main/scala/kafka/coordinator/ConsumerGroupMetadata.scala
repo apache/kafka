@@ -62,6 +62,14 @@ private[coordinator] case object Stable extends GroupState { val state: Byte = 3
 private[coordinator] case object Dead extends GroupState { val state: Byte = 4 }
 
 
+private object ConsumerGroupMetadata {
+  private val validPreviousStates: Map[GroupState, Set[GroupState]] =
+    Map(Dead -> Set(PreparingRebalance),
+      Stable -> Set(Rebalancing),
+      PreparingRebalance -> Set(Stable),
+      Rebalancing -> Set(PreparingRebalance))
+}
+
 /**
  * Group contains the following metadata:
  *
@@ -76,12 +84,6 @@ private[coordinator] case object Dead extends GroupState { val state: Byte = 4 }
 @nonthreadsafe
 private[coordinator] class ConsumerGroupMetadata(val groupId: String,
                                                  val partitionAssignmentStrategy: String) {
-
-  private val validPreviousStates: Map[GroupState, Set[GroupState]] =
-    Map(Dead -> Set(PreparingRebalance),
-      Stable -> Set(Rebalancing),
-      PreparingRebalance -> Set(Stable),
-      Rebalancing -> Set(PreparingRebalance))
 
   private val consumers = new mutable.HashMap[String, ConsumerMetadata]
   private var state: GroupState = Stable
@@ -124,8 +126,8 @@ private[coordinator] class ConsumerGroupMetadata(val groupId: String,
   }
 
   private def assertValidTransition(targetState: GroupState) {
-    if (!validPreviousStates(targetState).contains(state))
+    if (!ConsumerGroupMetadata.validPreviousStates(targetState).contains(state))
       throw new IllegalStateException("Group %s should be in the %s states before moving to %s state. Instead it is in %s state"
-        .format(groupId, validPreviousStates(targetState).mkString(","), targetState, state))
+        .format(groupId, ConsumerGroupMetadata.validPreviousStates(targetState).mkString(","), targetState, state))
   }
 }
