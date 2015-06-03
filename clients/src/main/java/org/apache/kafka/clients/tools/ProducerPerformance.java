@@ -19,10 +19,6 @@ import org.apache.kafka.clients.producer.*;
 
 public class ProducerPerformance {
 
-    private static final long NS_PER_MS = 1000000L;
-    private static final long NS_PER_SEC = 1000 * NS_PER_MS;
-    private static final long MIN_SLEEP_NS = 2 * NS_PER_MS;
-
     public static void main(String[] args) throws Exception {
         if (args.length < 4) {
             System.err.println("USAGE: java " + ProducerPerformance.class.getName() +
@@ -51,31 +47,17 @@ public class ProducerPerformance {
         byte[] payload = new byte[recordSize];
         Arrays.fill(payload, (byte) 1);
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<byte[], byte[]>(topicName, payload);
-        long sleepTime = NS_PER_SEC / throughput;
-        long sleepDeficitNs = 0;
         Stats stats = new Stats(numRecords, 5000);
-        long start = System.currentTimeMillis();
+        long startMs = System.currentTimeMillis();
+
+        MessageThroughputThrottler throttler = new MessageThroughputThrottler(throughput, startMs);
         for (int i = 0; i < numRecords; i++) {
-            long sendStart = System.currentTimeMillis();
-            Callback cb = stats.nextCompletion(sendStart, payload.length, stats);
+            long sendStartMs = System.currentTimeMillis();
+            Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
             producer.send(record, cb);
 
-            /*
-             * Maybe sleep a little to control throughput. Sleep time can be a bit inaccurate for times < 1 ms so
-             * instead of sleeping each time instead wait until a minimum sleep time accumulates (the "sleep deficit")
-             * and then make up the whole deficit in one longer sleep.
-             */
-            if (throughput > 0) {
-                float elapsed = (sendStart - start) / 1000.f;
-                if (elapsed > 0 && i / elapsed > throughput) {
-                    sleepDeficitNs += sleepTime;
-                    if (sleepDeficitNs >= MIN_SLEEP_NS) {
-                        long sleepMs = sleepDeficitNs / 1000000;
-                        long sleepNs = sleepDeficitNs - sleepMs * 1000000;
-                        Thread.sleep(sleepMs, (int) sleepNs);
-                        sleepDeficitNs = 0;
-                    }
-                }
+            if (throttler.shouldThrottle(i, sendStartMs)) {
+                throttler.throttle();
             }
         }
 

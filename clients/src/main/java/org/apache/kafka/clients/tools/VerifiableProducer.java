@@ -43,25 +43,31 @@ import joptsimple.OptionSpecBuilder;
  * with end-to-end correctness tests by making externally visible which messages have been
  * acked and which have not.
  *
- * When used as a command-line tool, it produces a fixed number of increasing integers.
+ * When used as a command-line tool, it produces increasing integers. It will produce a 
+ * fixed number of messages unless the default max-messages -1 is used, in which case
+ * it produces indefinitely.
+ *  
  * If logging is left enabled, log output on stdout can be easily ignored by checking
  * whether a given line is valid JSON.
  */
 public class VerifiableProducer {
 
-    private static final long NS_PER_MS = 1000000L;
-    private static final long NS_PER_SEC = 1000 * NS_PER_MS;
-    private static final long MIN_SLEEP_NS = 2 * NS_PER_MS;
-    
     OptionParser commandLineParser;
     Map<String, OptionSpec<?>> commandLineOptions = new HashMap<String, OptionSpec<?>>();
   
     String topic;
     private Properties producerProps = new Properties();
     private Producer<String, String> producer;
-    private int numMessages;
+    // If maxMessages < 0, produce until the process is killed externally
+    private long maxMessages = -1;
+    
+    // Number of messages for which acks were received
+    private long numAcked = 0;
+    
+    // Number of send attempts
+    private long numSent = 0;
     private long throughput;
-  
+
     /** Construct with command-line arguments */
     public VerifiableProducer(String[] args) throws IOException {
         this.configureParser();
@@ -74,28 +80,39 @@ public class VerifiableProducer {
         this.commandLineParser = new OptionParser();
         ArgumentAcceptingOptionSpec<String> topicOpt = commandLineParser.accepts("topic", "REQUIRED: The topic id to produce messages to.")
                 .withRequiredArg()
+                .required()
                 .describedAs("topic")
                 .ofType(String.class);
         commandLineOptions.put("topic", topicOpt);
     
         ArgumentAcceptingOptionSpec<String>  brokerListOpt = commandLineParser.accepts("broker-list", "REQUIRED: The broker list string in the form HOST1:PORT1,HOST2:PORT2.")
                 .withRequiredArg()
+                .required()
                 .describedAs("broker-list")
                 .ofType(String.class);
         commandLineOptions.put("broker-list", brokerListOpt);
     
     
-        ArgumentAcceptingOptionSpec<Integer>  numMessagesOpt = commandLineParser.accepts("num-messages", "REQUIRED: The number of messages to produce.")
-                .withRequiredArg()
-                .describedAs("num-messages")
-                .ofType(Integer.class);
-        commandLineOptions.put("num-messages", numMessagesOpt);
+        ArgumentAcceptingOptionSpec<String>  numMessagesOpt = commandLineParser.accepts("max-messages", "Produce this many messages. Default: -1, produces messages until the process is killed externally.")
+                .withOptionalArg()
+                .defaultsTo("-1")
+                .describedAs("max-messages")
+                .ofType(String.class);
+        commandLineOptions.put("max-messages", numMessagesOpt);
 
-        ArgumentAcceptingOptionSpec<Long>  throughputOpt = commandLineParser.accepts("throughput", "REQUIRED: Average message throughput, in messages/sec.")
-                .withRequiredArg()
+        ArgumentAcceptingOptionSpec<String>  throughputOpt = commandLineParser.accepts("throughput", "Average message throughput, in messages/sec. Default: -1, results in no throttling.")
+                .withOptionalArg()
+                .defaultsTo("-1")
                 .describedAs("throughput")
-                .ofType(Long.class);
+                .ofType(String.class);
         commandLineOptions.put("throughput", throughputOpt);
+
+        ArgumentAcceptingOptionSpec<String>  acksOpt = commandLineParser.accepts("acks", "number of acks required. Default: -1")
+                .withOptionalArg()
+                .defaultsTo("-1")
+                .describedAs("acks")
+                .ofType(String.class);
+        commandLineOptions.put("acks", acksOpt);
     
         OptionSpecBuilder helpOpt = commandLineParser.accepts("help", "Print this message.");
         commandLineOptions.put("help", helpOpt);
@@ -103,44 +120,26 @@ public class VerifiableProducer {
   
     /** Validate command-line arguments and parse into properties object. */
     public void parseCommandLineArgs(String[] args) throws IOException {
-  
-        OptionSpec[] requiredArgs = new OptionSpec[]{commandLineOptions.get("topic"),
-                                                     commandLineOptions.get("broker-list"),
-                                                     commandLineOptions.get("num-messages"),
-                                                     commandLineOptions.get("throughput")};
-    
+
         OptionSet options = commandLineParser.parse(args);
         if (options.has(commandLineOptions.get("help"))) {
             commandLineParser.printHelpOn(System.out);
             System.exit(0);
         }
-        checkRequiredArgs(commandLineParser, options, requiredArgs);
-    
-        this.numMessages = (Integer) options.valueOf("num-messages");
+
+        this.maxMessages = Integer.parseInt((String) options.valueOf("max-messages"));
         this.topic = (String) options.valueOf("topic");
-        this.throughput = (Long) options.valueOf("throughput");
+        this.throughput = Long.parseLong((String) options.valueOf("throughput"));
     
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, options.valueOf("broker-list"));
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
                           "org.apache.kafka.common.serialization.StringSerializer");
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
                           "org.apache.kafka.common.serialization.StringSerializer");
-        producerProps.put(ProducerConfig.ACKS_CONFIG, "-1");
+        producerProps.put(ProducerConfig.ACKS_CONFIG, options.valueOf("acks"));
     
         // No producer retries
         producerProps.put("retries", "0");
-    }
-  
-    private static void checkRequiredArgs(
-            OptionParser parser, OptionSet options, OptionSpec[] required) throws IOException
-    {
-        for (OptionSpec arg : required) {
-            if (!options.has(arg)) {
-                System.err.println("Missing required argument \"" + arg + "\"");
-                parser.printHelpOn(System.err);
-                System.exit(1);
-            }
-        }
     }
   
     /**
@@ -148,6 +147,7 @@ public class VerifiableProducer {
      */
     public void send(String key, String value) {
         ProducerRecord<String, String> record = new ProducerRecord<String, String>(topic, key, value);
+        numSent++;
         try {
             producer.send(record, new PrintInfoCallback(key, value));
         } catch (Exception e) {
@@ -215,6 +215,7 @@ public class VerifiableProducer {
         public void onCompletion(RecordMetadata recordMetadata, Exception e) {
             synchronized (System.out) {
                 if (e == null) {
+                    VerifiableProducer.this.numAcked++;
                     System.out.println(successString(recordMetadata, this.key, this.value, System.currentTimeMillis()));
                 } else {
                     System.out.println(errorString(e, this.key, this.value, System.currentTimeMillis()));
@@ -224,56 +225,37 @@ public class VerifiableProducer {
     }
   
     public static void main(String[] args) throws IOException {
-    
-        VerifiableProducer producer = new VerifiableProducer(args);
-
-        long sleepTimeNs = NS_PER_SEC / producer.throughput;
-        long sleepDeficitNs = 0;
-        long startMs = System.currentTimeMillis();
         
-        for (int i = 0; i < producer.numMessages; i++) {
+        final VerifiableProducer producer = new VerifiableProducer(args);
+        final long startMs = System.currentTimeMillis();
+        boolean infinite = producer.maxMessages < 0;
+
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                producer.close();
+
+                long stopMs = System.currentTimeMillis();
+                double avgThroughput = 1000 * ((producer.numAcked) / (double) (stopMs - startMs));
+
+                JSONObject obj = new JSONObject();
+                obj.put("class", producer.getClass().toString());
+                obj.put("name", "tool_data");
+                obj.put("sent", producer.numSent);
+                obj.put("acked", producer.numAcked);
+                obj.put("target_throughput", producer.throughput);
+                obj.put("avg_throughput", avgThroughput);
+                System.out.println(obj.toJSONString());
+            }
+        });
+        
+        MessageThroughputThrottler throttler = new MessageThroughputThrottler(producer.throughput, startMs);
+        for (int i = 0; i < producer.maxMessages || infinite; i++) {
             long sendStartMs = System.currentTimeMillis();
             producer.send(null, String.format("%d", i));
-            
-            // throttle message throughput by sleeping, on average,
-            // (NS_PER_SEC / producer.throughput) nanoseconds between each sent message
-            if (producer.throughput > 0) {
-                float elapsedMs = (sendStartMs - startMs) / 1000.f;
-                if (elapsedMs > 0 && i / elapsedMs > producer.throughput) {
-                    sleepDeficitNs += sleepTimeNs;
-                    
-                    // If enough sleep deficit has accumulated, sleep a little
-                    if (sleepDeficitNs >= MIN_SLEEP_NS) {
-                        long sleepMs = sleepDeficitNs / 1000000;
-                        long sleepNs = sleepDeficitNs - sleepMs * 1000000;
-                        
-                        long sleepStartNs = System.nanoTime();
-                        try {
-                            Thread.sleep(sleepMs, (int) sleepNs);
-                            sleepDeficitNs = 0;
-                        } catch (InterruptedException e) {
-                            // If sleep is cut short, reduce deficit by the amount of
-                            // time we actually spent sleeping
-                            long sleepElapsedNs = System.nanoTime() - sleepStartNs;
-                            if (sleepElapsedNs <= sleepDeficitNs) {
-                                sleepDeficitNs -= sleepElapsedNs;
-                            }
-                        }
-                        
-                    }
-                }
+            if (throttler.shouldThrottle(i, sendStartMs)) {
+                throttler.throttle();
             }
         }
-        producer.close();
-        
-        long stopMs = System.currentTimeMillis();
-        double avgThroughput = 1000 * ((producer.numMessages) / (double) (stopMs - startMs));
-
-        JSONObject obj = new JSONObject();
-        obj.put("class", producer.getClass().toString());
-        obj.put("name", "tool_data");
-        obj.put("target_throughput", producer.throughput);
-        obj.put("avg_throughput", avgThroughput);
-        System.out.println(obj.toJSONString());
     }
 }
