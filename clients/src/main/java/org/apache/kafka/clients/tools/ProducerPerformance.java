@@ -50,7 +50,7 @@ public class ProducerPerformance {
         Stats stats = new Stats(numRecords, 5000);
         long startMs = System.currentTimeMillis();
 
-        MessageThroughputThrottler throttler = new MessageThroughputThrottler(throughput, startMs);
+        ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
         for (int i = 0; i < numRecords; i++) {
             long sendStartMs = System.currentTimeMillis();
             Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);

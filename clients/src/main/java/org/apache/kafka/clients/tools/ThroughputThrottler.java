@@ -33,7 +33,7 @@ package org.apache.kafka.clients.tools;
  *     } 
  * </pre> 
  */
-public class MessageThroughputThrottler {
+public class ThroughputThrottler {
     
     private static final long NS_PER_MS = 1000000L;
     private static final long NS_PER_SEC = 1000 * NS_PER_MS;
@@ -44,7 +44,7 @@ public class MessageThroughputThrottler {
     long targetThroughput = -1;
     long startMs;
 
-    public MessageThroughputThrottler(long targetThroughput, long startMs) {
+    public ThroughputThrottler(long targetThroughput, long startMs) {
         this.startMs = startMs;
         this.targetThroughput = targetThroughput;
         this.sleepTimeNs = NS_PER_SEC / targetThroughput;
