@@ -249,7 +249,7 @@ public class VerifiableProducer {
             }
         });
         
-        MessageThroughputThrottler throttler = new MessageThroughputThrottler(producer.throughput, startMs);
+        ThroughputThrottler throttler = new ThroughputThrottler(producer.throughput, startMs);
         for (int i = 0; i < producer.maxMessages || infinite; i++) {
             long sendStartMs = System.currentTimeMillis();
             producer.send(null, String.format("%d", i));
