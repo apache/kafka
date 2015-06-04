@@ -142,11 +142,10 @@ public class Channel {
 
     private boolean send(NetworkSend send) throws IOException {
         send.writeTo(transportLayer);
-        boolean sendComplete = send.remaining() == 0;
-        if (sendComplete) {
+        if (send.completed()) {
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
         }
-        return sendComplete;
+        return send.completed();
     }
 
- }
+}

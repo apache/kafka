@@ -22,17 +22,12 @@ package org.apache.kafka.common.network;
  */
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ScatteringByteChannel;
-import java.nio.channels.GatheringByteChannel;
 import java.nio.channels.SocketChannel;
-
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 
 import java.security.Principal;
 
 
-public interface TransportLayer extends ScatteringByteChannel, GatheringByteChannel {
+public interface TransportLayer {
 
     /**
      * Returns true if the channel has handshake and authenticaiton done.
@@ -55,6 +50,18 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
     SocketChannel socketChannel();
 
     /**
+     * returns true if socketchannel is open.
+     */
+    boolean isOpen();
+
+    public void close() throws IOException;
+
+    /**
+     * returns true if there are any pending bytes needs to be written to channel.
+     */
+    boolean pending();
+
+    /**
      * Performs SSL handshake hence is a no-op for the non-secure
      * implementation
      * @throws IOException
@@ -62,9 +69,25 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
     void handshake() throws IOException;
 
 
-    DataInputStream inStream() throws IOException;
+    /**
+     * Reads sequence of bytes from the channel to given buffer
+     */
+    public int read(ByteBuffer dst) throws IOException;
 
-    DataOutputStream outStream() throws IOException;
+    public long read(ByteBuffer[] dsts) throws IOException;
+
+    public long read(ByteBuffer[] dsts, int offset, int length) throws IOException;
+
+    /**
+     * Writes a sequence of bytes to this channel from the given buffer.
+     */
+    public int write(ByteBuffer src) throws IOException;
+
+    public long write(ByteBuffer[] srcs) throws IOException;
+
+    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException;
+
+
 
     /**
      * returns SSLSession.getPeerPrinicpal if SSLTransportLayer used

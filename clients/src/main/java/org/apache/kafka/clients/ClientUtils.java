@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.SecurityProtocol;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.SSLChannelBuilder;
 import org.apache.kafka.common.network.PlainTextChannelBuilder;
-import org.apache.kafka.common.config.SecurityConfigs;
 import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -75,8 +74,7 @@ public class ClientUtils {
      */
     public static ChannelBuilder createChannelBuilder(Map<String, ?> configs) {
         ChannelBuilder channelBuilder = null;
-        SecurityProtocol securityProtocol = configs.containsKey(SecurityConfigs.SECURITY_PROTOCOL_CONFIG) ?
-            SecurityProtocol.valueOf((String) configs.get(SecurityConfigs.SECURITY_PROTOCOL_CONFIG)) : SecurityProtocol.PLAINTEXT;
+        SecurityProtocol securityProtocol = SecurityProtocol.valueOf((String) configs.get(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
 
         if (securityProtocol == SecurityProtocol.SSL) {
             channelBuilder = new SSLChannelBuilder();

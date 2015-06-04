@@ -384,8 +384,8 @@ project(':clients') {
     archives testJar
   }
 
-  // checkstyle {
-  //   configFile = new File(rootDir, "checkstyle/checkstyle.xml")
-  // }
-  // test.dependsOn('checkstyleMain', 'checkstyleTest')
+  checkstyle {
+    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
 }

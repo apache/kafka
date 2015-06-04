@@ -17,22 +17,13 @@ import static org.junit.Assert.assertTrue;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.SocketChannel;
-import java.nio.channels.SelectionKey;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.SSLEngineResult;
 
 import org.apache.kafka.common.config.SecurityConfigs;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestSSLUtils;
@@ -151,18 +142,6 @@ public class SSLSelectorTest {
         assertEquals("", blockingRequest(node, ""));
     }
 
-    /**
-     * Test sending an small string
-     */
-    @Test
-    public void testIncompleteSend() throws Exception {
-        int bufferSize = 16391;
-        int node = 0;
-        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
-        selector.connect(node, addr, bufferSize, bufferSize);
-        String requestPrefix = TestUtils.randomString(bufferSize);
-        assertEquals(requestPrefix, blockingRequest(node, requestPrefix));
-    }
 
     @Test
     public void testMute() throws Exception {
@@ -193,7 +172,6 @@ public class SSLSelectorTest {
     public void testRenegotiation() throws Exception {
         int reqs = 500;
         int node = 0;
-
         // create connections
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -217,9 +195,9 @@ public class SSLSelectorTest {
             // handle any responses we may have gotten
             for (NetworkReceive receive : selector.completedReceives()) {
                 String[] pieces = asString(receive).split("-");
-                assertEquals("Receive text should be in the form 'conn-counter'", 2, pieces.length);
+                assertEquals("Should be in the form 'conn-counter'", 2, pieces.length);
                 assertEquals("Check the source", receive.source(), Integer.parseInt(pieces[0]));
-                assertEquals("Receive ByteBuffer position should be at 0", 0, receive.payload().position());
+                assertEquals("Check that the receive has kindly been rewound", 0, receive.payload().position());
                 assertEquals("Check the request counter", responses, Integer.parseInt(pieces[1]));
                 responses++;
             }

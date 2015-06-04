@@ -19,6 +19,7 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.common.config.SecurityConfigs;
 import org.apache.kafka.common.network.SSLFactory;
+import org.apache.kafka.clients.CommonClientConfigs;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -43,10 +44,6 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.DefaultDigestAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.DefaultSignatureAlgorithmIdentifierFinder;
 import org.bouncycastle.operator.bc.BcRSAContentSignerBuilder;
-
-
-
-
 
 import java.util.Date;
 import java.util.HashMap;
@@ -174,7 +171,7 @@ public class TestSSLUtils {
     public static Map<String, Object> createSSLConfig(SSLFactory.Mode mode, File keyStoreFile, String password, String keyPassword,
                                                       File trustStoreFile, String trustStorePassword, boolean useClientCert) {
         Map<String, Object> sslConfigs = new HashMap<String, Object>();
-        sslConfigs.put(SecurityConfigs.SECURITY_PROTOCOL_CONFIG, "SSL"); // kafka security protocol
+        sslConfigs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL"); // kafka security protocol
         sslConfigs.put(SecurityConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2"); // protocol to create SSLContext
 
         if (mode == SSLFactory.Mode.SERVER || (mode == SSLFactory.Mode.CLIENT && keyStoreFile != null)) {

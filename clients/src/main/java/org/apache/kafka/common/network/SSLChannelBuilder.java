@@ -15,8 +15,6 @@ package org.apache.kafka.common.network;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.config.SecurityConfigs;
@@ -28,12 +26,10 @@ import org.slf4j.LoggerFactory;
 public class SSLChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(SSLChannelBuilder.class);
     private SSLFactory sslFactory;
-    private ExecutorService executorService;
     private PrincipalBuilder principalBuilder;
 
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
-            this.executorService = Executors.newScheduledThreadPool(1);
             this.sslFactory = new SSLFactory(SSLFactory.Mode.CLIENT);
             this.sslFactory.configure(configs);
             this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
@@ -49,8 +45,7 @@ public class SSLChannelBuilder implements ChannelBuilder {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             SSLTransportLayer transportLayer = new SSLTransportLayer(key,
                                                                      sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
-                                                                                                socketChannel.socket().getPort()),
-                                                                     executorService);
+                                                                                                socketChannel.socket().getPort()));
             Authenticator authenticator = new DefaultAuthenticator(transportLayer, this.principalBuilder);
             channel = new Channel(id, transportLayer, authenticator);
         } catch (Exception e) {
@@ -61,7 +56,6 @@ public class SSLChannelBuilder implements ChannelBuilder {
     }
 
     public void close()  {
-        this.executorService.shutdown();
         this.principalBuilder.close();
     }
 }

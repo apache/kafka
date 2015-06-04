@@ -48,57 +48,8 @@ public class PlainTextTransportLayer implements TransportLayer {
         this.socketChannel = (SocketChannel) key.channel();
     }
 
-    /**
-     * Closes this channel
-     *
-     * @throws IOException If and I/O error occurs
-     */
-    public void close() throws IOException {
-        socketChannel.socket().close();
-        socketChannel.close();
-    }
-
-    public boolean isOpen() {
-        return socketChannel.isOpen();
-    }
-
-    public void disconnect() {
-        key.cancel();
-    }
-
-    /**
-     * Writes a sequence of bytes to this channel from the given buffer.
-     */
-    public int write(ByteBuffer src) throws IOException {
-        return socketChannel.write(src);
-    }
-
-    public long write(ByteBuffer[] srcs) throws IOException {
-        return socketChannel.write(srcs);
-    }
-
-    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
-        return socketChannel.write(srcs, offset, length);
-    }
-
-    public int read(ByteBuffer dst) throws IOException {
-        return socketChannel.read(dst);
-    }
-
-    public long read(ByteBuffer[] dsts) throws IOException {
-        return socketChannel.read(dsts);
-    }
-
-    public long read(ByteBuffer[] dsts, int offset, int length) throws IOException {
-        return socketChannel.read(dsts, offset, length);
-    }
-
     public boolean isReady() {
         return true;
-    }
-
-    public SocketChannel socketChannel() {
-        return socketChannel;
     }
 
     public void finishConnect() throws IOException {
@@ -109,6 +60,40 @@ public class PlainTextTransportLayer implements TransportLayer {
         key.interestOps(ops);
     }
 
+    public void disconnect() {
+        key.cancel();
+    }
+
+    public SocketChannel socketChannel() {
+        return socketChannel;
+    }
+
+
+    public boolean isOpen() {
+        return socketChannel.isOpen();
+    }
+
+    /**
+     * Closes this channel
+     *
+     * @throws IOException If and I/O error occurs
+     */
+    public void close() throws IOException {
+        socketChannel.socket().close();
+        socketChannel.close();
+    }
+
+
+
+    /**
+     * There won't be any pending bytes to written socketChannel once write method is called.
+     * This will always return false.
+     */
+    public boolean pending() {
+        return false;
+    }
+
+
     /**
      * Performs SSL handshake hence is a no-op for the non-secure
      * implementation
@@ -116,26 +101,97 @@ public class PlainTextTransportLayer implements TransportLayer {
     */
     public void handshake() throws IOException {}
 
-    public DataInputStream inStream() throws IOException {
-        if (inStream == null)
-            this.inStream = new DataInputStream(socketChannel.socket().getInputStream());
-        return inStream;
+
+    /**
+    * Reads a sequence of bytes from this channel into the given buffer.
+    *
+    * @param dst The buffer into which bytes are to be transferred
+    * @return The number of bytes read, possible zero or -1 if the channel has reached end-of-stream
+    * @throws IOException if some other I/O error occurs
+    */
+
+    public int read(ByteBuffer dst) throws IOException {
+        return socketChannel.read(dst);
     }
 
-    public DataOutputStream outStream() throws IOException {
-        if (outStream == null)
-         this.outStream = new DataOutputStream(socketChannel.socket().getOutputStream());
-        return outStream;
+    /**
+     * Reads a sequence of bytes from this channel into the given buffers.
+     *
+     * @param dsts - The buffers into which bytes are to be transferred.
+     * @return The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream.
+     * @throws IOException if some other I/O error occurs
+     */
+    public long read(ByteBuffer[] dsts) throws IOException {
+        return socketChannel.read(dsts);
     }
 
+    /**
+     * Reads a sequence of bytes from this channel into a subsequence of the given buffers.
+     * @param dsts - The buffers into which bytes are to be transferred
+     * @param offset - The offset within the buffer array of the first buffer into which bytes are to be transferred; must be non-negative and no larger than dsts.length.
+     * @param length - The maximum number of buffers to be accessed; must be non-negative and no larger than dsts.length - offset
+     * @returns The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream.
+     * @throws IOException if some other I/O error occurs
+     */
+    public long read(ByteBuffer[] dsts, int offset, int length) throws IOException {
+        return socketChannel.read(dsts, offset, length);
+    }
+
+    /**
+    * Writes a sequence of bytes to this channel from the given buffer.
+    *
+    * @param src The buffer from which bytes are to be retrieved
+    * @returns The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
+    * @throws IOException If some other I/O error occurs
+    */
+    public int write(ByteBuffer src) throws IOException {
+        return socketChannel.write(src);
+    }
+
+    /**
+    * Writes a sequence of bytes to this channel from the given buffer.
+    *
+    * @param src The buffer from which bytes are to be retrieved
+    * @returns The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
+    * @throws IOException If some other I/O error occurs
+    */
+    public long write(ByteBuffer[] srcs) throws IOException {
+        return socketChannel.write(srcs);
+    }
+
+    /**
+    * Writes a sequence of bytes to this channel from the subsequence of the given buffers.
+    *
+    * @param srcs The buffers from which bytes are to be retrieved
+    * @param offset The offset within the buffer array of the first buffer from which bytes are to be retrieved; must be non-negative and no larger than srcs.length.
+    * @param length - The maximum number of buffers to be accessed; must be non-negative and no larger than srcs.length - offset.
+    * @return returns no.of bytes written , possibly zero.
+    * @throws IOException If some other I/O error occurs
+    */
+    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
+        return socketChannel.write(srcs, offset, length);
+    }
+
+    /**
+     * Rerturns ANONYMOUS as Principal.
+     */
     public Principal peerPrincipal() throws IOException {
         return principal;
     }
 
+    /**
+     * Adds the interestOps to selectionKey.
+     * @param SelectionKey interestOps
+     */
     public void addInterestOps(int ops) {
         key.interestOps(key.interestOps() | ops);
+
     }
 
+    /**
+     * Removes the interestOps from selectionKey.
+     * @param SelectionKey interestOps
+     */
     public void removeInterestOps(int ops) {
         key.interestOps(key.interestOps() & ~ops);
     }

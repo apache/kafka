@@ -136,7 +136,7 @@ public class SSLFactory implements Configurable {
             sslEngine.setUseClientMode(false);
             if (needClientAuth)
                 sslEngine.setNeedClientAuth(needClientAuth);
-            else if (wantClientAuth)
+            else
                 sslEngine.setNeedClientAuth(wantClientAuth);
         } else {
             sslEngine.setUseClientMode(true);

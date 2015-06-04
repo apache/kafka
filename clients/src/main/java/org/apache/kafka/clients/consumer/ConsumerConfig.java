@@ -278,7 +278,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.CLASS,
                                         Importance.HIGH,
                                         VALUE_DESERIALIZER_CLASS_DOC)
-                                .define(SecurityConfigs.SECURITY_PROTOCOL_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SECURITY_PROTOCOL, Importance.MEDIUM, SecurityConfigs.SECURITY_PROTOCOL_DOC)
+                                .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, Type.STRING, CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL, Importance.MEDIUM, CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .define(SecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Type.CLASS, SecurityConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS, Importance.LOW, SecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC)
                                 .define(SecurityConfigs.SSL_PROTOCOL_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_PROTOCOL, Importance.MEDIUM, SecurityConfigs.SSL_PROTOCOL_DOC)
                                 .define(SecurityConfigs.SSL_PROVIDER_CONFIG, Type.STRING, Importance.MEDIUM, SecurityConfigs.SSL_PROVIDER_DOC, false)
