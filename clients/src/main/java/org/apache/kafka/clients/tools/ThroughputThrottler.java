@@ -21,8 +21,9 @@ package org.apache.kafka.clients.tools;
 /**
  * This class helps producers throttle throughput.
  * 
- * The resulting average throughput will be approximately 
- * min(targetThroughput, maximumPossibleThroughput)
+ * If targetThroughput >= 0, the resulting average throughput will be approximately
+ * min(targetThroughput, maximumPossibleThroughput). If targetThroughput < 0,
+ * no throttling will occur. 
  * 
  * To use, do this between successive send attempts:
  * <pre>
@@ -53,7 +54,9 @@ public class ThroughputThrottler {
     public ThroughputThrottler(long targetThroughput, long startMs) {
         this.startMs = startMs;
         this.targetThroughput = targetThroughput;
-        this.sleepTimeNs = NS_PER_SEC / targetThroughput;
+        this.sleepTimeNs = targetThroughput > 0 ?
+                           NS_PER_SEC / targetThroughput : 
+                           Long.MAX_VALUE;
     }
 
     /**
@@ -63,7 +66,7 @@ public class ThroughputThrottler {
      * @return
      */
     public boolean shouldThrottle(long amountSoFar, long sendStartMs) {
-        if (this.targetThroughput <= 0) {
+        if (this.targetThroughput < 0) {
             // No throttling in this case
             return false;
         }
@@ -72,7 +75,21 @@ public class ThroughputThrottler {
         return elapsedMs > 0 && (amountSoFar / elapsedMs) > this.targetThroughput;
     }
 
+    /**
+     * Occasionally blocks for small amounts of time to achieve targetThroughput.
+     * 
+     * Note that if targetThroughput is 0, this will block extremely aggressively.
+     */
     public void throttle() {
+        if (targetThroughput == 0) {
+            try {
+                Thread.sleep(Long.MAX_VALUE);
+            } catch (InterruptedException e) {
+                // do nothing
+            }
+            return;
+        }
+        
         // throttle throughput by sleeping, on average,
         // (1 / this.throughput) seconds between "things sent"
         sleepDeficitNs += sleepTimeNs;

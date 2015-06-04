@@ -93,7 +93,7 @@
 			<allow pkg="org.apache.kafka.clients.producer" />
 			<allow pkg="org.apache.kafka.clients.consumer" />
             <allow pkg="org.json.simple" />
-            <allow pkg="joptsimple" />
+            <allow pkg="net.sourceforge.argparse4j" />
 		</subpackage>
 	</subpackage>
 
