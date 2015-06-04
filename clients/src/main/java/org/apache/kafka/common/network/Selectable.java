@@ -29,12 +29,12 @@ public interface Selectable {
      * @param receiveBufferSize The receive buffer for the socket
      * @throws IOException If we cannot begin connecting
      */
-    public void connect(int id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException;
+    public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException;
 
     /**
      * Begin disconnecting the connection identified by the given id
      */
-    public void disconnect(int id);
+    public void disconnect(String id);
 
     /**
      * Wakeup this selector if it is blocked on I/O
@@ -50,7 +50,7 @@ public interface Selectable {
      * Queue the given request for sending in the subsequent {@poll(long)} calls
      * @param send The request to send
      */
-    public void send(NetworkSend send);
+    public void send(Send send);
 
     /**
      * Do I/O. Reads, writes, connection establishment, etc.
@@ -62,7 +62,7 @@ public interface Selectable {
     /**
      * The list of sends that completed on the last {@link #poll(long, List) poll()} call.
      */
-    public List<NetworkSend> completedSends();
+    public List<Send> completedSends();
 
     /**
      * The list of receives that completed on the last {@link #poll(long, List) poll()} call.
@@ -73,25 +73,25 @@ public interface Selectable {
      * The list of connections that finished disconnecting on the last {@link #poll(long, List) poll()}
      * call.
      */
-    public List<Integer> disconnected();
+    public List<String> disconnected();
 
     /**
      * The list of connections that completed their connection on the last {@link #poll(long, List) poll()}
      * call.
      */
-    public List<Integer> connected();
+    public List<String> connected();
 
     /**
      * Disable reads from the given connection
      * @param id The id for the connection
      */
-    public void mute(int id);
+    public void mute(String id);
 
     /**
      * Re-enable reads from the given connection
      * @param id The id for the connection
      */
-    public void unmute(int id);
+    public void unmute(String id);
 
     /**
      * Disable reads from all connections

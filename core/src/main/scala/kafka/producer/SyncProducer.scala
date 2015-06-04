@@ -17,11 +17,12 @@
 
 package kafka.producer
 
-import kafka.api._
-import kafka.network.{BlockingChannel, BoundedByteBufferSend, Receive}
-import kafka.utils._
 import java.util.Random
 
+import kafka.api._
+import kafka.network.{RequestOrResponseSend, BlockingChannel}
+import kafka.utils._
+import org.apache.kafka.common.network.NetworkReceive
 import org.apache.kafka.common.utils.Utils._
 
 object SyncProducer {
@@ -50,7 +51,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
      * data. So, leaving the rest of the logging at TRACE, while errors should be logged at ERROR level
      */
     if (logger.isDebugEnabled) {
-      val buffer = new BoundedByteBufferSend(request).buffer
+      val buffer = new RequestOrResponseSend("", request).buffer
       trace("verifying sendbuffer of size " + buffer.limit)
       val requestTypeId = buffer.getShort()
       if(requestTypeId == RequestKeys.ProduceKey) {
@@ -63,12 +64,12 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
   /**
    * Common functionality for the public send methods
    */
-  private def doSend(request: RequestOrResponse, readResponse: Boolean = true): Receive = {
+  private def doSend(request: RequestOrResponse, readResponse: Boolean = true): NetworkReceive = {
     lock synchronized {
       verifyRequest(request)
       getOrMakeConnection()
 
-      var response: Receive = null
+      var response: NetworkReceive = null
       try {
         blockingChannel.send(request)
         if(readResponse)
@@ -95,7 +96,7 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
     producerRequestStats.getProducerRequestStats(config.host, config.port).requestSizeHist.update(requestSize)
     producerRequestStats.getProducerRequestAllBrokersStats.requestSizeHist.update(requestSize)
 
-    var response: Receive = null
+    var response: NetworkReceive = null
     val specificTimer = producerRequestStats.getProducerRequestStats(config.host, config.port).requestTimer
     val aggregateTimer = producerRequestStats.getProducerRequestAllBrokersStats.requestTimer
     aggregateTimer.time {
@@ -104,14 +105,14 @@ class SyncProducer(val config: SyncProducerConfig) extends Logging {
       }
     }
     if(producerRequest.requiredAcks != 0)
-      ProducerResponse.readFrom(response.buffer)
+      ProducerResponse.readFrom(response.payload)
     else
       null
   }
 
   def send(request: TopicMetadataRequest): TopicMetadataResponse = {
     val response = doSend(request)
-    TopicMetadataResponse.readFrom(response.buffer)
+    TopicMetadataResponse.readFrom(response.payload)
   }
 
   def close() = {

@@ -19,14 +19,16 @@
 package kafka.api
 
 import java.nio._
-import kafka.utils._
+
 import kafka.api.ApiUtils._
 import kafka.cluster.BrokerEndPoint
-import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.network.{BoundedByteBufferSend, RequestChannel}
 import kafka.common.ErrorMapping
+import kafka.controller.LeaderIsrAndControllerEpoch
+import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
-import collection.Set
+import kafka.utils._
+
+import scala.collection.Set
 
 
 object LeaderAndIsr {
@@ -184,7 +186,7 @@ case class LeaderAndIsrRequest (versionId: Short,
       case (topicAndPartition, partitionAndState) => (topicAndPartition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
     }
     val errorResponse = LeaderAndIsrResponse(correlationId, responseMap)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean): String = {

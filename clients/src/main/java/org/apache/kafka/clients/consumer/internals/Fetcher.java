@@ -124,7 +124,7 @@ public class Fetcher<K, V> {
      */
     public void initFetches(Cluster cluster, long now) {
         for (ClientRequest request : createFetchRequests(cluster)) {
-            Node node = cluster.nodeById(request.request().destination());
+            Node node = cluster.nodeById(Integer.parseInt(request.request().destination()));
             if (client.ready(node, now)) {
                 log.trace("Initiating fetch to node {}: {}", node.id(), request);
                 client.send(request);
@@ -209,12 +209,12 @@ public class Fetcher<K, V> {
             } else if (this.client.ready(info.leader(), now)) {
                 Node node = info.leader();
                 ListOffsetRequest request = new ListOffsetRequest(-1, partitions);
-                RequestSend send = new RequestSend(node.id(),
+                RequestSend send = new RequestSend(node.idString(),
                     this.client.nextRequestHeader(ApiKeys.LIST_OFFSETS),
                     request.toStruct());
                 ClientRequest clientRequest = new ClientRequest(now, true, send, null);
                 this.client.send(clientRequest);
-                List<ClientResponse> responses = this.client.completeAll(node.id(), now);
+                List<ClientResponse> responses = this.client.completeAll(node.idString(), now);
                 if (responses.isEmpty())
                     throw new IllegalStateException("This should not happen.");
                 ClientResponse response = responses.get(responses.size() - 1);
@@ -258,7 +258,7 @@ public class Fetcher<K, V> {
         for (TopicPartition partition : subscriptions.assignedPartitions()) {
             Node node = cluster.leaderFor(partition);
             // if there is a leader and no in-flight requests, issue a new fetch
-            if (node != null && this.client.inFlightRequestCount(node.id()) == 0) {
+            if (node != null && this.client.inFlightRequestCount(node.idString()) == 0) {
                 Map<TopicPartition, FetchRequest.PartitionData> fetch = fetchable.get(node.id());
                 if (fetch == null) {
                     fetch = new HashMap<TopicPartition, FetchRequest.PartitionData>();
@@ -274,7 +274,7 @@ public class Fetcher<K, V> {
         for (Map.Entry<Integer, Map<TopicPartition, FetchRequest.PartitionData>> entry : fetchable.entrySet()) {
             int nodeId = entry.getKey();
             final FetchRequest fetch = new FetchRequest(this.maxWaitMs, this.minBytes, entry.getValue());
-            RequestSend send = new RequestSend(nodeId, this.client.nextRequestHeader(ApiKeys.FETCH), fetch.toStruct());
+            RequestSend send = new RequestSend(Integer.toString(nodeId), this.client.nextRequestHeader(ApiKeys.FETCH), fetch.toStruct());
             RequestCompletionHandler handler = new RequestCompletionHandler() {
                 public void onComplete(ClientResponse response) {
                     handleFetchResponse(response, fetch);

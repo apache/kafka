@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.util.Properties
 
 import kafka.api.ApiVersion
@@ -24,9 +25,11 @@ import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.ConfigDef
+import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.protocol.SecurityProtocol
-import scala.collection.{immutable, JavaConversions, Map}
+import scala.collection.{mutable, immutable, JavaConversions, Map}
 
 object Defaults {
   /** ********* Zookeeper Configuration ***********/
@@ -130,6 +133,10 @@ object Defaults {
   val DeleteTopicEnable = false
 
   val CompressionType = "producer"
+
+  val MetricNumSamples = 2
+  val MetricSampleWindowMs = 1000
+  val MetricReporterClasses = ""
 }
 
 object KafkaConfig {
@@ -239,6 +246,10 @@ object KafkaConfig {
 
   val DeleteTopicEnableProp = "delete.topic.enable"
   val CompressionTypeProp = "compression.type"
+
+  val MetricSampleWindowMsProp = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG
+  val MetricNumSamplesProp: String = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG
+  val MetricReporterClassesProp: String = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG
 
 
   /* Documentation */
@@ -374,6 +385,10 @@ object KafkaConfig {
     "('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
     "'producer' which means retain the original compression codec set by the producer."
 
+  val MetricSampleWindowMsDoc = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC
+  val MetricNumSamplesDoc = CommonClientConfigs.METRICS_NUM_SAMPLES_DOC
+  val MetricReporterClassesDoc = CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC
+
 
   private val configDef = {
     import ConfigDef.Range._
@@ -494,6 +509,9 @@ object KafkaConfig {
       .define(OffsetCommitRequiredAcksProp, SHORT, Defaults.OffsetCommitRequiredAcks, HIGH, OffsetCommitRequiredAcksDoc)
       .define(DeleteTopicEnableProp, BOOLEAN, Defaults.DeleteTopicEnable, HIGH, DeleteTopicEnableDoc)
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, HIGH, CompressionTypeDoc)
+      .define(MetricNumSamplesProp, INT, Defaults.MetricNumSamples, atLeast(1), LOW, MetricNumSamplesDoc)
+      .define(MetricSampleWindowMsProp, LONG, Defaults.MetricSampleWindowMs, atLeast(1), LOW, MetricSampleWindowMsDoc)
+      .define(MetricReporterClassesProp, LIST, Defaults.MetricReporterClasses, LOW, MetricReporterClassesDoc)
   }
 
   def configNames() = {
@@ -618,7 +636,10 @@ object KafkaConfig {
       offsetCommitTimeoutMs = parsed.get(OffsetCommitTimeoutMsProp).asInstanceOf[Int],
       offsetCommitRequiredAcks = parsed.get(OffsetCommitRequiredAcksProp).asInstanceOf[Short],
       deleteTopicEnable = parsed.get(DeleteTopicEnableProp).asInstanceOf[Boolean],
-      compressionType = parsed.get(CompressionTypeProp).asInstanceOf[String]
+      compressionType = parsed.get(CompressionTypeProp).asInstanceOf[String],
+      metricNumSamples = parsed.get(MetricNumSamplesProp).asInstanceOf[Int],
+      metricSampleWindowMs = parsed.get(MetricSampleWindowMsProp).asInstanceOf[Long],
+      _metricReporterClasses = parsed.get(MetricReporterClassesProp).asInstanceOf[java.util.List[String]]
     )
   }
 
@@ -653,7 +674,7 @@ object KafkaConfig {
   }
 }
 
-class KafkaConfig(/** ********* Zookeeper Configuration ***********/
+class KafkaConfig (/** ********* Zookeeper Configuration ***********/
                   val zkConnect: String,
                   val zkSessionTimeoutMs: Int = Defaults.ZkSessionTimeoutMs,
                   private val _zkConnectionTimeoutMs: Option[Int] = None,
@@ -766,7 +787,11 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
                   val offsetCommitRequiredAcks: Short = Defaults.OffsetCommitRequiredAcks,
 
                   val deleteTopicEnable: Boolean = Defaults.DeleteTopicEnable,
-                  val compressionType: String = Defaults.CompressionType
+                  val compressionType: String = Defaults.CompressionType,
+
+                  val metricSampleWindowMs: Long = Defaults.MetricSampleWindowMs,
+                  val metricNumSamples: Int = Defaults.MetricNumSamples,
+                  private val _metricReporterClasses: java.util.List[String] = util.Arrays.asList(Defaults.MetricReporterClasses)
                    ) {
 
   val zkConnectionTimeoutMs: Int = _zkConnectionTimeoutMs.getOrElse(zkSessionTimeoutMs)
@@ -785,6 +810,8 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
 
   val maxConnectionsPerIpOverrides: Map[String, Int] =
     getMap(KafkaConfig.MaxConnectionsPerIpOverridesProp, _maxConnectionsPerIpOverrides).map { case (k, v) => (k, v.toInt)}
+
+  val metricReporterClasses: java.util.List[MetricsReporter] = getMetricClasses(_metricReporterClasses)
 
   private def getLogRetentionTimeMillis: Long = {
     val millisInMinute = 60L * 1000L
@@ -848,6 +875,24 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
     } else {
       getListeners()
     }
+  }
+
+  private def getMetricClasses(metricClasses: java.util.List[String]): java.util.List[MetricsReporter] = {
+
+    val reporterList = new util.ArrayList[MetricsReporter]();
+    val iterator = metricClasses.iterator()
+
+    while (iterator.hasNext) {
+      val reporterName = iterator.next()
+      if (!reporterName.isEmpty) {
+        val reporter: MetricsReporter = CoreUtils.createObject[MetricsReporter](reporterName)
+        reporter.configure(toProps.asInstanceOf[java.util.Map[String, _]])
+        reporterList.add(reporter)
+      }
+    }
+
+    reporterList
+
   }
 
 
@@ -992,6 +1037,9 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
     props.put(OffsetCommitRequiredAcksProp, offsetCommitRequiredAcks.toString)
     props.put(DeleteTopicEnableProp, deleteTopicEnable.toString)
     props.put(CompressionTypeProp, compressionType.toString)
+    props.put(MetricNumSamplesProp, metricNumSamples.toString)
+    props.put(MetricSampleWindowMsProp, metricSampleWindowMs.toString)
+    props.put(MetricReporterClassesProp, JavaConversions.collectionAsScalaIterable(_metricReporterClasses).mkString(","))
 
     props
   }

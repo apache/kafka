@@ -320,7 +320,7 @@ public class Sender implements Runnable {
             recordsByPartition.put(tp, batch);
         }
         ProduceRequest request = new ProduceRequest(acks, timeout, produceRecordsByPartition);
-        RequestSend send = new RequestSend(destination,
+        RequestSend send = new RequestSend(Integer.toString(destination),
                                            this.client.nextRequestHeader(ApiKeys.PRODUCE),
                                            request.toStruct());
         RequestCompletionHandler callback = new RequestCompletionHandler() {
@@ -505,10 +505,10 @@ public class Sender implements Runnable {
                 topicErrorSensor.record(count, now);
         }
 
-        public void recordLatency(int node, long latency) {
+        public void recordLatency(String node, long latency) {
             long now = time.milliseconds();
             this.requestTimeSensor.record(latency, now);
-            if (node >= 0) {
+            if (!node.isEmpty()) {
                 String nodeTimeName = "node-" + node + ".latency";
                 Sensor nodeRequestTime = this.metrics.getSensor(nodeTimeName);
                 if (nodeRequestTime != null)

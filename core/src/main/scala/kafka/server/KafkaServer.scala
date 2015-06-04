@@ -21,18 +21,21 @@ import kafka.admin._
 import kafka.log.LogConfig
 import kafka.log.CleanerConfig
 import kafka.log.LogManager
-import kafka.utils._
 import java.util.concurrent._
 import atomic.{AtomicInteger, AtomicBoolean}
 import java.io.File
 
-import collection.mutable
+import kafka.utils._
+import org.apache.kafka.common.metrics._
+import org.apache.kafka.common.network.NetworkReceive
+
+import scala.collection.{JavaConversions, mutable}
 import org.I0Itec.zkclient.ZkClient
 import kafka.controller.{ControllerStats, KafkaController}
 import kafka.cluster.{EndPoint, Broker}
 import kafka.api.{ControlledShutdownResponse, ControlledShutdownRequest}
 import kafka.common.{ErrorMapping, InconsistentBrokerIdException, GenerateBrokerIdException}
-import kafka.network.{Receive, BlockingChannel, SocketServer}
+import kafka.network.{BlockingChannel, SocketServer}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
 import kafka.coordinator.ConsumerCoordinator
@@ -47,6 +50,19 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   private val isStartingUp = new AtomicBoolean(false)
 
   private var shutdownLatch = new CountDownLatch(1)
+
+  private val metricConfig: MetricConfig = new MetricConfig()
+          .samples(config.metricNumSamples)
+          .timeWindow(config.metricSampleWindowMs, TimeUnit.MILLISECONDS)
+  private val jmxPrefix: String = "kafka.server"
+  private val reporters: java.util.List[MetricsReporter] =  config.metricReporterClasses
+  reporters.add(new JmxReporter(jmxPrefix))
+
+
+
+  // This exists so SocketServer (which uses Client libraries) can use the client Time objects without having to convert all of Kafka to use them
+  // Once we get rid of kafka.utils.time, we can get rid of this too
+  private val socketServerTime: org.apache.kafka.common.utils.Time = new org.apache.kafka.common.utils.SystemTime()
 
   val brokerState: BrokerState = new BrokerState
 
@@ -117,6 +133,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         config.brokerId =  getBrokerId
         this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
+        val metrics = new Metrics(metricConfig, reporters, socketServerTime)
+
+
         socketServer = new SocketServer(config.brokerId,
                                         config.listeners,
                                         config.numNetworkThreads,
@@ -126,7 +145,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                         config.socketRequestMaxBytes,
                                         config.maxConnectionsPerIp,
                                         config.connectionsMaxIdleMs,
-                                        config.maxConnectionsPerIpOverrides)
+                                        config.maxConnectionsPerIpOverrides,
+                                        socketServerTime,
+                                        metrics)
           socketServer.startup()
 
           /* start replica manager */
@@ -262,14 +283,14 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
           // 2. issue a controlled shutdown to the controller
           if (channel != null) {
-            var response: Receive = null
+            var response: NetworkReceive = null
             try {
               // send the controlled shutdown request
               val request = new ControlledShutdownRequest(correlationId.getAndIncrement, config.brokerId)
               channel.send(request)
 
               response = channel.receive()
-              val shutdownResponse = ControlledShutdownResponse.readFrom(response.buffer)
+              val shutdownResponse = ControlledShutdownResponse.readFrom(response.payload())
               if (shutdownResponse.errorCode == ErrorMapping.NoError && shutdownResponse.partitionsRemaining != null &&
                   shutdownResponse.partitionsRemaining.size == 0) {
                 shutdownSucceeded = true

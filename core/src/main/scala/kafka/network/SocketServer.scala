@@ -17,23 +17,26 @@
 
 package kafka.network
 
+import java.io.IOException
+import java.net._
+import java.nio.channels._
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import java.net._
-import java.io._
-import java.nio.channels._
 
+import com.yammer.metrics.core.Gauge
 import kafka.cluster.EndPoint
-import org.apache.kafka.common.protocol.SecurityProtocol
-
-import scala.collection._
-
 import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
-import com.yammer.metrics.core.{Gauge, Meter}
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.MetricName
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.InvalidReceiveException
+import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.protocol.types.SchemaException
+import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
+
+import scala.collection._
 
 /**
  * An NIO socket server. The threading model is
@@ -50,16 +53,20 @@ class SocketServer(val brokerId: Int,
                    val maxRequestSize: Int = Int.MaxValue,
                    val maxConnectionsPerIp: Int = Int.MaxValue,
                    val connectionsMaxIdleMs: Long,
-                   val maxConnectionsPerIpOverrides: Map[String, Int] ) extends Logging with KafkaMetricsGroup {
+                   val maxConnectionsPerIpOverrides: Map[String, Int],
+                   val time: Time,
+                   val metrics: Metrics) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Socket Server on Broker " + brokerId + "], "
-  private val time = SystemTime
+
   private val processors = new Array[Processor](numProcessorThreads)
   private[network] var acceptors =  mutable.Map[EndPoint,Acceptor]()
   val requestChannel = new RequestChannel(numProcessorThreads, maxQueuedRequests)
 
-  /* a meter to track the average free capacity of the network processors */
-  private val aggregateIdleMeter = newMeter("NetworkProcessorAvgIdlePercent", "percent", TimeUnit.NANOSECONDS)
-
+  private val allMetricNames = (0 until numProcessorThreads).map { i =>
+    val tags = new util.HashMap[String, String]()
+    tags.put("networkProcessor", i.toString)
+    new MetricName("io-wait-ratio", "socket-server-metrics", tags)
+  }
 
   /* I'm pushing the mapping of port-to-protocol to the processor level,
      so the processor can put the correct protocol in the request channel.
@@ -75,25 +82,29 @@ class SocketServer(val brokerId: Int,
   def startup() {
     val quotas = new ConnectionQuotas(maxConnectionsPerIp, maxConnectionsPerIpOverrides)
 
+    newGauge("NetworkProcessorAvgIdlePercent",
+      new Gauge[Double] {
+        def value = allMetricNames.map( metricName =>
+          metrics.metrics().get(metricName).value()).sum / numProcessorThreads
+      }
+    )
+
+
     this.synchronized {
       for (i <- 0 until numProcessorThreads) {
         processors(i) = new Processor(i,
           time,
           maxRequestSize,
-          aggregateIdleMeter,
-          newMeter("IdlePercent", "percent", TimeUnit.NANOSECONDS, Map("networkProcessor" -> i.toString)),
           numProcessorThreads,
           requestChannel,
           quotas,
           connectionsMaxIdleMs,
-          portToProtocol)
+          portToProtocol,
+          metrics
+          )
         Utils.newThread("kafka-network-thread-%d-%d".format(brokerId, i), processors(i), false).start()
       }
     }
-
-    newGauge("ResponsesBeingSent", new Gauge[Int] {
-      def value = processors.foldLeft(0) { (total, p) => total + p.countInterestOps(SelectionKey.OP_WRITE) }
-    })
 
     // register the processor threads for notification of responses
     requestChannel.addResponseListener((id:Int) => processors(id).wakeup())
@@ -140,18 +151,19 @@ class SocketServer(val brokerId: Int,
  */
 private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQuotas) extends Runnable with Logging {
 
-  protected val selector = Selector.open()
   private val startupLatch = new CountDownLatch(1)
   private val shutdownLatch = new CountDownLatch(1)
   private val alive = new AtomicBoolean(true)
+
+  def wakeup()
 
   /**
    * Initiates a graceful shutdown by signaling to stop and waiting for the shutdown to complete
    */
   def shutdown(): Unit = {
     alive.set(false)
-    selector.wakeup()
-    shutdownLatch.await
+    wakeup()
+    shutdownLatch.await()
   }
 
   /**
@@ -163,23 +175,18 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
    * Record that the thread startup is complete
    */
   protected def startupComplete() = {
-    startupLatch.countDown
+    startupLatch.countDown()
   }
 
   /**
    * Record that the thread shutdown is complete
    */
-  protected def shutdownComplete() = shutdownLatch.countDown
+  protected def shutdownComplete() = shutdownLatch.countDown()
 
   /**
    * Is the server still running?
    */
   protected def isRunning = alive.get
-  
-  /**
-   * Wakeup the thread for selection.
-   */
-  def wakeup() = selector.wakeup()
   
   /**
    * Close the given key and associated socket
@@ -200,30 +207,6 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
       swallowError(channel.close())
     }
   }
-  
-  /**
-   * Close all open connections
-   */
-  def closeAll() {
-    // removes cancelled keys from selector.keys set
-    this.selector.selectNow() 
-    val iter = this.selector.keys().iterator()
-    while (iter.hasNext) {
-      val key = iter.next()
-      close(key)
-    }
-  }
-
-  def countInterestOps(ops: Int): Int = {
-    var count = 0
-    val it = this.selector.keys().iterator()
-    while (it.hasNext) {
-      if ((it.next().interestOps() & ops) != 0) {
-        count += 1
-      }
-    }
-    count
-  }
 }
 
 /**
@@ -237,6 +220,7 @@ private[kafka] class Acceptor(val host: String,
                               connectionQuotas: ConnectionQuotas,
                               protocol: SecurityProtocol,
                               portToProtocol: ConcurrentHashMap[Int, SecurityProtocol]) extends AbstractServerThread(connectionQuotas) {
+  val nioSelector = java.nio.channels.Selector.open()
   val serverChannel = openServerSocket(host, port)
   portToProtocol.put(serverChannel.socket().getLocalPort, protocol)
 
@@ -244,13 +228,13 @@ private[kafka] class Acceptor(val host: String,
    * Accept loop that checks for new connection attempts
    */
   def run() {
-    serverChannel.register(selector, SelectionKey.OP_ACCEPT)
+    serverChannel.register(nioSelector, SelectionKey.OP_ACCEPT);
     startupComplete()
     var currentProcessor = 0
     while(isRunning) {
-      val ready = selector.select(500)
+      val ready = nioSelector.select(500)
       if(ready > 0) {
-        val keys = selector.selectedKeys()
+        val keys = nioSelector.selectedKeys()
         val iter = keys.iterator()
         while(iter.hasNext && isRunning) {
           var key: SelectionKey = null
@@ -258,7 +242,7 @@ private[kafka] class Acceptor(val host: String,
             key = iter.next
             iter.remove()
             if(key.isAcceptable)
-               accept(key, processors(currentProcessor))
+              accept(key, processors(currentProcessor))
             else
                throw new IllegalStateException("Unrecognized key state for acceptor thread.")
 
@@ -272,7 +256,7 @@ private[kafka] class Acceptor(val host: String,
     }
     debug("Closing server socket and selector.")
     swallowError(serverChannel.close())
-    swallowError(selector.close())
+    swallowError(nioSelector.close())
     shutdownComplete()
   }
   
@@ -290,7 +274,7 @@ private[kafka] class Acceptor(val host: String,
     serverChannel.socket().setReceiveBufferSize(recvBufferSize)
     try {
       serverChannel.socket.bind(socketAddress)
-      info("Awaiting socket connections on %s:%d.".format(socketAddress.getHostName, port))
+      info("Awaiting socket connections on %s:%d.".format(socketAddress.getHostName, serverChannel.socket.getLocalPort))
     } catch {
       case e: SocketException => 
         throw new KafkaException("Socket server failed to bind to %s:%d: %s.".format(socketAddress.getHostName, port, e.getMessage), e)
@@ -324,6 +308,12 @@ private[kafka] class Acceptor(val host: String,
     }
   }
 
+  /**
+   * Wakeup the thread for selection.
+   */
+  @Override
+  def wakeup = nioSelector.wakeup()
+
 }
 
 /**
@@ -333,19 +323,36 @@ private[kafka] class Acceptor(val host: String,
 private[kafka] class Processor(val id: Int,
                                val time: Time,
                                val maxRequestSize: Int,
-                               val aggregateIdleMeter: Meter,
-                               val idleMeter: Meter,
                                val totalProcessorThreads: Int,
                                val requestChannel: RequestChannel,
                                connectionQuotas: ConnectionQuotas,
                                val connectionsMaxIdleMs: Long,
-                               val portToProtocol: ConcurrentHashMap[Int,SecurityProtocol]) extends AbstractServerThread(connectionQuotas) {
+                               val portToProtocol: ConcurrentHashMap[Int,SecurityProtocol],
+                               val metrics: Metrics) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
-  private val connectionsMaxIdleNanos = connectionsMaxIdleMs * 1000 * 1000
-  private var currentTimeNanos = SystemTime.nanoseconds
-  private val lruConnections = new util.LinkedHashMap[SelectionKey, Long]
-  private var nextIdleCloseCheckTime = currentTimeNanos + connectionsMaxIdleNanos
+  private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
+
+  private val metricTags = new util.HashMap[String, String]()
+  metricTags.put("networkProcessor", id.toString)
+
+  newGauge("IdlePercent",
+    new Gauge[Double] {
+      def value = {
+        metrics.metrics().get(new MetricName("io-wait-ratio", "socket-server-metrics", metricTags)).value()
+      }
+    },
+    JavaConversions.mapAsScalaMap(metricTags)
+  )
+
+  private val selector = new org.apache.kafka.common.network.Selector(
+    maxRequestSize,
+    connectionsMaxIdleMs,
+    metrics,
+    time,
+    "socket-server",
+    metricTags,
+    false)
 
   override def run() {
     startupComplete()
@@ -354,68 +361,51 @@ private[kafka] class Processor(val id: Int,
       configureNewConnections()
       // register any new responses for writing
       processNewResponses()
-      val startSelectTime = SystemTime.nanoseconds
-      val ready = selector.select(300)
-      currentTimeNanos = SystemTime.nanoseconds
-      val idleTime = currentTimeNanos - startSelectTime
-      idleMeter.mark(idleTime)
-      // We use a single meter for aggregate idle percentage for the thread pool.
-      // Since meter is calculated as total_recorded_value / time_window and
-      // time_window is independent of the number of threads, each recorded idle
-      // time should be discounted by # threads.
-      aggregateIdleMeter.mark(idleTime / totalProcessorThreads)
 
-      trace("Processor id " + id + " selection time = " + idleTime + " ns")
-      if(ready > 0) {
-        val keys = selector.selectedKeys()
-        val iter = keys.iterator()
-        while(iter.hasNext && isRunning) {
-          var key: SelectionKey = null
-          try {
-            key = iter.next
-            iter.remove()
-            if(key.isReadable)
-              read(key)
-            else if(key.isWritable)
-              write(key)
-            else if(!key.isValid)
-              close(key)
-            else
-              throw new IllegalStateException("Unrecognized key state for processor thread.")
-          } catch {
-            case e: EOFException => {
-              debug("Closing socket connection to %s.".format(channelFor(key).socket.getInetAddress))
-              close(key)
-            } case e: InvalidRequestException => {
-              info("Closing socket connection to %s due to invalid request: %s".format(channelFor(key).socket.getInetAddress, e.getMessage))
-              close(key)
-            } case e: Throwable => {
-              error("Closing socket for " + channelFor(key).socket.getInetAddress + " because of error", e)
-              close(key)
-            }
+      try {
+        selector.poll(300)
+      } catch {
+        case e @ (_: IllegalStateException | _: IOException) => {
+          error("Closing processor %s due to illegal state or IO exception".format(id))
+          swallow(closeAll())
+          shutdownComplete()
+          throw e
+        }
+        case e: InvalidReceiveException =>
+          // Log warning and continue since Selector already closed the connection
+          warn("Connection was closed due to invalid receive. Processor will continue handling other connections")
+      }
+      collection.JavaConversions.collectionAsScalaIterable(selector.completedReceives).foreach( receive => {
+        try {
+          val req = RequestChannel.Request(processor = id, connectionId = receive.source, buffer = receive.payload, startTimeMs = time.milliseconds, securityProtocol = SecurityProtocol.PLAINTEXT)
+          requestChannel.sendRequest(req)
+        } catch {
+          case e @ (_: InvalidRequestException | _: SchemaException) => {
+            // note that even though we got an exception, we can assume that receive.source is valid. Issues with constructing a valid receive object were handled earlier
+            error("Closing socket for " + receive.source + " because of error", e)
+            selector.close(receive.source)
           }
         }
-      }
-      maybeCloseOldestConnection
-    }
-    debug("Closing selector.")
-    closeAll()
-    swallowError(selector.close())
-    shutdownComplete()
-  }
+        selector.mute(receive.source)
+      })
 
-  /**
-   * Close the given key and associated socket
-   */
-  override def close(key: SelectionKey): Unit = {
-    lruConnections.remove(key)
-    super.close(key)
+      collection.JavaConversions.iterableAsScalaIterable(selector.completedSends()).foreach( send => {
+        val resp = inflightResponses.remove(send.destination()).get
+        resp.request.updateRequestMetrics()
+        selector.unmute(send.destination())
+      })
+    }
+
+
+
+    debug("Closing selector - processor " + id)
+    closeAll()
+    shutdownComplete()
   }
 
   private def processNewResponses() {
     var curr = requestChannel.receiveResponse(id)
     while(curr != null) {
-      val key = curr.request.requestKey.asInstanceOf[SelectionKey]
       try {
         curr.responseAction match {
           case RequestChannel.NoOpAction => {
@@ -423,26 +413,21 @@ private[kafka] class Processor(val id: Int,
             // that are sitting in the server's socket buffer
             curr.request.updateRequestMetrics
             trace("Socket server received empty response to send, registering for read: " + curr)
-            key.interestOps(SelectionKey.OP_READ)
-            key.attach(null)
+            selector.unmute(curr.request.connectionId)
           }
           case RequestChannel.SendAction => {
-            trace("Socket server received response to send, registering for write: " + curr)
-            key.interestOps(SelectionKey.OP_WRITE)
-            key.attach(curr)
+            trace("Socket server received response to send, registering for write and sending data: " + curr)
+            selector.send(curr.responseSend)
+            inflightResponses += (curr.request.connectionId -> curr)
           }
           case RequestChannel.CloseConnectionAction => {
             curr.request.updateRequestMetrics
             trace("Closing socket connection actively according to the response code.")
-            close(key)
+            selector.close(curr.request.connectionId)
           }
-          case responseCode => throw new KafkaException("No mapping found for response code " + responseCode)
         }
-      } catch {
-        case e: CancelledKeyException => {
-          debug("Ignoring response for closed socket.")
-          close(key)
-        }
+
+
       } finally {
         curr = requestChannel.receiveResponse(id)
       }
@@ -464,84 +449,27 @@ private[kafka] class Processor(val id: Int,
     while(!newConnections.isEmpty) {
       val channel = newConnections.poll()
       debug("Processor " + id + " listening to new connection from " + channel.socket.getRemoteSocketAddress)
-      channel.register(selector, SelectionKey.OP_READ)
+      val localHost = channel.socket().getLocalAddress.getHostAddress
+      val localPort = channel.socket().getLocalPort
+      val remoteHost = channel.socket().getInetAddress.getHostAddress
+      val remotePort = channel.socket().getPort
+      val connectionId = localHost + ":" + localPort + "-" + remoteHost + ":" + remotePort
+      selector.register(connectionId, channel)
     }
   }
 
-  /*
-   * Process reads from ready sockets
+  /**
+   * Close all open connections
    */
-  def read(key: SelectionKey) {
-    lruConnections.put(key, currentTimeNanos)
-    val socketChannel = channelFor(key)
-    var receive = key.attachment.asInstanceOf[Receive]
-    if(key.attachment == null) {
-      receive = new BoundedByteBufferReceive(maxRequestSize)
-      key.attach(receive)
-    }
-    val read = receive.readFrom(socketChannel)
-    val address = socketChannel.socket.getRemoteSocketAddress()
-    trace(read + " bytes read from " + address)
-    if(read < 0) {
-      close(key)
-    } else if(receive.complete) {
-      val port = socketChannel.socket().getLocalPort
-      val protocol = portToProtocol.get(port)
-      val req = RequestChannel.Request(processor = id, requestKey = key, buffer = receive.buffer, startTimeMs = time.milliseconds, remoteAddress = address, securityProtocol = protocol)
-      requestChannel.sendRequest(req)
-      key.attach(null)
-      // explicitly reset interest ops to not READ, no need to wake up the selector just yet
-      key.interestOps(key.interestOps & (~SelectionKey.OP_READ))
-    } else {
-      // more reading to be done
-      trace("Did not finish reading, registering for read again on connection " + socketChannel.socket.getRemoteSocketAddress())
-      key.interestOps(SelectionKey.OP_READ)
-      wakeup()
-    }
+  def closeAll() {
+    selector.close()
   }
 
-  /*
-   * Process writes to ready sockets
+  /**
+   * Wakeup the thread for selection.
    */
-  def write(key: SelectionKey) {
-    val socketChannel = channelFor(key)
-    val response = key.attachment().asInstanceOf[RequestChannel.Response]
-    val responseSend = response.responseSend
-    if(responseSend == null)
-      throw new IllegalStateException("Registered for write interest but no response attached to key.")
-    val written = responseSend.writeTo(socketChannel)
-    trace(written + " bytes written to " + socketChannel.socket.getRemoteSocketAddress() + " using key " + key)
-    if(responseSend.complete) {
-      response.request.updateRequestMetrics()
-      key.attach(null)
-      trace("Finished writing, registering for read on connection " + socketChannel.socket.getRemoteSocketAddress())
-      key.interestOps(SelectionKey.OP_READ)
-    } else {
-      trace("Did not finish writing, registering for write again on connection " + socketChannel.socket.getRemoteSocketAddress())
-      key.interestOps(SelectionKey.OP_WRITE)
-      wakeup()
-    }
-  }
-
-  private def channelFor(key: SelectionKey) = key.channel().asInstanceOf[SocketChannel]
-
-  private def maybeCloseOldestConnection {
-    if(currentTimeNanos > nextIdleCloseCheckTime) {
-      if(lruConnections.isEmpty) {
-        nextIdleCloseCheckTime = currentTimeNanos + connectionsMaxIdleNanos
-      } else {
-        val oldestConnectionEntry = lruConnections.entrySet.iterator().next()
-        val connectionLastActiveTime = oldestConnectionEntry.getValue
-        nextIdleCloseCheckTime = connectionLastActiveTime + connectionsMaxIdleNanos
-        if(currentTimeNanos > nextIdleCloseCheckTime) {
-          val key: SelectionKey = oldestConnectionEntry.getKey
-          trace("About to close the idle connection from " + key.channel.asInstanceOf[SocketChannel].socket.getRemoteSocketAddress
-            + " due to being idle for " + (currentTimeNanos - connectionLastActiveTime) / 1000 / 1000 + " millis")
-          close(key)
-        }
-      }
-    }
-  }
+  @Override
+  def wakeup = selector.wakeup()
 
 }
 

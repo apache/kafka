@@ -472,7 +472,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             String metricGrpPrefix = "consumer";
             Map<String, String> metricsTags = new LinkedHashMap<String, String>();
             metricsTags.put("client-id", clientId);
-            this.client = new NetworkClient(new Selector(metrics, time, metricGrpPrefix, metricsTags),
+            this.client = new NetworkClient(
+                    new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, metricsTags),
                     this.metadata,
                     clientId,
                     100, // a fixed large enough value will suffice

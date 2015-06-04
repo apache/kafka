@@ -21,22 +21,22 @@ import java.util.Map;
  */
 final class ClusterConnectionStates {
     private final long reconnectBackoffMs;
-    private final Map<Integer, NodeConnectionState> nodeState;
+    private final Map<String, NodeConnectionState> nodeState;
 
     public ClusterConnectionStates(long reconnectBackoffMs) {
         this.reconnectBackoffMs = reconnectBackoffMs;
-        this.nodeState = new HashMap<Integer, NodeConnectionState>();
+        this.nodeState = new HashMap<String, NodeConnectionState>();
     }
 
     /**
-     * Return true iff we can currently initiate a new connection to the given node. This will be the case if we are not
+     * Return true iff we can currently initiate a new connection. This will be the case if we are not
      * connected and haven't been connected for at least the minimum reconnection backoff period.
-     * @param node The node id to check
+     * @param id The connection id to check
      * @param now The current time in MS
      * @return true if we can initiate a new connection
      */
-    public boolean canConnect(int node, long now) {
-        NodeConnectionState state = nodeState.get(node);
+    public boolean canConnect(String id, long now) {
+        NodeConnectionState state = nodeState.get(id);
         if (state == null)
             return true;
         else
@@ -45,11 +45,11 @@ final class ClusterConnectionStates {
 
     /**
      * Return true if we are disconnected from the given node and can't re-establish a connection yet
-     * @param node The node to check
+     * @param id The connection to check
      * @param now The current time in ms
      */
-    public boolean isBlackedOut(int node, long now) {
-        NodeConnectionState state = nodeState.get(node);
+    public boolean isBlackedOut(String id, long now) {
+        NodeConnectionState state = nodeState.get(id);
         if (state == null)
             return false;
         else
@@ -60,11 +60,11 @@ final class ClusterConnectionStates {
      * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
      * disconnected, this respects the reconnect backoff time. When connecting or connected, this handles slow/stalled
      * connections.
-     * @param node The node to check
+     * @param id The connection to check
      * @param now The current time in ms
      */
-    public long connectionDelay(int node, long now) {
-        NodeConnectionState state = nodeState.get(node);
+    public long connectionDelay(String id, long now) {
+        NodeConnectionState state = nodeState.get(id);
         if (state == null) return 0;
         long timeWaited = now - state.lastConnectAttemptMs;
         if (state.state == ConnectionState.DISCONNECTED) {
@@ -77,67 +77,67 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Enter the connecting state for the given node.
-     * @param node The id of the node we are connecting to
+     * Enter the connecting state for the given connection.
+     * @param id The id of the connection
      * @param now The current time.
      */
-    public void connecting(int node, long now) {
-        nodeState.put(node, new NodeConnectionState(ConnectionState.CONNECTING, now));
+    public void connecting(String id, long now) {
+        nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now));
     }
 
     /**
-     * Return true iff we have a connection to the give node
-     * @param node The id of the node to check
+     * Return true iff a specific connection is connected
+     * @param id The id of the connection to check
      */
-    public boolean isConnected(int node) {
-        NodeConnectionState state = nodeState.get(node);
+    public boolean isConnected(String id) {
+        NodeConnectionState state = nodeState.get(id);
         return state != null && state.state == ConnectionState.CONNECTED;
     }
 
     /**
-     * Return true iff we are in the process of connecting to the given node
-     * @param node The id of the node
+     * Return true iff we are in the process of connecting
+     * @param id The id of the connection
      */
-    public boolean isConnecting(int node) {
-        NodeConnectionState state = nodeState.get(node);
+    public boolean isConnecting(String id) {
+        NodeConnectionState state = nodeState.get(id);
         return state != null && state.state == ConnectionState.CONNECTING;
     }
 
     /**
-     * Enter the connected state for the given node
-     * @param node The node we have connected to
+     * Enter the connected state for the given connection
+     * @param id The connection identifier
      */
-    public void connected(int node) {
-        NodeConnectionState nodeState = nodeState(node);
+    public void connected(String id) {
+        NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.CONNECTED;
     }
 
     /**
      * Enter the disconnected state for the given node
-     * @param node The node we have disconnected from
+     * @param id The connection we have disconnected
      */
-    public void disconnected(int node) {
-        NodeConnectionState nodeState = nodeState(node);
+    public void disconnected(String id) {
+        NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.DISCONNECTED;
     }
     
     /**
-     * Get the state of our connection to the given node
-     * @param node The id of the node
+     * Get the state of a given connection
+     * @param id The id of the connection
      * @return The state of our connection
      */
-    public ConnectionState connectionState(int node) {
-        return nodeState(node).state;
+    public ConnectionState connectionState(String id) {
+        return nodeState(id).state;
     }
     
     /**
      * Get the state of a given node
-     * @param node The node to fetch the state for
+     * @param id The connection to fetch the state for
      */
-    private NodeConnectionState nodeState(int node) {
-        NodeConnectionState state = this.nodeState.get(node);
+    private NodeConnectionState nodeState(String id) {
+        NodeConnectionState state = this.nodeState.get(id);
         if (state == null)
-            throw new IllegalStateException("No entry found for node " + node);
+            throw new IllegalStateException("No entry found for connection " + id);
         return state;
     }
     

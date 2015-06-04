@@ -445,7 +445,7 @@ public final class Coordinator {
         log.debug("Issuing consumer metadata request to broker {}", node.id());
 
         ConsumerMetadataRequest request = new ConsumerMetadataRequest(this.groupId);
-        RequestSend send = new RequestSend(node.id(),
+        RequestSend send = new RequestSend(node.idString(),
             this.client.nextRequestHeader(ApiKeys.CONSUMER_METADATA),
             request.toStruct());
         long now = time.milliseconds();
@@ -464,7 +464,7 @@ public final class Coordinator {
         log.debug("Issuing request ({}: {}) to coordinator {}", api, request, this.consumerCoordinator.id());
 
         RequestHeader header = this.client.nextRequestHeader(api);
-        RequestSend send = new RequestSend(this.consumerCoordinator.id(), header, request);
+        RequestSend send = new RequestSend(this.consumerCoordinator.idString(), header, request);
         return new ClientRequest(now, true, send, handler);
     }
 

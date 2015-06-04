@@ -22,10 +22,7 @@ import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
+import java.util.*;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
@@ -49,7 +46,7 @@ public class SelectorTest {
     public void setup() throws Exception {
         this.server = new EchoServer();
         this.server.start();
-        this.selector = new Selector(new Metrics(), new MockTime() , "MetricGroup", new LinkedHashMap<String, String>());
+        this.selector = new Selector(5000, new Metrics(), new MockTime() , "MetricGroup", new LinkedHashMap<String, String>());
     }
 
     @After
@@ -63,7 +60,7 @@ public class SelectorTest {
      */
     @Test
     public void testServerDisconnect() throws Exception {
-        int node = 0;
+        String node = "0";
 
         // connect and do a simple request
         blockingConnect(node);
@@ -84,7 +81,7 @@ public class SelectorTest {
      */
     @Test
     public void testClientDisconnect() throws Exception {
-        int node = 0;
+        String node = "0";
         blockingConnect(node);
         selector.disconnect(node);
         selector.send(createSend(node, "hello1"));
@@ -101,7 +98,7 @@ public class SelectorTest {
      */
     @Test(expected = IllegalStateException.class)
     public void testCantSendWithInProgress() throws Exception {
-        int node = 0;
+        String node = "0";
         blockingConnect(node);
         selector.send(createSend(node, "test1"));
         selector.send(createSend(node, "test2"));
@@ -113,7 +110,7 @@ public class SelectorTest {
      */
     @Test(expected = IllegalStateException.class)
     public void testCantSendWithoutConnecting() throws Exception {
-        selector.send(createSend(0, "test"));
+        selector.send(createSend("0", "test"));
         selector.poll(1000L);
     }
 
@@ -122,7 +119,7 @@ public class SelectorTest {
      */
     @Test(expected = IOException.class)
     public void testNoRouteToHost() throws Exception {
-        selector.connect(0, new InetSocketAddress("asdf.asdf.dsc", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        selector.connect("0", new InetSocketAddress("asdf.asdf.dsc", server.port), BUFFER_SIZE, BUFFER_SIZE);
     }
 
     /**
@@ -130,7 +127,7 @@ public class SelectorTest {
      */
     @Test
     public void testConnectionRefused() throws Exception {
-        int node = 0;
+        String node = "0";
         ServerSocket nonListeningSocket = new ServerSocket(0);
         int nonListeningPort = nonListeningSocket.getLocalPort();
         selector.connect(node, new InetSocketAddress("localhost", nonListeningPort), BUFFER_SIZE, BUFFER_SIZE);
@@ -151,14 +148,15 @@ public class SelectorTest {
         // create connections
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         for (int i = 0; i < conns; i++)
-            selector.connect(i, addr, BUFFER_SIZE, BUFFER_SIZE);
-
+            selector.connect(Integer.toString(i), addr, BUFFER_SIZE, BUFFER_SIZE);
         // send echo requests and receive responses
-        int[] requests = new int[conns];
-        int[] responses = new int[conns];
+        Map<String, Integer> requests = new HashMap<String, Integer>();
+        Map<String, Integer> responses = new HashMap<String, Integer>();
         int responseCount = 0;
-        for (int i = 0; i < conns; i++)
-            selector.send(createSend(i, i + "-" + 0));
+        for (int i = 0; i < conns; i++) {
+            String node = Integer.toString(i);
+            selector.send(createSend(node, node + "-0"));
+        }
 
         // loop until we complete all requests
         while (responseCount < conns * reqs) {
@@ -171,19 +169,27 @@ public class SelectorTest {
             for (NetworkReceive receive : selector.completedReceives()) {
                 String[] pieces = asString(receive).split("-");
                 assertEquals("Should be in the form 'conn-counter'", 2, pieces.length);
-                assertEquals("Check the source", receive.source(), Integer.parseInt(pieces[0]));
+                assertEquals("Check the source", receive.source(), pieces[0]);
                 assertEquals("Check that the receive has kindly been rewound", 0, receive.payload().position());
-                assertEquals("Check the request counter", responses[receive.source()], Integer.parseInt(pieces[1]));
-                responses[receive.source()]++; // increment the expected counter
+                if (responses.containsKey(receive.source())) {
+                    assertEquals("Check the request counter", (int) responses.get(receive.source()), Integer.parseInt(pieces[1]));
+                    responses.put(receive.source(), responses.get(receive.source()) + 1);
+                } else {
+                    assertEquals("Check the request counter", 0, Integer.parseInt(pieces[1]));
+                    responses.put(receive.source(), 1);
+                }
                 responseCount++;
             }
 
             // prepare new sends for the next round
-            for (NetworkSend send : selector.completedSends()) {
-                int dest = send.destination();
-                requests[dest]++;
-                if (requests[dest] < reqs)
-                    selector.send(createSend(dest, dest + "-" + requests[dest]));
+            for (Send send : selector.completedSends()) {
+                String dest = send.destination();
+                if (requests.containsKey(dest))
+                    requests.put(dest, requests.get(dest) + 1);
+                else
+                    requests.put(dest, 1);
+                if (requests.get(dest) < reqs)
+                    selector.send(createSend(dest, dest + "-" + requests.get(dest)));
             }
         }
     }
@@ -193,7 +199,7 @@ public class SelectorTest {
      */
     @Test
     public void testSendLargeRequest() throws Exception {
-        int node = 0;
+        String node = "0";
         blockingConnect(node);
         String big = TestUtils.randomString(10 * BUFFER_SIZE);
         assertEquals(big, blockingRequest(node, big));
@@ -204,41 +210,41 @@ public class SelectorTest {
      */
     @Test
     public void testEmptyRequest() throws Exception {
-        int node = 0;
+        String node = "0";
         blockingConnect(node);
         assertEquals("", blockingRequest(node, ""));
     }
 
     @Test(expected = IllegalStateException.class)
     public void testExistingConnectionId() throws IOException {
-        blockingConnect(0);
-        blockingConnect(0);
+        blockingConnect("0");
+        blockingConnect("0");
     }
 
     @Test
     public void testMute() throws Exception {
-        blockingConnect(0);
-        blockingConnect(1);
+        blockingConnect("0");
+        blockingConnect("1");
 
-        selector.send(createSend(0, "hello"));
-        selector.send(createSend(1, "hi"));
+        selector.send(createSend("0", "hello"));
+        selector.send(createSend("1", "hi"));
 
-        selector.mute(1);
+        selector.mute("1");
 
         while (selector.completedReceives().isEmpty())
             selector.poll(5);
         assertEquals("We should have only one response", 1, selector.completedReceives().size());
-        assertEquals("The response should not be from the muted node", 0, selector.completedReceives().get(0).source());
+        assertEquals("The response should not be from the muted node", "0", selector.completedReceives().get(0).source());
 
-        selector.unmute(1);
+        selector.unmute("1");
         do {
             selector.poll(5);
         } while (selector.completedReceives().isEmpty());
         assertEquals("We should have only one response", 1, selector.completedReceives().size());
-        assertEquals("The response should be from the previously muted node", 1, selector.completedReceives().get(0).source());
+        assertEquals("The response should be from the previously muted node", "1", selector.completedReceives().get(0).source());
     }
 
-    private String blockingRequest(int node, String s) throws IOException {
+    private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
         selector.poll(1000L);
         while (true) {
@@ -250,13 +256,13 @@ public class SelectorTest {
     }
 
     /* connect and wait for the connection to complete */
-    private void blockingConnect(int node) throws IOException {
+    private void blockingConnect(String node) throws IOException {
         selector.connect(node, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
         while (!selector.connected().contains(node))
             selector.poll(10000L);
     }
 
-    private NetworkSend createSend(int node, String s) {
+    private NetworkSend createSend(String node, String s) {
         return new NetworkSend(node, ByteBuffer.wrap(s.getBytes()));
     }
 
