@@ -31,7 +31,6 @@ public class MockSerializer implements Serializer<byte[]> {
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
-
     }
 
     @Override
