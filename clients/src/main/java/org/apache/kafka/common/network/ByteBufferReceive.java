@@ -24,11 +24,11 @@ import java.nio.ByteBuffer;
  */
 public class ByteBufferReceive implements Receive {
 
-    private final int source;
+    private final String source;
     private final ByteBuffer[] buffers;
     private int remaining;
 
-    public ByteBufferReceive(int source, ByteBuffer... buffers) {
+    public ByteBufferReceive(String source, ByteBuffer... buffers) {
         super();
         this.source = source;
         this.buffers = buffers;
@@ -37,7 +37,7 @@ public class ByteBufferReceive implements Receive {
     }
 
     @Override
-    public int source() {
+    public String source() {
         return source;
     }
 
@@ -51,10 +51,6 @@ public class ByteBufferReceive implements Receive {
         long read = transportLayer.read(buffers);
         remaining += read;
         return read;
-    }
-
-    public ByteBuffer[] reify() {
-        return buffers;
     }
 
 }

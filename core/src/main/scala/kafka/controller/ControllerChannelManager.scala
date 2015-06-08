@@ -16,8 +16,9 @@
 */
 package kafka.controller
 
-import kafka.network.{Receive, BlockingChannel}
+import kafka.network.BlockingChannel
 import kafka.utils.{CoreUtils, Logging, ShutdownableThread}
+import org.apache.kafka.common.network.NetworkReceive
 import collection.mutable.HashMap
 import kafka.cluster.Broker
 import java.util.concurrent.{LinkedBlockingQueue, BlockingQueue}
@@ -120,7 +121,7 @@ class RequestSendThread(val controllerId: Int,
     val queueItem = queue.take()
     val request = queueItem._1
     val callback = queueItem._2
-    var receive: Receive = null
+    var receive: NetworkReceive = null
     try {
       lock synchronized {
         var isSendSuccessful = false
@@ -147,11 +148,11 @@ class RequestSendThread(val controllerId: Int,
           var response: RequestOrResponse = null
           request.requestId.get match {
             case RequestKeys.LeaderAndIsrKey =>
-              response = LeaderAndIsrResponse.readFrom(receive.buffer)
+              response = LeaderAndIsrResponse.readFrom(receive.payload())
             case RequestKeys.StopReplicaKey =>
-              response = StopReplicaResponse.readFrom(receive.buffer)
+              response = StopReplicaResponse.readFrom(receive.payload())
             case RequestKeys.UpdateMetadataKey =>
-              response = UpdateMetadataResponse.readFrom(receive.buffer)
+              response = UpdateMetadataResponse.readFrom(receive.payload())
           }
           stateChangeLogger.trace("Controller %d epoch %d received response %s for a request sent to broker %s"
             .format(controllerId, controllerContext.epoch, response.toString, toBroker.toString))

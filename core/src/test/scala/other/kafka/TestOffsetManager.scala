@@ -2,7 +2,7 @@ package other.kafka
 
 import org.I0Itec.zkclient.ZkClient
 import kafka.api._
-import kafka.utils.{ShutdownableThread, ZKStringSerializer}
+import kafka.utils.{ZkUtils, ShutdownableThread}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import scala.collection._
 import kafka.client.ClientUtils
@@ -72,7 +72,7 @@ object TestOffsetManager {
         offsetsChannel.send(commitRequest)
         numCommits.getAndIncrement
         commitTimer.time {
-          val response = OffsetCommitResponse.readFrom(offsetsChannel.receive().buffer)
+          val response = OffsetCommitResponse.readFrom(offsetsChannel.receive().payload())
           if (response.commitStatus.exists(_._2 != ErrorMapping.NoError)) numErrors.getAndIncrement
         }
         offset += 1
@@ -119,7 +119,7 @@ object TestOffsetManager {
       val group = "group-" + id
       try {
         metadataChannel.send(ConsumerMetadataRequest(group))
-        val coordinatorId = ConsumerMetadataResponse.readFrom(metadataChannel.receive().buffer).coordinatorOpt.map(_.id).getOrElse(-1)
+        val coordinatorId = ConsumerMetadataResponse.readFrom(metadataChannel.receive().payload()).coordinatorOpt.map(_.id).getOrElse(-1)
 
         val channel = if (channels.contains(coordinatorId))
           channels(coordinatorId)
@@ -135,7 +135,7 @@ object TestOffsetManager {
           channel.send(fetchRequest)
 
           fetchTimer.time {
-            val response = OffsetFetchResponse.readFrom(channel.receive().buffer)
+            val response = OffsetFetchResponse.readFrom(channel.receive().payload())
             if (response.requestInfo.exists(_._2.error != ErrorMapping.NoError)) {
               numErrors.getAndIncrement
             }
@@ -238,7 +238,7 @@ object TestOffsetManager {
     var fetchThread: FetchThread = null
     var statsThread: StatsThread = null
     try {
-      zkClient = new ZkClient(zookeeper, 6000, 2000, ZKStringSerializer)
+      zkClient = ZkUtils.createZkClient(zookeeper, 6000, 2000)
       commitThreads = (0 to (threadCount-1)).map { threadId =>
         new CommitThread(threadId, partitionCount, commitIntervalMs, zkClient)
       }

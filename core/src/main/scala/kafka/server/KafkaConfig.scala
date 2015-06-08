@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import java.util
 import java.util.Properties
 
 import kafka.api.ApiVersion
@@ -24,9 +25,11 @@ import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
+import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.ConfigDef
+import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.protocol.SecurityProtocol
-import scala.collection.{immutable, JavaConversions, Map}
+import scala.collection.{mutable, immutable, JavaConversions, Map}
 
 object Defaults {
   /** ********* Zookeeper Configuration ***********/
@@ -111,6 +114,10 @@ object Defaults {
   val ControlledShutdownRetryBackoffMs = 5000
   val ControlledShutdownEnable = true
 
+  /** ********* Consumer coordinator configuration ***********/
+  val ConsumerMinSessionTimeoutMs = 6000
+  val ConsumerMaxSessionTimeoutMs = 30000
+
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSize = OffsetManagerConfig.DefaultMaxMetadataSize
   val OffsetsLoadBufferSize = OffsetManagerConfig.DefaultLoadBufferSize
@@ -126,6 +133,10 @@ object Defaults {
   val DeleteTopicEnable = false
 
   val CompressionType = "producer"
+
+  val MetricNumSamples = 2
+  val MetricSampleWindowMs = 1000
+  val MetricReporterClasses = ""
 }
 
 object KafkaConfig {
@@ -218,6 +229,9 @@ object KafkaConfig {
   val ControlledShutdownMaxRetriesProp = "controlled.shutdown.max.retries"
   val ControlledShutdownRetryBackoffMsProp = "controlled.shutdown.retry.backoff.ms"
   val ControlledShutdownEnableProp = "controlled.shutdown.enable"
+  /** ********* Consumer coordinator configuration ***********/
+  val ConsumerMinSessionTimeoutMsProp = "consumer.min.session.timeout.ms"
+  val ConsumerMaxSessionTimeoutMsProp = "consumer.max.session.timeout.ms"
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeProp = "offset.metadata.max.bytes"
   val OffsetsLoadBufferSizeProp = "offsets.load.buffer.size"
@@ -232,6 +246,10 @@ object KafkaConfig {
 
   val DeleteTopicEnableProp = "delete.topic.enable"
   val CompressionTypeProp = "compression.type"
+
+  val MetricSampleWindowMsProp = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG
+  val MetricNumSamplesProp: String = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG
+  val MetricReporterClassesProp: String = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG
 
 
   /* Documentation */
@@ -343,6 +361,9 @@ object KafkaConfig {
   val ControlledShutdownMaxRetriesDoc = "Controlled shutdown can fail for multiple reasons. This determines the number of retries when such failure happens"
   val ControlledShutdownRetryBackoffMsDoc = "Before each retry, the system needs time to recover from the state that caused the previous failure (Controller fail over, replica lag etc). This config determines the amount of time to wait before retrying."
   val ControlledShutdownEnableDoc = "Enable controlled shutdown of the server"
+  /** ********* Consumer coordinator configuration ***********/
+  val ConsumerMinSessionTimeoutMsDoc = "The minimum allowed session timeout for registered consumers"
+  val ConsumerMaxSessionTimeoutMsDoc = "The maximum allowed session timeout for registered consumers"
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSizeDoc = "The maximum size for a metadata entry associated with an offset commit"
   val OffsetsLoadBufferSizeDoc = "Batch size for reading from the offsets segments when loading offsets into the cache."
@@ -363,6 +384,10 @@ object KafkaConfig {
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the standard compression codecs " +
     "('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to no compression; and " +
     "'producer' which means retain the original compression codec set by the producer."
+
+  val MetricSampleWindowMsDoc = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC
+  val MetricNumSamplesDoc = CommonClientConfigs.METRICS_NUM_SAMPLES_DOC
+  val MetricReporterClassesDoc = CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC
 
 
   private val configDef = {
@@ -461,10 +486,15 @@ object KafkaConfig {
       .define(UncleanLeaderElectionEnableProp, BOOLEAN, Defaults.UncleanLeaderElectionEnable, HIGH, UncleanLeaderElectionEnableDoc)
       .define(InterBrokerSecurityProtocolProp, STRING, Defaults.InterBrokerSecurityProtocol, MEDIUM, InterBrokerSecurityProtocolDoc)
       .define(InterBrokerProtocolVersionProp, STRING, Defaults.InterBrokerProtocolVersion, MEDIUM, InterBrokerProtocolVersionDoc)
+
       /** ********* Controlled shutdown configuration ***********/
       .define(ControlledShutdownMaxRetriesProp, INT, Defaults.ControlledShutdownMaxRetries, MEDIUM, ControlledShutdownMaxRetriesDoc)
       .define(ControlledShutdownRetryBackoffMsProp, INT, Defaults.ControlledShutdownRetryBackoffMs, MEDIUM, ControlledShutdownRetryBackoffMsDoc)
       .define(ControlledShutdownEnableProp, BOOLEAN, Defaults.ControlledShutdownEnable, MEDIUM, ControlledShutdownEnableDoc)
+
+      /** ********* Consumer coordinator configuration ***********/
+      .define(ConsumerMinSessionTimeoutMsProp, INT, Defaults.ConsumerMinSessionTimeoutMs, MEDIUM, ConsumerMinSessionTimeoutMsDoc)
+      .define(ConsumerMaxSessionTimeoutMsProp, INT, Defaults.ConsumerMaxSessionTimeoutMs, MEDIUM, ConsumerMaxSessionTimeoutMsDoc)
 
       /** ********* Offset management configuration ***********/
       .define(OffsetMetadataMaxSizeProp, INT, Defaults.OffsetMetadataMaxSize, HIGH, OffsetMetadataMaxSizeDoc)
@@ -479,6 +509,9 @@ object KafkaConfig {
       .define(OffsetCommitRequiredAcksProp, SHORT, Defaults.OffsetCommitRequiredAcks, HIGH, OffsetCommitRequiredAcksDoc)
       .define(DeleteTopicEnableProp, BOOLEAN, Defaults.DeleteTopicEnable, HIGH, DeleteTopicEnableDoc)
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, HIGH, CompressionTypeDoc)
+      .define(MetricNumSamplesProp, INT, Defaults.MetricNumSamples, atLeast(1), LOW, MetricNumSamplesDoc)
+      .define(MetricSampleWindowMsProp, LONG, Defaults.MetricSampleWindowMs, atLeast(1), LOW, MetricSampleWindowMsDoc)
+      .define(MetricReporterClassesProp, LIST, Defaults.MetricReporterClasses, LOW, MetricReporterClassesDoc)
   }
 
   def configNames() = {
@@ -581,10 +614,15 @@ object KafkaConfig {
       uncleanLeaderElectionEnable = parsed.get(UncleanLeaderElectionEnableProp).asInstanceOf[Boolean],
       interBrokerSecurityProtocol = SecurityProtocol.valueOf(parsed.get(InterBrokerSecurityProtocolProp).asInstanceOf[String]),
       interBrokerProtocolVersion =  ApiVersion(parsed.get(InterBrokerProtocolVersionProp).asInstanceOf[String]),
+
       /** ********* Controlled shutdown configuration ***********/
       controlledShutdownMaxRetries = parsed.get(ControlledShutdownMaxRetriesProp).asInstanceOf[Int],
       controlledShutdownRetryBackoffMs = parsed.get(ControlledShutdownRetryBackoffMsProp).asInstanceOf[Int],
       controlledShutdownEnable = parsed.get(ControlledShutdownEnableProp).asInstanceOf[Boolean],
+
+      /** ********* Consumer coordinator configuration ***********/
+      consumerMinSessionTimeoutMs = parsed.get(ConsumerMinSessionTimeoutMsProp).asInstanceOf[Int],
+      consumerMaxSessionTimeoutMs = parsed.get(ConsumerMaxSessionTimeoutMsProp).asInstanceOf[Int],
 
       /** ********* Offset management configuration ***********/
       offsetMetadataMaxSize = parsed.get(OffsetMetadataMaxSizeProp).asInstanceOf[Int],
@@ -598,7 +636,10 @@ object KafkaConfig {
       offsetCommitTimeoutMs = parsed.get(OffsetCommitTimeoutMsProp).asInstanceOf[Int],
       offsetCommitRequiredAcks = parsed.get(OffsetCommitRequiredAcksProp).asInstanceOf[Short],
       deleteTopicEnable = parsed.get(DeleteTopicEnableProp).asInstanceOf[Boolean],
-      compressionType = parsed.get(CompressionTypeProp).asInstanceOf[String]
+      compressionType = parsed.get(CompressionTypeProp).asInstanceOf[String],
+      metricNumSamples = parsed.get(MetricNumSamplesProp).asInstanceOf[Int],
+      metricSampleWindowMs = parsed.get(MetricSampleWindowMsProp).asInstanceOf[Long],
+      _metricReporterClasses = parsed.get(MetricReporterClassesProp).asInstanceOf[java.util.List[String]]
     )
   }
 
@@ -633,7 +674,7 @@ object KafkaConfig {
   }
 }
 
-class KafkaConfig(/** ********* Zookeeper Configuration ***********/
+class KafkaConfig (/** ********* Zookeeper Configuration ***********/
                   val zkConnect: String,
                   val zkSessionTimeoutMs: Int = Defaults.ZkSessionTimeoutMs,
                   private val _zkConnectionTimeoutMs: Option[Int] = None,
@@ -729,6 +770,10 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
                   val controlledShutdownRetryBackoffMs: Int = Defaults.ControlledShutdownRetryBackoffMs,
                   val controlledShutdownEnable: Boolean = Defaults.ControlledShutdownEnable,
 
+                  /** ********* Consumer coordinator configuration ***********/
+                  val consumerMinSessionTimeoutMs: Int = Defaults.ConsumerMinSessionTimeoutMs,
+                  val consumerMaxSessionTimeoutMs: Int = Defaults.ConsumerMaxSessionTimeoutMs,
+
                   /** ********* Offset management configuration ***********/
                   val offsetMetadataMaxSize: Int = Defaults.OffsetMetadataMaxSize,
                   val offsetsLoadBufferSize: Int = Defaults.OffsetsLoadBufferSize,
@@ -742,7 +787,11 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
                   val offsetCommitRequiredAcks: Short = Defaults.OffsetCommitRequiredAcks,
 
                   val deleteTopicEnable: Boolean = Defaults.DeleteTopicEnable,
-                  val compressionType: String = Defaults.CompressionType
+                  val compressionType: String = Defaults.CompressionType,
+
+                  val metricSampleWindowMs: Long = Defaults.MetricSampleWindowMs,
+                  val metricNumSamples: Int = Defaults.MetricNumSamples,
+                  private val _metricReporterClasses: java.util.List[String] = util.Arrays.asList(Defaults.MetricReporterClasses)
                    ) {
 
   val zkConnectionTimeoutMs: Int = _zkConnectionTimeoutMs.getOrElse(zkSessionTimeoutMs)
@@ -761,6 +810,8 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
 
   val maxConnectionsPerIpOverrides: Map[String, Int] =
     getMap(KafkaConfig.MaxConnectionsPerIpOverridesProp, _maxConnectionsPerIpOverrides).map { case (k, v) => (k, v.toInt)}
+
+  val metricReporterClasses: java.util.List[MetricsReporter] = getMetricClasses(_metricReporterClasses)
 
   private def getLogRetentionTimeMillis: Long = {
     val millisInMinute = 60L * 1000L
@@ -824,6 +875,24 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
     } else {
       getListeners()
     }
+  }
+
+  private def getMetricClasses(metricClasses: java.util.List[String]): java.util.List[MetricsReporter] = {
+
+    val reporterList = new util.ArrayList[MetricsReporter]();
+    val iterator = metricClasses.iterator()
+
+    while (iterator.hasNext) {
+      val reporterName = iterator.next()
+      if (!reporterName.isEmpty) {
+        val reporter: MetricsReporter = CoreUtils.createObject[MetricsReporter](reporterName)
+        reporter.configure(toProps.asInstanceOf[java.util.Map[String, _]])
+        reporterList.add(reporter)
+      }
+    }
+
+    reporterList
+
   }
 
 
@@ -951,6 +1020,10 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
     props.put(ControlledShutdownRetryBackoffMsProp, controlledShutdownRetryBackoffMs.toString)
     props.put(ControlledShutdownEnableProp, controlledShutdownEnable.toString)
 
+    /** ********* Consumer coordinator configuration ***********/
+    props.put(ConsumerMinSessionTimeoutMsProp, consumerMinSessionTimeoutMs.toString)
+    props.put(ConsumerMaxSessionTimeoutMsProp, consumerMaxSessionTimeoutMs.toString)
+
     /** ********* Offset management configuration ***********/
     props.put(OffsetMetadataMaxSizeProp, offsetMetadataMaxSize.toString)
     props.put(OffsetsLoadBufferSizeProp, offsetsLoadBufferSize.toString)
@@ -964,6 +1037,9 @@ class KafkaConfig(/** ********* Zookeeper Configuration ***********/
     props.put(OffsetCommitRequiredAcksProp, offsetCommitRequiredAcks.toString)
     props.put(DeleteTopicEnableProp, deleteTopicEnable.toString)
     props.put(CompressionTypeProp, compressionType.toString)
+    props.put(MetricNumSamplesProp, metricNumSamples.toString)
+    props.put(MetricSampleWindowMsProp, metricSampleWindowMs.toString)
+    props.put(MetricReporterClassesProp, JavaConversions.collectionAsScalaIterable(_metricReporterClasses).mkString(","))
 
     props
   }

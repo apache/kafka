@@ -14,32 +14,33 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.network;
 
-import java.io.IOException;
-import java.nio.channels.ScatteringByteChannel;
+package org.apache.kafka.clients.producer;
+
+import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.Cluster;
 
 /**
- * This interface models the in-progress reading of data from a channel to a source identified by an integer id
+ * Partitioner Interface
  */
-public interface Receive {
+
+public interface Partitioner extends Configurable {
 
     /**
-     * The numeric id of the source from which we are receiving data.
+     * Compute the partition for the given record.
+     *
+     * @param topic The topic name
+     * @param key The key to partition on (or null if no key)
+     * @param keyBytes The serialized key to partition on( or null if no key)
+     * @param value The value to partition on or null
+     * @param valueBytes The serialized value to partition on or null
+     * @param cluster The current cluster metadata
      */
-    public String source();
+    public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster);
 
     /**
-     * Are we done receiving data?
+     * This is called when partitioner is closed.
      */
-    public boolean complete();
-
-    /**
-     * Read bytes into this receive from the given channel
-     * @param channel The channel to read from
-     * @return The number of bytes read
-     * @throws IOException If the reading fails
-     */
-    public long readFrom(ScatteringByteChannel channel) throws IOException;
+    public void close();
 
 }

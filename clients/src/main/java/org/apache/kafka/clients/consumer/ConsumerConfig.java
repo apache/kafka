@@ -157,6 +157,13 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String VALUE_DESERIALIZER_CLASS_CONFIG = "value.deserializer";
     private static final String VALUE_DESERIALIZER_CLASS_DOC = "Deserializer class for value that implements the <code>Deserializer</code> interface.";
 
+    /** <code>connections.max.idle.ms</code> */
+    public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
+
+    /** <code>connections.max.idle.ms</code> */
+    public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
+
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -293,7 +300,13 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(SecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_TRUSTSTORE_PASSWORD, Importance.HIGH, SecurityConfigs.SSL_TRUSTSTORE_PASSWORD_DOC)
                                 .define(SecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, Importance.LOW, SecurityConfigs.SSL_KEYMANAGER_ALGORITHM_DOC)
                                 .define(SecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, Importance.LOW, SecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC)
-                                .define(SecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, Type.STRING, Importance.LOW, SecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC, false);
+                                .define(SecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, Type.STRING, Importance.LOW, SecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC, false)
+                                /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
+                                .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
+                                        Type.LONG,
+                                        9 * 60 * 1000,
+                                        Importance.MEDIUM,
+                                        CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC);
 
     }
 

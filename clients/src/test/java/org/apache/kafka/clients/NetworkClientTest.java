@@ -65,7 +65,7 @@ public class NetworkClientTest {
         client.poll(1, time.milliseconds());
         selector.clear();
         assertTrue("Now the client is ready", client.ready(node, time.milliseconds()));
-        selector.disconnect(node.id());
+        selector.disconnect(node.idString());
         client.poll(1, time.milliseconds());
         selector.clear();
         assertFalse("After we forced the disconnection the client is no longer ready.", client.ready(node, time.milliseconds()));
@@ -74,7 +74,7 @@ public class NetworkClientTest {
 
     @Test(expected = IllegalStateException.class)
     public void testSendToUnreadyNode() {
-        RequestSend send = new RequestSend(5,
+        RequestSend send = new RequestSend("5",
                                            client.nextRequestHeader(ApiKeys.METADATA),
                                            new MetadataRequest(Arrays.asList("test")).toStruct());
         ClientRequest request = new ClientRequest(time.milliseconds(), false, send, null);
@@ -86,7 +86,7 @@ public class NetworkClientTest {
     public void testSimpleRequestResponse() {
         ProduceRequest produceRequest = new ProduceRequest((short) 1, 1000, Collections.<TopicPartition, ByteBuffer>emptyMap());
         RequestHeader reqHeader = client.nextRequestHeader(ApiKeys.PRODUCE);
-        RequestSend send = new RequestSend(node.id(), reqHeader, produceRequest.toStruct());
+        RequestSend send = new RequestSend(node.idString(), reqHeader, produceRequest.toStruct());
         TestCallbackHandler handler = new TestCallbackHandler();
         ClientRequest request = new ClientRequest(time.milliseconds(), true, send, handler);
         awaitReady(client, node);
@@ -101,7 +101,7 @@ public class NetworkClientTest {
         respHeader.writeTo(buffer);
         resp.writeTo(buffer);
         buffer.flip();
-        selector.completeReceive(new NetworkReceive(node.id(), buffer));
+        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
         List<ClientResponse> responses = client.poll(1, time.milliseconds());
         assertEquals(1, responses.size());
         assertTrue("The handler should have executed.", handler.executed);

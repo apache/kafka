@@ -59,4 +59,6 @@ public class CommonClientConfigs {
     public static final String SECURITY_PROTOCOL_DOC = "Protocol used to communicate with brokers. Currently only PLAINTEXT and SSL are supported.";
     public static final String DEFAULT_SECURITY_PROTOCOL = "PLAINTEXT";
 
+    public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = "connections.max.idle.ms";
+    public static final String CONNECTIONS_MAX_IDLE_MS_DOC = "Close idle connections after the number of milliseconds specified by this config.";
 }

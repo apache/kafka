@@ -460,7 +460,7 @@ object ZkUtils extends Logging {
 
   def maybeDeletePath(zkUrl: String, dir: String) {
     try {
-      val zk = new ZkClient(zkUrl, 30*1000, 30*1000, ZKStringSerializer)
+      val zk = createZkClient(zkUrl, 30*1000, 30*1000)
       zk.deleteRecursive(dir)
       zk.close()
     } catch {
@@ -781,9 +781,14 @@ object ZkUtils extends Logging {
       }
     }
   }
+
+  def createZkClient(zkUrl: String, sessionTimeout: Int, connectionTimeout: Int): ZkClient = {
+    val zkClient = new ZkClient(zkUrl, sessionTimeout, connectionTimeout, ZKStringSerializer)
+    zkClient    
+  }
 }
 
-object ZKStringSerializer extends ZkSerializer {
+private object ZKStringSerializer extends ZkSerializer {
 
   @throws(classOf[ZkMarshallingError])
   def serialize(data : Object) : Array[Byte] = data.asInstanceOf[String].getBytes("UTF-8")

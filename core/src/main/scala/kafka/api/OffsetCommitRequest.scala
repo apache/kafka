@@ -18,11 +18,13 @@
 package kafka.api
 
 import java.nio.ByteBuffer
+
 import kafka.api.ApiUtils._
-import kafka.utils.{SystemTime, Logging}
-import kafka.network.{RequestChannel, BoundedByteBufferSend}
-import kafka.common.{OffsetMetadata, OffsetAndMetadata, ErrorMapping, TopicAndPartition}
+import kafka.common.{ErrorMapping, OffsetAndMetadata, TopicAndPartition}
+import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
+import kafka.utils.Logging
+
 import scala.collection._
 
 object OffsetCommitRequest extends Logging {
@@ -162,7 +164,7 @@ case class OffsetCommitRequest(groupId: String,
     val commitStatus = requestInfo.mapValues(_ => errorCode)
     val commitResponse = OffsetCommitResponse(commitStatus, correlationId)
 
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(commitResponse)))
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, commitResponse)))
   }
 
   override def describe(details: Boolean): String = {

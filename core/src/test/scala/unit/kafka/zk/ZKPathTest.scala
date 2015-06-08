@@ -19,7 +19,7 @@ package unit.kafka.zk
 
 import junit.framework.Assert
 import kafka.consumer.ConsumerConfig
-import kafka.utils.{ZkPath, TestUtils, ZKStringSerializer, ZkUtils}
+import kafka.utils.{ZkPath, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.config.ConfigException
@@ -34,9 +34,8 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testCreatePersistentPathThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,
       "test", "1"))
-    var zkClient = new ZkClient(zkConnectWithInvalidRoot, zkSessionTimeoutMs,
-      config.zkConnectionTimeoutMs,
-      ZKStringSerializer)
+    var zkClient = ZkUtils.createZkClient(zkConnectWithInvalidRoot, zkSessionTimeoutMs,
+      config.zkConnectionTimeoutMs)
     try {
       ZkPath.resetNamespaceCheckedState
       ZkUtils.createPersistentPath(zkClient, path)
@@ -49,8 +48,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   def testCreatePersistentPath {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
-    var zkClient = new ZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-      ZKStringSerializer)
+    var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
     try {
       ZkPath.resetNamespaceCheckedState
       ZkUtils.createPersistentPath(zkClient, path)
@@ -64,9 +62,8 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testMakeSurePersistsPathExistsThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,
       "test", "1"))
-    var zkClient = new ZkClient(zkConnectWithInvalidRoot, zkSessionTimeoutMs,
-      config.zkConnectionTimeoutMs,
-      ZKStringSerializer)
+    var zkClient = ZkUtils.createZkClient(zkConnectWithInvalidRoot, zkSessionTimeoutMs,
+      config.zkConnectionTimeoutMs)
     try {
       ZkPath.resetNamespaceCheckedState
       ZkUtils.makeSurePersistentPathExists(zkClient, path)
@@ -79,8 +76,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   def testMakeSurePersistsPathExists {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
-    var zkClient = new ZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-      ZKStringSerializer)
+    var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
     try {
       ZkPath.resetNamespaceCheckedState
       ZkUtils.makeSurePersistentPathExists(zkClient, path)
@@ -94,9 +90,8 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testCreateEphemeralPathThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,
       "test", "1"))
-    var zkClient = new ZkClient(zkConnectWithInvalidRoot, zkSessionTimeoutMs,
-      config.zkConnectionTimeoutMs,
-      ZKStringSerializer)
+    var zkClient = ZkUtils.createZkClient(zkConnectWithInvalidRoot, zkSessionTimeoutMs,
+      config.zkConnectionTimeoutMs)
     try {
       ZkPath.resetNamespaceCheckedState
       ZkUtils.createEphemeralPathExpectConflict(zkClient, path, "somedata")
@@ -109,8 +104,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   def testCreateEphemeralPathExists {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
-    var zkClient = new ZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-      ZKStringSerializer)
+    var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
     try {
       ZkPath.resetNamespaceCheckedState
       ZkUtils.createEphemeralPathExpectConflict(zkClient, path, "somedata")
@@ -124,9 +118,8 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
   def testCreatePersistentSequentialThrowsException {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnectWithInvalidRoot,
       "test", "1"))
-    var zkClient = new ZkClient(zkConnectWithInvalidRoot, zkSessionTimeoutMs,
-      config.zkConnectionTimeoutMs,
-      ZKStringSerializer)
+    var zkClient = ZkUtils.createZkClient(zkConnectWithInvalidRoot, zkSessionTimeoutMs,
+      config.zkConnectionTimeoutMs)
     try {
       ZkPath.resetNamespaceCheckedState
       ZkUtils.createSequentialPersistentPath(zkClient, path)
@@ -139,8 +132,7 @@ class ZKPathTest extends JUnit3Suite with ZooKeeperTestHarness {
 
   def testCreatePersistentSequentialExists {
     val config = new ConsumerConfig(TestUtils.createConsumerProperties(zkConnect, "test", "1"))
-    var zkClient = new ZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs,
-      ZKStringSerializer)
+    var zkClient = ZkUtils.createZkClient(zkConnect, zkSessionTimeoutMs, config.zkConnectionTimeoutMs)
 
     var actualPath: String = ""
     try {

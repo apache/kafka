@@ -16,12 +16,11 @@
  */
 package kafka.javaapi
 
-import kafka.api._
 import java.nio.ByteBuffer
+
+import kafka.api._
+
 import scala.collection.mutable
-import kafka.network.{BoundedByteBufferSend, RequestChannel}
-import kafka.common.ErrorMapping
-import kafka.network.RequestChannel.Response
 
 class TopicMetadataRequest(val versionId: Short,
                            val correlationId: Int,
