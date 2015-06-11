@@ -27,16 +27,22 @@ To run the tests:
 3. Bring up the cluster, making sure you have enough workers. For Vagrant, 
    use `vagrant up`. If you want to run on AWS, use `vagrant up
    --provider=aws --no-parallel`.
+
+Note that the initial provisioning process can be quite slow since it involves
+installing dependencies and updates on every vm.
+
 4. Install ducktape:
        
         $ git clone https://github.com/confluentinc/ducktape
         $ cd ducktape
-        $ pip install ducktape
+        $ python setup.py install
+
 5. Run the system tests using ducktape, you can view results in the `results`
    directory.
         
         $ cd tests
         $ ducktape tests
+
 6. To iterate/run again if you made any changes:
 
         $ cd kafka

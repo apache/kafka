@@ -119,6 +119,9 @@ class ConsoleConsumer(BackgroundThreadService):
             prop_file = self.render('console_consumer.properties', consumer_timeout_ms=self.consumer_timeout_ms)
         else:
             prop_file = self.render('console_consumer.properties')
+
+        self.logger.info("console_consumer.properties:")
+        self.logger.info(prop_file)
         node.account.create_file("/mnt/console_consumer.properties", prop_file)
 
         # Run and capture output

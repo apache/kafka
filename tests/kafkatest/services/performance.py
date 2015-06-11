@@ -101,11 +101,6 @@ class ConsumerPerformanceService(PerformanceService):
         # Parse and save the last line's information
         parts = last.split(',')
 
-        print "=" * 20
-        print "ConsumerPerformanceService data:"
-        print parts
-        print "-" * 20
-
         self.results[idx-1] = {
             'total_mb': float(parts[3]),
             'mbps': float(parts[4]),

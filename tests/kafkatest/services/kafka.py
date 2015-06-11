@@ -55,6 +55,8 @@ class KafkaService(Service):
 
     def start_node(self, node):
         props_file = self.render('kafka.properties', node=node, broker_id=self.idx(node))
+        self.logger.info("kafka.properties:")
+        self.logger.info(props_file)
         node.account.create_file("/mnt/kafka.properties", props_file)
 
         cmd = "/opt/kafka/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log & echo $! > /mnt/kafka.pid"

@@ -37,7 +37,11 @@ class ZookeeperService(Service):
 
         node.account.ssh("mkdir -p /mnt/zookeeper")
         node.account.ssh("echo %d > /mnt/zookeeper/myid" % idx)
-        node.account.create_file("/mnt/zookeeper.properties", self.render('zookeeper.properties'))
+
+        config_file = self.render('zookeeper.properties')
+        self.logger.info("zookeeper.properties:")
+        self.logger.info(config_file)
+        node.account.create_file("/mnt/zookeeper.properties", config_file)
 
         node.account.ssh(
             "/opt/kafka/bin/zookeeper-server-start.sh /mnt/zookeeper.properties 1>> %(path)s 2>> %(path)s &"
