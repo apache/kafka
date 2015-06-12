@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
+package org.apache.kafka.clients.producer;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -26,11 +26,6 @@ import java.util.Map;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import org.apache.kafka.clients.producer.Callback;
-import org.apache.kafka.clients.producer.Partitioner;
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
@@ -47,7 +42,7 @@ import org.apache.kafka.common.serialization.Serializer;
 public class MockProducer<K, V> implements Producer<K, V> {
 
     private final Cluster cluster;
-    private final Partitioner partitioner = new DefaultPartitioner();
+    private final Partitioner partitioner;
     private final List<ProducerRecord<K, V>> sent;
     private final Deque<Completion> completions;
     private boolean autoComplete;
@@ -63,10 +58,14 @@ public class MockProducer<K, V> implements Producer<K, V> {
      *        the user must call {@link #completeNext()} or {@link #errorNext(RuntimeException)} after
      *        {@link #send(ProducerRecord) send()} to complete the call and unblock the @{link
      *        java.util.concurrent.Future Future&lt;RecordMetadata&gt;} that is returned.
+     * @param partitioner The partition strategy
+     * @param keySerializer The serializer for key that implements {@link Serializer}.
+     * @param valueSerializer The serializer for value that implements {@link Serializer}.
      */
-    public MockProducer(Cluster cluster, boolean autoComplete, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+    public MockProducer(Cluster cluster, boolean autoComplete, Partitioner partitioner, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
         this.cluster = cluster;
         this.autoComplete = autoComplete;
+        this.partitioner = partitioner;
         this.keySerializer = keySerializer;
         this.valueSerializer = valueSerializer;
         this.offsets = new HashMap<TopicPartition, Long>();
@@ -75,12 +74,21 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Create a new mock producer with invented metadata the given autoComplete setting.
+     * Create a new mock producer with invented metadata the given autoComplete setting and key\value serializers
      *
-     * Equivalent to {@link #MockProducer(Cluster, boolean, Serializer, Serializer)} new MockProducer(null, autoComplete)}
+     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer)}
      */
     public MockProducer(boolean autoComplete, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
-        this(Cluster.empty(), autoComplete, keySerializer, valueSerializer);
+        this(Cluster.empty(), autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer);
+    }
+
+    /**
+     * Create a new mock producer with invented metadata the given autoComplete setting, partitioner and key\value serializers
+     *
+     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer)}
+     */
+    public MockProducer(boolean autoComplete, Partitioner partitioner, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+        this(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer);
     }
 
     /**
@@ -208,9 +216,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
                                                    + "].");
             return partition;
         }
-        byte[] key = keySerializer.serialize(topic, record.key());
-        byte[] value = valueSerializer.serialize(topic, record.value());
-        return this.partitioner.partition(topic, null, key, null, value, cluster);
+        byte[] keyBytes = keySerializer.serialize(topic, record.key());
+        byte[] valueBytes = valueSerializer.serialize(topic, record.value());
+        return this.partitioner.partition(topic, record.key(), keyBytes, record.value(), valueBytes, cluster);
     }
 
     private static class Completion {

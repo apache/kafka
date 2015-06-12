@@ -21,7 +21,6 @@ import static org.junit.Assert.*;
 import java.util.Iterator;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.test.MockConsumer;
 import org.junit.Test;
 
 public class MockConsumerTest {

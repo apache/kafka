@@ -27,11 +27,11 @@ import java.util.ArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
+import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.test.MockProducer;
 import org.apache.kafka.test.MockSerializer;
 import org.junit.Test;
 
@@ -59,7 +59,7 @@ public class MockProducerTest {
         PartitionInfo partitionInfo0 = new PartitionInfo(topic, 0, null, null, null);
         PartitionInfo partitionInfo1 = new PartitionInfo(topic, 1, null, null, null);
         Cluster cluster = new Cluster(new ArrayList<Node>(0), asList(partitionInfo0, partitionInfo1));
-        MockProducer<String, String> producer = new MockProducer<String, String>(cluster, true, new StringSerializer(), new StringSerializer());
+        MockProducer<String, String> producer = new MockProducer<String, String>(cluster, true, new DefaultPartitioner(), new StringSerializer(), new StringSerializer());
         ProducerRecord<String, String> record = new ProducerRecord<String, String>(topic, "key", "value");
         Future<RecordMetadata> metadata = producer.send(record);
         assertEquals("Partition should be correct", 1, metadata.get().partition());
