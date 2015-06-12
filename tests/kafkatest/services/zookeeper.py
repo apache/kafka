@@ -49,18 +49,14 @@ class ZookeeperService(Service):
 
         time.sleep(5)  # give it some time to start
 
-    def stop_node(self, node, allow_fail=True):
-        # This uses Kafka-REST's stop service script because it's better behaved
-        # (knows how to wait) and sends SIGTERM instead of
-        # zookeeper-stop-server.sh's SIGINT. We don't actually care about clean
-        # shutdown here, so it's ok to use the bigger hammer
+    def stop_node(self, node):
         idx = self.idx(node)
         self.logger.info("Stopping %s node %d on %s" % (type(self).__name__, idx, node.account.hostname))
-        node.account.ssh("/opt/kafka-rest/bin/kafka-rest-stop-service zookeeper", allow_fail=allow_fail)
+        node.account.kill_process("zookeeper", allow_fail=False)
 
-    def clean_node(self, node, allow_fail=True):
+    def clean_node(self, node):
         self.logger.info("Cleaning ZK node %d on %s", self.idx(node), node.account.hostname)
-        node.account.ssh("rm -rf /mnt/zookeeper /mnt/zookeeper.properties /mnt/zk.log", allow_fail=allow_fail)
+        node.account.ssh("rm -rf /mnt/zookeeper /mnt/zookeeper.properties /mnt/zk.log", allow_fail=False)
 
     def connect_setting(self):
         return ','.join([node.account.hostname + ':2181' for node in self.nodes])

@@ -82,17 +82,17 @@ class KafkaService(Service):
         leader = self.leader(topic, partition)
         self.signal_node(leader, sig)
 
-    def stop_node(self, node, clean_shutdown=True, allow_fail=True):
+    def stop_node(self, node, clean_shutdown=True):
         pids = self.pids(node)
         sig = signal.SIGTERM if clean_shutdown else signal.SIGKILL
 
         for pid in pids:
-            node.account.signal(pid, sig, allow_fail=allow_fail)
+            node.account.signal(pid, sig, allow_fail=False)
 
-        node.account.ssh("rm -f /mnt/kafka.pid", allow_fail=True)
+        node.account.ssh("rm -f /mnt/kafka.pid", allow_fail=False)
 
     def clean_node(self, node):
-        node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log")
+        node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log", allow_fail=False)
 
     def create_topic(self, topic_cfg):
         node = self.nodes[0] # any node is fine here

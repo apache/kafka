@@ -138,8 +138,8 @@ class ConsoleConsumer(BackgroundThreadService):
         super(ConsoleConsumer, self).start_node(node)
 
     def stop_node(self, node):
-        node.account.kill_process("java", allow_fail=True)
+        node.account.kill_process("java", allow_fail=False)
 
     def clean_node(self, node):
-        node.account.ssh("rm -rf /mnt/console_consumer.properties /mnt/consumer.log", allow_fail=True)
+        node.account.ssh("rm -rf /mnt/console_consumer.properties /mnt/consumer.log", allow_fail=False)
 
