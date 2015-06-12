@@ -393,6 +393,8 @@ public class Selector implements Selectable {
                     if (log.isTraceEnabled())
                         log.trace("About to close the idle connection from " + connectionId
                                 + " due to being idle for " + (currentTimeNanos - connectionLastActiveTime) / 1000 / 1000 + " millis");
+
+                    disconnected.add(connectionId);
                     close(connectionId);
                 }
             }
