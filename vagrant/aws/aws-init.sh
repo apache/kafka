@@ -1,13 +1,13 @@
 #!/bin/bash
 
-# This script should be run once on your aws test driver machine before
-# attempting to run any ducktape tests
+# This script can be used to set up a driver machine on aws from which you will run tests
+# or bring up your mini Kafka cluster.
 
 # Install dependencies
-sudo apt-get install -y maven openjdk-6-jdk build-essential \
+sudo apt-get install -y maven openjdk-7-jdk build-essential \
             ruby-dev zlib1g-dev realpath python-setuptools
 
-base_dir=`dirname $0`/..
+base_dir=`dirname $0`/../..
 
 if [ -z `which vagrant` ]; then
     echo "Installing vagrant..."

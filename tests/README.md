@@ -39,9 +39,7 @@ installing dependencies and updates on every vm.):
 
 * Install ducktape:
        
-        $ git clone https://github.com/confluentinc/ducktape
-        $ cd ducktape
-        $ python setup.py install
+        $ pip install ducktape
 
 * Run the system tests using ducktape:
 
@@ -93,9 +91,7 @@ the test driver machine.
 * Start by making sure you're up to date, and install git and ducktape:
 
         $ sudo apt-get update && sudo apt-get -y upgrade && sudo apt-get install -y git
-        $ git clone https://github.com/confluentinc/ducktape.git
-        $ cd ducktape
-        $ python setup.py install
+        $ pip install ducktape
 
 * Get Kafka:
 
@@ -104,7 +100,7 @@ the test driver machine.
 * Install some dependencies:
 
         $ cd kafka
-        $ aws/aws-init.sh
+        $ kafka/vagrant/aws/aws-init.sh
         $ . ~/.bashrc
 
 * An example Vagrantfile.local has been created by aws-init.sh which looks something like:
