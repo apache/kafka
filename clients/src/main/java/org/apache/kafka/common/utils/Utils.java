@@ -287,8 +287,17 @@ public class Utils {
      * @return 32 bit hash of the given array
      */
     public static int murmur2(final byte[] data) {
+      return murmur2(data, 0x9747b28c);
+    }
+
+    /**
+     * Generates 32 bit murmur2 hash from byte array
+     * @param data byte array to hash
+     * @param seed TODO
+     * @return 32 bit hash of the given array
+     */
+    public static int murmur2(final byte[] data, int seed) {
         int length = data.length;
-        int seed = 0x9747b28c;
         // 'm' and 'r' are mixing constants generated offline.
         // They're not really 'magic', they just happen to work well.
         final int m = 0x5bd1e995;

@@ -49,7 +49,7 @@ public class DefaultPartitioner implements Partitioner {
      * @param number a given number
      * @return a positive number.
      */
-    private static int toPositive(int number) {
+    protected static int toPositive(int number) {
         return number & 0x7fffffff;
     }
 
@@ -68,20 +68,27 @@ public class DefaultPartitioner implements Partitioner {
     public int partition(String topic, Object key, byte[] keyBytes, Object value, byte[] valueBytes, Cluster cluster) {
         List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
         int numPartitions = partitions.size();
-        if (keyBytes == null) {
-            int nextValue = counter.getAndIncrement();
-            List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
-            if (availablePartitions.size() > 0) {
-                int part = DefaultPartitioner.toPositive(nextValue) % availablePartitions.size();
-                return availablePartitions.get(part).partition();
-            } else {
-                // no partitions are available, give a non-available partition
-                return DefaultPartitioner.toPositive(nextValue) % numPartitions;
-            }
+        if (keyBytes == null)
+          return partitionWithoutKey(topic, cluster, numPartitions);
+        else
+          return partitionWithKey(keyBytes, numPartitions, topic, cluster);
+    }
+
+    protected int partitionWithoutKey(String topic, Cluster cluster, int numPartitions) {
+        int nextValue = counter.getAndIncrement();
+        List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
+        if (availablePartitions.size() > 0) {
+            int part = DefaultPartitioner.toPositive(nextValue) % availablePartitions.size();
+            return availablePartitions.get(part).partition();
         } else {
-            // hash the keyBytes to choose a partition
-            return DefaultPartitioner.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
+            // no partitions are available, give a non-available partition
+            return DefaultPartitioner.toPositive(nextValue) % numPartitions;
         }
+    }
+    
+    protected int partitionWithKey(byte[] keyBytes, int numPartitions, String topic, Cluster cluster) {
+        // hash the keyBytes to choose a partition
+        return DefaultPartitioner.toPositive(Utils.murmur2(keyBytes)) % numPartitions;
     }
 
     public void close() {}
