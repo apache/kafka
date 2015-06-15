@@ -1,0 +1,3 @@
+# Use this Vagrantfile.local for running system tests
+mode = "test"
+num_workers = 9

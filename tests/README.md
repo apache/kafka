@@ -27,8 +27,10 @@ This quickstart will help you run the Kafka system tests on your local machine.
 * Setup a testing cluster with Vagrant. Configure your Vagrant setup by creating the file 
    `Vagrantfile.local` in the directory of your Kafka checkout. At a minimum, you *MUST* 
    set `mode = "test"` and the value of `num_workers` high enough for the test(s) you're trying to run.
+    An example resides in kafka/vagrant/system-test-Vagrantfile.local
 
         # Example Vagrantfile.local for use on local machine
+        # Vagrantfile.local should reside in the base Kafka directory
         mode = "test"
         num_workers = 9
 
