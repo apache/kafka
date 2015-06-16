@@ -38,7 +38,7 @@ class VerifiableProducer(BackgroundThreadService):
 
     def _worker(self, idx, node):
         cmd = self.start_cmd
-        self.logger.debug("Verbose producer %d command: %s" % (idx, cmd))
+        self.logger.debug("VerifiableProducer %d command: %s" % (idx, cmd))
 
         for line in node.account.ssh_capture(cmd):
             line = line.strip()

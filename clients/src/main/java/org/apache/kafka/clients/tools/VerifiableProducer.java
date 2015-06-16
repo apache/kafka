@@ -136,10 +136,7 @@ public class VerifiableProducer {
         try {
             Namespace res;
             res = parser.parseArgs(args);
-            System.out.println(res);
-            System.out.println(res.getString("brokerList"));
-            
-            
+
             int maxMessages = res.getInt("maxMessages");
             String topic = res.getString("topic");
             int throughput = res.getInt("throughput");
