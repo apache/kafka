@@ -267,6 +267,7 @@ public class Selector implements Selectable {
                         key.interestOps(key.interestOps() & ~SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
                         this.connected.add(transmissions.id);
                         this.sensors.connectionCreated.record();
+                        log.debug("Connection {} created", transmissions.id);
                     }
 
                     /* read from any connections that have readable data */
@@ -307,7 +308,7 @@ public class Selector implements Selectable {
                 } catch (IOException e) {
                     String desc = socketDescription(channel);
                     if (e instanceof EOFException || e instanceof ConnectException)
-                        log.info("Connection {} disconnected", desc);
+                        log.debug("Connection {} disconnected", desc);
                     else
                         log.warn("Error in I/O with connection to {}", desc, e);
                     close(transmissions.id);
