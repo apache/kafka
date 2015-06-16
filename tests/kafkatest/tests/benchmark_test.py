@@ -194,12 +194,21 @@ class Benchmark(KafkaTest):
         return data
 
     def test_single_consumer(self):
+        topic = "test-rep-three"
+
+        self.producer = ProducerPerformanceService(
+            self.test_context, 1, self.kafka,
+            topic=topic, num_records=self.msgs_default, record_size=self.msg_size_default, throughput=-1,
+            settings={'acks':1, 'batch.size':self.batch_size, 'buffer.memory':self.buffer_memory}
+        )
+        self.producer.run()
+
         # All consumer tests use the messages from the first benchmark, so
         # they'll get messages of the default message size
         self.logger.info("BENCHMARK: Single consumer")
         self.perf = ConsumerPerformanceService(
             self.test_context, 1, self.kafka,
-            topic="test-rep-three", num_records=self.msgs_default, throughput=-1, threads=1
+            topic=topic, num_records=self.msgs_default, throughput=-1, threads=1
         )
         self.perf.run()
 
@@ -208,6 +217,15 @@ class Benchmark(KafkaTest):
         return data
 
     def test_three_consumers(self):
+        topic = "test-rep-three"
+
+        self.producer = ProducerPerformanceService(
+            self.test_context, 1, self.kafka,
+            topic=topic, num_records=self.msgs_default, record_size=self.msg_size_default, throughput=-1,
+            settings={'acks':1, 'batch.size':self.batch_size, 'buffer.memory':self.buffer_memory}
+        )
+        self.producer.run()
+
         self.logger.info("BENCHMARK: Three consumers")
         self.perf = ConsumerPerformanceService(
             self.test_context, 3, self.kafka,

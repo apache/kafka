@@ -102,8 +102,8 @@ class ConsumerPerformanceService(PerformanceService):
         parts = last.split(',')
 
         self.results[idx-1] = {
-            'total_mb': float(parts[3]),
-            'mbps': float(parts[4]),
+            'total_mb': float(parts[2]),
+            'mbps': float(parts[3]),
             'records_per_sec': float(parts[5]),
         }
 
