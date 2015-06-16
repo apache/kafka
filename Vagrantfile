@@ -53,11 +53,6 @@ if File.exists?(local_config_file) then
   eval(File.read(local_config_file), binding, "Vagrantfile.local")
 end
 
-if mode == "test"
-  num_zookeepers = 0
-  num_brokers = 0
-end
-
 # This is a horrible hack to work around bad interactions between
 # vagrant-hostmanager and vagrant-aws/vagrant's implementation. Hostmanager
 # wants to update the /etc/hosts entries, but tries to do so even on nodes that

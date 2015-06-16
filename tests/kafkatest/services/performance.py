@@ -1,10 +1,11 @@
-# Copyright 2014 Confluent Inc.
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
+#    http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,48 +13,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.services.service import Service
-import threading
+from ducktape.services.background_thread import BackgroundThreadService
 
 
-class PerformanceService(Service):
-    def __init__(self, service_context):
-        super(PerformanceService, self).__init__(service_context)
-
-    def start(self):
-        super(PerformanceService, self).start()
-        self.worker_threads = []
-        self.results = [None] * len(self.nodes)
-        self.stats = [[] for x in range(len(self.nodes))]
-        for idx,node in enumerate(self.nodes,1):
-            self.logger.info("Running %s node %d on %s", self.__class__.__name__, idx, node.account.hostname)
-            worker = threading.Thread(
-                name=self.__class__.__name__ + "-worker-" + str(idx),
-                target=self._worker,
-                args=(idx,node)
-            )
-            worker.daemon = True
-            worker.start()
-            self.worker_threads.append(worker)
-
-    def wait(self):
-        super(PerformanceService, self).wait()
-        for idx,worker in enumerate(self.worker_threads,1):
-            self.logger.debug("Waiting for %s worker %d to finish", self.__class__.__name__, idx)
-            worker.join()
-        self.worker_threads = None
-
-    def stop(self):
-        super(PerformanceService, self).stop()
-        assert self.worker_threads is None, "%s.stop should only be called after wait" % self.__class__.__name__
-        for idx,node in enumerate(self.nodes,1):
-            self.logger.debug("Stopping %s node %d on %s", self.__class__.__name__, idx, node.account.hostname)
-            node.free()
+class PerformanceService(BackgroundThreadService):
+    def __init__(self, context, num_nodes):
+        super(PerformanceService, self).__init__(context, num_nodes)
+        self.results = [None] * self.num_nodes
+        self.stats = [[] for x in range(self.num_nodes)]
 
 
 class ProducerPerformanceService(PerformanceService):
-    def __init__(self, service_context, kafka, topic, num_records, record_size, throughput, settings={}, intermediate_stats=False):
-        super(ProducerPerformanceService, self).__init__(service_context)
+    def __init__(self, context, num_nodes, kafka, topic, num_records, record_size, throughput, settings={}, intermediate_stats=False):
+        super(ProducerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.args = {
             'topic': topic,
@@ -73,6 +45,7 @@ class ProducerPerformanceService(PerformanceService):
         for key,value in self.settings.items():
             cmd += " %s=%s" % (str(key), str(value))
         self.logger.debug("Producer performance %d command: %s", idx, cmd)
+
         def parse_stats(line):
             parts = line.split(',')
             return {
@@ -103,8 +76,8 @@ class ProducerPerformanceService(PerformanceService):
 
 
 class ConsumerPerformanceService(PerformanceService):
-    def __init__(self, service_context, kafka, topic, num_records, throughput, threads=1, settings={}):
-        super(ConsumerPerformanceService, self).__init__(service_context)
+    def __init__(self, context, num_nodes, kafka, topic, num_records, throughput, threads=1, settings={}):
+        super(ConsumerPerformanceService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.args = {
             'topic': topic,
@@ -128,16 +101,17 @@ class ConsumerPerformanceService(PerformanceService):
             last = line
         # Parse and save the last line's information
         parts = last.split(',')
+
         self.results[idx-1] = {
-            'total_mb': float(parts[3]),
-            'mbps': float(parts[4]),
-            'records_per_sec': float(parts[6]),
+            'total_mb': float(parts[2]),
+            'mbps': float(parts[3]),
+            'records_per_sec': float(parts[5]),
         }
 
 
 class EndToEndLatencyService(PerformanceService):
-    def __init__(self, service_context, kafka, topic, num_records, consumer_fetch_max_wait=100, acks=1):
-        super(EndToEndLatencyService, self).__init__(service_context)
+    def __init__(self, context, num_nodes, kafka, topic, num_records, consumer_fetch_max_wait=100, acks=1):
+        super(EndToEndLatencyService, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.args = {
             'topic': topic,
@@ -152,7 +126,7 @@ class EndToEndLatencyService(PerformanceService):
             'zk_connect': self.kafka.zk.connect_setting(),
             'bootstrap_servers': self.kafka.bootstrap_servers(),
         })
-        cmd = "/opt/kafka/bin/kafka-run-class.sh kafka.tools.TestEndToEndLatency "\
+        cmd = "/opt/kafka/bin/kafka-run-class.sh kafka.tools.EndToEndLatency "\
               "%(bootstrap_servers)s %(zk_connect)s %(topic)s %(num_records)d "\
               "%(consumer_fetch_max_wait)d %(acks)d" % args
         self.logger.debug("End-to-end latency %d command: %s", idx, cmd)

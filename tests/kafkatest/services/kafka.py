@@ -1,10 +1,11 @@
-# Copyright 2014 Confluent Inc.
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
+#    http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -13,31 +14,36 @@
 # limitations under the License.
 
 from ducktape.services.service import Service
-import time, re, json
+
+import json
+import re
+import signal
+import time
 
 
 class KafkaService(Service):
-    def __init__(self, service_context, zk, topics=None):
+
+    logs = {
+        "kafka_log": {
+            "path": "/mnt/kafka.log",
+            "collect_default": True},
+        "kafka_data": {
+            "path": "/mnt/kafka-logs",
+            "collect_default": False}
+    }
+
+    def __init__(self, context, num_nodes, zk, topics=None):
         """
-        :type service_context ducktape.services.service.ServiceContext
+        :type context
         :type zk: ZookeeperService
         :type topics: dict
         """
-        super(KafkaService, self).__init__(service_context)
+        super(KafkaService, self).__init__(context, num_nodes)
         self.zk = zk
         self.topics = topics
 
     def start(self):
         super(KafkaService, self).start()
-
-        # Start all nodes in this Kafka service
-        for idx, node in enumerate(self.nodes, 1):
-            self.logger.info("Starting Kafka node %d on %s", idx, node.account.hostname)
-            self._stop_and_clean(node, allow_fail=True)
-            self.start_node(node)
-
-            # wait for start up
-            time.sleep(6)
 
         # Create topics if necessary
         if self.topics is not None:
@@ -47,6 +53,47 @@ class KafkaService(Service):
 
                 topic_cfg["topic"] = topic
                 self.create_topic(topic_cfg)
+
+    def start_node(self, node):
+        props_file = self.render('kafka.properties', node=node, broker_id=self.idx(node))
+        self.logger.info("kafka.properties:")
+        self.logger.info(props_file)
+        node.account.create_file("/mnt/kafka.properties", props_file)
+
+        cmd = "/opt/kafka/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log & echo $! > /mnt/kafka.pid"
+        self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
+        node.account.ssh(cmd)
+        time.sleep(5)
+        if len(self.pids(node)) == 0:
+            raise Exception("No process ids recorded on node %s" % str(node))
+
+    def pids(self, node):
+        """Return process ids associated with running processes on the given node."""
+        try:
+            return [pid for pid in node.account.ssh_capture("cat /mnt/kafka.pid", callback=int)]
+        except:
+            return []
+
+    def signal_node(self, node, sig=signal.SIGTERM):
+        pids = self.pids(node)
+        for pid in pids:
+            node.account.signal(pid, sig)
+
+    def signal_leader(self, topic, partition=0, sig=signal.SIGTERM):
+        leader = self.leader(topic, partition)
+        self.signal_node(leader, sig)
+
+    def stop_node(self, node, clean_shutdown=True):
+        pids = self.pids(node)
+        sig = signal.SIGTERM if clean_shutdown else signal.SIGKILL
+
+        for pid in pids:
+            node.account.signal(pid, sig, allow_fail=False)
+
+        node.account.ssh("rm -f /mnt/kafka.pid", allow_fail=False)
+
+    def clean_node(self, node):
+        node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log /mnt/kafka.pid", allow_fail=False)
 
     def create_topic(self, topic_cfg):
         node = self.nodes[0] # any node is fine here
@@ -143,45 +190,13 @@ class KafkaService(Service):
         self.logger.debug("Verify partition reassignment:")
         self.logger.debug(output)
 
-    def stop(self):
-        """If the service left any running processes or data, clean them up."""
-        super(KafkaService, self).stop()
-
-        for idx, node in enumerate(self.nodes, 1):
-            self.logger.info("Stopping %s node %d on %s" % (type(self).__name__, idx, node.account.hostname))
-            self._stop_and_clean(node, allow_fail=True)
-            node.free()
-
-    def _stop_and_clean(self, node, allow_fail=False):
-        node.account.ssh("/opt/kafka/bin/kafka-server-stop.sh", allow_fail=allow_fail)
-        time.sleep(5)  # the stop script doesn't wait
-        node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log")
-
-    def stop_node(self, node, clean_shutdown=True, allow_fail=True):
-        node.account.kill_process("kafka", clean_shutdown, allow_fail)
-
-    def start_node(self, node, config=None):
-        if config is None:
-            template = open('templates/kafka.properties').read()
-            template_params = {
-                'broker_id': self.idx(node),
-                'hostname': node.account.hostname,
-                'zk_connect': self.zk.connect_setting()
-            }
-
-            config = template % template_params
-
-        node.account.create_file("/mnt/kafka.properties", config)
-        cmd = "/opt/kafka/bin/kafka-server-start.sh /mnt/kafka.properties 1>> /mnt/kafka.log 2>> /mnt/kafka.log &"
-        self.logger.debug("Attempting to start KafkaService on %s with command: %s" % (str(node.account), cmd))
-        node.account.ssh(cmd)
-
     def restart_node(self, node, wait_sec=0, clean_shutdown=True):
-        self.stop_node(node, clean_shutdown, allow_fail=True)
+        """Restart the given node, waiting wait_sec in between stopping and starting up again."""
+        self.stop_node(node, clean_shutdown)
         time.sleep(wait_sec)
         self.start_node(node)
 
-    def get_leader_node(self, topic, partition=0):
+    def leader(self, topic, partition=0):
         """ Get the leader replica for the given topic and partition.
         """
         cmd = "/opt/kafka/bin/kafka-run-class.sh kafka.tools.ZooKeeperMainWrapper -server %s " \
