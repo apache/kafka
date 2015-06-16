@@ -92,7 +92,7 @@ class KafkaService(Service):
         node.account.ssh("rm -f /mnt/kafka.pid", allow_fail=False)
 
     def clean_node(self, node):
-        node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log", allow_fail=False)
+        node.account.ssh("rm -rf /mnt/kafka-logs /mnt/kafka.properties /mnt/kafka.log /mnt/kafka.pid", allow_fail=False)
 
     def create_topic(self, topic_cfg):
         node = self.nodes[0] # any node is fine here
@@ -191,7 +191,7 @@ class KafkaService(Service):
 
     def restart_node(self, node, wait_sec=0, clean_shutdown=True):
         """Restart the given node, waiting wait_sec in between stopping and starting up again."""
-        self.stop_node(node, clean_shutdown, allow_fail=True)
+        self.stop_node(node, clean_shutdown)
         time.sleep(wait_sec)
         self.start_node(node)
 

@@ -18,7 +18,7 @@ from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.performance import ProducerPerformanceService, ConsumerPerformanceService, EndToEndLatencyService
 
 
-class KafkaBenchmark(KafkaTest):
+class Benchmark(KafkaTest):
     '''A benchmark of Kafka producer/consumer performance. This replicates the test
     run here:
     https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines
