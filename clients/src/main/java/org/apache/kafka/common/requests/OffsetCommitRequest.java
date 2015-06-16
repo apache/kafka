@@ -217,12 +217,22 @@ public class OffsetCommitRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(Throwable e) {
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         Map<TopicPartition, Short> responseData = new HashMap<TopicPartition, Short>();
         for (Map.Entry<TopicPartition, PartitionData> entry: offsetData.entrySet()) {
             responseData.put(entry.getKey(), Errors.forException(e).code());
         }
-        return new OffsetCommitResponse(responseData);
+
+        switch (versionId) {
+            // OffsetCommitResponseV0 == OffsetCommitResponseV1 == OffsetCommitResponseV2
+            case 0:
+            case 1:
+            case 2:
+                return new OffsetCommitResponse(responseData);
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.OFFSET_COMMIT.id)));
+        }
     }
 
     public String groupId() {

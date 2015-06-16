@@ -90,19 +90,24 @@ public class ProduceRequest  extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(Throwable e) {
-
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         /* In case the producer doesn't actually want any response */
         if (acks == 0)
             return null;
 
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<TopicPartition, ProduceResponse.PartitionResponse>();
 
-        for (Map.Entry<TopicPartition, ByteBuffer> entry: partitionRecords.entrySet()) {
+        for (Map.Entry<TopicPartition, ByteBuffer> entry : partitionRecords.entrySet()) {
             responseMap.put(entry.getKey(), new ProduceResponse.PartitionResponse(Errors.forException(e).code(), ProduceResponse.INVALID_OFFSET));
         }
 
-        return new ProduceResponse(responseMap);
+        switch (versionId) {
+            case 0:
+                return new ProduceResponse(responseMap);
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.PRODUCE.id)));
+        }
     }
 
     public short acks() {
@@ -115,6 +120,10 @@ public class ProduceRequest  extends AbstractRequest {
 
     public Map<TopicPartition, ByteBuffer> partitionRecords() {
         return partitionRecords;
+    }
+
+    public static ProduceRequest parse(ByteBuffer buffer, int versionId) {
+        return new ProduceRequest(ProtoUtils.parseRequest(ApiKeys.PRODUCE.id, versionId, buffer));
     }
 
     public static ProduceRequest parse(ByteBuffer buffer) {

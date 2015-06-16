@@ -41,12 +41,22 @@ public class ConsumerMetadataRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(Throwable e) {
-        return new ConsumerMetadataResponse(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code(), Node.noNode());
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
+        switch(versionId) {
+            case 0:
+                return new ConsumerMetadataResponse(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code(), Node.noNode());
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.CONSUMER_METADATA.id)));
+        }
     }
 
     public String groupId() {
         return groupId;
+    }
+
+    public static ConsumerMetadataRequest parse(ByteBuffer buffer, int versionId) {
+        return new ConsumerMetadataRequest(ProtoUtils.parseRequest(ApiKeys.CONSUMER_METADATA.id, versionId, buffer));
     }
 
     public static ConsumerMetadataRequest parse(ByteBuffer buffer) {
