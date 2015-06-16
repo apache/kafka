@@ -17,7 +17,7 @@ import java.nio.channels.SocketChannel;
 import java.util.Map;
 
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
-import org.apache.kafka.common.config.SecurityConfigs;
+import org.apache.kafka.common.config.SSLConfigs;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
@@ -27,19 +27,24 @@ public class SSLChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(SSLChannelBuilder.class);
     private SSLFactory sslFactory;
     private PrincipalBuilder principalBuilder;
+    private SSLFactory.Mode mode;
+
+    public SSLChannelBuilder(SSLFactory.Mode mode) {
+        this.mode = mode;
+    }
 
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
-            this.sslFactory = new SSLFactory(SSLFactory.Mode.CLIENT);
+            this.sslFactory = new SSLFactory(mode);
             this.sslFactory.configure(configs);
-            this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
+            this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
             this.principalBuilder.configure(configs);
         } catch (Exception e) {
             throw new KafkaException(e);
         }
     }
 
-    public Channel buildChannel(int id, SelectionKey key) throws KafkaException {
+    public Channel buildChannel(String id, SelectionKey key) throws KafkaException {
         Channel channel = null;
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();

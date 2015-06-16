@@ -18,6 +18,7 @@ package org.apache.kafka.common.network;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.ScatteringByteChannel;
 
 /**
  * A receive backed by an array of ByteBuffers
@@ -47,8 +48,8 @@ public class ByteBufferReceive implements Receive {
     }
 
     @Override
-    public long readFrom(TransportLayer transportLayer) throws IOException {
-        long read = transportLayer.read(buffers);
+    public long readFrom(ScatteringByteChannel channel) throws IOException {
+        long read = channel.read(buffers);
         remaining += read;
         return read;
     }

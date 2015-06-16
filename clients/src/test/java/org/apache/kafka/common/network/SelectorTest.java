@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
 import java.util.*;
 
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.config.SecurityConfigs;
+import org.apache.kafka.common.config.SSLConfigs;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -46,13 +46,13 @@ public class SelectorTest {
     @Before
     public void setup() throws Exception {
         Map<String, Object> configs = new HashMap<String, Object>();
-        configs.put(SecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SecurityConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
+        configs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         this.server = new EchoServer(configs);
         this.server.start();
 
         this.channelBuilder = new PlainTextChannelBuilder();
         this.channelBuilder.configure(configs);
-        this.selector = new Selector(5000, new Metrics(), new MockTime() , "MetricGroup", new LinkedHashMap<String, String>(), ChannelBuilder);
+        this.selector = new Selector(5000, new Metrics(), new MockTime() , "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
     }
 
     @After
@@ -214,7 +214,7 @@ public class SelectorTest {
     @Test
     public void testLargeMessageSequence() throws Exception {
         int bufferSize = 512 * 1024;
-        int node = 0;
+        String node = "0";
         int reqs = 50;
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -289,7 +289,7 @@ public class SelectorTest {
         return new String(Utils.toArray(receive.payload()));
     }
 
-    private void sendAndReceive(int node, String requestPrefix, int startIndex, int endIndex) throws Exception {
+    private void sendAndReceive(String node, String requestPrefix, int startIndex, int endIndex) throws Exception {
         int requests = startIndex;
         int responses = startIndex;
         selector.send(createSend(node, requestPrefix + "-" + startIndex));

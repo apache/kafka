@@ -18,7 +18,7 @@ package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.config.SecurityConfigs;
+import org.apache.kafka.common.config.SSLConfigs;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.MockSerializer;
@@ -60,7 +60,7 @@ public class KafkaProducerTest {
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL);
-        configs.put(SecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SecurityConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
+        configs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         final int oldInitCount = MockSerializer.INIT_COUNT.get();
         final int oldCloseCount = MockSerializer.CLOSE_COUNT.get();
 

@@ -134,7 +134,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
         val metrics = new Metrics(metricConfig, reporters, socketServerTime)
-
+        val channelConfigs = config.channelConfigs
 
         socketServer = new SocketServer(config.brokerId,
                                         config.listeners,
@@ -146,6 +146,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                                         config.maxConnectionsPerIp,
                                         config.connectionsMaxIdleMs,
                                         config.maxConnectionsPerIpOverrides,
+                                        channelConfigs,
                                         socketServerTime,
                                         metrics)
           socketServer.startup()

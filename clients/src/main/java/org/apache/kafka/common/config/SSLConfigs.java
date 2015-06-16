@@ -16,7 +16,7 @@ package org.apache.kafka.common.config;
 import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.KeyManagerFactory;
 
-public class SecurityConfigs {
+public class SSLConfigs {
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG NAMES AS THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
      */
@@ -72,11 +72,6 @@ public class SecurityConfigs {
     public static final String SSL_TRUSTSTORE_PASSWORD_DOC = "The password for the trust store file. ";
     public static final String DEFAULT_TRUSTSTORE_PASSWORD = "truststore_password";
 
-    public static final String SSL_CLIENT_REQUIRE_CERT_CONFIG = "ssl.client.require.cert";
-    public static final String SSL_CLIENT_REQUIRE_CERT_DOC = "This is to enforce two-way authentication between client and server."
-            + "Default value is false. If set to true client needs to provide Keystore related config";
-    public static final Boolean DEFAULT_SSL_CLIENT_REQUIRE_CERT = false;
-
     public static final String SSL_KEYMANAGER_ALGORITHM_CONFIG = "ssl.keymanager.algorithm";
     public static final String SSL_KEYMANAGER_ALGORITHM_DOC = "The algorithm used by key manager factory for SSL connections. "
             + "Default value is the key manager factory algorithm configured for the Java Virtual Machine.";
@@ -91,12 +86,12 @@ public class SecurityConfigs {
     public static final String SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC = "The endpoint identification algorithm to validate server hostname using server certificate. ";
 
     public static final String SSL_NEED_CLIENT_AUTH_CONFIG = "ssl.need.client.auth";
-    public static final String SSL_NEED_CLIENT_AUTH_CONFIG_DOC = "If set to true kafka broker requires all the ssl client connecting to provide client authentication. "
+    public static final String SSL_NEED_CLIENT_AUTH_DOC = "If set to true kafka broker requires all the ssl client connecting to provide client authentication. "
         + "Default value is false";
     public static final Boolean DEFAULT_SSL_NEED_CLIENT_AUTH = false;
 
     public static final String SSL_WANT_CLIENT_AUTH_CONFIG = "ssl.want.client.auth";
-    public static final String SSL_WANT_CLIENT_AUTH_CONFIG_DOC = "If set to true kafka broker requests for client authentication. Clients without any certificates can still be able to connect using SSL.";
+    public static final String SSL_WANT_CLIENT_AUTH_DOC = "If set to true kafka broker requests for client authentication. Clients without any certificates can still be able to connect using SSL.";
     public static final Boolean DEFAULT_SSL_WANT_CLIENT_AUTH = false;
 
 }

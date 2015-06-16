@@ -17,7 +17,7 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.common.config.SecurityConfigs;
+import org.apache.kafka.common.config.SSLConfigs;
 import org.apache.kafka.common.network.SSLFactory;
 import org.apache.kafka.clients.CommonClientConfigs;
 
@@ -172,25 +172,24 @@ public class TestSSLUtils {
                                                       File trustStoreFile, String trustStorePassword, boolean useClientCert) {
         Map<String, Object> sslConfigs = new HashMap<String, Object>();
         sslConfigs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL"); // kafka security protocol
-        sslConfigs.put(SecurityConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2"); // protocol to create SSLContext
+        sslConfigs.put(SSLConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2"); // protocol to create SSLContext
 
         if (mode == SSLFactory.Mode.SERVER || (mode == SSLFactory.Mode.CLIENT && keyStoreFile != null)) {
-            sslConfigs.put(SecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath());
-            sslConfigs.put(SecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
-            sslConfigs.put(SecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
-            sslConfigs.put(SecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, password);
-            sslConfigs.put(SecurityConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
+            sslConfigs.put(SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG, keyStoreFile.getPath());
+            sslConfigs.put(SSLConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS");
+            sslConfigs.put(SSLConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
+            sslConfigs.put(SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, password);
+            sslConfigs.put(SSLConfigs.SSL_KEY_PASSWORD_CONFIG, keyPassword);
         }
 
-        sslConfigs.put(SecurityConfigs.SSL_CLIENT_REQUIRE_CERT_CONFIG, useClientCert);
-        sslConfigs.put(SecurityConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
-        sslConfigs.put(SecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
-        sslConfigs.put(SecurityConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
-        sslConfigs.put(SecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
+        sslConfigs.put(SSLConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, trustStoreFile.getPath());
+        sslConfigs.put(SSLConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, trustStorePassword);
+        sslConfigs.put(SSLConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, "JKS");
+        sslConfigs.put(SSLConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, TrustManagerFactory.getDefaultAlgorithm());
 
         List<String> enabledProtocols  = new ArrayList<String>();
         enabledProtocols.add("TLSv1.2");
-        sslConfigs.put(SecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
+        sslConfigs.put(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, enabledProtocols);
 
         return sslConfigs;
     }

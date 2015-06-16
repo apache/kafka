@@ -15,6 +15,7 @@ package org.apache.kafka.common.network;
 import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.channels.GatheringByteChannel;
 
 /**
  * A send backed by an array of byte buffers
@@ -52,12 +53,17 @@ public class ByteBufferSend implements Send {
     }
 
     @Override
-    public long writeTo(TransportLayer transportLayer) throws IOException {
-        long written = transportLayer.write(buffers);
+    public long writeTo(GatheringByteChannel channel) throws IOException {
+        long written = channel.write(buffers);
         if (written < 0)
             throw new EOFException("Wrote negative bytes to channel. This shouldn't happen.");
         remaining -= written;
-        pending = transportLayer.pending();
+        // This is temporary workaround. As Send , Receive interfaces are being used by BlockingChannel.
+        // Once BlockingChannel is removed we can make Send, Receive to work with transportLayer rather than
+        // GatheringByteChannel or ScatteringByteChannel.
+        if (channel instanceof SSLTransportLayer) {
+            pending = ((SSLTransportLayer) channel).pending();
+        }
         return written;
     }
 }

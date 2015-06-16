@@ -19,7 +19,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.config.SecurityConfigs;
+import org.apache.kafka.common.config.SSLConfigs;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -160,9 +160,6 @@ public class ConsumerConfig extends AbstractConfig {
     /** <code>connections.max.idle.ms</code> */
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
 
-    /** <code>connections.max.idle.ms</code> */
-    public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
-
 
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
@@ -286,21 +283,21 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.HIGH,
                                         VALUE_DESERIALIZER_CLASS_DOC)
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, Type.STRING, CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL, Importance.MEDIUM, CommonClientConfigs.SECURITY_PROTOCOL_DOC)
-                                .define(SecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Type.CLASS, SecurityConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS, Importance.LOW, SecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC)
-                                .define(SecurityConfigs.SSL_PROTOCOL_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_PROTOCOL, Importance.MEDIUM, SecurityConfigs.SSL_PROTOCOL_DOC)
-                                .define(SecurityConfigs.SSL_PROVIDER_CONFIG, Type.STRING, Importance.MEDIUM, SecurityConfigs.SSL_PROVIDER_DOC, false)
-                                .define(SecurityConfigs.SSL_CIPHER_SUITES_CONFIG, Type.LIST, Importance.LOW, SecurityConfigs.SSL_CIPHER_SUITES_DOC, false)
-                                .define(SecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Type.LIST, SecurityConfigs.DEFAULT_ENABLED_PROTOCOLS, Importance.MEDIUM, SecurityConfigs.SSL_ENABLED_PROTOCOLS_DOC)
-                                .define(SecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_KEYSTORE_TYPE, Importance.MEDIUM, SecurityConfigs.SSL_KEYSTORE_TYPE_DOC)
-                                .define(SecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG, Type.STRING, Importance.HIGH, SecurityConfigs.SSL_KEYSTORE_LOCATION_DOC, false)
-                                .define(SecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, SecurityConfigs.SSL_KEYSTORE_PASSWORD_DOC, false)
-                                .define(SecurityConfigs.SSL_KEY_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, SecurityConfigs.SSL_KEY_PASSWORD_DOC, false)
-                                .define(SecurityConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE, Importance.MEDIUM, SecurityConfigs.SSL_TRUSTSTORE_TYPE_DOC)
-                                .define(SecurityConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_TRUSTSTORE_LOCATION, Importance.HIGH, SecurityConfigs.SSL_TRUSTSTORE_LOCATION_DOC)
-                                .define(SecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_TRUSTSTORE_PASSWORD, Importance.HIGH, SecurityConfigs.SSL_TRUSTSTORE_PASSWORD_DOC)
-                                .define(SecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, Importance.LOW, SecurityConfigs.SSL_KEYMANAGER_ALGORITHM_DOC)
-                                .define(SecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, Type.STRING, SecurityConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, Importance.LOW, SecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC)
-                                .define(SecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, Type.STRING, Importance.LOW, SecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC, false)
+                                .define(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Type.CLASS, SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS, Importance.LOW, SSLConfigs.PRINCIPAL_BUILDER_CLASS_DOC)
+                                .define(SSLConfigs.SSL_PROTOCOL_CONFIG, Type.STRING, SSLConfigs.DEFAULT_SSL_PROTOCOL, Importance.MEDIUM, SSLConfigs.SSL_PROTOCOL_DOC)
+                                .define(SSLConfigs.SSL_PROVIDER_CONFIG, Type.STRING, Importance.MEDIUM, SSLConfigs.SSL_PROVIDER_DOC, false)
+                                .define(SSLConfigs.SSL_CIPHER_SUITES_CONFIG, Type.LIST, Importance.LOW, SSLConfigs.SSL_CIPHER_SUITES_DOC, false)
+                                .define(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Type.LIST, SSLConfigs.DEFAULT_ENABLED_PROTOCOLS, Importance.MEDIUM, SSLConfigs.SSL_ENABLED_PROTOCOLS_DOC)
+                                .define(SSLConfigs.SSL_KEYSTORE_TYPE_CONFIG, Type.STRING, SSLConfigs.DEFAULT_SSL_KEYSTORE_TYPE, Importance.MEDIUM, SSLConfigs.SSL_KEYSTORE_TYPE_DOC)
+                                .define(SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG, Type.STRING, Importance.HIGH, SSLConfigs.SSL_KEYSTORE_LOCATION_DOC, false)
+                                .define(SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, SSLConfigs.SSL_KEYSTORE_PASSWORD_DOC, false)
+                                .define(SSLConfigs.SSL_KEY_PASSWORD_CONFIG, Type.STRING, Importance.HIGH, SSLConfigs.SSL_KEY_PASSWORD_DOC, false)
+                                .define(SSLConfigs.SSL_TRUSTSTORE_TYPE_CONFIG, Type.STRING, SSLConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE, Importance.MEDIUM, SSLConfigs.SSL_TRUSTSTORE_TYPE_DOC)
+                                .define(SSLConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, Type.STRING, SSLConfigs.DEFAULT_TRUSTSTORE_LOCATION, Importance.HIGH, SSLConfigs.SSL_TRUSTSTORE_LOCATION_DOC)
+                                .define(SSLConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, Type.STRING, SSLConfigs.DEFAULT_TRUSTSTORE_PASSWORD, Importance.HIGH, SSLConfigs.SSL_TRUSTSTORE_PASSWORD_DOC)
+                                .define(SSLConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG, Type.STRING, SSLConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, Importance.LOW, SSLConfigs.SSL_KEYMANAGER_ALGORITHM_DOC)
+                                .define(SSLConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG, Type.STRING, SSLConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, Importance.LOW, SSLConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC)
+                                .define(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, Type.STRING, Importance.LOW, SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC, false)
                                 /* default is set to be a bit lower than the server default (10 min), to avoid both client and server closing connection at same time */
                                 .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,
                                         Type.LONG,

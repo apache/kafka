@@ -27,7 +27,7 @@ import javax.net.ssl.*;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.config.SecurityConfigs;
+import org.apache.kafka.common.config.SSLConfigs;
 
 
 public class SSLFactory implements Configurable {
@@ -55,44 +55,44 @@ public class SSLFactory implements Configurable {
 
     @Override
     public void configure(Map<String, ?> configs) throws KafkaException {
-        this.protocol =  (String) configs.get(SecurityConfigs.SSL_PROTOCOL_CONFIG);
-        this.provider = (String) configs.get(SecurityConfigs.SSL_PROVIDER_CONFIG);
+        this.protocol =  (String) configs.get(SSLConfigs.SSL_PROTOCOL_CONFIG);
+        this.provider = (String) configs.get(SSLConfigs.SSL_PROVIDER_CONFIG);
 
-        if (configs.get(SecurityConfigs.SSL_CIPHER_SUITES_CONFIG) != null) {
-            List<String> cipherSuitesList = (List<String>) configs.get(SecurityConfigs.SSL_CIPHER_SUITES_CONFIG);
+        if (configs.get(SSLConfigs.SSL_CIPHER_SUITES_CONFIG) != null) {
+            List<String> cipherSuitesList = (List<String>) configs.get(SSLConfigs.SSL_CIPHER_SUITES_CONFIG);
             this.cipherSuites = (String[]) cipherSuitesList.toArray(new String[cipherSuitesList.size()]);
         }
 
-        if (configs.get(SecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG) != null) {
-            List<String> enabledProtocolsList = (List<String>) configs.get(SecurityConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
+        if (configs.get(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG) != null) {
+            List<String> enabledProtocolsList = (List<String>) configs.get(SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG);
             this.enabledProtocols =  (String[]) enabledProtocolsList.toArray(new String[enabledProtocolsList.size()]);
         }
 
-        if (configs.containsKey(SecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)) {
-            this.endpointIdentification = (String) configs.get(SecurityConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
+        if (configs.containsKey(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)) {
+            this.endpointIdentification = (String) configs.get(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
         }
 
-        if (configs.containsKey(SecurityConfigs.SSL_NEED_CLIENT_AUTH_CONFIG)) {
-            this.needClientAuth = (Boolean) configs.get(SecurityConfigs.SSL_NEED_CLIENT_AUTH_CONFIG);
+        if (configs.containsKey(SSLConfigs.SSL_NEED_CLIENT_AUTH_CONFIG)) {
+            this.needClientAuth = (Boolean) configs.get(SSLConfigs.SSL_NEED_CLIENT_AUTH_CONFIG);
         }
 
-        if (configs.containsKey(SecurityConfigs.SSL_WANT_CLIENT_AUTH_CONFIG)) {
-            this.wantClientAuth = (Boolean) configs.get(SecurityConfigs.SSL_WANT_CLIENT_AUTH_CONFIG);
+        if (configs.containsKey(SSLConfigs.SSL_WANT_CLIENT_AUTH_CONFIG)) {
+            this.wantClientAuth = (Boolean) configs.get(SSLConfigs.SSL_WANT_CLIENT_AUTH_CONFIG);
         }
 
-        this.kmfAlgorithm = (String) configs.get(SecurityConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
-        this.tmfAlgorithm = (String) configs.get(SecurityConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
+        this.kmfAlgorithm = (String) configs.get(SSLConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
+        this.tmfAlgorithm = (String) configs.get(SSLConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG);
 
         if (checkKeyStoreConfigs(configs)) {
-            createKeystore((String) configs.get(SecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG),
-                           (String) configs.get(SecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
-                           (String) configs.get(SecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
-                           (String) configs.get(SecurityConfigs.SSL_KEY_PASSWORD_CONFIG));
+            createKeystore((String) configs.get(SSLConfigs.SSL_KEYSTORE_TYPE_CONFIG),
+                           (String) configs.get(SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
+                           (String) configs.get(SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
+                           (String) configs.get(SSLConfigs.SSL_KEY_PASSWORD_CONFIG));
         }
 
-        createTruststore((String) configs.get(SecurityConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
-                         (String) configs.get(SecurityConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
-                         (String) configs.get(SecurityConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+        createTruststore((String) configs.get(SSLConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
+                         (String) configs.get(SSLConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
+                         (String) configs.get(SSLConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
         try {
             this.sslContext = createSSLContext();
         } catch (Exception e) {
@@ -177,10 +177,10 @@ public class SSLFactory implements Configurable {
     }
 
     private boolean checkKeyStoreConfigs(Map<String, ?> configs) {
-        return  configs.containsKey(SecurityConfigs.SSL_KEYSTORE_TYPE_CONFIG) &&
-                configs.containsKey(SecurityConfigs.SSL_KEYSTORE_LOCATION_CONFIG) &&
-                configs.containsKey(SecurityConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) &&
-                configs.containsKey(SecurityConfigs.SSL_KEY_PASSWORD_CONFIG);
+        return  configs.containsKey(SSLConfigs.SSL_KEYSTORE_TYPE_CONFIG) &&
+                configs.containsKey(SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG) &&
+                configs.containsKey(SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG) &&
+                configs.containsKey(SSLConfigs.SSL_KEY_PASSWORD_CONFIG);
     }
 
     private class SecurityStore {

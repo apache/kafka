@@ -16,7 +16,7 @@ import java.nio.channels.SelectionKey;
 import java.util.Map;
 
 import org.apache.kafka.common.security.auth.PrincipalBuilder;
-import org.apache.kafka.common.config.SecurityConfigs;
+import org.apache.kafka.common.config.SSLConfigs;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.KafkaException;
 
@@ -30,14 +30,14 @@ public class PlainTextChannelBuilder implements ChannelBuilder {
 
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
-            this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
+            this.principalBuilder = (PrincipalBuilder) Utils.newInstance((Class<?>) configs.get(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG));
             this.principalBuilder.configure(configs);
         } catch (Exception e) {
             throw new KafkaException(e);
         }
     }
 
-    public Channel buildChannel(int id, SelectionKey key) throws KafkaException {
+    public Channel buildChannel(String id, SelectionKey key) throws KafkaException {
         Channel channel = null;
         try {
             PlainTextTransportLayer transportLayer = new PlainTextTransportLayer(key);

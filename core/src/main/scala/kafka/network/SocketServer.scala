@@ -31,7 +31,8 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.network.InvalidReceiveException
+import org.apache.kafka.common.network.{InvalidReceiveException, ChannelBuilder,
+                                        PlainTextChannelBuilder, SSLChannelBuilder, SSLFactory}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.utils.{SystemTime, Time, Utils}
@@ -41,7 +42,7 @@ import scala.collection._
 /**
  * An NIO socket server. The threading model is
  *   1 Acceptor thread that handles new connections
- *   N Processor threads that each have their own selector and read requests from sockets
+ *   Acceptor has N Processor threads that each have their own selector and read requests from sockets
  *   M Handler threads that handle requests and produce responses back to the processor threads for writing.
  */
 class SocketServer(val brokerId: Int,
@@ -54,13 +55,13 @@ class SocketServer(val brokerId: Int,
                    val maxConnectionsPerIp: Int = Int.MaxValue,
                    val connectionsMaxIdleMs: Long,
                    val maxConnectionsPerIpOverrides: Map[String, Int],
+                   val channelConfigs: java.util.Map[String, Object],
                    val time: Time,
                    val metrics: Metrics) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[Socket Server on Broker " + brokerId + "], "
-
-  private val processors = new Array[Processor](numProcessorThreads)
-  private[network] var acceptors =  mutable.Map[EndPoint,Acceptor]()
   val requestChannel = new RequestChannel(numProcessorThreads, maxQueuedRequests)
+  private[network] var acceptors =  mutable.Map[EndPoint,Acceptor]()
+
 
   private val allMetricNames = (0 until numProcessorThreads).map { i =>
     val tags = new util.HashMap[String, String]()
@@ -90,32 +91,15 @@ class SocketServer(val brokerId: Int,
     )
 
 
-    this.synchronized {
-      for (i <- 0 until numProcessorThreads) {
-        processors(i) = new Processor(i,
-          time,
-          maxRequestSize,
-          numProcessorThreads,
-          requestChannel,
-          quotas,
-          connectionsMaxIdleMs,
-          portToProtocol,
-          metrics
-          )
-        Utils.newThread("kafka-network-thread-%d-%d".format(brokerId, i), processors(i), false).start()
-      }
-    }
 
-    // register the processor threads for notification of responses
-    requestChannel.addResponseListener((id:Int) => processors(id).wakeup())
-   
     // start accepting connections
     // right now we will use the same processors for all ports, since we didn't implement different protocols
     // in the future, we may implement different processors for SSL and Kerberos
 
     this.synchronized {
       endpoints.values.foreach(endpoint => {
-        val acceptor = new Acceptor(endpoint.host, endpoint.port, processors, sendBufferSize, recvBufferSize, quotas, endpoint.protocolType, portToProtocol)
+        val acceptor = new Acceptor(endpoint.host, endpoint.port, sendBufferSize, recvBufferSize, requestChannel, quotas, endpoint.protocolType,
+           portToProtocol, channelConfigs, numProcessorThreads, maxQueuedRequests, maxRequestSize, connectionsMaxIdleMs, metrics, time, brokerId)
         acceptors.put(endpoint, acceptor)
         Utils.newThread("kafka-socket-acceptor-%s-%d".format(endpoint.protocolType.toString, endpoint.port), acceptor, false).start()
         acceptor.awaitStartup
@@ -132,7 +116,6 @@ class SocketServer(val brokerId: Int,
     info("Shutting down")
     this.synchronized {
       acceptors.values.foreach(_.shutdown)
-      processors.foreach(_.shutdown)
     }
     info("Shutdown completed")
   }
@@ -144,8 +127,8 @@ class SocketServer(val brokerId: Int,
       case e: Exception => throw new KafkaException("Tried to check server's port before server was started or checked for port of non-existing protocol", e)
     }
   }
-}
 
+}
 /**
  * A base class with some helper variables and methods
  */
@@ -187,7 +170,7 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
    * Is the server still running?
    */
   protected def isRunning = alive.get
-  
+
   /**
    * Close the given key and associated socket
    */
@@ -198,7 +181,7 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
       swallowError(key.cancel())
     }
   }
-  
+
   def close(channel: SocketChannel) {
     if(channel != null) {
       debug("Closing connection from " + channel.socket.getRemoteSocketAddress())
@@ -212,17 +195,45 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
 /**
  * Thread that accepts and configures new connections. There is only need for one of these
  */
-private[kafka] class Acceptor(val host: String, 
+private[kafka] class Acceptor(val host: String,
                               private val port: Int,
-                              private val processors: Array[Processor],
-                              val sendBufferSize: Int, 
+                              val sendBufferSize: Int,
                               val recvBufferSize: Int,
+                              requestChannel: RequestChannel,
                               connectionQuotas: ConnectionQuotas,
                               protocol: SecurityProtocol,
-                              portToProtocol: ConcurrentHashMap[Int, SecurityProtocol]) extends AbstractServerThread(connectionQuotas) {
+                              portToProtocol: ConcurrentHashMap[Int, SecurityProtocol],
+                              channelConfigs: java.util.Map[String, Object],
+                              numProcessorThreads: Int,
+                              maxQueuedRequests: Int,
+                              maxRequestSize: Int,
+                              connectionsMaxIdleMs: Long,
+                              metrics: Metrics,
+                              time: Time,
+                              brokerId: Int) extends AbstractServerThread(connectionQuotas) {
   val nioSelector = java.nio.channels.Selector.open()
   val serverChannel = openServerSocket(host, port)
+  private val processors = new Array[Processor](numProcessorThreads)
   portToProtocol.put(serverChannel.socket().getLocalPort, protocol)
+  this.synchronized {
+    for (i <- 0 until numProcessorThreads) {
+        processors(i) = new Processor(i,
+          time,
+          maxRequestSize,
+          numProcessorThreads,
+          requestChannel,
+          connectionQuotas,
+          connectionsMaxIdleMs,
+          protocol,
+          channelConfigs,
+          metrics
+          )
+        Utils.newThread("kafka-network-thread-%d-%s-%d".format(brokerId, protocol.name, i), processors(i), false).start()
+      }
+  }
+
+  // register the processor threads for notification of responses
+  requestChannel.addResponseListener((id:Int) => processors(id).wakeup())
 
   /**
    * Accept loop that checks for new connection attempts
@@ -259,12 +270,12 @@ private[kafka] class Acceptor(val host: String,
     swallowError(nioSelector.close())
     shutdownComplete()
   }
-  
+
   /*
    * Create a server socket to listen for connections on.
    */
   def openServerSocket(host: String, port: Int): ServerSocketChannel = {
-    val socketAddress = 
+    val socketAddress =
       if(host == null || host.trim.isEmpty)
         new InetSocketAddress(port)
       else
@@ -276,7 +287,7 @@ private[kafka] class Acceptor(val host: String,
       serverChannel.socket.bind(socketAddress)
       info("Awaiting socket connections on %s:%d.".format(socketAddress.getHostName, serverChannel.socket.getLocalPort))
     } catch {
-      case e: SocketException => 
+      case e: SocketException =>
         throw new KafkaException("Socket server failed to bind to %s:%d: %s.".format(socketAddress.getHostName, port, e.getMessage), e)
     }
     serverChannel
@@ -314,6 +325,12 @@ private[kafka] class Acceptor(val host: String,
   @Override
   def wakeup = nioSelector.wakeup()
 
+
+  override def shutdown() = {
+    processors.foreach(_.shutdown)
+    super.shutdown
+  }
+
 }
 
 /**
@@ -327,14 +344,16 @@ private[kafka] class Processor(val id: Int,
                                val requestChannel: RequestChannel,
                                connectionQuotas: ConnectionQuotas,
                                val connectionsMaxIdleMs: Long,
-                               val portToProtocol: ConcurrentHashMap[Int,SecurityProtocol],
+                               val protocol: SecurityProtocol,
+                               val channelConfigs: java.util.Map[String, Object],
                                val metrics: Metrics) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private val newConnections = new ConcurrentLinkedQueue[SocketChannel]()
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
-
+  private val channelBuilder = createChannelBuilder
   private val metricTags = new util.HashMap[String, String]()
   metricTags.put("networkProcessor", id.toString)
+
 
   newGauge("IdlePercent",
     new Gauge[Double] {
@@ -352,7 +371,8 @@ private[kafka] class Processor(val id: Int,
     time,
     "socket-server",
     metricTags,
-    false)
+    false,
+    channelBuilder)
 
   override def run() {
     startupComplete()
@@ -458,6 +478,15 @@ private[kafka] class Processor(val id: Int,
     }
   }
 
+  private def createChannelBuilder():ChannelBuilder = {
+    var channelBuilder:ChannelBuilder = new PlainTextChannelBuilder()
+    if (protocol == SecurityProtocol.SSL) {
+      channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.SERVER)
+    }
+    channelBuilder.configure(channelConfigs)
+    channelBuilder
+  }
+
   /**
    * Close all open connections
    */
@@ -476,7 +505,7 @@ private[kafka] class Processor(val id: Int,
 class ConnectionQuotas(val defaultMax: Int, overrideQuotas: Map[String, Int]) {
   private val overrides = overrideQuotas.map(entry => (InetAddress.getByName(entry._1), entry._2))
   private val counts = mutable.Map[InetAddress, Int]()
-  
+
   def inc(addr: InetAddress) {
     counts synchronized {
       val count = counts.getOrElse(addr, 0)
@@ -486,7 +515,7 @@ class ConnectionQuotas(val defaultMax: Int, overrideQuotas: Map[String, Int]) {
         throw new TooManyConnectionsException(addr, max)
     }
   }
-  
+
   def dec(addr: InetAddress) {
     counts synchronized {
       val count = counts.get(addr).get
@@ -496,7 +525,7 @@ class ConnectionQuotas(val defaultMax: Int, overrideQuotas: Map[String, Int]) {
         counts.put(addr, count - 1)
     }
   }
-  
+
 }
 
 class TooManyConnectionsException(val ip: InetAddress, val count: Int) extends KafkaException("Too many connections from %s (maximum = %d)".format(ip, count))

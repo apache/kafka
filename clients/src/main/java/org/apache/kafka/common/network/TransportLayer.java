@@ -21,13 +21,14 @@ package org.apache.kafka.common.network;
  * Transport layer for underlying communication
  */
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.nio.channels.ScatteringByteChannel;
+import java.nio.channels.GatheringByteChannel;
 
 import java.security.Principal;
 
 
-public interface TransportLayer {
+public interface TransportLayer extends ScatteringByteChannel, GatheringByteChannel {
 
     /**
      * Returns true if the channel has handshake and authenticaiton done.
@@ -35,7 +36,7 @@ public interface TransportLayer {
     boolean isReady();
 
     /**
-     * calls internal socketChannel.finishConnect()
+     * Finishes the process of connecting a socket channel.
      */
     void finishConnect() throws IOException;
 
@@ -49,12 +50,6 @@ public interface TransportLayer {
      */
     SocketChannel socketChannel();
 
-    /**
-     * returns true if socketchannel is open.
-     */
-    boolean isOpen();
-
-    public void close() throws IOException;
 
     /**
      * returns true if there are any pending bytes needs to be written to channel.
@@ -67,26 +62,6 @@ public interface TransportLayer {
      * @throws IOException
     */
     void handshake() throws IOException;
-
-
-    /**
-     * Reads sequence of bytes from the channel to given buffer
-     */
-    public int read(ByteBuffer dst) throws IOException;
-
-    public long read(ByteBuffer[] dsts) throws IOException;
-
-    public long read(ByteBuffer[] dsts, int offset, int length) throws IOException;
-
-    /**
-     * Writes a sequence of bytes to this channel from the given buffer.
-     */
-    public int write(ByteBuffer src) throws IOException;
-
-    public long write(ByteBuffer[] srcs) throws IOException;
-
-    public long write(ByteBuffer[] srcs, int offset, int length) throws IOException;
-
 
 
     /**

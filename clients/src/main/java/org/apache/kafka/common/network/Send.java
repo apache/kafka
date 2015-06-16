@@ -37,7 +37,7 @@ public interface Send {
      * @return The number of bytes written
      * @throws IOException If the write fails
      */
-    public long writeTo(Channel channel) throws IOException;
+    public long writeTo(GatheringByteChannel channel) throws IOException;
 
     /**
      * Size of the send

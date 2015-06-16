@@ -110,9 +110,9 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   def testUncleanLeaderElectionDisabled {
-	// disable unclean leader election
-	configProps1.put("unclean.leader.election.enable", String.valueOf(false))
-	configProps2.put("unclean.leader.election.enable", String.valueOf(false))
+	  // disable unclean leader election
+	  configProps1.put("unclean.leader.election.enable", String.valueOf(false))
+  	configProps2.put("unclean.leader.election.enable", String.valueOf(false))
     startBrokers(Seq(configProps1, configProps2))
 
     // create topic with 1 partition, 2 replicas, one on each broker

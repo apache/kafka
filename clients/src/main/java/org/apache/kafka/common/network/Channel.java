@@ -31,13 +31,13 @@ import org.slf4j.LoggerFactory;
 
 public class Channel {
     private static final Logger log = LoggerFactory.getLogger(Channel.class);
-    private final int id;
+    private final String id;
     private TransportLayer transportLayer;
     private Authenticator authenticator;
     private NetworkReceive receive;
-    private NetworkSend send;
+    private Send send;
 
-    public Channel(int id, TransportLayer transportLayer, Authenticator authenticator) throws IOException {
+    public Channel(String id, TransportLayer transportLayer, Authenticator authenticator) throws IOException {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticator = authenticator;
@@ -78,7 +78,7 @@ public class Channel {
         transportLayer.finishConnect();
     }
 
-    public int id() {
+    public String id() {
         return id;
     }
 
@@ -104,7 +104,7 @@ public class Channel {
             return socket.getLocalAddress().toString();
     }
 
-    public void setSend(NetworkSend send) {
+    public void setSend(Send send) {
         if (this.send != null)
             throw new IllegalStateException("Attempt to begin a send operation with prior send operation still in progress.");
         this.send = send;
@@ -126,8 +126,8 @@ public class Channel {
         return result;
     }
 
-    public NetworkSend write() throws IOException {
-        NetworkSend result = null;
+    public Send write() throws IOException {
+        Send result = null;
         if (send != null && send(send)) {
             result = send;
             send = null;
@@ -140,7 +140,7 @@ public class Channel {
         return result;
     }
 
-    private boolean send(NetworkSend send) throws IOException {
+    private boolean send(Send send) throws IOException {
         send.writeTo(transportLayer);
         if (send.completed()) {
             transportLayer.removeInterestOps(SelectionKey.OP_WRITE);

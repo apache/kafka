@@ -30,10 +30,10 @@ public interface ChannelBuilder {
 
     /**
      * returns a Channel with TransportLayer and Authenticator configured.
-     * @param  id
-     * @param  socketChannel
+     * @param  id  channel id
+     * @param  key SelectionKey
      */
-    public Channel buildChannel(int id, SelectionKey key) throws KafkaException;
+    public Channel buildChannel(String id, SelectionKey key) throws KafkaException;
 
 
     /**

@@ -22,8 +22,6 @@ package org.apache.kafka.common.network;
  */
 
 import java.io.IOException;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.SelectionKey;
@@ -39,8 +37,6 @@ public class PlainTextTransportLayer implements TransportLayer {
     private static final Logger log = LoggerFactory.getLogger(PlainTextTransportLayer.class);
     private SelectionKey key;
     private SocketChannel socketChannel;
-    private DataInputStream inStream;
-    private DataOutputStream outStream;
     private final Principal principal = new KafkaPrincipal("ANONYMOUS");
 
     public PlainTextTransportLayer(SelectionKey key) throws IOException {

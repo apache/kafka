@@ -67,18 +67,18 @@ public class NetworkReceive implements Receive {
         return !size.hasRemaining() && !buffer.hasRemaining();
     }
 
-    public long readFrom(ScatteringByteChannel transportLayer) throws IOException {
-        return readFromReadableChannel(transportLayer);
+    public long readFrom(ScatteringByteChannel channel) throws IOException {
+        return readFromReadableChannel(channel);
     }
 
     // Need a method to read from ReadableByteChannel because BlockingChannel requires read with timeout
     // See: http://stackoverflow.com/questions/2866557/timeout-for-socketchannel-doesnt-work
     // This can go away after we get rid of BlockingChannel
     @Deprecated
-    public long readFromReadableChannel(ReadableByteChannel transportLayer) throws IOException {
+    public long readFromReadableChannel(ReadableByteChannel channel) throws IOException {
         int read = 0;
         if (size.hasRemaining()) {
-            int bytesRead = transportLayer.read(size);
+            int bytesRead = channel.read(size);
             if (bytesRead < 0)
                 throw new EOFException();
             read += bytesRead;
@@ -93,7 +93,7 @@ public class NetworkReceive implements Receive {
             }
         }
         if (buffer != null) {
-            int bytesRead = transportLayer.read(buffer);
+            int bytesRead = channel.read(buffer);
             if (bytesRead < 0)
                 throw new EOFException();
             read += bytesRead;
@@ -108,10 +108,10 @@ public class NetworkReceive implements Receive {
 
     // Used only by BlockingChannel, so we may be able to get rid of this when/if we get rid of BlockingChannel
     @Deprecated
-    public long readCompletely(ReadableByteChannel transportLayer) throws IOException {
+    public long readCompletely(ReadableByteChannel channel) throws IOException {
         int totalRead = 0;
         while (!complete()) {
-            totalRead += readFromReadableChannel(transportLayer);
+            totalRead += readFromReadableChannel(channel);
         }
         return totalRead;
     }

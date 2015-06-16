@@ -26,9 +26,11 @@ import kafka.consumer.ConsumerConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.common.config.SSLConfigs
 import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.metrics.MetricsReporter
 import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.PrincipalBuilder
 import scala.collection.{mutable, immutable, JavaConversions, Map}
 
 object Defaults {
@@ -137,6 +139,23 @@ object Defaults {
   val MetricNumSamples = 2
   val MetricSampleWindowMs = 1000
   val MetricReporterClasses = ""
+
+  /** ********* SSL configuration ***********/
+  val PrincipalBuilderClass = SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS
+  val SSLProtocol = SSLConfigs.DEFAULT_SSL_PROTOCOL
+  val SSLEnabledProtocols = SSLConfigs.DEFAULT_ENABLED_PROTOCOLS
+  val SSLKeystoreType = SSLConfigs.DEFAULT_SSL_KEYSTORE_TYPE
+  val SSLKeystoreLocation = "/tmp/ssl.keystore.jks"
+  val SSLKeystorePassword = "keystore_password"
+  val SSLKeyPassword = "key_password"
+  val SSLTruststoreType = SSLConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE
+  val SSLTruststoreLocation = SSLConfigs.DEFAULT_TRUSTSTORE_LOCATION
+  val SSLTruststorePassword = SSLConfigs.DEFAULT_TRUSTSTORE_PASSWORD
+  val SSLKeyManagerAlgorithm = SSLConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM
+  val SSLTrustManagerAlgorithm = SSLConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM
+  val SSLNeedClientAuth = false
+  val SSLWantClientAuth = false
+
 }
 
 object KafkaConfig {
@@ -250,6 +269,25 @@ object KafkaConfig {
   val MetricSampleWindowMsProp = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG
   val MetricNumSamplesProp: String = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG
   val MetricReporterClassesProp: String = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG
+
+  /** ********* SSL Configuration ****************/
+  val PrincipalBuilderClassProp = SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG
+  val SSLProtocolProp = SSLConfigs.SSL_PROTOCOL_CONFIG
+  val SSLProviderProp = SSLConfigs.SSL_PROVIDER_CONFIG
+  val SSLCipherSuitesProp = SSLConfigs.SSL_CIPHER_SUITES_CONFIG
+  val SSLEnabledProtocolsProp = SSLConfigs.SSL_ENABLED_PROTOCOLS_CONFIG
+  val SSLKeystoreTypeProp = SSLConfigs.SSL_KEYSTORE_TYPE_CONFIG
+  val SSLKeystoreLocationProp = SSLConfigs.SSL_KEYSTORE_LOCATION_CONFIG
+  val SSLKeystorePasswordProp = SSLConfigs.SSL_KEYSTORE_PASSWORD_CONFIG
+  val SSLKeyPasswordProp = SSLConfigs.SSL_KEY_PASSWORD_CONFIG
+  val SSLTruststoreTypeProp = SSLConfigs.SSL_TRUSTSTORE_TYPE_CONFIG
+  val SSLTruststoreLocationProp = SSLConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG
+  val SSLTruststorePasswordProp = SSLConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG
+  val SSLKeyManagerAlgorithmProp = SSLConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG
+  val SSLTrustManagerAlgorithmProp = SSLConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG
+  val SSLEndpointIdentificationAlgorithmProp = SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
+  val SSLNeedClientAuthProp = SSLConfigs.SSL_NEED_CLIENT_AUTH_CONFIG
+  val SSLWantClientAuthProp = SSLConfigs.SSL_WANT_CLIENT_AUTH_CONFIG
 
 
   /* Documentation */
@@ -389,6 +427,25 @@ object KafkaConfig {
   val MetricNumSamplesDoc = CommonClientConfigs.METRICS_NUM_SAMPLES_DOC
   val MetricReporterClassesDoc = CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC
 
+  /** ********* SSL Configuration ****************/
+  val PrincipalBuilderClassDoc = SSLConfigs.PRINCIPAL_BUILDER_CLASS_DOC
+  val SSLProtocolDoc = SSLConfigs.SSL_PROTOCOL_DOC
+  val SSLProviderDoc = SSLConfigs.SSL_PROVIDER_DOC
+  val SSLCipherSuitesDoc = SSLConfigs.SSL_CIPHER_SUITES_DOC
+  val SSLEnabledProtocolsDoc = SSLConfigs.SSL_ENABLED_PROTOCOLS_DOC
+  val SSLKeystoreTypeDoc = SSLConfigs.SSL_KEYSTORE_TYPE_DOC
+  val SSLKeystoreLocationDoc = SSLConfigs.SSL_KEYSTORE_LOCATION_DOC
+  val SSLKeystorePasswordDoc = SSLConfigs.SSL_KEYSTORE_PASSWORD_DOC
+  val SSLKeyPasswordDoc = SSLConfigs.SSL_KEY_PASSWORD_DOC
+  val SSLTruststoreTypeDoc = SSLConfigs.SSL_TRUSTSTORE_TYPE_DOC
+  val SSLTruststorePasswordDoc = SSLConfigs.SSL_TRUSTSTORE_PASSWORD_DOC
+  val SSLTruststoreLocationDoc = SSLConfigs.SSL_TRUSTSTORE_LOCATION_DOC
+  val SSLKeyManagerAlgorithmDoc = SSLConfigs.SSL_KEYMANAGER_ALGORITHM_DOC
+  val SSLTrustManagerAlgorithmDoc = SSLConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC
+  val SSLEndpointIdentificationAlgorithmDoc = SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC
+  val SSLNeedClientAuthDoc = SSLConfigs.SSL_NEED_CLIENT_AUTH_DOC
+  val SSLWantClientAuthDoc = SSLConfigs.SSL_WANT_CLIENT_AUTH_DOC
+
 
   private val configDef = {
     import ConfigDef.Range._
@@ -512,6 +569,23 @@ object KafkaConfig {
       .define(MetricNumSamplesProp, INT, Defaults.MetricNumSamples, atLeast(1), LOW, MetricNumSamplesDoc)
       .define(MetricSampleWindowMsProp, LONG, Defaults.MetricSampleWindowMs, atLeast(1), LOW, MetricSampleWindowMsDoc)
       .define(MetricReporterClassesProp, LIST, Defaults.MetricReporterClasses, LOW, MetricReporterClassesDoc)
+
+      /** ********* SSL Configuration ****************/
+      .define(PrincipalBuilderClassProp, STRING, Defaults.PrincipalBuilderClass, MEDIUM, PrincipalBuilderClassDoc)
+      .define(SSLProtocolProp, STRING, Defaults.SSLProtocol, MEDIUM, SSLProtocolDoc)
+      .define(SSLProviderProp, STRING, MEDIUM, SSLProviderDoc, false)
+      .define(SSLEnabledProtocolsProp, LIST, Defaults.SSLEnabledProtocols, MEDIUM, SSLEnabledProtocolsDoc)
+      .define(SSLKeystoreTypeProp, STRING, Defaults.SSLKeystoreType, MEDIUM, SSLKeystoreTypeDoc)
+      .define(SSLKeystoreLocationProp, STRING, Defaults.SSLKeystoreLocation, MEDIUM, SSLKeystoreLocationDoc)
+      .define(SSLKeystorePasswordProp, STRING, Defaults.SSLKeystorePassword, MEDIUM, SSLKeystorePasswordDoc)
+      .define(SSLKeyPasswordProp, STRING, Defaults.SSLKeyPassword, MEDIUM, SSLKeyPasswordDoc)
+      .define(SSLTruststoreTypeProp, STRING, Defaults.SSLTruststoreType, MEDIUM, SSLTruststoreTypeDoc)
+      .define(SSLTruststoreLocationProp, STRING, Defaults.SSLTruststoreLocation, MEDIUM, SSLTruststoreLocationDoc)
+      .define(SSLTruststorePasswordProp, STRING, Defaults.SSLTruststorePassword, MEDIUM, SSLTruststorePasswordDoc)
+      .define(SSLKeyManagerAlgorithmProp, STRING, Defaults.SSLKeyManagerAlgorithm, MEDIUM, SSLKeyManagerAlgorithmDoc)
+      .define(SSLTrustManagerAlgorithmProp, STRING, Defaults.SSLTrustManagerAlgorithm, MEDIUM, SSLTrustManagerAlgorithmDoc)
+      .define(SSLNeedClientAuthProp, BOOLEAN, Defaults.SSLNeedClientAuth, MEDIUM, SSLNeedClientAuthDoc)
+      .define(SSLWantClientAuthProp, BOOLEAN, Defaults.SSLWantClientAuth, MEDIUM, SSLWantClientAuthDoc)
   }
 
   def configNames() = {
@@ -639,7 +713,24 @@ object KafkaConfig {
       compressionType = parsed.get(CompressionTypeProp).asInstanceOf[String],
       metricNumSamples = parsed.get(MetricNumSamplesProp).asInstanceOf[Int],
       metricSampleWindowMs = parsed.get(MetricSampleWindowMsProp).asInstanceOf[Long],
-      _metricReporterClasses = parsed.get(MetricReporterClassesProp).asInstanceOf[java.util.List[String]]
+      _metricReporterClasses = parsed.get(MetricReporterClassesProp).asInstanceOf[java.util.List[String]],
+
+      /** *************** SSL configuration *****************/
+      principalBuilderClass = parsed.get(PrincipalBuilderClassProp).asInstanceOf[String],
+      sslProtocol = parsed.get(SSLProtocolProp).asInstanceOf[String],
+      _sslProvider = Option(parsed.get(SSLProviderProp)).map(_.asInstanceOf[String]),
+      sslEnabledProtocols = parsed.get(SSLEnabledProtocolsProp).asInstanceOf[java.util.List[String]],
+      sslKeystoreType = parsed.get(SSLKeystoreTypeProp).asInstanceOf[String],
+      sslKeystoreLocation = parsed.get(SSLKeystoreLocationProp).asInstanceOf[String],
+      sslKeystorePassword = parsed.get(SSLKeystorePasswordProp).asInstanceOf[String],
+      sslKeyPassword = parsed.get(SSLKeyPasswordProp).asInstanceOf[String],
+      sslTruststoreType = parsed.get(SSLTruststoreTypeProp).asInstanceOf[String],
+      sslTruststoreLocation = parsed.get(SSLTruststoreLocationProp).asInstanceOf[String],
+      sslTruststorePassword = parsed.get(SSLTruststorePasswordProp).asInstanceOf[String],
+      sslKeyManagerAlgorithm = parsed.get(SSLKeyManagerAlgorithmProp).asInstanceOf[String],
+      sslTrustManagerAlgorithm = parsed.get(SSLTrustManagerAlgorithmProp).asInstanceOf[String],
+      sslNeedClientAuth = parsed.get(SSLNeedClientAuthProp).asInstanceOf[Boolean],
+      sslWantClientAuth = parsed.get(SSLWantClientAuthProp).asInstanceOf[Boolean]
     )
   }
 
@@ -791,7 +882,24 @@ class KafkaConfig (/** ********* Zookeeper Configuration ***********/
 
                   val metricSampleWindowMs: Long = Defaults.MetricSampleWindowMs,
                   val metricNumSamples: Int = Defaults.MetricNumSamples,
-                  private val _metricReporterClasses: java.util.List[String] = util.Arrays.asList(Defaults.MetricReporterClasses)
+                  private val _metricReporterClasses: java.util.List[String] = util.Arrays.asList(Defaults.MetricReporterClasses),
+
+                  /** ********** SSL Configuration ************/
+                  val principalBuilderClass: String = Defaults.PrincipalBuilderClass,
+                  val sslProtocol: String = Defaults.SSLProtocol,
+                  private val _sslProvider: Option[String] = None,
+                  val sslEnabledProtocols: java.util.List[String] = util.Arrays.asList(Defaults.SSLEnabledProtocols),
+                  val sslKeystoreType: String = Defaults.SSLKeystoreType,
+                  val sslKeystoreLocation: String = Defaults.SSLKeystoreLocation,
+                  val sslKeystorePassword: String = Defaults.SSLKeystorePassword,
+                  val sslKeyPassword: String = Defaults.SSLKeyPassword,
+                  val sslTruststoreType: String = Defaults.SSLTruststoreType,
+                  val sslTruststoreLocation: String = Defaults.SSLTruststoreLocation,
+                  val sslTruststorePassword: String = Defaults.SSLTruststorePassword,
+                  val sslKeyManagerAlgorithm: String = Defaults.SSLKeyManagerAlgorithm,
+                  val sslTrustManagerAlgorithm: String = Defaults.SSLTrustManagerAlgorithm,
+                  val sslNeedClientAuth: Boolean = Defaults.SSLNeedClientAuth,
+                  val sslWantClientAuth: Boolean = Defaults.SSLWantClientAuth
                    ) {
 
   val zkConnectionTimeoutMs: Int = _zkConnectionTimeoutMs.getOrElse(zkSessionTimeoutMs)
@@ -812,6 +920,7 @@ class KafkaConfig (/** ********* Zookeeper Configuration ***********/
     getMap(KafkaConfig.MaxConnectionsPerIpOverridesProp, _maxConnectionsPerIpOverrides).map { case (k, v) => (k, v.toInt)}
 
   val metricReporterClasses: java.util.List[MetricsReporter] = getMetricClasses(_metricReporterClasses)
+  val sslProvider = _sslProvider.getOrElse("")
 
   private def getLogRetentionTimeMillis: Long = {
     val millisInMinute = 60L * 1000L
@@ -895,7 +1004,9 @@ class KafkaConfig (/** ********* Zookeeper Configuration ***********/
 
   }
 
-
+  private def getPrincipalBuilderClass(principalBuilderClass: String): PrincipalBuilder = {
+    CoreUtils.createObject[PrincipalBuilder](principalBuilderClass)
+  }
 
   validateValues()
 
@@ -1041,6 +1152,42 @@ class KafkaConfig (/** ********* Zookeeper Configuration ***********/
     props.put(MetricSampleWindowMsProp, metricSampleWindowMs.toString)
     props.put(MetricReporterClassesProp, JavaConversions.collectionAsScalaIterable(_metricReporterClasses).mkString(","))
 
+    /** ********* SSL configuration ***********/
+    props.put(PrincipalBuilderClassProp, principalBuilderClass)
+    props.put(SSLProtocolProp, sslProtocol)
+    props.put(SSLProviderProp, sslProvider)
+    props.put(SSLEnabledProtocolsProp, JavaConversions.collectionAsScalaIterable(sslEnabledProtocols).mkString(","))
+    props.put(SSLKeystoreTypeProp, sslKeystoreType)
+    props.put(SSLKeystoreLocationProp, sslKeystoreLocation)
+    props.put(SSLKeystorePasswordProp, sslKeystorePassword)
+    props.put(SSLKeyPasswordProp, sslKeyPassword)
+    props.put(SSLTruststoreTypeProp, sslTruststoreType)
+    props.put(SSLTruststoreLocationProp, sslTruststoreLocation)
+    props.put(SSLTruststorePasswordProp, sslTruststorePassword)
+    props.put(SSLKeyManagerAlgorithmProp, sslKeyManagerAlgorithm)
+    props.put(SSLTrustManagerAlgorithmProp, sslTrustManagerAlgorithm)
+    props.put(SSLNeedClientAuthProp, sslNeedClientAuth.toString)
+    props.put(SSLWantClientAuthProp, sslWantClientAuth.toString)
     props
+  }
+
+  def channelConfigs: java.util.Map[String, Object] = {
+    val channelConfigs = new java.util.HashMap[String, Object]()
+    import kafka.server.KafkaConfig._
+    channelConfigs.put(PrincipalBuilderClassProp, Class.forName(principalBuilderClass))
+    channelConfigs.put(SSLProtocolProp, sslProtocol)
+    channelConfigs.put(SSLEnabledProtocolsProp, sslEnabledProtocols)
+    channelConfigs.put(SSLKeystoreTypeProp, sslKeystoreType)
+    channelConfigs.put(SSLKeystoreLocationProp, sslKeystoreLocation)
+    channelConfigs.put(SSLKeystorePasswordProp, sslKeystorePassword)
+    channelConfigs.put(SSLKeyPasswordProp, sslKeyPassword)
+    channelConfigs.put(SSLTruststoreTypeProp, sslTruststoreType)
+    channelConfigs.put(SSLTruststoreLocationProp, sslTruststoreLocation)
+    channelConfigs.put(SSLTruststorePasswordProp, sslTruststorePassword)
+    channelConfigs.put(SSLKeyManagerAlgorithmProp, sslKeyManagerAlgorithm)
+    channelConfigs.put(SSLTrustManagerAlgorithmProp, sslTrustManagerAlgorithm)
+    channelConfigs.put(SSLNeedClientAuthProp, sslNeedClientAuth: java.lang.Boolean)
+    channelConfigs.put(SSLWantClientAuthProp, sslWantClientAuth: java.lang.Boolean)
+    channelConfigs
   }
 }

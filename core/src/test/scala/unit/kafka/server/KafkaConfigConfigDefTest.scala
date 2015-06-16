@@ -249,11 +249,29 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
         case KafkaConfig.MetricSampleWindowMsProp => expected.setProperty(name, "1000")
         case KafkaConfig.MetricReporterClassesProp => expected.setProperty(name, "")
 
+        //SSL Configs
+        case KafkaConfig.PrincipalBuilderClassProp => expected.setProperty(name, "")
+        case KafkaConfig.SSLProtocolProp => expected.setProperty(name, "SSL")
+        case KafkaConfig.SSLProviderProp => expected.setProperty(name, "")
+        case KafkaConfig.SSLEnabledProtocolsProp => expected.setProperty(name, "SSLv2,SSLv3")
+        case KafkaConfig.SSLKeystoreTypeProp => expected.setProperty(name, "JKS")
+        case KafkaConfig.SSLKeystoreLocationProp => expected.setProperty(name, "/tmp/keystore.jks")
+        case KafkaConfig.SSLKeystorePasswordProp => expected.setProperty(name, "password")
+        case KafkaConfig.SSLKeyPasswordProp => expected.setProperty(name, "kpassword")
+        case KafkaConfig.SSLTruststoreTypeProp => expected.setProperty(name, "jks")
+        case KafkaConfig.SSLTruststorePasswordProp => expected.setProperty(name, "tpassword")
+        case KafkaConfig.SSLTruststoreLocationProp => expected.setProperty(name, "/tmp/truststore.jks")
+        case KafkaConfig.SSLKeyManagerAlgorithmProp => expected.setProperty(name, "ssl")
+        case KafkaConfig.SSLTrustManagerAlgorithmProp => expected.setProperty(name, "tls")
+        case KafkaConfig.SSLNeedClientAuthProp => expected.setProperty(name, randFrom("true", "false"))
+        case KafkaConfig.SSLWantClientAuthProp => expected.setProperty(name, randFrom("true", "false"))
         case nonNegativeIntProperty => expected.setProperty(name, nextInt(Int.MaxValue).toString)
       }
     })
 
     val actual = KafkaConfig.fromProps(expected).toProps
+    println(actual)
+    println(expected)
     Assert.assertEquals(expected, actual)
   }
 
@@ -355,6 +373,23 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
         case KafkaConfig.MetricNumSamplesProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricSampleWindowMsProp => assertPropertyInvalid(getBaseProperties, name, "not_a_number", "-1", "0")
         case KafkaConfig.MetricReporterClassesProp => // ignore string
+
+        //SSL Configs
+        case KafkaConfig.PrincipalBuilderClassProp =>
+        case KafkaConfig.SSLProtocolProp => // ignore string
+        case KafkaConfig.SSLProviderProp => // ignore string
+        case KafkaConfig.SSLEnabledProtocolsProp =>
+        case KafkaConfig.SSLKeystoreTypeProp => // ignore string
+        case KafkaConfig.SSLKeystoreLocationProp => // ignore string
+        case KafkaConfig.SSLKeystorePasswordProp => // ignore string
+        case KafkaConfig.SSLKeyPasswordProp => // ignore string
+        case KafkaConfig.SSLTruststoreTypeProp => // ignore string
+        case KafkaConfig.SSLTruststorePasswordProp => // ignore string
+        case KafkaConfig.SSLTruststoreLocationProp => // ignore string
+        case KafkaConfig.SSLKeyManagerAlgorithmProp =>
+        case KafkaConfig.SSLTrustManagerAlgorithmProp =>
+        case KafkaConfig.SSLNeedClientAuthProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
+        case KafkaConfig.SSLWantClientAuthProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
 
         case nonNegativeIntProperty => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }

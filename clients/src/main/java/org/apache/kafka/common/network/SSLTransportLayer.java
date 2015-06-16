@@ -183,7 +183,7 @@ public class SSLTransportLayer implements TransportLayer {
             return;
         }
         try {
-            switch(handshakeStatus) {
+            switch (handshakeStatus) {
                 case NEED_TASK:
                     handshakeStatus = runDelegatedTasks();
                     break;
@@ -343,7 +343,7 @@ public class SSLTransportLayer implements TransportLayer {
             }
             cont = result.getStatus() == SSLEngineResult.Status.OK &&
                 handshakeStatus == HandshakeStatus.NEED_UNWRAP;
-        } while(cont);
+        } while (cont);
         return result;
     }
 
@@ -405,7 +405,7 @@ public class SSLTransportLayer implements TransportLayer {
                 } else if (unwrapResult.getStatus() == Status.CLOSED) {
                     throw new EOFException();
                 }
-            } while(netReadBuffer.position() != 0);
+            } while (netReadBuffer.position() != 0);
         }
 
         return read;

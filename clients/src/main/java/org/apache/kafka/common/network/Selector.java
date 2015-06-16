@@ -16,7 +16,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
-import java.net.Socket;
 import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -69,7 +68,7 @@ public class Selector implements Selectable {
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
     private final java.nio.channels.Selector nioSelector;
-    private final Map<String, Channel> keys;
+    private final Map<String, Channel> channels;
     private final List<Send> completedSends;
     private final List<NetworkReceive> completedReceives;
     private final List<String> disconnected;
@@ -103,7 +102,7 @@ public class Selector implements Selectable {
         this.metricGrpPrefix = metricGrpPrefix;
         this.metricTags = metricTags;
         this.channels = new HashMap<String, Channel>();
-        this.completedSends = new ArrayList<NetworkSend>();
+        this.completedSends = new ArrayList<Send>();
         this.completedReceives = new ArrayList<NetworkReceive>();
         this.connected = new ArrayList<String>();
         this.disconnected = new ArrayList<String>();
@@ -117,8 +116,8 @@ public class Selector implements Selectable {
         this.metricsPerConnection = metricsPerConnection;
     }
 
-    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, Map<String, String> metricTags) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, metricTags, true);
+    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, Map<String, String> metricTags, ChannelBuilder channelBuilder) {
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, metricTags, true, channelBuilder);
     }
 
     /**
@@ -165,8 +164,8 @@ public class Selector implements Selectable {
      * Use this on server-side, when a connection is accepted by a different thread but processed by the Selector
      * Note that we are not checking if the connection id is valid - since the connection already exists
      */
-    public void register(String id, SocketChannel channel) throws ClosedChannelException {
-        SelectionKey key = channel.register(nioSelector, SelectionKey.OP_READ);
+    public void register(String id, SocketChannel socketChannel) throws ClosedChannelException {
+        SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
         Channel channel = channelBuilder.buildChannel(id, key);
         key.attach(channel);
         this.channels.put(id, channel);
@@ -278,24 +277,23 @@ public class Selector implements Selectable {
                     if (channel.isReady() && key.isReadable()) {
                         NetworkReceive networkReceive;
                         try {
-                            while ((networkReceive = channel.read()) != null) {
-                                networkReceive.payload().rewind();
+                            if ((networkReceive = channel.read()) != null) {
                                 this.completedReceives.add(networkReceive);
                                 this.sensors.recordBytesReceived(channel.id(), networkReceive.payload().limit());
                             }
                         } catch (InvalidReceiveException e) {
-                            log.error("Invalid data received from " + transmissions.id + " closing connection", e);
-                            close(transmissions.id);
+                            log.error("Invalid data received from " + channel.id() + " closing connection", e);
+                            close(channel.id());
                             throw e;
                         }
                     }
 
                     /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
                     if (key.isWritable() && channel.isReady()) {
-                        NetworkSend networkSend = channel.write();
-                        if (networkSend != null) {
-                            this.completedSends.add(networkSend);
-                            this.sensors.recordBytesSent(channel.id(), networkSend.size());
+                        Send send = channel.write();
+                        if (send != null) {
+                            this.completedSends.add(send);
+                            this.sensors.recordBytesSent(channel.id(), send.size());
                         }
                     }
 
@@ -424,7 +422,7 @@ public class Selector implements Selectable {
      * @param id channel id
      */
     public void close(String id) {
-        Channel channel = this.channels(id);
+        Channel channel = this.channels.get(id);
         close(channel);
     }
 
@@ -445,7 +443,7 @@ public class Selector implements Selectable {
      * Get the channel associated with this numeric id
      */
     private Channel channelForId(String id) {
-        Channel channel = channel.get(id);
+        Channel channel = this.channels.get(id);
         if (channel == null)
             throw new IllegalStateException("Attempt to write to socket for which there is no open connection. Connection id " + id + " existing connections " + channels.keySet().toString());
         return channel;
@@ -456,13 +454,6 @@ public class Selector implements Selectable {
      */
     private Channel channel(SelectionKey key) {
         return (Channel) key.attachment();
-    }
-
-    /**
-     * Get the socket channel associated with this selection key
-     */
-    private SocketChannel channel(SelectionKey key) {
-        return (SocketChannel) key.channel();
     }
 
 
