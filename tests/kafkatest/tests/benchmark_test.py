@@ -24,7 +24,7 @@ class Benchmark(KafkaTest):
     https://engineering.linkedin.com/kafka/benchmarking-apache-kafka-2-million-writes-second-three-cheap-machines
     '''
     def __init__(self, test_context):
-        super(KafkaBenchmark, self).__init__(test_context, num_zk=1, num_brokers=3, topics={
+        super(Benchmark, self).__init__(test_context, num_zk=1, num_brokers=3, topics={
             'test-rep-one' : { 'partitions': 6, 'replication-factor': 1 },
             'test-rep-three' : { 'partitions': 6, 'replication-factor': 3 }
         })
