@@ -15,11 +15,10 @@
  * limitations under the License.
  */
 
-package unit.kafka.log
+package kafka.log
 
 import java.util.Properties
 
-import kafka.log.{Defaults, LogConfig}
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
 import org.scalatest.junit.JUnit3Suite

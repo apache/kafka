@@ -15,20 +15,18 @@
  * limitations under the License.
  */
 
-package unit.kafka.consumer
+package kafka.consumer
 
 import org.scalatest.junit.JUnit3Suite
 import org.easymock.EasyMock
 import org.I0Itec.zkclient.ZkClient
 import org.apache.zookeeper.data.Stat
-import kafka.consumer._
 import kafka.utils.{TestUtils, Logging, ZkUtils, Json}
 import junit.framework.Assert._
 import kafka.common.TopicAndPartition
-import unit.kafka.consumer.PartitionAssignorTest.StaticSubscriptionInfo
-import kafka.consumer.ConsumerThreadId
-import unit.kafka.consumer.PartitionAssignorTest.Scenario
-import unit.kafka.consumer.PartitionAssignorTest.WildcardSubscriptionInfo
+import kafka.consumer.PartitionAssignorTest.StaticSubscriptionInfo
+import kafka.consumer.PartitionAssignorTest.Scenario
+import kafka.consumer.PartitionAssignorTest.WildcardSubscriptionInfo
 
 class PartitionAssignorTest extends JUnit3Suite with Logging {
 

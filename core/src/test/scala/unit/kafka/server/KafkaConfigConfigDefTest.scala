@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.server
+package kafka.server
 
 import java.util.Properties
 
 import kafka.api.ApiVersion
 import kafka.message._
-import kafka.server.{Defaults, KafkaConfig}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{Assert, Test}
 import org.scalatest.junit.JUnit3Suite
