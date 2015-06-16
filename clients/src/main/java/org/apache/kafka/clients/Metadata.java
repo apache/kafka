@@ -36,6 +36,7 @@ public final class Metadata {
     private final long metadataExpireMs;
     private int version;
     private long lastRefreshMs;
+    private long lastSuccessfulRefreshMs;
     private Cluster cluster;
     private boolean needUpdate;
     private final Set<String> topics;
@@ -57,6 +58,7 @@ public final class Metadata {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
         this.lastRefreshMs = 0L;
+        this.lastSuccessfulRefreshMs = 0L;
         this.version = 0;
         this.cluster = Cluster.empty();
         this.needUpdate = false;
@@ -83,7 +85,7 @@ public final class Metadata {
      * is now
      */
     public synchronized long timeToNextUpdate(long nowMs) {
-        long timeToExpire = needUpdate ? 0 : Math.max(this.lastRefreshMs + this.metadataExpireMs - nowMs, 0);
+        long timeToExpire = needUpdate ? 0 : Math.max(this.lastSuccessfulRefreshMs + this.metadataExpireMs - nowMs, 0);
         long timeToAllowUpdate = this.lastRefreshMs + this.refreshBackoffMs - nowMs;
         return Math.max(timeToExpire, timeToAllowUpdate);
     }
@@ -146,6 +148,7 @@ public final class Metadata {
     public synchronized void update(Cluster cluster, long now) {
         this.needUpdate = false;
         this.lastRefreshMs = now;
+        this.lastSuccessfulRefreshMs = now;
         this.version += 1;
         this.cluster = cluster;
         notifyAll();
@@ -168,10 +171,10 @@ public final class Metadata {
     }
 
     /**
-     * The last time metadata was updated.
+     * The last time metadata was successfully updated.
      */
-    public synchronized long lastUpdate() {
-        return this.lastRefreshMs;
+    public synchronized long lastSuccessfulUpdate() {
+        return this.lastSuccessfulRefreshMs;
     }
 
     /**
