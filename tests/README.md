@@ -25,13 +25,14 @@ This quickstart will help you run the Kafka system tests on your local machine.
         $ ./gradlew jar
       
 * Setup a testing cluster with Vagrant. Configure your Vagrant setup by creating the file 
-   `Vagrantfile.local` in the directory of your Kafka checkout. At a minimum, you *MUST* 
-   set `mode = "test"` and the value of `num_workers` high enough for the test(s) you're trying to run.
-    An example resides in kafka/vagrant/system-test-Vagrantfile.local
+   `Vagrantfile.local` in the directory of your Kafka checkout. For testing purposes,
+  `num_brokers` and `num_kafka` should be 0, and `num_workers` should be set high enough
+  to run all of you tests. An example resides in kafka/vagrant/system-test-Vagrantfile.local
 
         # Example Vagrantfile.local for use on local machine
         # Vagrantfile.local should reside in the base Kafka directory
-        mode = "test"
+        num_zookeepers = 0
+        num_kafka = 0
         num_workers = 9
 
 * Bring up the cluster (note that the initial provisioning process can be slow since it involves
@@ -56,38 +57,51 @@ installing dependencies and updates on every vm.):
         
 EC2 Quickstart
 --------------
-This quickstart will help you run the Kafka system tests using Amazon EC2. As a convention, we'll use "kafkatest" 
-in most names, but you can use whatever you want.
+This quickstart will help you run the Kafka system tests using Amazon EC2. As a convention, we'll use "kafkatest" in most names, but you can use whatever you want. 
+
+There are a lot of steps here, but the basic goals are to create one distinguished EC2 instance that
+will be our "test driver", and to set up the security groups and iam role so that the test driver
+can create, destroy, and run ssh commands on any number of "workers".
+
+Preparation
+-----------
+In these steps, we will create an IAM role which has permission to create and destroy EC2 instances, 
+set up a keypair used for ssh access to the test driver and worker machines, and create a security group to allow the test driver and workers to all communicate via TCP.
 
 * [Create an IAM role](http://docs.aws.amazon.com/IAM/latest/UserGuide/Using_SettingUpUser.html#Using_CreateUser_console). We'll give this role the ability to launch or kill additional EC2 machines.
  - Create role "kafkatest-master"
  - Role type: Amazon EC2
- - Attach policy: AmazonEC2FullAccess
+ - Attach policy: AmazonEC2FullAccess (this will allow our test-driver to create and destroy EC2 instances)
  
 * If you haven't already, [set up a keypair to use for SSH access](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html). For the purpose
 of this quickstart, let's say the keypair name is kafkatest, and you've saved the private key in kafktest.pem
 
-* Next, create a security group called "kafkatest-insecure". 
- - After creating the group, inbound rules: allow SSH on port 22 from anywhere; also, allow access on all ports (0-65535) from other machines in the kafkatest-insecure group.
+* Next, create a security group called "kafkatest". 
+ - After creating the group, inbound rules: allow SSH on port 22 from anywhere; also, allow access on all ports (0-65535) from other machines in the kafkatest group.
 
+Create the Test Driver
+----------------------
 * Launch a new test driver machine 
  - OS: Ubuntu server is recommended
  - Instance type: t2.medium is easily enough since this machine is just a driver
  - Instance details: Most defaults are fine.
  - IAM role -> kafkatest-master
  - Tagging the instance with a useful name is recommended. 
- - Security group -> 'kafkatest-insecure'
+ - Security group -> 'kafkatest'
   
-* Once the machine is started, upload the SSH key:
+
+* Once the machine is started, upload the SSH key to your test driver:
 
         $ scp -i /path/to/kafkatest.pem \
             /path/to/kafkatest.pem ubuntu@public.hostname.amazonaws.com:kafkatest.pem
 
-* Grab the public hostname/IP and SSH into the host:
+* Grab the public hostname/IP (available for example by navigating to your EC2 dashboard and viewing running instances) of your test driver and SSH into it:
 
         $ ssh -i /path/to/kafkatest.pem ubuntu@public.hostname.amazonaws.com
         
-* The following steps assume you are logged into
+Set Up the Test Driver
+----------------------
+The following steps assume you have ssh'd into
 the test driver machine.
 
 * Start by making sure you're up to date, and install git and ducktape:
@@ -111,15 +125,16 @@ the test driver machine.
         ec2_instance_type = "..." # Pick something appropriate for your
                                   # test. Note that the default m3.medium has
                                   # a small disk.
-        mode = "test"
+        num_zookeepers = 0
+        num_kafka = 0
         num_workers = 9
         ec2_keypair_name = 'kafkatest'
         ec2_keypair_file = '/home/ubuntu/kafkatest.pem'
-        ec2_security_groups = ['kafkatest-insecure']
+        ec2_security_groups = ['kafkatest']
         ec2_region = 'us-west-2'
         ec2_ami = "ami-29ebb519"
 
-* Start up the instances:
+* Start up the instances (note we have found bringing up machines in parallel can cause errors on aws):
 
         $ vagrant up --provider=aws --no-provision --no-parallel && vagrant provision
 
@@ -128,4 +143,5 @@ the test driver machine.
         $ cd kafka/tests
         $ ducktape kafkatest/tests
 
+* To halt your workers without destroying persistent state, run `vagrant halt`. Run `vagrant destroy -f` to destroy all traces of your workers.
 
