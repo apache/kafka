@@ -356,6 +356,8 @@ project(':clients') {
     compile "org.slf4j:slf4j-api:1.7.6"
     compile 'org.xerial.snappy:snappy-java:1.1.1.7'
     compile 'net.jpountz.lz4:lz4:1.2.0'
+    compile 'net.sourceforge.argparse4j:argparse4j:0.5.0'
+    compile 'com.googlecode.json-simple:json-simple:1.1.1'
 
     testCompile 'com.novocode:junit-interface:0.9'
     testRuntime "$slf4jlog4j"

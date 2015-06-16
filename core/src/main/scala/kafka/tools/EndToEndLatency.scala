@@ -17,13 +17,14 @@
 
 package kafka.tools
 
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord, KafkaProducer}
+import java.util.{Arrays, Properties}
+
 import kafka.consumer._
-import java.util.Properties
-import java.util.Arrays
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+
 import scala.Option.option2Iterable
 
-object TestEndToEndLatency {
+object EndToEndLatency {
   def main(args: Array[String]) {
     if (args.length != 6) {
       System.err.println("USAGE: java " + getClass().getName + " broker_list zookeeper_connect topic num_messages consumer_fetch_max_wait producer_acks")

@@ -29,3 +29,8 @@ config/server-*
 config/zookeeper-*
 core/data/*
 gradle/wrapper/*
+
+results
+tests/results
+.ducktape
+tests/.ducktape
