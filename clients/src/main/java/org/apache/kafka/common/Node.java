@@ -18,12 +18,14 @@ package org.apache.kafka.common;
 public class Node {
 
     private final int id;
+    private final String idString;
     private final String host;
     private final int port;
 
     public Node(int id, String host, int port) {
         super();
         this.id = id;
+        this.idString = Integer.toString(id);
         this.host = host;
         this.port = port;
     }
@@ -37,6 +39,14 @@ public class Node {
      */
     public int id() {
         return id;
+    }
+
+    /**
+     * String representation of the node id.
+     * Typically the integer id is used to serialize over the wire, the string representation is used as an identifier with NetworkClient code
+     */
+    public String idString() {
+        return idString;
     }
 
     /**

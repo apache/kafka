@@ -43,8 +43,8 @@ public class ProtocolSerializationTest {
                                  new Field("struct", new Schema(new Field("field", Type.INT32))));
         this.struct = new Struct(this.schema).set("int8", (byte) 1)
                                              .set("int16", (short) 1)
-                                             .set("int32", (int) 1)
-                                             .set("int64", (long) 1)
+                                             .set("int32", 1)
+                                             .set("int64", 1L)
                                              .set("string", "1")
                                              .set("bytes", "1".getBytes())
                                              .set("array", new Object[] {1});

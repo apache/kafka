@@ -96,7 +96,7 @@ public final class Coordinator {
         this.time = time;
         this.client = client;
         this.generation = -1;
-        this.consumerId = "";
+        this.consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID;
         this.groupId = groupId;
         this.metadata = metadata;
         this.consumerCoordinator = null;
@@ -120,29 +120,58 @@ public final class Coordinator {
         // send a join group request to the coordinator
         log.debug("(Re-)joining group {} with subscribed topics {}", groupId, subscribedTopics);
 
-        JoinGroupRequest request = new JoinGroupRequest(groupId,
-            (int) this.sessionTimeoutMs,
-            subscribedTopics,
-            this.consumerId,
-            this.assignmentStrategy);
-        ClientResponse resp = this.blockingCoordinatorRequest(ApiKeys.JOIN_GROUP, request.toStruct(), null, now);
+        // repeat processing the response until succeed or fatal error
+        do {
+            JoinGroupRequest request = new JoinGroupRequest(groupId,
+                (int) this.sessionTimeoutMs,
+                subscribedTopics,
+                this.consumerId,
+                this.assignmentStrategy);
 
-        // process the response
-        JoinGroupResponse response = new JoinGroupResponse(resp.responseBody());
-        // TODO: needs to handle disconnects and errors, should not just throw exceptions
-        Errors.forCode(response.errorCode()).maybeThrow();
-        this.consumerId = response.consumerId();
+            ClientResponse resp = this.blockingCoordinatorRequest(ApiKeys.JOIN_GROUP, request.toStruct(), null, now);
+            JoinGroupResponse response = new JoinGroupResponse(resp.responseBody());
+            short errorCode = response.errorCode();
 
-        // set the flag to refresh last committed offsets
-        this.subscriptions.needRefreshCommits();
+            if (errorCode == Errors.NONE.code()) {
+                this.consumerId = response.consumerId();
+                this.generation = response.generationId();
 
-        log.debug("Joined group: {}", response);
+                // set the flag to refresh last committed offsets
+                this.subscriptions.needRefreshCommits();
 
-        // record re-assignment time
-        this.sensors.partitionReassignments.record(time.milliseconds() - now);
+                log.debug("Joined group: {}", response);
 
-        // return assigned partitions
-        return response.assignedPartitions();
+                // record re-assignment time
+                this.sensors.partitionReassignments.record(time.milliseconds() - now);
+
+                // return assigned partitions
+                return response.assignedPartitions();
+            } else if (errorCode == Errors.UNKNOWN_CONSUMER_ID.code()) {
+                // reset the consumer id and retry immediately
+                this.consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID;
+                log.info("Attempt to join group {} failed due to unknown consumer id, resetting and retrying.",
+                    groupId);
+            } else if (errorCode == Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code()
+                    || errorCode == Errors.NOT_COORDINATOR_FOR_CONSUMER.code()) {
+                // re-discover the coordinator and retry with backoff
+                coordinatorDead();
+                Utils.sleep(this.retryBackoffMs);
+
+                log.info("Attempt to join group {} failed due to obsolete coordinator information, retrying.",
+                    groupId);
+            } else if (errorCode == Errors.UNKNOWN_PARTITION_ASSIGNMENT_STRATEGY.code()
+                    || errorCode == Errors.INCONSISTENT_PARTITION_ASSIGNMENT_STRATEGY.code()
+                    || errorCode == Errors.INVALID_SESSION_TIMEOUT.code()) {
+                // log the error and re-throw the exception
+                log.error("Attempt to join group {} failed due to: {}",
+                    groupId, Errors.forCode(errorCode).exception().getMessage());
+                Errors.forCode(errorCode).maybeThrow();
+            } else {
+                // unexpected error, throw the exception
+                throw new KafkaException("Unexpected error in join group response: "
+                    + Errors.forCode(response.errorCode()).exception().getMessage());
+            }
+        } while (true);
     }
 
     /**
@@ -216,7 +245,6 @@ public final class Coordinator {
             // parse the response to get the offsets
             boolean offsetsReady = true;
             OffsetFetchResponse response = new OffsetFetchResponse(resp.responseBody());
-            // TODO: needs to handle disconnects
             Map<TopicPartition, Long> offsets = new HashMap<TopicPartition, Long>(response.responseData().size());
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
@@ -238,7 +266,8 @@ public final class Coordinator {
                         // just ignore this partition
                         log.debug("Unknown topic or partition for " + tp);
                     } else {
-                        throw new IllegalStateException("Unexpected error code " + data.errorCode + " while fetching offset");
+                        throw new KafkaException("Unexpected error in fetch offset response: "
+                            + Errors.forCode(data.errorCode).exception().getMessage());
                     }
                 } else if (data.offset >= 0) {
                     // record the position with the offset (-1 indicates no committed offset to fetch)
@@ -416,7 +445,7 @@ public final class Coordinator {
         log.debug("Issuing consumer metadata request to broker {}", node.id());
 
         ConsumerMetadataRequest request = new ConsumerMetadataRequest(this.groupId);
-        RequestSend send = new RequestSend(node.id(),
+        RequestSend send = new RequestSend(node.idString(),
             this.client.nextRequestHeader(ApiKeys.CONSUMER_METADATA),
             request.toStruct());
         long now = time.milliseconds();
@@ -435,7 +464,7 @@ public final class Coordinator {
         log.debug("Issuing request ({}: {}) to coordinator {}", api, request, this.consumerCoordinator.id());
 
         RequestHeader header = this.client.nextRequestHeader(api);
-        RequestSend send = new RequestSend(this.consumerCoordinator.id(), header, request);
+        RequestSend send = new RequestSend(this.consumerCoordinator.idString(), header, request);
         return new ClientRequest(now, true, send, handler);
     }
 
@@ -470,9 +499,15 @@ public final class Coordinator {
                 if (response.errorCode() == Errors.NONE.code()) {
                     log.debug("Received successful heartbeat response.");
                 } else if (response.errorCode() == Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code()
-                    || response.errorCode() == Errors.NOT_COORDINATOR_FOR_CONSUMER.code()) {
+                        || response.errorCode() == Errors.NOT_COORDINATOR_FOR_CONSUMER.code()) {
+                    log.info("Attempt to heart beat failed since coordinator is either not started or not valid, marking it as dead.");
                     coordinatorDead();
                 } else if (response.errorCode() == Errors.ILLEGAL_GENERATION.code()) {
+                    log.info("Attempt to heart beat failed since generation id is not legal, try to re-join group.");
+                    subscriptions.needReassignment();
+                } else if (response.errorCode() == Errors.UNKNOWN_CONSUMER_ID.code()) {
+                    log.info("Attempt to heart beat failed since consumer id is not valid, reset it and try to re-join group.");
+                    consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID;
                     subscriptions.needReassignment();
                 } else {
                     throw new KafkaException("Unexpected error in heartbeat response: "
@@ -505,9 +540,10 @@ public final class Coordinator {
                         log.debug("Committed offset {} for partition {}", offset, tp);
                         subscriptions.committed(tp, offset);
                     } else if (errorCode == Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code()
-                        || errorCode == Errors.NOT_COORDINATOR_FOR_CONSUMER.code()) {
+                            || errorCode == Errors.NOT_COORDINATOR_FOR_CONSUMER.code()) {
                         coordinatorDead();
                     } else {
+                        // do not need to throw the exception but just log the error
                         log.error("Error committing partition {} at offset {}: {}",
                             tp,
                             offset,

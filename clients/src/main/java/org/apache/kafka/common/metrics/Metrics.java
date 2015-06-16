@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.metrics;
 
+import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -46,7 +47,7 @@ import org.apache.kafka.common.utils.Utils;
  * sensor.record(messageSize);
  * </pre>
  */
-public class Metrics {
+public class Metrics implements Closeable {
 
     private final MetricConfig config;
     private final ConcurrentMap<MetricName, KafkaMetric> metrics;
@@ -192,6 +193,7 @@ public class Metrics {
     /**
      * Close this metrics repository.
      */
+    @Override
     public void close() {
         for (MetricsReporter reporter : this.reporters)
             reporter.close();

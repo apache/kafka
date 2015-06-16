@@ -66,7 +66,7 @@ object CoreUtils extends Logging {
    * @param fun The runction to execute in the thread
    * @return The unstarted thread
    */
-  def daemonThread(name: String, fun: () => Unit): Thread =
+  def daemonThread(name: String, fun: => Unit): Thread =
     Utils.daemonThread(name, runnable(fun))
 
   /**
@@ -102,7 +102,7 @@ object CoreUtils extends Logging {
    * Recursively delete the list of files/directories and any subfiles (if any exist)
    * @param files sequence of files to be deleted
    */
-  def rm(files: Seq[String]): Unit = files.map(f => rm(new File(f)))
+  def rm(files: Seq[String]): Unit = files.foreach(f => rm(new File(f)))
 
   /**
    * Recursively delete the given file/directory and any subfiles (if any exist)
@@ -207,7 +207,7 @@ object CoreUtils extends Logging {
       return map
     val keyVals = str.split("\\s*,\\s*").map(s => {
       val lio = s.lastIndexOf(":")
-      Pair(s.substring(0,lio).trim, s.substring(lio + 1).trim)
+      (s.substring(0,lio).trim, s.substring(lio + 1).trim)
     })
     keyVals.toMap
   }
@@ -230,7 +230,7 @@ object CoreUtils extends Logging {
   def createObject[T<:AnyRef](className: String, args: AnyRef*): T = {
     val klass = Class.forName(className).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
-    constructor.newInstance(args: _*).asInstanceOf[T]
+    constructor.newInstance(args: _*)
   }
 
   /**

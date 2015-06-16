@@ -85,6 +85,20 @@ public class MetadataTest {
         }
     }
 
+    @Test
+    public void testFailedUpdate() {
+        long time = 100;
+        metadata.update(Cluster.empty(), time);
+
+        assertEquals(100, metadata.timeToNextUpdate(1000));
+        metadata.failedUpdate(1100);
+
+        assertEquals(100, metadata.timeToNextUpdate(1100));
+        assertEquals(100, metadata.lastSuccessfulUpdate());
+
+    }
+
+
     private Thread asyncFetch(final String topic) {
         Thread thread = new Thread() {
             public void run() {

@@ -18,11 +18,13 @@
 package kafka.api
 
 import java.nio.ByteBuffer
+
 import kafka.api.ApiUtils._
-import kafka.utils.{SystemTime, Logging}
-import kafka.network.{RequestChannel, BoundedByteBufferSend}
-import kafka.common.{OffsetMetadata, OffsetAndMetadata, ErrorMapping, TopicAndPartition}
+import kafka.common.{ErrorMapping, OffsetAndMetadata, TopicAndPartition}
+import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
+import kafka.utils.Logging
+
 import scala.collection._
 
 object OffsetCommitRequest extends Logging {
@@ -69,7 +71,8 @@ object OffsetCommitRequest extends Logging {
         val partitionId = buffer.getInt
         val offset = buffer.getLong
         val timestamp = {
-          if (versionId <= 1)
+          // version 1 specific field
+          if (versionId == 1)
             buffer.getLong
           else
             org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP
@@ -126,8 +129,8 @@ case class OffsetCommitRequest(groupId: String,
       t1._2.foreach( t2 => {
         buffer.putInt(t2._1.partition)
         buffer.putLong(t2._2.offset)
-        // version 0 and 1 specific data
-        if (versionId <= 1)
+        // version 1 specific data
+        if (versionId == 1)
           buffer.putLong(t2._2.commitTimestamp)
         writeShortString(buffer, t2._2.metadata)
       })
@@ -151,7 +154,7 @@ case class OffsetCommitRequest(groupId: String,
         innerCount +
         4 /* partition */ +
         8 /* offset */ +
-        (if (versionId <= 1) 8 else 0) /* timestamp */ +
+        (if (versionId == 1) 8 else 0) /* timestamp */ +
         shortStringLength(offsetAndMetadata._2.metadata)
       })
     })
@@ -161,7 +164,7 @@ case class OffsetCommitRequest(groupId: String,
     val commitStatus = requestInfo.mapValues(_ => errorCode)
     val commitResponse = OffsetCommitResponse(commitStatus, correlationId)
 
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(commitResponse)))
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, commitResponse)))
   }
 
   override def describe(details: Boolean): String = {

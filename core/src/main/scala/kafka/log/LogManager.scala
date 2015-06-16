@@ -407,6 +407,8 @@ class LogManager(val logDirs: Array[File],
    * Runs through the log removing segments older than a certain age
    */
   private def cleanupExpiredSegments(log: Log): Int = {
+    if (log.config.retentionMs < 0)
+      return 0
     val startMs = time.milliseconds
     log.deleteOldSegments(startMs - _.lastModified > log.config.retentionMs)
   }

@@ -18,7 +18,6 @@
 package kafka.server
 
 import org.apache.kafka.common.protocol.SecurityProtocol
-import org.apache.kafka.common.requests.{JoinGroupResponse, JoinGroupRequest, HeartbeatRequest, HeartbeatResponse, ResponseHeader}
 import org.apache.kafka.common.TopicPartition
 import kafka.api._
 import kafka.admin.AdminUtils
@@ -28,10 +27,9 @@ import kafka.coordinator.ConsumerCoordinator
 import kafka.log._
 import kafka.network._
 import kafka.network.RequestChannel.Response
-import kafka.utils.{SystemTime, Logging}
-
+import org.apache.kafka.common.requests.{JoinGroupRequest, JoinGroupResponse, HeartbeatRequest, HeartbeatResponse, ResponseHeader, ResponseSend}
+import kafka.utils.{ZkUtils, ZKGroupTopicDirs, SystemTime, Logging}
 import scala.collection._
-
 import org.I0Itec.zkclient.ZkClient
 
 /**
@@ -54,7 +52,7 @@ class KafkaApis(val requestChannel: RequestChannel,
    */
   def handle(request: RequestChannel.Request) {
     try{
-      trace("Handling request: " + request.requestObj + " from client: " + request.remoteAddress)
+      trace("Handling request: " + request.requestObj + " from connection: " + request.connectionId)
       request.requestId match {
         case RequestKeys.ProduceKey => handleProducerRequest(request)
         case RequestKeys.FetchKey => handleFetchRequest(request)
@@ -84,7 +82,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (response == null)
             requestChannel.closeConnection(request.processor, request)
           else
-            requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(respHeader, response)))
+            requestChannel.sendResponse(new Response(request, new ResponseSend(request.connectionId, respHeader, response)))
         }
         error("error when handling request %s".format(request.requestObj), e)
     } finally
@@ -99,7 +97,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     try {
       val (response, error) = replicaManager.becomeLeaderOrFollower(leaderAndIsrRequest, offsetManager)
       val leaderAndIsrResponse = new LeaderAndIsrResponse(leaderAndIsrRequest.correlationId, response, error)
-      requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(leaderAndIsrResponse)))
+      requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, leaderAndIsrResponse)))
     } catch {
       case e: KafkaStorageException =>
         fatal("Disk error during leadership change.", e)
@@ -114,7 +112,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val stopReplicaRequest = request.requestObj.asInstanceOf[StopReplicaRequest]
     val (response, error) = replicaManager.stopReplicas(stopReplicaRequest)
     val stopReplicaResponse = new StopReplicaResponse(stopReplicaRequest.correlationId, response.toMap, error)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(stopReplicaResponse)))
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, stopReplicaResponse)))
     replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads()
   }
 
@@ -123,7 +121,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     replicaManager.maybeUpdateMetadataCache(updateMetadataRequest, metadataCache)
 
     val updateMetadataResponse = new UpdateMetadataResponse(updateMetadataRequest.correlationId)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(updateMetadataResponse)))
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, updateMetadataResponse)))
   }
 
   def handleControlledShutdownRequest(request: RequestChannel.Request) {
@@ -134,7 +132,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val partitionsRemaining = controller.shutdownBroker(controlledShutdownRequest.brokerId)
     val controlledShutdownResponse = new ControlledShutdownResponse(controlledShutdownRequest.correlationId,
       ErrorMapping.NoError, partitionsRemaining)
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(controlledShutdownResponse)))
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, controlledShutdownResponse)))
   }
 
 
@@ -158,47 +156,73 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       val response = OffsetCommitResponse(commitStatus, offsetCommitRequest.correlationId)
-      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+      requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
     }
 
-    // compute the retention time based on the request version:
-    // if it is before v2 or not specified by user, we can use the default retention
-    val offsetRetention =
-      if (offsetCommitRequest.versionId <= 1 ||
-        offsetCommitRequest.retentionMs == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME) {
-        offsetManager.config.offsetsRetentionMs
-      } else {
-        offsetCommitRequest.retentionMs
+    if (offsetCommitRequest.versionId == 0) {
+      // for version 0 always store offsets to ZK
+      val responseInfo = offsetCommitRequest.requestInfo.map {
+        case (topicAndPartition, metaAndError) => {
+          val topicDirs = new ZKGroupTopicDirs(offsetCommitRequest.groupId, topicAndPartition.topic)
+          try {
+            if (metadataCache.getTopicMetadata(Set(topicAndPartition.topic), request.securityProtocol).size <= 0) {
+              (topicAndPartition, ErrorMapping.UnknownTopicOrPartitionCode)
+            } else if (metaAndError.metadata != null && metaAndError.metadata.length > config.offsetMetadataMaxSize) {
+              (topicAndPartition, ErrorMapping.OffsetMetadataTooLargeCode)
+            } else {
+              ZkUtils.updatePersistentPath(zkClient, topicDirs.consumerOffsetDir + "/" +
+                topicAndPartition.partition, metaAndError.offset.toString)
+              (topicAndPartition, ErrorMapping.NoError)
+            }
+          } catch {
+            case e: Throwable => (topicAndPartition, ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]]))
+          }
+        }
       }
 
-    // commit timestamp is always set to now.
-    // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
-    // expire timestamp is computed differently for v1 and v2.
-    //   - If v1 and no explicit commit timestamp is provided we use default expiration timestamp.
-    //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
-    //   - If v2 we use the default expiration timestamp
-    val currentTimestamp = SystemTime.milliseconds
-    val defaultExpireTimestamp = offsetRetention + currentTimestamp
+      sendResponseCallback(responseInfo)
+    } else {
+      // for version 1 and beyond store offsets in offset manager
 
-    val offsetData = offsetCommitRequest.requestInfo.mapValues(offsetAndMetadata =>
-      offsetAndMetadata.copy(
-        commitTimestamp = currentTimestamp,
-        expireTimestamp = {
-          if (offsetAndMetadata.commitTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
-            defaultExpireTimestamp
-          else
-            offsetRetention + offsetAndMetadata.commitTimestamp
+      // compute the retention time based on the request version:
+      // if it is v1 or not specified by user, we can use the default retention
+      val offsetRetention =
+        if (offsetCommitRequest.versionId <= 1 ||
+          offsetCommitRequest.retentionMs == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME) {
+          offsetManager.config.offsetsRetentionMs
+        } else {
+          offsetCommitRequest.retentionMs
         }
-      )
-    )
 
-    // call offset manager to store offsets
-    offsetManager.storeOffsets(
-      offsetCommitRequest.groupId,
-      offsetCommitRequest.consumerId,
-      offsetCommitRequest.groupGenerationId,
-      offsetData,
-      sendResponseCallback)
+      // commit timestamp is always set to now.
+      // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
+      // expire timestamp is computed differently for v1 and v2.
+      //   - If v1 and no explicit commit timestamp is provided we use default expiration timestamp.
+      //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
+      //   - If v2 we use the default expiration timestamp
+      val currentTimestamp = SystemTime.milliseconds
+      val defaultExpireTimestamp = offsetRetention + currentTimestamp
+
+      val offsetData = offsetCommitRequest.requestInfo.mapValues(offsetAndMetadata =>
+        offsetAndMetadata.copy(
+          commitTimestamp = currentTimestamp,
+          expireTimestamp = {
+            if (offsetAndMetadata.commitTimestamp == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP)
+              defaultExpireTimestamp
+            else
+              offsetRetention + offsetAndMetadata.commitTimestamp
+          }
+        )
+      )
+
+      // call offset manager to store offsets
+      offsetManager.storeOffsets(
+        offsetCommitRequest.groupId,
+        offsetCommitRequest.consumerId,
+        offsetCommitRequest.groupGenerationId,
+        offsetData,
+        sendResponseCallback)
+    }
   }
 
   /**
@@ -234,7 +258,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       } else {
         val response = ProducerResponse(produceRequest.correlationId, responseStatus)
-        requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+        requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
       }
     }
 
@@ -279,7 +303,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       val response = FetchResponse(fetchRequest.correlationId, responsePartitionData)
-      requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(response)))
+      requestChannel.sendResponse(new RequestChannel.Response(request, new FetchResponseSend(request.connectionId, response)))
     }
 
     // call the replica manager to fetch messages from the local replica
@@ -337,7 +361,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     })
     val response = OffsetResponse(offsetRequest.correlationId, responseMap)
-    requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+    requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
   }
 
   def fetchOffsets(logManager: LogManager, topicAndPartition: TopicAndPartition, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
@@ -440,7 +464,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val brokers = metadataCache.getAliveBrokers
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(topicMetadata.mkString(","), brokers.mkString(","), metadataRequest.correlationId, metadataRequest.clientId))
     val response = new TopicMetadataResponse(brokers.map(_.getBrokerEndPoint(request.securityProtocol)), topicMetadata, metadataRequest.correlationId)
-    requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+    requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
   }
 
   /*
@@ -449,22 +473,49 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleOffsetFetchRequest(request: RequestChannel.Request) {
     val offsetFetchRequest = request.requestObj.asInstanceOf[OffsetFetchRequest]
 
-    val (unknownTopicPartitions, knownTopicPartitions) = offsetFetchRequest.requestInfo.partition(topicAndPartition =>
-      metadataCache.getPartitionInfo(topicAndPartition.topic, topicAndPartition.partition).isEmpty
-    )
-    val unknownStatus = unknownTopicPartitions.map(topicAndPartition => (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)).toMap
-    val knownStatus =
-      if (knownTopicPartitions.size > 0)
-        offsetManager.getOffsets(offsetFetchRequest.groupId, knownTopicPartitions).toMap
-      else
-        Map.empty[TopicAndPartition, OffsetMetadataAndError]
-    val status = unknownStatus ++ knownStatus
+    val response = if (offsetFetchRequest.versionId == 0) {
+      // version 0 reads offsets from ZK
+      val responseInfo = offsetFetchRequest.requestInfo.map( topicAndPartition => {
+        val topicDirs = new ZKGroupTopicDirs(offsetFetchRequest.groupId, topicAndPartition.topic)
+        try {
+          if (metadataCache.getTopicMetadata(Set(topicAndPartition.topic), request.securityProtocol).size <= 0) {
+            (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)
+          } else {
+            val payloadOpt = ZkUtils.readDataMaybeNull(zkClient, topicDirs.consumerOffsetDir + "/" + topicAndPartition.partition)._1
+            payloadOpt match {
+              case Some(payload) => (topicAndPartition, OffsetMetadataAndError(payload.toLong))
+              case None => (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)
+            }
+          }
+        } catch {
+          case e: Throwable =>
+            (topicAndPartition, OffsetMetadataAndError(OffsetMetadata.InvalidOffsetMetadata,
+              ErrorMapping.codeFor(e.getClass.asInstanceOf[Class[Throwable]])))
+        }
+      })
 
-    val response = OffsetFetchResponse(status, offsetFetchRequest.correlationId)
+      OffsetFetchResponse(collection.immutable.Map(responseInfo: _*), offsetFetchRequest.correlationId)
+    } else {
+      // version 1 reads offsets from Kafka
+      val (unknownTopicPartitions, knownTopicPartitions) = offsetFetchRequest.requestInfo.partition(topicAndPartition =>
+        metadataCache.getPartitionInfo(topicAndPartition.topic, topicAndPartition.partition).isEmpty
+      )
+      val unknownStatus = unknownTopicPartitions.map(topicAndPartition => (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)).toMap
+      val knownStatus =
+        if (knownTopicPartitions.size > 0)
+          offsetManager.getOffsets(offsetFetchRequest.groupId, knownTopicPartitions).toMap
+        else
+          Map.empty[TopicAndPartition, OffsetMetadataAndError]
+      val status = unknownStatus ++ knownStatus
+
+      OffsetFetchResponse(status, offsetFetchRequest.correlationId)
+    }
 
     trace("Sending offset fetch response %s for correlation id %d to client %s."
           .format(response, offsetFetchRequest.correlationId, offsetFetchRequest.clientId))
-    requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+
+    requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
+
   }
 
   /*
@@ -489,7 +540,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     trace("Sending consumer metadata %s for correlation id %d to client %s."
           .format(response, consumerMetadataRequest.correlationId, consumerMetadataRequest.clientId))
-    requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(response)))
+    requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
   }
 
   def handleJoinGroupRequest(request: RequestChannel.Request) {
@@ -499,17 +550,19 @@ class KafkaApis(val requestChannel: RequestChannel,
     val respHeader = new ResponseHeader(request.header.correlationId)
 
     // the callback for sending a join-group response
-    def sendResponseCallback(partitions: List[TopicAndPartition], generationId: Int, errorCode: Short) {
+    def sendResponseCallback(partitions: Set[TopicAndPartition], consumerId: String, generationId: Int, errorCode: Short) {
       val partitionList = partitions.map(tp => new TopicPartition(tp.topic, tp.partition)).toBuffer
-      val responseBody = new JoinGroupResponse(errorCode, generationId, joinGroupRequest.consumerId, partitionList)
-      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(respHeader, responseBody)))
+      val responseBody = new JoinGroupResponse(errorCode, generationId, consumerId, partitionList)
+      trace("Sending join group response %s for correlation id %d to client %s."
+              .format(responseBody, request.header.correlationId, request.header.clientId))
+      requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, responseBody)))
     }
 
     // let the coordinator to handle join-group
-    coordinator.consumerJoinGroup(
+    coordinator.handleJoinGroup(
       joinGroupRequest.groupId(),
       joinGroupRequest.consumerId(),
-      joinGroupRequest.topics().toList,
+      joinGroupRequest.topics().toSet,
       joinGroupRequest.sessionTimeout(),
       joinGroupRequest.strategy(),
       sendResponseCallback)
@@ -522,11 +575,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a heartbeat response
     def sendResponseCallback(errorCode: Short) {
       val response = new HeartbeatResponse(errorCode)
-      requestChannel.sendResponse(new RequestChannel.Response(request, new BoundedByteBufferSend(respHeader, response)))
+      trace("Sending heartbeat response %s for correlation id %d to client %s."
+              .format(response, request.header.correlationId, request.header.clientId))
+      requestChannel.sendResponse(new RequestChannel.Response(request, new ResponseSend(request.connectionId, respHeader, response)))
     }
 
     // let the coordinator to handle heartbeat
-    coordinator.consumerHeartbeat(
+    coordinator.handleHeartbeat(
       heartbeatRequest.groupId(),
       heartbeatRequest.consumerId(),
       heartbeatRequest.groupGenerationId(),

@@ -17,20 +17,21 @@
 
 package kafka.api
 
-import org.apache.kafka.clients.producer._
-import org.scalatest.junit.JUnit3Suite
-import org.junit.Test
-import org.junit.Assert._
+import java.util.Properties
+import java.util.concurrent.TimeUnit
 
+import kafka.consumer.SimpleConsumer
+import kafka.integration.KafkaServerTestHarness
+import kafka.message.Message
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.consumer.SimpleConsumer
-import kafka.message.Message
-import kafka.integration.KafkaServerTestHarness
-import org.apache.kafka.common.errors.SerializationException
-import java.util.Properties
+import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.errors.SerializationException
 import org.apache.kafka.common.serialization.ByteArraySerializer
+import org.junit.Assert._
+import org.junit.Test
+import org.scalatest.junit.JUnit3Suite
 
 
 class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
@@ -318,6 +319,109 @@ class ProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
         producer.close()
     }
   }
-  
 
+  /**
+   * Test close with zero timeout from caller thread
+   */
+  @Test
+  def testCloseWithZeroTimeoutFromCallerThread() {
+    var producer: KafkaProducer[Array[Byte],Array[Byte]] = null
+    try {
+      // create topic
+      val leaders = TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+      val leader0 = leaders(0)
+      val leader1 = leaders(1)
+
+      // create record
+      val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, null, "value".getBytes)
+      val record1 = new ProducerRecord[Array[Byte], Array[Byte]](topic, 1, null, "value".getBytes)
+
+      // Test closing from caller thread.
+      for(i <- 0 until 50) {
+        producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
+        val responses = (0 until numRecords) map (i => producer.send(record0))
+        assertTrue("No request is complete.", responses.forall(!_.isDone()))
+        producer.close(0, TimeUnit.MILLISECONDS)
+        responses.foreach { future =>
+          try {
+            future.get()
+            fail("No message should be sent successfully.")
+          } catch {
+            case e: Exception =>
+              assertEquals("java.lang.IllegalStateException: Producer is closed forcefully.", e.getMessage)
+          }
+        }
+        val fetchResponse = if (leader0.get == configs(0).brokerId) {
+          consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
+        } else {
+          consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
+        }
+        assertEquals("Fetch response should have no message returned.", 0, fetchResponse.messageSet(topic, 0).size)
+      }
+    } finally {
+      if (producer != null)
+        producer.close()
+    }
+  }
+
+  /**
+   * Test close with zero and non-zero timeout from sender thread
+   */
+  @Test
+  def testCloseWithZeroTimeoutFromSenderThread() {
+    var producer: KafkaProducer[Array[Byte],Array[Byte]] = null
+    try {
+      // create topic
+      val leaders = TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+      val leader0 = leaders(0)
+      val leader1 = leaders(1)
+
+      // create record
+      val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, 0, null, "value".getBytes)
+      val record1 = new ProducerRecord[Array[Byte], Array[Byte]](topic, 1, null, "value".getBytes)
+
+      // Test closing from sender thread.
+      class CloseCallback(producer: KafkaProducer[Array[Byte], Array[Byte]]) extends Callback {
+        override def onCompletion(metadata: RecordMetadata, exception: Exception) {
+          // Trigger another batch in accumulator before close the producer. These messages should
+          // not be sent.
+          (0 until numRecords) map (i => producer.send(record1))
+          // The close call will be called by all the message callbacks. This tests idempotence of the close call.
+          producer.close(0, TimeUnit.MILLISECONDS)
+          // Test close with non zero timeout. Should not block at all.
+          producer.close(Long.MaxValue, TimeUnit.MICROSECONDS)
+        }
+      }
+      for(i <- 0 until 50) {
+        producer = TestUtils.createNewProducer(brokerList, lingerMs = Long.MaxValue)
+        // send message to partition 0
+        var responses = (0 until numRecords) map (i => producer.send(record0))
+        // send message to partition 1
+        responses ++= ((0 until numRecords) map (i => producer.send(record1, new CloseCallback(producer))))
+        assertTrue("No request is complete.", responses.forall(!_.isDone()))
+        // flush the messages.
+        producer.flush()
+        assertTrue("All request are complete.", responses.forall(_.isDone()))
+        // Check the messages received by broker.
+        val fetchResponse0 = if (leader0.get == configs(0).brokerId) {
+          consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
+        } else {
+          consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 0, 0, Int.MaxValue).build())
+        }
+        val fetchResponse1 = if (leader1.get == configs(0).brokerId) {
+          consumer1.fetch(new FetchRequestBuilder().addFetch(topic, 1, 0, Int.MaxValue).build())
+        } else {
+          consumer2.fetch(new FetchRequestBuilder().addFetch(topic, 1, 0, Int.MaxValue).build())
+        }
+        val expectedNumRecords = (i + 1) * numRecords
+        assertEquals("Fetch response to partition 0 should have %d messages.".format(expectedNumRecords),
+          expectedNumRecords, fetchResponse0.messageSet(topic, 0).size)
+        assertEquals("Fetch response to partition 1 should have %d messages.".format(expectedNumRecords),
+          expectedNumRecords, fetchResponse1.messageSet(topic, 1).size)
+      }
+    } finally {
+      if (producer != null)
+        producer.close()
+    }
+  }
 }

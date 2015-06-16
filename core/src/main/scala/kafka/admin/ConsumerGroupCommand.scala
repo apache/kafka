@@ -48,7 +48,7 @@ object ConsumerGroupCommand {
 
     opts.checkArgs()
 
-    val zkClient = new ZkClient(opts.options.valueOf(opts.zkConnectOpt), 30000, 30000, ZKStringSerializer)
+    val zkClient = ZkUtils.createZkClient(opts.options.valueOf(opts.zkConnectOpt), 30000, 30000)
 
     try {
       if (opts.options.has(opts.listOpt))
@@ -174,7 +174,7 @@ object ConsumerGroupCommand {
     val offsetMap = mutable.Map[TopicAndPartition, Long]()
     val channel = ClientUtils.channelToOffsetManager(group, zkClient, channelSocketTimeoutMs, channelRetryBackoffMs)
     channel.send(OffsetFetchRequest(group, topicPartitions))
-    val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().buffer)
+    val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
 
     offsetFetchResponse.requestInfo.foreach { case (topicAndPartition, offsetAndMetadata) =>
       if (offsetAndMetadata == OffsetMetadataAndError.NoOffset) {

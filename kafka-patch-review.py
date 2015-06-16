@@ -99,6 +99,37 @@ def main():
     print "Failed to login to the JIRA instance", sys.exc_info()[0], sys.exc_info()[1]
     sys.exit(1)
 
+  git_command="git format-patch " + opt.branch + " --stdout > " + patch_file
+  if opt.debug:
+    print git_command
+  p=os.popen(git_command)
+  p.close()
+
+  print 'Getting latest patch attached to the JIRA'
+  tmp_dir = tempfile.mkdtemp()
+  get_latest_patch_command="python ./dev-utils/test-patch.py --get-latest-patch --defect " + opt.jira + " --output " + tmp_dir + " > /dev/null 2>&1"
+  p=os.popen(get_latest_patch_command)
+  p.close()
+
+  previous_patch=tmp_dir + "/" + opt.jira + ".patch"
+  diff_file=tmp_dir + "/" + opt.jira + ".diff"
+  if os.path.isfile(previous_patch) and os.stat(previous_patch).st_size > 0:
+    print 'Creating diff with previous version of patch uploaded to JIRA'
+    diff_command = "diff " + previous_patch+ " " + patch_file + " > " + diff_file
+    try:
+      p=os.popen(diff_command)
+      sys.stdout.flush()
+      p.close()
+    except:
+      pass
+    print 'Diff with previous version of patch uploaded to JIRA is saved to ' + diff_file
+
+    print 'Checking if the there are changes that need to be pushed'
+    if os.stat(diff_file).st_size == 0:
+      print 'No changes found on top of changes uploaded to JIRA'
+      print 'Aborting'
+      sys.exit(1)
+
   rb_command= post_review_tool + " --publish --tracking-branch " + opt.branch + " --target-groups=kafka --bugs-closed=" + opt.jira
   if opt.debug:
     rb_command=rb_command + " --debug"
@@ -133,12 +164,6 @@ def main():
     sys.exit(1)
   if opt.debug:
     print 'rb url=',rb_url
-
-  git_command="git format-patch " + opt.branch + " --stdout > " + patch_file
-  if opt.debug:
-    print git_command
-  p=os.popen(git_command)
-  p.close()
 
   print 'Creating diff against', opt.branch, 'and uploading patch to JIRA',opt.jira
   issue = jira.issue(opt.jira)

@@ -17,6 +17,8 @@
 
 package kafka
 
+import java.util.Properties
+
 import scala.collection.JavaConversions._
 import joptsimple.OptionParser
 import metrics.KafkaMetricsReporter
@@ -26,7 +28,7 @@ import org.apache.kafka.common.utils.Utils
 
 object Kafka extends Logging {
 
-  def getKafkaConfigFromArgs(args: Array[String]): KafkaConfig = {
+  def getPropsFromArgs(args: Array[String]): Properties = {
     val optionParser = new OptionParser
     val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file")
       .withRequiredArg()
@@ -47,14 +49,14 @@ object Kafka extends Logging {
 
       props.putAll(CommandLineUtils.parseKeyValueArgs(options.valuesOf(overrideOpt)))
     }
-
-    KafkaConfig.fromProps(props)
+    props
   }
 
   def main(args: Array[String]): Unit = {
     try {
-      val serverConfig = getKafkaConfigFromArgs(args)
-      KafkaMetricsReporter.startReporters(new VerifiableProperties(serverConfig.toProps))
+      val serverProps = getPropsFromArgs(args)
+      val serverConfig = KafkaConfig.fromProps(serverProps)
+      KafkaMetricsReporter.startReporters(new VerifiableProperties(serverProps))
       val kafkaServerStartable = new KafkaServerStartable(serverConfig)
 
       // attach shutdown handler to catch control-c
@@ -68,7 +70,9 @@ object Kafka extends Logging {
       kafkaServerStartable.awaitShutdown
     }
     catch {
-      case e: Throwable => fatal(e)
+      case e: Throwable =>
+        fatal(e)
+        System.exit(1)
     }
     System.exit(0)
   }

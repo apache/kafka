@@ -30,17 +30,17 @@ import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
  * It works as follows.
  * 
  * Config is stored under the path
- *   /brokers/topics/<topic_name>/config
+ *   /config/topics/<topic_name>
  * This znode stores the topic-overrides for this topic (but no defaults) in properties format.
  * 
  * To avoid watching all topics for changes instead we have a notification path
- *   /brokers/config_changes
+ *   /config/changes
  * The TopicConfigManager has a child watch on this path.
  * 
  * To update a topic config we first update the topic config properties. Then we create a new sequential
  * znode under the change path which contains the name of the topic that was updated, say
- *   /brokers/config_changes/config_change_13321
- * This is just a notification--the actual config change is stored only once under the /brokers/topics/<topic_name>/config path.
+ *   /config/changes/config_change_13321
+ * This is just a notification--the actual config change is stored only once under the /config/topics/<topic_name> path.
  *   
  * This will fire a watcher on all brokers. This watcher works as follows. It reads all the config change notifications.
  * It keeps track of the highest config change suffix number it has applied previously. For any previously applied change it finds

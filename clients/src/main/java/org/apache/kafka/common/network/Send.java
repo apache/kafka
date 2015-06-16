@@ -13,7 +13,6 @@
 package org.apache.kafka.common.network;
 
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.GatheringByteChannel;
 
 /**
@@ -24,22 +23,12 @@ public interface Send {
     /**
      * The numeric id for the destination of this send
      */
-    public int destination();
-
-    /**
-     * The number of bytes remaining to send
-     */
-    public int remaining();
+    public String destination();
 
     /**
      * Is this send complete?
      */
     public boolean completed();
-
-    /**
-     * An optional method to turn this send into an array of ByteBuffers if possible (otherwise returns null)
-     */
-    public ByteBuffer[] reify();
 
     /**
      * Write some as-yet unwritten bytes from this send to the provided channel. It may take multiple calls for the send
@@ -49,5 +38,10 @@ public interface Send {
      * @throws IOException If the write fails
      */
     public long writeTo(GatheringByteChannel channel) throws IOException;
+
+    /**
+     * Size of the send
+     */
+    public long size();
 
 }

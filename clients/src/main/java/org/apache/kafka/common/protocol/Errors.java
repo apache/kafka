@@ -69,7 +69,15 @@ public enum Errors {
     INVALID_REQUIRED_ACKS(21,
             new InvalidRequiredAcksException("Produce request specified an invalid value for required acks.")),
     ILLEGAL_GENERATION(22,
-            new ApiException("Specified consumer generation id is not valid."));
+            new ApiException("Specified consumer generation id is not valid.")),
+    INCONSISTENT_PARTITION_ASSIGNMENT_STRATEGY(23,
+            new ApiException("The request partition assignment strategy does not match that of the group.")),
+    UNKNOWN_PARTITION_ASSIGNMENT_STRATEGY(24,
+            new ApiException("The request partition assignment strategy is unknown to the broker.")),
+    UNKNOWN_CONSUMER_ID(25,
+            new ApiException("The coordinator is not aware of this consumer.")),
+    INVALID_SESSION_TIMEOUT(26,
+            new ApiException("The session timeout is not within an acceptable range."));
 
     private static Map<Class<?>, Errors> classToError = new HashMap<Class<?>, Errors>();
     private static Map<Short, Errors> codeToError = new HashMap<Short, Errors>();

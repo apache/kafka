@@ -83,6 +83,59 @@ class KafkaConfigTest extends JUnit3Suite {
     val cfg = KafkaConfig.fromProps(props)
     assertEquals( 30 * 60L * 1000L, cfg.logRetentionTimeMillis)
   }
+  @Test
+  def testLogRetentionUnlimited() {
+    val props1 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
+    val props2 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
+    val props3 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
+    val props4 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
+    val props5 = TestUtils.createBrokerConfig(0,TestUtils.MockZkConnect, port = 8181)
+
+    props1.put("log.retention.ms", "-1")
+    props2.put("log.retention.minutes", "-1")
+    props3.put("log.retention.hours", "-1")
+
+    val cfg1 = KafkaConfig.fromProps(props1)
+    val cfg2 = KafkaConfig.fromProps(props2)
+    val cfg3 = KafkaConfig.fromProps(props3)
+    assertEquals("Should be -1", -1, cfg1.logRetentionTimeMillis)
+    assertEquals("Should be -1", -1, cfg2.logRetentionTimeMillis)
+    assertEquals("Should be -1", -1, cfg3.logRetentionTimeMillis)
+
+    props4.put("log.retention.ms", "-1")
+    props4.put("log.retention.minutes", "30")
+
+    val cfg4 = KafkaConfig.fromProps(props4)
+    assertEquals("Should be -1", -1, cfg4.logRetentionTimeMillis)
+
+    props5.put("log.retention.ms", "0")
+
+    intercept[IllegalArgumentException] {
+      val cfg5 = KafkaConfig.fromProps(props5)
+    }
+  }
+
+  @Test
+  def testLogRetentionValid {
+    val props1 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val props2 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    val props3 = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+
+    props1.put("log.retention.ms", "0")
+    props2.put("log.retention.minutes", "0")
+    props3.put("log.retention.hours", "0")
+
+    intercept[IllegalArgumentException] {
+      val cfg1 = KafkaConfig.fromProps(props1)
+    }
+    intercept[IllegalArgumentException] {
+      val cfg2 = KafkaConfig.fromProps(props2)
+    }
+    intercept[IllegalArgumentException] {
+      val cfg3 = KafkaConfig.fromProps(props3)
+    }
+
+  }
 
   @Test
   def testAdvertiseDefaults() {

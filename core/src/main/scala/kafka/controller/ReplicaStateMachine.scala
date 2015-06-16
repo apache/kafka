@@ -282,7 +282,7 @@ class ReplicaStateMachine(controller: KafkaController) extends Logging {
     val replicasForTopic = controller.controllerContext.replicasForTopic(topic)
     val replicaStatesForTopic = replicasForTopic.map(r => (r, replicaState(r))).toMap
     debug("Are all replicas for topic %s deleted %s".format(topic, replicaStatesForTopic))
-    replicaStatesForTopic.foldLeft(true)((deletionState, r) => deletionState && r._2 == ReplicaDeletionSuccessful)
+    replicaStatesForTopic.forall(_._2 == ReplicaDeletionSuccessful)
   }
 
   def isAtLeastOneReplicaInDeletionStartedState(topic: String): Boolean = {

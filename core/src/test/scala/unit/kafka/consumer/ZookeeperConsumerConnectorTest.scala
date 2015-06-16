@@ -316,7 +316,7 @@ class ZookeeperConsumerConnectorTest extends JUnit3Suite with KafkaServerTestHar
   }
 
   def testLeaderSelectionForPartition() {
-    val zkClient = new ZkClient(zkConnect, 6000, 30000, ZKStringSerializer)
+    val zkClient = ZkUtils.createZkClient(zkConnect, 6000, 30000)
 
     // create topic topic1 with 1 partition on broker 0
     createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 1, servers = servers)

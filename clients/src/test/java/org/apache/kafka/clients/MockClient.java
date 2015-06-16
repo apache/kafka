@@ -78,7 +78,7 @@ public class MockClient implements KafkaClient {
         return false;
     }
 
-    public void disconnect(Integer node) {
+    public void disconnect(String node) {
         Iterator<ClientRequest> iter = requests.iterator();
         while (iter.hasNext()) {
             ClientRequest request = iter.next();
@@ -115,7 +115,7 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public List<ClientResponse> completeAll(int node, long now) {
+    public List<ClientResponse> completeAll(String node, long now) {
         return completeAll(now);
     }
 
@@ -158,7 +158,7 @@ public class MockClient implements KafkaClient {
     }
 
     @Override
-    public int inFlightRequestCount(int nodeId) {
+    public int inFlightRequestCount(String nodeId) {
         return requests.size();
     }
 

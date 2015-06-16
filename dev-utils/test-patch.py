@@ -328,6 +328,8 @@ parser.add_option("--patch-command", dest="patch_cmd", default="git apply",
                   help="Patch command such as `git apply' or `patch'", metavar="COMMAND")
 parser.add_option("-p", "--strip", dest="strip", default="1",
                   help="Remove <n> leading slashes from diff paths", metavar="N")
+parser.add_option("--get-latest-patch", dest="get_latest_patch",
+                  help="Get the latest patch attached to JIRA", action="store_true")
 
 (options, args) = parser.parse_args()
 if not (options.defect or options.filename):
@@ -341,6 +343,10 @@ if options.defect and options.filename:
 if options.post_results and not options.password:
   print "FATAL: --post-results requires --password"
   sys.exit(1)
+
+if options.get_latest_patch and not options.defect:
+    print "FATAL: --get-latest-patch requires --defect"
+    sys.exit(1)
 
 branch = options.branch
 if options.output_dir and not options.output_dir.startswith('/'):
@@ -356,6 +362,7 @@ password = options.password
 run_tests = options.run_tests
 post_results = options.post_results
 strip = options.strip
+get_latest_patch = options.get_latest_patch
 patch_cmd = options.patch_cmd
 result = Result()
 
@@ -397,12 +404,11 @@ if output_dir.endswith("/"):
 if output_dir and not os.path.isdir(output_dir):
   os.makedirs(output_dir)
 
-# If defect parameter is specified let's download the latest attachment
-if defect:
+def get_latest_patch():
+  global jira_json, json, versions, branch, attachment, patch_contents, patch_file, fh
   print "Defect: %s" % defect
   jira_json = jira_get_defect(result, defect, username, password)
   json = json.loads(jira_json)
-
   # JIRA must be in Patch Available state
   if '"Patch Available"' not in jira_json:
     print "ERROR: Defect %s not in patch available state" % (defect)
@@ -417,19 +423,22 @@ if defect:
       sys.exit(1)
     else:
       print "INFO: Guessed branch as %s" % (branch)
-
   attachment = jira_get_attachment(result, defect, username, password)
   if not attachment:
     print "ERROR: No attachments found for %s" % (defect)
     sys.exit(1)
-
   result.attachment = attachment
-
   patch_contents = jira_request(result, result.attachment, username, password, None, {}).read()
   patch_file = "%s/%s.patch" % (output_dir, defect)
-
   with open(patch_file, 'a') as fh:
     fh.write(patch_contents)
+
+if defect:
+  # If defect parameter is specified let's download the latest attachment
+  get_latest_patch()
+  if options.get_latest_patch:
+    print "Saving latest attachment of %s as %s/%s.patch" % (defect, output_dir, defect)
+    sys.exit(0)
 elif options.filename:
   patch_file = options.filename
 else:

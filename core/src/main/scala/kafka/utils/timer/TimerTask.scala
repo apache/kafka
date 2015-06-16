@@ -33,11 +33,15 @@ trait TimerTask extends Runnable {
     synchronized {
       // if this timerTask is already held by an existing timer task entry,
       // we will remove such an entry first.
-      if (timerTaskEntry != null && timerTaskEntry != entry) {
+      if (timerTaskEntry != null && timerTaskEntry != entry)
         timerTaskEntry.remove()
-      }
+
       timerTaskEntry = entry
     }
+  }
+
+  private[timer] def getTimerTaskEntry(): TimerTaskEntry = {
+    timerTaskEntry
   }
 
 }

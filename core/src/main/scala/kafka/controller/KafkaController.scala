@@ -647,7 +647,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
    */
   def startup() = {
     inLock(controllerContext.controllerLock) {
-      info("Controller starting up");
+      info("Controller starting up")
       registerSessionExpirationListener()
       isRunning = true
       controllerElector.startup
@@ -1112,6 +1112,10 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
         controllerElector.elect
       }
     }
+
+    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+      //no-op handleSessionEstablishmentError in KafkaHealthCheck should System.exit and log the error.
+    }
   }
 
   private def checkAndTriggerPartitionRebalance(): Unit = {
@@ -1326,7 +1330,7 @@ case class PartitionAndReplica(topic: String, partition: Int, replica: Int) {
   }
 }
 
-case class LeaderIsrAndControllerEpoch(val leaderAndIsr: LeaderAndIsr, controllerEpoch: Int) {
+case class LeaderIsrAndControllerEpoch(leaderAndIsr: LeaderAndIsr, controllerEpoch: Int) {
   override def toString(): String = {
     val leaderAndIsrInfo = new StringBuilder
     leaderAndIsrInfo.append("(Leader:" + leaderAndIsr.leader)

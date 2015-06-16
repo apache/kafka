@@ -375,7 +375,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
     if(Os.isWindows)
       lock.lock()
     try {
-      return fun
+      fun
     } finally {
       if(Os.isWindows)
         lock.unlock()

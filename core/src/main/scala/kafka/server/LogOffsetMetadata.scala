@@ -26,7 +26,7 @@ object LogOffsetMetadata {
 
   class OffsetOrdering extends Ordering[LogOffsetMetadata] {
     override def compare(x: LogOffsetMetadata , y: LogOffsetMetadata ): Int = {
-      return x.offsetDiff(y).toInt
+      x.offsetDiff(y).toInt
     }
   }
 

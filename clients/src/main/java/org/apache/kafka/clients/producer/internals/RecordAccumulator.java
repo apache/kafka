@@ -56,8 +56,9 @@ public final class RecordAccumulator {
     private static final Logger log = LoggerFactory.getLogger(RecordAccumulator.class);
 
     private volatile boolean closed;
-    private volatile AtomicInteger flushesInProgress;
     private int drainIndex;
+    private final AtomicInteger flushesInProgress;
+    private final AtomicInteger appendsInProgress;
     private final int batchSize;
     private final CompressionType compression;
     private final long lingerMs;
@@ -66,6 +67,7 @@ public final class RecordAccumulator {
     private final Time time;
     private final ConcurrentMap<TopicPartition, Deque<RecordBatch>> batches;
     private final IncompleteRecordBatches incomplete;
+
 
     /**
      * Create a new record accumulator
@@ -96,6 +98,7 @@ public final class RecordAccumulator {
         this.drainIndex = 0;
         this.closed = false;
         this.flushesInProgress = new AtomicInteger(0);
+        this.appendsInProgress = new AtomicInteger(0);
         this.batchSize = batchSize;
         this.compression = compression;
         this.lingerMs = lingerMs;
@@ -146,40 +149,50 @@ public final class RecordAccumulator {
      * @param callback The user-supplied callback to execute when the request is complete
      */
     public RecordAppendResult append(TopicPartition tp, byte[] key, byte[] value, Callback callback) throws InterruptedException {
-        if (closed)
-            throw new IllegalStateException("Cannot send after the producer is closed.");
-        // check if we have an in-progress batch
-        Deque<RecordBatch> dq = dequeFor(tp);
-        synchronized (dq) {
-            RecordBatch last = dq.peekLast();
-            if (last != null) {
-                FutureRecordMetadata future = last.tryAppend(key, value, callback);
-                if (future != null)
-                    return new RecordAppendResult(future, dq.size() > 1 || last.records.isFull(), false);
-            }
-        }
-
-        // we don't have an in-progress record batch try to allocate a new batch
-        int size = Math.max(this.batchSize, Records.LOG_OVERHEAD + Record.recordSize(key, value));
-        log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
-        ByteBuffer buffer = free.allocate(size);
-        synchronized (dq) {
-            RecordBatch last = dq.peekLast();
-            if (last != null) {
-                FutureRecordMetadata future = last.tryAppend(key, value, callback);
-                if (future != null) {
-                    // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
-                    free.deallocate(buffer);
-                    return new RecordAppendResult(future, dq.size() > 1 || last.records.isFull(), false);
+        // We keep track of the number of appending thread to make sure we do not miss batches in
+        // abortIncompleteBatches().
+        appendsInProgress.incrementAndGet();
+        try {
+            if (closed)
+                throw new IllegalStateException("Cannot send after the producer is closed.");
+            // check if we have an in-progress batch
+            Deque<RecordBatch> dq = dequeFor(tp);
+            synchronized (dq) {
+                RecordBatch last = dq.peekLast();
+                if (last != null) {
+                    FutureRecordMetadata future = last.tryAppend(key, value, callback);
+                    if (future != null)
+                        return new RecordAppendResult(future, dq.size() > 1 || last.records.isFull(), false);
                 }
             }
-            MemoryRecords records = MemoryRecords.emptyRecords(buffer, compression, this.batchSize);
-            RecordBatch batch = new RecordBatch(tp, records, time.milliseconds());
-            FutureRecordMetadata future = Utils.notNull(batch.tryAppend(key, value, callback));
 
-            dq.addLast(batch);
-            incomplete.add(batch);
-            return new RecordAppendResult(future, dq.size() > 1 || batch.records.isFull(), true);
+            // we don't have an in-progress record batch try to allocate a new batch
+            int size = Math.max(this.batchSize, Records.LOG_OVERHEAD + Record.recordSize(key, value));
+            log.trace("Allocating a new {} byte message buffer for topic {} partition {}", size, tp.topic(), tp.partition());
+            ByteBuffer buffer = free.allocate(size);
+            synchronized (dq) {
+                // Need to check if producer is closed again after grabbing the dequeue lock.
+                if (closed)
+                    throw new IllegalStateException("Cannot send after the producer is closed.");
+                RecordBatch last = dq.peekLast();
+                if (last != null) {
+                    FutureRecordMetadata future = last.tryAppend(key, value, callback);
+                    if (future != null) {
+                        // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
+                        free.deallocate(buffer);
+                        return new RecordAppendResult(future, dq.size() > 1 || last.records.isFull(), false);
+                    }
+                }
+                MemoryRecords records = MemoryRecords.emptyRecords(buffer, compression, this.batchSize);
+                RecordBatch batch = new RecordBatch(tp, records, time.milliseconds());
+                FutureRecordMetadata future = Utils.notNull(batch.tryAppend(key, value, callback));
+
+                dq.addLast(batch);
+                incomplete.add(batch);
+                return new RecordAppendResult(future, dq.size() > 1 || batch.records.isFull(), true);
+            }
+        } finally {
+            appendsInProgress.decrementAndGet();
         }
     }
 
@@ -292,17 +305,21 @@ public final class RecordAccumulator {
                     synchronized (deque) {
                         RecordBatch first = deque.peekFirst();
                         if (first != null) {
-                            if (size + first.records.sizeInBytes() > maxSize && !ready.isEmpty()) {
-                                // there is a rare case that a single batch size is larger than the request size due
-                                // to compression; in this case we will still eventually send this batch in a single
-                                // request
-                                break;
-                            } else {
-                                RecordBatch batch = deque.pollFirst();
-                                batch.records.close();
-                                size += batch.records.sizeInBytes();
-                                ready.add(batch);
-                                batch.drainedMs = now;
+                            boolean backoff = first.attempts > 0 && first.lastAttemptMs + retryBackoffMs > now;
+                            // Only drain the batch if it is not during backoff period.
+                            if (!backoff) {
+                                if (size + first.records.sizeInBytes() > maxSize && !ready.isEmpty()) {
+                                    // there is a rare case that a single batch size is larger than the request size due
+                                    // to compression; in this case we will still eventually send this batch in a single
+                                    // request
+                                    break;
+                                } else {
+                                    RecordBatch batch = deque.pollFirst();
+                                    batch.records.close();
+                                    size += batch.records.sizeInBytes();
+                                    ready.add(batch);
+                                    batch.drainedMs = now;
+                                }
                             }
                         }
                     }
@@ -347,7 +364,14 @@ public final class RecordAccumulator {
     public void beginFlush() {
         this.flushesInProgress.getAndIncrement();
     }
-    
+
+    /**
+     * Are there any threads currently appending messages?
+     */
+    private boolean appendsInProgress() {
+        return appendsInProgress.get() > 0;
+    }
+
     /**
      * Mark all partitions as ready to send and block until the send is complete
      */
@@ -355,6 +379,40 @@ public final class RecordAccumulator {
         for (RecordBatch batch: this.incomplete.all())
             batch.produceFuture.await();
         this.flushesInProgress.decrementAndGet();
+    }
+
+    /**
+     * This function is only called when sender is closed forcefully. It will fail all the
+     * incomplete batches and return.
+     */
+    public void abortIncompleteBatches() {
+        // We need to keep aborting the incomplete batch until no thread is trying to append to
+        // 1. Avoid losing batches.
+        // 2. Free up memory in case appending threads are blocked on buffer full.
+        // This is a tight loop but should be able to get through very quickly.
+        do {
+            abortBatches();
+        } while (appendsInProgress());
+        // After this point, no thread will append any messages because they will see the close
+        // flag set. We need to do the last abort after no thread was appending in case the there was a new
+        // batch appended by the last appending thread.
+        abortBatches();
+        this.batches.clear();
+    }
+
+    /**
+     * Go through incomplete batches and abort them.
+     */
+    private void abortBatches() {
+        for (RecordBatch batch : incomplete.all()) {
+            Deque<RecordBatch> dq = dequeFor(batch.topicPartition);
+            // Close the batch before aborting
+            synchronized (dq) {
+                batch.records.close();
+            }
+            batch.done(-1L, new IllegalStateException("Producer is closed forcefully."));
+            deallocate(batch);
+        }
     }
 
     /**
@@ -399,7 +457,7 @@ public final class RecordAccumulator {
      */
     private final static class IncompleteRecordBatches {
         private final Set<RecordBatch> incomplete;
-        
+
         public IncompleteRecordBatches() {
             this.incomplete = new HashSet<RecordBatch>();
         }

@@ -74,7 +74,7 @@ object ConsoleProducer {
 
   def getOldProducerProps(config: ProducerConfig): Properties = {
 
-    val props = new Properties;
+    val props = new Properties
 
     props.putAll(config.extraProducerProps)
 
@@ -100,7 +100,7 @@ object ConsoleProducer {
 
   def getNewProducerProps(config: ProducerConfig): Properties = {
 
-    val props = new Properties;
+    val props = new Properties
 
     props.putAll(config.extraProducerProps)
 

@@ -16,332 +16,337 @@
  */
 package kafka.coordinator
 
-import org.apache.kafka.common.protocol.Errors
-
 import kafka.common.TopicAndPartition
 import kafka.server._
 import kafka.utils._
-
-import scala.collection.mutable.HashMap
-
-import org.I0Itec.zkclient.{IZkChildListener, ZkClient}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.JoinGroupRequest
+
+import org.I0Itec.zkclient.ZkClient
+import java.util.concurrent.atomic.AtomicBoolean
 
 
 /**
- * Kafka coordinator handles consumer group and consumer offset management.
+ * ConsumerCoordinator handles consumer group and consumer offset management.
  *
- * Each Kafka server instantiates a coordinator, which is responsible for a set of
- * consumer groups; the consumer groups are assigned to coordinators based on their
+ * Each Kafka server instantiates a coordinator which is responsible for a set of
+ * consumer groups. Consumer groups are assigned to coordinators based on their
  * group names.
  */
 class ConsumerCoordinator(val config: KafkaConfig,
-                          val zkClient: ZkClient) extends Logging {
+                          val zkClient: ZkClient,
+                          val offsetManager: OffsetManager) extends Logging {
 
-  this.logIdent = "[Kafka Coordinator " + config.brokerId + "]: "
+  this.logIdent = "[ConsumerCoordinator " + config.brokerId + "]: "
 
-  /* zookeeper listener for topic-partition changes */
-  private val topicPartitionChangeListeners = new HashMap[String, TopicPartitionChangeListener]
+  private val isActive = new AtomicBoolean(false)
 
-  /* the consumer group registry cache */
-  // TODO: access to this map needs to be synchronized
-  private val consumerGroupRegistries = new HashMap[String, GroupRegistry]
-
-  /* the list of subscribed groups per topic */
-  // TODO: access to this map needs to be synchronized
-  private val consumerGroupsPerTopic = new HashMap[String, List[String]]
-
-  /* the delayed operation purgatory for heartbeat-based failure detection */
   private var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = null
-
-  /* the delayed operation purgatory for handling join-group requests */
-  private var joinGroupPurgatory: DelayedOperationPurgatory[DelayedJoinGroup] = null
-
-  /* the delayed operation purgatory for preparing rebalance process */
   private var rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance] = null
-
-  /* latest consumer heartbeat bucket's end timestamp in milliseconds */
-  private var latestHeartbeatBucketEndMs: Long = SystemTime.milliseconds
+  private var coordinatorMetadata: CoordinatorMetadata = null
 
   /**
-   * Start-up logic executed at the same time when the server starts up.
+   * NOTE: If a group lock and coordinatorLock are simultaneously needed,
+   * be sure to acquire the group lock before coordinatorLock to prevent deadlock
+   */
+
+  /**
+   * Startup logic executed at the same time when the server starts up.
    */
   def startup() {
-
-    // Initialize consumer group registries and heartbeat bucket metadata
-    latestHeartbeatBucketEndMs = SystemTime.milliseconds
-
-    // Initialize purgatories for delayed heartbeat, join-group and rebalance operations
-    heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat](purgatoryName = "Heartbeat", brokerId = config.brokerId)
-    joinGroupPurgatory = new DelayedOperationPurgatory[DelayedJoinGroup](purgatoryName = "JoinGroup", brokerId = config.brokerId)
-    rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance](purgatoryName = "Rebalance", brokerId = config.brokerId)
-
+    info("Starting up.")
+    heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
+    rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", config.brokerId)
+    coordinatorMetadata = new CoordinatorMetadata(config, zkClient, maybePrepareRebalance)
+    isActive.set(true)
+    info("Startup complete.")
   }
 
   /**
-   * Shut-down logic executed at the same time when server shuts down,
-   * ordering of actions should be reversed from the start-up process
-   *
+   * Shutdown logic executed at the same time when server shuts down.
+   * Ordering of actions should be reversed from the startup process.
    */
   def shutdown() {
-
-    // De-register all Zookeeper listeners for topic-partition changes
-    for (topic <- topicPartitionChangeListeners.keys)  {
-      deregisterTopicChangeListener(topic)
-    }
-    topicPartitionChangeListeners.clear()
-
-    // Shutdown purgatories for delayed heartbeat, join-group and rebalance operations
+    info("Shutting down.")
+    isActive.set(false)
+    coordinatorMetadata.shutdown()
     heartbeatPurgatory.shutdown()
-    joinGroupPurgatory.shutdown()
     rebalancePurgatory.shutdown()
-
-    // Clean up consumer group registries metadata
-    consumerGroupRegistries.clear()
-    consumerGroupsPerTopic.clear()
+    info("Shutdown complete.")
   }
 
-  /**
-   * Process a join-group request from a consumer to join as a new group member
-   */
-  def consumerJoinGroup(groupId: String,
-                        consumerId: String,
-                        topics: List[String],
-                        sessionTimeoutMs: Int,
-                        partitionAssignmentStrategy: String,
-                        responseCallback:(List[TopicAndPartition], Int, Short) => Unit ) {
-
-    // if the group does not exist yet, create one
-    if (!consumerGroupRegistries.contains(groupId))
-      createNewGroup(groupId, partitionAssignmentStrategy)
-
-    val groupRegistry = consumerGroupRegistries(groupId)
-
-    // if the consumer id is unknown or it does exists in
-    // the group yet, register this consumer to the group
-    if (consumerId.equals(JoinGroupRequest.UNKNOWN_CONSUMER_ID)) {
-      createNewConsumer(groupId, groupRegistry.generateNextConsumerId, topics, sessionTimeoutMs)
-    } else if (!groupRegistry.memberRegistries.contains(consumerId)) {
-      createNewConsumer(groupId, consumerId, topics, sessionTimeoutMs)
-    }
-
-    // add a delayed join-group operation to the purgatory
-    // TODO
-
-    // if the current group is under rebalance process,
-    // check if the delayed rebalance operation can be finished
-    // TODO
-
-    // TODO --------------------------------------------------------------
-    // TODO: this is just a stub for new consumer testing,
-    // TODO: needs to be replaced with the logic above
-    // TODO --------------------------------------------------------------
-    // just return all the partitions of the subscribed topics
-    val partitionIdsPerTopic = ZkUtils.getPartitionsForTopics(zkClient, topics)
-    val partitions = partitionIdsPerTopic.flatMap{ case (topic, partitionIds) =>
-      partitionIds.map(partition => {
-        TopicAndPartition(topic, partition)
-      })
-    }.toList
-
-    responseCallback(partitions, 1 /* generation id */, Errors.NONE.code)
-
-    info("Handled join-group from consumer " + consumerId + " to group " + groupId)
-  }
-
-  /**
-   * Process a heartbeat request from a consumer
-   */
-  def consumerHeartbeat(groupId: String,
-                        consumerId: String,
-                        generationId: Int,
-                        responseCallback: Short => Unit) {
-
-    // check that the group already exists
-    // TODO
-
-    // check that the consumer has already registered for the group
-    // TODO
-
-    // check if the consumer generation id is correct
-    // TODO
-
-    // remove the consumer from its current heartbeat bucket, and add it back to the corresponding bucket
-    // TODO
-
-    // create the heartbeat response, if partition rebalance is triggered set the corresponding error code
-    // TODO
-
-    info("Handled heartbeat of consumer " + consumerId + " from group " + groupId)
-
-    // TODO --------------------------------------------------------------
-    // TODO: this is just a stub for new consumer testing,
-    // TODO: needs to be replaced with the logic above
-    // TODO --------------------------------------------------------------
-    // check if the consumer already exist, if yes return OK,
-    // otherwise return illegal generation error
-    if (consumerGroupRegistries.contains(groupId)
-      && consumerGroupRegistries(groupId).memberRegistries.contains(consumerId))
-      responseCallback(Errors.NONE.code)
-    else
-      responseCallback(Errors.ILLEGAL_GENERATION.code)
-  }
-
-  /**
-   * Create a new consumer
-   */
-  private def createNewConsumer(groupId: String,
-                                consumerId: String,
-                                topics: List[String],
-                                sessionTimeoutMs: Int) {
-    debug("Registering consumer " + consumerId + " for group " + groupId)
-
-    // create the new consumer registry entry
-    val consumerRegistry = new ConsumerRegistry(groupId, consumerId, topics, sessionTimeoutMs)
-
-    consumerGroupRegistries(groupId).memberRegistries.put(consumerId, consumerRegistry)
-
-    // check if the partition assignment strategy is consistent with the group
-    // TODO
-
-    // add the group to the subscribed topics
-    // TODO
-
-    // schedule heartbeat tasks for the consumer
-    // TODO
-
-    // add the member registry entry to the group
-    // TODO
-
-    // start preparing group partition rebalance
-    // TODO
-
-    info("Registered consumer " + consumerId + " for group " + groupId)
-  }
-
-  /**
-   * Create a new consumer group in the registry
-   */
-  private def createNewGroup(groupId: String, partitionAssignmentStrategy: String) {
-    debug("Creating new group " + groupId)
-
-    val groupRegistry = new GroupRegistry(groupId, partitionAssignmentStrategy)
-
-    consumerGroupRegistries.put(groupId, groupRegistry)
-
-    info("Created new group registry " + groupId)
-  }
-
-  /**
-   * Callback invoked when a consumer's heartbeat has expired
-   */
-  private def onConsumerHeartbeatExpired(groupId: String, consumerId: String) {
-
-    // if the consumer does not exist in group registry anymore, do nothing
-    // TODO
-
-    // record heartbeat failure
-    // TODO
-
-    // if the maximum failures has been reached, mark consumer as failed
-    // TODO
-  }
-
-  /**
-   * Callback invoked when a consumer is marked as failed
-   */
-  private def onConsumerFailure(groupId: String, consumerId: String) {
-
-    // remove the consumer from its group registry metadata
-    // TODO
-
-    // cut the socket connection to the consumer
-    // TODO: howto ??
-
-    // if the group has no consumer members any more, remove the group
-    // otherwise start preparing group partition rebalance
-    // TODO
-
-  }
-
-  /**
-   * Prepare partition rebalance for the group
-   */
-  private def prepareRebalance(groupId: String) {
-
-    // try to change the group state to PrepareRebalance
-
-    // add a task to the delayed rebalance purgatory
-
-    // TODO
-  }
-
-  /**
-   * Start partition rebalance for the group
-   */
-  private def startRebalance(groupId: String) {
-
-    // try to change the group state to UnderRebalance
-
-    // compute new assignment based on the strategy
-
-    // send back the join-group response
-
-    // TODO
-  }
-
-  /**
-   * Fail current partition rebalance for the group
-   */
-
-  /**
-   * Register ZK listeners for topic-partition changes
-   */
-  private def registerTopicChangeListener(topic: String) = {
-    if (!topicPartitionChangeListeners.contains(topic)) {
-      val listener = new TopicPartitionChangeListener(config)
-      topicPartitionChangeListeners.put(topic, listener)
-      ZkUtils.makeSurePersistentPathExists(zkClient, ZkUtils.getTopicPath(topic))
-      zkClient.subscribeChildChanges(ZkUtils.getTopicPath(topic), listener)
-    }
-  }
-
-  /**
-   * De-register ZK listeners for topic-partition changes
-   */
-  private def deregisterTopicChangeListener(topic: String) = {
-    val listener = topicPartitionChangeListeners.get(topic).get
-    zkClient.unsubscribeChildChanges(ZkUtils.getTopicPath(topic), listener)
-    topicPartitionChangeListeners.remove(topic)
-  }
-
-  /**
-   * Zookeeper listener that catch topic-partition changes
-   */
-  class TopicPartitionChangeListener(val config: KafkaConfig) extends IZkChildListener with Logging {
-
-    this.logIdent = "[TopicChangeListener on coordinator " + config.brokerId + "]: "
-
-    /**
-     * Try to trigger a rebalance for each group subscribed in the changed topic
-     *
-     * @throws Exception
-     *            On any error.
-     */
-    def handleChildChange(parentPath: String , curChilds: java.util.List[String]) {
-      debug("Fired for path %s with children %s".format(parentPath, curChilds))
-
-      // get the topic
-      val topic = parentPath.split("/").last
-
-      // get groups that subscribed to this topic
-      val groups = consumerGroupsPerTopic.get(topic).get
-
-      for (groupId <- groups) {
-        prepareRebalance(groupId)
+  def handleJoinGroup(groupId: String,
+                      consumerId: String,
+                      topics: Set[String],
+                      sessionTimeoutMs: Int,
+                      partitionAssignmentStrategy: String,
+                      responseCallback:(Set[TopicAndPartition], String, Int, Short) => Unit) {
+    if (!isActive.get) {
+      responseCallback(Set.empty, consumerId, 0, Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code)
+    } else if (!isCoordinatorForGroup(groupId)) {
+      responseCallback(Set.empty, consumerId, 0, Errors.NOT_COORDINATOR_FOR_CONSUMER.code)
+    } else if (!PartitionAssignor.strategies.contains(partitionAssignmentStrategy)) {
+      responseCallback(Set.empty, consumerId, 0, Errors.UNKNOWN_PARTITION_ASSIGNMENT_STRATEGY.code)
+    } else if (sessionTimeoutMs < config.consumerMinSessionTimeoutMs || sessionTimeoutMs > config.consumerMaxSessionTimeoutMs) {
+      responseCallback(Set.empty, consumerId, 0, Errors.INVALID_SESSION_TIMEOUT.code)
+    } else {
+      // only try to create the group if the group is not unknown AND
+      // the consumer id is UNKNOWN, if consumer is specified but group does not
+      // exist we should reject the request
+      var group = coordinatorMetadata.getGroup(groupId)
+      if (group == null) {
+        if (consumerId != JoinGroupRequest.UNKNOWN_CONSUMER_ID) {
+          responseCallback(Set.empty, consumerId, 0, Errors.UNKNOWN_CONSUMER_ID.code)
+        } else {
+          group = coordinatorMetadata.addGroup(groupId, partitionAssignmentStrategy)
+          doJoinGroup(group, consumerId, topics, sessionTimeoutMs, partitionAssignmentStrategy, responseCallback)
+        }
+      } else {
+        doJoinGroup(group, consumerId, topics, sessionTimeoutMs, partitionAssignmentStrategy, responseCallback)
       }
     }
   }
+
+  private def doJoinGroup(group: ConsumerGroupMetadata,
+                          consumerId: String,
+                          topics: Set[String],
+                          sessionTimeoutMs: Int,
+                          partitionAssignmentStrategy: String,
+                          responseCallback:(Set[TopicAndPartition], String, Int, Short) => Unit) {
+    group synchronized {
+      if (group.is(Dead)) {
+        // if the group is marked as dead, it means some other thread has just removed the group
+        // from the coordinator metadata; this is likely that the group has migrated to some other
+        // coordinator OR the group is in a transient unstable phase. Let the consumer to retry
+        // joining without specified consumer id,
+        responseCallback(Set.empty, consumerId, 0, Errors.UNKNOWN_CONSUMER_ID.code)
+      } else if (partitionAssignmentStrategy != group.partitionAssignmentStrategy) {
+        responseCallback(Set.empty, consumerId, 0, Errors.INCONSISTENT_PARTITION_ASSIGNMENT_STRATEGY.code)
+      } else if (consumerId != JoinGroupRequest.UNKNOWN_CONSUMER_ID && !group.has(consumerId)) {
+        // if the consumer trying to register with a un-recognized id, send the response to let
+        // it reset its consumer id and retry
+        responseCallback(Set.empty, consumerId, 0, Errors.UNKNOWN_CONSUMER_ID.code)
+      } else if (group.has(consumerId) && group.is(Stable) && topics == group.get(consumerId).topics) {
+        /*
+         * if an existing consumer sends a JoinGroupRequest with no changes while the group is stable,
+         * just treat it like a heartbeat and return their currently assigned partitions.
+         */
+        val consumer = group.get(consumerId)
+        completeAndScheduleNextHeartbeatExpiration(group, consumer)
+        responseCallback(consumer.assignedTopicPartitions, consumerId, group.generationId, Errors.NONE.code)
+      } else {
+        val consumer = if (consumerId == JoinGroupRequest.UNKNOWN_CONSUMER_ID) {
+          // if the consumer id is unknown, register this consumer to the group
+          val generatedConsumerId = group.generateNextConsumerId
+          val consumer = addConsumer(generatedConsumerId, topics, sessionTimeoutMs, group)
+          maybePrepareRebalance(group)
+          consumer
+        } else {
+          val consumer = group.get(consumerId)
+          if (topics != consumer.topics) {
+            // existing consumer changed its subscribed topics
+            updateConsumer(group, consumer, topics)
+            maybePrepareRebalance(group)
+            consumer
+          } else {
+            // existing consumer rejoining a group due to rebalance
+            consumer
+          }
+        }
+
+        consumer.awaitingRebalanceCallback = responseCallback
+
+        if (group.is(PreparingRebalance))
+          rebalancePurgatory.checkAndComplete(ConsumerGroupKey(group.groupId))
+      }
+    }
+  }
+
+  def handleHeartbeat(groupId: String,
+                      consumerId: String,
+                      generationId: Int,
+                      responseCallback: Short => Unit) {
+    if (!isActive.get) {
+      responseCallback(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code)
+    } else if (!isCoordinatorForGroup(groupId)) {
+      responseCallback(Errors.NOT_COORDINATOR_FOR_CONSUMER.code)
+    } else {
+      val group = coordinatorMetadata.getGroup(groupId)
+      if (group == null) {
+        // if the group is marked as dead, it means some other thread has just removed the group
+        // from the coordinator metadata; this is likely that the group has migrated to some other
+        // coordinator OR the group is in a transient unstable phase. Let the consumer to retry
+        // joining without specified consumer id,
+        responseCallback(Errors.UNKNOWN_CONSUMER_ID.code)
+      } else {
+        group synchronized {
+          if (group.is(Dead)) {
+            responseCallback(Errors.UNKNOWN_CONSUMER_ID.code)
+          } else if (!group.has(consumerId)) {
+            responseCallback(Errors.UNKNOWN_CONSUMER_ID.code)
+          } else if (generationId != group.generationId) {
+            responseCallback(Errors.ILLEGAL_GENERATION.code)
+          } else {
+            val consumer = group.get(consumerId)
+            completeAndScheduleNextHeartbeatExpiration(group, consumer)
+            responseCallback(Errors.NONE.code)
+          }
+        }
+      }
+    }
+  }
+
+  /**
+   * Complete existing DelayedHeartbeats for the given consumer and schedule the next one
+   */
+  private def completeAndScheduleNextHeartbeatExpiration(group: ConsumerGroupMetadata, consumer: ConsumerMetadata) {
+    // complete current heartbeat expectation
+    consumer.latestHeartbeat = SystemTime.milliseconds
+    val consumerKey = ConsumerKey(consumer.groupId, consumer.consumerId)
+    heartbeatPurgatory.checkAndComplete(consumerKey)
+
+    // reschedule the next heartbeat expiration deadline
+    val newHeartbeatDeadline = consumer.latestHeartbeat + consumer.sessionTimeoutMs
+    val delayedHeartbeat = new DelayedHeartbeat(this, group, consumer, newHeartbeatDeadline, consumer.sessionTimeoutMs)
+    heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(consumerKey))
+  }
+
+  private def addConsumer(consumerId: String,
+                          topics: Set[String],
+                          sessionTimeoutMs: Int,
+                          group: ConsumerGroupMetadata) = {
+    val consumer = new ConsumerMetadata(consumerId, group.groupId, topics, sessionTimeoutMs)
+    val topicsToBind = topics -- group.topics
+    group.add(consumer.consumerId, consumer)
+    coordinatorMetadata.bindGroupToTopics(group.groupId, topicsToBind)
+    consumer
+  }
+
+  private def removeConsumer(group: ConsumerGroupMetadata, consumer: ConsumerMetadata) {
+    group.remove(consumer.consumerId)
+    val topicsToUnbind = consumer.topics -- group.topics
+    coordinatorMetadata.unbindGroupFromTopics(group.groupId, topicsToUnbind)
+  }
+
+  private def updateConsumer(group: ConsumerGroupMetadata, consumer: ConsumerMetadata, topics: Set[String]) {
+    val topicsToBind = topics -- group.topics
+    group.remove(consumer.consumerId)
+    val topicsToUnbind = consumer.topics -- group.topics
+    group.add(consumer.consumerId, consumer)
+    consumer.topics = topics
+    coordinatorMetadata.bindAndUnbindGroupFromTopics(group.groupId, topicsToBind, topicsToUnbind)
+  }
+
+  private def maybePrepareRebalance(group: ConsumerGroupMetadata) {
+    group synchronized {
+      if (group.canRebalance)
+        prepareRebalance(group)
+    }
+  }
+
+  private def prepareRebalance(group: ConsumerGroupMetadata) {
+    group.transitionTo(PreparingRebalance)
+    group.generationId += 1
+    info("Preparing to rebalance group %s generation %s".format(group.groupId, group.generationId))
+
+    val rebalanceTimeout = group.rebalanceTimeout
+    val delayedRebalance = new DelayedRebalance(this, group, rebalanceTimeout)
+    val consumerGroupKey = ConsumerGroupKey(group.groupId)
+    rebalancePurgatory.tryCompleteElseWatch(delayedRebalance, Seq(consumerGroupKey))
+  }
+
+  private def rebalance(group: ConsumerGroupMetadata) {
+    assert(group.notYetRejoinedConsumers == List.empty[ConsumerMetadata])
+
+    group.transitionTo(Rebalancing)
+    info("Rebalancing group %s generation %s".format(group.groupId, group.generationId))
+
+    val assignedPartitionsPerConsumer = reassignPartitions(group)
+    trace("Rebalance for group %s generation %s has assigned partitions: %s"
+          .format(group.groupId, group.generationId, assignedPartitionsPerConsumer))
+
+    group.transitionTo(Stable)
+    info("Stabilized group %s generation %s".format(group.groupId, group.generationId))
+  }
+
+  private def onConsumerHeartbeatExpired(group: ConsumerGroupMetadata, consumer: ConsumerMetadata) {
+    trace("Consumer %s in group %s has failed".format(consumer.consumerId, group.groupId))
+    removeConsumer(group, consumer)
+    maybePrepareRebalance(group)
+  }
+
+  private def isCoordinatorForGroup(groupId: String) = offsetManager.leaderIsLocal(offsetManager.partitionFor(groupId))
+
+  private def reassignPartitions(group: ConsumerGroupMetadata) = {
+    val assignor = PartitionAssignor.createInstance(group.partitionAssignmentStrategy)
+    val topicsPerConsumer = group.topicsPerConsumer
+    val partitionsPerTopic = coordinatorMetadata.partitionsPerTopic
+    val assignedPartitionsPerConsumer = assignor.assign(topicsPerConsumer, partitionsPerTopic)
+    assignedPartitionsPerConsumer.foreach { case (consumerId, partitions) =>
+      group.get(consumerId).assignedTopicPartitions = partitions
+    }
+    assignedPartitionsPerConsumer
+  }
+
+  def tryCompleteRebalance(group: ConsumerGroupMetadata, forceComplete: () => Boolean) = {
+    group synchronized {
+      if (group.notYetRejoinedConsumers == List.empty[ConsumerMetadata])
+        forceComplete()
+      else false
+    }
+  }
+
+  def onExpirationRebalance() {
+    // TODO: add metrics for rebalance timeouts
+  }
+
+  def onCompleteRebalance(group: ConsumerGroupMetadata) {
+    group synchronized {
+      val failedConsumers = group.notYetRejoinedConsumers
+      if (group.isEmpty || !failedConsumers.isEmpty) {
+        failedConsumers.foreach { failedConsumer =>
+          removeConsumer(group, failedConsumer)
+          // TODO: cut the socket connection to the consumer
+        }
+
+        if (group.isEmpty) {
+          group.transitionTo(Dead)
+          info("Group %s generation %s is dead and removed".format(group.groupId, group.generationId))
+          coordinatorMetadata.removeGroup(group.groupId, group.topics)
+        }
+      }
+      if (!group.is(Dead)) {
+        // assign partitions to existing consumers of the group according to the partitioning strategy
+        rebalance(group)
+
+        // trigger the awaiting join group response callback for all the consumers after rebalancing
+        for (consumer <- group.allConsumers) {
+          assert(consumer.awaitingRebalanceCallback != null)
+          consumer.awaitingRebalanceCallback(consumer.assignedTopicPartitions, consumer.consumerId, group.generationId, Errors.NONE.code)
+          consumer.awaitingRebalanceCallback = null
+          completeAndScheduleNextHeartbeatExpiration(group, consumer)
+        }
+      }
+    }
+  }
+
+  def tryCompleteHeartbeat(group: ConsumerGroupMetadata, consumer: ConsumerMetadata, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
+    group synchronized {
+      if (shouldKeepConsumerAlive(consumer, heartbeatDeadline))
+        forceComplete()
+      else false
+    }
+  }
+
+  def onExpirationHeartbeat(group: ConsumerGroupMetadata, consumer: ConsumerMetadata, heartbeatDeadline: Long) {
+    group synchronized {
+      if (!shouldKeepConsumerAlive(consumer, heartbeatDeadline))
+        onConsumerHeartbeatExpired(group, consumer)
+    }
+  }
+
+  def onCompleteHeartbeat() {}
+
+  private def shouldKeepConsumerAlive(consumer: ConsumerMetadata, heartbeatDeadline: Long) =
+    consumer.awaitingRebalanceCallback != null || consumer.latestHeartbeat + consumer.sessionTimeoutMs > heartbeatDeadline
 }
-
-

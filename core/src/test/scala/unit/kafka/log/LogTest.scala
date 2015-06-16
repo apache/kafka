@@ -107,7 +107,7 @@ class LogTest extends JUnitSuite {
 
     time.sleep(log.config.segmentMs - maxJitter)
     log.append(set)
-    assertEquals("Log does not roll on this append because it occurs earlier than max jitter", 1, log.numberOfSegments);
+    assertEquals("Log does not roll on this append because it occurs earlier than max jitter", 1, log.numberOfSegments)
     time.sleep(maxJitter - log.activeSegment.rollJitterMs + 1)
     log.append(set)
     assertEquals("Log should roll after segmentMs adjusted by random jitter", 2, log.numberOfSegments)
@@ -302,7 +302,7 @@ class LogTest extends JUnitSuite {
       assertEquals("Still no change in the logEndOffset", currOffset, log.logEndOffset)
       assertEquals("Should still be able to append and should get the logEndOffset assigned to the new append",
                    currOffset,
-                   log.append(TestUtils.singleMessageSet("hello".toString.getBytes)).firstOffset)
+                   log.append(TestUtils.singleMessageSet("hello".getBytes)).firstOffset)
 
       // cleanup the log
       log.delete()
@@ -337,6 +337,7 @@ class LogTest extends JUnitSuite {
     val messageSetWithUnkeyedMessage = new ByteBufferMessageSet(NoCompressionCodec, unkeyedMessage, keyedMessage)
     val messageSetWithOneUnkeyedMessage = new ByteBufferMessageSet(NoCompressionCodec, unkeyedMessage)
     val messageSetWithCompressedKeyedMessage = new ByteBufferMessageSet(GZIPCompressionCodec, keyedMessage)
+    val messageSetWithCompressedUnkeyedMessage = new ByteBufferMessageSet(GZIPCompressionCodec, keyedMessage, unkeyedMessage)
 
     val messageSetWithKeyedMessage = new ByteBufferMessageSet(NoCompressionCodec, keyedMessage)
     val messageSetWithKeyedMessages = new ByteBufferMessageSet(NoCompressionCodec, keyedMessage, anotherKeyedMessage)
@@ -356,8 +357,8 @@ class LogTest extends JUnitSuite {
       case e: InvalidMessageException => // this is good
     }
     try {
-      log.append(messageSetWithCompressedKeyedMessage)
-      fail("Compacted topics cannot accept compressed messages.")
+      log.append(messageSetWithCompressedUnkeyedMessage)
+      fail("Compacted topics cannot accept a message without a key.")
     } catch {
       case e: InvalidMessageException => // this is good
     }
@@ -365,25 +366,7 @@ class LogTest extends JUnitSuite {
     // the following should succeed without any InvalidMessageException
     log.append(messageSetWithKeyedMessage)
     log.append(messageSetWithKeyedMessages)
-
-    // test that a compacted topic with broker-side compression type set to uncompressed can accept compressed messages
-    val uncompressedLog = new Log(logDir, logConfig.copy(compact = true, compressionType = "uncompressed"),
-                                  recoveryPoint = 0L, time.scheduler, time)
-    uncompressedLog.append(messageSetWithCompressedKeyedMessage)
-    uncompressedLog.append(messageSetWithKeyedMessage)
-    uncompressedLog.append(messageSetWithKeyedMessages)
-    try {
-      uncompressedLog.append(messageSetWithUnkeyedMessage)
-      fail("Compacted topics cannot accept a message without a key.")
-    } catch {
-      case e: InvalidMessageException => // this is good
-    }
-    try {
-      uncompressedLog.append(messageSetWithOneUnkeyedMessage)
-      fail("Compacted topics cannot accept a message without a key.")
-    } catch {
-      case e: InvalidMessageException => // this is good
-    }
+    log.append(messageSetWithCompressedKeyedMessage)
   }
 
   /**
@@ -752,7 +735,7 @@ class LogTest extends JUnitSuite {
     val topic: String = "test_topic"
     val partition:String = "143"
     val dir: File = new File(logDir + topicPartitionName(topic, partition))
-    val topicAndPartition = Log.parseTopicPartitionName(dir);
+    val topicAndPartition = Log.parseTopicPartitionName(dir)
     assertEquals(topic, topicAndPartition.asTuple._1)
     assertEquals(partition.toInt, topicAndPartition.asTuple._2)
   }
@@ -761,7 +744,7 @@ class LogTest extends JUnitSuite {
   def testParseTopicPartitionNameForEmptyName() {
     try {
       val dir: File = new File("")
-      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      val topicAndPartition = Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case e: Exception => // its GOOD!
@@ -772,7 +755,7 @@ class LogTest extends JUnitSuite {
   def testParseTopicPartitionNameForNull() {
     try {
       val dir: File = null
-      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      val topicAndPartition = Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir)
     } catch {
       case e: Exception => // its GOOD!
@@ -785,7 +768,7 @@ class LogTest extends JUnitSuite {
     val partition:String = "1999"
     val dir: File = new File(logDir + File.separator + topic + partition)
     try {
-      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      val topicAndPartition = Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case e: Exception => // its GOOD!
@@ -798,7 +781,7 @@ class LogTest extends JUnitSuite {
     val partition:String = "1999"
     val dir: File = new File(logDir + topicPartitionName(topic, partition))
     try {
-      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      val topicAndPartition = Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case e: Exception => // its GOOD!
@@ -811,7 +794,7 @@ class LogTest extends JUnitSuite {
     val partition:String = ""
     val dir: File = new File(logDir + topicPartitionName(topic, partition))
     try {
-      val topicAndPartition = Log.parseTopicPartitionName(dir);
+      val topicAndPartition = Log.parseTopicPartitionName(dir)
       fail("KafkaException should have been thrown for dir: " + dir.getCanonicalPath)
     } catch {
       case e: Exception => // its GOOD!

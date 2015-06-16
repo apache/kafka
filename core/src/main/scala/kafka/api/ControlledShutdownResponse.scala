@@ -39,9 +39,9 @@ object ControlledShutdownResponse {
 }
 
 
-case class ControlledShutdownResponse(val correlationId: Int,
-                                      val errorCode: Short = ErrorMapping.NoError,
-                                      val partitionsRemaining: Set[TopicAndPartition])
+case class ControlledShutdownResponse(correlationId: Int,
+                                      errorCode: Short = ErrorMapping.NoError,
+                                      partitionsRemaining: Set[TopicAndPartition])
   extends RequestOrResponse() {
   def sizeInBytes(): Int ={
     var size =

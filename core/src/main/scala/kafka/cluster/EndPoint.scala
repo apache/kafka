@@ -68,7 +68,7 @@ case class EndPoint(host: String, port: Int, protocolType: SecurityProtocol) {
   def writeTo(buffer: ByteBuffer): Unit = {
     buffer.putInt(port)
     writeShortString(buffer, host)
-    buffer.putShort(protocolType.id.toShort)
+    buffer.putShort(protocolType.id)
   }
 
   def sizeInBytes: Int =

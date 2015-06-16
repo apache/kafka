@@ -89,6 +89,11 @@ class KafkaHealthcheck(private val brokerId: Int,
       info("done re-registering broker")
       info("Subscribing to %s path to watch for new topics".format(ZkUtils.BrokerTopicsPath))
     }
+
+    override def handleSessionEstablishmentError(error: Throwable): Unit = {
+      fatal("Could not establish session with zookeeper", error)
+      System.exit(-1)
+    }
   }
 
 }

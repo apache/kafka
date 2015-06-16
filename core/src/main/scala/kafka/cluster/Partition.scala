@@ -219,7 +219,7 @@ class Partition(val topic: String,
         if (topic == OffsetManager.OffsetsTopicName &&
            /* if we are making a leader->follower transition */
            leaderReplica == localBrokerId)
-          offsetManager.clearOffsetsInPartition(partitionId)
+          offsetManager.removeOffsetsFromCacheForPartition(partitionId)
       }
 
       if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == newLeaderBrokerId) {

@@ -19,11 +19,13 @@ package kafka.server
 
 import kafka.utils._
 import kafka.utils.timer._
+import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.metrics.KafkaMetricsGroup
 
 import java.util.LinkedList
 import java.util.concurrent._
 import java.util.concurrent.atomic._
+import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import org.apache.kafka.common.utils.Utils
 
@@ -122,7 +124,9 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
   private[this] val timeoutTimer = new Timer(executor)
 
   /* a list of operation watching keys */
-  private val watchersForKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers))
+  private val watchersForKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers(key)))
+
+  private val removeWatchersLock = new ReentrantReadWriteLock()
 
   // the number of estimated total operations in the purgatory
   private[this] val estimatedTotalOperations = new AtomicInteger(0)
@@ -185,8 +189,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
       // If the operation is already completed, stop adding it to the rest of the watcher list.
       if (operation.isCompleted())
         return false
-      val watchers = watchersFor(key)
-      watchers.watch(operation)
+      watchForOperation(key, operation)
 
       if (!watchCreated) {
         watchCreated = true
@@ -217,7 +220,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
    * @return the number of completed operations during this process
    */
   def checkAndComplete(key: Any): Int = {
-    val watchers = watchersForKey.get(key)
+    val watchers = inReadLock(removeWatchersLock) { watchersForKey.get(key) }
     if(watchers == null)
       0
     else
@@ -229,7 +232,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
    * on multiple lists, and some of its watched entries may still be in the watch lists
    * even when it has been completed, this number may be larger than the number of real operations watched
    */
-  def watched() = watchersForKey.values.map(_.watched).sum
+  def watched() = allWatchers.map(_.watched).sum
 
   /**
    * Return the number of delayed operations in the expiry queue
@@ -237,9 +240,36 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
   def delayed() = timeoutTimer.size
 
   /*
-   * Return the watch list of the given key
+   * Return all the current watcher lists,
+   * note that the returned watchers may be removed from the list by other threads
    */
-  private def watchersFor(key: Any) = watchersForKey.getAndMaybePut(key)
+  private def allWatchers = inReadLock(removeWatchersLock) { watchersForKey.values }
+
+  /*
+   * Return the watch list of the given key, note that we need to
+   * grab the removeWatchersLock to avoid the operation being added to a removed watcher list
+   */
+  private def watchForOperation(key: Any, operation: T) {
+    inReadLock(removeWatchersLock) {
+      val watcher = watchersForKey.getAndMaybePut(key)
+      watcher.watch(operation)
+    }
+  }
+
+  /*
+   * Remove the key from watcher lists if its list is empty
+   */
+  private def removeKeyIfEmpty(key: Any, watchers: Watchers) {
+    inWriteLock(removeWatchersLock) {
+      // if the current key is no longer correlated to the watchers to remove, skip
+      if (watchersForKey.get(key) != watchers)
+        return
+
+      if (watchers != null && watchers.watched == 0) {
+        watchersForKey.remove(key)
+      }
+    }
+  }
 
   /**
    * Shutdown the expire reaper thread
@@ -252,11 +282,11 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
   /**
    * A linked list of watched delayed operations based on some key
    */
-  private class Watchers {
+  private class Watchers(val key: Any) {
 
     private[this] val operations = new LinkedList[T]()
 
-    def watched(): Int = operations synchronized operations.size
+    def watched: Int = operations synchronized operations.size
 
     // add the element to watch
     def watch(t: T) {
@@ -266,8 +296,8 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
     // traverse the list and try to complete some watched elements
     def tryCompleteWatched(): Int = {
 
+      var completed = 0
       operations synchronized {
-        var completed = 0
         val iter = operations.iterator()
         while (iter.hasNext) {
           val curr = iter.next()
@@ -279,8 +309,12 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
             iter.remove()
           }
         }
-        completed
       }
+
+      if (operations.size == 0)
+        removeKeyIfEmpty(key, this)
+
+      completed
     }
 
     // traverse the list and purge elements that are already completed by others
@@ -296,6 +330,10 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
           }
         }
       }
+
+      if (operations.size == 0)
+        removeKeyIfEmpty(key, this)
+
       purged
     }
   }
@@ -319,7 +357,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
         // a little overestimated total number of operations.
         estimatedTotalOperations.getAndSet(delayed)
         debug("Begin purging watch lists")
-        val purged = watchersForKey.values.map(_.purgeCompleted()).sum
+        val purged = allWatchers.map(_.purgeCompleted()).sum
         debug("Purged %d elements from watch lists.".format(purged))
       }
     }

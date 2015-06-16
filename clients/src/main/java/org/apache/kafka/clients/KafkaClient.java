@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.clients;
 
+import java.io.Closeable;
 import java.util.List;
 
 import org.apache.kafka.common.Node;
@@ -21,7 +22,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 /**
  * The interface for {@link NetworkClient}
  */
-public interface KafkaClient {
+public interface KafkaClient extends Closeable {
 
     /**
      * Check if we are currently ready to send another request to the given node but don't attempt to connect if we
@@ -80,13 +81,13 @@ public interface KafkaClient {
     public List<ClientResponse> poll(long timeout, long now);
 
     /**
-     * Complete all in-flight requests for a given node
+     * Complete all in-flight requests for a given connection
      * 
-     * @param node The node to complete requests for
+     * @param id The connection to complete requests for
      * @param now The current time in ms
      * @return All requests that complete during this time period.
      */
-    public List<ClientResponse> completeAll(int node, long now);
+    public List<ClientResponse> completeAll(String id, long now);
 
     /**
      * Complete all in-flight requests
@@ -116,7 +117,7 @@ public interface KafkaClient {
      * 
      * @param nodeId The id of the node
      */
-    public int inFlightRequestCount(int nodeId);
+    public int inFlightRequestCount(String nodeId);
 
     /**
      * Generate a request header for the next request
@@ -129,10 +130,5 @@ public interface KafkaClient {
      * Wake up the client if it is currently blocked waiting for I/O
      */
     public void wakeup();
-
-    /**
-     * Close the client and disconnect from all nodes
-     */
-    public void close();
 
 }

@@ -38,12 +38,6 @@ case class TopicPartitionOperationKey(topic: String, partition: Int) extends Del
   override def keyLabel = "%s-%d".format(topic, partition)
 }
 
-/* used by bucketized delayed-heartbeat operations */
-case class TTimeMsKey(time: Long) extends DelayedOperationKey {
-
-  override def keyLabel = "%d".format(time)
-}
-
 /* used by delayed-join-group operations */
 case class ConsumerKey(groupId: String, consumerId: String) extends DelayedOperationKey {
 

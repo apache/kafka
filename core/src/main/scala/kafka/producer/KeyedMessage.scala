@@ -21,7 +21,7 @@ package kafka.producer
  * A topic, key, and value.
  * If a partition key is provided it will override the key for the purpose of partitioning but will not be stored.
  */
-case class KeyedMessage[K, V](val topic: String, val key: K, val partKey: Any, val message: V) {
+case class KeyedMessage[K, V](topic: String, key: K, partKey: Any, message: V) {
   if(topic == null)
     throw new IllegalArgumentException("Topic cannot be null.")
   

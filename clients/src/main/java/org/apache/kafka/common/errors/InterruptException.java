@@ -31,4 +31,9 @@ public class InterruptException extends KafkaException {
         Thread.currentThread().interrupt();
     }
 
+    public InterruptException(String message) {
+        super(message, new InterruptedException());
+        Thread.currentThread().interrupt();
+    }
+
 }

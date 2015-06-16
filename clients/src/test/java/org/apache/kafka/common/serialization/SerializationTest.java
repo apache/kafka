@@ -54,6 +54,26 @@ public class SerializationTest {
         }
     }
 
+    @Test
+    public void testIntegerSerializer() {
+        Integer[] integers = new Integer[]{
+            423412424,
+            -41243432
+        };
+        String mytopic = "testTopic";
+
+        Serializer<Integer> serializer = new IntegerSerializer();
+        Deserializer<Integer> deserializer = new IntegerDeserializer();
+
+        for (Integer integer : integers) {
+            assertEquals("Should get the original integer after serialization and deserialization",
+                    integer, deserializer.deserialize(mytopic, serializer.serialize(mytopic, integer)));
+        }
+
+        assertEquals("Should support null in serialization and deserialization",
+                null, deserializer.deserialize(mytopic, serializer.serialize(mytopic, null)));
+    }
+
     private SerDeser<String> getStringSerDeser(String encoder) {
         Map<String, Object> serializerConfigs = new HashMap<String, Object>();
         serializerConfigs.put("key.serializer.encoding", encoder);

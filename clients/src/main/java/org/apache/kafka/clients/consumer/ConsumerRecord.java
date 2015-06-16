@@ -58,14 +58,14 @@ public final class ConsumerRecord<K, V> {
     /**
      * The key (or null if no key is specified)
      */
-    public K key() throws Exception {
+    public K key() {
         return key;
     }
 
     /**
      * The value
      */
-    public V value() throws Exception {
+    public V value() {
         return value;
     }
 
