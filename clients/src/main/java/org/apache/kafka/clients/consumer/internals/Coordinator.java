@@ -69,7 +69,7 @@ public final class Coordinator {
     private final String groupId;
     private final Metadata metadata;
     private final Heartbeat heartbeat;
-    private final long sessionTimeoutMs;
+    private final int sessionTimeoutMs;
     private final String assignmentStrategy;
     private final SubscriptionState subscriptions;
     private final CoordinatorMetrics sensors;
@@ -84,7 +84,7 @@ public final class Coordinator {
     public Coordinator(KafkaClient client,
                        String groupId,
                        long retryBackoffMs,
-                       long sessionTimeoutMs,
+                       int sessionTimeoutMs,
                        String assignmentStrategy,
                        Metadata metadata,
                        SubscriptionState subscriptions,
@@ -123,7 +123,7 @@ public final class Coordinator {
         // repeat processing the response until succeed or fatal error
         do {
             JoinGroupRequest request = new JoinGroupRequest(groupId,
-                (int) this.sessionTimeoutMs,
+                this.sessionTimeoutMs,
                 subscribedTopics,
                 this.consumerId,
                 this.assignmentStrategy);

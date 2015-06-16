@@ -50,7 +50,7 @@ public class CoordinatorTest {
     private String groupId = "test-group";
     private TopicPartition tp = new TopicPartition(topicName, 0);
     private long retryBackoffMs = 0L;
-    private long sessionTimeoutMs = 10L;
+    private int sessionTimeoutMs = 10;
     private String rebalanceStrategy = "not-matter";
     private MockTime time = new MockTime();
     private MockClient client = new MockClient(time);
