@@ -83,6 +83,9 @@ public class Sender implements Runnable {
     /* true while the sender thread is still running */
     private volatile boolean running;
 
+    /* true when the caller wants to ignore all unsent/inflight messages and force close.  */
+    private volatile boolean forceClose;
+
     /* metrics */
     private final SenderMetrics sensors;
 
@@ -132,15 +135,23 @@ public class Sender implements Runnable {
         // okay we stopped accepting requests but there may still be
         // requests in the accumulator or waiting for acknowledgment,
         // wait until these are completed.
-        while (this.accumulator.hasUnsent() || this.client.inFlightRequestCount() > 0) {
+        while (!forceClose && (this.accumulator.hasUnsent() || this.client.inFlightRequestCount() > 0)) {
             try {
                 run(time.milliseconds());
             } catch (Exception e) {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
         }
-
-        this.client.close();
+        if (forceClose) {
+            // We need to fail all the incomplete batches and wake up the threads waiting on
+            // the futures.
+            this.accumulator.abortIncompleteBatches();
+        }
+        try {
+            this.client.close();
+        } catch (Exception e) {
+            log.error("Failed to close network client", e);
+        }
 
         log.debug("Shutdown of Kafka producer I/O thread has completed.");
     }
@@ -178,7 +189,6 @@ public class Sender implements Runnable {
                                                                          now);
         sensors.updateProduceRequestMetrics(batches);
         List<ClientRequest> requests = createProduceRequests(batches, now);
-
         // If we have any nodes that are ready to send + have sendable data, poll with 0 timeout so this can immediately
         // loop and try sending more data. Otherwise, the timeout is determined by nodes that have partitions with data
         // that isn't yet sendable (e.g. lingering, backing off). Note that this specifically does not include nodes
@@ -206,6 +216,14 @@ public class Sender implements Runnable {
         this.running = false;
         this.accumulator.close();
         this.wakeup();
+    }
+
+    /**
+     * Closes the sender without sending out any pending messages.
+     */
+    public void forceClose() {
+        this.forceClose = true;
+        initiateClose();
     }
 
     /**
@@ -302,7 +320,7 @@ public class Sender implements Runnable {
             recordsByPartition.put(tp, batch);
         }
         ProduceRequest request = new ProduceRequest(acks, timeout, produceRecordsByPartition);
-        RequestSend send = new RequestSend(destination,
+        RequestSend send = new RequestSend(Integer.toString(destination),
                                            this.client.nextRequestHeader(ApiKeys.PRODUCE),
                                            request.toStruct());
         RequestCompletionHandler callback = new RequestCompletionHandler() {
@@ -392,7 +410,7 @@ public class Sender implements Runnable {
             m = new MetricName("metadata-age", metricGrpName, "The age in seconds of the current producer metadata being used.", metricTags);
             metrics.addMetric(m, new Measurable() {
                 public double measure(MetricConfig config, long now) {
-                    return (now - metadata.lastUpdate()) / 1000.0;
+                    return (now - metadata.lastSuccessfulUpdate()) / 1000.0;
                 }
             });
         }
@@ -487,10 +505,10 @@ public class Sender implements Runnable {
                 topicErrorSensor.record(count, now);
         }
 
-        public void recordLatency(int node, long latency) {
+        public void recordLatency(String node, long latency) {
             long now = time.milliseconds();
             this.requestTimeSensor.record(latency, now);
-            if (node >= 0) {
+            if (!node.isEmpty()) {
                 String nodeTimeName = "node-" + node + ".latency";
                 Sensor nodeRequestTime = this.metrics.getSensor(nodeTimeName);
                 if (nodeRequestTime != null)

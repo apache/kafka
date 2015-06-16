@@ -53,7 +53,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     var zkClient: ZkClient = null
 
     try {
-      zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+      zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
       val partitionsForPreferredReplicaElection =
         if (!options.has(jsonFileOpt))
           ZkUtils.getAllPartitions(zkClient)

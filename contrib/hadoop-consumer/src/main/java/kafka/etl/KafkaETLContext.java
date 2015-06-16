@@ -159,7 +159,7 @@ public class KafkaETLContext {
         _response = _consumer.fetch(fetchRequest);
         if(_response != null) {
             _respIterator = new ArrayList<ByteBufferMessageSet>(){{
-                add((ByteBufferMessageSet) _response.messageSet(_request.getTopic(), _request.getPartition()));
+                add(_response.messageSet(_request.getTopic(), _request.getPartition()));
             }}.iterator();
         }
         _requestTime += (System.currentTimeMillis() - tempTime);

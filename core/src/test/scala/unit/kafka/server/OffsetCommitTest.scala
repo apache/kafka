@@ -85,7 +85,7 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
     // create the topic
     createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = Seq(server))
 
-    val commitRequest = OffsetCommitRequest(group, immutable.Map(topicAndPartition -> OffsetAndMetadata(offset=42L)))
+    val commitRequest = OffsetCommitRequest(group, immutable.Map(topicAndPartition -> OffsetAndMetadata(offset = 42L)))
     val commitResponse = simpleConsumer.commitOffsets(commitRequest)
 
     assertEquals(ErrorMapping.NoError, commitResponse.commitStatus.get(topicAndPartition).get)
@@ -227,19 +227,22 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
 
     val fetchRequest = OffsetFetchRequest(group, Seq(TopicAndPartition(topic, 0)))
 
-    // v0 version commit request with commit timestamp set to -1
-    // should not expire
+    // v0 version commit request
+    // committed offset should not exist with fetch version 1 since it was stored in ZK
     val commitRequest0 = OffsetCommitRequest(
       groupId = group,
-      requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(1L, "metadata", -1L)),
+      requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(1L, "metadata")),
       versionId = 0
     )
     assertEquals(ErrorMapping.NoError, simpleConsumer.commitOffsets(commitRequest0).commitStatus.get(topicPartition).get)
-    Thread.sleep(retentionCheckInterval * 2)
-    assertEquals(1L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
+    assertEquals(-1L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
+
+    // committed offset should exist with fetch version 0
+    assertEquals(1L, simpleConsumer.fetchOffsets(OffsetFetchRequest(group, Seq(TopicAndPartition(topic, 0)), versionId = 0)).requestInfo.get(topicPartition).get.offset)
+
 
     // v1 version commit request with commit timestamp set to -1
-    // should not expire
+    // committed offset should not expire
     val commitRequest1 = OffsetCommitRequest(
       groupId = group,
       requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(2L, "metadata", -1L)),
@@ -250,7 +253,7 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(2L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
 
     // v1 version commit request with commit timestamp set to now - two days
-    // should expire
+    // committed offset should expire
     val commitRequest2 = OffsetCommitRequest(
       groupId = group,
       requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(3L, "metadata", SystemTime.milliseconds - 2*24*60*60*1000L)),
@@ -261,7 +264,7 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(-1L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
 
     // v2 version commit request with retention time set to 1 hour
-    // should not expire
+    // committed offset should not expire
     val commitRequest3 = OffsetCommitRequest(
       groupId = group,
       requestInfo = immutable.Map(topicPartition -> OffsetAndMetadata(4L, "metadata", -1L)),
@@ -273,7 +276,7 @@ class OffsetCommitTest extends JUnit3Suite with ZooKeeperTestHarness {
     assertEquals(4L, simpleConsumer.fetchOffsets(fetchRequest).requestInfo.get(topicPartition).get.offset)
 
     // v2 version commit request with retention time set to 0 second
-    // should expire
+    // committed offset should expire
     val commitRequest4 = OffsetCommitRequest(
       groupId = "test-group",
       requestInfo = immutable.Map(TopicAndPartition(topic, 0) -> OffsetAndMetadata(5L, "metadata", -1L)),

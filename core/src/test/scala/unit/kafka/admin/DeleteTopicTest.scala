@@ -54,7 +54,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     // check if all replicas but the one that is shut down has deleted the log
     TestUtils.waitUntilTrue(() =>
       servers.filter(s => s.config.brokerId != follower.config.brokerId)
-        .foldLeft(true)((res, server) => res && server.getLogManager().getLog(topicAndPartition).isEmpty), "Replicas 0,1 have not deleted log.")
+        .forall(_.getLogManager().getLog(topicAndPartition).isEmpty), "Replicas 0,1 have not deleted log.")
     // ensure topic deletion is halted
     TestUtils.waitUntilTrue(() => ZkUtils.pathExists(zkClient, ZkUtils.getDeleteTopicPath(topic)),
       "Admin path /admin/delete_topic/test path deleted even when a follower replica is down")
@@ -104,8 +104,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
     // wait until replica log is created on every broker
-    TestUtils.waitUntilTrue(() => servers.foldLeft(true)((res, server) =>
-      res && server.getLogManager().getLog(topicAndPartition).isDefined),
+    TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined),
       "Replicas for topic test not created.")
     val leaderIdOpt = ZkUtils.getLeaderForPartition(zkClient, topic, 0)
     assertTrue("Leader should exist for partition [test,0]", leaderIdOpt.isDefined)
@@ -155,7 +154,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     // verify that new partition doesn't exist on any broker either
     TestUtils.waitUntilTrue(() =>
-      servers.foldLeft(true)((res, server) => res && server.getLogManager().getLog(newPartition).isEmpty),
+      servers.forall(_.getLogManager().getLog(newPartition).isEmpty),
       "Replica logs not for new partition [test,1] not deleted after delete topic is complete.")
     servers.foreach(_.shutdown())
   }
@@ -173,7 +172,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     // verify that new partition doesn't exist on any broker either
     assertTrue("Replica logs not deleted after delete topic is complete",
-      servers.foldLeft(true)((res, server) => res && server.getLogManager().getLog(newPartition).isEmpty))
+      servers.forall(_.getLogManager().getLog(newPartition).isEmpty))
     servers.foreach(_.shutdown())
   }
 
@@ -192,7 +191,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     val leaderIdOpt = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, 0, 1000)
     assertTrue("New leader should be elected after re-creating topic test", leaderIdOpt.isDefined)
     // check if all replica logs are created
-    TestUtils.waitUntilTrue(() => servers.foldLeft(true)((res, server) => res && server.getLogManager().getLog(topicAndPartition).isDefined),
+    TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined),
       "Replicas for topic test not created.")
     servers.foreach(_.shutdown())
   }
@@ -207,8 +206,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     // verify delete topic path for test2 is removed from zookeeper
     TestUtils.verifyTopicDeletion(zkClient, "test2", 1, servers)
     // verify that topic test is untouched
-    TestUtils.waitUntilTrue(() => servers.foldLeft(true)((res, server) =>
-      res && server.getLogManager().getLog(topicAndPartition).isDefined),
+    TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined),
       "Replicas for topic test not created")
     // test the topic path exists
     assertTrue("Topic test mistakenly deleted", ZkUtils.pathExists(zkClient, ZkUtils.getTopicPath(topic)))
@@ -267,8 +265,7 @@ class DeleteTopicTest extends JUnit3Suite with ZooKeeperTestHarness {
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
     // wait until replica log is created on every broker
-    TestUtils.waitUntilTrue(() => servers.foldLeft(true)((res, server) =>
-      res && server.getLogManager().getLog(topicAndPartition).isDefined),
+    TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicAndPartition).isDefined),
       "Replicas for topic test not created")
     servers
   }

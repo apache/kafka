@@ -12,16 +12,21 @@
  */
 package org.apache.kafka.clients;
 
+import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 
 public class ClientUtils {
+    private static final Logger log = LoggerFactory.getLogger(ClientUtils.class);
 
     public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
         List<InetSocketAddress> addresses = new ArrayList<InetSocketAddress>();
@@ -44,5 +49,16 @@ public class ClientUtils {
         if (addresses.size() < 1)
             throw new ConfigException("No bootstrap urls given in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG);
         return addresses;
+    }
+
+    public static void closeQuietly(Closeable c, String name, AtomicReference<Throwable> firstException) {
+        if (c != null) {
+            try {
+                c.close();
+            } catch (Throwable t) {
+                firstException.compareAndSet(null, t);
+                log.error("Failed to close " + name, t);
+            }
+        }
     }
 }

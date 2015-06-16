@@ -34,9 +34,9 @@ case class OffsetAndMetadata(offsetMetadata: OffsetMetadata,
                              commitTimestamp: Long = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP,
                              expireTimestamp: Long = org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_TIMESTAMP) {
 
-  def offset() = offsetMetadata.offset
+  def offset = offsetMetadata.offset
 
-  def metadata() = offsetMetadata.metadata
+  def metadata = offsetMetadata.metadata
 
   override def toString = "[%s,CommitTime %d,ExpirationTime %d]".format(offsetMetadata, commitTimestamp, expireTimestamp)
 }

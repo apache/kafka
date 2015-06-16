@@ -242,7 +242,7 @@ class ReplicaManager(val config: KafkaConfig,
   def getReplicaOrException(topic: String, partition: Int): Replica = {
     val replicaOpt = getReplica(topic, partition)
     if(replicaOpt.isDefined)
-      return replicaOpt.get
+      replicaOpt.get
     else
       throw new ReplicaNotAvailableException("Replica %d is not available for partition [%s,%d]".format(config.brokerId, topic, partition))
   }

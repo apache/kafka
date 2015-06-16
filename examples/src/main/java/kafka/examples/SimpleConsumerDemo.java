@@ -42,9 +42,9 @@ public class SimpleConsumerDemo {
   }
 
   private static void generateData() {
-    Producer producer2 = new Producer(KafkaProperties.topic2);
+    Producer producer2 = new Producer(KafkaProperties.topic2, false);
     producer2.start();
-    Producer producer3 = new Producer(KafkaProperties.topic3);
+    Producer producer3 = new Producer(KafkaProperties.topic3, false);
     producer3.start();
     try {
       Thread.sleep(1000);
@@ -68,7 +68,7 @@ public class SimpleConsumerDemo {
             .addFetch(KafkaProperties.topic2, 0, 0L, 100)
             .build();
     FetchResponse fetchResponse = simpleConsumer.fetch(req);
-      printMessages((ByteBufferMessageSet) fetchResponse.messageSet(KafkaProperties.topic2, 0));
+      printMessages(fetchResponse.messageSet(KafkaProperties.topic2, 0));
 
     System.out.println("Testing single multi-fetch");
     Map<String, List<Integer>> topicMap = new HashMap<String, List<Integer>>();
@@ -85,7 +85,7 @@ public class SimpleConsumerDemo {
       String topic = entry.getKey();
       for ( Integer offset : entry.getValue()) {
         System.out.println("Response from fetch request no: " + ++fetchReq);
-        printMessages((ByteBufferMessageSet) fetchResponse.messageSet(topic, offset));
+        printMessages(fetchResponse.messageSet(topic, offset));
       }
     }
   }

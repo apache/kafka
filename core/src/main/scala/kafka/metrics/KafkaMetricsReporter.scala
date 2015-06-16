@@ -52,7 +52,7 @@ object KafkaMetricsReporter {
 
   def startReporters (verifiableProps: VerifiableProperties) {
     ReporterStarted synchronized {
-      if (ReporterStarted.get() == false) {
+      if (!ReporterStarted.get()) {
         val metricsConfig = new KafkaMetricsConfig(verifiableProps)
         if(metricsConfig.reporters.size > 0) {
           metricsConfig.reporters.foreach(reporterType => {

@@ -149,7 +149,7 @@ object ConsumerOffsetChecker extends Logging {
     var zkClient: ZkClient = null
     var channel: BlockingChannel = null
     try {
-      zkClient = new ZkClient(zkConnect, 30000, 30000, ZKStringSerializer)
+      zkClient = ZkUtils.createZkClient(zkConnect, 30000, 30000)
 
       val topicList = topics match {
         case Some(x) => x.split(",").view.toList
@@ -162,7 +162,7 @@ object ConsumerOffsetChecker extends Logging {
 
       debug("Sending offset fetch request to coordinator %s:%d.".format(channel.host, channel.port))
       channel.send(OffsetFetchRequest(group, topicPartitions))
-      val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().buffer)
+      val offsetFetchResponse = OffsetFetchResponse.readFrom(channel.receive().payload())
       debug("Received offset fetch response %s.".format(offsetFetchResponse))
 
       offsetFetchResponse.requestInfo.foreach { case (topicAndPartition, offsetAndMetadata) =>

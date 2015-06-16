@@ -18,10 +18,9 @@
 package kafka.api
 
 import java.nio.ByteBuffer
-import kafka.api.ApiUtils._
-import collection.mutable.ListBuffer
-import kafka.network.{BoundedByteBufferSend, RequestChannel}
-import kafka.common.{TopicAndPartition, ErrorMapping}
+
+import kafka.common.{ErrorMapping, TopicAndPartition}
+import kafka.network.{RequestOrResponseSend, RequestChannel}
 import kafka.network.RequestChannel.Response
 import kafka.utils.Logging
 
@@ -37,9 +36,9 @@ object ControlledShutdownRequest extends Logging {
   }
 }
 
-case class ControlledShutdownRequest(val versionId: Short,
-                                     val correlationId: Int,
-                                     val brokerId: Int)
+case class ControlledShutdownRequest(versionId: Short,
+                                     correlationId: Int,
+                                     brokerId: Int)
   extends RequestOrResponse(Some(RequestKeys.ControlledShutdownKey)){
 
   def this(correlationId: Int, brokerId: Int) =
@@ -63,7 +62,7 @@ case class ControlledShutdownRequest(val versionId: Short,
 
   override  def handleError(e: Throwable, requestChannel: RequestChannel, request: RequestChannel.Request): Unit = {
     val errorResponse = ControlledShutdownResponse(correlationId, ErrorMapping.codeFor(e.getCause.asInstanceOf[Class[Throwable]]), Set.empty[TopicAndPartition])
-    requestChannel.sendResponse(new Response(request, new BoundedByteBufferSend(errorResponse)))
+    requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, errorResponse)))
   }
 
   override def describe(details: Boolean = false): String = {

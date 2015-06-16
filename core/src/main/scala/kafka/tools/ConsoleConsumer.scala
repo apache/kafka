@@ -69,7 +69,7 @@ object ConsoleConsumer extends Logging {
             .withRequiredArg
             .describedAs("prop")
             .ofType(classOf[String])
-    val deleteConsumerOffsetsOpt = parser.accepts("delete-consumer-offsets", "If specified, the consumer path in zookeeper is deleted when starting up");
+    val deleteConsumerOffsetsOpt = parser.accepts("delete-consumer-offsets", "If specified, the consumer path in zookeeper is deleted when starting up")
     val resetBeginningOpt = parser.accepts("from-beginning", "If the consumer does not already have an established offset to consume from, " +
             "start with the earliest message present in the log rather than the latest message.")
     val maxMessagesOpt = parser.accepts("max-messages", "The maximum number of messages to consume before exiting. If not set, consumption is continual.")
@@ -125,6 +125,11 @@ object ConsoleConsumer extends Logging {
     }
     consumerProps.put("auto.offset.reset", if(options.has(resetBeginningOpt)) "smallest" else "largest")
     consumerProps.put("zookeeper.connect", options.valueOf(zkConnectOpt))
+
+    if (!checkZkPathExists(options.valueOf(zkConnectOpt),"/brokers/ids")) {
+      System.err.println("No brokers found.")
+      System.exit(1)
+    }
 
     if (!options.has(deleteConsumerOffsetsOpt) && options.has(resetBeginningOpt) &&
        checkZkPathExists(options.valueOf(zkConnectOpt),"/consumers/" + consumerProps.getProperty("group.id")+ "/offsets")) {
@@ -204,7 +209,7 @@ object ConsoleConsumer extends Logging {
 
   def checkZkPathExists(zkUrl: String, path: String): Boolean = {
     try {
-      val zk = new ZkClient(zkUrl, 30*1000,30*1000, ZKStringSerializer);
+      val zk = ZkUtils.createZkClient(zkUrl, 30*1000,30*1000);
       zk.exists(path)
     } catch {
       case _: Throwable => false

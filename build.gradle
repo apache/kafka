@@ -30,11 +30,14 @@ allprojects {
 }
 
 ext {
-    gradleVersion = "2.0"
-}
+    gradleVersion = "2.4"
 
-def isVerificationRequired(project) {
-    project.gradle.startParameter.taskNames.any { it.contains("upload") }
+    skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
+    shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
+
+    mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
+    mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
+    mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
 }
 
 apply from: file('wrapper.gradle')
@@ -47,32 +50,33 @@ subprojects {
   apply plugin: 'maven'
   apply plugin: 'signing'
 
+  sourceCompatibility = 1.6
+
   licenseTest.onlyIf { isVerificationRequired(project) }
 
   uploadArchives {
     repositories {
       signing {
-          if (isVerificationRequired(project)) {
-              sign configurations.archives
+          required { shouldSign }
+          sign configurations.archives
 
-              // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
-              mavenDeployer {
-                  beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
-                  repository(url: "${mavenUrl}") {
-                      authentication(userName: "${mavenUsername}", password: "${mavenPassword}")
-                  }
-                  afterEvaluate {
-                      pom.artifactId = "${archivesBaseName}"
-                      pom.project {
-                          name 'Apache Kafka'
-                          packaging 'jar'
-                          url 'http://kafka.apache.org'
-                          licenses {
-                              license {
-                                  name 'The Apache Software License, Version 2.0'
-                                  url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                                  distribution 'repo'
-                              }
+          // To test locally, replace mavenUrl in ~/.gradle/gradle.properties to file://localhost/tmp/myRepo/
+          mavenDeployer {
+              beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+              repository(url: "${mavenUrl}") {
+                  authentication(userName: "${mavenUsername}", password: "${mavenPassword}")
+              }
+              afterEvaluate {
+                  pom.artifactId = "${archivesBaseName}"
+                  pom.project {
+                      name 'Apache Kafka'
+                      packaging 'jar'
+                      url 'http://kafka.apache.org'
+                      licenses {
+                          license {
+                              name 'The Apache Software License, Version 2.0'
+                              url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                              distribution 'repo'
                           }
                       }
                   }
@@ -205,7 +209,7 @@ project(':core') {
     compile project(':clients')
     compile "org.scala-lang:scala-library:$scalaVersion"
     compile 'org.apache.zookeeper:zookeeper:3.4.6'
-    compile 'com.101tec:zkclient:0.3'
+    compile 'com.101tec:zkclient:0.5'
     compile 'com.yammer.metrics:metrics-core:2.2.0'
     compile 'net.sf.jopt-simple:jopt-simple:3.2'
 
@@ -224,7 +228,7 @@ project(':core') {
     }
     testRuntime "$slf4jlog4j"
 
-    zinc 'com.typesafe.zinc:zinc:0.3.1'
+    zinc 'com.typesafe.zinc:zinc:0.3.7'
   }
 
   configurations {
@@ -350,7 +354,7 @@ project(':clients') {
 
   dependencies {
     compile "org.slf4j:slf4j-api:1.7.6"
-    compile 'org.xerial.snappy:snappy-java:1.1.1.6'
+    compile 'org.xerial.snappy:snappy-java:1.1.1.7'
     compile 'net.jpountz.lz4:lz4:1.2.0'
     compile 'net.sourceforge.argparse4j:argparse4j:0.5.0'
     compile 'com.googlecode.json-simple:json-simple:1.1.1'

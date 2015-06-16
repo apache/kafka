@@ -317,12 +317,17 @@ object AdminUtils extends Logging {
     if(str != null) {
       Json.parseFull(str) match {
         case None => // there are no config overrides
-        case Some(map: Map[String, _]) => 
+        case Some(mapAnon: Map[_, _]) =>
+          val map = mapAnon collect { case (k: String, v: Any) => k -> v }
           require(map("version") == 1)
           map.get("config") match {
-            case Some(config: Map[String, String]) =>
-              for((k,v) <- config)
-                props.setProperty(k, v)
+            case Some(config: Map[_, _]) =>
+              for(configTup <- config)
+                configTup match {
+                  case (k: String, v: String) =>
+                    props.setProperty(k, v)
+                  case _ => throw new IllegalArgumentException("Invalid topic config: " + str)
+                }
             case _ => throw new IllegalArgumentException("Invalid topic config: " + str)
           }
 

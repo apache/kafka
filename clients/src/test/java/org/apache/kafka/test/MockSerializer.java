@@ -14,23 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.test;
 
-package kafka.coordinator
+import org.apache.kafka.common.serialization.Serializer;
 
-import scala.collection.mutable
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
-/**
- * A bucket of consumers that are scheduled for heartbeat expiration.
- *
- * The motivation behind this is to avoid expensive fine-grained per-consumer
- * heartbeat expiration but use coarsen-grained methods that group consumers
- * with similar deadline together. This will result in some consumers not
- * being expired for heartbeats in time but is tolerable.
- */
-class HeartbeatBucket(val startMs: Long, endMs: Long) {
+public class MockSerializer implements Serializer<byte[]> {
+    public static final AtomicInteger INIT_COUNT = new AtomicInteger(0);
+    public static final AtomicInteger CLOSE_COUNT = new AtomicInteger(0);
 
-  /* The list of consumers that are contained in this bucket */
-  val consumerRegistryList = new mutable.HashSet[ConsumerRegistry]
+    public MockSerializer() {
+        INIT_COUNT.incrementAndGet();
+    }
 
-  // TODO
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+    }
+
+    @Override
+    public byte[] serialize(String topic, byte[] data) {
+        return data;
+    }
+
+    @Override
+    public void close() {
+        CLOSE_COUNT.incrementAndGet();
+    }
 }

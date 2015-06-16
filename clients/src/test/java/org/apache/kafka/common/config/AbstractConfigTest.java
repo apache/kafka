@@ -12,15 +12,15 @@
  */
 package org.apache.kafka.common.config;
 
-import static org.junit.Assert.fail;
-
-import java.util.Map;
-import java.util.Properties;
-
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.junit.Test;
+
+import java.util.Map;
+import java.util.Properties;
+
+import static org.junit.Assert.fail;
 
 public class AbstractConfigTest {
 
@@ -73,7 +73,7 @@ public class AbstractConfigTest {
                                             METRIC_REPORTER_CLASSES_DOC);
         }
 
-        public TestConfig(Map<? extends Object, ? extends Object> props) {
+        public TestConfig(Map<?, ?> props) {
             super(CONFIG, props);
         }
     }

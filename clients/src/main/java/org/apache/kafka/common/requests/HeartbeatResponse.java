@@ -27,7 +27,10 @@ public class HeartbeatResponse extends AbstractRequestResponse {
     /**
      * Possible error code:
      *
-     * TODO
+     * CONSUMER_COORDINATOR_NOT_AVAILABLE (15)
+     * NOT_COORDINATOR_FOR_CONSUMER (16)
+     * ILLEGAL_GENERATION (22)
+     * UNKNOWN_CONSUMER_ID (25)
      */
 
     private final short errorCode;

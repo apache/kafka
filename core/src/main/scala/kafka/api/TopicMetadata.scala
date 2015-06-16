@@ -109,7 +109,7 @@ object PartitionMetadata {
 }
 
 case class PartitionMetadata(partitionId: Int, 
-                             val leader: Option[BrokerEndPoint],
+                             leader: Option[BrokerEndPoint],
                              replicas: Seq[BrokerEndPoint],
                              isr: Seq[BrokerEndPoint] = Seq.empty,
                              errorCode: Short = ErrorMapping.NoError) extends Logging {

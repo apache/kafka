@@ -125,7 +125,10 @@ private[timer] class TimingWheel(tickMs: Long, wheelSize: Int, startMs: Long, ta
   def add(timerTaskEntry: TimerTaskEntry): Boolean = {
     val expiration = timerTaskEntry.timerTask.expirationMs
 
-    if (expiration < currentTime + tickMs) {
+    if (timerTaskEntry.cancelled) {
+      // Cancelled
+      false
+    } else if (expiration < currentTime + tickMs) {
       // Already expired
       false
     } else if (expiration < currentTime + interval) {

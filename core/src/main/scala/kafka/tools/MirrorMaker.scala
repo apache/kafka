@@ -18,7 +18,7 @@
 package kafka.tools
 
 import java.util
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{TimeUnit, CountDownLatch}
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.{Collections, Properties}
 
@@ -222,7 +222,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         connector.setConsumerRebalanceListener(consumerRebalanceListener)
     }
 
-    // create Kafka streams
+    // create filters
     val filterSpec = if (options.has(whitelistOpt))
       new Whitelist(options.valueOf(whitelistOpt))
     else
@@ -271,10 +271,6 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       }
       info("Closing producer.")
       producer.close()
-      connectors.foreach(commitOffsets)
-      // Connector should only be shutdown after offsets are committed.
-      info("Shutting down consumer connectors.")
-      connectors.foreach(_.shutdown())
       info("Kafka mirror maker shutdown successfully")
     }
   }
@@ -306,7 +302,6 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         val stream = streams(0)
         val iter = stream.iterator()
 
-        // TODO: Need to be changed after KAFKA-1660 is available.
         while (!exitingOnSendFailure && !shuttingDown) {
           try {
             while (!exitingOnSendFailure && !shuttingDown && iter.hasNext()) {
@@ -326,6 +321,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         case t: Throwable =>
           fatal("Mirror maker thread failure due to ", t)
       } finally {
+        info("Flushing producer.")
+        producer.flush()
+        info("Committing consumer offsets.")
+        commitOffsets(connector)
+        info("Shutting down consumer connectors.")
+        connector.shutdown()
         shutdownLatch.countDown()
         info("Mirror maker thread stopped")
         // if it exits accidentally, stop the entire mirror maker
@@ -388,6 +389,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     def close() {
       this.producer.close()
     }
+
+    def close(timeout: Long) {
+      this.producer.close(timeout, TimeUnit.MILLISECONDS)
+    }
   }
 
   private class MirrorMakerProducerCallback (topic: String, key: Array[Byte], value: Array[Byte])
@@ -399,8 +404,11 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         // still could not be sent.
         super.onCompletion(metadata, exception)
         // If abort.on.send.failure is set, stop the mirror maker. Otherwise log skipped message and move on.
-        if (abortOnSendFailure)
+        if (abortOnSendFailure) {
+          info("Closing producer due to send failure.")
           exitingOnSendFailure = true
+          producer.close(0)
+        }
         numDroppedMessages.incrementAndGet()
       }
     }

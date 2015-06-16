@@ -255,13 +255,9 @@ class ByteBufferMessageSet(val buffer: ByteBuffer) extends MessageSet with Loggi
       buffer.reset()
       this
     } else {
-      if (compactedTopic && targetCodec != NoCompressionCodec)
-        throw new InvalidMessageException("Compacted topic cannot accept compressed messages. " +
-          "Either the producer sent a compressed message or the topic has been configured with a broker-side compression codec.")
-      // We need to crack open the message-set if any of these are true:
-      // (i) messages are compressed,
-      // (ii) this message-set is sent to a compacted topic (and so we need to verify that each message has a key)
-      // If the broker is configured with a target compression codec then we need to recompress regardless of original codec
+      // We need to deep-iterate over the message-set if any of these are true:
+      // (i) messages are compressed
+      // (ii) the topic is configured with a target compression codec so we need to recompress regardless of original codec
       val messages = this.internalIterator(isShallow = false).map(messageAndOffset => {
         if (compactedTopic && !messageAndOffset.message.hasKey)
           throw new InvalidMessageException("Compacted topic cannot accept message without key.")

@@ -48,7 +48,7 @@ class LogManagerTest extends JUnit3Suite {
     if(logManager != null)
       logManager.shutdown()
     CoreUtils.rm(logDir)
-    logManager.logDirs.map(CoreUtils.rm(_))
+    logManager.logDirs.foreach(CoreUtils.rm(_))
     super.tearDown()
   }
   

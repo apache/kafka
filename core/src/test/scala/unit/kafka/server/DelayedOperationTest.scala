@@ -55,9 +55,9 @@ class DelayedOperationTest extends JUnit3Suite {
   @Test
   def testRequestExpiry() {
     val expiration = 20L
+    val start = System.currentTimeMillis
     val r1 = new MockDelayedOperation(expiration)
     val r2 = new MockDelayedOperation(200000L)
-    val start = System.currentTimeMillis
     assertFalse("r1 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r1, Array("test1")))
     assertFalse("r2 not satisfied and hence watched", purgatory.tryCompleteElseWatch(r2, Array("test2")))
     r1.awaitExpiration()

@@ -17,22 +17,23 @@
 
 package kafka.network
 
-import java.util.concurrent._
-import kafka.metrics.KafkaMetricsGroup
-import com.yammer.metrics.core.Gauge
 import java.nio.ByteBuffer
+import java.util.concurrent._
+
+import com.yammer.metrics.core.Gauge
 import kafka.api._
 import kafka.common.TopicAndPartition
-import kafka.utils.{Logging, SystemTime}
 import kafka.message.ByteBufferMessageSet
-import java.net._
+import kafka.metrics.KafkaMetricsGroup
+import kafka.utils.{Logging, SystemTime}
+import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, SecurityProtocol}
 import org.apache.kafka.common.requests.{AbstractRequest, RequestHeader}
 import org.apache.log4j.Logger
 
 
 object RequestChannel extends Logging {
-  val AllDone = new Request(processor = 1, requestKey = 2, buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
+  val AllDone = new Request(processor = 1, connectionId = "2", buffer = getShutdownReceive(), startTimeMs = 0, securityProtocol = SecurityProtocol.PLAINTEXT)
 
   def getShutdownReceive() = {
     val emptyProducerRequest = new ProducerRequest(0, 0, "", 0, 0, collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]())
@@ -43,17 +44,20 @@ object RequestChannel extends Logging {
     byteBuffer
   }
 
-  case class Request(processor: Int, requestKey: Any, private var buffer: ByteBuffer, startTimeMs: Long, remoteAddress: SocketAddress = new InetSocketAddress(0), securityProtocol: SecurityProtocol) {
+  case class Request(processor: Int, connectionId: String, private var buffer: ByteBuffer, startTimeMs: Long, securityProtocol: SecurityProtocol) {
     @volatile var requestDequeueTimeMs = -1L
     @volatile var apiLocalCompleteTimeMs = -1L
     @volatile var responseCompleteTimeMs = -1L
     @volatile var responseDequeueTimeMs = -1L
     val requestId = buffer.getShort()
+    // for server-side request / response format
+    // TODO: this will be removed once we migrated to client-side format
     val requestObj =
       if ( RequestKeys.keyToNameAndDeserializerMap.contains(requestId))
         RequestKeys.deserializerForKey(requestId)(buffer)
       else
         null
+    // for client-side request / response format
     val header: RequestHeader =
       if (requestObj == null) {
         buffer.rewind
@@ -68,7 +72,15 @@ object RequestChannel extends Logging {
 
     buffer = null
     private val requestLogger = Logger.getLogger("kafka.request.logger")
-    trace("Processor %d received request : %s".format(processor, requestObj))
+
+    private def requestDesc: String = {
+      if (requestObj != null)
+        requestObj.describe(false)
+      else
+        header.toString + " -- " + body.toString
+    }
+
+    trace("Processor %d received request : %s".format(processor, requestDesc))
 
     def updateRequestMetrics() {
       val endTimeMs = SystemTime.milliseconds
@@ -99,13 +111,13 @@ object RequestChannel extends Logging {
              m.responseSendTimeHist.update(responseSendTime)
              m.totalTimeHist.update(totalTime)
       }
+
       if(requestLogger.isTraceEnabled)
-        requestLogger.trace("Completed request:%s from client %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
-          .format(requestObj.describe(true), remoteAddress, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
-      else if(requestLogger.isDebugEnabled) {
-        requestLogger.debug("Completed request:%s from client %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
-          .format(requestObj.describe(false), remoteAddress, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
-      }
+        requestLogger.trace("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
+                .format(requestDesc, connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
+      else if(requestLogger.isDebugEnabled)
+        requestLogger.debug("Completed request:%s from connection %s;totalTime:%d,requestQueueTime:%d,localTime:%d,remoteTime:%d,responseQueueTime:%d,sendTime:%d"
+          .format(requestDesc, connectionId, totalTime, requestQueueTime, apiLocalTime, apiRemoteTime, responseQueueTime, responseSendTime))
     }
   }
   

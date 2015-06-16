@@ -22,12 +22,12 @@ import java.nio.channels.GatheringByteChannel;
  */
 public class ByteBufferSend implements Send {
 
-    private final int destination;
+    private final String destination;
     protected final ByteBuffer[] buffers;
     private int remaining;
     private int size;
 
-    public ByteBufferSend(int destination, ByteBuffer... buffers) {
+    public ByteBufferSend(String destination, ByteBuffer... buffers) {
         super();
         this.destination = destination;
         this.buffers = buffers;
@@ -37,7 +37,7 @@ public class ByteBufferSend implements Send {
     }
 
     @Override
-    public int destination() {
+    public String destination() {
         return destination;
     }
 
@@ -47,16 +47,7 @@ public class ByteBufferSend implements Send {
     }
 
     @Override
-    public ByteBuffer[] reify() {
-        return this.buffers;
-    }
-
-    @Override
-    public int remaining() {
-        return this.remaining;
-    }
-
-    public int size() {
+    public long size() {
         return this.size;
     }
 
@@ -64,9 +55,8 @@ public class ByteBufferSend implements Send {
     public long writeTo(GatheringByteChannel channel) throws IOException {
         long written = channel.write(buffers);
         if (written < 0)
-            throw new EOFException("This shouldn't happen.");
+            throw new EOFException("Wrote negative bytes to channel. This shouldn't happen.");
         remaining -= written;
         return written;
     }
-
 }

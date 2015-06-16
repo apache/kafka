@@ -78,8 +78,8 @@ class UncleanLeaderElectionTest extends JUnit3Suite with ZooKeeperTestHarness {
   }
 
   override def tearDown() {
-    servers.map(server => shutdownServer(server))
-    servers.map(server => CoreUtils.rm(server.config.logDirs))
+    servers.foreach(server => shutdownServer(server))
+    servers.foreach(server => CoreUtils.rm(server.config.logDirs))
 
     // restore log levels
     kafkaApisLogger.setLevel(Level.ERROR)

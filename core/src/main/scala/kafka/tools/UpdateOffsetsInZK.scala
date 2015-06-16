@@ -21,7 +21,7 @@ import org.I0Itec.zkclient.ZkClient
 import kafka.consumer.{SimpleConsumer, ConsumerConfig}
 import kafka.api.{PartitionOffsetRequestInfo, OffsetRequest}
 import kafka.common.{TopicAndPartition, KafkaException}
-import kafka.utils.{ZKGroupTopicDirs, ZkUtils, ZKStringSerializer, CoreUtils}
+import kafka.utils.{ZKGroupTopicDirs, ZkUtils, CoreUtils}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
 
@@ -36,8 +36,8 @@ object UpdateOffsetsInZK {
     if(args.length < 3)
       usage
     val config = new ConsumerConfig(Utils.loadProps(args(1)))
-    val zkClient = new ZkClient(config.zkConnect, config.zkSessionTimeoutMs,
-        config.zkConnectionTimeoutMs, ZKStringSerializer)
+    val zkClient = ZkUtils.createZkClient(config.zkConnect, config.zkSessionTimeoutMs,
+        config.zkConnectionTimeoutMs)
     args(0) match {
       case Earliest => getAndSetOffsets(zkClient, OffsetRequest.EarliestTime, config, args(2))
       case Latest => getAndSetOffsets(zkClient, OffsetRequest.LatestTime, config, args(2))
