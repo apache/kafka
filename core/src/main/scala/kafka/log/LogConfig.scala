@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils
 import scala.collection._
 import org.apache.kafka.common.config.ConfigDef
 import kafka.message.BrokerCompressionCodec
+import kafka.message.Message
 
 object Defaults {
   val SegmentSize = 1024 * 1024
@@ -162,7 +163,7 @@ object LogConfig {
     import java.util.Arrays.asList
 
     new ConfigDef()
-      .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(0), MEDIUM, SegmentSizeDoc)
+      .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(Message.MinHeaderSize), MEDIUM, SegmentSizeDoc)
       .define(SegmentMsProp, LONG, Defaults.SegmentMs, atLeast(0), MEDIUM, SegmentMsDoc)
       .define(SegmentJitterMsProp, LONG, Defaults.SegmentJitterMs, atLeast(0), MEDIUM, SegmentJitterMsDoc)
       .define(SegmentIndexBytesProp, INT, Defaults.MaxIndexSize, atLeast(0), MEDIUM, MaxIndexSizeDoc)
