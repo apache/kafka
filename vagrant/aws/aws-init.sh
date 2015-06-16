@@ -4,7 +4,7 @@
 # or bring up your mini Kafka cluster.
 
 # Install dependencies
-sudo apt-get install -y maven openjdk-7-jdk build-essential \
+sudo apt-get install -y maven openjdk-6-jdk build-essential \
             ruby-dev zlib1g-dev realpath python-setuptools
 
 base_dir=`dirname $0`/../..
