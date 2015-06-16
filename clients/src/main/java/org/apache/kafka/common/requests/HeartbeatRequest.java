@@ -50,7 +50,7 @@ public class HeartbeatRequest extends AbstractRequest {
 
     @Override
     public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
-        switch(versionId) {
+        switch (versionId) {
             case 0:
                 return new HeartbeatResponse(Errors.forException(e).code());
             default:

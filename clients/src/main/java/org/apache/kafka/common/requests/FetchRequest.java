@@ -130,7 +130,7 @@ public class FetchRequest extends AbstractRequest {
             responseData.put(entry.getKey(), partitionResponse);
         }
 
-        switch(versionId) {
+        switch (versionId) {
             case 0:
                 return new FetchResponse(responseData);
             default:

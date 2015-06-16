@@ -42,7 +42,7 @@ public class ConsumerMetadataRequest extends AbstractRequest {
 
     @Override
     public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
-        switch(versionId) {
+        switch (versionId) {
             case 0:
                 return new ConsumerMetadataResponse(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code(), Node.noNode());
             default:

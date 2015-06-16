@@ -115,7 +115,7 @@ public class ListOffsetRequest extends AbstractRequest {
             responseData.put(entry.getKey(), partitionResponse);
         }
 
-        switch(versionId) {
+        switch (versionId) {
             case 0:
                 return new ListOffsetResponse(responseData);
             default:
