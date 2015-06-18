@@ -356,7 +356,7 @@ class LogManager(val logDirs: Array[File],
            .format(topicAndPartition.topic, 
                    topicAndPartition.partition, 
                    dataDir.getAbsolutePath,
-                   {import JavaConversions._; config.toProps.mkString(", ")}))
+                   {import JavaConversions._; config.originals.mkString(", ")}))
       log
     }
   }

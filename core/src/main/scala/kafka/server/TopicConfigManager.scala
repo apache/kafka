@@ -101,9 +101,10 @@ class TopicConfigManager(private val zkClient: ZkClient,
             val topic = json.substring(1, json.length - 1) // hacky way to dequote
             if (logsByTopic.contains(topic)) {
               /* combine the default properties with the overrides in zk to create the new LogConfig */
-              val props = new Properties(logManager.defaultConfig.toProps)
+              val props = new Properties()
+              props.putAll(logManager.defaultConfig.originals)
               props.putAll(AdminUtils.fetchTopicConfig(zkClient, topic))
-              val logConfig = LogConfig.fromProps(props)
+              val logConfig = LogConfig(props)
               for (log <- logsByTopic(topic))
                 log.config = logConfig
               info("Processed topic config change %d for topic %s, setting new config to %s.".format(changeId, topic, props))

@@ -17,6 +17,8 @@
 
 package kafka.log
 
+import java.util.Properties
+
 import junit.framework.Assert._
 import org.scalatest.junit.JUnitSuite
 import org.junit.{After, Test}
@@ -35,7 +37,11 @@ import org.apache.kafka.common.utils.Utils
 class CleanerTest extends JUnitSuite {
   
   val dir = TestUtils.tempDir()
-  val logConfig = LogConfig(segmentSize=1024, maxIndexSize=1024, compact=true)
+  val logProps = new Properties()
+  logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+  logProps.put(LogConfig.SegmentIndexBytesProp, 1024: java.lang.Integer)
+  logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+  val logConfig = LogConfig(logProps)
   val time = new MockTime()
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
   
@@ -50,8 +56,11 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testCleanSegments() {
     val cleaner = makeCleaner(Int.MaxValue)
-    val log = makeLog(config = logConfig.copy(segmentSize = 1024))
-    
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
     // append messages to the log until we have four segments
     while(log.numberOfSegments < 4)
       log.append(message(log.logEndOffset.toInt, log.logEndOffset.toInt))
@@ -72,7 +81,10 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testCleaningWithDeletes() {
     val cleaner = makeCleaner(Int.MaxValue)
-    val log = makeLog(config = logConfig.copy(segmentSize = 1024))
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     
     // append messages with the keys 0 through N
     while(log.numberOfSegments < 2)
@@ -98,7 +110,11 @@ class CleanerTest extends JUnitSuite {
     val cleaner = makeCleaner(Int.MaxValue)
 
     // create a log with compaction turned off so we can append unkeyed messages
-    val log = makeLog(config = logConfig.copy(segmentSize = 1024, compact = false))
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+    logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Delete)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // append unkeyed messages
     while(log.numberOfSegments < 2)
@@ -114,7 +130,9 @@ class CleanerTest extends JUnitSuite {
     val expectedSizeAfterCleaning = log.size - sizeWithUnkeyedMessages
 
     // turn on compaction and compact the log
-    val compactedLog = makeLog(config = logConfig.copy(segmentSize = 1024))
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+
+    val compactedLog = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     cleaner.clean(LogToClean(TopicAndPartition("test", 0), log, 0))
 
     assertEquals("Log should only contain keyed messages after cleaning.", 0, unkeyedMessageCountInLog(log))
@@ -139,7 +157,10 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testCleanSegmentsWithAbort() {
     val cleaner = makeCleaner(Int.MaxValue, abortCheckDone)
-    val log = makeLog(config = logConfig.copy(segmentSize = 1024))
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     // append messages to the log until we have four segments
     while(log.numberOfSegments < 4)
@@ -159,7 +180,11 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testSegmentGrouping() {
     val cleaner = makeCleaner(Int.MaxValue)
-    val log = makeLog(config = logConfig.copy(segmentSize = 300, indexInterval = 1))
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     
     // append some messages to the log
     var i = 0
@@ -208,7 +233,12 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testSegmentGroupingWithSparseOffsets() {
     val cleaner = makeCleaner(Int.MaxValue)
-    val log = makeLog(config = logConfig.copy(segmentSize = 1024, indexInterval = 1))
+
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
        
     // fill up first segment
     while (log.numberOfSegments == 1)
@@ -288,7 +318,12 @@ class CleanerTest extends JUnitSuite {
   @Test
   def testRecoveryAfterCrash() {
     val cleaner = makeCleaner(Int.MaxValue)
-    val config = logConfig.copy(segmentSize = 300, indexInterval = 1, fileDeleteDelayMs = 10)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+    logProps.put(LogConfig.FileDeleteDelayMsProp, 10: java.lang.Integer)
+
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
       
     def recoverAndCheck(config: LogConfig, expectedKeys : Iterable[Int]) : Log = {   
       // Recover log file and check that after recovery, keys are as expected

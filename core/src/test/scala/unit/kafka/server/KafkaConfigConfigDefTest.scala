@@ -30,29 +30,13 @@ import scala.util.Random._
 class KafkaConfigConfigDefTest extends JUnit3Suite {
 
   @Test
-  def testFromPropsDefaults() {
-    val defaults = new Properties()
-    defaults.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
-
-    // some ordinary setting
-    defaults.put(KafkaConfig.AdvertisedPortProp, "1818")
-
-    val props = new Properties(defaults)
-
-    val config = KafkaConfig.fromProps(props)
-
-    Assert.assertEquals(1818, config.advertisedPort)
-    Assert.assertEquals("KafkaConfig defaults should be retained", Defaults.ConnectionsMaxIdleMs, config.connectionsMaxIdleMs)
-  }
-
-  @Test
   def testFromPropsEmpty() {
     // only required
     val p = new Properties()
     p.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
     val actualConfig = KafkaConfig.fromProps(p)
 
-    val expectedConfig = new KafkaConfig(zkConnect = "127.0.0.1:2181")
+    val expectedConfig = new KafkaConfig(p)
 
     Assert.assertEquals(expectedConfig.zkConnect, actualConfig.zkConnect)
     Assert.assertEquals(expectedConfig.zkSessionTimeoutMs, actualConfig.zkSessionTimeoutMs)
@@ -252,7 +236,7 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
       }
     })
 
-    val actual = KafkaConfig.fromProps(expected).toProps
+    val actual = KafkaConfig.fromProps(expected).originals
     Assert.assertEquals(expected, actual)
   }
 
