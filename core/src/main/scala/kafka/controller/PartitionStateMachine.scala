@@ -188,7 +188,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
         case NewPartition =>
           // pre: partition did not exist before this
           assertValidPreviousStates(topicAndPartition, List(NonExistentPartition), NewPartition)
-          assignReplicasToPartitions(topic, partition)
           partitionState.put(topicAndPartition, NewPartition)
           val assignedReplicas = controllerContext.partitionReplicaAssignment(topicAndPartition).mkString(",")
           stateChangeLogger.trace("Controller %d epoch %d changed partition %s state from %s to %s with assigned replicas %s"
@@ -263,17 +262,6 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
       throw new IllegalStateException("Partition %s should be in the %s states before moving to %s state"
         .format(topicAndPartition, fromStates.mkString(","), targetState) + ". Instead it is in %s state"
         .format(partitionState(topicAndPartition)))
-  }
-
-  /**
-   * Invoked on the NonExistentPartition->NewPartition state transition to update the controller's cache with the
-   * partition's replica assignment.
-   * @param topic     The topic of the partition whose replica assignment is to be cached
-   * @param partition The partition whose replica assignment is to be cached
-   */
-  private def assignReplicasToPartitions(topic: String, partition: Int) {
-    val assignedReplicas = ZkUtils.getReplicasForPartition(controllerContext.zkClient, topic, partition)
-    controllerContext.partitionReplicaAssignment += TopicAndPartition(topic, partition) -> assignedReplicas
   }
 
   /**
@@ -526,6 +514,7 @@ class PartitionStateMachine(controller: KafkaController) extends Logging {
           else {
             if (partitionsToBeAdded.size > 0) {
               info("New partitions to be added %s".format(partitionsToBeAdded))
+              controllerContext.partitionReplicaAssignment.++=(partitionsToBeAdded)
               controller.onNewPartitionCreation(partitionsToBeAdded.keySet.toSet)
             }
           }
