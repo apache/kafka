@@ -126,7 +126,15 @@ class LogManager(val logDirs: Array[File],
         brokerState.newState(RecoveringFromUncleanShutdown)
       }
 
-      val recoveryPoints = this.recoveryPointCheckpoints(dir).read
+      var recoveryPoints = Map[TopicAndPartition, Long]()
+      try {
+        recoveryPoints = this.recoveryPointCheckpoints(dir).read
+      } catch {
+        case e: Exception => {
+          warn("Error occured while reading recovery-point-offset-checkpoint file of directory " + dir, e)
+          warn("Resetting the recovery checkpoint to 0")
+        }
+      }
 
       val jobsForDir = for {
         dirContent <- Option(dir.listFiles).toList
