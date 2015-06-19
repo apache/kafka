@@ -70,16 +70,6 @@ object CoreUtils extends Logging {
     Utils.daemonThread(name, runnable(fun))
 
   /**
-   * Open a channel for the given file
-   */
-  def openChannel(file: File, mutable: Boolean): FileChannel = {
-    if(mutable)
-      new RandomAccessFile(file, "rw").getChannel()
-    else
-      new FileInputStream(file).getChannel()
-  }
-
-  /**
    * Do the given action and log any exceptions thrown without rethrowing them
    * @param log The log method to use for logging. E.g. logger.warn
    * @param action The action to execute

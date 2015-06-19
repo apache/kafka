@@ -43,6 +43,7 @@ object Defaults {
   val UncleanLeaderElectionEnable = kafka.server.Defaults.UncleanLeaderElectionEnable
   val MinInSyncReplicas = kafka.server.Defaults.MinInSyncReplicas
   val CompressionType = kafka.server.Defaults.CompressionType
+  val PreAllocateEnable = kafka.server.Defaults.LogPreAllocateEnable
 }
 
 case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfig.configDef, props) {
@@ -64,6 +65,7 @@ case class LogConfig(props: java.util.Map[_, _]) extends AbstractConfig(LogConfi
   val uncleanLeaderElectionEnable = getBoolean(LogConfig.UncleanLeaderElectionEnableProp)
   val minInSyncReplicas = getInt(LogConfig.MinInSyncReplicasProp)
   val compressionType = getString(LogConfig.CompressionTypeProp).toLowerCase
+  val preallocate = getBoolean(LogConfig.PreAllocateEnableProp)
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -95,6 +97,7 @@ object LogConfig {
   val UncleanLeaderElectionEnableProp = "unclean.leader.election.enable"
   val MinInSyncReplicasProp = "min.insync.replicas"
   val CompressionTypeProp = "compression.type"
+  val PreAllocateEnableProp = "preallocate"
 
   val SegmentSizeDoc = "The hard maximum for the size of a segment file in the log"
   val SegmentMsDoc = "The soft maximum on the amount of time before a new log segment is rolled"
@@ -118,6 +121,7 @@ object LogConfig {
   val CompressionTypeDoc = "Specify the final compression type for a given topic. This configuration accepts the " +
     "standard compression codecs ('gzip', 'snappy', lz4). It additionally accepts 'uncompressed' which is equivalent to " +
     "no compression; and 'producer' which means retain the original compression codec set by the producer."
+  val PreAllocateEnableDoc ="Should pre allocate file when create new segment?"
 
   private val configDef = {
     import ConfigDef.Range._
@@ -149,6 +153,8 @@ object LogConfig {
         MEDIUM, UncleanLeaderElectionEnableDoc)
       .define(MinInSyncReplicasProp, INT, Defaults.MinInSyncReplicas, atLeast(1), MEDIUM, MinInSyncReplicasDoc)
       .define(CompressionTypeProp, STRING, Defaults.CompressionType, in(BrokerCompressionCodec.brokerCompressionOptions:_*), MEDIUM, CompressionTypeDoc)
+      .define(PreAllocateEnableProp, BOOLEAN, Defaults.PreAllocateEnable,
+        MEDIUM, PreAllocateEnableDoc)
   }
 
   def apply(): LogConfig = LogConfig(new Properties())

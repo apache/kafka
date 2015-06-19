@@ -192,6 +192,7 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
         case KafkaConfig.MinInSyncReplicasProp => expected.setProperty(name, atLeastOneIntProp)
         case KafkaConfig.AutoLeaderRebalanceEnableProp => expected.setProperty(name, randFrom("true", "false"))
         case KafkaConfig.UncleanLeaderElectionEnableProp => expected.setProperty(name, randFrom("true", "false"))
+        case KafkaConfig.LogPreAllocateProp => expected.setProperty(name, randFrom("true", "false"))
         case KafkaConfig.InterBrokerSecurityProtocolProp => expected.setProperty(name, SecurityProtocol.PLAINTEXT.toString)
         case KafkaConfig.InterBrokerProtocolVersionProp => expected.setProperty(name, ApiVersion.latestVersion.toString)
 

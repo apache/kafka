@@ -45,6 +45,7 @@ class LogConfigTest extends JUnit3Suite {
         case LogConfig.MinInSyncReplicasProp => expected.setProperty(name, (nextInt(Int.MaxValue - 1) + 1).toString)
         case LogConfig.RetentionBytesProp => expected.setProperty(name, nextInt().toString)
         case LogConfig.RetentionMsProp => expected.setProperty(name, nextLong().toString)
+        case LogConfig.PreAllocateEnableProp => expected.setProperty(name, randFrom("true", "false"))
         case positiveIntProperty => expected.setProperty(name, nextInt(Int.MaxValue).toString)
       }
     })
