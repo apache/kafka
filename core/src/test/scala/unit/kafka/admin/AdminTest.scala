@@ -242,7 +242,7 @@ class AdminTest extends JUnit3Suite with ZooKeeperTestHarness with Logging {
     val partitionToBeReassigned = 0
     val topicAndPartition = TopicAndPartition(topic, partitionToBeReassigned)
     val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, Map(topicAndPartition -> newReplicas))
-    assertTrue("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
+    assertFalse("Partition reassignment failed for test, 0", reassignPartitionsCommand.reassignPartitions())
     val reassignedPartitions = ZkUtils.getPartitionsBeingReassigned(zkClient)
     assertFalse("Partition should not be reassigned", reassignedPartitions.contains(topicAndPartition))
     servers.foreach(_.shutdown())
