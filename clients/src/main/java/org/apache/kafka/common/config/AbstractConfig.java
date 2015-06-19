@@ -51,10 +51,14 @@ public class AbstractConfig {
     }
 
     protected Object get(String key) {
+        use(key);
+        return values.get(key);
+    }
+
+    public void use(String key) {
         if (!values.containsKey(key))
             throw new ConfigException(String.format("Unknown configuration '%s'", key));
         used.add(key);
-        return values.get(key);
     }
 
     public Short getShort(String key) {
