@@ -489,6 +489,39 @@ class LogTest extends JUnitSuite {
   }
 
   /**
+   * Test that if we have corrupted an index segment it is rebuilt when the log is re-opened
+   */
+  @Test
+  def testCorruptIndexRebuild() {
+    // publish the messages and close the log
+    val numMessages = 200
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 200: java.lang.Integer)
+    logProps.put(LogConfig.IndexIntervalBytesProp, 1: java.lang.Integer)
+
+    val config = LogConfig(logProps)
+    var log = new Log(logDir, config, recoveryPoint = 0L, time.scheduler, time)
+    for(i <- 0 until numMessages)
+      log.append(TestUtils.singleMessageSet(TestUtils.randomBytes(10)))
+    val indexFiles = log.logSegments.map(_.index.file)
+    log.close()
+
+    // corrupt all the index files
+    for( file <- indexFiles) {
+      val bw = new BufferedWriter(new FileWriter(file))
+      bw.write("  ")
+      bw.close()
+    }
+
+    // reopen the log
+    log = new Log(logDir, config, recoveryPoint = 200L, time.scheduler, time)
+    assertEquals("Should have %d messages when log is reopened".format(numMessages), numMessages, log.logEndOffset)
+    for(i <- 0 until numMessages)
+      assertEquals(i, log.read(i, 100, None).messageSet.head.offset)
+    log.close()
+  }
+
+  /**
    * Test the Log truncate operations
    */
   @Test
