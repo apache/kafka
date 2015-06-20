@@ -216,7 +216,9 @@ project(':core') {
     testCompile 'junit:junit:4.6'
     testCompile 'org.easymock:easymock:3.0'
     testCompile 'org.objenesis:objenesis:1.2'
+    testCompile 'org.bouncycastle:bcpkix-jdk15on:1.52'
     testCompile project(':clients')
+    testCompile project(':clients').sourceSets.test.output
     if (scalaVersion.startsWith('2.10')) {
       testCompile 'org.scalatest:scalatest_2.10:1.9.1'
     } else if (scalaVersion.startsWith('2.11')) {

@@ -954,10 +954,12 @@ class KafkaConfig (/** ********* Zookeeper Configuration ***********/
     } catch {
       case e: Exception => throw new IllegalArgumentException("Error creating broker listeners from '%s': %s".format(listeners, e.getMessage))
     }
-    val distinctPorts = endpoints.map(ep => ep.port).distinct
+    // filter port 0 for unit tests
+    val endpointsWithoutZeroPort = endpoints.map(ep => ep.port).filter(_ != 0)
+    val distinctPorts = endpointsWithoutZeroPort.distinct
     val distinctProtocols = endpoints.map(ep => ep.protocolType).distinct
 
-    require(distinctPorts.size == endpoints.size, "Each listener must have a different port")
+    require(distinctPorts.size == endpointsWithoutZeroPort.size, "Each listener must have a different port")
     require(distinctProtocols.size == endpoints.size, "Each listener must have a different protocol")
   }
 

@@ -3,9 +3,9 @@
  * file distributed with this work for additional information regarding copyright ownership. The ASF licenses this file
  * to You under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the
  * License. You may obtain a copy of the License at
- * 
+ *
  * http://www.apache.org/licenses/LICENSE-2.0
- * 
+ *
  * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
  * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
  * specific language governing permissions and limitations under the License.
@@ -101,7 +101,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Begin connecting to the given node, return true if we are already connected and ready to send to that node.
-     * 
+     *
      * @param node The node to check
      * @param now The current timestamp
      * @return True if we are ready to send to the given node
@@ -122,7 +122,7 @@ public class NetworkClient implements KafkaClient {
      * Returns the number of milliseconds to wait, based on the connection state, before attempting to send data. When
      * disconnected, this respects the reconnect backoff time. When connecting or connected, this handles slow/stalled
      * connections.
-     * 
+     *
      * @param node The node to check
      * @param now The current timestamp
      * @return The number of milliseconds to wait.
@@ -147,7 +147,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Check if the node with the given id is ready to send more requests.
-     * 
+     *
      * @param node The node
      * @param now The current time in ms
      * @return true if the node is ready
@@ -166,7 +166,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Are we connected and ready and able to send more requests to the given connection?
-     * 
+     *
      * @param node The node
      */
     private boolean isSendable(String node) {
@@ -175,7 +175,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Return the state of the connection to the given node
-     * 
+     *
      * @param node The node to check
      * @return The connection state
      */
@@ -185,7 +185,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Queue up the given request for sending. Requests can only be sent out to ready nodes.
-     * 
+     *
      * @param request The request
      */
     @Override
@@ -200,7 +200,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Do actual reads and writes to sockets.
-     * 
+     *
      * @param timeout The maximum amount of time to wait (in ms) for responses if there are none immediately
      * @param now The current time in milliseconds
      * @return The list of responses received
@@ -246,7 +246,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Await all the outstanding responses for requests on the given connection
-     * 
+     *
      * @param node The node to block on
      * @param now The current time in ms
      * @return All the collected responses
@@ -294,7 +294,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Generate a request header for the given API key
-     * 
+     *
      * @param key The api key
      * @return A request header with the appropriate client id and correlation id
      */
@@ -324,7 +324,7 @@ public class NetworkClient implements KafkaClient {
      * prefer a node with an existing connection, but will potentially choose a node for which we don't yet have a
      * connection if all existing connections are in use. This method will never choose a node for which there is no
      * existing connection and from which we have disconnected within the reconnect backoff period.
-     * 
+     *
      * @return The node with the fewest in-flight requests.
      */
     public Node leastLoadedNode(long now) {
@@ -349,7 +349,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Handle any completed request send. In particular if no response is expected consider the request complete.
-     * 
+     *
      * @param responses The list of responses to update
      * @param now The current time
      */
@@ -366,7 +366,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Handle any completed receives and update the response list with the responses received.
-     * 
+     *
      * @param responses The list of responses to update
      * @param now The current time
      */
@@ -407,7 +407,7 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Handle any disconnected connections
-     * 
+     *
      * @param responses The list of responses that completed with the disconnection
      * @param now The current time
      */

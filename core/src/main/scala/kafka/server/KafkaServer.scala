@@ -28,6 +28,7 @@ import java.io.File
 import kafka.utils._
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.network.NetworkReceive
+import org.apache.kafka.common.protocol.SecurityProtocol
 
 import scala.collection.{JavaConversions, mutable}
 import org.I0Itec.zkclient.ZkClient
@@ -51,19 +52,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
   private var shutdownLatch = new CountDownLatch(1)
 
-  private val metricConfig: MetricConfig = new MetricConfig()
-          .samples(config.metricNumSamples)
-          .timeWindow(config.metricSampleWindowMs, TimeUnit.MILLISECONDS)
-  private val jmxPrefix: String = "kafka.server"
-  private val reporters: java.util.List[MetricsReporter] =  config.metricReporterClasses
-  reporters.add(new JmxReporter(jmxPrefix))
-
-
-
-  // This exists so SocketServer (which uses Client libraries) can use the client Time objects without having to convert all of Kafka to use them
-  // Once we get rid of kafka.utils.time, we can get rid of this too
-  private val socketServerTime: org.apache.kafka.common.utils.Time = new org.apache.kafka.common.utils.SystemTime()
-
   val brokerState: BrokerState = new BrokerState
 
   var apis: KafkaApis = null
@@ -86,8 +74,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
   var kafkaHealthcheck: KafkaHealthcheck = null
   val metadataCache: MetadataCache = new MetadataCache(config.brokerId)
-
-
 
   var zkClient: ZkClient = null
   val correlationId: AtomicInteger = new AtomicInteger(0)
@@ -133,68 +119,54 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         config.brokerId =  getBrokerId
         this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
-        val metrics = new Metrics(metricConfig, reporters, socketServerTime)
-        val channelConfigs = config.channelConfigs
 
-        socketServer = new SocketServer(config.brokerId,
-                                        config.listeners,
-                                        config.numNetworkThreads,
-                                        config.queuedMaxRequests,
-                                        config.socketSendBufferBytes,
-                                        config.socketReceiveBufferBytes,
-                                        config.socketRequestMaxBytes,
-                                        config.maxConnectionsPerIp,
-                                        config.connectionsMaxIdleMs,
-                                        config.maxConnectionsPerIpOverrides,
-                                        channelConfigs,
-                                        socketServerTime,
-                                        metrics)
-          socketServer.startup()
+        socketServer = new SocketServer(config)
+        socketServer.startup()
 
-          /* start replica manager */
-          replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler, logManager, isShuttingDown)
-          replicaManager.startup()
+        /* start replica manager */
+        replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler, logManager, isShuttingDown)
+        replicaManager.startup()
 
-          /* start offset manager */
-          offsetManager = createOffsetManager()
+        /* start offset manager */
+        offsetManager = createOffsetManager()
 
-          /* start kafka controller */
-          kafkaController = new KafkaController(config, zkClient, brokerState)
-          kafkaController.startup()
+        /* start kafka controller */
+        kafkaController = new KafkaController(config, zkClient, brokerState)
+        kafkaController.startup()
 
-          /* start kafka coordinator */
-          consumerCoordinator = new ConsumerCoordinator(config, zkClient, offsetManager)
-          consumerCoordinator.startup()
+        /* start kafka coordinator */
+        consumerCoordinator = new ConsumerCoordinator(config, zkClient, offsetManager)
+        consumerCoordinator.startup()
 
-          /* start processing requests */
-          apis = new KafkaApis(socketServer.requestChannel, replicaManager, offsetManager, consumerCoordinator,
-            kafkaController, zkClient, config.brokerId, config, metadataCache)
-          requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
-          brokerState.newState(RunningAsBroker)
+        /* start processing requests */
+        apis = new KafkaApis(socketServer.requestChannel, replicaManager, offsetManager, consumerCoordinator,
+          kafkaController, zkClient, config.brokerId, config, metadataCache)
+        requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
+        brokerState.newState(RunningAsBroker)
 
-          Mx4jLoader.maybeLoad()
+        Mx4jLoader.maybeLoad()
 
-          /* start topic config manager */
-          topicConfigManager = new TopicConfigManager(zkClient, logManager)
-          topicConfigManager.startup()
+        /* start topic config manager */
+        topicConfigManager = new TopicConfigManager(zkClient, logManager)
+        topicConfigManager.startup()
 
-          /* tell everyone we are alive */
-          val listeners = config.advertisedListeners.map {case(protocol, endpoint) =>
-            if (endpoint.port == 0)
-              (protocol, EndPoint(endpoint.host, socketServer.boundPort(), endpoint.protocolType))
-            else
-              (protocol, endpoint)
-          }
-          kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, config.zkSessionTimeoutMs, zkClient)
-          kafkaHealthcheck.startup()
+        /* tell everyone we are alive */
+        val listeners = config.advertisedListeners.map {case(protocol, endpoint) =>
+          if (endpoint.port == 0)
+            (protocol, EndPoint(endpoint.host, socketServer.boundPort(), endpoint.protocolType))
+          else
+            (protocol, endpoint)
+        }
+        kafkaHealthcheck = new KafkaHealthcheck(config.brokerId, listeners, config.zkSessionTimeoutMs, zkClient)
+        kafkaHealthcheck.startup()
 
-          /* register broker metrics */
-          registerStats()
+        /* register broker metrics */
+        registerStats()
 
-          shutdownLatch = new CountDownLatch(1)
-          startupComplete.set(true)
-          isStartingUp.set(false)
-          info("started")
+        shutdownLatch = new CountDownLatch(1)
+        startupComplete.set(true)
+        isStartingUp.set(false)
+        info("started")
       }
     }
     catch {
@@ -386,7 +358,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
   def getLogManager(): LogManager = logManager
 
-  def boundPort(): Int = socketServer.boundPort()
+  def boundPort(protocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Int = socketServer.boundPort(protocol)
 
   private def createLogManager(zkClient: ZkClient, brokerState: BrokerState): LogManager = {
     val defaultLogConfig = LogConfig(segmentSize = config.logSegmentBytes,

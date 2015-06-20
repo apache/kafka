@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import java.io.IOException;
+import java.io.File;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 
@@ -46,12 +47,13 @@ public class SSLSelectorTest {
 
     @Before
     public void setup() throws Exception {
-        Map<SSLFactory.Mode, Map<String, Object>> sslConfigs = TestSSLUtils.createSSLConfigs(false, true);
-        Map<String, Object> sslServerConfigs = sslConfigs.get(SSLFactory.Mode.SERVER);
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+
+        Map<String, Object> sslServerConfigs = TestSSLUtils.createSSLConfig(false, true, SSLFactory.Mode.SERVER, trustStoreFile, "server");
         sslServerConfigs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         this.server = new EchoServer(sslServerConfigs);
         this.server.start();
-        Map<String, Object> sslClientConfigs = sslConfigs.get(SSLFactory.Mode.CLIENT);
+        Map<String, Object> sslClientConfigs = TestSSLUtils.createSSLConfig(false, false, SSLFactory.Mode.SERVER, trustStoreFile, "client");
         sslClientConfigs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
 
         this.channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT);
@@ -208,7 +210,6 @@ public class SSLSelectorTest {
     //         }
     //     }
     // }
-
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));

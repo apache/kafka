@@ -14,6 +14,7 @@ package org.apache.kafka.common.network;
 
 import javax.net.ssl.*;
 
+import java.io.File;
 import java.util.Map;
 
 import org.apache.kafka.test.TestSSLUtils;
@@ -33,8 +34,8 @@ public class SSLFactoryTest {
 
     @Test
     public void testSSLFactoryConfiguration() throws Exception {
-        Map<SSLFactory.Mode, Map<String, Object>> sslConfigs = TestSSLUtils.createSSLConfigs(false, true);
-        Map<String, Object> serverSSLConfig = sslConfigs.get(SSLFactory.Mode.SERVER);
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> serverSSLConfig = TestSSLUtils.createSSLConfig(false, true, SSLFactory.Mode.SERVER, trustStoreFile, "server");
         SSLFactory sslFactory = new SSLFactory(SSLFactory.Mode.SERVER);
         sslFactory.configure(serverSSLConfig);
         //host and port are hints
@@ -47,8 +48,8 @@ public class SSLFactoryTest {
 
     @Test
     public void testClientMode() throws Exception {
-        Map<SSLFactory.Mode, Map<String, Object>> sslConfigs = TestSSLUtils.createSSLConfigs(false, true);
-        Map<String, Object> clientSSLConfig = sslConfigs.get(SSLFactory.Mode.CLIENT);
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> clientSSLConfig = TestSSLUtils.createSSLConfig(false, true, SSLFactory.Mode.CLIENT, trustStoreFile, "client");
         SSLFactory sslFactory = new SSLFactory(SSLFactory.Mode.CLIENT);
         sslFactory.configure(clientSSLConfig);
         //host and port are hints

@@ -56,7 +56,7 @@ public class DefaultAuthenticator implements Authenticator {
      * DefaultAuthenticator doesn't implement any additional authentication.
      * @returns true
      */
-    public boolean isComplete() {
+    public boolean complete() {
         return true;
     }
 

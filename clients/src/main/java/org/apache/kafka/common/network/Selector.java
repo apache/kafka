@@ -154,7 +154,7 @@ public class Selector implements Selectable {
             throw e;
         }
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);
-        Channel channel = channelBuilder.buildChannel(id, key);
+        Channel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
         key.attach(channel);
         this.channels.put(id, channel);
     }
@@ -166,7 +166,7 @@ public class Selector implements Selectable {
      */
     public void register(String id, SocketChannel socketChannel) throws ClosedChannelException {
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
-        Channel channel = channelBuilder.buildChannel(id, key);
+        Channel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
         key.attach(channel);
         this.channels.put(id, channel);
     }
@@ -269,12 +269,12 @@ public class Selector implements Selectable {
                     }
 
                     /* if channel is not ready finish prepare */
-                    if (!channel.isReady()) {
+                    if (!channel.ready()) {
                         channel.prepare();
                     }
 
-                     /* if channel is ready read from any connections that have readable data */
-                    if (channel.isReady() && key.isReadable()) {
+                    /* if channel is ready read from any connections that have readable data */
+                    if (channel.ready() && key.isReadable()) {
                         NetworkReceive networkReceive;
                         try {
                             if ((networkReceive = channel.read()) != null) {
@@ -289,7 +289,7 @@ public class Selector implements Selectable {
                     }
 
                     /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
-                    if (key.isWritable() && channel.isReady()) {
+                    if (channel.ready() && key.isWritable()) {
                         Send send = channel.write();
                         if (send != null) {
                             this.completedSends.add(send);
@@ -423,7 +423,8 @@ public class Selector implements Selectable {
      */
     public void close(String id) {
         Channel channel = this.channels.get(id);
-        close(channel);
+        if (channel != null)
+            close(channel);
     }
 
     /**

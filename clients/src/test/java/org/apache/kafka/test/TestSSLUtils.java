@@ -23,7 +23,9 @@ import org.apache.kafka.clients.CommonClientConfigs;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.EOFException;
 import java.math.BigInteger;
 import javax.net.ssl.TrustManagerFactory;
 import java.security.*;
@@ -153,7 +155,14 @@ public class TestSSLUtils {
 
     public static <T extends Certificate> void createTrustStore(
             String filename, String password, Map<String, T> certs) throws GeneralSecurityException, IOException {
-        KeyStore ks = createEmptyKeyStore();
+        KeyStore ks = KeyStore.getInstance("JKS");
+        try {
+            FileInputStream in = new FileInputStream(filename);
+            ks.load(in, password.toCharArray());
+            in.close();
+        } catch (EOFException e) {
+            ks = createEmptyKeyStore();
+        }
         for (Map.Entry<String, T> cert : certs.entrySet()) {
             ks.setCertificateEntry(cert.getKey(), cert.getValue());
         }
@@ -194,42 +203,41 @@ public class TestSSLUtils {
         return sslConfigs;
     }
 
-    public static Map<SSLFactory.Mode, Map<String, Object>> createSSLConfigs(boolean useClientCert, boolean trustStore)
+    public static  Map<String, Object> createSSLConfig(boolean useClientCert, boolean trustStore, SSLFactory.Mode mode, File trustStoreFile, String certAlias)
         throws IOException, GeneralSecurityException {
-        Map<SSLFactory.Mode, Map<String, Object>> sslConfigs = new HashMap<SSLFactory.Mode, Map<String, Object>>();
         Map<String, X509Certificate> certs = new HashMap<String, X509Certificate>();
-        File trustStoreFile = File.createTempFile("truststore", ".jks");
-        File clientKeyStoreFile = null;
-        File serverKeyStoreFile = File.createTempFile("serverKS", ".jks");
-        String clientPassword = "ClientPassword";
-        String serverPassword = "ServerPassword";
+        File keyStoreFile;
+        String password;
+
+        if (mode == SSLFactory.Mode.SERVER)
+            password = "ServerPassword";
+        else
+            password = "ClientPassword";
+
         String trustStorePassword = "TrustStorePassword";
 
         if (useClientCert) {
-            clientKeyStoreFile = File.createTempFile("clientKS", ".jks");
+            keyStoreFile = File.createTempFile("clientKS", ".jks");
             KeyPair cKP = generateKeyPair("RSA");
             X509Certificate cCert = generateCertificate("CN=localhost, O=client", cKP, 30, "SHA1withRSA");
-            createKeyStore(clientKeyStoreFile.getPath(), clientPassword, "client", cKP.getPrivate(), cCert);
-            certs.put("client", cCert);
+            createKeyStore(keyStoreFile.getPath(), password, "client", cKP.getPrivate(), cCert);
+            certs.put(certAlias, cCert);
+        } else {
+            keyStoreFile = File.createTempFile("serverKS", ".jks");
+            KeyPair sKP = generateKeyPair("RSA");
+            X509Certificate sCert = generateCertificate("CN=localhost, O=server", sKP, 30,
+                                                        "SHA1withRSA");
+            createKeyStore(keyStoreFile.getPath(), password, password, "server", sKP.getPrivate(), sCert);
+            certs.put(certAlias, sCert);
         }
-
-        KeyPair sKP = generateKeyPair("RSA");
-        X509Certificate sCert = generateCertificate("CN=localhost, O=server", sKP, 30,
-                                                    "SHA1withRSA");
-        createKeyStore(serverKeyStoreFile.getPath(), serverPassword, serverPassword, "server", sKP.getPrivate(), sCert);
-        certs.put("server", sCert);
 
         if (trustStore) {
             createTrustStore(trustStoreFile.getPath(), trustStorePassword, certs);
         }
 
-        Map<String, Object> clientSSLConfig = createSSLConfig(SSLFactory.Mode.CLIENT, clientKeyStoreFile, clientPassword,
-                                                              clientPassword, trustStoreFile, trustStorePassword, useClientCert);
-        Map<String, Object> serverSSLConfig = createSSLConfig(SSLFactory.Mode.SERVER, serverKeyStoreFile, serverPassword,
-                                                              serverPassword, trustStoreFile, trustStorePassword, useClientCert);
-        sslConfigs.put(SSLFactory.Mode.CLIENT, clientSSLConfig);
-        sslConfigs.put(SSLFactory.Mode.SERVER, serverSSLConfig);
-        return sslConfigs;
+        Map<String, Object> sslConfig = createSSLConfig(mode, keyStoreFile, password,
+                                                        password, trustStoreFile, trustStorePassword, useClientCert);
+        return sslConfig;
     }
 
 }

@@ -66,6 +66,7 @@ public class SSLTransportLayer implements TransportLayer {
         this.netWriteBuffer = ByteBuffer.allocateDirect(packetBufferSize());
         this.appReadBuffer = ByteBuffer.allocateDirect(applicationBufferSize());
         this.socketSendBufferSize = this.socketChannel.socket().getSendBufferSize();
+        startHandshake();
     }
 
     /**
@@ -80,6 +81,7 @@ public class SSLTransportLayer implements TransportLayer {
         handshakeComplete = false;
         closed = false;
         closing = false;
+        addInterestOps(SelectionKey.OP_READ);
         //initiate handshake
         sslEngine.beginHandshake();
         handshakeStatus = sslEngine.getHandshakeStatus();
@@ -88,7 +90,7 @@ public class SSLTransportLayer implements TransportLayer {
     }
 
 
-    public boolean isReady() {
+    public boolean ready() {
         return handshakeComplete;
     }
 
@@ -98,9 +100,7 @@ public class SSLTransportLayer implements TransportLayer {
     public void finishConnect() throws IOException {
         socketChannel.finishConnect();
         removeInterestOps(SelectionKey.OP_CONNECT);
-        addInterestOps(SelectionKey.OP_READ);
         key.interestOps(key.interestOps() & ~SelectionKey.OP_CONNECT | SelectionKey.OP_READ);
-        startHandshake();
     }
 
     /**
@@ -177,7 +177,6 @@ public class SSLTransportLayer implements TransportLayer {
         boolean write = key.isWritable();
         handshakeComplete = false;
         handshakeStatus = sslEngine.getHandshakeStatus();
-
         if (!flush(netWriteBuffer)) {
             key.interestOps(SelectionKey.OP_WRITE);
             return;
@@ -368,13 +367,11 @@ public class SSLTransportLayer implements TransportLayer {
         }
 
         if (dst.remaining() > 0) {
-            boolean canRead = true;
             netReadBuffer = Utils.ensureCapacity(netReadBuffer, packetBufferSize());
-            if (canRead && netReadBuffer.remaining() > 0) {
+            if (netReadBuffer.remaining() > 0) {
                 int netread = socketChannel.read(netReadBuffer);
-                canRead = netread > 0;
+                if (netread == 0) return netread;
             }
-
             do {
                 netReadBuffer.flip();
                 SSLEngineResult unwrapResult = sslEngine.unwrap(netReadBuffer, appReadBuffer);
@@ -401,13 +398,16 @@ public class SSLTransportLayer implements TransportLayer {
                 } else if (unwrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
                     int currentPacketBufferSize = packetBufferSize();
                     netReadBuffer = Utils.ensureCapacity(netReadBuffer, currentPacketBufferSize);
+                    if (netReadBuffer.position() >= currentPacketBufferSize) {
+                        throw new IllegalStateException("Buffer underflow when available data (" + netReadBuffer.position() +
+                                                        ") > packet buffer size (" + currentPacketBufferSize + ")");
+                    }
                     break;
                 } else if (unwrapResult.getStatus() == Status.CLOSED) {
                     throw new EOFException();
                 }
             } while (netReadBuffer.position() != 0);
         }
-
         return read;
     }
 
@@ -516,7 +516,6 @@ public class SSLTransportLayer implements TransportLayer {
                     totalWritten += written;
                 }
             }
-
             if (!srcs[i].hasRemaining()) {
                 i++;
             } else {

@@ -33,7 +33,7 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
     /**
      * Returns true if the channel has handshake and authenticaiton done.
      */
-    boolean isReady();
+    boolean ready();
 
     /**
      * Finishes the process of connecting a socket channel.
@@ -50,11 +50,6 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
      */
     SocketChannel socketChannel();
 
-
-    /**
-     * returns true if there are any pending bytes needs to be written to channel.
-     */
-    boolean pending();
 
     /**
      * Performs SSL handshake hence is a no-op for the non-secure

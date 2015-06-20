@@ -49,6 +49,6 @@ public interface Authenticator {
     /**
      * returns true if authentication is complete otherwise returns false;
      */
-    boolean isComplete();
+    boolean complete();
 
 }

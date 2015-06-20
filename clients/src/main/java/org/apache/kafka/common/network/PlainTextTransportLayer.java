@@ -44,7 +44,7 @@ public class PlainTextTransportLayer implements TransportLayer {
         this.socketChannel = (SocketChannel) key.channel();
     }
 
-    public boolean isReady() {
+    public boolean ready() {
         return true;
     }
 
@@ -79,24 +79,12 @@ public class PlainTextTransportLayer implements TransportLayer {
         socketChannel.close();
     }
 
-
-
-    /**
-     * There won't be any pending bytes to written socketChannel once write method is called.
-     * This will always return false.
-     */
-    public boolean pending() {
-        return false;
-    }
-
-
     /**
      * Performs SSL handshake hence is a no-op for the non-secure
      * implementation
      * @throws IOException
     */
     public void handshake() throws IOException {}
-
 
     /**
     * Reads a sequence of bytes from this channel into the given buffer.
@@ -107,6 +95,7 @@ public class PlainTextTransportLayer implements TransportLayer {
     */
 
     public int read(ByteBuffer dst) throws IOException {
+        System.out.println("in read " + dst.remaining());
         return socketChannel.read(dst);
     }
 

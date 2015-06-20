@@ -32,15 +32,17 @@ import org.slf4j.LoggerFactory;
 public class Channel {
     private static final Logger log = LoggerFactory.getLogger(Channel.class);
     private final String id;
-    private TransportLayer transportLayer;
+    public TransportLayer transportLayer;
     private Authenticator authenticator;
     private NetworkReceive receive;
     private Send send;
+    private int maxReceiveSize;
 
-    public Channel(String id, TransportLayer transportLayer, Authenticator authenticator) throws IOException {
+    public Channel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize) throws IOException {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticator = authenticator;
+        this.maxReceiveSize = maxReceiveSize;
     }
 
     public void close() throws IOException {
@@ -61,11 +63,11 @@ public class Channel {
      * Does handshake of transportLayer and Authentication using configured authenticator
      */
     public void prepare() throws IOException {
-        if (transportLayer.isReady() && authenticator.isComplete())
+        if (transportLayer.ready() && authenticator.complete())
             return;
-        if (!transportLayer.isReady())
+        if (!transportLayer.ready())
             transportLayer.handshake();
-        if (transportLayer.isReady() && !authenticator.isComplete())
+        if (transportLayer.ready() && !authenticator.complete())
             authenticator.authenticate();
     }
 
@@ -90,8 +92,8 @@ public class Channel {
         transportLayer.addInterestOps(SelectionKey.OP_READ);
     }
 
-    public boolean isReady() {
-        return transportLayer.isReady() && authenticator.isComplete();
+    public boolean ready() {
+        return transportLayer.ready() && authenticator.complete();
     }
 
     public String socketDescription() {
@@ -115,9 +117,10 @@ public class Channel {
         NetworkReceive result = null;
 
         if (receive == null) {
-            receive = new NetworkReceive(id);
+            receive = new NetworkReceive(maxReceiveSize, id);
         }
-        receive(receive);
+
+        long x = receive(receive);
         if (receive.complete()) {
             receive.payload().rewind();
             result = receive;

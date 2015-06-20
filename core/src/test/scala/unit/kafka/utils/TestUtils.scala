@@ -22,6 +22,8 @@ import java.nio._
 import java.nio.channels._
 import java.util.Random
 import java.util.Properties
+import java.security.cert.X509Certificate
+import javax.net.ssl.X509TrustManager
 import charset.Charset
 
 import org.apache.kafka.common.protocol.SecurityProtocol
@@ -46,9 +48,14 @@ import kafka.log._
 import junit.framework.AssertionFailedError
 import junit.framework.Assert._
 import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.common.network.SSLFactory
+import org.apache.kafka.common.config.SSLConfigs
+import org.apache.kafka.test.TestSSLUtils
 
 import scala.collection.Map
-import org.apache.kafka.clients.consumer.KafkaConsumer
+import scala.collection.JavaConversions._
 
 /**
  * Utility functions to help with testing
@@ -133,12 +140,18 @@ object TestUtils extends Logging {
   def createBrokerConfigs(numConfigs: Int,
     zkConnect: String,
     enableControlledShutdown: Boolean = true,
-    enableDeleteTopic: Boolean = false): Seq[Properties] = {
-    (0 until numConfigs).map(node => createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic))
+    enableDeleteTopic: Boolean = false,
+    enableSSL: Boolean = false,
+    trustStoreFile: Option[File] = None): Seq[Properties] = {
+    (0 until numConfigs).map(node => createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, enableSSL = enableSSL, trustStoreFile = trustStoreFile))
   }
 
   def getBrokerListStrFromServers(servers: Seq[KafkaServer]): String = {
     servers.map(s => formatAddress(s.config.hostName, s.boundPort())).mkString(",")
+  }
+
+  def getSSLBrokerListStrFromServers(servers: Seq[KafkaServer]): String = {
+    servers.map(s => formatAddress(s.config.hostName, s.boundPort(SecurityProtocol.SSL))).mkString(",")
   }
 
   /**
@@ -147,10 +160,13 @@ object TestUtils extends Logging {
   def createBrokerConfig(nodeId: Int, zkConnect: String,
     enableControlledShutdown: Boolean = true,
     enableDeleteTopic: Boolean = false,
-    port: Int = RandomPort): Properties = {
+    port: Int = RandomPort, enableSSL: Boolean = false, trustStoreFile: Option[File] = None): Properties = {
     val props = new Properties
+    var listeners: String = "PLAINTEXT://localhost:"+port.toString
     if (nodeId >= 0) props.put("broker.id", nodeId.toString)
-    props.put("listeners", "PLAINTEXT://localhost:"+port.toString)
+    if (enableSSL)
+      listeners = listeners + "," + "SSL://localhost:"+port.toString
+    props.put("listeners", listeners)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
     props.put("zookeeper.connect", zkConnect)
     props.put("replica.socket.timeout.ms", "1500")
@@ -158,6 +174,9 @@ object TestUtils extends Logging {
     props.put("controlled.shutdown.enable", enableControlledShutdown.toString)
     props.put("delete.topic.enable", enableDeleteTopic.toString)
     props.put("controlled.shutdown.retry.backoff.ms", "100")
+    if (enableSSL) {
+      props.putAll(addSSLConfigs(SSLFactory.Mode.SERVER, true, trustStoreFile, "server"+nodeId))
+    }
     props
   }
 
@@ -381,7 +400,9 @@ object TestUtils extends Logging {
                         blockOnBufferFull: Boolean = true,
                         bufferSize: Long = 1024L * 1024L,
                         retries: Int = 0,
-                        lingerMs: Long = 0) : KafkaProducer[Array[Byte],Array[Byte]] = {
+                        lingerMs: Long = 0,
+                        enableSSL: Boolean = false,
+                        trustStoreFile: Option[File] = None) : KafkaProducer[Array[Byte],Array[Byte]] = {
     import org.apache.kafka.clients.producer.ProducerConfig
 
     val producerProps = new Properties()
@@ -396,6 +417,10 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+    if (enableSSL) {
+      producerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL")
+      producerProps.putAll(addSSLConfigs(SSLFactory.Mode.CLIENT, false, trustStoreFile, "producer"))
+    }
     new KafkaProducer[Array[Byte],Array[Byte]](producerProps)
   }
 
@@ -871,6 +896,37 @@ object TestUtils extends Logging {
     val bytes = new Array[Byte](buffer.remaining)
     buffer.get(bytes)
     new String(bytes, encoding)
+  }
+
+  def addSSLConfigs(mode: SSLFactory.Mode, clientCert: Boolean, trustStoreFile: Option[File],  certAlias: String): Properties = {
+    var sslConfigs: java.util.Map[String, Object] = new java.util.HashMap[String, Object]()
+    if (!trustStoreFile.isDefined) {
+      throw new Exception("enableSSL set to true but no trustStoreFile provided")
+    }
+    if (mode == SSLFactory.Mode.SERVER)
+      sslConfigs = TestSSLUtils.createSSLConfig(true, true, mode, trustStoreFile.get, certAlias)
+    else
+      sslConfigs = TestSSLUtils.createSSLConfig(false, false, mode, trustStoreFile.get, certAlias)
+
+    val sslProps = new Properties()
+    sslConfigs.foreach(kv =>
+      sslProps.put(kv._1, kv._2)
+    )
+    sslProps
+  }
+
+  // a X509TrustManager to trust self-signed certs for unit tests.
+  def trustAllCerts: X509TrustManager = {
+    val trustManager = new X509TrustManager() {
+      override def getAcceptedIssuers: Array[X509Certificate] = {
+        null
+      }
+      override def checkClientTrusted(certs: Array[X509Certificate], authType: String) {
+      }
+      override def checkServerTrusted(certs: Array[X509Certificate], authType: String) {
+      }
+    }
+    trustManager
   }
 
 }

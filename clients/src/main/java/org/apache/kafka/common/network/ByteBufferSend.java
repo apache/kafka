@@ -26,7 +26,7 @@ public class ByteBufferSend implements Send {
     protected final ByteBuffer[] buffers;
     private int remaining;
     private int size;
-    private boolean pending;
+    private boolean pending = false;
 
     public ByteBufferSend(String destination, ByteBuffer... buffers) {
         super();
