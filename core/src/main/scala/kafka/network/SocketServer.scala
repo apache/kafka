@@ -238,7 +238,6 @@ private[kafka] class Acceptor(val host: String,
     }
   )
 
-  println("processorIndex " + processorIndex + " numProcessorThreads " + numProcessorThreads)
   this.synchronized {
     for (i <- processorIndex until numProcessorThreads) {
         processors(i) = new Processor(i,
@@ -281,7 +280,6 @@ private[kafka] class Acceptor(val host: String,
             // round robin to the next processor thread
             currentProcessor = (currentProcessor + 1) % numProcessorThreads
             if (currentProcessor < processorIndex) currentProcessor = processorIndex
-            println("current Processor " + currentProcessor + " protocol " + protocol)
           } catch {
             case e: Throwable => error("Error while accepting connection", e)
           }
@@ -453,7 +451,7 @@ private[kafka] class Processor(val id: Int,
             selector.unmute(curr.request.connectionId)
           }
           case RequestChannel.SendAction => {
-            println("Socket server received response to send, registering for write and sending data: " + protocol + " id  " + id)
+            trace("Socket server received response to send, registering for write and sending data: " + curr)
             selector.send(curr.responseSend)
             inflightResponses += (curr.request.connectionId -> curr)
           }

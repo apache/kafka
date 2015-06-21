@@ -160,12 +160,12 @@ object TestUtils extends Logging {
   def createBrokerConfig(nodeId: Int, zkConnect: String,
     enableControlledShutdown: Boolean = true,
     enableDeleteTopic: Boolean = false,
-    port: Int = RandomPort, enableSSL: Boolean = false, trustStoreFile: Option[File] = None): Properties = {
+    port: Int = RandomPort, enableSSL: Boolean = false, sslPort: Int = RandomPort, trustStoreFile: Option[File] = None): Properties = {
     val props = new Properties
     var listeners: String = "PLAINTEXT://localhost:"+port.toString
     if (nodeId >= 0) props.put("broker.id", nodeId.toString)
     if (enableSSL)
-      listeners = listeners + "," + "SSL://localhost:"+port.toString
+      listeners = listeners + "," + "SSL://localhost:"+sslPort.toString
     props.put("listeners", listeners)
     props.put("log.dir", TestUtils.tempDir().getAbsolutePath)
     props.put("zookeeper.connect", zkConnect)

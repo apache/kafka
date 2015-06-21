@@ -95,7 +95,6 @@ public class PlainTextTransportLayer implements TransportLayer {
     */
 
     public int read(ByteBuffer dst) throws IOException {
-        System.out.println("in read " + dst.remaining());
         return socketChannel.read(dst);
     }
 

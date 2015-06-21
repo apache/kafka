@@ -153,7 +153,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         /* tell everyone we are alive */
         val listeners = config.advertisedListeners.map {case(protocol, endpoint) =>
           if (endpoint.port == 0)
-            (protocol, EndPoint(endpoint.host, socketServer.boundPort(), endpoint.protocolType))
+            (protocol, EndPoint(endpoint.host, socketServer.boundPort(protocol), endpoint.protocolType))
           else
             (protocol, endpoint)
         }
