@@ -266,7 +266,6 @@ public class Selector implements Selectable {
                         channel.finishConnect();
                         this.connected.add(channel.id());
                         this.sensors.connectionCreated.record();
-                        log.debug("Connection {} created", transmissions.id);
                     }
 
                     /* if channel is not ready finish prepare */
