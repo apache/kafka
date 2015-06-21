@@ -120,12 +120,12 @@ class SSLProducerSendTest extends JUnit3Suite with KafkaServerTestHarness {
         case e: Throwable => fail("Only expecting IllegalArgumentException", e)
       }
 
-      // // non-blocking send a list of records
-      // for (i <- 1 to numRecords)
-      //   producer.send(record0, callback)
+      // non-blocking send a list of records
+      for (i <- 1 to numRecords)
+        producer.send(record0, callback)
 
-      // // check that all messages have been acked via offset
-      // assertEquals("Should have offset " + (numRecords + 4), numRecords + 4L, producer.send(record0, callback).get.offset)
+      // check that all messages have been acked via offset
+      assertEquals("Should have offset " + (numRecords + 4), numRecords + 4L, producer.send(record0, callback).get.offset)
 
     } finally {
       if (producer != null) {
