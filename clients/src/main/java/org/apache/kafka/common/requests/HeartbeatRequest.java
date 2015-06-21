@@ -48,6 +48,17 @@ public class HeartbeatRequest extends AbstractRequest {
         consumerId = struct.getString(CONSUMER_ID_KEY_NAME);
     }
 
+    @Override
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
+        switch (versionId) {
+            case 0:
+                return new HeartbeatResponse(Errors.forException(e).code());
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.HEARTBEAT.id)));
+        }
+    }
+
     public String groupId() {
         return groupId;
     }
@@ -60,12 +71,11 @@ public class HeartbeatRequest extends AbstractRequest {
         return consumerId;
     }
 
-    public static HeartbeatRequest parse(ByteBuffer buffer) {
-        return new HeartbeatRequest((Struct) CURRENT_SCHEMA.read(buffer));
+    public static HeartbeatRequest parse(ByteBuffer buffer, int versionId) {
+        return new HeartbeatRequest(ProtoUtils.parseRequest(ApiKeys.HEARTBEAT.id, versionId, buffer));
     }
 
-    @Override
-    public AbstractRequestResponse getErrorResponse(Throwable e) {
-        return new HeartbeatResponse(Errors.forException(e).code());
+    public static HeartbeatRequest parse(ByteBuffer buffer) {
+        return new HeartbeatRequest((Struct) CURRENT_SCHEMA.read(buffer));
     }
 }

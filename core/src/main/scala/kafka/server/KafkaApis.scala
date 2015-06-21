@@ -74,7 +74,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         if ( request.requestObj != null)
           request.requestObj.handleError(e, requestChannel, request)
         else {
-          val response = request.body.getErrorResponse(e)
+          val response = request.body.getErrorResponse(request.header.apiVersion, e)
           val respHeader = new ResponseHeader(request.header.correlationId)
 
           /* If request doesn't have a default error response, we just close the connection.
@@ -428,9 +428,9 @@ class KafkaApis(val requestChannel: RequestChannel,
               val aliveBrokers = metadataCache.getAliveBrokers
               val offsetsTopicReplicationFactor =
                 if (aliveBrokers.length > 0)
-                  Math.min(config.offsetsTopicReplicationFactor, aliveBrokers.length)
+                  Math.min(config.offsetsTopicReplicationFactor.toInt, aliveBrokers.length)
                 else
-                  config.offsetsTopicReplicationFactor
+                  config.offsetsTopicReplicationFactor.toInt
               AdminUtils.createTopic(zkClient, topic, config.offsetsTopicPartitions,
                                      offsetsTopicReplicationFactor,
                                      offsetManager.offsetsTopicConfig)

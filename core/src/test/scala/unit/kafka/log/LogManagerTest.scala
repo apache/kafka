@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io._
+import java.util.Properties
 import junit.framework.Assert._
 import org.junit.Test
 import org.scalatest.junit.JUnit3Suite
@@ -30,7 +31,11 @@ class LogManagerTest extends JUnit3Suite {
   val time: MockTime = new MockTime()
   val maxRollInterval = 100
   val maxLogAgeMs = 10*60*60*1000
-  val logConfig = LogConfig(segmentSize = 1024, maxIndexSize = 4096, retentionMs = maxLogAgeMs)
+  val logProps = new Properties()
+  logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
+  logProps.put(LogConfig.SegmentIndexBytesProp, 4096: java.lang.Integer)
+  logProps.put(LogConfig.RetentionMsProp, maxLogAgeMs: java.lang.Integer)
+  val logConfig = LogConfig(logProps)
   var logDir: File = null
   var logManager: LogManager = null
   val name = "kafka"
@@ -113,8 +118,11 @@ class LogManagerTest extends JUnit3Suite {
   def testCleanupSegmentsToMaintainSize() {
     val setSize = TestUtils.singleMessageSet("test".getBytes()).sizeInBytes
     logManager.shutdown()
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 10 * setSize: java.lang.Integer)
+    logProps.put(LogConfig.RetentionBytesProp, 5L * 10L * setSize + 10L: java.lang.Long)
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
 
-    val config = logConfig.copy(segmentSize = 10 * setSize, retentionSize = 5L * 10L * setSize + 10L)
     logManager = createLogManager()
     logManager.startup
 
@@ -154,7 +162,10 @@ class LogManagerTest extends JUnit3Suite {
   @Test
   def testTimeBasedFlush() {
     logManager.shutdown()
-    val config = logConfig.copy(flushMs = 1000)
+    val logProps = new Properties()
+    logProps.put(LogConfig.FlushMsProp, 1000: java.lang.Integer)
+    val config = LogConfig.fromProps(logConfig.originals, logProps)
+
     logManager = createLogManager()
     logManager.startup
     val log = logManager.createLog(TopicAndPartition(name, 0), config)

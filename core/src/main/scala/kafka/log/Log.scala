@@ -78,6 +78,13 @@ class Log(val dir: File,
   /* last time it was flushed */
   private val lastflushedTime = new AtomicLong(time.milliseconds)
 
+  def initFileSize() : Int = {
+    if (config.preallocate)
+      config.segmentSize
+    else
+      0
+  }
+
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
   loadSegments()
@@ -162,14 +169,26 @@ class Log(val dir: File,
       } else if(filename.endsWith(LogFileSuffix)) {
         // if its a log file, load the corresponding log segment
         val start = filename.substring(0, filename.length - LogFileSuffix.length).toLong
-        val hasIndex = Log.indexFilename(dir, start).exists
+        val indexFile = Log.indexFilename(dir, start)
         val segment = new LogSegment(dir = dir, 
                                      startOffset = start,
                                      indexIntervalBytes = config.indexInterval, 
                                      maxIndexSize = config.maxIndexSize,
                                      rollJitterMs = config.randomSegmentJitter,
-                                     time = time)
-        if(!hasIndex) {
+                                     time = time,
+                                     fileAlreadyExists = true)
+
+        if(indexFile.exists()) {
+          try {
+              segment.index.sanityCheck()
+          } catch {
+            case e: java.lang.IllegalArgumentException =>
+              warn("Found an corrupted index file, %s, deleting and rebuilding index...".format(indexFile.getAbsolutePath))
+              indexFile.delete()
+              segment.recover(config.maxMessageSize)
+          }
+        }
+        else {
           error("Could not find index file corresponding to log file %s, rebuilding index...".format(segment.log.file.getAbsolutePath))
           segment.recover(config.maxMessageSize)
         }
@@ -205,16 +224,16 @@ class Log(val dir: File,
                                      indexIntervalBytes = config.indexInterval, 
                                      maxIndexSize = config.maxIndexSize,
                                      rollJitterMs = config.randomSegmentJitter,
-                                     time = time))
+                                     time = time,
+                                     fileAlreadyExists = false,
+                                     initFileSize = this.initFileSize(),
+                                     preallocate = config.preallocate))
     } else {
       recoverLog()
       // reset the index size of the currently active log segment to allow more entries
       activeSegment.index.resize(config.maxIndexSize)
     }
 
-    // sanity check the index file of every segment to ensure we don't proceed with a corrupt segment
-    for (s <- logSegments)
-      s.index.sanityCheck()
   }
 
   private def updateLogEndOffset(messageOffset: Long) {
@@ -586,14 +605,20 @@ class Log(val dir: File,
     
       segments.lastEntry() match {
         case null => 
-        case entry => entry.getValue.index.trimToValidSize()
+        case entry => {
+          entry.getValue.index.trimToValidSize()
+          entry.getValue.log.trim()
+        }
       }
       val segment = new LogSegment(dir, 
                                    startOffset = newOffset,
                                    indexIntervalBytes = config.indexInterval, 
                                    maxIndexSize = config.maxIndexSize,
                                    rollJitterMs = config.randomSegmentJitter,
-                                   time = time)
+                                   time = time,
+                                   fileAlreadyExists = false,
+                                   initFileSize = initFileSize,
+                                   preallocate = config.preallocate)
       val prev = addSegment(segment)
       if(prev != null)
         throw new KafkaException("Trying to roll a new log segment for topic partition %s with start offset %d while it already exists.".format(name, newOffset))
@@ -687,7 +712,10 @@ class Log(val dir: File,
                                 indexIntervalBytes = config.indexInterval, 
                                 maxIndexSize = config.maxIndexSize,
                                 rollJitterMs = config.randomSegmentJitter,
-                                time = time))
+                                time = time,
+                                fileAlreadyExists = false,
+                                initFileSize = initFileSize,
+                                preallocate = config.preallocate))
       updateLogEndOffset(newOffset)
       this.recoveryPoint = math.min(newOffset, this.recoveryPoint)
     }

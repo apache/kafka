@@ -26,6 +26,7 @@ import java.util.*;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.config.SSLConfigs;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -40,6 +41,7 @@ public class SelectorTest {
     private static final int BUFFER_SIZE = 4 * 1024;
 
     private EchoServer server;
+    private Time time;
     private Selectable selector;
     private ChannelBuilder channelBuilder;
 
@@ -49,7 +51,6 @@ public class SelectorTest {
         configs.put(SSLConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Class.forName(SSLConfigs.DEFAULT_PRINCIPAL_BUILDER_CLASS));
         this.server = new EchoServer(configs);
         this.server.start();
-
         this.channelBuilder = new PlainTextChannelBuilder();
         this.channelBuilder.configure(configs);
         this.selector = new Selector(5000, new Metrics(), new MockTime() , "MetricGroup", new LinkedHashMap<String, String>(), channelBuilder);
@@ -261,6 +262,18 @@ public class SelectorTest {
         } while (selector.completedReceives().isEmpty());
         assertEquals("We should have only one response", 1, selector.completedReceives().size());
         assertEquals("The response should be from the previously muted node", "1", selector.completedReceives().get(0).source());
+    }
+
+
+    @Test
+    public void testCloseOldestConnection() throws Exception {
+        String id = "0";
+        blockingConnect(id);
+
+        time.sleep(6000); // The max idle time is 5000ms
+        selector.poll(0);
+
+        assertTrue("The idle connection should have been closed", selector.disconnected().contains(id));
     }
 
     private String blockingRequest(String node, String s) throws IOException {

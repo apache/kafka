@@ -18,6 +18,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
@@ -47,16 +50,28 @@ public class MetadataRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(Throwable e) {
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         Map<String, Errors> topicErrors = new HashMap<String, Errors>();
-        for (String topic: topics) {
+        for (String topic : topics) {
             topicErrors.put(topic, Errors.forException(e));
         }
-        return new MetadataResponse(topicErrors);
+
+        Cluster cluster = new Cluster(new ArrayList<Node>(), new ArrayList<PartitionInfo>());
+        switch (versionId) {
+            case 0:
+                return new MetadataResponse(cluster, topicErrors);
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.METADATA.id)));
+        }
     }
 
     public List<String> topics() {
         return topics;
+    }
+
+    public static MetadataRequest parse(ByteBuffer buffer, int versionId) {
+        return new MetadataRequest(ProtoUtils.parseRequest(ApiKeys.METADATA.id, versionId, buffer));
     }
 
     public static MetadataRequest parse(ByteBuffer buffer) {

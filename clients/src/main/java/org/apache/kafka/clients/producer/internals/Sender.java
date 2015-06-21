@@ -410,7 +410,7 @@ public class Sender implements Runnable {
             m = new MetricName("metadata-age", metricGrpName, "The age in seconds of the current producer metadata being used.", metricTags);
             metrics.addMetric(m, new Measurable() {
                 public double measure(MetricConfig config, long now) {
-                    return (now - metadata.lastUpdate()) / 1000.0;
+                    return (now - metadata.lastSuccessfulUpdate()) / 1000.0;
                 }
             });
         }

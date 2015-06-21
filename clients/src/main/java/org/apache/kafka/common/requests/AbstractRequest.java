@@ -28,33 +28,33 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     }
 
     /**
-     * Get an error response for a request
+     * Get an error response for a request for a given api version
      */
-    public abstract AbstractRequestResponse getErrorResponse(Throwable e);
+    public abstract AbstractRequestResponse getErrorResponse(int versionId, Throwable e);
 
     /**
      * Factory method for getting a request object based on ApiKey ID and a buffer
      */
-    public static AbstractRequest getRequest(int requestId, ByteBuffer buffer) {
+    public static AbstractRequest getRequest(int requestId, int versionId, ByteBuffer buffer) {
         switch (ApiKeys.forId(requestId)) {
             case PRODUCE:
-                return ProduceRequest.parse(buffer);
+                return ProduceRequest.parse(buffer, versionId);
             case FETCH:
-                return FetchRequest.parse(buffer);
+                return FetchRequest.parse(buffer, versionId);
             case LIST_OFFSETS:
-                return ListOffsetRequest.parse(buffer);
+                return ListOffsetRequest.parse(buffer, versionId);
             case METADATA:
-                return MetadataRequest.parse(buffer);
+                return MetadataRequest.parse(buffer, versionId);
             case OFFSET_COMMIT:
-                return OffsetCommitRequest.parse(buffer);
+                return OffsetCommitRequest.parse(buffer, versionId);
             case OFFSET_FETCH:
-                return OffsetFetchRequest.parse(buffer);
+                return OffsetFetchRequest.parse(buffer, versionId);
             case CONSUMER_METADATA:
-                return ConsumerMetadataRequest.parse(buffer);
+                return ConsumerMetadataRequest.parse(buffer, versionId);
             case JOIN_GROUP:
-                return JoinGroupRequest.parse(buffer);
+                return JoinGroupRequest.parse(buffer, versionId);
             case HEARTBEAT:
-                return HeartbeatRequest.parse(buffer);
+                return HeartbeatRequest.parse(buffer, versionId);
             default:
                 return null;
         }

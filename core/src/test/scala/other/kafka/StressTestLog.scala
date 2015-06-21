@@ -17,6 +17,7 @@
 
 package kafka
 
+import java.util.Properties
 import java.util.concurrent.atomic._
 import kafka.common._
 import kafka.message._
@@ -33,10 +34,13 @@ object StressTestLog {
   def main(args: Array[String]) {
     val dir = TestUtils.tempDir()
     val time = new MockTime
+    val logProprties = new Properties()
+    logProprties.put(LogConfig.SegmentBytesProp, 64*1024*1024: java.lang.Integer)
+    logProprties.put(LogConfig.MaxMessageBytesProp, Int.MaxValue: java.lang.Integer)
+    logProprties.put(LogConfig.SegmentIndexBytesProp, 1024*1024: java.lang.Integer)
+
     val log = new Log(dir = dir,
-                      config = LogConfig(segmentSize = 64*1024*1024,
-                                         maxMessageSize = Int.MaxValue,
-                                         maxIndexSize = 1024*1024),
+                      config = LogConfig(logProprties),
                       recoveryPoint = 0L,
                       scheduler = time.scheduler,
                       time = time)

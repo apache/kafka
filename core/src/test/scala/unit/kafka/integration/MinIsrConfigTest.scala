@@ -15,11 +15,10 @@
  * limitations under the License.
  */
 
-package unit.kafka.integration
+package kafka.integration
 
 import java.util.Properties
 
-import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.scalatest.junit.JUnit3Suite

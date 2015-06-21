@@ -189,8 +189,7 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
       // If the operation is already completed, stop adding it to the rest of the watcher list.
       if (operation.isCompleted())
         return false
-      val watchers = watchersFor(key)
-      watchers.watch(operation)
+      watchForOperation(key, operation)
 
       if (!watchCreated) {
         watchCreated = true
@@ -241,22 +240,34 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
   def delayed() = timeoutTimer.size
 
   /*
-   * Return the watch list of the given key
-   */
-  private def watchersFor(key: Any) = inReadLock(removeWatchersLock) { watchersForKey.getAndMaybePut(key) }
-
-  /*
-   * Return all the current watcher lists
+   * Return all the current watcher lists,
+   * note that the returned watchers may be removed from the list by other threads
    */
   private def allWatchers = inReadLock(removeWatchersLock) { watchersForKey.values }
 
   /*
+   * Return the watch list of the given key, note that we need to
+   * grab the removeWatchersLock to avoid the operation being added to a removed watcher list
+   */
+  private def watchForOperation(key: Any, operation: T) {
+    inReadLock(removeWatchersLock) {
+      val watcher = watchersForKey.getAndMaybePut(key)
+      watcher.watch(operation)
+    }
+  }
+
+  /*
    * Remove the key from watcher lists if its list is empty
    */
-  private def removeKeyIfEmpty(key: Any) = inWriteLock(removeWatchersLock) {
-    val watchers = watchersForKey.get(key)
-    if (watchers != null && watchers.watched == 0) {
-      watchersForKey.remove(key)
+  private def removeKeyIfEmpty(key: Any, watchers: Watchers) {
+    inWriteLock(removeWatchersLock) {
+      // if the current key is no longer correlated to the watchers to remove, skip
+      if (watchersForKey.get(key) != watchers)
+        return
+
+      if (watchers != null && watchers.watched == 0) {
+        watchersForKey.remove(key)
+      }
     }
   }
 
@@ -298,10 +309,11 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
             iter.remove()
           }
         }
-
-        if (operations.size == 0)
-          removeKeyIfEmpty(key)
       }
+
+      if (operations.size == 0)
+        removeKeyIfEmpty(key, this)
+
       completed
     }
 
@@ -317,10 +329,11 @@ class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: String, br
             purged += 1
           }
         }
-
-        if (operations.size == 0)
-          removeKeyIfEmpty(key)
       }
+
+      if (operations.size == 0)
+        removeKeyIfEmpty(key, this)
+
       purged
     }
   }

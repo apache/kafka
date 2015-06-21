@@ -20,7 +20,7 @@ package kafka
 import java.io._
 import java.nio._
 import java.nio.channels._
-import java.util.Random
+import java.util.{Properties, Random}
 import kafka.log._
 import kafka.utils._
 import kafka.message._
@@ -110,7 +110,10 @@ object TestLinearWriteSpeed {
         writables(i) = new ChannelWritable(new File(dir, "kafka-test-" + i + ".dat"), buffer)
       } else if(options.has(logOpt)) {
         val segmentSize = rand.nextInt(512)*1024*1024 + 64*1024*1024 // vary size to avoid herd effect
-        writables(i) = new LogWritable(new File(dir, "kafka-test-" + i), new LogConfig(segmentSize=segmentSize, flushInterval = flushInterval), scheduler, messageSet)
+        val logProperties = new Properties()
+        logProperties.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
+        logProperties.put(LogConfig.FlushMessagesProp, flushInterval: java.lang.Long)
+        writables(i) = new LogWritable(new File(dir, "kafka-test-" + i), new LogConfig(logProperties), scheduler, messageSet)
       } else {
         System.err.println("Must specify what to write to with one of --log, --channel, or --mmap") 
         System.exit(1)

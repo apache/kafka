@@ -54,7 +54,7 @@ class FileMessageSet private[kafka](@volatile var file: File,
   /* if this is not a slice, update the file pointer to the end of the file */
   if (!isSlice)
     /* set the file position to the last byte in the file */
-    channel.position(channel.size)
+    channel.position(math.min(channel.size().toInt, end))
 
   /**
    * Create a file message set with no slicing.
@@ -66,12 +66,25 @@ class FileMessageSet private[kafka](@volatile var file: File,
    * Create a file message set with no slicing
    */
   def this(file: File) = 
-    this(file, CoreUtils.openChannel(file, mutable = true))
+    this(file, FileMessageSet.openChannel(file, mutable = true))
+
+  /**
+   * Create a file message set with no slicing, and with initFileSize and preallocate.
+   * For windows NTFS and some old LINUX file system, set preallocate to true and initFileSize
+   * with one value (for example 512 * 1024 *1024 ) can improve the kafka produce performance.
+   * If it's new file and preallocate is true, end will be set to 0.  Otherwise set to Int.MaxValue.
+   */
+  def this(file: File, fileAlreadyExists: Boolean, initFileSize: Int, preallocate: Boolean) =
+      this(file,
+        channel = FileMessageSet.openChannel(file, mutable = true, fileAlreadyExists, initFileSize, preallocate),
+        start = 0,
+        end = ( if ( !fileAlreadyExists && preallocate ) 0 else Int.MaxValue),
+        isSlice = false)
 
   /**
    * Create a file message set with mutable option
    */
-  def this(file: File, mutable: Boolean) = this(file, CoreUtils.openChannel(file, mutable))
+  def this(file: File, mutable: Boolean) = this(file, FileMessageSet.openChannel(file, mutable))
   
   /**
    * Create a slice view of the file message set that begins and ends at the given byte offsets
@@ -223,7 +236,15 @@ class FileMessageSet private[kafka](@volatile var file: File,
    */
   def close() {
     flush()
+    trim()
     channel.close()
+  }
+  
+  /**
+   * Trim file when close or roll to next file
+   */
+  def trim() {    
+    truncateTo(sizeInBytes())
   }
   
   /**
@@ -271,6 +292,37 @@ class FileMessageSet private[kafka](@volatile var file: File,
     success
   }
   
+}
+  
+object FileMessageSet
+{
+  /**
+   * Open a channel for the given file
+   * For windows NTFS and some old LINUX file system, set preallocate to true and initFileSize
+   * with one value (for example 512 * 1025 *1024 ) can improve the kafka produce performance.
+   * @param file File path
+   * @param mutable mutable
+   * @param fileAlreadyExists File already exists or not
+   * @param initFileSize The size used for pre allocate file, for example 512 * 1025 *1024
+   * @param preallocate Pre allocate file or not, gotten from configuration.
+   */
+  def openChannel(file: File, mutable: Boolean, fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false): FileChannel = {
+    if (mutable) {
+      if (fileAlreadyExists)
+        new RandomAccessFile(file, "rw").getChannel()
+      else {
+        if (preallocate) {
+          val randomAccessFile = new RandomAccessFile(file, "rw")
+          randomAccessFile.setLength(initFileSize)
+          randomAccessFile.getChannel()
+        }
+        else
+          new RandomAccessFile(file, "rw").getChannel()
+      }
+    }
+    else
+      new FileInputStream(file).getChannel()
+  }
 }
 
 object LogFlushStats extends KafkaMetricsGroup {

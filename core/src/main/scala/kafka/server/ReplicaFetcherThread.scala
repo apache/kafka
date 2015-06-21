@@ -90,7 +90,7 @@ class ReplicaFetcherThread(name:String,
       // Prior to truncating the follower's log, ensure that doing so is not disallowed by the configuration for unclean leader election.
       // This situation could only happen if the unclean election configuration for a topic changes while a replica is down. Otherwise,
       // we should never encounter this situation since a non-ISR leader cannot be elected if disallowed by the broker configuration.
-      if (!LogConfig.fromProps(brokerConfig.toProps, AdminUtils.fetchTopicConfig(replicaMgr.zkClient,
+      if (!LogConfig.fromProps(brokerConfig.originals, AdminUtils.fetchTopicConfig(replicaMgr.zkClient,
         topicAndPartition.topic)).uncleanLeaderElectionEnable) {
         // Log a fatal error and shutdown the broker to ensure that data loss does not unexpectedly occur.
         fatal("Halting because log truncation is not allowed for topic %s,".format(topicAndPartition.topic) +
@@ -111,15 +111,15 @@ class ReplicaFetcherThread(name:String,
        * Roll out a new log at the follower with the start offset equal to the current leader's start offset and continue fetching.
        */
       val leaderStartOffset = simpleConsumer.earliestOrLatestOffset(topicAndPartition, OffsetRequest.EarliestTime, brokerConfig.brokerId)
-      replicaMgr.logManager.truncateFullyAndStartAt(topicAndPartition, leaderStartOffset)
       warn("Replica %d for partition %s reset its fetch offset from %d to current leader %d's start offset %d"
         .format(brokerConfig.brokerId, topicAndPartition, replica.logEndOffset.messageOffset, sourceBroker.id, leaderStartOffset))
+      replicaMgr.logManager.truncateFullyAndStartAt(topicAndPartition, leaderStartOffset)
       leaderStartOffset
     }
   }
 
   // any logic for partitions whose leader has changed
   def handlePartitionsWithErrors(partitions: Iterable[TopicAndPartition]) {
-    delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs)
+    delayPartitions(partitions, brokerConfig.replicaFetchBackoffMs.toLong)
   }
 }

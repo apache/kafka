@@ -15,13 +15,11 @@
  * limitations under the License.
 */
 
-package unit.kafka.zk
+package kafka.zk
 
 import junit.framework.Assert
 import kafka.consumer.ConsumerConfig
 import kafka.utils.{ZkPath, TestUtils, ZkUtils}
-import kafka.zk.ZooKeeperTestHarness
-import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.config.ConfigException
 import org.scalatest.junit.JUnit3Suite
 

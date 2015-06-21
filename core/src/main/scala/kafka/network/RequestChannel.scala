@@ -66,7 +66,7 @@ object RequestChannel extends Logging {
         null
     val body: AbstractRequest =
       if (requestObj == null)
-        AbstractRequest.getRequest(header.apiKey, buffer)
+        AbstractRequest.getRequest(header.apiKey, header.apiVersion, buffer)
       else
         null
 

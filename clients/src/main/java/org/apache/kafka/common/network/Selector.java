@@ -266,6 +266,7 @@ public class Selector implements Selectable {
                         channel.finishConnect();
                         this.connected.add(channel.id());
                         this.sensors.connectionCreated.record();
+                        log.debug("Connection {} created", transmissions.id);
                     }
 
                     /* if channel is not ready finish prepare */
@@ -305,7 +306,7 @@ public class Selector implements Selectable {
                 } catch (IOException e) {
                     String desc = channel.socketDescription();
                     if (e instanceof EOFException || e instanceof ConnectException)
-                        log.info("Connection {} disconnected", desc);
+                        log.debug("Connection {} disconnected", desc);
                     else
                         log.warn("Error in I/O with connection to {}", desc, e);
                     close(channel(key));
@@ -383,6 +384,8 @@ public class Selector implements Selectable {
                     if (log.isTraceEnabled())
                         log.trace("About to close the idle connection from " + connectionId
                                 + " due to being idle for " + (currentTimeNanos - connectionLastActiveTime) / 1000 / 1000 + " millis");
+
+                    disconnected.add(connectionId);
                     close(connectionId);
                 }
             }

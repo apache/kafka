@@ -208,9 +208,14 @@ class ReassignPartitionsCommand(zkClient: ZkClient, partitions: collection.Map[T
   def reassignPartitions(): Boolean = {
     try {
       val validPartitions = partitions.filter(p => validatePartition(zkClient, p._1.topic, p._1.partition))
-      val jsonReassignmentData = ZkUtils.getPartitionReassignmentZkData(validPartitions)
-      ZkUtils.createPersistentPath(zkClient, ZkUtils.ReassignPartitionsPath, jsonReassignmentData)
-      true
+      if(validPartitions.isEmpty) {
+        false
+      }
+      else {
+        val jsonReassignmentData = ZkUtils.getPartitionReassignmentZkData(validPartitions)
+        ZkUtils.createPersistentPath(zkClient, ZkUtils.ReassignPartitionsPath, jsonReassignmentData)
+        true
+      }
     } catch {
       case ze: ZkNodeExistsException =>
         val partitionsBeingReassigned = ZkUtils.getPartitionsBeingReassigned(zkClient)
