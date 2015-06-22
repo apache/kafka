@@ -249,13 +249,12 @@ class Partition(val topic: String,
                   TopicAndPartition(topic, partitionId)))
       case None =>
         throw new NotAssignedReplicaException(("Leader %d failed to record follower %d's position %d since the replica" +
-          " is not recognized to be one of the assigned replicas %s for partition [%s,%d]")
+          " is not recognized to be one of the assigned replicas %s for partition %s.")
           .format(localBrokerId,
                   replicaId,
-                  logReadResult.info.fetchOffsetMetadata,
+                  logReadResult.info.fetchOffsetMetadata.messageOffset,
                   assignedReplicas().map(_.brokerId).mkString(","),
-                  topic,
-                  partitionId))
+                  TopicAndPartition(topic, partitionId)))
     }
   }
 
