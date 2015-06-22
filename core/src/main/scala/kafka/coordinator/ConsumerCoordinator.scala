@@ -46,8 +46,8 @@ class ConsumerCoordinator(val config: KafkaConfig,
   private var coordinatorMetadata: CoordinatorMetadata = null
 
   /**
-   * NOTE: If a group lock and coordinatorLock are simultaneously needed,
-   * be sure to acquire the group lock before coordinatorLock to prevent deadlock
+   * NOTE: If a group lock and metadataLock are simultaneously needed,
+   * be sure to acquire the group lock before metadataLock to prevent deadlock
    */
 
   /**

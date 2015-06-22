@@ -37,8 +37,8 @@ private[coordinator] class CoordinatorMetadata(config: KafkaConfig,
                                                maybePrepareRebalance: ConsumerGroupMetadata => Unit) {
 
   /**
-   * NOTE: If a group lock and coordinatorLock are simultaneously needed,
-   * be sure to acquire the group lock before coordinatorLock to prevent deadlock
+   * NOTE: If a group lock and metadataLock are simultaneously needed,
+   * be sure to acquire the group lock before metadataLock to prevent deadlock
    */
   private val metadataLock = new ReentrantReadWriteLock()
 
