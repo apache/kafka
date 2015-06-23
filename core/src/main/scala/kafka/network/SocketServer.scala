@@ -102,15 +102,14 @@ class SocketServer(val config: KafkaConfig) extends Logging with KafkaMetricsGro
     val quotas = new ConnectionQuotas(maxConnectionsPerIp, maxConnectionsPerIpOverrides)
 
     this.synchronized {
-      var processorIndex = 0
+      var processorBeginIndex = 0
       endpoints.values.foreach(endpoint => {
-        val acceptor = new Acceptor(endpoint.host, endpoint.port, sendBufferSize, recvBufferSize, requestChannel, processors, quotas, endpoint.protocolType,
-          portToProtocol, channelConfigs, numProcessorThreads + processorIndex, maxQueuedRequests, maxRequestSize, connectionsMaxIdleMs, new Metrics(metricConfig, reporters, time),
-          allMetricNames, time, config.brokerId, processorIndex)
+        val acceptor = new Acceptor(endpoint.host, endpoint.port, sendBufferSize, recvBufferSize, config.brokerId, requestChannel, processors, processorBeginIndex, numProcessorThreads, quotas,
+          endpoint.protocolType, portToProtocol, channelConfigs,  maxQueuedRequests, maxRequestSize, connectionsMaxIdleMs, new Metrics(metricConfig, reporters, time), allMetricNames, time)
         acceptors.put(endpoint, acceptor)
         Utils.newThread("kafka-socket-acceptor-%s-%d".format(endpoint.protocolType.toString, endpoint.port), acceptor, false).start()
         acceptor.awaitStartup
-        processorIndex += numProcessorThreads
+        processorBeginIndex += numProcessorThreads
       })
     }
 
@@ -211,23 +210,24 @@ private[kafka] class Acceptor(val host: String,
                               private val port: Int,
                               val sendBufferSize: Int,
                               val recvBufferSize: Int,
+                              brokerId: Int,
                               requestChannel: RequestChannel,
                               processors: Array[Processor],
+                              processorBeginIndex: Int,
+                              numProcessorThreads: Int,
                               connectionQuotas: ConnectionQuotas,
                               protocol: SecurityProtocol,
                               portToProtocol: ConcurrentHashMap[Int, SecurityProtocol],
                               channelConfigs: java.util.Map[String, Object],
-                              numProcessorThreads: Int,
                               maxQueuedRequests: Int,
                               maxRequestSize: Int,
                               connectionsMaxIdleMs: Long,
                               metrics: Metrics,
                               allMetricNames: Seq[MetricName],
-                              time: Time,
-                              brokerId: Int,
-                              processorIndex: Int) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
+                              time: Time) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
   val nioSelector = java.nio.channels.Selector.open()
   val serverChannel = openServerSocket(host, port)
+  val processorEndIndex = processorBeginIndex + numProcessorThreads
 
   portToProtocol.put(serverChannel.socket().getLocalPort, protocol)
 
@@ -239,7 +239,7 @@ private[kafka] class Acceptor(val host: String,
   )
 
   this.synchronized {
-    for (i <- processorIndex until numProcessorThreads) {
+    for (i <- processorBeginIndex until processorEndIndex) {
         processors(i) = new Processor(i,
           time,
           maxRequestSize,
@@ -261,7 +261,7 @@ private[kafka] class Acceptor(val host: String,
   def run() {
     serverChannel.register(nioSelector, SelectionKey.OP_ACCEPT);
     startupComplete()
-    var currentProcessor = processorIndex
+    var currentProcessor = processorBeginIndex
     while(isRunning) {
       val ready = nioSelector.select(500)
       if(ready > 0) {
@@ -278,8 +278,8 @@ private[kafka] class Acceptor(val host: String,
                throw new IllegalStateException("Unrecognized key state for acceptor thread.")
 
             // round robin to the next processor thread
-            currentProcessor = (currentProcessor + 1) % numProcessorThreads
-            if (currentProcessor < processorIndex) currentProcessor = processorIndex
+            currentProcessor = (currentProcessor + 1) % processorEndIndex
+            if (currentProcessor < processorBeginIndex) currentProcessor = processorEndIndex
           } catch {
             case e: Throwable => error("Error while accepting connection", e)
           }

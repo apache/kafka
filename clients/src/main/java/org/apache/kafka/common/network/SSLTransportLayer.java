@@ -56,7 +56,6 @@ public class SSLTransportLayer implements TransportLayer {
     private ByteBuffer appReadBuffer;
     private ByteBuffer emptyBuf = ByteBuffer.allocate(0);
     private int interestOps;
-    private int socketSendBufferSize;
 
     public SSLTransportLayer(SelectionKey key, SSLEngine sslEngine) throws IOException {
         this.key = key;
@@ -65,7 +64,6 @@ public class SSLTransportLayer implements TransportLayer {
         this.netReadBuffer = ByteBuffer.allocateDirect(packetBufferSize());
         this.netWriteBuffer = ByteBuffer.allocateDirect(packetBufferSize());
         this.appReadBuffer = ByteBuffer.allocateDirect(applicationBufferSize());
-        this.socketSendBufferSize = this.socketChannel.socket().getSendBufferSize();
         startHandshake();
     }
 
@@ -192,7 +190,7 @@ public class SSLTransportLayer implements TransportLayer {
                         int currentPacketBufferSize = packetBufferSize();
                         netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, currentPacketBufferSize);
                         if (netWriteBuffer.position() >= currentPacketBufferSize) {
-                            throw new IllegalStateException("Buffer overflow when available data (" + netWriteBuffer.position() +
+                            throw new IllegalStateException("Buffer overflow when available data size (" + netWriteBuffer.position() +
                                                             ") >= network buffer size (" + currentPacketBufferSize + ")");
                         }
                     } else if (handshakeResult.getStatus() == Status.BUFFER_UNDERFLOW) {
@@ -218,7 +216,7 @@ public class SSLTransportLayer implements TransportLayer {
                         int currentAppBufferSize = applicationBufferSize();
                         netReadBuffer = Utils.ensureCapacity(netReadBuffer, currentAppBufferSize);
                         if (netReadBuffer.position() > currentAppBufferSize) {
-                            throw new IllegalStateException("Buffer underflow when available data (" + netReadBuffer.position() +
+                            throw new IllegalStateException("Buffer underflow when available data size (" + netReadBuffer.position() +
                                                             ") > packet buffer size (" + currentAppBufferSize + ")");
                         }
                     } else if (handshakeResult.getStatus() == Status.CLOSED) {
@@ -388,7 +386,7 @@ public class SSLTransportLayer implements TransportLayer {
                     int currentApplicationBufferSize = applicationBufferSize();
                     appReadBuffer = Utils.ensureCapacity(appReadBuffer, currentApplicationBufferSize);
                     if (appReadBuffer.position() >= currentApplicationBufferSize) {
-                        throw new IllegalStateException("Buffer overflow when available data (" + appReadBuffer.position() +
+                        throw new IllegalStateException("Buffer overflow when available data size (" + appReadBuffer.position() +
                                                         ") >= application buffer size (" + currentApplicationBufferSize + ")");
                     }
                     if (dst.hasRemaining())
@@ -399,7 +397,7 @@ public class SSLTransportLayer implements TransportLayer {
                     int currentPacketBufferSize = packetBufferSize();
                     netReadBuffer = Utils.ensureCapacity(netReadBuffer, currentPacketBufferSize);
                     if (netReadBuffer.position() >= currentPacketBufferSize) {
-                        throw new IllegalStateException("Buffer underflow when available data (" + netReadBuffer.position() +
+                        throw new IllegalStateException("Buffer underflow when available data size (" + netReadBuffer.position() +
                                                         ") > packet buffer size (" + currentPacketBufferSize + ")");
                     }
                     break;
@@ -554,7 +552,7 @@ public class SSLTransportLayer implements TransportLayer {
 
     /**
      * returns a SSL Session after the handshake is established
-     * throws IlleagalStateException if the handshake is not established
+     * throws IllegalStateException if the handshake is not established
      */
     public SSLSession sslSession() throws IllegalStateException {
         return sslEngine.getSession();

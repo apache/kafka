@@ -74,9 +74,7 @@ public class SSLFactory implements Configurable {
 
         if (configs.containsKey(SSLConfigs.SSL_NEED_CLIENT_AUTH_CONFIG)) {
             this.needClientAuth = (Boolean) configs.get(SSLConfigs.SSL_NEED_CLIENT_AUTH_CONFIG);
-        }
-
-        if (configs.containsKey(SSLConfigs.SSL_WANT_CLIENT_AUTH_CONFIG)) {
+        } else if (configs.containsKey(SSLConfigs.SSL_WANT_CLIENT_AUTH_CONFIG)) {
             this.wantClientAuth = (Boolean) configs.get(SSLConfigs.SSL_WANT_CLIENT_AUTH_CONFIG);
         }
 
