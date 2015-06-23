@@ -522,7 +522,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * <strong>If close() is called from {@link Callback}, a warning message will be logged and close(0, TimeUnit.MILLISECONDS)
      * will be called instead. We do this because the sender thread would otherwise try to join itself and
      * block forever.</strong>
-     * <p/>
+     * <p>
+     *
      * @throws InterruptException If the thread is interrupted while blocked
      */
     @Override
