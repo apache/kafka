@@ -12,13 +12,14 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.TopicPartition;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
-import org.apache.kafka.common.TopicPartition;
 
 /**
  * A class for tracking the topics, partitions, and offsets for the consumer
@@ -49,7 +50,14 @@ public class SubscriptionState {
     /* do we need to request the latest committed offsets from the coordinator? */
     private boolean needsFetchCommittedOffsets;
 
-    public SubscriptionState() {
+    /* Partitions that need to be reset before fetching */
+    private Map<TopicPartition, OffsetResetStrategy> resetPartitions;
+
+    /* Default offset reset strategy */
+    private OffsetResetStrategy offsetResetStrategy;
+
+    public SubscriptionState(OffsetResetStrategy offsetResetStrategy) {
+        this.offsetResetStrategy = offsetResetStrategy;
         this.subscribedTopics = new HashSet<String>();
         this.subscribedPartitions = new HashSet<TopicPartition>();
         this.assignedPartitions = new HashSet<TopicPartition>();
@@ -58,6 +66,7 @@ public class SubscriptionState {
         this.committed = new HashMap<TopicPartition, Long>();
         this.needsPartitionAssignment = false;
         this.needsFetchCommittedOffsets = true; // initialize to true for the consumers to fetch offset upon starting up
+        this.resetPartitions = new HashMap<TopicPartition, OffsetResetStrategy>();
     }
 
     public void subscribe(String topic) {
@@ -102,12 +111,14 @@ public class SubscriptionState {
         this.committed.remove(tp);
         this.fetched.remove(tp);
         this.consumed.remove(tp);
+        this.resetPartitions.remove(tp);
     }
 
     public void clearAssignment() {
         this.assignedPartitions.clear();
         this.committed.clear();
         this.fetched.clear();
+        this.consumed.clear();
         this.needsPartitionAssignment = !subscribedTopics().isEmpty();
     }
 
@@ -145,6 +156,7 @@ public class SubscriptionState {
     public void seek(TopicPartition tp, long offset) {
         fetched(tp, offset);
         consumed(tp, offset);
+        resetPartitions.remove(tp);
     }
 
     public Set<TopicPartition> assignedPartitions() {
@@ -169,6 +181,28 @@ public class SubscriptionState {
         return this.consumed;
     }
 
+    public void needOffsetReset(TopicPartition partition, OffsetResetStrategy offsetResetStrategy) {
+        this.resetPartitions.put(partition, offsetResetStrategy);
+        this.fetched.remove(partition);
+        this.consumed.remove(partition);
+    }
+
+    public void needOffsetReset(TopicPartition partition) {
+        needOffsetReset(partition, offsetResetStrategy);
+    }
+
+    public boolean isOffsetResetNeeded(TopicPartition partition) {
+        return resetPartitions.containsKey(partition);
+    }
+
+    public boolean isOffsetResetNeeded() {
+        return !resetPartitions.isEmpty();
+    }
+
+    public OffsetResetStrategy resetStrategy(TopicPartition partition) {
+        return resetPartitions.get(partition);
+    }
+
     public boolean hasAllFetchPositions() {
         return this.fetched.size() >= this.assignedPartitions.size();
     }
@@ -191,5 +225,6 @@ public class SubscriptionState {
         this.assignedPartitions.addAll(assignments);
         this.needsPartitionAssignment = false;
     }
+
 
 }

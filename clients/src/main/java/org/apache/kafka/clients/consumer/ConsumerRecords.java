@@ -27,6 +27,8 @@ import java.util.Map;
  * {@link Consumer#poll(long)} operation.
  */
 public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
+    public static final ConsumerRecords<Object, Object> EMPTY =
+            new ConsumerRecords<Object, Object>(Collections.EMPTY_MAP);
 
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
 
@@ -101,6 +103,11 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
                 }
             };
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <K, V> ConsumerRecords<K, V> empty() {
+        return (ConsumerRecords<K, V>) EMPTY;
     }
 
 }

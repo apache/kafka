@@ -40,8 +40,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
     private boolean closed;
 
-    public MockConsumer() {
-        this.subscriptions = new SubscriptionState();
+    public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
+        this.subscriptions = new SubscriptionState(offsetResetStrategy);
         this.partitions = new HashMap<String, List<PartitionInfo>>();
         this.records = new HashMap<TopicPartition, List<ConsumerRecord<K, V>>>();
         this.closed = false;
@@ -173,6 +173,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized void close() {
         ensureNotClosed();
         this.closed = true;
+    }
+
+    @Override
+    public void wakeup() {
+
     }
 
     private void ensureNotClosed() {

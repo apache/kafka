@@ -100,4 +100,12 @@ public class UtilsTest {
         buffer = ByteBuffer.wrap(myvar).asReadOnlyBuffer();
         this.subTest(buffer);
     }
+
+    @Test
+    public void testMin() {
+        assertEquals(1, Utils.min(1));
+        assertEquals(1, Utils.min(1, 2, 3));
+        assertEquals(1, Utils.min(2, 1, 3));
+        assertEquals(1, Utils.min(2, 3, 1));
+    }
 }
