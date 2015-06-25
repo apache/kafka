@@ -5,9 +5,7 @@ package io.confluent.streaming;
  */
 public interface KStreamConfig {
 
-  void setDefaultStreamSynchronizer(StreamSynchronizer streamSynchronizer);
-
-  void setCopartitioningGroupFactory(CopartitioningGroupFactory copartitioningGroupFactory);
+  void setStreamSynchronizerFactory(StreamSynchronizerFactory streamSynchronizerFactory);
 
   void addTopicToCopartitioningGroup(String topic, String groupName);
 

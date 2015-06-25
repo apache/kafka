@@ -8,12 +8,9 @@ public final class CopartitioningGroup {
   public final String name;
   public final int numPartitions;
 
-  public final StreamSynchronizer streamSynchronizer;
-
-  public CopartitioningGroup(String name, int numPartitions, StreamSynchronizer streamSynchronizer) {
+  public CopartitioningGroup(String name, int numPartitions) {
     this.name = name;
     this.numPartitions = numPartitions;
-    this.streamSynchronizer = streamSynchronizer;
   }
 
 }

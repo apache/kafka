@@ -7,25 +7,29 @@ public class Stamped<V> implements Comparable {
 
   public final V value;
   public final long timestamp;
-  private final long nanoTime = System.nanoTime(); // used for tie-breaking
+  private final long tieBreaker;
 
   public Stamped(V value, long timestamp) {
-    this.value = value;
-    this.timestamp = timestamp;
+    this(value, timestamp, System.nanoTime());
   }
 
-  @Override
+  public Stamped(V value, long timestamp, long tieBreaker) {
+    this.value = value;
+    this.timestamp = timestamp;
+    this.tieBreaker = tieBreaker;
+  }
+
   public int compareTo(Object other) {
-    long otherTimestamp = ((Stamped<Object>) other).timestamp;
+    long otherTimestamp = ((Stamped<?>) other).timestamp;
 
     if (timestamp < otherTimestamp) return -1;
     else if (timestamp > otherTimestamp) return 1;
 
     // tie breaking
-    otherTimestamp = ((Stamped<Object>) other).nanoTime;
+    otherTimestamp = ((Stamped<?>) other).tieBreaker;
 
-    if (nanoTime < otherTimestamp) return -1;
-    else if (nanoTime > otherTimestamp) return 1;
+    if (tieBreaker < otherTimestamp) return -1;
+    else if (tieBreaker > otherTimestamp) return 1;
 
     return 0;
   }

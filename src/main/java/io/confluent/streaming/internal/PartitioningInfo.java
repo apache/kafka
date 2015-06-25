@@ -16,7 +16,11 @@ class PartitioningInfo {
     this(null, numPartitions);
   }
 
-  PartitioningInfo(CopartitioningGroup copartitioningGroup, int numPartitions) {
+  PartitioningInfo(CopartitioningGroup copartitioningGroup) {
+    this(copartitioningGroup, copartitioningGroup.numPartitions);
+  }
+
+  private PartitioningInfo(CopartitioningGroup copartitioningGroup, int numPartitions) {
     this.copartitioningGroup = copartitioningGroup;
     this.numPartitions = numPartitions;
   }

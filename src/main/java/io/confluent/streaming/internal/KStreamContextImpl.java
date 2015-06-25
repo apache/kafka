@@ -36,7 +36,7 @@ public class KStreamContextImpl implements KStreamContext {
           // TODO: use the consumer to get partitioning info
           int numPartitions = 1;
 
-          partitioningInfo = new PartitioningInfo(null, numPartitions);
+          partitioningInfo = new PartitioningInfo(numPartitions);
           partitioningInfos.put(topic, partitioningInfo);
         }
 
