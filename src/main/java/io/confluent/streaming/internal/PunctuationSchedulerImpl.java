@@ -20,20 +20,28 @@ public class PunctuationSchedulerImpl implements PunctuationScheduler {
 
   @Override
   public void schedule(long time) {
-    if (scheduled != null)
-      throw new IllegalStateException("punctuation is already scheduled");
+    synchronized (this) {
+      if (scheduled != null)
+        throw new IllegalStateException("punctuation is already scheduled");
 
-    scheduled = queue.schedule(this, time);
+      scheduled = queue.schedule(this, time);
+    }
   }
 
   @Override
   public void cancel() {
-    queue.cancel(scheduled);
-    scheduled = null;
+    synchronized (this) {
+      if (scheduled != null) {
+        queue.cancel(scheduled);
+        scheduled = null;
+      }
+    }
   }
 
   public void processed() {
-    scheduled = null;
+    synchronized (this) {
+      scheduled = null;
+    }
   }
 
 }

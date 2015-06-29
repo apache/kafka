@@ -1,6 +1,7 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.StreamSynchronizer;
+import io.confluent.streaming.util.FilteredIterator;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -33,10 +34,6 @@ public class RegulatedConsumer<K, V> {
   public void init() {
     unpaused.clear();
     unpaused.addAll(consumer.subscriptions());
-  }
-
-  public void addStreamSynchronizers(Map<TopicPartition, StreamSynchronizer<K, V>> streamSynchronizers) {
-    this.streamSynchronizers.putAll(streamSynchronizers);
   }
 
   public void poll() {
@@ -76,27 +73,18 @@ public class RegulatedConsumer<K, V> {
     streamSynchronizers.clear();
   }
 
-  private class DeserializingIterator implements Iterator<ConsumerRecord<K, V>> {
-
-    private final Iterator<ConsumerRecord<byte[], byte[]>> inner;
+  private class DeserializingIterator extends FilteredIterator<ConsumerRecord<K, V>, ConsumerRecord<byte[], byte[]>> {
 
     DeserializingIterator(Iterator<ConsumerRecord<byte[], byte[]>> inner) {
-      this.inner = inner;
+      super(inner);
     }
 
-    public boolean hasNext() {
-      return inner.hasNext();
-    }
-
-    public ConsumerRecord<K, V> next() {
-      ConsumerRecord<byte[], byte[]> record = inner.next();
+    protected ConsumerRecord<K, V> filter(ConsumerRecord<byte[], byte[]> record) {
       K key = keyDeserializer.deserialize(record.topic(), record.key());
       V value = valueDeserializer.deserialize(record.topic(), record.value());
       return new ConsumerRecord<K, V>(record.topic(), record.partition(), record.offset(), key, value);
     }
-    public void remove() {
-    throw new UnsupportedOperationException();
-  }
+
   }
 
 }
