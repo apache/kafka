@@ -55,11 +55,11 @@ public class RecordCollectors {
 
   public static class SerializingRecordCollector<K, V> implements RecordCollector<K, V> {
 
-    private final RecordCollector collector;
+    private final RecordCollector<byte[], byte[]> collector;
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
 
-    public SerializingRecordCollector(RecordCollector collector, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
+    public SerializingRecordCollector(RecordCollector<byte[], byte[]> collector, Serializer<K> keySerializer, Serializer<V> valueSerializer) {
       super();
       this.keySerializer = keySerializer;
       this.valueSerializer = valueSerializer;

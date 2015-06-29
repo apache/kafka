@@ -9,8 +9,8 @@ import java.util.LinkedList;
  */
 public class QueueWithMinTimestampTracking<E> {
 
-  private final Deque<Stamped<E>> queue = new ArrayDeque();
-  private final LinkedList<Stamped<E>> descendingSubsequence = new LinkedList();
+  private final Deque<Stamped<E>> queue = new ArrayDeque<Stamped<E>>();
+  private final LinkedList<Stamped<E>> descendingSubsequence = new LinkedList<Stamped<E>>();
 
   public void add(E value, long timestamp) {
 

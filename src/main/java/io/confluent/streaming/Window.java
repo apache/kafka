@@ -11,8 +11,6 @@ public interface Window<K, V> {
 
   void put(K key, V value, long timestamp);
 
-  void punctuate(long timestamp);
-
   void flush();
 
 }

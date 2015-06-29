@@ -39,6 +39,7 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> impl
         private final Deserializer<V> valueDeserializer;
         private RecordCollector<byte[], byte[]> collector;
 
+        @SuppressWarnings("unchecked")
         public MemoryStore(String name, KStreamContext context) {
             this.topic = name;
             this.partition = context.id();

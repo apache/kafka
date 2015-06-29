@@ -16,7 +16,7 @@ public class StreamSynchronizer<K, V> {
   public final String name;
   private final RegulatedConsumer<K, V> consumer;
   private final Chooser<K, V> chooser;
-  private final TimestampExtractor timestampExtractor;
+  private final TimestampExtractor<K, V> timestampExtractor;
   private final Map<TopicPartition, RecordQueueWrapper> stash = new HashMap<TopicPartition, RecordQueueWrapper>();
   private final int desiredUnprocessed;
   private final Map<TopicPartition, Long> consumedOffsets;
@@ -28,7 +28,7 @@ public class StreamSynchronizer<K, V> {
   public StreamSynchronizer(String name,
                             RegulatedConsumer<K, V> consumer,
                             Chooser<K, V> chooser,
-                            TimestampExtractor timestampExtractor,
+                            TimestampExtractor<K, V> timestampExtractor,
                             int desiredNumberOfUnprocessedRecords) {
     this.name = name;
     this.consumer = consumer;

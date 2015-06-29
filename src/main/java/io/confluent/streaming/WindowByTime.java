@@ -1,5 +1,6 @@
 package io.confluent.streaming;
 
+import io.confluent.streaming.util.FilteredIterator;
 import io.confluent.streaming.util.Stamped;
 
 import java.util.HashMap;
@@ -21,24 +22,20 @@ public class WindowByTime<K, V> implements Window<K, V> {
     this.maxCount = maxCount;
   }
 
-  public Iterator<V> find(K key, long timestamp) {
+  public Iterator<V> find(K key, final long timestamp) {
     final LinkedList<Stamped<V>> values = map.get(key);
 
     if (values == null) {
       return null;
     }
     else {
-      final Iterator<Stamped<V>> inner = values.iterator();
-
-      return new Iterator<V>() {
-        public boolean hasNext() {
-          return inner.hasNext();
-        }
-        public V next() {
-          return inner.next().value;
-        }
-        public void remove() {
-          throw new UnsupportedOperationException();
+      return new FilteredIterator<V, Stamped<V>>(values.iterator()) {
+        @Override
+        protected V filter(Stamped<V> item) {
+          if (item.timestamp <= timestamp)
+            return item.value;
+          else
+            return null;
         }
       };
     }
@@ -53,7 +50,7 @@ public class WindowByTime<K, V> implements Window<K, V> {
       map.put(key, values);
     }
 
-    values.offerLast(new Stamped(value, timestamp));
+    values.offerLast(new Stamped<V>(value, timestamp));
 
     evictExcess();
     evictExpired(timestamp - duration);
@@ -88,8 +85,6 @@ public class WindowByTime<K, V> implements Window<K, V> {
       }
     }
   }
-
-  public void punctuate(long timestamp) {}
 
   public void flush() {}
 

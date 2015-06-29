@@ -17,7 +17,8 @@ public class RegulatedConsumer<K, V> {
   private final Deserializer<K> keyDeserializer;
   private final Deserializer<V> valueDeserializer;
   private final long pollTimeMs;
-  private final Map<TopicPartition, StreamSynchronizer<K, V>> streamSynchronizers = new HashMap();
+  private final Map<TopicPartition, StreamSynchronizer<K, V>> streamSynchronizers =
+    new HashMap<TopicPartition, StreamSynchronizer<K, V>>();
 
   public RegulatedConsumer(Consumer<byte[], byte[]> consumer,
                            Deserializer<K> keyDeserializer,

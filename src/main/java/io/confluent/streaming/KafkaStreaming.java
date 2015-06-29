@@ -84,8 +84,8 @@ public class KafkaStreaming implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(KafkaStreaming.class);
 
     private final KStreamJob job;
-    private final Map<Integer, Collection<SyncGroup>> syncGroups = new HashMap();
-    private final Map<Integer, KStreamContextImpl> kstreamContexts = new HashMap();
+    private final Map<Integer, Collection<SyncGroup>> syncGroups = new HashMap<Integer, Collection<SyncGroup>>();
+    private final Map<Integer, KStreamContextImpl> kstreamContexts = new HashMap<Integer, KStreamContextImpl>();
     protected final Producer<byte[], byte[]> producer;
     protected final Consumer<byte[], byte[]> consumer;
     private final RegulatedConsumer<Object, Object> regulatedConsumer;
@@ -99,7 +99,6 @@ public class KafkaStreaming implements Runnable {
     private volatile boolean running;
     private CountDownLatch shutdownComplete = new CountDownLatch(1);
     private long lastCommit;
-    private long lastWindow;
     private long nextStateCleaning;
     private long recordsProcessed;
 
@@ -119,6 +118,7 @@ public class KafkaStreaming implements Runnable {
         this(job, config, null, null);
     }
 
+    @SuppressWarnings("unchecked")
     protected KafkaStreaming(KStreamJob job,
                              StreamingConfig config,
                              Producer<byte[], byte[]> producer,
@@ -138,7 +138,6 @@ public class KafkaStreaming implements Runnable {
                                                   this.config.pollTimeMs);
         this.running = true;
         this.lastCommit = 0;
-        this.lastWindow = 0;
         this.nextStateCleaning = Long.MAX_VALUE;
         this.recordsProcessed = 0;
         this.time = new SystemTime();

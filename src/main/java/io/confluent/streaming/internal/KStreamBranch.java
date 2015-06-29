@@ -2,6 +2,7 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.Predicate;
 
+import java.lang.reflect.Array;
 import java.util.Arrays;
 
 /**
@@ -12,9 +13,10 @@ class KStreamBranch<K, V> implements Receiver<K, V> {
   private final Predicate<K, V>[] predicates;
   final KStreamSource<K, V>[] branches;
 
+  @SuppressWarnings("unchecked")
   KStreamBranch(Predicate<K, V>[] predicates, PartitioningInfo partitioningInfo, KStreamContextImpl context) {
     this.predicates = Arrays.copyOf(predicates, predicates.length);
-    branches = (KStreamSource<K, V>[]) new Object[predicates.length + 1];
+    this.branches = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length + 1);
     for (int i = 0; i < branches.length; i++) {
       branches[i] = new KStreamSource<K, V>(partitioningInfo, context);
     }
