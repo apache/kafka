@@ -2,6 +2,7 @@ package io.confluent.streaming;
 
 import io.confluent.streaming.internal.RecordQueueImpl;
 import io.confluent.streaming.internal.RegulatedConsumer;
+import io.confluent.streaming.internal.Receiver;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
@@ -14,78 +15,103 @@ import java.util.Map;
  */
 public class StreamSynchronizer<K, V> {
 
+  public final String name;
   private final RegulatedConsumer<K, V> consumer;
   private final Chooser<K, V> chooser;
   private final TimestampExtractor timestampExtractor;
-  private final Map<TopicPartition, RecordQueue<K, V>> stash = new HashMap<TopicPartition, RecordQueue<K, V>>();
+  private final Map<TopicPartition, RecordQueueWrapper> stash = new HashMap<TopicPartition, RecordQueueWrapper>();
   private final int desiredUnprocessed;
+  private final Map<TopicPartition, Long> consumedOffsets;
 
   private long streamTime = -1;
-  private int buffered = 0;
+  private volatile int buffered = 0;
 
-  public StreamSynchronizer(RegulatedConsumer<K, V> consumer,
+  public StreamSynchronizer(String name,
+                            RegulatedConsumer<K, V> consumer,
                             Chooser<K, V> chooser,
                             TimestampExtractor timestampExtractor,
                             int desiredNumberOfUnprocessedRecords) {
+    this.name = name;
     this.consumer = consumer;
     this.chooser = chooser;
     this.timestampExtractor = timestampExtractor;
     this.desiredUnprocessed = desiredNumberOfUnprocessedRecords;
+    this.consumedOffsets = new HashMap<TopicPartition, Long>();
+
   }
 
-  public void add(TopicPartition partition, Iterator<ConsumerRecord<K, V>> iterator) {
-    RecordQueue<K, V> queue = stash.get(partition);
-    if (queue == null) {
-      queue = createRecordQueue(partition);
-      this.stash.put(partition, queue);
-    }
+  public void addPartition(TopicPartition partition, final Receiver<Object, Object> receiver) {
+    synchronized (this) {
+      RecordQueueWrapper queue = stash.get(partition);
 
-    boolean wasEmpty = (queue.size() == 0);
-
-    while (iterator.hasNext()) {
-      ConsumerRecord<K, V> record = iterator.next();
-      queue.add(record, timestampExtractor.extract(record.topic(), record.key(), record.value()));
-      buffered++;
-    }
-
-    if (wasEmpty && queue.size() > 0) chooser.add(queue);
-
-    // if we have buffered enough for this partition, pause
-    if (queue.size() > this.desiredUnprocessed) {
-      consumer.pause(partition);
-    }
-  }
-
-  public ConsumerRecord<K, V> next() {
-    RecordQueue<K, V> queue = chooser.next();
-
-    if (queue == null) {
-      consumer.poll();
-      return null;
-    }
-
-    if (queue.size() == this.desiredUnprocessed) {
-      ConsumerRecord<K, V> record = queue.peekLast();
-      if (record != null) {
-        consumer.unpause(queue.partition(), record.offset());
+      if (queue == null) {
+        queue = new RecordQueueWrapper(createRecordQueue(partition)) {
+          @Override
+          void doProcess(ConsumerRecord<K, V> record, long streamTime) {
+            receiver.receive(record.key(), record.value(), streamTime);
+          }
+        };
+        stash.put(partition, queue);
+      } else {
+        throw new IllegalStateException("duplicate partition");
       }
     }
+  }
 
-    if (queue.size() == 0) return null;
+  public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<K, V>> iterator) {
+    synchronized (this) {
+      RecordQueueWrapper queue = stash.get(partition);
+      if (queue != null) {
+        boolean wasEmpty = (queue.size() == 0);
 
-    long timestamp = queue.currentStreamTime();
-    ConsumerRecord<K, V> record = queue.next();
+        while (iterator.hasNext()) {
+          ConsumerRecord<K, V> record = iterator.next();
+          queue.add(record, timestampExtractor.extract(record.topic(), record.key(), record.value()));
+          buffered++;
+        }
 
-    if (streamTime < timestamp) streamTime = timestamp;
+        if (wasEmpty && queue.size() > 0) chooser.add(queue);
 
-    if (queue.size() > 0) chooser.add(queue);
-    buffered--;
+        // if we have buffered enough for this partition, pause
+        if (queue.size() > this.desiredUnprocessed) {
+          consumer.pause(partition);
+        }
+      }
+    }
+  }
 
-    return record;
+  public void process() {
+    synchronized (this) {
+      RecordQueueWrapper queue = (RecordQueueWrapper)chooser.next();
+
+      if (queue == null) {
+        consumer.poll();
+        return;
+      }
+
+      if (queue.size() == this.desiredUnprocessed) {
+        ConsumerRecord<K, V> record = queue.peekLast();
+        if (record != null) {
+          consumer.unpause(queue.partition(), record.offset());
+        }
+      }
+
+      if (queue.size() == 0) return;
+
+      queue.process();
+
+      if (queue.size() > 0) chooser.add(queue);
+
+      buffered--;
+    }
   }
 
   public long currentStreamTime() {
     return streamTime;
+  }
+
+  public Map<TopicPartition, Long> consumedOffsets() {
+    return this.consumedOffsets;
   }
 
   public int buffered() {
@@ -99,6 +125,57 @@ public class StreamSynchronizer<K, V> {
 
   protected RecordQueue<K, V> createRecordQueue(TopicPartition partition) {
     return new RecordQueueImpl<K, V>(partition);
+  }
+
+  private abstract class RecordQueueWrapper implements RecordQueue<K, V> {
+
+    private final RecordQueue<K, V> queue;
+
+    RecordQueueWrapper(RecordQueue<K, V> queue) {
+     this.queue = queue;
+    }
+
+    void process() {
+      long timestamp = queue.currentStreamTime();
+      ConsumerRecord<K, V> record = queue.next();
+
+      if (streamTime < timestamp) streamTime = timestamp;
+
+      doProcess(record, streamTime);
+
+      consumedOffsets.put(queue.partition(), record.offset());
+    }
+
+    abstract void doProcess(ConsumerRecord<K, V> record, long streamTime);
+
+    public TopicPartition partition() {
+      return queue.partition();
+    }
+
+    public void add(ConsumerRecord<K, V> value, long timestamp) {
+      queue.add(value, timestamp);
+    }
+
+    public ConsumerRecord<K, V> next() {
+      return queue.next();
+    }
+
+    public ConsumerRecord<K, V> peekNext() {
+      return queue.peekNext();
+    }
+
+    public ConsumerRecord<K, V> peekLast() {
+      return queue.peekLast();
+    }
+
+    public int size() {
+      return queue.size();
+    }
+
+    public long currentStreamTime() {
+      return queue.currentStreamTime();
+    }
+
   }
 
 }

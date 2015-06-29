@@ -5,8 +5,8 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 /**
  * Created by yasuhiro on 6/19/15.
  */
-public interface RecordCollector {
+public interface RecordCollector<K, V> {
 
-  <K, V> void send(ProducerRecord<K, V> record);
+  void send(ProducerRecord<K, V> record);
 
 }

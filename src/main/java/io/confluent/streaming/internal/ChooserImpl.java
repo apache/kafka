@@ -30,15 +30,17 @@ public class ChooserImpl<K, V> implements Chooser<K, V> {
     pq = new PriorityQueue<RecordQueue<K, V>>(3, comparator);
   }
 
+  @Override
   public void add(RecordQueue<K, V> queue) {
     pq.offer(queue);
   }
 
-
+  @Override
   public RecordQueue<K, V> next() {
     return pq.poll();
   }
 
+  @Override
   public void close() {
     pq.clear();
   }

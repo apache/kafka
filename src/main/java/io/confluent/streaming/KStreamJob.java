@@ -5,8 +5,6 @@ package io.confluent.streaming;
  */
 public interface KStreamJob {
 
-  void configure(KStreamConfig config);
-
   void build(KStreamContext ksc);
 
 }

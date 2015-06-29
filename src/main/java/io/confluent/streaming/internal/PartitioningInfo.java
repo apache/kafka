@@ -1,39 +1,26 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.CopartitioningGroup;
+import io.confluent.streaming.SyncGroup;
 
 /**
  * Created by yasuhiro on 6/19/15.
  */
 class PartitioningInfo {
 
-  public static PartitioningInfo missing = new PartitioningInfo(null, 0);
+  public static PartitioningInfo missing = new PartitioningInfo(null, -1);
 
-  private final CopartitioningGroup copartitioningGroup;
-  private final int numPartitions;
+  public final SyncGroup syncGroup;
+  public final int numPartitions;
 
-  PartitioningInfo(int numPartitions) {
-    this(null, numPartitions);
-  }
+  PartitioningInfo(SyncGroup syncGroup, int numPartitions) {
+    if (syncGroup == null) throw new NullPointerException();
 
-  PartitioningInfo(CopartitioningGroup copartitioningGroup) {
-    this(copartitioningGroup, copartitioningGroup.numPartitions);
-  }
-
-  private PartitioningInfo(CopartitioningGroup copartitioningGroup, int numPartitions) {
-    this.copartitioningGroup = copartitioningGroup;
+    this.syncGroup = syncGroup;
     this.numPartitions = numPartitions;
   }
 
   boolean isJoinCompatibleWith(PartitioningInfo other) {
-    if (copartitioningGroup != null) {
-      return copartitioningGroup == other.copartitioningGroup;
-    }
-    else {
-      return
-        (other.copartitioningGroup == null &
-          (numPartitions >= 0 || numPartitions == other.numPartitions));
-    }
+    return syncGroup == other.syncGroup && numPartitions >= 0 && numPartitions == other.numPartitions;
   }
 
 }
