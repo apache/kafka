@@ -21,11 +21,6 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V, K, V> implement
     }
   }
 
-  public void punctuate(long timestamp) {
-    window.punctuate(timestamp);
-    super.punctuate(timestamp);
-  }
-
   public void flush() {
     window.flush();
     super.flush();

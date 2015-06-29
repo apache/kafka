@@ -57,10 +57,6 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V, K, V1> {
         }
       }
 
-      public void punctuate(long timestamp) {
-        KStreamJoin.this.punctuate(timestamp);
-      }
-
       public void flush() {
         KStreamJoin.this.flush();
       }

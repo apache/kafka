@@ -38,11 +38,11 @@ public class KStreamContextImpl implements KStreamContext {
   private final ProcessorConfig processorConfig;
   private final Metrics metrics;
   private final File stateDir;
-  private final ProcessorContext processorContext;
   private final ProcessorStateManager state;
   private final Map<String, StorageEngine> stores = new HashMap<String, StorageEngine>();
   private Consumer<byte[], byte[]> restoreConsumer;
 
+  @SuppressWarnings("unchecked")
   public KStreamContextImpl(int id,
                             RegulatedConsumer<?, ?> regulatedConsumer,
                             Producer<byte[], byte[]> producer,
@@ -68,9 +68,18 @@ public class KStreamContextImpl implements KStreamContext {
 
     this.stateDir = stateDir;
     this.state = new ProcessorStateManager(id, stateDir);
-    this.processorContext = new ProcessorContext(id, streamingConfig, stateDir, metrics);
 
     this.metrics = metrics;
+  }
+
+  @Override
+  public int id() {
+    return id;
+  }
+
+  @Override
+  public StreamingConfig streamingConfig() {
+    return streamingConfig;
   }
 
   @Override
@@ -79,6 +88,7 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
+  @SuppressWarnings("unchecked")
   public <K, V> KStream<K, V> from(String topic, SyncGroup syncGroup) {
     if (syncGroup == null) throw new NullPointerException();
 
@@ -164,6 +174,12 @@ public class KStreamContextImpl implements KStreamContext {
     state.registerAndRestore(simpleCollector, restoreConsumer, engine);
   }
 
+
+  @Override
+  public void schedule(Processor<?, ?> processor, long time) {
+
+  }
+
   public Collection<SyncGroup> syncGroups() {
     return syncGroups.values();
   }
@@ -174,12 +190,6 @@ public class KStreamContextImpl implements KStreamContext {
     job.build(this);
 
     this.restoreConsumer = null;
-  }
-
-  public void punctuate(long timestamp) {
-    for (KStreamSource<?, ?> stream : sourceStreams.values()) {
-      stream.punctuate(timestamp);
-    }
   }
 
   public void flush() {

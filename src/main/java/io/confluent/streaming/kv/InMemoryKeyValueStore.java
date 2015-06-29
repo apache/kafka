@@ -1,8 +1,8 @@
 package io.confluent.streaming.kv;
 
+import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StorageEngine;
-import io.confluent.streaming.internal.ProcessorContext;
 import io.confluent.streaming.kv.internals.MeteredKeyValueStore;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -22,7 +22,7 @@ import java.util.*;
  */
 public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> implements KeyValueStore<K, V>, StorageEngine {
 
-    public InMemoryKeyValueStore(String name, ProcessorContext context) {
+    public InMemoryKeyValueStore(String name, KStreamContext context) {
         super(name, "kafka-streams", new MemoryStore<K, V>(name, context), context.metrics(), new SystemTime());
     }
 
@@ -39,17 +39,17 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> impl
         private final Deserializer<V> valueDeserializer;
         private RecordCollector<byte[], byte[]> collector;
 
-        public MemoryStore(String name, ProcessorContext context) {
+        public MemoryStore(String name, KStreamContext context) {
             this.topic = name;
             this.partition = context.id();
             this.store = new TreeMap<K, V>();
             this.dirty = new HashSet<K>();
             this.collector = null;
             this.maxDirty = 100;
-            this.keySerializer = (Serializer<K>) context.config().keySerializer();
-            this.valueSerializer = (Serializer<V>) context.config().valueSerializer();
-            this.keyDeserializer = (Deserializer<K>) context.config().keyDeserializer();
-            this.valueDeserializer = (Deserializer<V>) context.config().valueDeserializer();
+            this.keySerializer = (Serializer<K>) context.streamingConfig().keySerializer();
+            this.valueSerializer = (Serializer<V>) context.streamingConfig().valueSerializer();
+            this.keyDeserializer = (Deserializer<K>) context.streamingConfig().keyDeserializer();
+            this.valueDeserializer = (Deserializer<V>) context.streamingConfig().valueDeserializer();
         }
 
         @Override

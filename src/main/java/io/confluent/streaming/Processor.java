@@ -7,7 +7,9 @@ public interface Processor<K,V>  {
 
   void apply(K key, V value);
 
-  void punctuate(long timestamp);
+  void init(PunctuationScheduler punctuationScheduler);
+
+  void punctuate();
 
   void flush();
 

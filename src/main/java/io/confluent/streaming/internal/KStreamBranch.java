@@ -34,12 +34,6 @@ class KStreamBranch<K, V> implements Receiver<K, V> {
     }
   }
 
-  public void punctuate(long timestamp) {
-    for (KStreamSource<K, V> branch : branches) {
-      branch.punctuate(timestamp);
-    }
-  }
-
   public void flush() {
     for (KStreamSource<K, V> branch : branches) {
       branch.flush();

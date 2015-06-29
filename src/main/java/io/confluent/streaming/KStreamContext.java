@@ -10,7 +10,11 @@ import java.util.Map;
  */
 public interface KStreamContext {
 
-  static final String DEFAULT_SYNCHRONIZATION_GROUP = "defaultSynchronizationGroup";
+  String DEFAULT_SYNCHRONIZATION_GROUP = "defaultSynchronizationGroup";
+
+  int id();
+
+  StreamingConfig streamingConfig();
 
   <K, V> KStream<K, V> from(String topic);
 
@@ -31,4 +35,6 @@ public interface KStreamContext {
   SyncGroup syncGroup(String name);
 
   void restore(StorageEngine engine) throws Exception;
+
+  void schedule(Processor<?, ?> processor, long time);
 }

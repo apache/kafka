@@ -1,8 +1,6 @@
 package io.confluent.streaming;
 
-import io.confluent.streaming.internal.RecordQueueImpl;
-import io.confluent.streaming.internal.RegulatedConsumer;
-import io.confluent.streaming.internal.Receiver;
+import io.confluent.streaming.internal.*;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
@@ -22,6 +20,7 @@ public class StreamSynchronizer<K, V> {
   private final Map<TopicPartition, RecordQueueWrapper> stash = new HashMap<TopicPartition, RecordQueueWrapper>();
   private final int desiredUnprocessed;
   private final Map<TopicPartition, Long> consumedOffsets;
+  private final PunctuationQueue punctuationQueue = new PunctuationQueue();
 
   private long streamTime = -1;
   private volatile int buffered = 0;
@@ -80,29 +79,35 @@ public class StreamSynchronizer<K, V> {
     }
   }
 
+  public PunctuationScheduler getPunctuationScheduler(Processor<?, ?> processor) {
+    return new PunctuationSchedulerImpl(punctuationQueue, processor);
+  }
+
   public void process() {
     synchronized (this) {
-      RecordQueueWrapper queue = (RecordQueueWrapper)chooser.next();
+      RecordQueueWrapper recordQueue = (RecordQueueWrapper)chooser.next();
 
-      if (queue == null) {
+      if (recordQueue == null) {
         consumer.poll();
         return;
       }
 
-      if (queue.size() == this.desiredUnprocessed) {
-        ConsumerRecord<K, V> record = queue.peekLast();
+      if (recordQueue.size() == this.desiredUnprocessed) {
+        ConsumerRecord<K, V> record = recordQueue.peekLast();
         if (record != null) {
-          consumer.unpause(queue.partition(), record.offset());
+          consumer.unpause(recordQueue.partition(), record.offset());
         }
       }
 
-      if (queue.size() == 0) return;
+      if (recordQueue.size() == 0) return;
 
-      queue.process();
+      recordQueue.process();
 
-      if (queue.size() > 0) chooser.add(queue);
+      if (recordQueue.size() > 0) chooser.add(recordQueue);
 
       buffered--;
+
+      punctuationQueue.mayPunctuate(streamTime);
     }
   }
 

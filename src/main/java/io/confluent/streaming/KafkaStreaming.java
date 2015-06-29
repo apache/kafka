@@ -213,7 +213,6 @@ public class KafkaStreaming implements Runnable {
                         syncGroup.streamSynchronizer.process();
                     }
                 }
-                maybeWindow();
                 maybeCommit();
                 maybeCleanState();
             }
@@ -232,19 +231,6 @@ public class KafkaStreaming implements Runnable {
             return false;
         }
         return true;
-    }
-
-    private void maybeWindow() throws Exception {
-        long now = time.milliseconds();
-        if (this.config.windowTimeMs >= 0 && lastWindow + this.config.windowTimeMs < now) {
-            log.trace("Windowing all stream processors");
-            this.lastWindow = now;
-            for (KStreamContextImpl context : kstreamContexts.values()) {
-                context.punctuate(now);
-                // check co-ordinator
-            }
-            this.streamingMetrics.windowTime.record(time.milliseconds() - now);
-        }
     }
 
     private void maybeCommit() {

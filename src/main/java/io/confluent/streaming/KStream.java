@@ -22,7 +22,7 @@ public interface KStream<K, V> {
   <V1, V2> KStream<K, V2> nestedLoop(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> processor)
     throws NotCopartitionedException;
 
-  KStream<K, V>[] branch(Predicate... predicates);
+  KStream<K, V>[] branch(Predicate<K, V>... predicates);
 
   KStream<K, V> through(String topic);
 

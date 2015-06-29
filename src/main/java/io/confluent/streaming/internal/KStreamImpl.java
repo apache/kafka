@@ -11,7 +11,6 @@ import java.util.ArrayList;
 abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V1> {
 
   private final ArrayList<Receiver<K, V>> nextReceivers = new ArrayList<Receiver<K, V>>(1);
-  private long punctuatedAt = 0L;
   final PartitioningInfo partitioningInfo;
   final KStreamContextImpl context;
 
@@ -33,6 +32,7 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
       }
     });
   }
+
 
   @Override
   public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K1, V1, K, V> mapper) {
@@ -56,7 +56,7 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
 
   @Override
   public KStreamWindowed<K, V> with(Window<K, V> window) {
-    return (KStreamWindowed)chain(new KStreamWindowedImpl(window, partitioningInfo, context));
+    return (KStreamWindowed<K, V>)chain(new KStreamWindowedImpl<K, V>(window, partitioningInfo, context));
   }
 
   @Override
@@ -71,8 +71,8 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
   }
 
   @Override
-  public KStream<K, V>[] branch(Predicate... predicates) {
-    KStreamBranch branch = new KStreamBranch<K, V>(predicates, partitioningInfo, context);
+  public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
+    KStreamBranch<K, V> branch = new KStreamBranch<K, V>(predicates, partitioningInfo, context);
     registerReceiver(branch);
     return branch.branches;
   }
@@ -88,14 +88,20 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
     process(this.<K, V>getSendProcessor(topic));
   }
 
+  @SuppressWarnings("unchecked")
   private <K, V> Processor<K, V> getSendProcessor(final String topic) {
-    final RecordCollector collector = context.recordCollector();
+    final RecordCollector<K, V> collector = (RecordCollector<K, V>) context.recordCollector();
 
     return new Processor<K, V>() {
+      @Override
       public void apply(K key, V value) {
         collector.send(new ProducerRecord<K, V>(topic, key, value));
       }
-      public void punctuate(long timestamp) {}
+      @Override
+      public void init(PunctuationScheduler scheduler) {}
+      @Override
+      public void punctuate() {}
+      @Override
       public void flush() {}
     };
   }
@@ -106,26 +112,14 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
       public void receive(K key, V value, long timestamp) {
         processor.apply(key, value);
       }
-      public void punctuate(long timestamp) {
-        processor.punctuate(timestamp);
-      }
       public void flush() {
         processor.flush();
       }
     };
     registerReceiver(receiver);
-  }
 
-  @Override
-  public void punctuate(long timestamp) {
-    if (timestamp != punctuatedAt) {
-      punctuatedAt = timestamp;
-
-      int numReceivers = nextReceivers.size();
-      for (int i = 0; i < numReceivers; i++) {
-        nextReceivers.get(i).punctuate(timestamp);
-      }
-    }
+    PunctuationScheduler scheduler = partitioningInfo.syncGroup.streamSynchronizer.getPunctuationScheduler(processor);
+    processor.init(scheduler);
   }
 
   @Override
