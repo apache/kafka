@@ -1,6 +1,7 @@
 package io.confluent.streaming;
 
 import io.confluent.streaming.internal.*;
+import io.confluent.streaming.util.MinTimestampTracker;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
@@ -44,13 +45,7 @@ public class StreamSynchronizer<K, V> {
       RecordQueueWrapper queue = stash.get(partition);
 
       if (queue == null) {
-        queue = new RecordQueueWrapper(createRecordQueue(partition)) {
-          @Override
-          void doProcess(ConsumerRecord<K, V> record, long streamTime) {
-            receiver.receive(record.key(), record.value(), streamTime);
-          }
-        };
-        stash.put(partition, queue);
+        stash.put(partition, new RecordQueueWrapper(createRecordQueue(partition), receiver));
       } else {
         throw new IllegalStateException("duplicate partition");
       }
@@ -108,10 +103,6 @@ public class StreamSynchronizer<K, V> {
     }
   }
 
-  public long currentStreamTime() {
-    return streamTime;
-  }
-
   public Map<TopicPartition, Long> consumedOffsets() {
     return this.consumedOffsets;
   }
@@ -126,15 +117,17 @@ public class StreamSynchronizer<K, V> {
   }
 
   protected RecordQueue<K, V> createRecordQueue(TopicPartition partition) {
-    return new RecordQueueImpl<K, V>(partition);
+    return new RecordQueueImpl<K, V>(partition, new MinTimestampTracker<ConsumerRecord<K, V>>());
   }
 
-  private abstract class RecordQueueWrapper implements RecordQueue<K, V> {
+  private class RecordQueueWrapper implements RecordQueue<K, V> {
 
     private final RecordQueue<K, V> queue;
+    private final Receiver<Object, Object> receiver;
 
-    RecordQueueWrapper(RecordQueue<K, V> queue) {
-     this.queue = queue;
+    RecordQueueWrapper(RecordQueue<K, V> queue, Receiver<Object, Object> receiver) {
+      this.queue = queue;
+      this.receiver = receiver;
     }
 
     void process() {
@@ -143,17 +136,16 @@ public class StreamSynchronizer<K, V> {
 
       if (streamTime < timestamp) streamTime = timestamp;
 
-      doProcess(record, streamTime);
-
+      receiver.receive(record.key(), record.value(), streamTime);
       consumedOffsets.put(queue.partition(), record.offset());
     }
 
-    abstract void doProcess(ConsumerRecord<K, V> record, long streamTime);
-
+    @Override
     public TopicPartition partition() {
       return queue.partition();
     }
 
+    @Override
     public void add(ConsumerRecord<K, V> value, long timestamp) {
       queue.add(value, timestamp);
     }
@@ -162,14 +154,17 @@ public class StreamSynchronizer<K, V> {
       return queue.next();
     }
 
+    @Override
     public long offset() {
       return queue.offset();
     }
 
+    @Override
     public int size() {
       return queue.size();
     }
 
+    @Override
     public long currentStreamTime() {
       return queue.currentStreamTime();
     }

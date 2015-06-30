@@ -1,22 +1,15 @@
 package io.confluent.streaming.util;
 
-import java.util.ArrayDeque;
-import java.util.Deque;
 import java.util.LinkedList;
 
 /**
- * Created by yasuhiro on 6/24/15.
+ * MinTimestampTracker maintains the minimum timestamp of stamped elements that were added but not yet removed.
  */
-public class QueueWithMinTimestampTracking<E> {
+public class MinTimestampTracker<E> implements TimestampTracker<E> {
 
-  private final Deque<Stamped<E>> queue = new ArrayDeque<Stamped<E>>();
   private final LinkedList<Stamped<E>> descendingSubsequence = new LinkedList<Stamped<E>>();
 
-  public void add(E value, long timestamp) {
-
-    Stamped<E> elem = new Stamped<E>(value, timestamp);
-    queue.addLast(elem);
-
+  public void addStampedElement(Stamped<E> elem) {
     Stamped<E> minElem = descendingSubsequence.peekLast();
     while (minElem.compareTo(elem) >= 0) {
       descendingSubsequence.removeLast();
@@ -25,25 +18,20 @@ public class QueueWithMinTimestampTracking<E> {
     descendingSubsequence.offerLast(elem);
   }
 
-  public E next() {
-    Stamped<E> stamped = queue.getFirst();
-
-    if (stamped == null) return null;
-
-    if (descendingSubsequence.peekFirst() == stamped)
+  public void removeStampedElement(Stamped<E> elem) {
+    if (elem != null && descendingSubsequence.peekFirst() == elem)
       descendingSubsequence.removeFirst();
-
-    return stamped.value;
   }
 
   public int size() {
-    return queue.size();
+    return descendingSubsequence.size();
   }
 
-  public long timestamp() {
+  public long get() {
     Stamped<E> stamped = descendingSubsequence.peekFirst();
     if (stamped == null) return -1L;
 
     return stamped.timestamp;
   }
+
 }
