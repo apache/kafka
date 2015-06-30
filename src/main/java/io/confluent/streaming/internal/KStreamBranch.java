@@ -16,7 +16,7 @@ class KStreamBranch<K, V> implements Receiver<K, V> {
   @SuppressWarnings("unchecked")
   KStreamBranch(Predicate<K, V>[] predicates, PartitioningInfo partitioningInfo, KStreamContextImpl context) {
     this.predicates = Arrays.copyOf(predicates, predicates.length);
-    this.branches = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length + 1);
+    this.branches = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
     for (int i = 0; i < branches.length; i++) {
       branches[i] = new KStreamSource<K, V>(partitioningInfo, context);
     }
@@ -32,7 +32,6 @@ class KStreamBranch<K, V> implements Receiver<K, V> {
           return;
         }
       }
-      branches[branches.length - 1].receive(key, value, timestamp);
       return;
     }
   }
