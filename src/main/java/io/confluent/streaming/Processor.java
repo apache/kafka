@@ -9,7 +9,7 @@ public interface Processor<K,V>  {
 
   void init(PunctuationScheduler punctuationScheduler);
 
-  void punctuate();
+  void punctuate(long streamTime);
 
   void flush();
 

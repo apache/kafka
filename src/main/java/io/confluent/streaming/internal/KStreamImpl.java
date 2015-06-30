@@ -100,7 +100,7 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
       @Override
       public void init(PunctuationScheduler scheduler) {}
       @Override
-      public void punctuate() {}
+      public void punctuate(long streamTime) {}
       @Override
       public void flush() {}
     };
