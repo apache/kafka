@@ -22,6 +22,7 @@ public class WindowByTime<K, V> implements Window<K, V> {
     this.maxCount = maxCount;
   }
 
+  @Override
   public Iterator<V> find(K key, final long timestamp) {
     final LinkedList<Stamped<V>> values = map.get(key);
 
@@ -41,6 +42,7 @@ public class WindowByTime<K, V> implements Window<K, V> {
     }
   }
 
+  @Override
   public void put(K key, V value, long timestamp) {
     list.offerLast(key);
 
@@ -85,7 +87,5 @@ public class WindowByTime<K, V> implements Window<K, V> {
       }
     }
   }
-
-  public void flush() {}
 
 }

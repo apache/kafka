@@ -42,6 +42,7 @@ public abstract class FilteredIterator<T, S> implements Iterator<T> {
         return;
       }
     }
+    nextValue = null;
   }
 
   protected abstract T filter(S item);
