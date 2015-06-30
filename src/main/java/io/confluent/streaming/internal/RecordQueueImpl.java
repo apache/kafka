@@ -11,6 +11,7 @@ import org.apache.kafka.common.TopicPartition;
 public class RecordQueueImpl<K, V> extends QueueWithMinTimestampTracking<ConsumerRecord<K, V>> implements RecordQueue<K, V> {
 
   private final TopicPartition partition;
+  private long offset;
 
   public RecordQueueImpl(TopicPartition partition) {
     this.partition = partition;
@@ -18,6 +19,14 @@ public class RecordQueueImpl<K, V> extends QueueWithMinTimestampTracking<Consume
 
   public TopicPartition partition() {
     return partition;
+  }
+
+  public void add(ConsumerRecord<K, V> record, long timestamp) {
+    offset = record.offset();
+  }
+
+  public long offset() {
+    return offset;
   }
 
   public long currentStreamTime() {

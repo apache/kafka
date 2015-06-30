@@ -36,20 +36,6 @@ public class QueueWithMinTimestampTracking<E> {
     return stamped.value;
   }
 
-  public E peekNext() {
-    if (queue.size() > 0)
-      return queue.peekFirst().value;
-    else
-      return null;
-  }
-
-  public E peekLast() {
-    if (queue.size() > 0)
-      return queue.peekLast().value;
-    else
-      return null;
-  }
-
   public int size() {
     return queue.size();
   }

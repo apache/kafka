@@ -93,10 +93,7 @@ public class StreamSynchronizer<K, V> {
       }
 
       if (recordQueue.size() == this.desiredUnprocessed) {
-        ConsumerRecord<K, V> record = recordQueue.peekLast();
-        if (record != null) {
-          consumer.unpause(recordQueue.partition(), record.offset());
-        }
+        consumer.unpause(recordQueue.partition(), recordQueue.offset());
       }
 
       if (recordQueue.size() == 0) return;
@@ -165,12 +162,8 @@ public class StreamSynchronizer<K, V> {
       return queue.next();
     }
 
-    public ConsumerRecord<K, V> peekNext() {
-      return queue.peekNext();
-    }
-
-    public ConsumerRecord<K, V> peekLast() {
-      return queue.peekLast();
+    public long offset() {
+      return queue.offset();
     }
 
     public int size() {

@@ -14,9 +14,7 @@ public interface RecordQueue<K, V>  {
 
   ConsumerRecord<K, V> next();
 
-  ConsumerRecord<K, V> peekNext();
-
-  ConsumerRecord<K, V> peekLast();
+  long offset();
 
   int size();
 
