@@ -1,7 +1,7 @@
 package io.confluent.streaming;
 
 /**
- * Created by yasuhiro on 6/17/15.
+ * KStream is an abstraction of a stream of key-value pairs.
  */
 public interface KStream<K, V> {
 
@@ -55,15 +55,16 @@ public interface KStream<K, V> {
   KStreamWindowed<K, V> with(Window<K, V> window);
 
   /**
-   * Creates a new stream by joining this stream with the other stream.
-   * Each element in this stream are joined with elements in other streams window by applying a function
+   * Creates a new stream by joining this stream with the other windowed stream.
+   * Each element in this stream is joined with elements in the other stream's window.
+   * The resulting values are computed by applying a joiner.
    *
    * @param other
-   * @param processor
+   * @param joiner
    * @return KStream
    * @throws NotCopartitionedException
    */
-  <V1, V2> KStream<K, V2> nestedLoop(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> processor)
+  <V1, V2> KStream<K, V2> nestedLoop(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> joiner)
     throws NotCopartitionedException;
 
   /**
