@@ -15,7 +15,7 @@ import java.util.Map;
 public class StreamSynchronizer<K, V> {
 
   public final String name;
-  private final RegulatedConsumer<K, V> consumer;
+  private final Ingestor ingestor;
   private final Chooser<K, V> chooser;
   private final TimestampExtractor<K, V> timestampExtractor;
   private final Map<TopicPartition, RecordQueueWrapper> stash = new HashMap<TopicPartition, RecordQueueWrapper>();
@@ -27,12 +27,12 @@ public class StreamSynchronizer<K, V> {
   private volatile int buffered = 0;
 
   public StreamSynchronizer(String name,
-                            RegulatedConsumer<K, V> consumer,
+                            Ingestor ingestor,
                             Chooser<K, V> chooser,
                             TimestampExtractor<K, V> timestampExtractor,
                             int desiredNumberOfUnprocessedRecords) {
     this.name = name;
-    this.consumer = consumer;
+    this.ingestor = ingestor;
     this.chooser = chooser;
     this.timestampExtractor = timestampExtractor;
     this.desiredUnprocessed = desiredNumberOfUnprocessedRecords;
@@ -68,7 +68,7 @@ public class StreamSynchronizer<K, V> {
 
         // if we have buffered enough for this partition, pause
         if (queue.size() > this.desiredUnprocessed) {
-          consumer.pause(partition);
+          ingestor.pause(partition);
         }
       }
     }
@@ -83,12 +83,12 @@ public class StreamSynchronizer<K, V> {
       RecordQueueWrapper recordQueue = (RecordQueueWrapper)chooser.next();
 
       if (recordQueue == null) {
-        consumer.poll();
+        ingestor.poll();
         return;
       }
 
       if (recordQueue.size() == this.desiredUnprocessed) {
-        consumer.unpause(recordQueue.partition(), recordQueue.offset());
+        ingestor.unpause(recordQueue.partition(), recordQueue.offset());
       }
 
       if (recordQueue.size() == 0) return;

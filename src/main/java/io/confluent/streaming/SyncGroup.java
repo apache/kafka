@@ -8,7 +8,7 @@ public class SyncGroup {
   public final String name;
   public final StreamSynchronizer<?, ?> streamSynchronizer;
 
-  public SyncGroup(String name, StreamSynchronizer streamSynchronizer) {
+  public SyncGroup(String name, StreamSynchronizer<?, ?> streamSynchronizer) {
     this.name = name;
     this.streamSynchronizer = streamSynchronizer;
   }

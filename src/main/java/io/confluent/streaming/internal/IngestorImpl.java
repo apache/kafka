@@ -10,7 +10,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.*;
 
-public class RegulatedConsumer<K, V> {
+public class IngestorImpl<K, V> implements Ingestor {
 
   private final Consumer<byte[], byte[]> consumer;
   private final Set<TopicPartition> unpaused = new HashSet<TopicPartition>();
@@ -21,10 +21,10 @@ public class RegulatedConsumer<K, V> {
   private final Map<TopicPartition, StreamSynchronizer<K, V>> streamSynchronizers =
     new HashMap<TopicPartition, StreamSynchronizer<K, V>>();
 
-  public RegulatedConsumer(Consumer<byte[], byte[]> consumer,
-                           Deserializer<K> keyDeserializer,
-                           Deserializer<V> valueDeserializer,
-                           long pollTimeMs) {
+  public IngestorImpl(Consumer<byte[], byte[]> consumer,
+                      Deserializer<K> keyDeserializer,
+                      Deserializer<V> valueDeserializer,
+                      long pollTimeMs) {
     this.consumer = consumer;
     this.keyDeserializer = keyDeserializer;
     this.valueDeserializer = valueDeserializer;

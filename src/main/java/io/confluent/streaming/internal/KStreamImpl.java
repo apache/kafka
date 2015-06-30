@@ -36,7 +36,7 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
 
   @Override
   public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K1, V1, K, V> mapper) {
-    return chain(new KStreamMap<K1, V1, K, V>(mapper, context));
+    return chain(new KStreamMap<K1, V1, K, V>(mapper, partitioningInfo.syncGroup, context));
   }
 
   @Override
@@ -46,7 +46,7 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
 
   @Override
   public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K1, ? extends Iterable<V1>, K, V> mapper) {
-    return chain(new KStreamFlatMap<K1, V1, K, V>(mapper, context));
+    return chain(new KStreamFlatMap<K1, V1, K, V>(mapper, partitioningInfo.syncGroup, context));
   }
 
   @Override

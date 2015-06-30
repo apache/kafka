@@ -19,8 +19,7 @@ package io.confluent.streaming;
 
 import io.confluent.streaming.internal.KStreamContextImpl;
 import io.confluent.streaming.internal.ProcessorConfig;
-import io.confluent.streaming.internal.RecordCollectors;
-import io.confluent.streaming.internal.RegulatedConsumer;
+import io.confluent.streaming.internal.IngestorImpl;
 import io.confluent.streaming.util.Util;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -38,10 +37,8 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,7 +85,7 @@ public class KafkaStreaming implements Runnable {
     private final Map<Integer, KStreamContextImpl> kstreamContexts = new HashMap<Integer, KStreamContextImpl>();
     protected final Producer<byte[], byte[]> producer;
     protected final Consumer<byte[], byte[]> consumer;
-    private final RegulatedConsumer<Object, Object> regulatedConsumer;
+    private final IngestorImpl<Object, Object> ingestor;
     private final StreamingConfig streamingConfig;
     private final ProcessorConfig config;
     private final Metrics metrics;
@@ -131,8 +128,8 @@ public class KafkaStreaming implements Runnable {
         this.streamingMetrics = new KafkaStreamingMetrics();
         this.requestingCommit = new ArrayList<Integer>();
         this.config = new ProcessorConfig(config.config());
-        this.regulatedConsumer =
-            new RegulatedConsumer<Object, Object>(this.consumer,
+        this.ingestor =
+            new IngestorImpl<Object, Object>(this.consumer,
                                                   (Deserializer<Object>) config.keyDeserializer(),
                                                   (Deserializer<Object>) config.valueDeserializer(),
                                                   this.config.pollTimeMs);
@@ -273,8 +270,8 @@ public class KafkaStreaming implements Runnable {
             KStreamContextImpl context = kstreamContexts.get(id);
             context.flush();
 
-            for (SyncGroup synchGroup : this.syncGroups.get(id)) {
-                commit.putAll(synchGroup.streamSynchronizer.consumedOffsets()); // TODO: can this be async?
+            for (SyncGroup syncGroup : this.syncGroups.get(id)) {
+                commit.putAll(syncGroup.streamSynchronizer.consumedOffsets()); // TODO: can this be async?
             }
         }
         consumer.commit(commit, CommitType.SYNC);
@@ -308,6 +305,8 @@ public class KafkaStreaming implements Runnable {
     private void addPartitions(Collection<TopicPartition> assignment) {
         HashSet<TopicPartition> partitions = new HashSet<TopicPartition>(assignment);
 
+        this.ingestor.init();
+
         Consumer<byte[], byte[]> restoreConsumer =
           new KafkaConsumer<byte[], byte[]>(
             streamingConfig.config(),
@@ -334,7 +333,7 @@ public class KafkaStreaming implements Runnable {
                 File stateDir = new File(config.stateDir, id.toString());
 
                 kstreamContext =
-                  new KStreamContextImpl(id, regulatedConsumer, producer, coordinator, streamingConfig, config, stateDir, metrics);
+                  new KStreamContextImpl(id, ingestor, producer, coordinator, streamingConfig, config, stateDir, metrics);
 
                 kstreamContext.init(restoreConsumer,job);
 
@@ -344,7 +343,6 @@ public class KafkaStreaming implements Runnable {
         }
 
         restoreConsumer.close();
-        this.regulatedConsumer.init();
         this.nextStateCleaning = time.milliseconds() + config.stateCleanupDelay;
     }
 
@@ -373,7 +371,7 @@ public class KafkaStreaming implements Runnable {
             }
         }
         // clear buffered records
-        this.regulatedConsumer.clear();
+        this.ingestor.clear();
     }
 
     private class KafkaStreamingMetrics {

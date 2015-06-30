@@ -7,14 +7,14 @@ import io.confluent.streaming.SyncGroup;
  */
 class PartitioningInfo {
 
-  public static PartitioningInfo missing = new PartitioningInfo(null, -1);
+  public static PartitioningInfo unjoinable(SyncGroup syncGroup) {
+    return new PartitioningInfo(syncGroup, -1);
+  }
 
   public final SyncGroup syncGroup;
   public final int numPartitions;
 
   PartitioningInfo(SyncGroup syncGroup, int numPartitions) {
-    if (syncGroup == null) throw new NullPointerException();
-
     this.syncGroup = syncGroup;
     this.numPartitions = numPartitions;
   }
