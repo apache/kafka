@@ -15,8 +15,6 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V, K, V1> {
   private final ValueJoiner<V, V1, V2> joiner;
   final Receiver<K, V2> receiverForOtherStream;
 
-  private boolean flushed = true;
-
   KStreamJoin(final Window<K, V1> window1, Window<K, V2> window2, ValueJoiner<V, V1, V2> joiner, PartitioningInfo partitioningInfo, KStreamContextImpl context) {
     super(partitioningInfo, context);
 
@@ -27,8 +25,8 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V, K, V1> {
     this.receiverForOtherStream = getReceiverForOther();
   }
 
+  @Override
   public void receive(K key, V1 value, long timestamp) {
-    flushed = false;
     Iterator<V2> iter = window2.find(key, timestamp);
     if (iter != null) {
       while (iter.hasNext()) {
@@ -37,28 +35,17 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V, K, V1> {
     }
   }
 
-  public void flush() {
-    if (!flushed) {
-      super.flush();
-      flushed = true;
-    }
-  }
-
   private Receiver<K, V2> getReceiverForOther() {
     return new Receiver<K, V2>() {
 
+      @Override
       public void receive(K key, V2 value2, long timestamp) {
-        flushed = false;
         Iterator<V1> iter = window1.find(key, timestamp);
         if (iter != null) {
           while (iter.hasNext()) {
             doJoin(key, iter.next(), value2, timestamp);
           }
         }
-      }
-
-      public void flush() {
-        KStreamJoin.this.flush();
       }
     };
   }

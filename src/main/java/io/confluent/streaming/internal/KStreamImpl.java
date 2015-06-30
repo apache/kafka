@@ -101,8 +101,6 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
       public void init(PunctuationScheduler scheduler) {}
       @Override
       public void punctuate(long streamTime) {}
-      @Override
-      public void flush() {}
     };
   }
 
@@ -112,22 +110,11 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
       public void receive(K key, V value, long timestamp) {
         processor.apply(key, value);
       }
-      public void flush() {
-        processor.flush();
-      }
     };
     registerReceiver(receiver);
 
     PunctuationScheduler scheduler = partitioningInfo.syncGroup.streamSynchronizer.getPunctuationScheduler(processor);
     processor.init(scheduler);
-  }
-
-  @Override
-  public void flush() {
-    int numReceivers = nextReceivers.size();
-    for (int i = 0; i < numReceivers; i++) {
-      nextReceivers.get(i).flush();
-    }
   }
 
   void registerReceiver(Receiver<K, V> receiver) {

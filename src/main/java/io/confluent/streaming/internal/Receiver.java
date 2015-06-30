@@ -7,6 +7,4 @@ public interface Receiver<K,V> {
 
   void receive(K key, V value, long timestamp);
 
-  void flush();
-
 }

@@ -11,6 +11,4 @@ public interface Processor<K,V>  {
 
   void punctuate(long streamTime);
 
-  void flush();
-
 }

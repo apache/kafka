@@ -14,6 +14,7 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V, K, V> implement
     this.window = window;
   }
 
+  @Override
   public void receive(K key, V value, long timestamp) {
     synchronized(this) {
       window.put(key, value, timestamp);
@@ -21,11 +22,7 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V, K, V> implement
     }
   }
 
-  public void flush() {
-    window.flush();
-    super.flush();
-  }
-
+  @Override
   public <V1, V2> KStream<K, V2> join(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> processor)
     throws NotCopartitionedException {
 

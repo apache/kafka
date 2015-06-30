@@ -22,6 +22,7 @@ class KStreamBranch<K, V> implements Receiver<K, V> {
     }
   }
 
+  @Override
   public void receive(K key, V value, long timestamp) {
     synchronized(this) {
       for (int i = 0; i < predicates.length; i++) {
@@ -33,12 +34,6 @@ class KStreamBranch<K, V> implements Receiver<K, V> {
       }
       branches[branches.length - 1].receive(key, value, timestamp);
       return;
-    }
-  }
-
-  public void flush() {
-    for (KStreamSource<K, V> branch : branches) {
-      branch.flush();
     }
   }
 

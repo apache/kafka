@@ -193,9 +193,6 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   public void flush() {
-    for (KStreamSource<?, ?> stream : sourceStreams.values()) {
-      stream.flush();
-    }
     state.flush();
   }
 

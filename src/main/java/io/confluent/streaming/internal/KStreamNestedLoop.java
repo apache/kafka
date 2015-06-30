@@ -19,6 +19,7 @@ class KStreamNestedLoop<K, V, V1, V2> extends KStreamImpl<K, V, K, V1> {
     this.joiner = joiner;
   }
 
+  @Override
   public void receive(K key, V1 value, long timestamp) {
     Iterator<V2> iter = window.find(key, timestamp);
     if (iter != null) {

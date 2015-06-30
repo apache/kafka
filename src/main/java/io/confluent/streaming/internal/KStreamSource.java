@@ -9,6 +9,7 @@ class KStreamSource<K, V> extends KStreamImpl<K, V, K, V> {
     super(partitioningInfo, context);
   }
 
+  @Override
   public void receive(K key, V value, long timestamp) {
     synchronized(this) {
       forward(key, value, timestamp);
