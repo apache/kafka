@@ -47,10 +47,10 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> impl
             this.dirty = new HashSet<K>();
             this.collector = null;
             this.maxDirty = 100;
-            this.keySerializer = (Serializer<K>) context.streamingConfig().keySerializer();
-            this.valueSerializer = (Serializer<V>) context.streamingConfig().valueSerializer();
-            this.keyDeserializer = (Deserializer<K>) context.streamingConfig().keyDeserializer();
-            this.valueDeserializer = (Deserializer<V>) context.streamingConfig().valueDeserializer();
+            this.keySerializer = (Serializer<K>) context.keySerializer();
+            this.valueSerializer = (Serializer<V>) context.valueSerializer();
+            this.keyDeserializer = (Deserializer<K>) context.keyDeserializer();
+            this.valueDeserializer = (Deserializer<V>) context.valueDeserializer();
         }
 
         @Override

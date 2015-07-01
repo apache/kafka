@@ -1,6 +1,8 @@
 package io.confluent.streaming;
 
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 
 import java.io.File;
 import java.util.Map;
@@ -14,11 +16,17 @@ public interface KStreamContext {
 
   int id();
 
-  StreamingConfig streamingConfig();
+  Serializer<?> keySerializer();
 
-  <K, V> KStream<K, V> from(String topic);
+  Serializer<?> valueSerializer();
 
-  <K, V> KStream<K, V> from(String topic, SyncGroup syncGroup);
+  Deserializer<?> keyDeserializer();
+
+  Deserializer<?> valueDeserializer();
+
+  KStream<?, ?> from(String topic);
+
+  KStream<?, ?> from(String topic, SyncGroup syncGroup);
 
   RecordCollector<byte[], byte[]> simpleRecordCollector();
 
@@ -39,4 +47,5 @@ public interface KStreamContext {
   void restore(StorageEngine engine) throws Exception;
 
   void schedule(Processor<?, ?> processor, long time);
+
 }

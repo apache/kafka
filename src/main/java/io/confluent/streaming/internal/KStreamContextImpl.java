@@ -5,6 +5,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -78,25 +79,40 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
-  public StreamingConfig streamingConfig() {
-    return streamingConfig;
+  public Serializer<?> keySerializer() {
+    return streamingConfig.keySerializer();
   }
 
   @Override
-  public <K, V> KStream<K, V> from(String topic) {
+  public Serializer<?> valueSerializer() {
+    return streamingConfig.valueSerializer();
+  }
+
+  @Override
+  public Deserializer<?> keyDeserializer() {
+    return streamingConfig.keyDeserializer();
+  }
+
+  @Override
+  public Deserializer<?> valueDeserializer() {
+    return streamingConfig.valueDeserializer();
+  }
+
+  @Override
+  public KStream<?, ?> from(String topic) {
     return from(topic, syncGroup(DEFAULT_SYNCHRONIZATION_GROUP));
   }
 
   @Override
   @SuppressWarnings("unchecked")
-  public <K, V> KStream<K, V> from(String topic, SyncGroup syncGroup) {
+  public KStream<?, ?> from(String topic, SyncGroup syncGroup) {
     if (syncGroup == null) throw new NullPointerException();
 
     synchronized (this) {
       if (!topics.contains(topic))
         throw new IllegalArgumentException("topic not subscribed: " + topic);
 
-      KStreamSource<K, V> stream = (KStreamSource<K, V>)sourceStreams.get(topic);
+      KStreamSource<?, ?> stream = sourceStreams.get(topic);
 
       if (stream == null) {
         PartitioningInfo partitioningInfo = partitioningInfos.get(topic);
@@ -109,7 +125,7 @@ public class KStreamContextImpl implements KStreamContext {
           partitioningInfos.put(topic, partitioningInfo);
         }
 
-        stream = new KStreamSource<K, V>(partitioningInfo, this);
+        stream = new KStreamSource<Object, Object>(partitioningInfo, this);
         sourceStreams.put(topic, stream);
 
         syncGroup.streamSynchronizer.addPartition(new TopicPartition(topic, id), (Receiver<Object, Object>)stream);
