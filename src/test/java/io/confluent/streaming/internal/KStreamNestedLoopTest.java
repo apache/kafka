@@ -1,11 +1,13 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
+import io.confluent.streaming.util.Util;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class KStreamNestedLoopTest {
 
@@ -37,16 +39,46 @@ public class KStreamNestedLoopTest {
 
   private PartitioningInfo partitioningInfo = new PartitioningInfo(new SyncGroup("group", streamSynchronizer), 1);
 
-  @Test
-  public void testNestedLoop() {
 
-    ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
+  private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
+    @Override
+    public String apply(String value1, String value2) {
+      return value1 + "+" + value2;
+    }
+  };
+
+  private ValueMapper<String, String> valueMapper = new ValueMapper<String, String>() {
+    @Override
+    public String apply(String value) {
+      return "#" + value;
+    }
+  };
+
+  private ValueMapper<Iterable<String>, String> valueMapper2 = new ValueMapper<Iterable<String>, String>() {
+    @Override
+    public Iterable<String> apply(String value) {
+      return (Iterable<String>) Util.mkSet(value);
+    }
+  };
+
+  private KeyValueMapper<Integer, String, Integer, String> keyValueMapper =
+    new KeyValueMapper<Integer, String, Integer, String>() {
       @Override
-      public String apply(String value1, String value2) {
-        return value1 + "+" + value2;
+      public KeyValue<Integer, String> apply(Integer key, String value) {
+        return KeyValue.pair(key, value);
       }
     };
 
+  KeyValueMapper<Integer, Iterable<String>, Integer, String> keyValueMapper2 =
+    new KeyValueMapper<Integer, Iterable<String>, Integer, String>() {
+      @Override
+      public KeyValue<Integer, Iterable<String>> apply(Integer key, String value) {
+        return KeyValue.pair(key, (Iterable<String>) Util.mkSet(value));
+      }
+    };
+
+  @Test
+  public void testNestedLoop() {
     final int[] expectedKeys = new int[] { 0, 1, 2, 3 };
 
     KStreamSource<Integer, String> stream1;
@@ -118,4 +150,219 @@ public class KStreamNestedLoopTest {
     }
   }
 
+  @Test
+  public void testMap() {
+    KStreamSource<Integer, String> stream1;
+    KStreamSource<Integer, String> stream2;
+    KStream<Integer, String> mapped1;
+    KStream<Integer, String> mapped2;
+    KStreamWindowed<Integer, String> windowed;
+    TestProcessor<Integer, String> processor;
+
+    processor = new TestProcessor<Integer, String>();
+    stream1 = new KStreamSource<Integer, String>(partitioningInfo, null);
+    stream2 = new KStreamSource<Integer, String>(partitioningInfo, null);
+    mapped1 = stream1.map(keyValueMapper);
+    mapped2 = stream2.map(keyValueMapper);
+
+    boolean exceptionRaised;
+
+    try {
+      exceptionRaised = false;
+      windowed = stream2.with(new UnlimitedWindow<Integer, String>());
+
+      mapped1.nestedLoop(windowed, joiner).process(processor);
+    }
+    catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertTrue(exceptionRaised);
+
+    try {
+      exceptionRaised = false;
+      windowed = mapped2.with(new UnlimitedWindow<Integer, String>());
+
+      stream1.nestedLoop(windowed, joiner).process(processor);
+    }
+    catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertTrue(exceptionRaised);
+
+    try {
+      exceptionRaised = false;
+      windowed = mapped2.with(new UnlimitedWindow<Integer, String>());
+
+      mapped1.nestedLoop(windowed, joiner).process(processor);
+    }
+    catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertTrue(exceptionRaised);
+  }
+
+  @Test
+  public void testFlatMap() {
+    KStreamSource<Integer, String> stream1;
+    KStreamSource<Integer, String> stream2;
+    KStream<Integer, String> mapped1;
+    KStream<Integer, String> mapped2;
+    KStreamWindowed<Integer, String> windowed;
+    TestProcessor<Integer, String> processor;
+
+    processor = new TestProcessor<Integer, String>();
+    stream1 = new KStreamSource<Integer, String>(partitioningInfo, null);
+    stream2 = new KStreamSource<Integer, String>(partitioningInfo, null);
+    mapped1 = stream1.flatMap(keyValueMapper2);
+    mapped2 = stream2.flatMap(keyValueMapper2);
+
+    boolean exceptionRaised;
+
+    try {
+      exceptionRaised = false;
+      windowed = stream2.with(new UnlimitedWindow<Integer, String>());
+
+      mapped1.nestedLoop(windowed, joiner).process(processor);
+    }
+    catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertTrue(exceptionRaised);
+
+    try {
+      exceptionRaised = false;
+      windowed = mapped2.with(new UnlimitedWindow<Integer, String>());
+
+      stream1.nestedLoop(windowed, joiner).process(processor);
+    }
+    catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertTrue(exceptionRaised);
+
+    try {
+      exceptionRaised = false;
+      windowed = mapped2.with(new UnlimitedWindow<Integer, String>());
+
+      mapped1.nestedLoop(windowed, joiner).process(processor);
+    }
+    catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertTrue(exceptionRaised);
+  }
+
+  @Test
+  public void testMapValues() {
+    KStreamSource<Integer, String> stream1;
+    KStreamSource<Integer, String> stream2;
+    KStream<Integer, String> mapped1;
+    KStream<Integer, String> mapped2;
+    KStreamWindowed<Integer, String> windowed;
+    TestProcessor<Integer, String> processor;
+
+    processor = new TestProcessor<Integer, String>();
+    stream1 = new KStreamSource<Integer, String>(partitioningInfo, null);
+    stream2 = new KStreamSource<Integer, String>(partitioningInfo, null);
+    mapped1 = stream1.mapValues(valueMapper);
+    mapped2 = stream2.mapValues(valueMapper);
+
+    boolean exceptionRaised;
+
+    try {
+      exceptionRaised = false;
+      windowed = stream2.with(new UnlimitedWindow<Integer, String>());
+
+      mapped1.nestedLoop(windowed, joiner).process(processor);
+    }
+    catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertFalse(exceptionRaised);
+
+    try {
+      exceptionRaised = false;
+      windowed = mapped2.with(new UnlimitedWindow<Integer, String>());
+
+      stream1.nestedLoop(windowed, joiner).process(processor);
+    }
+    catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertFalse(exceptionRaised);
+
+    try {
+      exceptionRaised = false;
+      windowed = mapped2.with(new UnlimitedWindow<Integer, String>());
+
+      mapped1.nestedLoop(windowed, joiner).process(processor);
+    }
+    catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertFalse(exceptionRaised);
+  }
+
+  @Test
+  public void testFlatMapValues() {
+    KStreamSource<Integer, String> stream1;
+    KStreamSource<Integer, String> stream2;
+    KStream<Integer, String> mapped1;
+    KStream<Integer, String> mapped2;
+    KStreamWindowed<Integer, String> windowed;
+    TestProcessor<Integer, String> processor;
+
+    processor = new TestProcessor<Integer, String>();
+    stream1 = new KStreamSource<Integer, String>(partitioningInfo, null);
+    stream2 = new KStreamSource<Integer, String>(partitioningInfo, null);
+    mapped1 = stream1.flatMapValues(valueMapper2);
+    mapped2 = stream2.flatMapValues(valueMapper2);
+
+    boolean exceptionRaised;
+
+    try {
+      exceptionRaised = false;
+      windowed = stream2.with(new UnlimitedWindow<Integer, String>());
+
+      mapped1.nestedLoop(windowed, joiner).process(processor);
+    }
+    catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertFalse(exceptionRaised);
+
+    try {
+      exceptionRaised = false;
+      windowed = mapped2.with(new UnlimitedWindow<Integer, String>());
+
+      stream1.nestedLoop(windowed, joiner).process(processor);
+    }
+    catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertFalse(exceptionRaised);
+
+    try {
+      exceptionRaised = false;
+      windowed = mapped2.with(new UnlimitedWindow<Integer, String>());
+
+      mapped1.nestedLoop(windowed, joiner).process(processor);
+    }
+    catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertFalse(exceptionRaised);
+  }
 }
