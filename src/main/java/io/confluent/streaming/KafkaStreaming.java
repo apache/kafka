@@ -330,14 +330,18 @@ public class KafkaStreaming implements Runnable {
                     }
                 };
 
-                File stateDir = new File(config.stateDir, id.toString());
-
                 kstreamContext =
-                  new KStreamContextImpl(id, ingestor, producer, coordinator, streamingConfig, config, stateDir, metrics);
-
-                kstreamContext.init(restoreConsumer,job);
+                  new KStreamContextImpl(id, ingestor, producer, coordinator, streamingConfig, config, metrics);
 
                 kstreamContexts.put(id, kstreamContext);
+
+                try {
+                    kstreamContext.init(restoreConsumer, job);
+                }
+                catch (Exception e) {
+                    throw new KafkaException(e);
+                }
+
                 syncGroups.put(id, kstreamContext.syncGroups());
             }
         }

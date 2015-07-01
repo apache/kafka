@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -39,8 +40,7 @@ public class KStreamContextImpl implements KStreamContext {
   private final ProcessorConfig processorConfig;
   private final Metrics metrics;
   private final File stateDir;
-  private final ProcessorStateManager state;
-  private final Map<String, StorageEngine> stores = new HashMap<String, StorageEngine>();
+  private final ProcessorStateManager stateMgr;
   private Consumer<byte[], byte[]> restoreConsumer;
 
   @SuppressWarnings("unchecked")
@@ -50,7 +50,6 @@ public class KStreamContextImpl implements KStreamContext {
                             Coordinator coordinator,
                             StreamingConfig streamingConfig,
                             ProcessorConfig processorConfig,
-                            File stateDir,
                             Metrics metrics) {
     this.id = id;
     this.topics = streamingConfig.topics();
@@ -67,9 +66,8 @@ public class KStreamContextImpl implements KStreamContext {
     this.timestampExtractor = (TimestampExtractor<Object, Object>)this.streamingConfig.timestampExtractor();
     if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractoris  missing");
 
-    this.stateDir = stateDir;
-    this.state = new ProcessorStateManager(id, stateDir);
-
+    this.stateDir = new File(processorConfig.stateDir, Integer.toString(id));
+    this.stateMgr = new ProcessorStateManager(id, stateDir);
     this.metrics = metrics;
   }
 
@@ -196,7 +194,7 @@ public class KStreamContextImpl implements KStreamContext {
   public void restore(StorageEngine engine) throws Exception {
     if (restoreConsumer == null) throw new IllegalStateException();
 
-    state.registerAndRestore(simpleCollector, restoreConsumer, engine);
+    stateMgr.registerAndRestore(simpleCollector, restoreConsumer, engine);
   }
 
 
@@ -209,20 +207,23 @@ public class KStreamContextImpl implements KStreamContext {
     return syncGroups.values();
   }
 
-  public void init(Consumer<byte[], byte[]> restoreConsumer, KStreamJob job) {
-    this.restoreConsumer = restoreConsumer;
-
-    job.build(this);
-
-    this.restoreConsumer = null;
+  public void init(Consumer<byte[], byte[]> restoreConsumer, KStreamJob job) throws IOException {
+    stateMgr.init();
+    try {
+      this.restoreConsumer = restoreConsumer;
+      job.build(this);
+    }
+    finally {
+      this.restoreConsumer = null;
+    }
   }
 
   public void flush() {
-    state.flush();
+    stateMgr.flush();
   }
 
   public void close() throws Exception {
-    state.close(simpleCollector.offsets());
+    stateMgr.close(simpleCollector.offsets());
   }
 
 }
