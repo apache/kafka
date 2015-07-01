@@ -1,5 +1,6 @@
-package io.confluent.streaming;
+package io.confluent.streaming.internal;
 
+import io.confluent.streaming.*;
 import io.confluent.streaming.internal.*;
 import io.confluent.streaming.util.MinTimestampTracker;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -26,18 +27,17 @@ public class StreamSynchronizer<K, V> {
   private long streamTime = -1;
   private volatile int buffered = 0;
 
-  public StreamSynchronizer(String name,
-                            Ingestor ingestor,
-                            Chooser<K, V> chooser,
-                            TimestampExtractor<K, V> timestampExtractor,
-                            int desiredUnprocessedPerPartition) {
+  StreamSynchronizer(String name,
+                     Ingestor ingestor,
+                     Chooser<K, V> chooser,
+                     TimestampExtractor<K, V> timestampExtractor,
+                     int desiredUnprocessedPerPartition) {
     this.name = name;
     this.ingestor = ingestor;
     this.chooser = chooser;
     this.timestampExtractor = timestampExtractor;
     this.desiredUnprocessed = desiredUnprocessedPerPartition;
     this.consumedOffsets = new HashMap<TopicPartition, Long>();
-
   }
 
   public void addPartition(TopicPartition partition, final Receiver<Object, Object> receiver) {

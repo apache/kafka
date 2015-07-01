@@ -1,7 +1,9 @@
 package io.confluent.streaming;
 
+import io.confluent.streaming.internal.StreamSynchronizer;
+
 /**
- * Created by yasuhiro on 6/26/15.
+ * SyncGroup represents a group of streams synchronized together.
  */
 public class SyncGroup {
 
