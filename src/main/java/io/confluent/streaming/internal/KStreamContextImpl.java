@@ -25,7 +25,7 @@ public class KStreamContextImpl implements KStreamContext {
   public final int id;
   private final Set<String> topics;
 
-  private final IngestorImpl<Object, Object> ingestor;
+  private final Ingestor ingestor;
   private final RecordCollectors.SimpleRecordCollector simpleCollector;
   private final RecordCollector<Object, Object> collector;
 
@@ -44,7 +44,7 @@ public class KStreamContextImpl implements KStreamContext {
 
   @SuppressWarnings("unchecked")
   public KStreamContextImpl(int id,
-                            IngestorImpl<?, ?> ingestor,
+                            Ingestor ingestor,
                             Producer<byte[], byte[]> producer,
                             Coordinator coordinator,
                             StreamingConfig streamingConfig,
@@ -53,7 +53,7 @@ public class KStreamContextImpl implements KStreamContext {
                             Metrics metrics) {
     this.id = id;
     this.topics = streamingConfig.topics();
-    this.ingestor = (IngestorImpl<Object, Object>) ingestor;
+    this.ingestor = ingestor;
 
     this.simpleCollector = new RecordCollectors.SimpleRecordCollector(producer);
     this.collector = new RecordCollectors.SerializingRecordCollector<Object, Object>(
