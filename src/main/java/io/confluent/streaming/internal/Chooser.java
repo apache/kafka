@@ -1,6 +1,4 @@
-package io.confluent.streaming;
-
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+package io.confluent.streaming.internal;
 
 /**
  * Created by yasuhiro on 6/25/15.

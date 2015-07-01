@@ -1,8 +1,5 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.Chooser;
-import io.confluent.streaming.RecordQueue;
-
 import java.util.Comparator;
 import java.util.PriorityQueue;
 

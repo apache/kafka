@@ -1,7 +1,6 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
-import io.confluent.streaming.internal.*;
 import io.confluent.streaming.util.MinTimestampTracker;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -19,7 +18,7 @@ public class StreamSynchronizer<K, V> {
   private final Ingestor ingestor;
   private final Chooser<K, V> chooser;
   private final TimestampExtractor<K, V> timestampExtractor;
-  private final Map<TopicPartition, RecordQueueWrapper> stash = new HashMap<TopicPartition, RecordQueueWrapper>();
+  private final Map<TopicPartition, RecordQueue<K, V>> stash = new HashMap<TopicPartition, RecordQueue<K, V>>();
   private final int desiredUnprocessed;
   private final Map<TopicPartition, Long> consumedOffsets;
   private final PunctuationQueue punctuationQueue = new PunctuationQueue();
@@ -40,34 +39,36 @@ public class StreamSynchronizer<K, V> {
     this.consumedOffsets = new HashMap<TopicPartition, Long>();
   }
 
-  public void addPartition(TopicPartition partition, final Receiver<Object, Object> receiver) {
+  @SuppressWarnings("unchecked")
+  public void addPartition(TopicPartition partition, Receiver<Object, Object> receiver) {
     synchronized (this) {
-      RecordQueueWrapper queue = stash.get(partition);
+      RecordQueue<K, V> recordQueue = stash.get(partition);
 
-      if (queue == null) {
-        stash.put(partition, new RecordQueueWrapper(createRecordQueue(partition), receiver));
+      if (recordQueue == null) {
+        stash.put(partition, createRecordQueue(partition, (Receiver<K, V>) receiver));
       } else {
         throw new IllegalStateException("duplicate partition");
       }
     }
   }
 
+  @SuppressWarnings("unchecked")
   public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<K, V>> iterator) {
     synchronized (this) {
-      RecordQueueWrapper queue = stash.get(partition);
-      if (queue != null) {
-        boolean wasEmpty = (queue.size() == 0);
+      RecordQueue recordQueue = stash.get(partition);
+      if (recordQueue != null) {
+        boolean wasEmpty = (recordQueue.size() == 0);
 
         while (iterator.hasNext()) {
           ConsumerRecord<K, V> record = iterator.next();
-          queue.add(record, timestampExtractor.extract(record.topic(), record.key(), record.value()));
+          recordQueue.add(record, timestampExtractor.extract(record.topic(), record.key(), record.value()));
           buffered++;
         }
 
-        if (wasEmpty && queue.size() > 0) chooser.add(queue);
+        if (wasEmpty && recordQueue.size() > 0) chooser.add(recordQueue);
 
         // if we have buffered enough for this partition, pause
-        if (queue.size() > this.desiredUnprocessed) {
+        if (recordQueue.size() > this.desiredUnprocessed) {
           ingestor.pause(partition);
         }
       }
@@ -78,9 +79,10 @@ public class StreamSynchronizer<K, V> {
     return new PunctuationSchedulerImpl(punctuationQueue, processor);
   }
 
+  @SuppressWarnings("unchecked")
   public void process() {
     synchronized (this) {
-      RecordQueueWrapper recordQueue = (RecordQueueWrapper)chooser.next();
+      RecordQueue recordQueue = chooser.next();
 
       if (recordQueue == null) {
         ingestor.poll();
@@ -93,7 +95,13 @@ public class StreamSynchronizer<K, V> {
 
       if (recordQueue.size() == 0) return;
 
-      recordQueue.process();
+      long timestamp = recordQueue.currentStreamTime();
+      ConsumerRecord<K, V> record = recordQueue.next();
+
+      if (streamTime < timestamp) streamTime = timestamp;
+
+      recordQueue.receiver.receive(record.key(), record.value(), streamTime);
+      consumedOffsets.put(recordQueue.partition(), record.offset());
 
       if (recordQueue.size() > 0) chooser.add(recordQueue);
 
@@ -116,59 +124,8 @@ public class StreamSynchronizer<K, V> {
     stash.clear();
   }
 
-  protected RecordQueue<K, V> createRecordQueue(TopicPartition partition) {
-    return new RecordQueueImpl<K, V>(partition, new MinTimestampTracker<ConsumerRecord<K, V>>());
-  }
-
-  private class RecordQueueWrapper implements RecordQueue<K, V> {
-
-    private final RecordQueue<K, V> queue;
-    private final Receiver<Object, Object> receiver;
-
-    RecordQueueWrapper(RecordQueue<K, V> queue, Receiver<Object, Object> receiver) {
-      this.queue = queue;
-      this.receiver = receiver;
-    }
-
-    void process() {
-      long timestamp = queue.currentStreamTime();
-      ConsumerRecord<K, V> record = queue.next();
-
-      if (streamTime < timestamp) streamTime = timestamp;
-
-      receiver.receive(record.key(), record.value(), streamTime);
-      consumedOffsets.put(queue.partition(), record.offset());
-    }
-
-    @Override
-    public TopicPartition partition() {
-      return queue.partition();
-    }
-
-    @Override
-    public void add(ConsumerRecord<K, V> value, long timestamp) {
-      queue.add(value, timestamp);
-    }
-
-    public ConsumerRecord<K, V> next() {
-      return queue.next();
-    }
-
-    @Override
-    public long offset() {
-      return queue.offset();
-    }
-
-    @Override
-    public int size() {
-      return queue.size();
-    }
-
-    @Override
-    public long currentStreamTime() {
-      return queue.currentStreamTime();
-    }
-
+  protected RecordQueue<K, V> createRecordQueue(TopicPartition partition, Receiver<K, V> receiver) {
+    return new RecordQueue<K, V>(partition, receiver, new MinTimestampTracker<ConsumerRecord<K, V>>());
   }
 
 }
