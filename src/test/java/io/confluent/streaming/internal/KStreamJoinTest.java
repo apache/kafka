@@ -2,7 +2,6 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
 import io.confluent.streaming.util.Util;
-import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
@@ -11,19 +10,7 @@ import static org.junit.Assert.assertTrue;
 
 public class KStreamJoinTest {
 
-  private Ingestor ingestor = new Ingestor() {
-    @Override
-    public void poll() {}
-
-    @Override
-    public void poll(long timeoutMs) {}
-
-    @Override
-    public void pause(TopicPartition partition) {}
-
-    @Override
-    public void unpause(TopicPartition partition, long offset) {}
-  };
+  private Ingestor ingestor = new NoopIngestor();
 
   private StreamSynchronizer<String, String> streamSynchronizer = new StreamSynchronizer<String, String>(
     "group",

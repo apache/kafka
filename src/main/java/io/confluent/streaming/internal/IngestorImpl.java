@@ -36,10 +36,12 @@ public class IngestorImpl<K, V> implements Ingestor {
     unpaused.addAll(consumer.subscriptions());
   }
 
+  @Override
   public void poll() {
     poll(pollTimeMs);
   }
 
+  @Override
   public void poll(long timeoutMs) {
     for (TopicPartition partition : toBePaused) {
       doPause(partition);
@@ -53,6 +55,7 @@ public class IngestorImpl<K, V> implements Ingestor {
     }
   }
 
+  @Override
   public void pause(TopicPartition partition) {
     toBePaused.add(partition);
   }
@@ -62,9 +65,15 @@ public class IngestorImpl<K, V> implements Ingestor {
     unpaused.remove(partition);
   }
 
+  @Override
   public void unpause(TopicPartition partition, long lastOffset) {
     consumer.seek(partition, lastOffset);
     unpaused.add(partition);
+  }
+
+  @Override
+  public int numPartitions(String topic) {
+    return consumer.partitionsFor(topic).size();
   }
 
   public void clear() {

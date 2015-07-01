@@ -7,9 +7,6 @@ import io.confluent.streaming.util.FilteredIterator;
 import java.util.Iterator;
 import java.util.LinkedList;
 
-/**
- * Created by yasuhiro on 6/30/15.
- */
 class UnlimitedWindow<K, V> implements Window<K, V> {
 
   private LinkedList<KeyValue<K, V>> list = new LinkedList<KeyValue<K, V>>();

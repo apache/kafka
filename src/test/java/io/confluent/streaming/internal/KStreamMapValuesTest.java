@@ -4,26 +4,13 @@ import io.confluent.streaming.StreamSynchronizer;
 import io.confluent.streaming.SyncGroup;
 import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.ValueMapper;
-import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
 
 public class KStreamMapValuesTest {
 
-  private Ingestor ingestor = new Ingestor() {
-    @Override
-    public void poll() {}
-
-    @Override
-    public void poll(long timeoutMs) {}
-
-    @Override
-    public void pause(TopicPartition partition) {}
-
-    @Override
-    public void unpause(TopicPartition partition, long offset) {}
-  };
+  private Ingestor ingestor = new NoopIngestor();
 
   private StreamSynchronizer<String, String> streamSynchronizer = new StreamSynchronizer<String, String>(
     "group",

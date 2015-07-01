@@ -15,4 +15,6 @@ public interface Ingestor {
 
   void unpause(TopicPartition partition, long offset);
 
+  int numPartitions(String topic);
+
 }

@@ -5,9 +5,6 @@ import io.confluent.streaming.PunctuationScheduler;
 
 import java.util.ArrayList;
 
-/**
- * Created by yasuhiro on 6/30/15.
- */
 class TestProcessor<K, V> implements Processor<K, V> {
   public final ArrayList<String> processed = new ArrayList<String>();
 
