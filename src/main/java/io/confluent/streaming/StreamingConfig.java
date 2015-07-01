@@ -129,8 +129,8 @@ public class StreamingConfig {
         return this.valDeserializer;
     }
 
-    public void timestampExtractor(TimestampExtractor<?, ?> streamSynchronizerFactory) {
-        this.timestampExtractor = streamSynchronizerFactory;
+    public void timestampExtractor(TimestampExtractor<?, ?> timestampExtractor) {
+        this.timestampExtractor = timestampExtractor;
     }
 
     public TimestampExtractor<?, ?> timestampExtractor() {
