@@ -32,7 +32,7 @@ public class KStreamContextImpl implements KStreamContext {
   private final Coordinator coordinator;
   private final HashMap<String, KStreamSource<?, ?>> sourceStreams = new HashMap<String, KStreamSource<?, ?>>();
   private final HashMap<String, PartitioningInfo> partitioningInfos = new HashMap<String, PartitioningInfo>();
-  private final StreamSynchronizerFactory<Object, Object> streamSynchronizerFactory;
+  private final TimestampExtractor<Object, Object> timestampExtractor;
   private final HashMap<String, SyncGroup> syncGroups = new HashMap<String, SyncGroup>();
   private final StreamingConfig streamingConfig;
   private final ProcessorConfig processorConfig;
@@ -63,8 +63,8 @@ public class KStreamContextImpl implements KStreamContext {
     this.streamingConfig = streamingConfig;
     this.processorConfig = processorConfig;
 
-    this.streamSynchronizerFactory = (StreamSynchronizerFactory<Object, Object>)this.streamingConfig.streamSynchronizerFactory();
-    if (this.streamSynchronizerFactory == null) throw new NullPointerException();
+    this.timestampExtractor = (TimestampExtractor<Object, Object>)this.streamingConfig.timestampExtractor();
+    if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractoris  missing");
 
     this.stateDir = stateDir;
     this.state = new ProcessorStateManager(id, stateDir);
@@ -155,17 +155,29 @@ public class KStreamContextImpl implements KStreamContext {
 
   @Override
   public SyncGroup syncGroup(String name) {
+    return syncGroup(name, new TimeBasedChooser<Object, Object>());
+  }
+
+  @Override
+  public SyncGroup roundRobinSyncGroup(String name) {
+    return syncGroup(name, new RoundRobinChooser<Object, Object>());
+  }
+
+  private SyncGroup syncGroup(String name, Chooser<Object, Object> chooser) {
+    int desiredUnprocessedPerPartition = processorConfig.bufferedRecordsPerPartition;
+
     synchronized (this) {
       SyncGroup syncGroup = syncGroups.get(name);
       if (syncGroup == null) {
         StreamSynchronizer<?, ?> streamSynchronizer =
-          streamSynchronizerFactory.create(name, ingestor, processorConfig.bufferedRecordsPerPartition);
+          new StreamSynchronizer<Object, Object>(name, ingestor, chooser, timestampExtractor, desiredUnprocessedPerPartition);
         syncGroup = new SyncGroup(name, streamSynchronizer);
         syncGroups.put(name, syncGroup);
       }
       return syncGroup;
     }
   }
+
 
   @Override
   public void restore(StorageEngine engine) throws Exception {

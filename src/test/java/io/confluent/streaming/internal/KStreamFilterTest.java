@@ -4,8 +4,6 @@ import io.confluent.streaming.*;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
-import java.lang.reflect.Array;
-
 import static org.junit.Assert.assertEquals;
 
 public class KStreamFilterTest {
@@ -27,7 +25,7 @@ public class KStreamFilterTest {
   private StreamSynchronizer<String, String> streamSynchronizer = new StreamSynchronizer<String, String>(
     "group",
     ingestor,
-    new ChooserImpl<String, String>(),
+    new TimeBasedChooser<String, String>(),
     new TimestampExtractor<String, String>() {
       public long extract(String topic, String key, String value) {
         return 0L;

@@ -9,11 +9,11 @@ import java.util.PriorityQueue;
 /**
  * Created by yasuhiro on 6/25/15.
  */
-public class ChooserImpl<K, V> implements Chooser<K, V> {
+public class TimeBasedChooser<K, V> implements Chooser<K, V> {
 
   private final PriorityQueue<RecordQueue<K, V>> pq;
 
-  public ChooserImpl() {
+  public TimeBasedChooser() {
     this(new Comparator<RecordQueue<K, V>>() {
       public int compare(RecordQueue<K, V> queue1, RecordQueue<K, V> queue2) {
         long time1 = queue1.currentStreamTime();
@@ -26,7 +26,7 @@ public class ChooserImpl<K, V> implements Chooser<K, V> {
     });
   }
 
-  public ChooserImpl(Comparator<RecordQueue<K, V>> comparator) {
+  private TimeBasedChooser(Comparator<RecordQueue<K, V>> comparator) {
     pq = new PriorityQueue<RecordQueue<K, V>>(3, comparator);
   }
 

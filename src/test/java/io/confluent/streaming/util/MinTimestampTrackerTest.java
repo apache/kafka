@@ -4,12 +4,10 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
-import java.lang.reflect.Array;
-
 public class MinTimestampTrackerTest {
 
   private Stamped<String> elem(long timestamp) {
-    return new Stamped("", timestamp);
+    return new Stamped<String>("", timestamp);
   }
 
   @SuppressWarnings("unchecked")

@@ -34,7 +34,7 @@ public class FilteredIteratorTest {
 
   @Test
   public void testEmptySource() {
-    List<Integer> list = Arrays.asList();
+    List<Integer> list = new ArrayList<Integer>();
 
     Iterator<String> filtered = new FilteredIterator<String, Integer>(list.iterator()) {
       protected String filter(Integer i) {
@@ -43,7 +43,7 @@ public class FilteredIteratorTest {
       }
     };
 
-    List<String> expected = Arrays.asList();
+    List<String> expected = new ArrayList<String>();
     List<String> result = new ArrayList<String>();
 
     while (filtered.hasNext()) {
@@ -64,7 +64,7 @@ public class FilteredIteratorTest {
       }
     };
 
-    List<String> expected = Arrays.asList();
+    List<String> expected = new ArrayList<String>();
     List<String> result = new ArrayList<String>();
 
     while (filtered.hasNext()) {

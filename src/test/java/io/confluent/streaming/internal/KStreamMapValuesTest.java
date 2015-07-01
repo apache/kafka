@@ -7,8 +7,6 @@ import io.confluent.streaming.ValueMapper;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
 
-import java.util.ArrayList;
-
 import static org.junit.Assert.assertEquals;
 
 public class KStreamMapValuesTest {
@@ -30,7 +28,7 @@ public class KStreamMapValuesTest {
   private StreamSynchronizer<String, String> streamSynchronizer = new StreamSynchronizer<String, String>(
     "group",
     ingestor,
-    new ChooserImpl<String, String>(),
+    new TimeBasedChooser<String, String>(),
     new TimestampExtractor<String, String>() {
       public long extract(String topic, String key, String value) {
         return 0L;

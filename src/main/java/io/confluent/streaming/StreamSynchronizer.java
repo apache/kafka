@@ -30,12 +30,12 @@ public class StreamSynchronizer<K, V> {
                             Ingestor ingestor,
                             Chooser<K, V> chooser,
                             TimestampExtractor<K, V> timestampExtractor,
-                            int desiredNumberOfUnprocessedRecords) {
+                            int desiredUnprocessedPerPartition) {
     this.name = name;
     this.ingestor = ingestor;
     this.chooser = chooser;
     this.timestampExtractor = timestampExtractor;
-    this.desiredUnprocessed = desiredNumberOfUnprocessedRecords;
+    this.desiredUnprocessed = desiredUnprocessedPerPartition;
     this.consumedOffsets = new HashMap<TopicPartition, Long>();
 
   }

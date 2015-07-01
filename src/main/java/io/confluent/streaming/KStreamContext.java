@@ -34,6 +34,8 @@ public interface KStreamContext {
 
   SyncGroup syncGroup(String name);
 
+  SyncGroup roundRobinSyncGroup(String name);
+
   void restore(StorageEngine engine) throws Exception;
 
   void schedule(Processor<?, ?> processor, long time);
