@@ -35,7 +35,7 @@ public class PunctuationQueue {
   public void mayPunctuate(long streamTime) {
     synchronized (pq) {
       Stamped<PunctuationSchedulerImpl> top = pq.peek();
-      while (top.timestamp <= streamTime) {
+      while (top != null && top.timestamp <= streamTime) {
         PunctuationSchedulerImpl scheduler = top.value;
         pq.poll();
         scheduler.processor.punctuate(streamTime);

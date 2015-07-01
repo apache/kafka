@@ -4,9 +4,6 @@ import io.confluent.streaming.Processor;
 import io.confluent.streaming.PunctuationScheduler;
 import io.confluent.streaming.util.Stamped;
 
-/**
- * Created by yasuhiro on 6/29/15.
- */
 public class PunctuationSchedulerImpl implements PunctuationScheduler {
 
   private Stamped<PunctuationSchedulerImpl> scheduled;
@@ -19,12 +16,12 @@ public class PunctuationSchedulerImpl implements PunctuationScheduler {
   }
 
   @Override
-  public void schedule(long time) {
+  public void schedule(long timestamp) {
     synchronized (this) {
       if (scheduled != null)
         throw new IllegalStateException("punctuation is already scheduled");
 
-      scheduled = queue.schedule(this, time);
+      scheduled = queue.schedule(this, timestamp);
     }
   }
 

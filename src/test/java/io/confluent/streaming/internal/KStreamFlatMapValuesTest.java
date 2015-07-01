@@ -1,6 +1,8 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
+import io.confluent.streaming.testutil.NoopIngestor;
+import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 
 import java.util.ArrayList;

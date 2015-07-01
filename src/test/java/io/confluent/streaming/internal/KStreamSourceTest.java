@@ -4,6 +4,8 @@ import static org.junit.Assert.assertEquals;
 
 import io.confluent.streaming.*;
 
+import io.confluent.streaming.testutil.NoopIngestor;
+import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 
 public class KStreamSourceTest {

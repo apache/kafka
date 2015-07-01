@@ -1,4 +1,4 @@
-package io.confluent.streaming.internal;
+package io.confluent.streaming.testutil;
 
 import io.confluent.streaming.KeyValue;
 import io.confluent.streaming.Window;
@@ -7,7 +7,7 @@ import io.confluent.streaming.util.FilteredIterator;
 import java.util.Iterator;
 import java.util.LinkedList;
 
-class UnlimitedWindow<K, V> implements Window<K, V> {
+public class UnlimitedWindow<K, V> implements Window<K, V> {
 
   private LinkedList<KeyValue<K, V>> list = new LinkedList<KeyValue<K, V>>();
 

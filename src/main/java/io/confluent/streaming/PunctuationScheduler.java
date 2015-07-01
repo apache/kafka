@@ -1,13 +1,11 @@
 package io.confluent.streaming;
 
-import io.confluent.streaming.internal.PunctuationQueue;
-
 /**
- * Created by yasuhiro on 6/29/15.
+ * An interface that allows {@link Processor} to schedule a notification at a specified stream time.
  */
 public interface PunctuationScheduler {
 
-  void schedule(long time);
+  void schedule(long timestamp);
 
   void cancel();
 

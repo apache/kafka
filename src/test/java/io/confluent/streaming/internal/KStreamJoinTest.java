@@ -1,6 +1,9 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
+import io.confluent.streaming.testutil.NoopIngestor;
+import io.confluent.streaming.testutil.TestProcessor;
+import io.confluent.streaming.testutil.UnlimitedWindow;
 import io.confluent.streaming.util.Util;
 import org.junit.Test;
 

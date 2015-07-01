@@ -1,8 +1,9 @@
-package io.confluent.streaming.internal;
+package io.confluent.streaming.testutil;
 
+import io.confluent.streaming.internal.Ingestor;
 import org.apache.kafka.common.TopicPartition;
 
-class NoopIngestor implements Ingestor {
+public class NoopIngestor implements Ingestor {
   @Override
   public void poll() {
   }
