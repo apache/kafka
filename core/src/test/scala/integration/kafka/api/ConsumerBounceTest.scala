@@ -14,14 +14,10 @@
 package kafka.api
 
 import kafka.server.KafkaConfig
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.consumer.CommitType
+import kafka.utils.{Logging, ShutdownableThread, TestUtils}
+import org.apache.kafka.clients.consumer._
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-
-import kafka.utils.{ShutdownableThread, TestUtils, Logging}
-
 import org.junit.Assert._
 
 import scala.collection.JavaConversions._
@@ -85,9 +81,11 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
         assertEquals(consumed.toLong, record.offset())
         consumed += 1
       }
-      consumer.commit(CommitType.SYNC)
 
-      if (consumed == numRecords) {
+      consumer.commit(CommitType.SYNC)
+      assertEquals(consumer.position(tp), consumer.committed(tp))
+
+      if (consumer.position(tp) == numRecords) {
         consumer.seekToBeginning()
         consumed = 0
       }

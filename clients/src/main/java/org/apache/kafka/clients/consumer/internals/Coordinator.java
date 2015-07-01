@@ -217,7 +217,7 @@ public final class Coordinator {
                 OffsetCommitRequest.DEFAULT_RETENTION_TIME,
                 offsetData);
 
-            RequestCompletionHandler handler = new CommitOffsetCompletionHandler(offsets, future);
+            RequestCompletionHandler handler = new OffsetCommitCompletionHandler(offsets, future);
             sendCoordinator(ApiKeys.OFFSET_COMMIT, req.toStruct(), handler, now);
         }
 
@@ -261,14 +261,14 @@ public final class Coordinator {
         RequestCompletionHandler completionHandler = new RequestCompletionHandler() {
             @Override
             public void onComplete(ClientResponse resp) {
-                handleOffsetResponse(resp, future);
+                handleOffsetFetchResponse(resp, future);
             }
         };
         sendCoordinator(ApiKeys.OFFSET_FETCH, request.toStruct(), completionHandler, now);
         return future;
     }
 
-    private void handleOffsetResponse(ClientResponse resp, RequestFuture<Map<TopicPartition, Long>> future) {
+    private void handleOffsetFetchResponse(ClientResponse resp, RequestFuture<Map<TopicPartition, Long>> future) {
         if (resp.wasDisconnected()) {
             handleCoordinatorDisconnect(resp);
             future.retryWithNewCoordinator();
@@ -471,12 +471,12 @@ public final class Coordinator {
         }
     }
 
-    private class CommitOffsetCompletionHandler implements RequestCompletionHandler {
+    private class OffsetCommitCompletionHandler implements RequestCompletionHandler {
 
         private final Map<TopicPartition, Long> offsets;
         private final RequestFuture<Void> future;
 
-        public CommitOffsetCompletionHandler(Map<TopicPartition, Long> offsets, RequestFuture<Void> future) {
+        public OffsetCommitCompletionHandler(Map<TopicPartition, Long> offsets, RequestFuture<Void> future) {
             this.offsets = offsets;
             this.future = future;
         }

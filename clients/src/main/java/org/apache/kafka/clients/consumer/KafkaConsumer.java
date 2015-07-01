@@ -42,6 +42,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -332,6 +333,7 @@ import static org.apache.kafka.common.utils.Utils.min;
  *         }
  *     }
  *
+ *     // Shutdown hook which can be called from a separate thread
  *     public void shutdown() {
  *         closed.set(true);
  *         consumer.wakeup();
@@ -417,7 +419,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     // and is used to prevent multi-threaded access
     private final AtomicReference<Long> currentThread = new AtomicReference<Long>();
     // refcount is used to allow reentrant access by the thread who has acquired currentThread
-    private int refcount = 0; // reference count for reentrant access
+    private final AtomicInteger refcount = new AtomicInteger(0);
 
     // TODO: This timeout controls how long we should wait before retrying a request. We should be able
     //       to leverage the work of KAFKA-2120 to get this value from configuration.
@@ -795,7 +797,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * rebalance and also on startup. As such, if you need to store offsets in anything other than Kafka, this API
      * should not be used.
      * <p>
-     * A non-blocking commit will attempt to commit offsets asychronously. No error will be thrown if the commit fails.
+     * A non-blocking commit will attempt to commit offsets asynchronously. No error will be thrown if the commit fails.
      * A blocking commit will wait for a response acknowledging the commit. In the event of an error it will retry until
      * the commit succeeds.
      * 
@@ -832,7 +834,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void commit(CommitType commitType) {
         acquire();
         try {
-            commit(this.subscriptions.allConsumed(), commitType);
+            // Need defensive copy to ensure offsets are not removed before completion (e.g. in rebalance)
+            Map<TopicPartition, Long> allConsumed = new HashMap<TopicPartition, Long>(this.subscriptions.allConsumed());
+            commit(allConsumed, commitType);
         } finally {
             release();
         }
@@ -978,10 +982,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public void close() {
-        if (closed) return;
-
         acquire();
         try {
+            if (closed) return;
             close(false);
         } finally {
             release();
@@ -1355,14 +1358,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         Long threadId = Thread.currentThread().getId();
         if (!threadId.equals(currentThread.get()) && !currentThread.compareAndSet(null, threadId))
             throw new ConcurrentModificationException("KafkaConsumer is not safe for multi-threaded access");
-        refcount++;
+        refcount.incrementAndGet();
     }
 
     /**
      * Release the light lock protecting the consumer from multi-threaded access.
      */
     private void release() {
-        if (--refcount == 0)
+        if (refcount.decrementAndGet() == 0)
             currentThread.set(null);
     }
 }
