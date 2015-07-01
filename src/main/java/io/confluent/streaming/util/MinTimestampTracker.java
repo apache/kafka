@@ -3,15 +3,19 @@ package io.confluent.streaming.util;
 import java.util.LinkedList;
 
 /**
- * MinTimestampTracker maintains the minimum timestamp of stamped elements that were added but not yet removed.
+ * MinTimestampTracker is a helper class for a sliding window implementation.
+ * It is assumed that elements are added or removed in a FIFO manner.
+ * It maintains the minimum timestamp of stamped elements that were added but not yet removed.
  */
 public class MinTimestampTracker<E> implements TimestampTracker<E> {
 
   private final LinkedList<Stamped<E>> descendingSubsequence = new LinkedList<Stamped<E>>();
 
   public void addStampedElement(Stamped<E> elem) {
+    if (elem == null) throw new NullPointerException();
+
     Stamped<E> minElem = descendingSubsequence.peekLast();
-    while (minElem.compareTo(elem) >= 0) {
+    while (minElem != null && minElem.compareTo(elem) >= 0) {
       descendingSubsequence.removeLast();
       minElem = descendingSubsequence.peekLast();
     }

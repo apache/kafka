@@ -1,7 +1,9 @@
 package io.confluent.streaming.util;
 
 /**
- * TimestampTracker maintains the timestamp, like the min timestamp, the max timestamp, etc. of stamped elements
+ * TimestampTracker is a helper class for a sliding window implementation.
+ * It is assumed that elements are added or removed in a FIFO manner.
+ * It maintains the timestamp, like the min timestamp, the max timestamp, etc. of stamped elements
  * that were added but not yet removed.
  */
 public interface TimestampTracker<E> {
@@ -20,7 +22,7 @@ public interface TimestampTracker<E> {
 
   /**
    * Returns the timestamp
-   * @return
+   * @return timestamp, or -1L when empty
    */
   long get();
 
