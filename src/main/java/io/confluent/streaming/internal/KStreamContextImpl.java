@@ -45,6 +45,7 @@ public class KStreamContextImpl implements KStreamContext {
 
   @SuppressWarnings("unchecked")
   public KStreamContextImpl(int id,
+                            Set<String> topics,
                             Ingestor ingestor,
                             Producer<byte[], byte[]> producer,
                             Coordinator coordinator,
@@ -52,7 +53,7 @@ public class KStreamContextImpl implements KStreamContext {
                             ProcessorConfig processorConfig,
                             Metrics metrics) {
     this.id = id;
-    this.topics = streamingConfig.topics();
+    this.topics = topics;
     this.ingestor = ingestor;
 
     this.simpleCollector = new RecordCollectors.SimpleRecordCollector(producer);
@@ -208,7 +209,7 @@ public class KStreamContextImpl implements KStreamContext {
     stateMgr.init();
     try {
       this.restoreConsumer = restoreConsumer;
-      job.build(this);
+      job.init(this);
     }
     finally {
       this.restoreConsumer = null;

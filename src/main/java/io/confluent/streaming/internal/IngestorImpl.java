@@ -55,7 +55,7 @@ public class IngestorImpl<K, V> implements Ingestor {
 
     for (TopicPartition partition : unpaused) {
       StreamSynchronizer<K, V> streamSynchronizer = streamSynchronizers.get(partition);
-      
+
       if (streamSynchronizer != null)
         streamSynchronizer.addRecords(partition, new DeserializingIterator(records.records(partition).iterator()));
       else

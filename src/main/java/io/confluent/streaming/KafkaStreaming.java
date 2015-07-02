@@ -39,6 +39,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,7 +81,8 @@ public class KafkaStreaming implements Runnable {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaStreaming.class);
 
-    private final KStreamJob job;
+    private final Class<? extends KStreamJob> jobClass;
+    private final Set<String> topics;
     private final Map<Integer, Collection<SyncGroup>> syncGroups = new HashMap<Integer, Collection<SyncGroup>>();
     private final Map<Integer, KStreamContextImpl> kstreamContexts = new HashMap<Integer, KStreamContextImpl>();
     protected final Producer<byte[], byte[]> producer;
@@ -111,16 +113,17 @@ public class KafkaStreaming implements Runnable {
         }
     };
 
-    public KafkaStreaming(KStreamJob job, StreamingConfig config) {
-        this(job, config, null, null);
+    public KafkaStreaming(Class<KStreamJob> jobClass, StreamingConfig config) {
+        this(jobClass, config, null, null);
     }
 
     @SuppressWarnings("unchecked")
-    protected KafkaStreaming(KStreamJob job,
+    protected KafkaStreaming(Class<? extends KStreamJob> jobClass,
                              StreamingConfig config,
                              Producer<byte[], byte[]> producer,
                              Consumer<byte[], byte[]> consumer) {
-        this.job = job;
+        this.jobClass = jobClass;
+        this.topics = extractTopics(jobClass);
         this.producer = producer == null? new KafkaProducer<byte[], byte[]>(config.config(), new ByteArraySerializer(), new ByteArraySerializer()): producer;
         this.consumer = consumer == null? new KafkaConsumer<byte[], byte[]>(config.config(), rebalanceCallback, new ByteArrayDeserializer(), new ByteArrayDeserializer()): consumer;
         this.streamingConfig = config;
@@ -130,9 +133,9 @@ public class KafkaStreaming implements Runnable {
         this.config = new ProcessorConfig(config.config());
         this.ingestor =
             new IngestorImpl<Object, Object>(this.consumer,
-                                                  (Deserializer<Object>) config.keyDeserializer(),
-                                                  (Deserializer<Object>) config.valueDeserializer(),
-                                                  this.config.pollTimeMs);
+                                             (Deserializer<Object>) config.keyDeserializer(),
+                                             (Deserializer<Object>) config.valueDeserializer(),
+                                             this.config.pollTimeMs);
         this.running = true;
         this.lastCommit = 0;
         this.nextStateCleaning = Long.MAX_VALUE;
@@ -161,8 +164,9 @@ public class KafkaStreaming implements Runnable {
             if (!config.stateDir.exists() && !config.stateDir.mkdirs())
                 throw new IllegalArgumentException("Failed to create state directory: " + config.stateDir.getAbsolutePath());
 
-            for (String topic : streamingConfig.topics())
+            for (String topic : topics)
                 consumer.subscribe(topic);
+
             log.info("Start-up complete");
         } else {
             throw new IllegalStateException("This container was already started");
@@ -318,6 +322,8 @@ public class KafkaStreaming implements Runnable {
             final Integer id = partition.partition();
             KStreamContextImpl kstreamContext = kstreamContexts.get(id);
             if (kstreamContext == null) {
+                KStreamJob job = (KStreamJob) Utils.newInstance(jobClass);
+
                 Coordinator coordinator = new Coordinator() {
                     @Override
                     public void commit(Coordinator.RequestScope scope) {
@@ -331,7 +337,7 @@ public class KafkaStreaming implements Runnable {
                 };
 
                 kstreamContext =
-                  new KStreamContextImpl(id, ingestor, producer, coordinator, streamingConfig, config, metrics);
+                  new KStreamContextImpl(id, topics, ingestor, producer, coordinator, streamingConfig, config, metrics);
 
                 kstreamContexts.put(id, kstreamContext);
 
@@ -378,6 +384,16 @@ public class KafkaStreaming implements Runnable {
         }
         // clear buffered records
         this.ingestor.clear();
+    }
+
+    private static Set<String> extractTopics(Class<? extends KStreamJob> jobClass) {
+        // extract topics from a jobClass's static member field, topics
+        try {
+            return ((KStreamJob.Topics)Util.getFieldValue(jobClass, null, "topics")).set;
+        }
+        catch (Exception e) {
+            throw new KStreamException("failed to get a topic list from the job", e);
+        }
     }
 
     private class KafkaStreamingMetrics {

@@ -55,7 +55,6 @@ public class StreamingConfig {
 
     private final Properties config;
     private final Map<String, Object> context = new HashMap<String, Object>();
-    private final Set<String> topics = new HashSet<String>();
     private Serializer<?> keySerializer;
     private Serializer<?> valSerializer;
     private Deserializer<?> keyDeserializer;
@@ -73,10 +72,6 @@ public class StreamingConfig {
     }
 
     @SuppressWarnings("all")
-
-    public void subscribe(String...topic) {
-        Collections.addAll(this.topics, topic);
-    }
 
     public void serialization(Serializer<?> serializer, Deserializer<?> deserializer) {
         keySerializer(serializer);
@@ -107,10 +102,6 @@ public class StreamingConfig {
 
     public Map<String, Object> context() {
         return this.context;
-    }
-
-    public Set<String> topics() {
-        return this.topics;
     }
 
     public Serializer<?> keySerializer() {

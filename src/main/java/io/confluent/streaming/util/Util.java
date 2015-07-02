@@ -1,6 +1,7 @@
 package io.confluent.streaming.util;
 
 import java.io.File;
+import java.lang.reflect.Field;
 import java.util.HashSet;
 
 /**
@@ -8,10 +9,28 @@ import java.util.HashSet;
  */
 public class Util {
 
+  /**
+   * Creates a set
+   * @param elems
+   * @return Set
+   */
   public static <T> HashSet<T> mkSet(T... elems) {
     HashSet<T> set = new HashSet<T>();
     for (T e : elems) set.add(e);
     return set;
+  }
+
+  /**
+   * Gets a value from a field of a class
+   * @param clazz the class object
+   * @param obj the instance object, or maybe null for a static field
+   * @Param fieldName the name of the field
+   * @return Object
+   * @throws Exception
+   */
+  public static Object getFieldValue(Class<?> clazz, Object obj, String fieldName) throws Exception {
+    Field myField = clazz.getDeclaredField(fieldName);
+    return myField.get(obj);
   }
 
   /**
