@@ -68,7 +68,7 @@ public class KStreamBranchTest {
     }
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L);
+      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(3, processors[0].processed.size());
@@ -87,7 +87,7 @@ public class KStreamBranchTest {
     }
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L);
+      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(3, processors[0].processed.size());

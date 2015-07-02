@@ -13,7 +13,7 @@ import java.util.Deque;
  */
 public class RecordQueue<K, V> {
 
-  private final Deque<Stamped<ConsumerRecord<K, V>>> queue = new ArrayDeque<Stamped<ConsumerRecord<K, V>>>();
+  private final Deque<StampedRecord<K, V>> queue = new ArrayDeque<StampedRecord<K, V>>();
   public final Receiver<K, V> receiver;
   private final TopicPartition partition;
   private TimestampTracker<ConsumerRecord<K, V>> timestampTracker;
@@ -29,21 +29,20 @@ public class RecordQueue<K, V> {
     return partition;
   }
 
-  public void add(ConsumerRecord<K, V> record, long timestamp) {
-    Stamped<ConsumerRecord<K, V>> elem = new Stamped<ConsumerRecord<K, V>>(record, timestamp);
-    queue.addLast(elem);
-    timestampTracker.addStampedElement(elem);
+  public void add(StampedRecord<K, V> record) {
+    queue.addLast(record);
+    timestampTracker.addStampedElement(record);
     offset = record.offset();
   }
 
-  public ConsumerRecord<K, V> next() {
-    Stamped<ConsumerRecord<K, V>> elem = queue.getFirst();
+  public StampedRecord<K, V> next() {
+    StampedRecord<K, V> elem = queue.getFirst();
 
     if (elem == null) return null;
 
     timestampTracker.removeStampedElement(elem);
 
-    return elem.value;
+    return elem;
   }
 
   public long offset() {
@@ -52,6 +51,10 @@ public class RecordQueue<K, V> {
 
   public int size() {
     return queue.size();
+  }
+
+  public boolean isEmpty() {
+    return queue.isEmpty();
   }
 
   public long currentStreamTime() {

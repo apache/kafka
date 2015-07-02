@@ -97,7 +97,7 @@ public class KStreamJoinTest {
     // push two items to the main stream. the other stream's window is empty
 
     for (int i = 0; i < 2; i++) {
-      stream1.receive(expectedKeys[i], "X" + expectedKeys[i], 0L);
+      stream1.receive(expectedKeys[i], "X" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(0, processor.processed.size());
@@ -105,7 +105,7 @@ public class KStreamJoinTest {
     // push two items to the other stream. the main stream's window has two items
 
     for (int i = 0; i < 2; i++) {
-      stream2.receive(expectedKeys[i], "Y" + expectedKeys[i], 0L);
+      stream2.receive(expectedKeys[i], "Y" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(2, processor.processed.size());
@@ -121,7 +121,7 @@ public class KStreamJoinTest {
     // push all items to the main stream. this should produce two items.
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream1.receive(expectedKeys[i], "X" + expectedKeys[i], 0L);
+      stream1.receive(expectedKeys[i], "X" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(2, processor.processed.size());
@@ -138,7 +138,7 @@ public class KStreamJoinTest {
 
     // push all items to the other stream. this should produce 6 items
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream2.receive(expectedKeys[i], "Y" + expectedKeys[i], 0L);
+      stream2.receive(expectedKeys[i], "Y" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(6, processor.processed.size());

@@ -55,19 +55,6 @@ public interface KStream<K, V> {
   KStreamWindowed<K, V> with(Window<K, V> window);
 
   /**
-   * Creates a new stream by joining this stream with the other windowed stream.
-   * Each element in this stream is joined with elements in the other stream's window.
-   * The resulting values are computed by applying a joiner.
-   *
-   * @param other
-   * @param joiner
-   * @return KStream
-   * @throws NotCopartitionedException
-   */
-  <V1, V2> KStream<K, V2> nestedLoop(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> joiner)
-    throws NotCopartitionedException;
-
-  /**
    * Creates an array of streams from this stream. Each stream in the array coresponds to a predicate in
    * supplied predicates in the same order. Predicates are evaluated in order. An element is streamed to
    * a corresponding stream for the first predicate is evaluated true.

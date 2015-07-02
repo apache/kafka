@@ -15,10 +15,10 @@ class KStreamMapValues<K, V, V1> extends KStreamImpl<K, V, K, V1> {
   }
 
   @Override
-  public void receive(K key, V1 value, long timestamp) {
+  public void receive(K key, V1 value, long timestamp, long streamTime) {
     synchronized (this) {
       V newValue = mapper.apply(value);
-      forward(key, newValue, timestamp);
+      forward(key, newValue, timestamp, streamTime);
     }
   }
 

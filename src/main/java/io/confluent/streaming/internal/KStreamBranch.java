@@ -23,12 +23,12 @@ class KStreamBranch<K, V> implements Receiver<K, V> {
   }
 
   @Override
-  public void receive(K key, V value, long timestamp) {
+  public void receive(K key, V value, long timestamp, long streamTime) {
     synchronized(this) {
       for (int i = 0; i < predicates.length; i++) {
         Predicate<K, V> predicate = predicates[i];
         if (predicate.apply(key, value)) {
-          branches[i].receive(key, value, timestamp);
+          branches[i].receive(key, value, timestamp, streamTime);
           return;
         }
       }

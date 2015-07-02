@@ -9,6 +9,10 @@ public interface Window<K, V> {
 
   Iterator<V> find(K key, long timestamp);
 
+  Iterator<V> findAfter(K key, long timestamp);
+
+  Iterator<V> findBefore(K key, long timestamp);
+
   void put(K key, V value, long timestamp);
 
 }

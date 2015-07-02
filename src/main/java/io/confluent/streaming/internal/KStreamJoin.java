@@ -10,27 +10,54 @@ import java.util.Iterator;
  */
 class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V, K, V1> {
 
-  private final Window<K, V1> window1;
-  private final Window<K, V2> window2;
+  private static abstract class Finder<K, T> {
+    abstract Iterator<T> find(K key, long timestamp);
+  }
+
+  private final Finder<K, V1> finder1;
+  private final Finder<K, V2> finder2;
   private final ValueJoiner<V, V1, V2> joiner;
   final Receiver<K, V2> receiverForOtherStream;
 
-  KStreamJoin(final Window<K, V1> window1, Window<K, V2> window2, ValueJoiner<V, V1, V2> joiner, PartitioningInfo partitioningInfo, KStreamContextImpl context) {
+  KStreamJoin(final Window<K, V1> window1, final Window<K, V2> window2, boolean prior, ValueJoiner<V, V1, V2> joiner, PartitioningInfo partitioningInfo, KStreamContextImpl context) {
     super(partitioningInfo, context);
 
-    this.window1 = window1;
-    this.window2 = window2;
+    if (prior) {
+      this.finder1 = new Finder<K, V1>() {
+        Iterator<V1> find(K key, long timestamp) {
+          return window1.findAfter(key, timestamp);
+        }
+      };
+      this.finder2 = new Finder<K, V2>() {
+        Iterator<V2> find(K key, long timestamp) {
+          return window2.findBefore(key, timestamp);
+        }
+      };
+    }
+    else {
+      this.finder1 = new Finder<K, V1>() {
+        Iterator<V1> find(K key, long timestamp) {
+          return window1.find(key, timestamp);
+        }
+      };
+      this.finder2 = new Finder<K, V2>() {
+        Iterator<V2> find(K key, long timestamp) {
+          return window2.find(key, timestamp);
+        }
+      };
+    }
+
     this.joiner = joiner;
 
     this.receiverForOtherStream = getReceiverForOther();
   }
 
   @Override
-  public void receive(K key, V1 value, long timestamp) {
-    Iterator<V2> iter = window2.find(key, timestamp);
+  public void receive(K key, V1 value, long timestamp, long streamTime) {
+    Iterator<V2> iter = finder2.find(key, timestamp);
     if (iter != null) {
       while (iter.hasNext()) {
-        doJoin(key, value, iter.next(), timestamp);
+        doJoin(key, value, iter.next(), timestamp, streamTime);
       }
     }
   }
@@ -39,19 +66,19 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V, K, V1> {
     return new Receiver<K, V2>() {
 
       @Override
-      public void receive(K key, V2 value2, long timestamp) {
-        Iterator<V1> iter = window1.find(key, timestamp);
+      public void receive(K key, V2 value2, long timestamp, long streamTime) {
+        Iterator<V1> iter = finder1.find(key, timestamp);
         if (iter != null) {
           while (iter.hasNext()) {
-            doJoin(key, iter.next(), value2, timestamp);
+            doJoin(key, iter.next(), value2, timestamp, streamTime);
           }
         }
       }
     };
   }
 
-  private void doJoin(K key, V1 value1, V2 value2, long timestamp) {
-    forward(key, joiner.apply(value1, value2), timestamp);
+  private void doJoin(K key, V1 value1, V2 value2, long timestamp, long streamTime) {
+    forward(key, joiner.apply(value1, value2), timestamp, streamTime);
   }
 
 }

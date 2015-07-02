@@ -15,10 +15,10 @@ class KStreamFilter<K, V> extends KStreamImpl<K, V, K, V> {
   }
 
   @Override
-  public void receive(K key, V value, long timestamp) {
+  public void receive(K key, V value, long timestamp,long streamTime) {
     synchronized(this) {
       if (predicate.apply(key, value)) {
-        forward(key, value, timestamp);
+        forward(key, value, timestamp, streamTime);
       }
     }
   }

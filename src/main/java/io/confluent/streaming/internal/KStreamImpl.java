@@ -60,17 +60,6 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
   }
 
   @Override
-  public <V1, V2> KStream<K, V2> nestedLoop(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> processor)
-    throws NotCopartitionedException {
-
-    KStreamWindowedImpl<K, V1> otherImpl = (KStreamWindowedImpl<K, V1>) other;
-
-    if (!partitioningInfo.isJoinCompatibleWith(otherImpl.partitioningInfo)) throw new NotCopartitionedException();
-
-    return chain(new KStreamNestedLoop<K, V2, V, V1>(otherImpl.window, processor, partitioningInfo, context));
-  }
-
-  @Override
   public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
     KStreamBranch<K, V> branch = new KStreamBranch<K, V>(predicates, partitioningInfo, context);
     registerReceiver(branch);
@@ -108,7 +97,7 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
   @Override
   public void process(final Processor<K, V> processor) {
     Receiver<K, V> receiver = new Receiver<K, V>() {
-      public void receive(K key, V value, long timestamp) {
+      public void receive(K key, V value, long timestamp, long streamTime) {
         processor.apply(key, value);
       }
     };
@@ -122,10 +111,10 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
     nextReceivers.add(receiver);
   }
 
-  protected void forward(K key, V value, long timestamp) {
+  protected void forward(K key, V value, long timestamp, long streamTime) {
     int numReceivers = nextReceivers.size();
     for (int i = 0; i < numReceivers; i++) {
-      nextReceivers.get(i).receive(key, value, timestamp);
+      nextReceivers.get(i).receive(key, value, timestamp, streamTime);
     }
   }
 

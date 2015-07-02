@@ -38,7 +38,7 @@ public class KStreamSourceTest {
     final String[] expectedValues = new String[] { "v1", "v2", "v3" };
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], expectedValues[i], 0L);
+      stream.receive(expectedKeys[i], expectedValues[i], 0L, 0L);
     }
 
     assertEquals(3, processor.processed.size());

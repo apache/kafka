@@ -23,7 +23,24 @@ public class WindowByTime<K, V> implements Window<K, V> {
   }
 
   @Override
+  public Iterator<V> findAfter(K key, final long timestamp) {
+    return find(key, timestamp, timestamp + duration);
+  }
+
+  @Override
+  public Iterator<V> findBefore(K key, final long timestamp) {
+    return find(key, timestamp - duration, timestamp);
+  }
+
+  @Override
   public Iterator<V> find(K key, final long timestamp) {
+    return find(key, timestamp - duration, timestamp + duration);
+  }
+
+  /*
+   * finds items in the window between startTime and endTime (both inclusive)
+   */
+  private Iterator<V> find(K key, final long startTime, final long endTime) {
     final LinkedList<Stamped<V>> values = map.get(key);
 
     if (values == null) {
@@ -33,7 +50,7 @@ public class WindowByTime<K, V> implements Window<K, V> {
       return new FilteredIterator<V, Stamped<V>>(values.iterator()) {
         @Override
         protected V filter(Stamped<V> item) {
-          if (item.timestamp <= timestamp)
+          if (startTime <= item.timestamp && item.timestamp <= endTime)
             return item.value;
           else
             return null;

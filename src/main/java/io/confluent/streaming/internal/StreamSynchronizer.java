@@ -57,18 +57,20 @@ public class StreamSynchronizer<K, V> {
     synchronized (this) {
       RecordQueue recordQueue = stash.get(partition);
       if (recordQueue != null) {
-        boolean wasEmpty = (recordQueue.size() == 0);
+        boolean wasEmpty = recordQueue.isEmpty();
 
         while (iterator.hasNext()) {
           ConsumerRecord<K, V> record = iterator.next();
-          recordQueue.add(record, timestampExtractor.extract(record.topic(), record.key(), record.value()));
+          long timestamp = timestampExtractor.extract(record.topic(), record.key(), record.value());
+          recordQueue.add(new StampedRecord<K, V>(record, timestamp));
           buffered++;
         }
 
-        if (wasEmpty && recordQueue.size() > 0) chooser.add(recordQueue);
+        int queueSize = recordQueue.size();
+        if (wasEmpty && queueSize > 0) chooser.add(recordQueue);
 
         // if we have buffered enough for this partition, pause
-        if (recordQueue.size() > this.desiredUnprocessed) {
+        if (queueSize >= this.desiredUnprocessed) {
           ingestor.pause(partition);
         }
       }
@@ -96,11 +98,11 @@ public class StreamSynchronizer<K, V> {
       if (recordQueue.size() == 0) return;
 
       long timestamp = recordQueue.currentStreamTime();
-      ConsumerRecord<K, V> record = recordQueue.next();
+      StampedRecord<K, V> record = recordQueue.next();
 
       if (streamTime < timestamp) streamTime = timestamp;
 
-      recordQueue.receiver.receive(record.key(), record.value(), streamTime);
+      recordQueue.receiver.receive(record.key(), record.value(), record.timestamp, streamTime);
       consumedOffsets.put(recordQueue.partition(), record.offset());
 
       if (recordQueue.size() > 0) chooser.add(recordQueue);
