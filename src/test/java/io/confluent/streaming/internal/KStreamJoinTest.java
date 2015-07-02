@@ -151,6 +151,86 @@ public class KStreamJoinTest {
   }
 
   @Test
+  public void testJoinPrior() {
+
+    final int[] expectedKeys = new int[]{0, 1, 2, 3};
+
+    KStreamSource<Integer, String> stream1;
+    KStreamSource<Integer, String> stream2;
+    KStreamWindowed<Integer, String> windowed1;
+    KStreamWindowed<Integer, String> windowed2;
+    TestProcessor<Integer, String> processor;
+    String[] expected;
+
+    processor = new TestProcessor<Integer, String>();
+    stream1 = new KStreamSource<Integer, String>(partitioningInfo, null);
+    stream2 = new KStreamSource<Integer, String>(partitioningInfo, null);
+    windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
+    windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
+
+    boolean exceptionRaised = false;
+
+    try {
+      windowed1.joinPrior(windowed2, joiner).process(processor);
+    } catch (NotCopartitionedException e) {
+      exceptionRaised = true;
+    }
+
+    assertFalse(exceptionRaised);
+
+    // push two items to the main stream. the other stream's window is empty
+
+    for (int i = 0; i < 2; i++) {
+      stream1.receive(expectedKeys[i], "X" + expectedKeys[i], i, 0L);
+    }
+
+    assertEquals(0, processor.processed.size());
+
+    // push two items to the other stream. the main stream's window has two items
+    // no corresponding item in the main window has a newer timestamp
+
+    for (int i = 0; i < 2; i++) {
+      stream2.receive(expectedKeys[i], "Y" + expectedKeys[i], i + 1, 0L);
+    }
+
+    assertEquals(0, processor.processed.size());
+
+    processor.processed.clear();
+
+    // push all items with newer timestamps to the main stream. this should produce two items.
+
+    for (int i = 0; i < expectedKeys.length; i++) {
+      stream1.receive(expectedKeys[i], "X" + expectedKeys[i], i + 2, 0L);
+    }
+
+    assertEquals(2, processor.processed.size());
+
+    expected = new String[]{"0:X0+Y0", "1:X1+Y1"};
+
+    for (int i = 0; i < expected.length; i++) {
+      assertEquals(expected[i], processor.processed.get(i));
+    }
+
+    processor.processed.clear();
+
+    // there will be previous two items + all items in the main stream's window, thus two are duplicates.
+
+    // push all items with older timestamps to the other stream. this should produce six items
+    for (int i = 0; i < expectedKeys.length; i++) {
+      stream2.receive(expectedKeys[i], "Y" + expectedKeys[i], i, 0L);
+    }
+
+    assertEquals(6, processor.processed.size());
+
+    expected = new String[]{"0:X0+Y0", "0:X0+Y0", "1:X1+Y1", "1:X1+Y1", "2:X2+Y2", "3:X3+Y3"};
+
+    for (int i = 0; i < expected.length; i++) {
+      assertEquals(expected[i], processor.processed.get(i));
+    }
+
+  }
+
+  @Test
   public void testMap() {
     KStreamSource<Integer, String> stream1;
     KStreamSource<Integer, String> stream2;
