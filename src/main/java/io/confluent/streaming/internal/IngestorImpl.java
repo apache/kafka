@@ -75,6 +75,17 @@ public class IngestorImpl<K, V> implements Ingestor {
     return consumer.partitionsFor(topic).size();
   }
 
+  @SuppressWarnings("unchecked")
+  @Override
+  public void addStreamSynchronizerForPartition(StreamSynchronizer<?, ?> streamSynchronizer, TopicPartition partition) {
+    streamSynchronizers.put(partition, (StreamSynchronizer<K, V>) streamSynchronizer);
+  }
+
+  @Override
+  public void removeStreamSynchronizerForPartition(TopicPartition partition) {
+    streamSynchronizers.remove(partition);
+  }
+
   public void clear() {
     unpaused.clear();
     toBePaused.clear();

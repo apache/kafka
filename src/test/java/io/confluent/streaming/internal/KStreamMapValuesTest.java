@@ -3,7 +3,7 @@ package io.confluent.streaming.internal;
 import io.confluent.streaming.SyncGroup;
 import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.ValueMapper;
-import io.confluent.streaming.testutil.NoopIngestor;
+import io.confluent.streaming.testutil.MockIngestor;
 import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 
@@ -11,7 +11,7 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamMapValuesTest {
 
-  private Ingestor ingestor = new NoopIngestor();
+  private Ingestor ingestor = new MockIngestor();
 
   private StreamSynchronizer<String, String> streamSynchronizer = new StreamSynchronizer<String, String>(
     "group",

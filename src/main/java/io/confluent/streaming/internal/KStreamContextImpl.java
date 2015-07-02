@@ -123,7 +123,9 @@ public class KStreamContextImpl implements KStreamContext {
         stream = new KStreamSource<Object, Object>(partitioningInfo, this);
         sourceStreams.put(topic, stream);
 
-        syncGroup.streamSynchronizer.addPartition(new TopicPartition(topic, id), (Receiver<Object, Object>)stream);
+        TopicPartition partition = new TopicPartition(topic, id);
+        syncGroup.streamSynchronizer.addPartition(partition, (Receiver<Object, Object>)stream);
+        ingestor.addStreamSynchronizerForPartition(syncGroup.streamSynchronizer, partition);
       }
       else {
         if (stream.partitioningInfo.syncGroup == syncGroup)

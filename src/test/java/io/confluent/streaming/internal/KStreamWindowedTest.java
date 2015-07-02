@@ -1,7 +1,7 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
-import io.confluent.streaming.testutil.NoopIngestor;
+import io.confluent.streaming.testutil.MockIngestor;
 import io.confluent.streaming.testutil.UnlimitedWindow;
 import org.junit.Test;
 
@@ -11,7 +11,7 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamWindowedTest {
 
-  private Ingestor ingestor = new NoopIngestor();
+  private Ingestor ingestor = new MockIngestor();
 
   private StreamSynchronizer<String, String> streamSynchronizer = new StreamSynchronizer<String, String>(
     "group",

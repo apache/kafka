@@ -270,7 +270,7 @@ public class KafkaStreaming implements Runnable {
             KStreamContextImpl context = kstreamContexts.get(id);
             context.flush();
 
-            for (SyncGroup syncGroup : this.syncGroups.get(id)) {
+            for (SyncGroup syncGroup : syncGroups.get(id)) {
                 commit.putAll(syncGroup.streamSynchronizer.consumedOffsets()); // TODO: can this be async?
             }
         }
@@ -305,7 +305,7 @@ public class KafkaStreaming implements Runnable {
     private void addPartitions(Collection<TopicPartition> assignment) {
         HashSet<TopicPartition> partitions = new HashSet<TopicPartition>(assignment);
 
-        this.ingestor.init();
+        ingestor.init();
 
         Consumer<byte[], byte[]> restoreConsumer =
           new KafkaConsumer<byte[], byte[]>(
@@ -363,6 +363,8 @@ public class KafkaStreaming implements Runnable {
         }
         for (TopicPartition partition : assignment) {
             KStreamContextImpl kstreamContext = kstreamContexts.remove(partition.partition());
+            ingestor.removeStreamSynchronizerForPartition(partition);
+
             if (kstreamContext != null) {
                 log.info("Removing stream context {}", partition.partition());
                 try {
