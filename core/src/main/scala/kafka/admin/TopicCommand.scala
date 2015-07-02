@@ -27,8 +27,8 @@ import scala.collection._
 import scala.collection.JavaConversions._
 import kafka.log.LogConfig
 import kafka.consumer.Whitelist
-import kafka.server.OffsetManager
 import org.apache.kafka.common.utils.Utils
+import kafka.coordinator.ConsumerCoordinator
 
 
 object TopicCommand {
@@ -111,7 +111,7 @@ object TopicCommand {
         println("Updated config for topic \"%s\".".format(topic))
       }
       if(opts.options.has(opts.partitionsOpt)) {
-        if (topic == OffsetManager.OffsetsTopicName) {
+        if (topic == ConsumerCoordinator.OffsetsTopicName) {
           throw new IllegalArgumentException("The number of partitions for the offsets topic cannot be changed.")
         }
         println("WARNING: If partitions are increased for a topic that has a key, the partition " +

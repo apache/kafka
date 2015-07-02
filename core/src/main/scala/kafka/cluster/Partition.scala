@@ -22,7 +22,7 @@ import kafka.utils.CoreUtils.{inReadLock,inWriteLock}
 import kafka.admin.AdminUtils
 import kafka.api.{PartitionStateInfo, LeaderAndIsr}
 import kafka.log.LogConfig
-import kafka.server.{TopicPartitionOperationKey, LogOffsetMetadata, OffsetManager, LogReadResult, ReplicaManager}
+import kafka.server.{TopicPartitionOperationKey, LogOffsetMetadata, LogReadResult, ReplicaManager}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.controller.KafkaController
 import kafka.message.ByteBufferMessageSet
@@ -160,8 +160,7 @@ class Partition(val topic: String,
    *  and setting the new leader and ISR
    */
   def makeLeader(controllerId: Int,
-                 partitionStateInfo: PartitionStateInfo, correlationId: Int,
-                 offsetManager: OffsetManager): Boolean = {
+                 partitionStateInfo: PartitionStateInfo, correlationId: Int): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
       val allReplicas = partitionStateInfo.allReplicas
       val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
@@ -186,8 +185,6 @@ class Partition(val topic: String,
         if (r.brokerId != localBrokerId) r.updateLogReadResult(LogReadResult.UnknownLogReadResult))
       // we may need to increment high watermark since ISR could be down to 1
       maybeIncrementLeaderHW(newLeaderReplica)
-      if (topic == OffsetManager.OffsetsTopicName)
-        offsetManager.loadOffsetsFromLog(partitionId)
       true
     }
   }
@@ -198,7 +195,7 @@ class Partition(val topic: String,
    */
   def makeFollower(controllerId: Int,
                    partitionStateInfo: PartitionStateInfo,
-                   correlationId: Int, offsetManager: OffsetManager): Boolean = {
+                   correlationId: Int): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
       val allReplicas = partitionStateInfo.allReplicas
       val leaderIsrAndControllerEpoch = partitionStateInfo.leaderIsrAndControllerEpoch
@@ -214,13 +211,6 @@ class Partition(val topic: String,
       inSyncReplicas = Set.empty[Replica]
       leaderEpoch = leaderAndIsr.leaderEpoch
       zkVersion = leaderAndIsr.zkVersion
-
-      leaderReplicaIdOpt.foreach { leaderReplica =>
-        if (topic == OffsetManager.OffsetsTopicName &&
-           /* if we are making a leader->follower transition */
-           leaderReplica == localBrokerId)
-          offsetManager.removeOffsetsFromCacheForPartition(partitionId)
-      }
 
       if (leaderReplicaIdOpt.isDefined && leaderReplicaIdOpt.get == newLeaderBrokerId) {
         false

@@ -32,7 +32,7 @@ import scala.collection.mutable
  * It delegates all group logic to the callers.
  */
 @threadsafe
-private[coordinator] class CoordinatorMetadata(config: KafkaConfig,
+private[coordinator] class CoordinatorMetadata(brokerId: Int,
                                                zkClient: ZkClient,
                                                maybePrepareRebalance: ConsumerGroupMetadata => Unit) {
 
@@ -179,7 +179,7 @@ private[coordinator] class CoordinatorMetadata(config: KafkaConfig,
    * Zookeeper listener to handle topic partition changes
    */
   class TopicPartitionChangeListener extends IZkDataListener with Logging {
-    this.logIdent = "[TopicPartitionChangeListener on Coordinator " + config.brokerId + "]: "
+    this.logIdent = "[TopicPartitionChangeListener on Coordinator " + brokerId + "]: "
 
     override def handleDataChange(dataPath: String, data: Object) {
       info("Handling data change for path: %s data: %s".format(dataPath, data))

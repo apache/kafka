@@ -333,13 +333,6 @@ public class CoordinatorTest {
         assertTrue(result.isDone());
         assertTrue(result.value().isEmpty());
 
-        // fetch with offset topic unknown
-        client.prepareResponse(offsetFetchResponse(tp, Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), "", 100L));
-        result = coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds());
-        client.poll(0, time.milliseconds());
-        assertTrue(result.isDone());
-        assertTrue(result.value().isEmpty());
-
         // fetch with offset -1
         client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", -1L));
         result = coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds());

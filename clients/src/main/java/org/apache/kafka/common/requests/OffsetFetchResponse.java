@@ -47,10 +47,11 @@ public class OffsetFetchResponse extends AbstractRequestResponse {
     /**
      * Possible error code:
      *
-     *  UNKNOWN_TOPIC_OR_PARTITION (3)
+     *  UNKNOWN_TOPIC_OR_PARTITION (3)  <- only for request v0
      *  OFFSET_LOAD_IN_PROGRESS (14)
      *  NOT_COORDINATOR_FOR_CONSUMER (16)
-     *  NO_OFFSETS_FETCHABLE (23)
+     *  ILLEGAL_GENERATION (22)
+     *  UNKNOWN_CONSUMER_ID (25)
      */
 
     private final Map<TopicPartition, PartitionData> responseData;

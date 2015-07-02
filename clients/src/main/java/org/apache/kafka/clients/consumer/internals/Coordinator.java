@@ -290,9 +290,10 @@ public final class Coordinator {
                         // re-discover the coordinator and retry
                         coordinatorDead();
                         future.retryWithNewCoordinator();
-                    } else if (data.errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
-                        // just ignore this partition
-                        log.debug("Unknown topic or partition for " + tp);
+                    } else if (data.errorCode == Errors.UNKNOWN_CONSUMER_ID.code()
+                            || data.errorCode == Errors.ILLEGAL_GENERATION.code()) {
+                        // need to re-join group
+                        subscriptions.needReassignment();
                     } else {
                         future.raise(new KafkaException("Unexpected error in fetch offset response: "
                                 + Errors.forCode(data.errorCode).exception().getMessage()));
@@ -499,13 +500,23 @@ public final class Coordinator {
                             || errorCode == Errors.NOT_COORDINATOR_FOR_CONSUMER.code()) {
                         coordinatorDead();
                         future.retryWithNewCoordinator();
-                    } else {
+                    } else if (errorCode == Errors.OFFSET_METADATA_TOO_LARGE.code()
+                            || errorCode == Errors.INVALID_COMMIT_OFFSET_SIZE.code()) {
                         // do not need to throw the exception but just log the error
-                        future.retryAfterBackoff();
                         log.error("Error committing partition {} at offset {}: {}",
-                            tp,
-                            offset,
-                            Errors.forCode(errorCode).exception().getMessage());
+                                tp,
+                                offset,
+                                Errors.forCode(errorCode).exception().getMessage());
+                    } else if (errorCode == Errors.UNKNOWN_CONSUMER_ID.code()
+                            || errorCode == Errors.ILLEGAL_GENERATION.code()) {
+                        // need to re-join group
+                        subscriptions.needReassignment();
+                    } else {
+                        // re-throw the exception as these should not happen
+                        log.error("Error committing partition {} at offset {}: {}",
+                                tp,
+                                offset,
+                                Errors.forCode(errorCode).exception().getMessage());
                     }
                 }
 

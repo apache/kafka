@@ -41,7 +41,7 @@ import kafka.common.{ErrorMapping, InconsistentBrokerIdException, GenerateBroker
 import kafka.network.{BlockingChannel, SocketServer}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
-import kafka.coordinator.ConsumerCoordinator
+import kafka.coordinator.{GroupManagerConfig, ConsumerCoordinator}
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
@@ -74,8 +74,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   var requestHandlerPool: KafkaRequestHandlerPool = null
 
   var logManager: LogManager = null
-
-  var offsetManager: OffsetManager = null
 
   var replicaManager: ReplicaManager = null
 
@@ -157,19 +155,16 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
           replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler, logManager, isShuttingDown)
           replicaManager.startup()
 
-          /* start offset manager */
-          offsetManager = createOffsetManager()
-
           /* start kafka controller */
           kafkaController = new KafkaController(config, zkClient, brokerState)
           kafkaController.startup()
 
           /* start kafka coordinator */
-          consumerCoordinator = new ConsumerCoordinator(config, zkClient, offsetManager)
+          consumerCoordinator = ConsumerCoordinator.create(config, zkClient, replicaManager, kafkaScheduler)
           consumerCoordinator.startup()
 
           /* start processing requests */
-          apis = new KafkaApis(socketServer.requestChannel, replicaManager, offsetManager, consumerCoordinator,
+          apis = new KafkaApis(socketServer.requestChannel, replicaManager, consumerCoordinator,
             kafkaController, zkClient, config.brokerId, config, metadataCache)
           requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
           brokerState.newState(RunningAsBroker)
@@ -349,8 +344,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
           CoreUtils.swallow(socketServer.shutdown())
         if(requestHandlerPool != null)
           CoreUtils.swallow(requestHandlerPool.shutdown())
-        if(offsetManager != null)
-          offsetManager.shutdown()
         CoreUtils.swallow(kafkaScheduler.shutdown())
         if(apis != null)
           CoreUtils.swallow(apis.close())
@@ -448,19 +441,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
       }
     }
     logProps
-  }
-
-  private def createOffsetManager(): OffsetManager = {
-    val offsetManagerConfig = OffsetManagerConfig(
-      maxMetadataSize = config.offsetMetadataMaxSize,
-      loadBufferSize = config.offsetsLoadBufferSize,
-      offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
-      offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
-      offsetsTopicNumPartitions = config.offsetsTopicPartitions,
-      offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-      offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
-      offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
-    new OffsetManager(offsetManagerConfig, replicaManager, zkClient, kafkaScheduler, metadataCache)
   }
 
   /**

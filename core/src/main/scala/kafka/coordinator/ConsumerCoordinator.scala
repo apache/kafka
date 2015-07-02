@@ -16,7 +16,9 @@
  */
 package kafka.coordinator
 
-import kafka.common.TopicAndPartition
+import kafka.common.{OffsetMetadataAndError, OffsetAndMetadata, TopicAndPartition}
+import kafka.message.UncompressedCodec
+import kafka.log.LogConfig
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.protocol.Errors
@@ -24,7 +26,11 @@ import org.apache.kafka.common.requests.JoinGroupRequest
 
 import org.I0Itec.zkclient.ZkClient
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.Properties
+import scala.collection.{Map, Seq, immutable}
 
+case class GroupManagerConfig(consumerMinSessionTimeoutMs: Int,
+                              consumerMaxSessionTimeoutMs: Int)
 
 /**
  * ConsumerCoordinator handles consumer group and consumer offset management.
@@ -33,17 +39,35 @@ import java.util.concurrent.atomic.AtomicBoolean
  * consumer groups. Consumer groups are assigned to coordinators based on their
  * group names.
  */
-class ConsumerCoordinator(val config: KafkaConfig,
-                          val zkClient: ZkClient,
-                          val offsetManager: OffsetManager) extends Logging {
+class ConsumerCoordinator(val brokerId: Int,
+                          val groupConfig: GroupManagerConfig,
+                          val offsetConfig: OffsetManagerConfig,
+                          private val offsetManager: OffsetManager,
+                          zkClient: ZkClient) extends Logging {
 
-  this.logIdent = "[ConsumerCoordinator " + config.brokerId + "]: "
+  this.logIdent = "[ConsumerCoordinator " + brokerId + "]: "
 
   private val isActive = new AtomicBoolean(false)
 
   private var heartbeatPurgatory: DelayedOperationPurgatory[DelayedHeartbeat] = null
   private var rebalancePurgatory: DelayedOperationPurgatory[DelayedRebalance] = null
   private var coordinatorMetadata: CoordinatorMetadata = null
+
+  def this(brokerId: Int,
+           groupConfig: GroupManagerConfig,
+           offsetConfig: OffsetManagerConfig,
+           replicaManager: ReplicaManager,
+           zkClient: ZkClient,
+           scheduler: KafkaScheduler) = this(brokerId, groupConfig, offsetConfig,
+    new OffsetManager(offsetConfig, replicaManager, zkClient, scheduler), zkClient)
+
+  def offsetsTopicConfigs: Properties = {
+    val props = new Properties
+    props.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    props.put(LogConfig.SegmentBytesProp, offsetConfig.offsetsTopicSegmentBytes.toString)
+    props.put(LogConfig.CompressionTypeProp, UncompressedCodec.name)
+    props
+  }
 
   /**
    * NOTE: If a group lock and metadataLock are simultaneously needed,
@@ -55,9 +79,9 @@ class ConsumerCoordinator(val config: KafkaConfig,
    */
   def startup() {
     info("Starting up.")
-    heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", config.brokerId)
-    rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", config.brokerId)
-    coordinatorMetadata = new CoordinatorMetadata(config, zkClient, maybePrepareRebalance)
+    heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", brokerId)
+    rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", brokerId)
+    coordinatorMetadata = new CoordinatorMetadata(brokerId, zkClient, maybePrepareRebalance)
     isActive.set(true)
     info("Startup complete.")
   }
@@ -69,6 +93,7 @@ class ConsumerCoordinator(val config: KafkaConfig,
   def shutdown() {
     info("Shutting down.")
     isActive.set(false)
+    offsetManager.shutdown()
     coordinatorMetadata.shutdown()
     heartbeatPurgatory.shutdown()
     rebalancePurgatory.shutdown()
@@ -87,7 +112,8 @@ class ConsumerCoordinator(val config: KafkaConfig,
       responseCallback(Set.empty, consumerId, 0, Errors.NOT_COORDINATOR_FOR_CONSUMER.code)
     } else if (!PartitionAssignor.strategies.contains(partitionAssignmentStrategy)) {
       responseCallback(Set.empty, consumerId, 0, Errors.UNKNOWN_PARTITION_ASSIGNMENT_STRATEGY.code)
-    } else if (sessionTimeoutMs < config.consumerMinSessionTimeoutMs || sessionTimeoutMs > config.consumerMaxSessionTimeoutMs) {
+    } else if (sessionTimeoutMs < groupConfig.consumerMinSessionTimeoutMs ||
+               sessionTimeoutMs > groupConfig.consumerMaxSessionTimeoutMs) {
       responseCallback(Set.empty, consumerId, 0, Errors.INVALID_SESSION_TIMEOUT.code)
     } else {
       // only try to create the group if the group is not unknown AND
@@ -196,6 +222,75 @@ class ConsumerCoordinator(val config: KafkaConfig,
     }
   }
 
+  def handleCommitOffsets(groupId: String,
+                          consumerId: String,
+                          generationId: Int,
+                          offsetMetadata: immutable.Map[TopicAndPartition, OffsetAndMetadata],
+                          responseCallback: immutable.Map[TopicAndPartition, Short] => Unit) {
+    if (!isActive.get) {
+      responseCallback(offsetMetadata.mapValues(_ => Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code))
+    } else if (!isCoordinatorForGroup(groupId)) {
+      responseCallback(offsetMetadata.mapValues(_ => Errors.NOT_COORDINATOR_FOR_CONSUMER.code))
+    } else {
+      val group = coordinatorMetadata.getGroup(groupId)
+      if (group == null) {
+        // if the group does not exist, it means this group is not relying
+        // on Kafka for partition management, and hence never send join-group
+        // request to the coordinator before; in this case blindly commit the offsets
+        offsetManager.storeOffsets(groupId, consumerId, generationId, offsetMetadata, responseCallback)
+      } else {
+        group synchronized {
+          if (group.is(Dead)) {
+            responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_CONSUMER_ID.code))
+          } else if (!group.has(consumerId)) {
+            responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_CONSUMER_ID.code))
+          } else if (generationId != group.generationId) {
+            responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION.code))
+          } else if (!offsetMetadata.keySet.subsetOf(group.get(consumerId).assignedTopicPartitions)) {
+            responseCallback(offsetMetadata.mapValues(_ => Errors.COMMITTING_PARTITIONS_NOT_ASSIGNED.code))
+          } else {
+            offsetManager.storeOffsets(groupId, consumerId, generationId, offsetMetadata, responseCallback)
+          }
+        }
+      }
+    }
+  }
+
+  def handleFetchOffsets(groupId: String,
+                         partitions: Seq[TopicAndPartition]): Map[TopicAndPartition, OffsetMetadataAndError] = {
+    if (!isActive.get) {
+      partitions.map {case topicAndPartition => (topicAndPartition, OffsetMetadataAndError.NotCoordinatorForGroup)}.toMap
+    } else if (!isCoordinatorForGroup(groupId)) {
+      partitions.map {case topicAndPartition => (topicAndPartition, OffsetMetadataAndError.NotCoordinatorForGroup)}.toMap
+    } else {
+      val group = coordinatorMetadata.getGroup(groupId)
+      if (group == null) {
+        // if the group does not exist, it means this group is not relying
+        // on Kafka for partition management, and hence never send join-group
+        // request to the coordinator before; in this case blindly fetch the offsets
+        offsetManager.getOffsets(groupId, partitions)
+      } else {
+        group synchronized {
+          if (group.is(Dead)) {
+            partitions.map {case topicAndPartition => (topicAndPartition, OffsetMetadataAndError.UnknownConsumer)}.toMap
+          } else {
+            offsetManager.getOffsets(groupId, partitions)
+          }
+        }
+      }
+    }
+  }
+
+  def handleGroupImmigration(offsetTopicPartitionId: Int) = {
+    // TODO we may need to add more logic in KAFKA-2017
+    offsetManager.loadOffsetsFromLog(offsetTopicPartitionId)
+  }
+
+  def handleGroupEmigration(offsetTopicPartitionId: Int) = {
+    // TODO we may need to add more logic in KAFKA-2017
+    offsetManager.removeOffsetsFromCacheForPartition(offsetTopicPartitionId)
+  }
+
   /**
    * Complete existing DelayedHeartbeats for the given consumer and schedule the next one
    */
@@ -246,8 +341,7 @@ class ConsumerCoordinator(val config: KafkaConfig,
 
   private def prepareRebalance(group: ConsumerGroupMetadata) {
     group.transitionTo(PreparingRebalance)
-    group.generationId += 1
-    info("Preparing to rebalance group %s generation %s".format(group.groupId, group.generationId))
+    info("Preparing to rebalance group %s with old generation %s".format(group.groupId, group.generationId))
 
     val rebalanceTimeout = group.rebalanceTimeout
     val delayedRebalance = new DelayedRebalance(this, group, rebalanceTimeout)
@@ -259,7 +353,9 @@ class ConsumerCoordinator(val config: KafkaConfig,
     assert(group.notYetRejoinedConsumers == List.empty[ConsumerMetadata])
 
     group.transitionTo(Rebalancing)
-    info("Rebalancing group %s generation %s".format(group.groupId, group.generationId))
+    group.generationId += 1
+
+    info("Rebalancing group %s with new generation %s".format(group.groupId, group.generationId))
 
     val assignedPartitionsPerConsumer = reassignPartitions(group)
     trace("Rebalance for group %s generation %s has assigned partitions: %s"
@@ -274,8 +370,6 @@ class ConsumerCoordinator(val config: KafkaConfig,
     removeConsumer(group, consumer)
     maybePrepareRebalance(group)
   }
-
-  private def isCoordinatorForGroup(groupId: String) = offsetManager.leaderIsLocal(offsetManager.partitionFor(groupId))
 
   private def reassignPartitions(group: ConsumerGroupMetadata) = {
     val assignor = PartitionAssignor.createInstance(group.partitionAssignmentStrategy)
@@ -345,8 +439,54 @@ class ConsumerCoordinator(val config: KafkaConfig,
     }
   }
 
-  def onCompleteHeartbeat() {}
+  def onCompleteHeartbeat() {
+    // TODO: add metrics for complete heartbeats
+  }
+
+  def partitionFor(group: String): Int = offsetManager.partitionFor(group)
 
   private def shouldKeepConsumerAlive(consumer: ConsumerMetadata, heartbeatDeadline: Long) =
     consumer.awaitingRebalanceCallback != null || consumer.latestHeartbeat + consumer.sessionTimeoutMs > heartbeatDeadline
+
+  private def isCoordinatorForGroup(groupId: String) = offsetManager.leaderIsLocal(offsetManager.partitionFor(groupId))
+}
+
+object ConsumerCoordinator {
+
+  val OffsetsTopicName = "__consumer_offsets"
+
+  def create(config: KafkaConfig,
+             zkClient: ZkClient,
+             replicaManager: ReplicaManager,
+             kafkaScheduler: KafkaScheduler): ConsumerCoordinator = {
+    val offsetConfig = OffsetManagerConfig(maxMetadataSize = config.offsetMetadataMaxSize,
+      loadBufferSize = config.offsetsLoadBufferSize,
+      offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
+      offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
+      offsetsTopicNumPartitions = config.offsetsTopicPartitions,
+      offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
+      offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
+      offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
+    val groupConfig = GroupManagerConfig(consumerMinSessionTimeoutMs = config.consumerMinSessionTimeoutMs,
+      consumerMaxSessionTimeoutMs = config.consumerMaxSessionTimeoutMs)
+
+    new ConsumerCoordinator(config.brokerId, groupConfig, offsetConfig, replicaManager, zkClient, kafkaScheduler)
+  }
+
+  def create(config: KafkaConfig,
+             zkClient: ZkClient,
+             offsetManager: OffsetManager): ConsumerCoordinator = {
+    val offsetConfig = OffsetManagerConfig(maxMetadataSize = config.offsetMetadataMaxSize,
+      loadBufferSize = config.offsetsLoadBufferSize,
+      offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
+      offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
+      offsetsTopicNumPartitions = config.offsetsTopicPartitions,
+      offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
+      offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
+      offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
+    val groupConfig = GroupManagerConfig(consumerMinSessionTimeoutMs = config.consumerMinSessionTimeoutMs,
+      consumerMaxSessionTimeoutMs = config.consumerMaxSessionTimeoutMs)
+
+    new ConsumerCoordinator(config.brokerId, groupConfig, offsetConfig, offsetManager, zkClient)
+  }
 }

@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.{Struct, Schema, Field}
 import org.apache.kafka.common.protocol.types.Type.STRING
 import org.apache.kafka.common.protocol.types.Type.INT32
@@ -25,19 +26,19 @@ import org.apache.kafka.common.utils.Utils
 
 import kafka.utils._
 import kafka.common._
-import kafka.log.{FileMessageSet, LogConfig}
+import kafka.log.FileMessageSet
 import kafka.message._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.common.TopicAndPartition
 import kafka.tools.MessageFormatter
 import kafka.api.ProducerResponseStatus
+import kafka.coordinator.ConsumerCoordinator
 
 import scala.Some
 import scala.collection._
 import java.io.PrintStream
 import java.util.concurrent.atomic.AtomicBoolean
 import java.nio.ByteBuffer
-import java.util.Properties
 import java.util.concurrent.TimeUnit
 
 import com.yammer.metrics.core.Gauge
@@ -87,8 +88,7 @@ object OffsetManagerConfig {
 class OffsetManager(val config: OffsetManagerConfig,
                     replicaManager: ReplicaManager,
                     zkClient: ZkClient,
-                    scheduler: Scheduler,
-                    metadataCache: MetadataCache) extends Logging with KafkaMetricsGroup {
+                    scheduler: Scheduler) extends Logging with KafkaMetricsGroup {
 
   /* offsets and metadata cache */
   private val offsetsCache = new Pool[GroupTopicPartition, OffsetAndMetadata]
@@ -143,9 +143,9 @@ class OffsetManager(val config: OffsetManagerConfig,
       // Append the tombstone messages to the offset partitions. It is okay if the replicas don't receive these (say,
       // if we crash or leaders move) since the new leaders will get rid of expired offsets during their own purge cycles.
       tombstonesForPartition.flatMap { case (offsetsPartition, tombstones) =>
-        val partitionOpt = replicaManager.getPartition(OffsetManager.OffsetsTopicName, offsetsPartition)
+        val partitionOpt = replicaManager.getPartition(ConsumerCoordinator.OffsetsTopicName, offsetsPartition)
         partitionOpt.map { partition =>
-          val appendPartition = TopicAndPartition(OffsetManager.OffsetsTopicName, offsetsPartition)
+          val appendPartition = TopicAndPartition(ConsumerCoordinator.OffsetsTopicName, offsetsPartition)
           val messages = tombstones.map(_._2).toSeq
 
           trace("Marked %d offsets in %s for deletion.".format(messages.size, appendPartition))
@@ -169,14 +169,6 @@ class OffsetManager(val config: OffsetManagerConfig,
     info("Removed %d expired offsets in %d milliseconds.".format(numExpiredOffsetsRemoved, SystemTime.milliseconds - startMs))
   }
 
-
-  def offsetsTopicConfig: Properties = {
-    val props = new Properties
-    props.put(LogConfig.SegmentBytesProp, config.offsetsTopicSegmentBytes.toString)
-    props.put(LogConfig.CleanupPolicyProp, "compact")
-    props.put(LogConfig.CompressionTypeProp, "uncompressed")
-    props
-  }
 
   def partitionFor(group: String): Int = Utils.abs(group.hashCode) % config.offsetsTopicNumPartitions
 
@@ -214,22 +206,14 @@ class OffsetManager(val config: OffsetManagerConfig,
   /**
    * Store offsets by appending it to the replicated log and then inserting to cache
    */
-  // TODO: generation id and consumer id is needed by coordinator to do consumer checking in the future
   def storeOffsets(groupId: String,
                    consumerId: String,
                    generationId: Int,
                    offsetMetadata: immutable.Map[TopicAndPartition, OffsetAndMetadata],
                    responseCallback: immutable.Map[TopicAndPartition, Short] => Unit) {
-    // check if there are any non-existent topics
-    val nonExistentTopics = offsetMetadata.filter { case (topicAndPartition, offsetMetadata) =>
-      !metadataCache.contains(topicAndPartition.topic)
-    }
-
-    // first filter out partitions with offset metadata size exceeding limit or
-    // if its a non existing topic
-    // TODO: in the future we may want to only support atomic commit and hence fail the whole commit
+    // first filter out partitions with offset metadata size exceeding limit
     val filteredOffsetMetadata = offsetMetadata.filter { case (topicAndPartition, offsetAndMetadata) =>
-      validateOffsetMetadataLength(offsetAndMetadata.metadata) || nonExistentTopics.contains(topicAndPartition)
+      validateOffsetMetadataLength(offsetAndMetadata.metadata)
     }
 
     // construct the message set to append
@@ -240,7 +224,7 @@ class OffsetManager(val config: OffsetManagerConfig,
       )
     }.toSeq
 
-    val offsetTopicPartition = TopicAndPartition(OffsetManager.OffsetsTopicName, partitionFor(groupId))
+    val offsetTopicPartition = TopicAndPartition(ConsumerCoordinator.OffsetsTopicName, partitionFor(groupId))
 
     val offsetsAndMetadataMessageSet = Map(offsetTopicPartition ->
       new ByteBufferMessageSet(config.offsetsTopicCompressionCodec, messages:_*))
@@ -271,6 +255,10 @@ class OffsetManager(val config: OffsetManagerConfig,
             ErrorMapping.ConsumerCoordinatorNotAvailableCode
           else if (status.error == ErrorMapping.NotLeaderForPartitionCode)
             ErrorMapping.NotCoordinatorForConsumerCode
+          else if (status.error == ErrorMapping.MessageSizeTooLargeCode
+                || status.error == ErrorMapping.MessageSetSizeTooLargeCode
+                || status.error == ErrorMapping.InvalidFetchSizeCode)
+            Errors.INVALID_COMMIT_OFFSET_SIZE.code
           else
             status.error
         }
@@ -278,9 +266,7 @@ class OffsetManager(val config: OffsetManagerConfig,
 
       // compute the final error codes for the commit response
       val commitStatus = offsetMetadata.map { case (topicAndPartition, offsetAndMetadata) =>
-        if (nonExistentTopics.contains(topicAndPartition))
-          (topicAndPartition, ErrorMapping.UnknownTopicOrPartitionCode)
-        else if (validateOffsetMetadataLength(offsetAndMetadata.metadata))
+        if (validateOffsetMetadataLength(offsetAndMetadata.metadata))
           (topicAndPartition, responseCode)
         else
           (topicAndPartition, ErrorMapping.OffsetMetadataTooLargeCode)
@@ -338,7 +324,7 @@ class OffsetManager(val config: OffsetManagerConfig,
         debug("Could not fetch offsets for group %s (not offset coordinator).".format(group))
         topicPartitions.map { topicAndPartition =>
           val groupTopicPartition = GroupTopicPartition(group, topicAndPartition)
-          (groupTopicPartition.topicPartition, OffsetMetadataAndError.NotOffsetManagerForGroup)
+          (groupTopicPartition.topicPartition, OffsetMetadataAndError.NotCoordinatorForGroup)
         }.toMap
       }
     }
@@ -349,7 +335,7 @@ class OffsetManager(val config: OffsetManagerConfig,
    */
   def loadOffsetsFromLog(offsetsPartition: Int) {
 
-    val topicPartition = TopicAndPartition(OffsetManager.OffsetsTopicName, offsetsPartition)
+    val topicPartition = TopicAndPartition(ConsumerCoordinator.OffsetsTopicName, offsetsPartition)
 
     loadingPartitions synchronized {
       if (loadingPartitions.contains(offsetsPartition)) {
@@ -421,7 +407,7 @@ class OffsetManager(val config: OffsetManagerConfig,
   }
 
   private def getHighWatermark(partitionId: Int): Long = {
-    val partitionOpt = replicaManager.getPartition(OffsetManager.OffsetsTopicName, partitionId)
+    val partitionOpt = replicaManager.getPartition(ConsumerCoordinator.OffsetsTopicName, partitionId)
 
     val hw = partitionOpt.map { partition =>
       partition.leaderReplicaIfLocal().map(_.highWatermark.messageOffset).getOrElse(-1L)
@@ -449,7 +435,7 @@ class OffsetManager(val config: OffsetManagerConfig,
     }
 
     if (numRemoved > 0) info("Removed %d cached offsets for %s on follower transition."
-                             .format(numRemoved, TopicAndPartition(OffsetManager.OffsetsTopicName, offsetsPartition)))
+                             .format(numRemoved, TopicAndPartition(ConsumerCoordinator.OffsetsTopicName, offsetsPartition)))
 
   }
 
@@ -460,8 +446,6 @@ class OffsetManager(val config: OffsetManagerConfig,
 }
 
 object OffsetManager {
-
-  val OffsetsTopicName = "__consumer_offsets"
 
   private case class KeyAndValueSchemas(keySchema: Schema, valueSchema: Schema)
 

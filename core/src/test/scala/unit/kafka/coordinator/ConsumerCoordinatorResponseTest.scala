@@ -22,8 +22,8 @@ import java.util.concurrent.TimeUnit
 
 import junit.framework.Assert._
 import kafka.common.TopicAndPartition
-import kafka.server.{KafkaConfig, OffsetManager}
-import kafka.utils.TestUtils
+import kafka.server.{OffsetManager, ReplicaManager, KafkaConfig}
+import kafka.utils.{KafkaScheduler, TestUtils}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.JoinGroupRequest
 import org.easymock.EasyMock
@@ -45,8 +45,8 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   val ConsumerMinSessionTimeout = 10
   val ConsumerMaxSessionTimeout = 30
   val DefaultSessionTimeout = 20
-  var offsetManager: OffsetManager = null
   var consumerCoordinator: ConsumerCoordinator = null
+  var offsetManager : OffsetManager = null
 
   @Before
   def setUp() {
@@ -54,12 +54,13 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
     props.setProperty(KafkaConfig.ConsumerMinSessionTimeoutMsProp, ConsumerMinSessionTimeout.toString)
     props.setProperty(KafkaConfig.ConsumerMaxSessionTimeoutMsProp, ConsumerMaxSessionTimeout.toString)
     offsetManager = EasyMock.createStrictMock(classOf[OffsetManager])
-    consumerCoordinator = new ConsumerCoordinator(KafkaConfig.fromProps(props), null, offsetManager)
+    consumerCoordinator = ConsumerCoordinator.create(KafkaConfig.fromProps(props), null, offsetManager)
     consumerCoordinator.startup()
   }
 
   @After
   def tearDown() {
+    EasyMock.reset(offsetManager)
     consumerCoordinator.shutdown()
   }
 
