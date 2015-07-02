@@ -198,11 +198,6 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
 
-  @Override
-  public void schedule(Processor<?, ?> processor, long time) {
-
-  }
-
   public Collection<SyncGroup> syncGroups() {
     return syncGroups.values();
   }

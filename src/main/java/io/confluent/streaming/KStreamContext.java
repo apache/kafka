@@ -46,6 +46,4 @@ public interface KStreamContext {
 
   void restore(StorageEngine engine) throws Exception;
 
-  void schedule(Processor<?, ?> processor, long time);
-
 }
