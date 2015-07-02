@@ -6,10 +6,14 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
 public class IngestorImpl<K, V> implements Ingestor {
+
+  private static final Logger log = LoggerFactory.getLogger(IngestorImpl.class);
 
   private final Consumer<byte[], byte[]> consumer;
   private final Set<TopicPartition> unpaused = new HashSet<TopicPartition>();
@@ -50,7 +54,12 @@ public class IngestorImpl<K, V> implements Ingestor {
     ConsumerRecords<byte[], byte[]> records = consumer.poll(timeoutMs);
 
     for (TopicPartition partition : unpaused) {
-      streamSynchronizers.get(partition).addRecords(partition, new DeserializingIterator(records.records(partition).iterator()));
+      StreamSynchronizer<K, V> streamSynchronizer = streamSynchronizers.get(partition);
+      
+      if (streamSynchronizer != null)
+        streamSynchronizer.addRecords(partition, new DeserializingIterator(records.records(partition).iterator()));
+      else
+        log.warn("unused topic: " + partition.topic());
     }
   }
 
