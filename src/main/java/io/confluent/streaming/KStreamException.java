@@ -5,6 +5,10 @@ package io.confluent.streaming;
  */
 public class KStreamException extends RuntimeException {
 
+  public KStreamException() {
+    super();
+  }
+
   public KStreamException(String msg) {
     super(msg);
   }

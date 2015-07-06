@@ -23,21 +23,16 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V, K, V> implement
   }
 
   @Override
-  public <V1, V2> KStream<K, V2> join(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> processor)
-    throws NotCopartitionedException  {
-
+  public <V1, V2> KStream<K, V2> join(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> processor) {
     return join(other, false, processor);
   }
 
   @Override
-  public <V1, V2> KStream<K, V2> joinPrior(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> processor)
-    throws NotCopartitionedException  {
-
+  public <V1, V2> KStream<K, V2> joinPrior(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> processor) {
     return join(other, true, processor);
   }
 
-  private <V1, V2> KStream<K, V2> join(KStreamWindowed<K, V1> other, boolean prior, ValueJoiner<V2, V, V1> processor)
-    throws NotCopartitionedException {
+  private <V1, V2> KStream<K, V2> join(KStreamWindowed<K, V1> other, boolean prior, ValueJoiner<V2, V, V1> processor) {
 
     KStreamWindowedImpl<K, V1> otherImpl = (KStreamWindowedImpl<K, V1>) other;
 

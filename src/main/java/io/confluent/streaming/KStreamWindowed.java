@@ -13,10 +13,8 @@ public interface KStreamWindowed<K, V> extends KStream<K, V> {
    * @param other
    * @param joiner
    * @return KStream
-   * @throws NotCopartitionedException
    */
-  <V1, V2> KStream<K, V2> join(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> joiner)
-    throws NotCopartitionedException;
+  <V1, V2> KStream<K, V2> join(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> joiner);
 
   /**
    * Creates a new stream by joining this windowed stream with the other windowed stream.
@@ -27,9 +25,7 @@ public interface KStreamWindowed<K, V> extends KStream<K, V> {
    * @param other
    * @param joiner
    * @return KStream
-   * @throws NotCopartitionedException
    */
-  <V1, V2> KStream<K, V2> joinPrior(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> joiner)
-    throws NotCopartitionedException;
+  <V1, V2> KStream<K, V2> joinPrior(KStreamWindowed<K, V1> other, ValueJoiner<V2, V, V1> joiner);
 
 }
