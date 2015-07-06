@@ -24,6 +24,7 @@ public class StreamSynchronizer<K, V> {
   private final PunctuationQueue punctuationQueue = new PunctuationQueue();
 
   private long streamTime = -1;
+  private boolean pollRequired = false;
   private volatile int buffered = 0;
 
   StreamSynchronizer(String name,
@@ -77,6 +78,10 @@ public class StreamSynchronizer<K, V> {
     }
   }
 
+  public boolean requiresPoll() {
+    return pollRequired;
+  }
+
   public PunctuationScheduler getPunctuationScheduler(Processor<?, ?> processor) {
     return new PunctuationSchedulerImpl(punctuationQueue, processor);
   }
@@ -84,23 +89,25 @@ public class StreamSynchronizer<K, V> {
   @SuppressWarnings("unchecked")
   public void process() {
     synchronized (this) {
-      RecordQueue recordQueue = chooser.next();
+      pollRequired = false;
 
+      RecordQueue recordQueue = chooser.next();
       if (recordQueue == null) {
-        ingestor.poll();
+        pollRequired = true;
         return;
       }
 
+      if (recordQueue.size() == 0) throw new IllegalStateException("empty record queue");
+
       if (recordQueue.size() == this.desiredUnprocessed) {
         ingestor.unpause(recordQueue.partition(), recordQueue.offset());
+        pollRequired = true;
       }
 
-      if (recordQueue.size() == 0) return;
-
-      long timestamp = recordQueue.currentStreamTime();
+      long trackedTimestamp = recordQueue.trackedTimestamp();
       StampedRecord<K, V> record = recordQueue.next();
 
-      if (streamTime < timestamp) streamTime = timestamp;
+      if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
       recordQueue.receiver.receive(record.key(), record.value(), record.timestamp, streamTime);
       consumedOffsets.put(recordQueue.partition(), record.offset());
@@ -110,6 +117,8 @@ public class StreamSynchronizer<K, V> {
       buffered--;
 
       punctuationQueue.mayPunctuate(streamTime);
+
+      return;
     }
   }
 

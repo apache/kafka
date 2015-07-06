@@ -208,13 +208,18 @@ public class KafkaStreaming implements Runnable {
     private void runLoop() {
         try {
             while (stillRunning()) {
+                boolean pollRequired = false;
+                
                 for (Map.Entry<Integer, Collection<SyncGroup>> entry : syncGroups.entrySet()) {
                     for (SyncGroup syncGroup : entry.getValue()) {
                         syncGroup.streamSynchronizer.process();
+                        pollRequired = pollRequired || syncGroup.streamSynchronizer.requiresPoll();
                     }
                 }
                 maybeCommit();
                 maybeCleanState();
+
+                if (pollRequired) ingestor.poll();
             }
         } catch (Exception e) {
             throw new KafkaException(e);

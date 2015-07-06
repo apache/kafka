@@ -46,12 +46,16 @@ public class IngestorImpl<K, V> implements Ingestor {
 
   @Override
   public void poll(long timeoutMs) {
-    for (TopicPartition partition : toBePaused) {
-      doPause(partition);
-    }
-    toBePaused.clear();
+    ConsumerRecords<byte[], byte[]> records;
 
-    ConsumerRecords<byte[], byte[]> records = consumer.poll(timeoutMs);
+    synchronized (this) {
+      for (TopicPartition partition : toBePaused) {
+        doPause(partition);
+      }
+      toBePaused.clear();
+
+      records = consumer.poll(timeoutMs);
+    }
 
     for (TopicPartition partition : unpaused) {
       StreamSynchronizer<K, V> streamSynchronizer = streamSynchronizers.get(partition);
@@ -75,8 +79,10 @@ public class IngestorImpl<K, V> implements Ingestor {
 
   @Override
   public void unpause(TopicPartition partition, long lastOffset) {
-    consumer.seek(partition, lastOffset);
-    unpaused.add(partition);
+    synchronized (this) {
+      consumer.seek(partition, lastOffset);
+      unpaused.add(partition);
+    }
   }
 
   @Override
@@ -87,12 +93,19 @@ public class IngestorImpl<K, V> implements Ingestor {
   @SuppressWarnings("unchecked")
   @Override
   public void addStreamSynchronizerForPartition(StreamSynchronizer<?, ?> streamSynchronizer, TopicPartition partition) {
-    streamSynchronizers.put(partition, (StreamSynchronizer<K, V>) streamSynchronizer);
+    synchronized (this) {
+      streamSynchronizers.put(partition, (StreamSynchronizer<K, V>) streamSynchronizer);
+      unpaused.add(partition);
+    }
   }
 
   @Override
   public void removeStreamSynchronizerForPartition(TopicPartition partition) {
-    streamSynchronizers.remove(partition);
+    synchronized (this) {
+      streamSynchronizers.remove(partition);
+      unpaused.remove(partition);
+      toBePaused.remove(partition);
+    }
   }
 
   public void clear() {

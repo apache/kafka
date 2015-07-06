@@ -13,8 +13,8 @@ public class TimeBasedChooser<K, V> implements Chooser<K, V> {
   public TimeBasedChooser() {
     this(new Comparator<RecordQueue<K, V>>() {
       public int compare(RecordQueue<K, V> queue1, RecordQueue<K, V> queue2) {
-        long time1 = queue1.currentStreamTime();
-        long time2 = queue2.currentStreamTime();
+        long time1 = queue1.trackedTimestamp();
+        long time2 = queue2.trackedTimestamp();
 
         if (time1 < time2) return -1;
         if (time1 > time2) return 1;

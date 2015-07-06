@@ -57,7 +57,11 @@ public class RecordQueue<K, V> {
     return queue.isEmpty();
   }
 
-  public long currentStreamTime() {
+  /**
+   * Returns a timestamp tracked by the TimestampTracker
+   * @return timestamp
+   */
+  public long trackedTimestamp() {
     return timestampTracker.get();
   }
 
