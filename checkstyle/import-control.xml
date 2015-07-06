@@ -95,8 +95,15 @@
 		</subpackage>
 	</subpackage>
 
+	<subpackage name="log4jappender">
+		<allow pkg="org.apache.log4j" />
+		<allow pkg="org.apache.kafka.clients" />
+		<allow pkg="org.apache.kafka.common" />
+		<allow pkg="org.apache.kafka.test" />
+	</subpackage>
+
 	<subpackage name="test">
 		<allow pkg="org.apache.kafka" />
 	</subpackage>
-	
+
 </import-control>
