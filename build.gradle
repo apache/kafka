@@ -13,11 +13,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import org.ajoberstar.grgit.Grgit
+
 buildscript {
   repositories {
     mavenCentral()
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
+
+  dependencies {
+    // For Apache Rat plugin to ignore non-Git files, need ancient version for Java 6 compatibility
+    classpath group: 'org.ajoberstar', name: 'grgit', version: '0.2.3'
+  }
 }
 
 def slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.6'
@@ -41,8 +48,24 @@ ext {
 }
 
 apply from: file('wrapper.gradle')
-apply from: file('gradle/license.gradle')
 apply from: file('scala.gradle')
+apply from: file('gradle/rat.gradle')
+
+rat {
+  // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
+  // restrict us only to files that are checked in or are staged.
+  def repo = Grgit.open(project.file('.'))
+  excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
+  // And some of the files that we have checked in should also be excluded from this check
+  excludes.addAll([
+    '**/.git/**',
+    'gradlew',
+    'gradlew.bat',
+    '**/README.md',
+    '.reviewboardrc',
+    'system_test/**',
+  ])
+}
 
 subprojects {
   apply plugin: 'java'
@@ -51,8 +74,6 @@ subprojects {
   apply plugin: 'signing'
 
   sourceCompatibility = 1.6
-
-  licenseTest.onlyIf { isVerificationRequired(project) }
 
   uploadArchives {
     repositories {
