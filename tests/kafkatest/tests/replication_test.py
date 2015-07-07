@@ -97,7 +97,12 @@ class ReplicationTest(Test):
         self.logger.info("num consumed:  %d" % len(self.consumed))
 
         # Check produced vs consumed
-        self.validate()
+        success, msg = self.validate()
+
+        if not success:
+            self.mark_for_collect(self.producer)
+
+        assert success, msg
 
     def clean_shutdown(self):
         """Discover leader node for our topic and shut it down cleanly."""
@@ -142,7 +147,7 @@ class ReplicationTest(Test):
             # Collect all the data logs if there was a failure
             self.mark_for_collect(self.kafka)
 
-        assert success, msg
+        return success, msg
 
     def test_clean_shutdown(self):
         self.run_with_failure(self.clean_shutdown)

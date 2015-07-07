@@ -23,7 +23,7 @@ class VerifiableProducer(BackgroundThreadService):
     logs = {
         "producer_log": {
             "path": "/mnt/producer.log",
-            "collect_default": True}
+            "collect_default": False}
     }
 
     def __init__(self, context, num_nodes, kafka, topic, max_messages=-1, throughput=100000):
@@ -46,8 +46,6 @@ class VerifiableProducer(BackgroundThreadService):
 
             data = self.try_parse_json(line)
             if data is not None:
-
-                self.logger.debug("VerifiableProducer: " + str(data))
 
                 with self.lock:
                     if data["name"] == "producer_send_error":

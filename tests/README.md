@@ -15,7 +15,7 @@ This quickstart will help you run the Kafka system tests on your local machine.
 * Install Vagrant Plugins:
 
         # Required
-        $ vagrant plugin install vagrant-hostmanager
+        $ vagrant plugin install vagrant-hostmanager vagrant-cachier
 
 * Build a specific branch of Kafka
        
@@ -57,11 +57,14 @@ installing dependencies and updates on every vm.):
         
 EC2 Quickstart
 --------------
-This quickstart will help you run the Kafka system tests using Amazon EC2. As a convention, we'll use "kafkatest" in most names, but you can use whatever you want. 
+This quickstart will help you run the Kafka system tests on EC2. In this setup, all logic is run
+on EC2 and none on your local machine. 
 
 There are a lot of steps here, but the basic goals are to create one distinguished EC2 instance that
 will be our "test driver", and to set up the security groups and iam role so that the test driver
 can create, destroy, and run ssh commands on any number of "workers".
+
+As a convention, we'll use "kafkatest" in most names, but you can use whatever name you want. 
 
 Preparation
 -----------
