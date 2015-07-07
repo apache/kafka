@@ -342,6 +342,7 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
    */
   def onControllerResignation() {
     // de-register listeners
+    deregisterIsrChangeNotificationListener()
     deregisterReassignedPartitionsListener()
     deregisterPreferredReplicaElectionListener()
 
@@ -891,14 +892,19 @@ class KafkaController(val config : KafkaConfig, zkClient: ZkClient, val brokerSt
     }
   }
 
-  private def registerReassignedPartitionsListener() = {
-    zkClient.subscribeDataChanges(ZkUtils.ReassignPartitionsPath, partitionReassignedListener)
-  }
-
   private def registerIsrChangeNotificationListener() = {
     debug("Registering IsrChangeNotificationListener")
     ZkUtils.makeSurePersistentPathExists(zkClient, ZkUtils.IsrChangeNotificationPath)
     zkClient.subscribeChildChanges(ZkUtils.IsrChangeNotificationPath, isrChangeNotificationListener)
+  }
+
+  private def deregisterIsrChangeNotificationListener() = {
+    debug("De-registering IsrChangeNotificationListener")
+    zkClient.unsubscribeChildChanges(ZkUtils.IsrChangeNotificationPath, isrChangeNotificationListener)
+  }
+
+  private def registerReassignedPartitionsListener() = {
+    zkClient.subscribeDataChanges(ZkUtils.ReassignPartitionsPath, partitionReassignedListener)
   }
 
   private def deregisterReassignedPartitionsListener() = {
