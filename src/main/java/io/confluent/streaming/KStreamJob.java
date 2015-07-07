@@ -40,11 +40,11 @@ public abstract class KStreamJob {
    * </p>
    * <pre>
    *   public init(KStreamContext context) {
-   *     KStream&ltInteger, PageView> pageViewStream = context.from("pageView").mapValues(...)
-   *     KStream&ltInteger, AdClick> adClickStream = context.from("adClick").join(pageViewStream, ...).process(...);
+   *     KStream&lt;Integer, PageView&gt; pageViewStream = context.from("pageView").mapValues(...);
+   *     KStream&lt;Integer, AdClick&gt; adClickStream = context.from("adClick").join(pageViewStream, ...).process(...);
    *   }
    * </pre>
-   * @param context
+   * @param context KStreamContext
    */
   public abstract void init(KStreamContext context);
 

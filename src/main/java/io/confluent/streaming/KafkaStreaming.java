@@ -52,13 +52,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Kafka Streaming allows for performing continuous computation on input coming from one or more input topics and
  * sends output to zero or more output topics.
  * <p>
- * This processing is done by implementing the {@link StreamProcessor} interface to specify the transformation. The
+ * This processing is done by implementing the {@link KStreamJob} interface to specify the transformation. The
  * {@link KafkaStreaming} instance will be responsible for the lifecycle of these processors. It will instantiate and
  * start one or more of these processors to process the Kafka partitions assigned to this particular instance.
  * <p>
  * This streaming instance will co-ordinate with any other instances (whether in this same process, on other processes
  * on this machine, or on remote machines). These processes will divide up the work so that all partitions are being
- * consumed. If instances are added or die, the corresponding {@link StreamProcessor} instances will be shutdown or
+ * consumed. If instances are added or die, the corresponding {@link KStreamJob} instances will be shutdown or
  * started in the appropriate processes to balance processing load.
  * <p>
  * Internally the {@link KafkaStreaming} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
@@ -69,10 +69,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *    Properties props = new Properties();
  *    props.put("bootstrap.servers", "localhost:4242");
  *    StreamingConfig config = new StreamingConfig(props);
- *    config.subscribe("test-topic-1", "test-topic-2");
  *    config.processor(ExampleStreamProcessor.class);
  *    config.serialization(new StringSerializer(), new StringDeserializer());
- *    KafkaStreaming container = new KafkaStreaming(config);
+ *    KafkaStreaming container = new KafkaStreaming(MyKStreamJob.class, config);
  *    container.run();
  * </pre>
  *

@@ -24,15 +24,16 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * This class saves out a map of topic/partition=>offsets to a file. The format of the file is UTF-8 text containing the following:
- *   <version>
- *   <n>
- *   <topic_name_1> <partition_1> <offset_1>
+ * This class saves out a map of topic/partition=&gt;offsets to a file. The format of the file is UTF-8 text containing the following:
+ * <pre>
+ *   &lt;version&gt;
+ *   &lt;n&gt;
+ *   &lt;topic_name_1&gt; &lt;partition_1&gt; &lt;offset_1&gt;
  *   .
  *   .
  *   .
- *   <topic_name_n> <partition_n> <offset_n>
- *
+ *   &lt;topic_name_n&gt; &lt;partition_n&gt; &lt;offset_n&gt;
+ * </pre>
  *   The first line contains a number designating the format version (currently 0), the next line contains
  *   a number giving the total number of offsets. Each successive line gives a topic/partition/offset triple
  *   separated by spaces.

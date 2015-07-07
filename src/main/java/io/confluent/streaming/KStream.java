@@ -7,50 +7,56 @@ public interface KStream<K, V> {
 
   /**
    * Creates a new stream consists of all elements of this stream which satisfy a predicate
-   * @param predicate
+   * @param predicate the instance of Predicate
    * @return KStream
    */
   KStream<K, V> filter(Predicate<K, V> predicate);
 
   /**
    * Creates a new stream consists all elements of this stream which do not satisfy a predicate
-   * @param predicate
-   * @return
+   * @param predicate the instance of Predicate
+   * @return KStream
    */
   KStream<K, V> filterOut(Predicate<K, V> predicate);
 
   /**
    * Creates a new stream by transforming key-value pairs by a mapper to all elements of this stream
-   * @param mapper
+   * @param mapper the instance of KeyValueMapper
+   * @param <K1> the key type of the new stream
+   * @param <V1> the value type of the new stream
    * @return KStream
    */
   <K1, V1> KStream<K1, V1> map(KeyValueMapper<K1, V1, K, V> mapper);
 
   /**
    * Creates a new stream by transforming valuesa by a mapper to all values of this stream
-   * @param mapper
-   * @return
+   * @param mapper the instance of ValueMapper
+   * @param <V1> the value type of the new stream
+   * @return KStream
    */
   <V1> KStream<K, V1> mapValues(ValueMapper<V1, V> mapper);
 
   /**
    * Creates a new stream by applying a mapper to all elements of this stream and using the values in the resulting Iterable
-   * @param mapper
-   * @return
+   * @param mapper the instance of KeyValueMapper
+   * @param <K1> the key type of the new stream
+   * @param <V1> the value type of the new stream
+   * @return KStream
    */
   <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K1, ? extends Iterable<V1>, K, V> mapper);
 
   /**
    * Creates a new stream by applying a mapper to all values of this stream and using the values in the resulting Iterable
-   * @param processor
-   * @return
+   * @param processor the instance of Processor
+   * @param <V1> the value type of the new stream
+   * @return KStream
    */
   <V1> KStream<K, V1> flatMapValues(ValueMapper<? extends Iterable<V1>, V> processor);
 
   /**
-   * Creates a new windowed stream using a specified window object.
-   * @param window
-   * @return
+   * Creates a new windowed stream using a specified window instance.
+   * @param window the instance of Window
+   * @return KStream
    */
   KStreamWindowed<K, V> with(Window<K, V> window);
 
@@ -59,28 +65,28 @@ public interface KStream<K, V> {
    * supplied predicates in the same order. Predicates are evaluated in order. An element is streamed to
    * a corresponding stream for the first predicate is evaluated true.
    * An element will be dropped if none of the predicates evaluate true.
-   * @param predicates
-   * @return
+   * @param predicates Instances of Predicate
+   * @return KStream
    */
   KStream<K, V>[] branch(Predicate<K, V>... predicates);
 
   /**
    * Sends key-value to a topic, also creates a new stream from the topic.
    * This is equivalent to calling sendTo(topic) and KStreamContext.from(topic).
-   * @param topic
-   * @return
+   * @param topic the topic name
+   * @return KStream
    */
   KStream<K, V> through(String topic);
 
   /**
    * Sends key-value to a topic.
-   * @param topic
+   * @param topic the topic name
    */
   void sendTo(String topic);
 
   /**
    * Processes all elements in this stream by applying a processor.
-   * @param processor
+   * @param processor the instance of Processor
    */
   void process(Processor<K, V> processor);
 

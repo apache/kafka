@@ -10,13 +10,13 @@ public interface TimestampTracker<E> {
 
   /**
    * Adds a stamped elements to this tracker.
-   * @param elem
+   * @param elem the added element
    */
   void addStampedElement(Stamped<E> elem);
 
   /**
    * Removed a stamped elements to this tracker.
-   * @param elem
+   * @param elem the removed element
    */
   void removeStampedElement(Stamped<E> elem);
 
@@ -28,6 +28,7 @@ public interface TimestampTracker<E> {
 
   /**
    * Returns the size of internal structure. The meaning of "size" depends on the implementation.
+   * @return size
    */
   int size();
 

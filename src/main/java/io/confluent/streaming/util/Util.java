@@ -12,7 +12,8 @@ public class Util {
 
   /**
    * Creates a set
-   * @param elems
+   * @param elems the elements
+   * @param <T> the type of element
    * @return Set
    */
   public static <T> HashSet<T> mkSet(T... elems) {
@@ -25,9 +26,9 @@ public class Util {
    * Gets a value from a field of a class
    * @param clazz the class object
    * @param obj the instance object, or maybe null for a static field
-   * @Param fieldName the name of the field
+   * @param fieldName the name of the field
    * @return Object
-   * @throws Exception
+   * @throws Exception the exception
    */
   public static Object getFieldValue(Class<?> clazz, Object obj, String fieldName) throws Exception {
     Field myField = clazz.getDeclaredField(fieldName);
@@ -35,8 +36,9 @@ public class Util {
   }
 
   /**
-   * Makes a srtring of a comma separated list of collection elements
-   * @param collection
+   * Makes a string of a comma separated list of collection elements
+   * @param collection the collection
+   * @param <E> the type of collection elements
    * @return String
    */
   public static <E> String mkString(Collection<E> collection) {

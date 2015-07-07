@@ -47,6 +47,7 @@ public class RecordCollectors {
 
     /**
      * The last ack'd offset from the producer
+     * @return the map from TopicPartition to offset
      */
     public Map<TopicPartition, Long> offsets() {
       return this.offsets;

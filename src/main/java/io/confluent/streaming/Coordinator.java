@@ -18,7 +18,7 @@
 package io.confluent.streaming;
 
 /**
- * Coordinators are provided to the process methods of {@link StreamProcessor} implementations to allow
+ * Coordinators are provided by the coordiantor methods of {@link KStreamContext} to allow
  * the user code to request actions from the framework.
  * <p>
  * This interface may evolve over time.
