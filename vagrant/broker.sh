@@ -22,6 +22,7 @@ set -e
 BROKER_ID=$1
 PUBLIC_ADDRESS=$2
 PUBLIC_ZOOKEEPER_ADDRESSES=$3
+JMX_PORT=$4
 
 cd /opt/kafka
 
@@ -35,4 +36,8 @@ echo "Killing server"
 bin/kafka-server-stop.sh || true
 sleep 5 # Because kafka-server-stop.sh doesn't actually wait
 echo "Starting server"
+if [[  -n $JMX_PORT ]]; then
+  export JMX_PORT=$JMX_PORT
+  export KAFKA_JMX_OPTS="-Djava.rmi.server.hostname=$PUBLIC_ADDRESS -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
+fi
 bin/kafka-server-start.sh /opt/kafka/config/server-$BROKER_ID.properties 1>> /tmp/broker.log 2>> /tmp/broker.log &

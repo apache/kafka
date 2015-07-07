@@ -21,6 +21,7 @@ set -e
 
 ZKID=$1
 NUM_ZK=$2
+JMX_PORT=$3
 
 cd /opt/kafka
 
@@ -37,6 +38,10 @@ echo "$ZKID" > /tmp/zookeeper/myid
 
 echo "Killing ZooKeeper"
 bin/zookeeper-server-stop.sh || true
-sleep 5 # Because kafka-server-stop.sh doesn't actually wait
+sleep 5 # Because zookeeper-server-stop.sh doesn't actually wait
 echo "Starting ZooKeeper"
+if [[  -n $JMX_PORT ]]; then
+  export JMX_PORT=$JMX_PORT
+  export KAFKA_JMX_OPTS="-Djava.rmi.server.hostname=zk$ZKID -Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
+fi
 bin/zookeeper-server-start.sh config/zookeeper-$ZKID.properties 1>> /tmp/zk.log 2>> /tmp/zk.log &

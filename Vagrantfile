@@ -22,6 +22,7 @@ VAGRANTFILE_API_VERSION = "2"
 
 # General config
 enable_dns = false
+enable_jmx = false
 num_zookeepers = 1
 num_brokers = 3
 num_workers = 0 # Generic workers that get the code, but don't start any services
@@ -135,7 +136,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       ip_address = "192.168.50." + (10 + i).to_s
       assign_local_ip(zookeeper, ip_address)
       zookeeper.vm.provision "shell", path: "vagrant/base.sh"
-      zookeeper.vm.provision "shell", path: "vagrant/zk.sh", :args => [i.to_s, num_zookeepers]
+      zk_jmx_port = enable_jmx ? (8000 + i).to_s : ""
+      zookeeper.vm.provision "shell", path: "vagrant/zk.sh", :args => [i.to_s, num_zookeepers, zk_jmx_port]
     end
   }
 
@@ -151,7 +153,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       # used to support clients running on the host.
       zookeeper_connect = zookeepers.map{ |zk_addr| zk_addr + ":2181"}.join(",")
       broker.vm.provision "shell", path: "vagrant/base.sh"
-      broker.vm.provision "shell", path: "vagrant/broker.sh", :args => [i.to_s, enable_dns ? name : ip_address, zookeeper_connect]
+      kafka_jmx_port = enable_jmx ? (9000 + i).to_s : ""
+      broker.vm.provision "shell", path: "vagrant/broker.sh", :args => [i.to_s, enable_dns ? name : ip_address, zookeeper_connect, kafka_jmx_port]
     end
   }
 
