@@ -160,7 +160,7 @@ public class KafkaStreaming implements Runnable {
 
     private void init() {
         log.info("Starting container");
-        if (this.started.compareAndSet(false, true)) {
+        if (started.compareAndSet(false, true)) {
             if (!config.stateDir.exists() && !config.stateDir.mkdirs())
                 throw new IllegalArgumentException("Failed to create state directory: " + config.stateDir.getAbsolutePath());
 
@@ -190,6 +190,7 @@ public class KafkaStreaming implements Runnable {
 
         producer.close();
         consumer.close();
+        shutdownComplete.countDown();
         log.info("Shut down complete");
     }
 
@@ -197,9 +198,9 @@ public class KafkaStreaming implements Runnable {
      * Shutdown this streaming instance.
      */
     public synchronized void close() {
-        this.running = false;
+        running = false;
         try {
-            this.shutdownComplete.await();
+            shutdownComplete.await();
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
@@ -207,9 +208,14 @@ public class KafkaStreaming implements Runnable {
 
     private void runLoop() {
         try {
+            boolean pollRequired = true;
+
             while (stillRunning()) {
-                boolean pollRequired = false;
-                
+                if (pollRequired) {
+                    ingestor.poll();
+                    pollRequired = false;
+                }
+
                 for (Map.Entry<Integer, Collection<SyncGroup>> entry : syncGroups.entrySet()) {
                     for (SyncGroup syncGroup : entry.getValue()) {
                         syncGroup.streamSynchronizer.process();
@@ -218,8 +224,6 @@ public class KafkaStreaming implements Runnable {
                 }
                 maybeCommit();
                 maybeCleanState();
-
-                if (pollRequired) ingestor.poll();
             }
         } catch (Exception e) {
             throw new KafkaException(e);
@@ -227,12 +231,12 @@ public class KafkaStreaming implements Runnable {
     }
 
     private boolean stillRunning() {
-        if(!this.running) {
+        if(!running) {
             log.debug("Shutting down at user request.");
             return false;
         }
-        if(this.config.totalRecordsToProcess >= 0 && this.recordsProcessed >= this.config.totalRecordsToProcess) {
-            log.debug("Shutting down as we've reached the user-configured limit of {} records to process.", this.config.totalRecordsToProcess);
+        if(config.totalRecordsToProcess >= 0 && recordsProcessed >= config.totalRecordsToProcess) {
+            log.debug("Shutting down as we've reached the user-configured limit of {} records to process.", config.totalRecordsToProcess);
             return false;
         }
         return true;
@@ -240,11 +244,11 @@ public class KafkaStreaming implements Runnable {
 
     private void maybeCommit() {
         long now = time.milliseconds();
-        if (this.config.commitTimeMs >= 0 && lastCommit + this.config.commitTimeMs < time.milliseconds()) {
+        if (config.commitTimeMs >= 0 && lastCommit + config.commitTimeMs < time.milliseconds()) {
             log.trace("Committing processor instances because the commit interval has elapsed.");
             commitAll(now);
         } else {
-            if (!this.requestingCommit.isEmpty()) {
+            if (!requestingCommit.isEmpty()) {
                 log.trace("Committing processor instances because of user request.");
                 commitRequesting(now);
             }
@@ -270,12 +274,12 @@ public class KafkaStreaming implements Runnable {
 
         producer.flush();
         consumer.commit(commit, CommitType.SYNC); // TODO: can this be async?
-        this.streamingMetrics.commitTime.record(time.milliseconds() - lastCommit);
+        streamingMetrics.commitTime.record(time.milliseconds() - lastCommit);
     }
 
     private void commitRequesting(long now) {
-        Map<TopicPartition, Long> commit = new HashMap<TopicPartition, Long>(this.requestingCommit.size());
-        for (Integer id : this.requestingCommit) {
+        Map<TopicPartition, Long> commit = new HashMap<TopicPartition, Long>(requestingCommit.size());
+        for (Integer id : requestingCommit) {
             KStreamContextImpl context = kstreamContexts.get(id);
             context.flush();
 
@@ -284,20 +288,20 @@ public class KafkaStreaming implements Runnable {
             }
         }
         consumer.commit(commit, CommitType.SYNC);
-        this.requestingCommit.clear();
-        this.streamingMetrics.commitTime.record(time.milliseconds() - now);
+        requestingCommit.clear();
+        streamingMetrics.commitTime.record(time.milliseconds() - now);
     }
 
     /* delete any state dirs that aren't for active contexts */
     private void maybeCleanState() {
         long now = time.milliseconds();
-        if(now > this.nextStateCleaning) {
-            File[] stateDirs = this.config.stateDir.listFiles();
+        if(now > nextStateCleaning) {
+            File[] stateDirs = config.stateDir.listFiles();
             if(stateDirs != null) {
                 for(File dir: stateDirs) {
                     try {
                         Integer id = Integer.parseInt(dir.getName());
-                        if(!this.kstreamContexts.keySet().contains(id)) {
+                        if(!kstreamContexts.keySet().contains(id)) {
                             log.info("Deleting obsolete state directory {} after {} delay ms.", dir.getAbsolutePath(), config.stateCleanupDelay);
                             Util.rm(dir);
                         }
@@ -307,7 +311,7 @@ public class KafkaStreaming implements Runnable {
                     }
                 }
             }
-            this.nextStateCleaning = Long.MAX_VALUE;
+            nextStateCleaning = Long.MAX_VALUE;
         }
     }
 
@@ -337,7 +341,7 @@ public class KafkaStreaming implements Runnable {
 
                     @Override
                     public void shutdown(Coordinator.RequestScope scope) {
-                        throw new IllegalStateException("Implement me");
+                        running = true;
                     }
                 };
 
@@ -358,7 +362,7 @@ public class KafkaStreaming implements Runnable {
         }
 
         restoreConsumer.close();
-        this.nextStateCleaning = time.milliseconds() + config.stateCleanupDelay;
+        nextStateCleaning = time.milliseconds() + config.stateCleanupDelay;
     }
 
     private void removePartitions(Collection<TopicPartition> assignment) {
@@ -388,7 +392,7 @@ public class KafkaStreaming implements Runnable {
             }
         }
         // clear buffered records
-        this.ingestor.clear();
+        ingestor.clear();
     }
 
     private static Set<String> extractTopics(Class<? extends KStreamJob> jobClass) {
