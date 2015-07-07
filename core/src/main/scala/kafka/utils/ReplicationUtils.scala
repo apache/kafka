@@ -18,14 +18,16 @@
 package kafka.utils
 
 import kafka.api.LeaderAndIsr
+import kafka.common.TopicAndPartition
 import kafka.controller.LeaderIsrAndControllerEpoch
-import org.apache.zookeeper.data.Stat
 import org.I0Itec.zkclient.ZkClient
+import org.apache.zookeeper.data.Stat
 
-import scala.Some
 import scala.collection._
 
 object ReplicationUtils extends Logging {
+
+  val IsrChangeNotificationPrefix = "isr_change_"
 
   def updateLeaderAndIsr(zkClient: ZkClient, topic: String, partitionId: Int, newLeaderAndIsr: LeaderAndIsr, controllerEpoch: Int,
     zkVersion: Int): (Boolean,Int) = {
@@ -33,7 +35,15 @@ object ReplicationUtils extends Logging {
     val path = ZkUtils.getTopicPartitionLeaderAndIsrPath(topic, partitionId)
     val newLeaderData = ZkUtils.leaderAndIsrZkData(newLeaderAndIsr, controllerEpoch)
     // use the epoch of the controller that made the leadership decision, instead of the current controller epoch
-    ZkUtils.conditionalUpdatePersistentPath(zkClient, path, newLeaderData, zkVersion, Some(checkLeaderAndIsrZkData))
+    val updatePersistentPath: (Boolean, Int) = ZkUtils.conditionalUpdatePersistentPath(zkClient, path, newLeaderData, zkVersion, Some(checkLeaderAndIsrZkData))
+    if (updatePersistentPath._1) {
+      val topicAndPartition: TopicAndPartition = TopicAndPartition(topic, partitionId)
+      val isrChangeNotificationPath: String = ZkUtils.createSequentialPersistentPath(
+        zkClient, ZkUtils.IsrChangeNotificationPath + "/" + IsrChangeNotificationPrefix,
+        topicAndPartition.toJson)
+      debug("Added " + isrChangeNotificationPath + " for " + topicAndPartition)
+    }
+    updatePersistentPath
   }
 
   def checkLeaderAndIsrZkData(zkClient: ZkClient, path: String, expectedLeaderAndIsrInfo: String): (Boolean,Int) = {
