@@ -131,9 +131,9 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       .ofType(classOf[String])
 
     val messageHandlerOpt = parser.accepts("message.handler",
-      "The consumer rebalance listener to use for mirror maker consumer.")
+      "Message handler which will process every record in-between consumer and producer.")
       .withRequiredArg()
-      .describedAs("A custom rebalance listener of type MirrorMakerMessageHandler")
+      .describedAs("A custom message handler of type MirrorMakerMessageHandler")
       .ofType(classOf[String])
 
     val messageHandlerArgsOpt = parser.accepts("message.handler.args",
