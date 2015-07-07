@@ -15,7 +15,7 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
     if (elem == null) throw new NullPointerException();
 
     Stamped<E> minElem = descendingSubsequence.peekLast();
-    while (minElem != null && minElem.compareTo(elem) >= 0) {
+    while (minElem != null && minElem.timestamp >= elem.timestamp) {
       descendingSubsequence.removeLast();
       minElem = descendingSubsequence.peekLast();
     }

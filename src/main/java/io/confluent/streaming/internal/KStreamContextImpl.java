@@ -63,7 +63,7 @@ public class KStreamContextImpl implements KStreamContext {
     this.processorConfig = processorConfig;
 
     this.timestampExtractor = (TimestampExtractor<Object, Object>)this.streamingConfig.timestampExtractor();
-    if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractoris  missing");
+    if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractor is  missing");
 
     this.stateDir = new File(processorConfig.stateDir, Integer.toString(id));
     this.stateMgr = new ProcessorStateManager(id, stateDir);
