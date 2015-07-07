@@ -403,6 +403,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         } catch (InterruptedException e) {
             this.errors.record();
             throw new InterruptException(e);
+        } catch (BufferExhaustedException e) {
+            this.errors.record();
+            this.metrics.sensor("buffer-exhausted-records").record();
+            throw e;
         } catch (KafkaException e) {
             this.errors.record();
             throw e;
