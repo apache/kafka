@@ -131,8 +131,8 @@ import static org.apache.kafka.common.utils.Utils.min;
  *     props.put(&quot;enable.auto.commit&quot;, &quot;true&quot;);
  *     props.put(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
  *     props.put(&quot;session.timeout.ms&quot;, &quot;30000&quot;);
- *     props.put(&quot;key.serializer&quot;, &quot;org.apache.kafka.common.serializers.StringSerializer&quot;);
- *     props.put(&quot;value.serializer&quot;, &quot;org.apache.kafka.common.serializers.StringSerializer&quot;);
+ *     props.put(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;String, String&gt;(props);
  *     consumer.subscribe(&quot;foo&quot;, &quot;bar&quot;);
  *     while (true) {
@@ -159,8 +159,8 @@ import static org.apache.kafka.common.utils.Utils.min;
  * to it. If it stops heartbeating for a period of time longer than <code>session.timeout.ms</code> then it will be
  * considered dead and it's partitions will be assigned to another process.
  * <p>
- * The serializers settings specify how to turn the objects the user provides into bytes. By specifying the string
- * serializers we are saying that our record's key and value will just be simple strings.
+ * The deserializer settings specify how to turn bytes into objects. For example, by specifying string deserializers, we
+ * are saying that our record's key and value will just be simple strings.
  * 
  * <h4>Controlling When Messages Are Considered Consumed</h4>
  * 
@@ -183,8 +183,8 @@ import static org.apache.kafka.common.utils.Utils.min;
  *     props.put(&quot;enable.auto.commit&quot;, &quot;false&quot;);
  *     props.put(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
  *     props.put(&quot;session.timeout.ms&quot;, &quot;30000&quot;);
- *     props.put(&quot;key.serializer&quot;, &quot;org.apache.kafka.common.serializers.StringSerializer&quot;);
- *     props.put(&quot;value.serializer&quot;, &quot;org.apache.kafka.common.serializers.StringSerializer&quot;);
+ *     props.put(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;String, String&gt;(props);
  *     consumer.subscribe(&quot;foo&quot;, &quot;bar&quot;);
  *     int commitInterval = 200;
