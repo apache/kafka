@@ -65,8 +65,6 @@ rat {
     '**/README.md',
     '.reviewboardrc',
     'system_test/**',
-    'tests/**',
-    'vagrant/**',
   ])
 }
 
