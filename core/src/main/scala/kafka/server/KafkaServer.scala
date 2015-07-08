@@ -17,6 +17,9 @@
 
 package kafka.server
 
+import java.util
+import java.util.Properties
+
 import kafka.admin._
 import kafka.log.LogConfig
 import kafka.log.CleanerConfig
@@ -38,7 +41,7 @@ import kafka.common.{ErrorMapping, InconsistentBrokerIdException, GenerateBroker
 import kafka.network.{BlockingChannel, SocketServer}
 import kafka.metrics.KafkaMetricsGroup
 import com.yammer.metrics.core.Gauge
-import kafka.coordinator.ConsumerCoordinator
+import kafka.coordinator.{GroupManagerConfig, ConsumerCoordinator}
 
 /**
  * Represents the lifecycle of a single Kafka broker. Handles all functionality required
@@ -71,8 +74,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   var requestHandlerPool: KafkaRequestHandlerPool = null
 
   var logManager: LogManager = null
-
-  var offsetManager: OffsetManager = null
 
   var replicaManager: ReplicaManager = null
 
@@ -154,19 +155,16 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
           replicaManager = new ReplicaManager(config, time, zkClient, kafkaScheduler, logManager, isShuttingDown)
           replicaManager.startup()
 
-          /* start offset manager */
-          offsetManager = createOffsetManager()
-
           /* start kafka controller */
           kafkaController = new KafkaController(config, zkClient, brokerState)
           kafkaController.startup()
 
           /* start kafka coordinator */
-          consumerCoordinator = new ConsumerCoordinator(config, zkClient, offsetManager)
+          consumerCoordinator = ConsumerCoordinator.create(config, zkClient, replicaManager, kafkaScheduler)
           consumerCoordinator.startup()
 
           /* start processing requests */
-          apis = new KafkaApis(socketServer.requestChannel, replicaManager, offsetManager, consumerCoordinator,
+          apis = new KafkaApis(socketServer.requestChannel, replicaManager, consumerCoordinator,
             kafkaController, zkClient, config.brokerId, config, metadataCache)
           requestHandlerPool = new KafkaRequestHandlerPool(config.brokerId, socketServer.requestChannel, apis, config.numIoThreads)
           brokerState.newState(RunningAsBroker)
@@ -346,8 +344,6 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
           CoreUtils.swallow(socketServer.shutdown())
         if(requestHandlerPool != null)
           CoreUtils.swallow(requestHandlerPool.shutdown())
-        if(offsetManager != null)
-          offsetManager.shutdown()
         CoreUtils.swallow(kafkaScheduler.shutdown())
         if(apis != null)
           CoreUtils.swallow(apis.close())
@@ -388,23 +384,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
   def boundPort(): Int = socketServer.boundPort()
 
   private def createLogManager(zkClient: ZkClient, brokerState: BrokerState): LogManager = {
-    val defaultLogConfig = LogConfig(segmentSize = config.logSegmentBytes,
-                                     segmentMs = config.logRollTimeMillis,
-                                     segmentJitterMs = config.logRollTimeJitterMillis,
-                                     flushInterval = config.logFlushIntervalMessages,
-                                     flushMs = config.logFlushIntervalMs.toLong,
-                                     retentionSize = config.logRetentionBytes,
-                                     retentionMs = config.logRetentionTimeMillis,
-                                     maxMessageSize = config.messageMaxBytes,
-                                     maxIndexSize = config.logIndexSizeMaxBytes,
-                                     indexInterval = config.logIndexIntervalBytes,
-                                     deleteRetentionMs = config.logCleanerDeleteRetentionMs,
-                                     fileDeleteDelayMs = config.logDeleteDelayMs,
-                                     minCleanableRatio = config.logCleanerMinCleanRatio,
-                                     compact = config.logCleanupPolicy.trim.toLowerCase == "compact",
-                                     minInSyncReplicas = config.minInSyncReplicas,
-                                     compressionType = config.compressionType)
-    val defaultProps = defaultLogConfig.toProps
+    val defaultProps = copyKafkaConfigToLog(config.originals)
+    val defaultLogConfig = LogConfig(defaultProps)
+
     val configs = AdminUtils.fetchAllTopicConfigs(zkClient).mapValues(LogConfig.fromProps(defaultProps, _))
     // read the log configurations from zookeeper
     val cleanerConfig = CleanerConfig(numThreads = config.logCleanerThreads,
@@ -428,17 +410,37 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
                    time = time)
   }
 
-  private def createOffsetManager(): OffsetManager = {
-    val offsetManagerConfig = OffsetManagerConfig(
-      maxMetadataSize = config.offsetMetadataMaxSize,
-      loadBufferSize = config.offsetsLoadBufferSize,
-      offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
-      offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
-      offsetsTopicNumPartitions = config.offsetsTopicPartitions,
-      offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-      offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
-      offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
-    new OffsetManager(offsetManagerConfig, replicaManager, zkClient, kafkaScheduler, metadataCache)
+  // Copy the subset of properties that are relevant to Logs
+  // I'm listing out individual properties here since the names are slightly different in each Config class...
+  private def copyKafkaConfigToLog(serverProps: java.util.Map[String, Object]): java.util.Map[String, Object] = {
+
+    val logProps = new util.HashMap[String, Object]()
+    val entryset = serverProps.entrySet.iterator
+    while (entryset.hasNext) {
+      val entry = entryset.next
+      entry.getKey match {
+        case KafkaConfig.LogSegmentBytesProp => logProps.put(LogConfig.SegmentBytesProp, entry.getValue)
+        case KafkaConfig.LogRollTimeMillisProp => logProps.put(LogConfig.SegmentMsProp, entry.getValue)
+        case KafkaConfig.LogRollTimeJitterMillisProp => logProps.put(LogConfig.SegmentJitterMsProp, entry.getValue)
+        case KafkaConfig.LogIndexSizeMaxBytesProp => logProps.put(LogConfig.SegmentIndexBytesProp, entry.getValue)
+        case KafkaConfig.LogFlushIntervalMessagesProp => logProps.put(LogConfig.FlushMessagesProp, entry.getValue)
+        case KafkaConfig.LogFlushIntervalMsProp => logProps.put(LogConfig.FlushMsProp, entry.getValue)
+        case KafkaConfig.LogRetentionBytesProp => logProps.put(LogConfig.RetentionBytesProp, entry.getValue)
+        case KafkaConfig.LogRetentionTimeMillisProp => logProps.put(LogConfig.RetentionMsProp, entry.getValue)
+        case KafkaConfig.MessageMaxBytesProp => logProps.put(LogConfig.MaxMessageBytesProp, entry.getValue)
+        case KafkaConfig.LogIndexIntervalBytesProp => logProps.put(LogConfig.IndexIntervalBytesProp, entry.getValue)
+        case KafkaConfig.LogCleanerDeleteRetentionMsProp => logProps.put(LogConfig.DeleteRetentionMsProp, entry.getValue)
+        case KafkaConfig.LogDeleteDelayMsProp => logProps.put(LogConfig.FileDeleteDelayMsProp, entry.getValue)
+        case KafkaConfig.LogCleanerMinCleanRatioProp => logProps.put(LogConfig.MinCleanableDirtyRatioProp, entry.getValue)
+        case KafkaConfig.LogCleanupPolicyProp => logProps.put(LogConfig.CleanupPolicyProp, entry.getValue)
+        case KafkaConfig.MinInSyncReplicasProp => logProps.put(LogConfig.MinInSyncReplicasProp, entry.getValue)
+        case KafkaConfig.CompressionTypeProp => logProps.put(LogConfig.CompressionTypeProp, entry.getValue)
+        case KafkaConfig.UncleanLeaderElectionEnableProp => logProps.put(LogConfig.UncleanLeaderElectionEnableProp, entry.getValue)
+        case KafkaConfig.LogPreAllocateProp => logProps.put(LogConfig.PreAllocateEnableProp, entry.getValue)
+        case _ => // we just leave those out
+      }
+    }
+    logProps
   }
 
   /**

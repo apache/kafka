@@ -38,31 +38,31 @@ public class RequestResponseTest {
                 createRequestHeader(),
                 createResponseHeader(),
                 createConsumerMetadataRequest(),
-                createConsumerMetadataRequest().getErrorResponse(new UnknownServerException()),
+                createConsumerMetadataRequest().getErrorResponse(0, new UnknownServerException()),
                 createConsumerMetadataResponse(),
                 createFetchRequest(),
-                createFetchRequest().getErrorResponse(new UnknownServerException()),
+                createFetchRequest().getErrorResponse(0, new UnknownServerException()),
                 createFetchResponse(),
                 createHeartBeatRequest(),
-                createHeartBeatRequest().getErrorResponse(new UnknownServerException()),
+                createHeartBeatRequest().getErrorResponse(0, new UnknownServerException()),
                 createHeartBeatResponse(),
                 createJoinGroupRequest(),
-                createJoinGroupRequest().getErrorResponse(new UnknownServerException()),
+                createJoinGroupRequest().getErrorResponse(0, new UnknownServerException()),
                 createJoinGroupResponse(),
                 createListOffsetRequest(),
-                createListOffsetRequest().getErrorResponse(new UnknownServerException()),
+                createListOffsetRequest().getErrorResponse(0, new UnknownServerException()),
                 createListOffsetResponse(),
                 createMetadataRequest(),
-                createMetadataRequest().getErrorResponse(new UnknownServerException()),
+                createMetadataRequest().getErrorResponse(0, new UnknownServerException()),
                 createMetadataResponse(),
                 createOffsetCommitRequest(),
-                createOffsetCommitRequest().getErrorResponse(new UnknownServerException()),
+                createOffsetCommitRequest().getErrorResponse(0, new UnknownServerException()),
                 createOffsetCommitResponse(),
                 createOffsetFetchRequest(),
-                createOffsetFetchRequest().getErrorResponse(new UnknownServerException()),
+                createOffsetFetchRequest().getErrorResponse(0, new UnknownServerException()),
                 createOffsetFetchResponse(),
                 createProduceRequest(),
-                createProduceRequest().getErrorResponse(new UnknownServerException()),
+                createProduceRequest().getErrorResponse(0, new UnknownServerException()),
                 createProduceResponse());
 
         for (AbstractRequestResponse req: requestResponseList) {
@@ -145,7 +145,10 @@ public class RequestResponseTest {
         Node[] isr = new Node[1];
         isr[0] = node;
         Cluster cluster = new Cluster(Arrays.asList(node), Arrays.asList(new PartitionInfo("topic1", 1, node, replicas, isr)));
-        return new MetadataResponse(cluster);
+
+        Map<String, Errors> errors = new HashMap<String, Errors>();
+        errors.put("topic2", Errors.LEADER_NOT_AVAILABLE);
+        return new MetadataResponse(cluster, errors);
     }
 
     private AbstractRequest createOffsetCommitRequest() {

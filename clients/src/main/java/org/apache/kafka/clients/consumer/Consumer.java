@@ -108,4 +108,9 @@ public interface Consumer<K, V> extends Closeable {
      */
     public void close();
 
+    /**
+     * @see KafkaConsumer#wakeup()
+     */
+    public void wakeup();
+
 }

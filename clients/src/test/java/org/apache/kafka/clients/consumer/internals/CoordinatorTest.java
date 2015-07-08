@@ -17,10 +17,11 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -49,24 +50,20 @@ public class CoordinatorTest {
     private String topicName = "test";
     private String groupId = "test-group";
     private TopicPartition tp = new TopicPartition(topicName, 0);
-    private long retryBackoffMs = 0L;
-    private long sessionTimeoutMs = 10L;
+    private int sessionTimeoutMs = 10;
     private String rebalanceStrategy = "not-matter";
     private MockTime time = new MockTime();
     private MockClient client = new MockClient(time);
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
-    private SubscriptionState subscriptions = new SubscriptionState();
+    private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
     private Metrics metrics = new Metrics(time);
     private Map<String, String> metricTags = new LinkedHashMap<String, String>();
 
     private Coordinator coordinator = new Coordinator(client,
         groupId,
-        retryBackoffMs,
         sessionTimeoutMs,
         rebalanceStrategy,
-        metadata,
         subscriptions,
         metrics,
         "consumer" + groupId,
@@ -75,13 +72,14 @@ public class CoordinatorTest {
 
     @Before
     public void setup() {
-        metadata.update(cluster, time.milliseconds());
         client.setNode(node);
     }
 
     @Test
     public void testNormalHeartbeat() {
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
 
         // normal heartbeat
         time.sleep(sessionTimeoutMs);
@@ -94,6 +92,8 @@ public class CoordinatorTest {
     @Test
     public void testCoordinatorNotAvailable() {
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
 
         // consumer_coordinator_not_available will mark coordinator as unknown
         time.sleep(sessionTimeoutMs);
@@ -108,6 +108,8 @@ public class CoordinatorTest {
     @Test
     public void testNotCoordinator() {
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
 
         // not_coordinator will mark coordinator as unknown
         time.sleep(sessionTimeoutMs);
@@ -122,6 +124,8 @@ public class CoordinatorTest {
     @Test
     public void testIllegalGeneration() {
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
 
         // illegal_generation will cause re-partition
         subscriptions.subscribe(topicName);
@@ -139,6 +143,8 @@ public class CoordinatorTest {
     @Test
     public void testCoordinatorDisconnect() {
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
 
         // coordinator disconnect will mark coordinator as unknown
         time.sleep(sessionTimeoutMs);
@@ -152,39 +158,67 @@ public class CoordinatorTest {
 
     @Test
     public void testNormalJoinGroup() {
+        subscriptions.subscribe(topicName);
+        subscriptions.needReassignment();
+
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
 
         // normal join group
         client.prepareResponse(joinGroupResponse(1, "consumer", Collections.singletonList(tp), Errors.NONE.code()));
-        assertEquals(Collections.singletonList(tp),
-            coordinator.assignPartitions(Collections.singletonList(topicName), time.milliseconds()));
-        assertEquals(0, client.inFlightRequestCount());
+        coordinator.assignPartitions(time.milliseconds());
+        client.poll(0, time.milliseconds());
+
+        assertFalse(subscriptions.partitionAssignmentNeeded());
+        assertEquals(Collections.singleton(tp), subscriptions.assignedPartitions());
     }
 
     @Test
     public void testReJoinGroup() {
+        subscriptions.subscribe(topicName);
+        subscriptions.needReassignment();
+
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
+        assertTrue(subscriptions.partitionAssignmentNeeded());
 
         // diconnected from original coordinator will cause re-discover and join again
         client.prepareResponse(joinGroupResponse(1, "consumer", Collections.singletonList(tp), Errors.NONE.code()), true);
+        coordinator.assignPartitions(time.milliseconds());
+        client.poll(0, time.milliseconds());
+        assertTrue(subscriptions.partitionAssignmentNeeded());
+
+        // rediscover the coordinator
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
+
+        // try assigning partitions again
         client.prepareResponse(joinGroupResponse(1, "consumer", Collections.singletonList(tp), Errors.NONE.code()));
-        assertEquals(Collections.singletonList(tp),
-            coordinator.assignPartitions(Collections.singletonList(topicName), time.milliseconds()));
-        assertEquals(0, client.inFlightRequestCount());
+        coordinator.assignPartitions(time.milliseconds());
+        client.poll(0, time.milliseconds());
+        assertFalse(subscriptions.partitionAssignmentNeeded());
+        assertEquals(Collections.singleton(tp), subscriptions.assignedPartitions());
     }
 
 
     @Test
     public void testCommitOffsetNormal() {
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
 
-        // sync commit
+        // With success flag
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())));
-        coordinator.commitOffsets(Collections.singletonMap(tp, 100L), true, time.milliseconds());
+        RequestFuture<Void> result = coordinator.commitOffsets(Collections.singletonMap(tp, 100L), time.milliseconds());
+        assertEquals(1, client.poll(0, time.milliseconds()).size());
+        assertTrue(result.isDone());
+        assertTrue(result.succeeded());
 
-        // async commit
-        coordinator.commitOffsets(Collections.singletonMap(tp, 100L), false, time.milliseconds());
+        // Without success flag
+        coordinator.commitOffsets(Collections.singletonMap(tp, 100L), time.milliseconds());
         client.respond(offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())));
         assertEquals(1, client.poll(0, time.milliseconds()).size());
     }
@@ -192,34 +226,55 @@ public class CoordinatorTest {
     @Test
     public void testCommitOffsetError() {
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
 
         // async commit with coordinator not available
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.code())));
-        coordinator.commitOffsets(Collections.singletonMap(tp, 100L), false, time.milliseconds());
+        coordinator.commitOffsets(Collections.singletonMap(tp, 100L), time.milliseconds());
         assertEquals(1, client.poll(0, time.milliseconds()).size());
         assertTrue(coordinator.coordinatorUnknown());
         // resume
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
 
         // async commit with not coordinator
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NOT_COORDINATOR_FOR_CONSUMER.code())));
-        coordinator.commitOffsets(Collections.singletonMap(tp, 100L), false, time.milliseconds());
+        coordinator.commitOffsets(Collections.singletonMap(tp, 100L), time.milliseconds());
         assertEquals(1, client.poll(0, time.milliseconds()).size());
         assertTrue(coordinator.coordinatorUnknown());
         // resume
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
 
         // sync commit with not_coordinator
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NOT_COORDINATOR_FOR_CONSUMER.code())));
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())));
-        coordinator.commitOffsets(Collections.singletonMap(tp, 100L), true, time.milliseconds());
+        RequestFuture<Void> result = coordinator.commitOffsets(Collections.singletonMap(tp, 100L), time.milliseconds());
+        assertEquals(1, client.poll(0, time.milliseconds()).size());
+        assertTrue(result.isDone());
+        assertEquals(RequestFuture.RetryAction.FIND_COORDINATOR, result.retryAction());
 
         // sync commit with coordinator disconnected
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())), true);
-        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
         client.prepareResponse(offsetCommitResponse(Collections.singletonMap(tp, Errors.NONE.code())));
-        coordinator.commitOffsets(Collections.singletonMap(tp, 100L), true, time.milliseconds());
+        result = coordinator.commitOffsets(Collections.singletonMap(tp, 100L), time.milliseconds());
+
+        assertEquals(0, client.poll(0, time.milliseconds()).size());
+        assertTrue(result.isDone());
+        assertEquals(RequestFuture.RetryAction.FIND_COORDINATOR, result.retryAction());
+
+        client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
+
+        result = coordinator.commitOffsets(Collections.singletonMap(tp, 100L), time.milliseconds());
+        assertEquals(1, client.poll(0, time.milliseconds()).size());
+        assertTrue(result.isDone());
+        assertTrue(result.succeeded());
     }
 
 
@@ -227,33 +282,63 @@ public class CoordinatorTest {
     public void testFetchOffset() {
 
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
 
         // normal fetch
         client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", 100L));
-        assertEquals(100L, (long) coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds()).get(tp));
+        RequestFuture<Map<TopicPartition, Long>> result = coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds());
+        client.poll(0, time.milliseconds());
+        assertTrue(result.isDone());
+        assertEquals(100L, (long) result.value().get(tp));
 
         // fetch with loading in progress
         client.prepareResponse(offsetFetchResponse(tp, Errors.OFFSET_LOAD_IN_PROGRESS.code(), "", 100L));
         client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", 100L));
-        assertEquals(100L, (long) coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds()).get(tp));
+
+        result = coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds());
+        client.poll(0, time.milliseconds());
+        assertTrue(result.isDone());
+        assertTrue(result.failed());
+        assertEquals(RequestFuture.RetryAction.BACKOFF, result.retryAction());
+
+        result = coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds());
+        client.poll(0, time.milliseconds());
+        assertTrue(result.isDone());
+        assertEquals(100L, (long) result.value().get(tp));
 
         // fetch with not coordinator
         client.prepareResponse(offsetFetchResponse(tp, Errors.NOT_COORDINATOR_FOR_CONSUMER.code(), "", 100L));
         client.prepareResponse(consumerMetadataResponse(node, Errors.NONE.code()));
         client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", 100L));
-        assertEquals(100L, (long) coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds()).get(tp));
+
+        result = coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds());
+        client.poll(0, time.milliseconds());
+        assertTrue(result.isDone());
+        assertTrue(result.failed());
+        assertEquals(RequestFuture.RetryAction.FIND_COORDINATOR, result.retryAction());
+
+        coordinator.discoverConsumerCoordinator();
+        client.poll(0, time.milliseconds());
+
+        result = coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds());
+        client.poll(0, time.milliseconds());
+        assertTrue(result.isDone());
+        assertEquals(100L, (long) result.value().get(tp));
 
         // fetch with no fetchable offsets
         client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", -1L));
-        assertEquals(0, coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds()).size());
-
-        // fetch with offset topic unknown
-        client.prepareResponse(offsetFetchResponse(tp, Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), "", 100L));
-        assertEquals(0, coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds()).size());
+        result = coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds());
+        client.poll(0, time.milliseconds());
+        assertTrue(result.isDone());
+        assertTrue(result.value().isEmpty());
 
         // fetch with offset -1
         client.prepareResponse(offsetFetchResponse(tp, Errors.NONE.code(), "", -1L));
-        assertEquals(0, coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds()).size());
+        result = coordinator.fetchOffsets(Collections.singleton(tp), time.milliseconds());
+        client.poll(0, time.milliseconds());
+        assertTrue(result.isDone());
+        assertTrue(result.value().isEmpty());
     }
 
     private Struct consumerMetadataResponse(Node node, short error) {

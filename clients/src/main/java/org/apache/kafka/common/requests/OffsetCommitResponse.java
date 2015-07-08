@@ -41,7 +41,13 @@ public class OffsetCommitResponse extends AbstractRequestResponse {
     /**
      * Possible error code:
      *
-     * TODO
+     * OFFSET_METADATA_TOO_LARGE (12)
+     * CONSUMER_COORDINATOR_NOT_AVAILABLE (15)
+     * NOT_COORDINATOR_FOR_CONSUMER (16)
+     * ILLEGAL_GENERATION (22)
+     * UNKNOWN_CONSUMER_ID (25)
+     * COMMITTING_PARTITIONS_NOT_ASSIGNED (27)
+     * INVALID_COMMIT_OFFSET_SIZE (28)
      */
 
     private final Map<TopicPartition, Short> responseData;

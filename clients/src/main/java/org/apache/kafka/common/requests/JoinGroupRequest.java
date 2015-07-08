@@ -12,6 +12,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ProtoUtils;
@@ -20,6 +21,7 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 public class JoinGroupRequest extends AbstractRequest {
@@ -65,6 +67,21 @@ public class JoinGroupRequest extends AbstractRequest {
         strategy = struct.getString(STRATEGY_KEY_NAME);
     }
 
+    @Override
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
+        switch (versionId) {
+            case 0:
+                return new JoinGroupResponse(
+                        Errors.forException(e).code(),
+                        JoinGroupResponse.UNKNOWN_GENERATION_ID,
+                        JoinGroupResponse.UNKNOWN_CONSUMER_ID,
+                        Collections.<TopicPartition>emptyList());
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.JOIN_GROUP.id)));
+        }
+    }
+
     public String groupId() {
         return groupId;
     }
@@ -85,12 +102,11 @@ public class JoinGroupRequest extends AbstractRequest {
         return strategy;
     }
 
-    public static JoinGroupRequest parse(ByteBuffer buffer) {
-        return new JoinGroupRequest((Struct) CURRENT_SCHEMA.read(buffer));
+    public static JoinGroupRequest parse(ByteBuffer buffer, int versionId) {
+        return new JoinGroupRequest(ProtoUtils.parseRequest(ApiKeys.JOIN_GROUP.id, versionId, buffer));
     }
 
-    @Override
-    public AbstractRequestResponse getErrorResponse(Throwable e) {
-        return new JoinGroupResponse(Errors.forException(e).code());
+    public static JoinGroupRequest parse(ByteBuffer buffer) {
+        return new JoinGroupRequest((Struct) CURRENT_SCHEMA.read(buffer));
     }
 }

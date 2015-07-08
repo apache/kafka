@@ -4,20 +4,27 @@
 // The ASF licenses this file to You under the Apache License, Version 2.0
 // (the "License"); you may not use this file except in compliance with
 // the License.  You may obtain a copy of the License at
-// 
+//
 //    http://www.apache.org/licenses/LICENSE-2.0
-// 
+//
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+import org.ajoberstar.grgit.Grgit
+
 buildscript {
   repositories {
     mavenCentral()
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
+
+  dependencies {
+    // For Apache Rat plugin to ignore non-Git files, need ancient version for Java 6 compatibility
+    classpath group: 'org.ajoberstar', name: 'grgit', version: '0.2.3'
+  }
 }
 
 def slf4jlog4j='org.slf4j:slf4j-log4j12:1.7.6'
@@ -41,8 +48,25 @@ ext {
 }
 
 apply from: file('wrapper.gradle')
-apply from: file('gradle/license.gradle')
 apply from: file('scala.gradle')
+apply from: file('gradle/rat.gradle')
+
+rat {
+  // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
+  // restrict us only to files that are checked in or are staged.
+  def repo = Grgit.open(project.file('.'))
+  excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
+  // And some of the files that we have checked in should also be excluded from this check
+  excludes.addAll([
+    '**/.git/**',
+    'build/rat/rat-report.xml',
+    'gradlew',
+    'gradlew.bat',
+    '**/README.md',
+    '.reviewboardrc',
+    'system_test/**',
+  ])
+}
 
 subprojects {
   apply plugin: 'java'
@@ -50,9 +74,7 @@ subprojects {
   apply plugin: 'maven'
   apply plugin: 'signing'
 
-  sourceCompatibility = 1.6
-
-  licenseTest.onlyIf { isVerificationRequired(project) }
+  sourceCompatibility = 1.7
 
   uploadArchives {
     repositories {
@@ -111,7 +133,7 @@ subprojects {
     archives srcJar
     archives javadocJar
   }
-  
+
   plugins.withType(ScalaPlugin) {
     //source jar should also contain scala source:
     srcJar.from sourceSets.main.scala
@@ -181,20 +203,20 @@ for ( sv in ['2_9_1', '2_9_2', '2_10_5', '2_11_6'] ) {
   }
 }
 
-tasks.create(name: "jarAll", dependsOn: ['jar_core_2_9_1', 'jar_core_2_9_2', 'jar_core_2_10_5', 'jar_core_2_11_6', 'clients:jar', 'examples:jar', 'contrib:hadoop-consumer:jar', 'contrib:hadoop-producer:jar']) {
+tasks.create(name: "jarAll", dependsOn: ['jar_core_2_9_1', 'jar_core_2_9_2', 'jar_core_2_10_5', 'jar_core_2_11_6', 'clients:jar', 'examples:jar', 'contrib:hadoop-consumer:jar', 'contrib:hadoop-producer:jar', 'log4j-appender:jar']) {
 }
 
-tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_9_1', 'srcJar_2_9_2', 'srcJar_2_10_5', 'srcJar_2_11_6', 'clients:srcJar', 'examples:srcJar', 'contrib:hadoop-consumer:srcJar', 'contrib:hadoop-producer:srcJar']) { }
+tasks.create(name: "srcJarAll", dependsOn: ['srcJar_2_9_1', 'srcJar_2_9_2', 'srcJar_2_10_5', 'srcJar_2_11_6', 'clients:srcJar', 'examples:srcJar', 'contrib:hadoop-consumer:srcJar', 'contrib:hadoop-producer:srcJar', 'log4j-appender:srcJar']) { }
 
-tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_9_1', 'docsJar_2_9_2', 'docsJar_2_10_5', 'docsJar_2_11_6', 'clients:docsJar', 'examples:docsJar', 'contrib:hadoop-consumer:docsJar', 'contrib:hadoop-producer:docsJar']) { }
+tasks.create(name: "docsJarAll", dependsOn: ['docsJar_2_9_1', 'docsJar_2_9_2', 'docsJar_2_10_5', 'docsJar_2_11_6', 'clients:docsJar', 'examples:docsJar', 'contrib:hadoop-consumer:docsJar', 'contrib:hadoop-producer:docsJar', 'log4j-appender:docsJar']) { }
 
-tasks.create(name: "testAll", dependsOn: ['test_core_2_9_1', 'test_core_2_9_2', 'test_core_2_10_5', 'test_core_2_11_6', 'clients:test']) {
+tasks.create(name: "testAll", dependsOn: ['test_core_2_9_1', 'test_core_2_9_2', 'test_core_2_10_5', 'test_core_2_11_6', 'clients:test', 'log4j-appender:test']) {
 }
 
 tasks.create(name: "releaseTarGzAll", dependsOn: ['releaseTarGz_2_9_1', 'releaseTarGz_2_9_2', 'releaseTarGz_2_10_5', 'releaseTarGz_2_11_6']) {
 }
 
-tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_9_1', 'uploadCoreArchives_2_9_2', 'uploadCoreArchives_2_10_5', 'uploadCoreArchives_2_11_6', 'clients:uploadArchives', 'examples:uploadArchives', 'contrib:hadoop-consumer:uploadArchives', 'contrib:hadoop-producer:uploadArchives']) {
+tasks.create(name: "uploadArchivesAll", dependsOn: ['uploadCoreArchives_2_9_1', 'uploadCoreArchives_2_9_2', 'uploadCoreArchives_2_10_5', 'uploadCoreArchives_2_11_6', 'clients:uploadArchives', 'examples:uploadArchives', 'contrib:hadoop-consumer:uploadArchives', 'contrib:hadoop-producer:uploadArchives', 'log4j-appender:uploadArchives']) {
 }
 
 project(':core') {
@@ -207,6 +229,7 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
+    compile project(':log4j-appender')
     compile "org.scala-lang:scala-library:$scalaVersion"
     compile 'org.apache.zookeeper:zookeeper:3.4.6'
     compile 'com.101tec:zkclient:0.5'
@@ -216,7 +239,6 @@ project(':core') {
     testCompile 'junit:junit:4.6'
     testCompile 'org.easymock:easymock:3.0'
     testCompile 'org.objenesis:objenesis:1.2'
-    testCompile project(':clients')
     if (scalaVersion.startsWith('2.10')) {
       testCompile 'org.scalatest:scalatest_2.10:1.9.1'
     } else if (scalaVersion.startsWith('2.11')) {
@@ -252,9 +274,9 @@ project(':core') {
     into "$buildDir/dependant-libs-${scalaVersion}"
   }
 
-  tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) { 
+  tasks.create(name: "releaseTarGz", dependsOn: configurations.archives.artifacts, type: Tar) {
     into "kafka_${baseScalaVersion}-${version}"
-    compression = Compression.GZIP 
+    compression = Compression.GZIP
     from(project.file("../bin")) { into "bin/" }
     from(project.file("../config")) { into "config/" }
     from '../LICENSE'
@@ -359,7 +381,7 @@ project(':clients') {
     compile 'net.sourceforge.argparse4j:argparse4j:0.5.0'
     compile 'com.googlecode.json-simple:json-simple:1.1.1'
 
-    testCompile 'com.novocode:junit-interface:0.9'
+    testCompile 'junit:junit:4.6'
     testRuntime "$slf4jlog4j"
   }
 
@@ -386,7 +408,45 @@ project(':clients') {
   artifacts {
     archives testJar
   }
-  
+
+  configurations {
+    archives.extendsFrom (testCompile)
+  }
+
+  checkstyle {
+     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+  }
+  test.dependsOn('checkstyleMain', 'checkstyleTest')
+}
+
+project(':log4j-appender') {
+  apply plugin: 'checkstyle'
+  archivesBaseName = "kafka-log4j-appender"
+
+  dependencies {
+    compile project(':clients')
+    compile "$slf4jlog4j"
+
+    testCompile 'junit:junit:4.6'
+    testCompile project(path: ':clients', configuration: 'archives')
+  }
+
+  task testJar(type: Jar) {
+    classifier = 'test'
+    from sourceSets.test.output
+  }
+
+  test {
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat = 'full'
+    }
+  }
+
+  javadoc {
+    include "**/org/apache/kafka/log4jappender/*"
+  }
+
   checkstyle {
      configFile = new File(rootDir, "checkstyle/checkstyle.xml")
   }

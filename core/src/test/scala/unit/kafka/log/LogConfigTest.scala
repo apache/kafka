@@ -15,11 +15,10 @@
  * limitations under the License.
  */
 
-package unit.kafka.log
+package kafka.log
 
 import java.util.Properties
 
-import kafka.log.{Defaults, LogConfig}
 import org.apache.kafka.common.config.ConfigException
 import org.junit.{Assert, Test}
 import org.scalatest.junit.JUnit3Suite
@@ -27,22 +26,9 @@ import org.scalatest.junit.JUnit3Suite
 class LogConfigTest extends JUnit3Suite {
 
   @Test
-  def testFromPropsDefaults() {
-    val defaults = new Properties()
-    defaults.put(LogConfig.SegmentBytesProp, "4242")
-    val props = new Properties(defaults)
-
-    val config = LogConfig.fromProps(props)
-
-    Assert.assertEquals(4242, config.segmentSize)
-    Assert.assertEquals("LogConfig defaults should be retained", Defaults.MaxMessageSize, config.maxMessageSize)
-    Assert.assertEquals("producer", config.compressionType)
-  }
-
-  @Test
   def testFromPropsEmpty() {
     val p = new Properties()
-    val config = LogConfig.fromProps(p)
+    val config = LogConfig(p)
     Assert.assertEquals(LogConfig(), config)
   }
 
@@ -59,11 +45,12 @@ class LogConfigTest extends JUnit3Suite {
         case LogConfig.MinInSyncReplicasProp => expected.setProperty(name, (nextInt(Int.MaxValue - 1) + 1).toString)
         case LogConfig.RetentionBytesProp => expected.setProperty(name, nextInt().toString)
         case LogConfig.RetentionMsProp => expected.setProperty(name, nextLong().toString)
+        case LogConfig.PreAllocateEnableProp => expected.setProperty(name, randFrom("true", "false"))
         case positiveIntProperty => expected.setProperty(name, nextInt(Int.MaxValue).toString)
       }
     })
 
-    val actual = LogConfig.fromProps(expected).toProps
+    val actual = LogConfig(expected).originals
     Assert.assertEquals(expected, actual)
   }
 
@@ -87,7 +74,7 @@ class LogConfigTest extends JUnit3Suite {
       val props = new Properties
       props.setProperty(name, value.toString)
       intercept[ConfigException] {
-        LogConfig.fromProps(props)
+        LogConfig(props)
       }
     })
   }

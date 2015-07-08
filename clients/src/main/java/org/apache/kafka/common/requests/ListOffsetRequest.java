@@ -107,7 +107,7 @@ public class ListOffsetRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(Throwable e) {
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<TopicPartition, ListOffsetResponse.PartitionData>();
 
         for (Map.Entry<TopicPartition, PartitionData> entry: offsetData.entrySet()) {
@@ -115,7 +115,13 @@ public class ListOffsetRequest extends AbstractRequest {
             responseData.put(entry.getKey(), partitionResponse);
         }
 
-        return new ListOffsetResponse(responseData);
+        switch (versionId) {
+            case 0:
+                return new ListOffsetResponse(responseData);
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.LIST_OFFSETS.id)));
+        }
     }
 
     public int replicaId() {
@@ -124,6 +130,10 @@ public class ListOffsetRequest extends AbstractRequest {
 
     public Map<TopicPartition, PartitionData> offsetData() {
         return offsetData;
+    }
+
+    public static ListOffsetRequest parse(ByteBuffer buffer, int versionId) {
+        return new ListOffsetRequest(ProtoUtils.parseRequest(ApiKeys.LIST_OFFSETS.id, versionId, buffer));
     }
 
     public static ListOffsetRequest parse(ByteBuffer buffer) {

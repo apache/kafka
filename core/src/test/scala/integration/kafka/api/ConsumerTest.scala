@@ -25,12 +25,13 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException
 
 import kafka.utils.{TestUtils, Logging}
-import kafka.server.{KafkaConfig, OffsetManager}
+import kafka.server.KafkaConfig
 
 import java.util.ArrayList
 import org.junit.Assert._
 
 import scala.collection.JavaConversions._
+import kafka.coordinator.ConsumerCoordinator
 
 
 /**
@@ -158,9 +159,9 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
       consumer0.poll(50)
     
     // get metadata for the topic
-    var parts = consumer0.partitionsFor(OffsetManager.OffsetsTopicName)
+    var parts = consumer0.partitionsFor(ConsumerCoordinator.OffsetsTopicName)
     while(parts == null)
-      parts = consumer0.partitionsFor(OffsetManager.OffsetsTopicName)
+      parts = consumer0.partitionsFor(ConsumerCoordinator.OffsetsTopicName)
     assertEquals(1, parts.size)
     assertNotNull(parts(0).leader())
     

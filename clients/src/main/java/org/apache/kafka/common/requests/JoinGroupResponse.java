@@ -75,10 +75,6 @@ public class JoinGroupResponse extends AbstractRequestResponse {
         this.assignedPartitions = assignedPartitions;
     }
 
-    public JoinGroupResponse(short errorCode) {
-        this(errorCode, UNKNOWN_GENERATION_ID, UNKNOWN_CONSUMER_ID, Collections.<TopicPartition>emptyList());
-    }
-
     public JoinGroupResponse(Struct struct) {
         super(struct);
         assignedPartitions = new ArrayList<TopicPartition>();

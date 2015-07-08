@@ -274,7 +274,7 @@ class OffsetIndex(@volatile var file: File, val baseOffset: Long, val maxIndexSi
    */
   def resize(newSize: Int) {
     inLock(lock) {
-      val raf = new RandomAccessFile(file, "rws")
+      val raf = new RandomAccessFile(file, "rw")
       val roundedNewSize = roundToExactMultiple(newSize, 8)
       val position = this.mmap.position
       

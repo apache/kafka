@@ -18,6 +18,7 @@
 package kafka.log
 
 import java.io.File
+import java.util.Properties
 
 import kafka.common.TopicAndPartition
 import kafka.message._
@@ -127,8 +128,13 @@ class LogCleanerIntegrationTest(compressionCodec: String) extends JUnit3Suite {
     for(i <- 0 until parts) {
       val dir = new File(logDir, "log-" + i)
       dir.mkdirs()
+      val logProps = new Properties()
+      logProps.put(LogConfig.SegmentBytesProp, segmentSize: java.lang.Integer)
+      logProps.put(LogConfig.SegmentIndexBytesProp, 100*1024: java.lang.Integer)
+      logProps.put(LogConfig.FileDeleteDelayMsProp, deleteDelay: java.lang.Integer)
+      logProps.put(LogConfig.CleanupPolicyProp, LogConfig.Compact)
       val log = new Log(dir = dir,
-                        LogConfig(segmentSize = segmentSize, maxIndexSize = 100*1024, fileDeleteDelayMs = deleteDelay, compact = true),
+                        LogConfig(logProps),
                         recoveryPoint = 0L,
                         scheduler = time.scheduler,
                         time = time)

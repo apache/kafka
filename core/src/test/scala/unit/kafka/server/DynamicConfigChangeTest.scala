@@ -16,6 +16,8 @@
  */
 package kafka.server
 
+import java.util.Properties
+
 import junit.framework.Assert._
 import org.junit.Test
 import kafka.integration.KafkaServerTestHarness
@@ -30,16 +32,19 @@ class DynamicConfigChangeTest extends JUnit3Suite with KafkaServerTestHarness {
 
   @Test
   def testConfigChange() {
-    val oldVal = 100000
-    val newVal = 200000
+    val oldVal: java.lang.Long = 100000
+    val newVal: java.lang.Long = 200000
     val tp = TopicAndPartition("test", 0)
-    AdminUtils.createTopic(zkClient, tp.topic, 1, 1, LogConfig(flushInterval = oldVal).toProps)
+    val logProps = new Properties()
+    logProps.put(LogConfig.FlushMessagesProp, oldVal.toString)
+    AdminUtils.createTopic(zkClient, tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.servers(0).logManager.getLog(tp)
       assertTrue(logOpt.isDefined)
       assertEquals(oldVal, logOpt.get.config.flushInterval)
     }
-    AdminUtils.changeTopicConfig(zkClient, tp.topic, LogConfig(flushInterval = newVal).toProps)
+    logProps.put(LogConfig.FlushMessagesProp, newVal.toString)
+    AdminUtils.changeTopicConfig(zkClient, tp.topic, logProps)
     TestUtils.retry(10000) {
       assertEquals(newVal, this.servers(0).logManager.getLog(tp).get.config.flushInterval)
     }
@@ -49,7 +54,9 @@ class DynamicConfigChangeTest extends JUnit3Suite with KafkaServerTestHarness {
   def testConfigChangeOnNonExistingTopic() {
     val topic = TestUtils.tempTopic
     try {
-      AdminUtils.changeTopicConfig(zkClient, topic, LogConfig(flushInterval = 10000).toProps)
+      val logProps = new Properties()
+      logProps.put(LogConfig.FlushMessagesProp, 10000: java.lang.Integer)
+      AdminUtils.changeTopicConfig(zkClient, topic, logProps)
       fail("Should fail with AdminOperationException for topic doesn't exist")
     } catch {
       case e: AdminOperationException => // expected

@@ -70,16 +70,6 @@ object CoreUtils extends Logging {
     Utils.daemonThread(name, runnable(fun))
 
   /**
-   * Open a channel for the given file
-   */
-  def openChannel(file: File, mutable: Boolean): FileChannel = {
-    if(mutable)
-      new RandomAccessFile(file, "rw").getChannel()
-    else
-      new FileInputStream(file).getChannel()
-  }
-
-  /**
    * Do the given action and log any exceptions thrown without rethrowing them
    * @param log The log method to use for logging. E.g. logger.warn
    * @param action The action to execute
@@ -251,32 +241,6 @@ object CoreUtils extends Logging {
     if(!s.endsWith(oldSuffix))
       throw new IllegalArgumentException("Expected string to end with '%s' but string is '%s'".format(oldSuffix, s))
     s.substring(0, s.length - oldSuffix.length) + newSuffix
-  }
-
-  /**
-   * Turn {@linkplain java.util.Properties} with default values into a {@linkplain java.util.Map}. Following example
-   * illustrates difference from the cast
-   * <pre>
-   * val defaults = new Properties()
-   * defaults.put("foo", "bar")
-   * val props = new Properties(defaults)
-   *
-   * props.getProperty("foo") // "bar"
-   * props.get("foo") // null
-   * evaluateDefaults(props).get("foo") // "bar"
-   * </pre>
-   *
-   * @param props properties to evaluate
-   * @return new java.util.Map instance
-   */
-  def evaluateDefaults(props: Properties): java.util.Map[String, String] = {
-    import java.util._
-    import JavaConversions.asScalaSet
-    val evaluated = new HashMap[String, String]()
-    for (name <- props.stringPropertyNames()) {
-      evaluated.put(name, props.getProperty(name))
-    }
-    evaluated
   }
 
   /**

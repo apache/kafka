@@ -120,5 +120,11 @@ class BrokerEndPointTest extends JUnit3Suite with Logging {
     assert(endpoint.host == "::1")
     assert(endpoint.port == 9092)
     assert(endpoint.connectionString ==  "PLAINTEXT://[::1]:9092")
+    // test hostname
+    connectionString = "PLAINTEXT://MyHostname:9092"
+    endpoint = EndPoint.createEndPoint(connectionString)
+    assert(endpoint.host == "MyHostname")
+    assert(endpoint.port == 9092)
+    assert(endpoint.connectionString ==  "PLAINTEXT://MyHostname:9092")
   }
 }

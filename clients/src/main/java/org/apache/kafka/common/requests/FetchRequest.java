@@ -120,17 +120,23 @@ public class FetchRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractRequestResponse getErrorResponse(Throwable e) {
+    public AbstractRequestResponse getErrorResponse(int versionId, Throwable e) {
         Map<TopicPartition, FetchResponse.PartitionData> responseData = new HashMap<TopicPartition, FetchResponse.PartitionData>();
 
         for (Map.Entry<TopicPartition, PartitionData> entry: fetchData.entrySet()) {
             FetchResponse.PartitionData partitionResponse = new FetchResponse.PartitionData(Errors.forException(e).code(),
-                                                                                            FetchResponse.INVALID_HIGHWATERMARK,
-                                                                                            FetchResponse.EMPTY_RECORD_SET);
+                    FetchResponse.INVALID_HIGHWATERMARK,
+                    FetchResponse.EMPTY_RECORD_SET);
             responseData.put(entry.getKey(), partitionResponse);
         }
 
-        return new FetchResponse(responseData);
+        switch (versionId) {
+            case 0:
+                return new FetchResponse(responseData);
+            default:
+                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
+                        versionId, this.getClass().getSimpleName(), ProtoUtils.latestVersion(ApiKeys.FETCH.id)));
+        }
     }
 
     public int replicaId() {
@@ -147,6 +153,10 @@ public class FetchRequest extends AbstractRequest {
 
     public Map<TopicPartition, PartitionData> fetchData() {
         return fetchData;
+    }
+
+    public static FetchRequest parse(ByteBuffer buffer, int versionId) {
+        return new FetchRequest(ProtoUtils.parseRequest(ApiKeys.FETCH.id, versionId, buffer));
     }
 
     public static FetchRequest parse(ByteBuffer buffer) {

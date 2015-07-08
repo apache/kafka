@@ -57,15 +57,19 @@ public class AbstractConfig {
         return values.get(key);
     }
 
-    public int getInt(String key) {
+    public Short getShort(String key) {
+        return (Short) get(key);
+    }
+
+    public Integer getInt(String key) {
         return (Integer) get(key);
     }
 
-    public long getLong(String key) {
+    public Long getLong(String key) {
         return (Long) get(key);
     }
 
-    public double getDouble(String key) {
+    public Double getDouble(String key) {
         return (Double) get(key);
     }
 
@@ -92,7 +96,7 @@ public class AbstractConfig {
         return keys;
     }
 
-    public Map<String, ?> originals() {
+    public Map<String, Object> originals() {
         Map<String, Object> copy = new HashMap<String, Object>();
         copy.putAll(originals);
         return copy;

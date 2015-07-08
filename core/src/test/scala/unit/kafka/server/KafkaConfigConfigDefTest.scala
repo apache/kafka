@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.server
+package kafka.server
 
 import java.util.Properties
 
 import kafka.api.ApiVersion
 import kafka.message._
-import kafka.server.{Defaults, KafkaConfig}
 import org.apache.kafka.common.protocol.SecurityProtocol
 import org.junit.{Assert, Test}
 import org.scalatest.junit.JUnit3Suite
@@ -31,29 +30,13 @@ import scala.util.Random._
 class KafkaConfigConfigDefTest extends JUnit3Suite {
 
   @Test
-  def testFromPropsDefaults() {
-    val defaults = new Properties()
-    defaults.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
-
-    // some ordinary setting
-    defaults.put(KafkaConfig.AdvertisedPortProp, "1818")
-
-    val props = new Properties(defaults)
-
-    val config = KafkaConfig.fromProps(props)
-
-    Assert.assertEquals(1818, config.advertisedPort)
-    Assert.assertEquals("KafkaConfig defaults should be retained", Defaults.ConnectionsMaxIdleMs, config.connectionsMaxIdleMs)
-  }
-
-  @Test
   def testFromPropsEmpty() {
     // only required
     val p = new Properties()
     p.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
     val actualConfig = KafkaConfig.fromProps(p)
 
-    val expectedConfig = new KafkaConfig(zkConnect = "127.0.0.1:2181")
+    val expectedConfig = new KafkaConfig(p)
 
     Assert.assertEquals(expectedConfig.zkConnect, actualConfig.zkConnect)
     Assert.assertEquals(expectedConfig.zkSessionTimeoutMs, actualConfig.zkSessionTimeoutMs)
@@ -209,6 +192,7 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
         case KafkaConfig.MinInSyncReplicasProp => expected.setProperty(name, atLeastOneIntProp)
         case KafkaConfig.AutoLeaderRebalanceEnableProp => expected.setProperty(name, randFrom("true", "false"))
         case KafkaConfig.UncleanLeaderElectionEnableProp => expected.setProperty(name, randFrom("true", "false"))
+        case KafkaConfig.LogPreAllocateProp => expected.setProperty(name, randFrom("true", "false"))
         case KafkaConfig.InterBrokerSecurityProtocolProp => expected.setProperty(name, SecurityProtocol.PLAINTEXT.toString)
         case KafkaConfig.InterBrokerProtocolVersionProp => expected.setProperty(name, ApiVersion.latestVersion.toString)
 
@@ -253,7 +237,7 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
       }
     })
 
-    val actual = KafkaConfig.fromProps(expected).toProps
+    val actual = KafkaConfig.fromProps(expected).originals
     Assert.assertEquals(expected, actual)
   }
 

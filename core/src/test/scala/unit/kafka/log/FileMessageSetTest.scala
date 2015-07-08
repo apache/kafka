@@ -17,6 +17,7 @@
 
 package kafka.log
 
+import java.io._
 import java.nio._
 import java.util.concurrent.atomic._
 import junit.framework.Assert._
@@ -146,5 +147,57 @@ class FileMessageSetTest extends BaseMessageSetTestCases {
     assertEquals(List(message), messageSet.toList)
     assertEquals(MessageSet.entrySize(message.message), messageSet.sizeInBytes)
   }
-  
+
+  /**
+   * Test the new FileMessageSet with pre allocate as true
+   */
+  @Test
+  def testPreallocateTrue() {
+    val temp = tempFile()
+    val set = new FileMessageSet(temp, false, 512 *1024 *1024, true)
+    val position = set.channel.position
+    val size = set.sizeInBytes()
+    assertEquals(0, position)
+    assertEquals(0, size)
+    assertEquals(512 *1024 *1024, temp.length)
+  }
+
+  /**
+   * Test the new FileMessageSet with pre allocate as false
+   */
+  @Test
+  def testPreallocateFalse() {
+    val temp = tempFile()
+    val set = new FileMessageSet(temp, false, 512 *1024 *1024, false)
+    val position = set.channel.position
+    val size = set.sizeInBytes()
+    assertEquals(0, position)
+    assertEquals(0, size)
+    assertEquals(0, temp.length)
+  }
+
+  /**
+   * Test the new FileMessageSet with pre allocate as true and file has been clearly shut down, the file will be truncate to end of valid data.
+   */
+  @Test
+  def testPreallocateClearShutdown() {
+    val temp = tempFile()
+    val set = new FileMessageSet(temp, false, 512 *1024 *1024, true)
+    set.append(new ByteBufferMessageSet(NoCompressionCodec, messages: _*))
+    val oldposition = set.channel.position
+    val oldsize = set.sizeInBytes()
+    assertEquals(messageSet.sizeInBytes, oldposition)
+    assertEquals(messageSet.sizeInBytes, oldsize)
+    set.close()
+
+    val tempReopen = new File(temp.getAbsolutePath())
+    val setReopen = new FileMessageSet(tempReopen, true, 512 *1024 *1024, true)
+    val position = setReopen.channel.position
+    val size = setReopen.sizeInBytes()
+
+    assertEquals(oldposition, position)
+    assertEquals(oldposition, size)
+    assertEquals(oldposition, tempReopen.length)
+  }
+
 }
