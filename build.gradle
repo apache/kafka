@@ -59,6 +59,7 @@ rat {
   // And some of the files that we have checked in should also be excluded from this check
   excludes.addAll([
     '**/.git/**',
+    'build/rat/rat-report.xml',
     'gradlew',
     'gradlew.bat',
     '**/README.md',
