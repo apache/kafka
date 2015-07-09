@@ -1,42 +1,22 @@
 package io.confluent.streaming;
 
-import io.confluent.streaming.util.Util;
-
-import java.util.Collections;
-import java.util.Set;
-
 /**
  * An interface to implement an application logic of a stream processing.
- *
- * Each subclass must declare a public static final member variable <code>topics</code> like this:
- * <pre>
- *   class MyKStreamJob {
- *     public static final Topics topics = new Topics("pageView", "adClick");
- *     ...
- *   }
- * </pre>
- *
- * <code>Topics</code> represents a set of topics used in the application.
+ * An instance is created and initialized by the framework for each partition.
  */
-public abstract class KStreamJob {
+public interface KStreamJob {
 
   /**
-   * A class represents a set of topic names.
+   * Returns a set of topics used in this job
+   * @return
    */
-  public static class Topics {
-
-    public final Set<String> set;
-
-    Topics(String...  topics) {
-      set = Collections.unmodifiableSet(Util.mkSet(topics));
-    }
-
-  }
+  Topics topics();
 
   /**
-   * Initializes a streaming job by constructing a processing logic using KStream API.
+   * Initializes a stream processing job for a partition. This method is called for each partition.
+   * An application constructs a processing logic using KStream API.
    * <p>
-   * For exmaple,
+   * For example,
    * </p>
    * <pre>
    *   public init(KStreamContext context) {
@@ -44,8 +24,14 @@ public abstract class KStreamJob {
    *     KStream&lt;Integer, AdClick&gt; adClickStream = context.from("adClick").join(pageViewStream, ...).process(...);
    *   }
    * </pre>
-   * @param context KStreamContext
+   * @param context KStreamContext for this partition
    */
-  public abstract void init(KStreamContext context);
+  void init(KStreamContext context);
+
+  /**
+   * Closes this partition of the stream processing job.
+   * An application can perform its special clean up here.
+   */
+  void close();
 
 }

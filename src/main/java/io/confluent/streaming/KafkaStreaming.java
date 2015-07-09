@@ -345,12 +345,12 @@ public class KafkaStreaming implements Runnable {
                 };
 
                 kstreamContext =
-                  new KStreamContextImpl(id, topics, ingestor, producer, coordinator, streamingConfig, config, metrics);
+                  new KStreamContextImpl(id, job, topics, ingestor, producer, coordinator, streamingConfig, config, metrics);
 
                 kstreamContexts.put(id, kstreamContext);
 
                 try {
-                    kstreamContext.init(restoreConsumer, job);
+                    kstreamContext.init(restoreConsumer);
                 }
                 catch (Exception e) {
                     throw new KafkaException(e);
@@ -397,7 +397,8 @@ public class KafkaStreaming implements Runnable {
     private static Set<String> extractTopics(Class<? extends KStreamJob> jobClass) {
         // extract topics from a jobClass's static member field, topics
         try {
-            return ((KStreamJob.Topics)Util.getFieldValue(jobClass, null, "topics")).set;
+            Object instance = Utils.newInstance(jobClass);
+            return ((Topics)instance).topics;
         }
         catch (Exception e) {
             throw new KStreamException("failed to get a topic list from the job", e);

@@ -23,6 +23,7 @@ public class KStreamContextImpl implements KStreamContext {
   private static final Logger log = LoggerFactory.getLogger(KStreamContextImpl.class);
 
   public final int id;
+  private final KStreamJob job;
   private final Set<String> topics;
 
   private final Ingestor ingestor;
@@ -43,6 +44,7 @@ public class KStreamContextImpl implements KStreamContext {
 
   @SuppressWarnings("unchecked")
   public KStreamContextImpl(int id,
+                            KStreamJob job,
                             Set<String> topics,
                             Ingestor ingestor,
                             Producer<byte[], byte[]> producer,
@@ -51,6 +53,7 @@ public class KStreamContextImpl implements KStreamContext {
                             ProcessorConfig processorConfig,
                             Metrics metrics) {
     this.id = id;
+    this.job = job;
     this.topics = topics;
     this.ingestor = ingestor;
 
@@ -203,7 +206,7 @@ public class KStreamContextImpl implements KStreamContext {
     return syncGroups.values();
   }
 
-  public void init(Consumer<byte[], byte[]> restoreConsumer, KStreamJob job) throws IOException {
+  public void init(Consumer<byte[], byte[]> restoreConsumer) throws IOException {
     stateMgr.init();
     try {
       this.restoreConsumer = restoreConsumer;
@@ -229,6 +232,7 @@ public class KStreamContextImpl implements KStreamContext {
 
   public void close() throws Exception {
     stateMgr.close(simpleCollector.offsets());
+    job.close();
   }
 
 }

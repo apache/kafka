@@ -23,19 +23,6 @@ public class Util {
   }
 
   /**
-   * Gets a value from a field of a class
-   * @param clazz the class object
-   * @param obj the instance object, or maybe null for a static field
-   * @param fieldName the name of the field
-   * @return Object
-   * @throws Exception the exception
-   */
-  public static Object getFieldValue(Class<?> clazz, Object obj, String fieldName) throws Exception {
-    Field myField = clazz.getDeclaredField(fieldName);
-    return myField.get(obj);
-  }
-
-  /**
    * Makes a string of a comma separated list of collection elements
    * @param collection the collection
    * @param <E> the type of collection elements
