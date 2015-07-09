@@ -155,13 +155,12 @@ class KafkaConfigTest extends JUnit3Suite {
 
   @Test
   def testAdvertiseConfigured() {
-    val port = "9999"
     val advertisedHostName = "routable-host"
     val advertisedPort = "1234"
 
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put(KafkaConfig.AdvertisedHostNameProp, advertisedHostName)
-    props.put(KafkaConfig.AdvertisedPortProp, advertisedPort.toString)
+    props.put(KafkaConfig.AdvertisedPortProp, advertisedPort)
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
@@ -178,7 +177,7 @@ class KafkaConfigTest extends JUnit3Suite {
 
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put(KafkaConfig.AdvertisedHostNameProp, advertisedHostName)
-    props.put(KafkaConfig.PortProp, port.toString)
+    props.put(KafkaConfig.PortProp, port)
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
@@ -195,7 +194,7 @@ class KafkaConfigTest extends JUnit3Suite {
 
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put(KafkaConfig.HostNameProp, hostName)
-    props.put(KafkaConfig.AdvertisedPortProp, advertisedPort.toString)
+    props.put(KafkaConfig.AdvertisedPortProp, advertisedPort)
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
