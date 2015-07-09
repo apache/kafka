@@ -2,29 +2,44 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
 import io.confluent.streaming.util.MinTimestampTracker;
+import io.confluent.streaming.util.ParallelExecutor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Created by yasuhiro on 6/23/15.
  */
-public class StreamSynchronizer<K, V> {
+public class StreamSynchronizer<K, V> implements ParallelExecutor.Task {
+
+  public static class Status {
+    private AtomicBoolean pollRequired = new AtomicBoolean();
+
+    public void pollRequired(boolean flag) {
+      pollRequired.set(flag);
+    }
+
+    public boolean pollRequired() {
+      return pollRequired.get();
+    }
+  }
 
   public final String name;
   private final Ingestor ingestor;
   private final Chooser<K, V> chooser;
   private final TimestampExtractor<K, V> timestampExtractor;
-  private final Map<TopicPartition, RecordQueue<K, V>> stash = new HashMap<TopicPartition, RecordQueue<K, V>>();
+  private final Map<TopicPartition, RecordQueue<K, V>> stash = new HashMap<>();
   private final int desiredUnprocessed;
   private final Map<TopicPartition, Long> consumedOffsets;
   private final PunctuationQueue punctuationQueue = new PunctuationQueue();
+  private final ArrayDeque<NewRecords<K, V>> newRecordBuffer = new ArrayDeque<>();
 
   private long streamTime = -1;
-  private boolean pollRequired = false;
   private volatile int buffered = 0;
 
   StreamSynchronizer(String name,
@@ -37,7 +52,7 @@ public class StreamSynchronizer<K, V> {
     this.chooser = chooser;
     this.timestampExtractor = timestampExtractor;
     this.desiredUnprocessed = desiredUnprocessedPerPartition;
-    this.consumedOffsets = new HashMap<TopicPartition, Long>();
+    this.consumedOffsets = new HashMap<>();
   }
 
   @SuppressWarnings("unchecked")
@@ -53,9 +68,17 @@ public class StreamSynchronizer<K, V> {
     }
   }
 
-  @SuppressWarnings("unchecked")
   public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<K, V>> iterator) {
     synchronized (this) {
+      newRecordBuffer.addLast(new NewRecords<>(partition, iterator));
+    }
+  }
+
+  private void ingestNewRecords() {
+    for (NewRecords<K, V> newRecords : newRecordBuffer) {
+      TopicPartition partition = newRecords.partition;
+      Iterator<ConsumerRecord<K, V>> iterator = newRecords.iterator;
+
       RecordQueue recordQueue = stash.get(partition);
       if (recordQueue != null) {
         boolean wasEmpty = recordQueue.isEmpty();
@@ -63,7 +86,7 @@ public class StreamSynchronizer<K, V> {
         while (iterator.hasNext()) {
           ConsumerRecord<K, V> record = iterator.next();
           long timestamp = timestampExtractor.extract(record.topic(), record.key(), record.value());
-          recordQueue.add(new StampedRecord<K, V>(record, timestamp));
+          recordQueue.add(new StampedRecord<>(record, timestamp));
           buffered++;
         }
 
@@ -78,22 +101,19 @@ public class StreamSynchronizer<K, V> {
     }
   }
 
-  public boolean requiresPoll() {
-    return pollRequired;
-  }
-
   public PunctuationScheduler getPunctuationScheduler(Processor<?, ?> processor) {
     return new PunctuationSchedulerImpl(punctuationQueue, processor);
   }
 
   @SuppressWarnings("unchecked")
-  public void process() {
+  public void process(Object context) {
+    Status status = (Status) context;
     synchronized (this) {
-      pollRequired = false;
+      ingestNewRecords();
 
       RecordQueue recordQueue = chooser.next();
       if (recordQueue == null) {
-        pollRequired = true;
+        status.pollRequired(true);
         return;
       }
 
@@ -101,11 +121,13 @@ public class StreamSynchronizer<K, V> {
 
       if (recordQueue.size() == this.desiredUnprocessed) {
         ingestor.unpause(recordQueue.partition(), recordQueue.offset());
-        pollRequired = true;
       }
 
       long trackedTimestamp = recordQueue.trackedTimestamp();
       StampedRecord<K, V> record = recordQueue.next();
+
+      if (recordQueue.size() < this.desiredUnprocessed)
+        status.pollRequired(true);
 
       if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
@@ -117,8 +139,6 @@ public class StreamSynchronizer<K, V> {
       buffered--;
 
       punctuationQueue.mayPunctuate(streamTime);
-
-      return;
     }
   }
 
@@ -139,4 +159,13 @@ public class StreamSynchronizer<K, V> {
     return new RecordQueue<K, V>(partition, receiver, new MinTimestampTracker<ConsumerRecord<K, V>>());
   }
 
+  private static class NewRecords<K, V> {
+    final TopicPartition partition;
+    final Iterator<ConsumerRecord<K, V>> iterator;
+
+    NewRecords(TopicPartition partition, Iterator<ConsumerRecord<K, V>> iterator) {
+      this.partition = partition;
+      this.iterator = iterator;
+    }
+  }
 }

@@ -20,6 +20,8 @@ package io.confluent.streaming;
 import io.confluent.streaming.internal.KStreamContextImpl;
 import io.confluent.streaming.internal.ProcessorConfig;
 import io.confluent.streaming.internal.IngestorImpl;
+import io.confluent.streaming.internal.StreamSynchronizer;
+import io.confluent.streaming.util.ParallelExecutor;
 import io.confluent.streaming.util.Util;
 import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -82,8 +84,10 @@ public class KafkaStreaming implements Runnable {
 
     private final Class<? extends KStreamJob> jobClass;
     private final Set<String> topics;
-    private final Map<Integer, Collection<SyncGroup>> syncGroups = new HashMap<Integer, Collection<SyncGroup>>();
-    private final Map<Integer, KStreamContextImpl> kstreamContexts = new HashMap<Integer, KStreamContextImpl>();
+    private final Map<Integer, Collection<SyncGroup>> syncGroups = new HashMap<>();
+    private final ArrayList<StreamSynchronizer<?, ?>> streamSynchronizers = new ArrayList<>();
+    private final ParallelExecutor parallelExecutor;
+    private final Map<Integer, KStreamContextImpl> kstreamContexts = new HashMap<>();
     protected final Producer<byte[], byte[]> producer;
     protected final Consumer<byte[], byte[]> consumer;
     private final IngestorImpl<Object, Object> ingestor;
@@ -123,23 +127,24 @@ public class KafkaStreaming implements Runnable {
                              Consumer<byte[], byte[]> consumer) {
         this.jobClass = jobClass;
         this.topics = extractTopics(jobClass);
-        this.producer = producer == null? new KafkaProducer<byte[], byte[]>(config.config(), new ByteArraySerializer(), new ByteArraySerializer()): producer;
-        this.consumer = consumer == null? new KafkaConsumer<byte[], byte[]>(config.config(), rebalanceCallback, new ByteArrayDeserializer(), new ByteArrayDeserializer()): consumer;
+        this.producer = producer == null? new KafkaProducer<>(config.config(), new ByteArraySerializer(), new ByteArraySerializer()): producer;
+        this.consumer = consumer == null? new KafkaConsumer<>(config.config(), rebalanceCallback, new ByteArrayDeserializer(), new ByteArrayDeserializer()): consumer;
         this.streamingConfig = config;
         this.metrics = new Metrics();
         this.streamingMetrics = new KafkaStreamingMetrics();
-        this.requestingCommit = new ArrayList<Integer>();
+        this.requestingCommit = new ArrayList<>();
         this.config = new ProcessorConfig(config.config());
         this.ingestor =
-            new IngestorImpl<Object, Object>(this.consumer,
-                                             (Deserializer<Object>) config.keyDeserializer(),
-                                             (Deserializer<Object>) config.valueDeserializer(),
-                                             this.config.pollTimeMs);
+            new IngestorImpl<>(this.consumer,
+                               (Deserializer<Object>) config.keyDeserializer(),
+                               (Deserializer<Object>) config.valueDeserializer(),
+                               this.config.pollTimeMs);
         this.running = true;
         this.lastCommit = 0;
         this.nextStateCleaning = Long.MAX_VALUE;
         this.recordsProcessed = 0;
         this.time = new SystemTime();
+        this.parallelExecutor = new ParallelExecutor(this.config.numStreamThreads);
     }
 
     /**
@@ -176,19 +181,20 @@ public class KafkaStreaming implements Runnable {
         log.info("Shutting down container");
         commitAll(time.milliseconds());
 
-        for (Map.Entry<Integer, Collection<SyncGroup>> entry : syncGroups.entrySet()) {
-            for (SyncGroup syncGroup : entry.getValue()) {
-                try {
-                    syncGroup.streamSynchronizer.close();
-                }
-                catch(Exception e) {
-                    log.error("Error while closing stream synchronizers: ", e);
-                }
+        for (StreamSynchronizer<?, ?> streamSynchronizer : streamSynchronizers) {
+            try {
+                streamSynchronizer.close();
+            }
+            catch(Exception e) {
+                log.error("Error while closing stream synchronizers: ", e);
             }
         }
 
         producer.close();
         consumer.close();
+        parallelExecutor.shutdown();
+        syncGroups.clear();
+        streamSynchronizers.clear();
         shutdownComplete.countDown();
         log.info("Shut down complete");
     }
@@ -207,20 +213,17 @@ public class KafkaStreaming implements Runnable {
 
     private void runLoop() {
         try {
-            boolean pollRequired = true;
+            StreamSynchronizer.Status status = new StreamSynchronizer.Status();
+            status.pollRequired(true);
 
             while (stillRunning()) {
-                if (pollRequired) {
+                if (status.pollRequired()) {
                     ingestor.poll();
-                    pollRequired = false;
+                    status.pollRequired(false);
                 }
 
-                for (Map.Entry<Integer, Collection<SyncGroup>> entry : syncGroups.entrySet()) {
-                    for (SyncGroup syncGroup : entry.getValue()) {
-                        syncGroup.streamSynchronizer.process();
-                        pollRequired = pollRequired || syncGroup.streamSynchronizer.requiresPoll();
-                    }
-                }
+                parallelExecutor.execute(streamSynchronizers, status);
+
                 maybeCommit();
                 maybeCleanState();
             }
@@ -255,19 +258,17 @@ public class KafkaStreaming implements Runnable {
     }
 
     private void commitAll(long now) {
-        Map<TopicPartition, Long> commit = new HashMap<TopicPartition, Long>();
+        Map<TopicPartition, Long> commit = new HashMap<>();
         for (KStreamContextImpl context : kstreamContexts.values()) {
             context.flush();
             // check co-ordinator
         }
-        for (Map.Entry<Integer, Collection<SyncGroup>> entry : syncGroups.entrySet()) {
-            for (SyncGroup syncGroup : entry.getValue()) {
-                try {
-                    commit.putAll(syncGroup.streamSynchronizer.consumedOffsets());
-                }
-                catch(Exception e) {
-                    log.error("Error while closing processor: ", e);
-                }
+        for (StreamSynchronizer<?, ?> streamSynchronizer : streamSynchronizers) {
+            try {
+                commit.putAll(streamSynchronizer.consumedOffsets());
+            }
+            catch(Exception e) {
+                log.error("Error while closing processor: ", e);
             }
         }
 
@@ -277,7 +278,7 @@ public class KafkaStreaming implements Runnable {
     }
 
     private void commitRequesting(long now) {
-        Map<TopicPartition, Long> commit = new HashMap<TopicPartition, Long>(requestingCommit.size());
+        Map<TopicPartition, Long> commit = new HashMap<>(requestingCommit.size());
         for (Integer id : requestingCommit) {
             KStreamContextImpl context = kstreamContexts.get(id);
             context.flush();
@@ -315,16 +316,12 @@ public class KafkaStreaming implements Runnable {
     }
 
     private void addPartitions(Collection<TopicPartition> assignment) {
-        HashSet<TopicPartition> partitions = new HashSet<TopicPartition>(assignment);
+        HashSet<TopicPartition> partitions = new HashSet<>(assignment);
 
         ingestor.init();
 
         Consumer<byte[], byte[]> restoreConsumer =
-          new KafkaConsumer<byte[], byte[]>(
-            streamingConfig.config(),
-            null,
-            new ByteArrayDeserializer(),
-            new ByteArrayDeserializer());
+          new KafkaConsumer<>(streamingConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
 
         for (TopicPartition partition : partitions) {
             final Integer id = partition.partition();
@@ -356,7 +353,11 @@ public class KafkaStreaming implements Runnable {
                     throw new KafkaException(e);
                 }
 
-                syncGroups.put(id, kstreamContext.syncGroups());
+                Collection<SyncGroup> syncGroups = kstreamContext.syncGroups();
+                this.syncGroups.put(id, syncGroups);
+                for (SyncGroup syncGroup : syncGroups) {
+                    streamSynchronizers.add(syncGroup.streamSynchronizer);
+                }
             }
         }
 
@@ -390,7 +391,7 @@ public class KafkaStreaming implements Runnable {
                 streamingMetrics.processorDestruction.record();
             }
         }
-        // clear buffered records
+        streamSynchronizers.clear();
         ingestor.clear();
     }
 

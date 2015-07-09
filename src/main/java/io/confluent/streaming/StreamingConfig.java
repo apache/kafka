@@ -53,6 +53,9 @@ public class StreamingConfig {
     /** <code>total.records.to.process</code> */
     public static final String TOTAL_RECORDS_TO_PROCESS = "total.records.to.process";
 
+    /** <code>num.of.stream.threads</code> */
+    public static final String NUM_STREAM_THREADS = "num.of.stream.threads";
+
     private final Properties config;
     private final Map<String, Object> context = new HashMap<String, Object>();
     private Serializer<?> keySerializer;

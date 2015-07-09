@@ -65,7 +65,12 @@ public class ProcessorConfig extends AbstractConfig {
                                         Type.LONG,
                                         -1L,
                                         Importance.LOW,
-                                        "Exit after processing this many records.");
+                                        "Exit after processing this many records.")
+                                .define(StreamingConfig.NUM_STREAM_THREADS,
+                                        Type.INT,
+                                        1,
+                                        Importance.LOW,
+                                        "The number of threads to execute stream processing.");
     }
 
     public final File stateDir;
@@ -75,6 +80,7 @@ public class ProcessorConfig extends AbstractConfig {
     public final int bufferedRecordsPerPartition;
     public final long stateCleanupDelay;
     public final long totalRecordsToProcess;
+    public final int numStreamThreads;
 
     public ProcessorConfig(Properties processor) {
         super(CONFIG, processor);
@@ -85,6 +91,7 @@ public class ProcessorConfig extends AbstractConfig {
         this.bufferedRecordsPerPartition = this.getInt(StreamingConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG);
         this.stateCleanupDelay = this.getLong(StreamingConfig.STATE_CLEANUP_DELAY_CONFIG);
         this.totalRecordsToProcess = this.getLong(StreamingConfig.TOTAL_RECORDS_TO_PROCESS);
+        this.numStreamThreads = this.getInt(StreamingConfig.NUM_STREAM_THREADS);
     }
 
 }
