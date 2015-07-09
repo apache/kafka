@@ -8,7 +8,7 @@ public interface KStreamJob {
 
   /**
    * Returns a set of topics used in this job
-   * @return
+   * @return Topics
    */
   Topics topics();
 

@@ -48,27 +48,28 @@ public interface KStreamContext {
 
   /**
    * Creates a KStream instance for the specified topic. The stream is added to the default synchronization group.
-   * @param topic
+   * @param topic the topic name
    * @return KStream
    */
   KStream<?, ?> from(String topic);
 
   /**
    * Creates a KStream instance for the specified topic. The stream is added to the specified synchronization group.
-   * @param topic
+   * @param topic the topic name
+   * @param syncGroup the synchronization group
    * @return KStream
    */
   KStream<?, ?> from(String topic, SyncGroup syncGroup);
 
   /**
    * Returns a RecordCollector which takes binary (byte array) key and value.
-   * @return
+   * @return RecordCollector
    */
   RecordCollector<byte[], byte[]> simpleRecordCollector();
 
   /**
    * Returns a RecordCollector which applies the serializer to key and value.
-   * @return
+   * @return RecordCollector
    */
   RecordCollector<Object, Object> recordCollector();
 
@@ -98,22 +99,22 @@ public interface KStreamContext {
 
   /**
    * Creates a synchronization group with the given name.
-   * @param name
+   * @param name the synchronization group name
    * @return a synchronization group
    */
   SyncGroup syncGroup(String name);
 
   /**
    * Creates a round robin synchronization group with the given name.
-   * @param name
+   * @param name the synchronization group name
    * @return a round robin synchronization group
    */
   SyncGroup roundRobinSyncGroup(String name);
 
   /**
    * Restores the specified storage engine.
-   * @param engine
-   * @throws Exception
+   * @param engine the storage engine
+   * @throws Exception an exception thrown by the engine
    */
   void restore(StorageEngine engine) throws Exception;
 
