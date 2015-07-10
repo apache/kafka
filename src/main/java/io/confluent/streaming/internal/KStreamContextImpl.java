@@ -117,6 +117,16 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
+  public KStream<?, ?> from(String topic) {
+    return from(topic, syncGroup(DEFAULT_SYNCHRONIZATION_GROUP), null, null);
+  }
+
+  @Override
+  public KStream<?, ?> from(String topic, SyncGroup syncGroup) {
+    return from(topic, syncGroup, null, null);
+  }
+
+  @Override
   public KStream<?, ?> from(String topic, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer) {
     return from(topic, syncGroup(DEFAULT_SYNCHRONIZATION_GROUP), keyDeserializer, valDeserializer);
   }
