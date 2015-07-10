@@ -112,19 +112,4 @@ public class IngestorImpl implements Ingestor {
     toBePaused.clear();
     streamSynchronizers.clear();
   }
-
-  private class DeserializingIterator extends FilteredIterator<ConsumerRecord<Object, Object>, ConsumerRecord<byte[], byte[]>> {
-
-    DeserializingIterator(Iterator<ConsumerRecord<byte[], byte[]>> inner) {
-      super(inner);
-    }
-
-    protected ConsumerRecord<Object, Object> filter(ConsumerRecord<byte[], byte[]> record) {
-      Object key = keyDeserializer.deserialize(record.topic(), record.key());
-      Object value = valueDeserializer.deserialize(record.topic(), record.value());
-      return new ConsumerRecord<>(record.topic(), record.partition(), record.offset(), key, value);
-    }
-
-  }
-
 }
