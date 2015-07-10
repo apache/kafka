@@ -3,17 +3,17 @@ package io.confluent.streaming.internal;
 import io.confluent.streaming.util.Stamped;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-public class StampedRecord<K, V> extends Stamped<ConsumerRecord<K, V>> {
+public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
 
-  StampedRecord(ConsumerRecord<K, V> record, long timestamp) {
+  StampedRecord(ConsumerRecord<Object, Object> record, long timestamp) {
     super(record, timestamp);
   }
 
-  public K key() {
+  public Object key() {
     return value.key();
   }
 
-  public V value() {
+  public Object value() {
     return value.value();
   }
 

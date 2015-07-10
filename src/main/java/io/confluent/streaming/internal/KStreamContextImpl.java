@@ -33,8 +33,8 @@ public class KStreamContextImpl implements KStreamContext {
   private final Coordinator coordinator;
   private final HashMap<String, KStreamSource<?, ?>> sourceStreams = new HashMap<String, KStreamSource<?, ?>>();
   private final HashMap<String, PartitioningInfo> partitioningInfos = new HashMap<String, PartitioningInfo>();
-  private final TimestampExtractor<Object, Object> timestampExtractor;
-  private final HashMap<String, SyncGroup> syncGroups = new HashMap<String, SyncGroup>();
+  private final TimestampExtractor timestampExtractor;
+  private final HashMap<String, StreamSynchronizer> streamSynchronizerMap = new HashMap<>();
   private final StreamingConfig streamingConfig;
   private final ProcessorConfig processorConfig;
   private final Metrics metrics;
@@ -65,7 +65,7 @@ public class KStreamContextImpl implements KStreamContext {
     this.streamingConfig = streamingConfig;
     this.processorConfig = processorConfig;
 
-    this.timestampExtractor = (TimestampExtractor<Object, Object>)this.streamingConfig.timestampExtractor();
+    this.timestampExtractor = this.streamingConfig.timestampExtractor();
     if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractor is  missing");
 
     this.stateDir = new File(processorConfig.stateDir, Integer.toString(id));
@@ -126,8 +126,9 @@ public class KStreamContextImpl implements KStreamContext {
         sourceStreams.put(topic, stream);
 
         TopicPartition partition = new TopicPartition(topic, id);
-        syncGroup.streamSynchronizer.addPartition(partition, (Receiver<Object, Object>)stream);
-        ingestor.addStreamSynchronizerForPartition(syncGroup.streamSynchronizer, partition);
+        StreamSynchronizer streamSynchronizer = (StreamSynchronizer)syncGroup;
+        streamSynchronizer.addPartition(partition, stream);
+        ingestor.addStreamSynchronizerForPartition(streamSynchronizer, partition);
       }
       else {
         if (stream.partitioningInfo.syncGroup == syncGroup)
@@ -170,26 +171,25 @@ public class KStreamContextImpl implements KStreamContext {
 
   @Override
   public SyncGroup syncGroup(String name) {
-    return syncGroup(name, new TimeBasedChooser<Object, Object>());
+    return syncGroup(name, new TimeBasedChooser());
   }
 
   @Override
   public SyncGroup roundRobinSyncGroup(String name) {
-    return syncGroup(name, new RoundRobinChooser<Object, Object>());
+    return syncGroup(name, new RoundRobinChooser());
   }
 
-  private SyncGroup syncGroup(String name, Chooser<Object, Object> chooser) {
+  private SyncGroup syncGroup(String name, Chooser chooser) {
     int desiredUnprocessedPerPartition = processorConfig.bufferedRecordsPerPartition;
 
     synchronized (this) {
-      SyncGroup syncGroup = syncGroups.get(name);
-      if (syncGroup == null) {
-        StreamSynchronizer<?, ?> streamSynchronizer =
-          new StreamSynchronizer<Object, Object>(name, ingestor, chooser, timestampExtractor, desiredUnprocessedPerPartition);
-        syncGroup = new SyncGroup(name, streamSynchronizer);
-        syncGroups.put(name, syncGroup);
+      StreamSynchronizer streamSynchronizer = streamSynchronizerMap.get(name);
+      if (streamSynchronizer == null) {
+        streamSynchronizer =
+          new StreamSynchronizer(name, ingestor, chooser, timestampExtractor, desiredUnprocessedPerPartition);
+        streamSynchronizerMap.put(name, streamSynchronizer);
       }
-      return syncGroup;
+      return (SyncGroup)streamSynchronizer;
     }
   }
 
@@ -202,8 +202,8 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
 
-  public Collection<SyncGroup> syncGroups() {
-    return syncGroups.values();
+  public Collection<StreamSynchronizer> streamSynchronizers() {
+    return streamSynchronizerMap.values();
   }
 
   public void init(Consumer<byte[], byte[]> restoreConsumer) throws IOException {

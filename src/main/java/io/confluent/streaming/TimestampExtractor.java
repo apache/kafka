@@ -1,10 +1,17 @@
 package io.confluent.streaming;
 
 /**
- * Created by yasuhiro on 6/22/15.
+ * An interface that allows the KStream framework to extract a timestamp from a key-value pair
  */
-public interface TimestampExtractor<K, V> {
+public interface TimestampExtractor {
 
-  long extract(String topic, K key, V value);
+  /**
+   * Extracts a timestamp from a key-value pair from a topic
+   * @param topic the topic name
+   * @param key the key object
+   * @param value the value object
+   * @return
+   */
+  long extract(String topic, Object key, Object value);
 
 }

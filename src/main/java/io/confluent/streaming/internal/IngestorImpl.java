@@ -11,22 +11,21 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-public class IngestorImpl<K, V> implements Ingestor {
+public class IngestorImpl implements Ingestor {
 
   private static final Logger log = LoggerFactory.getLogger(IngestorImpl.class);
 
   private final Consumer<byte[], byte[]> consumer;
-  private final Set<TopicPartition> unpaused = new HashSet<TopicPartition>();
-  private final Set<TopicPartition> toBePaused = new HashSet<TopicPartition>();
-  private final Deserializer<K> keyDeserializer;
-  private final Deserializer<V> valueDeserializer;
+  private final Set<TopicPartition> unpaused = new HashSet<>();
+  private final Set<TopicPartition> toBePaused = new HashSet<>();
+  private final Deserializer<Object> keyDeserializer;
+  private final Deserializer<Object> valueDeserializer;
   private final long pollTimeMs;
-  private final Map<TopicPartition, StreamSynchronizer<K, V>> streamSynchronizers =
-    new HashMap<TopicPartition, StreamSynchronizer<K, V>>();
+  private final Map<TopicPartition, StreamSynchronizer> streamSynchronizers = new HashMap<>();
 
   public IngestorImpl(Consumer<byte[], byte[]> consumer,
-                      Deserializer<K> keyDeserializer,
-                      Deserializer<V> valueDeserializer,
+                      Deserializer<Object> keyDeserializer,
+                      Deserializer<Object> valueDeserializer,
                       long pollTimeMs) {
     this.consumer = consumer;
     this.keyDeserializer = keyDeserializer;
@@ -58,7 +57,7 @@ public class IngestorImpl<K, V> implements Ingestor {
     }
 
     for (TopicPartition partition : unpaused) {
-      StreamSynchronizer<K, V> streamSynchronizer = streamSynchronizers.get(partition);
+      StreamSynchronizer streamSynchronizer = streamSynchronizers.get(partition);
 
       if (streamSynchronizer != null)
         streamSynchronizer.addRecords(partition, new DeserializingIterator(records.records(partition).iterator()));
@@ -92,9 +91,9 @@ public class IngestorImpl<K, V> implements Ingestor {
 
   @SuppressWarnings("unchecked")
   @Override
-  public void addStreamSynchronizerForPartition(StreamSynchronizer<?, ?> streamSynchronizer, TopicPartition partition) {
+  public void addStreamSynchronizerForPartition(StreamSynchronizer streamSynchronizer, TopicPartition partition) {
     synchronized (this) {
-      streamSynchronizers.put(partition, (StreamSynchronizer<K, V>) streamSynchronizer);
+      streamSynchronizers.put(partition, streamSynchronizer);
       unpaused.add(partition);
     }
   }
@@ -114,16 +113,16 @@ public class IngestorImpl<K, V> implements Ingestor {
     streamSynchronizers.clear();
   }
 
-  private class DeserializingIterator extends FilteredIterator<ConsumerRecord<K, V>, ConsumerRecord<byte[], byte[]>> {
+  private class DeserializingIterator extends FilteredIterator<ConsumerRecord<Object, Object>, ConsumerRecord<byte[], byte[]>> {
 
     DeserializingIterator(Iterator<ConsumerRecord<byte[], byte[]>> inner) {
       super(inner);
     }
 
-    protected ConsumerRecord<K, V> filter(ConsumerRecord<byte[], byte[]> record) {
-      K key = keyDeserializer.deserialize(record.topic(), record.key());
-      V value = valueDeserializer.deserialize(record.topic(), record.value());
-      return new ConsumerRecord<K, V>(record.topic(), record.partition(), record.offset(), key, value);
+    protected ConsumerRecord<Object, Object> filter(ConsumerRecord<byte[], byte[]> record) {
+      Object key = keyDeserializer.deserialize(record.topic(), record.key());
+      Object value = valueDeserializer.deserialize(record.topic(), record.value());
+      return new ConsumerRecord<>(record.topic(), record.partition(), record.offset(), key, value);
     }
 
   }

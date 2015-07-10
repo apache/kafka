@@ -12,19 +12,19 @@ public class KStreamSourceTest {
 
   private Ingestor ingestor = new MockIngestor();
 
-  private StreamSynchronizer<String, String> streamSynchronizer = new StreamSynchronizer<String, String>(
+  private StreamSynchronizer streamSynchronizer = new StreamSynchronizer(
     "group",
     ingestor,
-    new TimeBasedChooser<String, String>(),
-    new TimestampExtractor<String, String>() {
-      public long extract(String topic, String key, String value) {
+    new TimeBasedChooser(),
+    new TimestampExtractor() {
+      public long extract(String topic, Object key, Object value) {
         return 0L;
       }
     },
     10
   );
 
-  private PartitioningInfo partitioningInfo = new PartitioningInfo(new SyncGroup("group", streamSynchronizer), 1);
+  private PartitioningInfo partitioningInfo = new PartitioningInfo(streamSynchronizer, 1);
 
   @Test
   public void testKStreamSource() {

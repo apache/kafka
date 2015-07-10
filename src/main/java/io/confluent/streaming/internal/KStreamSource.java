@@ -10,7 +10,7 @@ class KStreamSource<K, V> extends KStreamImpl<K, V, K, V> {
   }
 
   @Override
-  public void receive(K key, V value, long timestamp, long streamTime) {
+  public void receive(Object key, Object value, long timestamp, long streamTime) {
     synchronized(this) {
       forward(key, value, timestamp, streamTime);
     }

@@ -5,21 +5,21 @@ import java.util.ArrayDeque;
 /**
  * Created by yasuhiro on 6/25/15.
  */
-public class RoundRobinChooser<K, V> implements Chooser<K, V> {
+public class RoundRobinChooser implements Chooser {
 
-  private final ArrayDeque<RecordQueue<K, V>> deque;
+  private final ArrayDeque<RecordQueue> deque;
 
   public RoundRobinChooser() {
-    deque = new ArrayDeque<RecordQueue<K, V>>();
+    deque = new ArrayDeque<>();
   }
 
   @Override
-  public void add(RecordQueue<K, V> queue) {
+  public void add(RecordQueue queue) {
     deque.offer(queue);
   }
 
   @Override
-  public RecordQueue<K, V> next() {
+  public RecordQueue next() {
     return deque.poll();
   }
 

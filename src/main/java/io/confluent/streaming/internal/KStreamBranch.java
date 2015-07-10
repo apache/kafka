@@ -8,7 +8,7 @@ import java.util.Arrays;
 /**
  * Created by yasuhiro on 6/18/15.
  */
-class KStreamBranch<K, V> implements Receiver<K, V> {
+class KStreamBranch<K, V> implements Receiver {
 
   private final Predicate<K, V>[] predicates;
   final KStreamSource<K, V>[] branches;
@@ -23,11 +23,11 @@ class KStreamBranch<K, V> implements Receiver<K, V> {
   }
 
   @Override
-  public void receive(K key, V value, long timestamp, long streamTime) {
+  public void receive(Object key, Object value, long timestamp, long streamTime) {
     synchronized(this) {
       for (int i = 0; i < predicates.length; i++) {
         Predicate<K, V> predicate = predicates[i];
-        if (predicate.apply(key, value)) {
+        if (predicate.apply((K)key, (V)value)) {
           branches[i].receive(key, value, timestamp, streamTime);
           return;
         }

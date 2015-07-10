@@ -3,8 +3,8 @@ package io.confluent.streaming.internal;
 /**
  * Created by yasuhiro on 6/17/15.
  */
-public interface Receiver<K,V> {
+public interface Receiver {
 
-  void receive(K key, V value, long timestamp, long streamTime);
+  void receive(Object key, Object value, long timestamp, long streamTime);
 
 }

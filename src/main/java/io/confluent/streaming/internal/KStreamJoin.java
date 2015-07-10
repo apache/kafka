@@ -17,7 +17,7 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V, K, V1> {
   private final Finder<K, V1> finder1;
   private final Finder<K, V2> finder2;
   private final ValueJoiner<V, V1, V2> joiner;
-  final Receiver<K, V2> receiverForOtherStream;
+  final Receiver receiverForOtherStream;
 
   KStreamJoin(final Window<K, V1> window1, final Window<K, V2> window2, boolean prior, ValueJoiner<V, V1, V2> joiner, PartitioningInfo partitioningInfo, KStreamContextImpl context) {
     super(partitioningInfo, context);
@@ -53,24 +53,24 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V, K, V1> {
   }
 
   @Override
-  public void receive(K key, V1 value, long timestamp, long streamTime) {
-    Iterator<V2> iter = finder2.find(key, timestamp);
+  public void receive(Object key, Object value, long timestamp, long streamTime) {
+    Iterator<V2> iter = finder2.find((K)key, timestamp);
     if (iter != null) {
       while (iter.hasNext()) {
-        doJoin(key, value, iter.next(), timestamp, streamTime);
+        doJoin((K)key, (V1)value, iter.next(), timestamp, streamTime);
       }
     }
   }
 
-  private Receiver<K, V2> getReceiverForOther() {
-    return new Receiver<K, V2>() {
+  private Receiver getReceiverForOther() {
+    return new Receiver() {
 
       @Override
-      public void receive(K key, V2 value2, long timestamp, long streamTime) {
-        Iterator<V1> iter = finder1.find(key, timestamp);
+      public void receive(Object key, Object value2, long timestamp, long streamTime) {
+        Iterator<V1> iter = finder1.find((K)key, timestamp);
         if (iter != null) {
           while (iter.hasNext()) {
-            doJoin(key, iter.next(), value2, timestamp, streamTime);
+            doJoin((K)key, iter.next(), (V2)value2, timestamp, streamTime);
           }
         }
       }

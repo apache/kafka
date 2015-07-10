@@ -15,9 +15,9 @@ class KStreamFlatMapValues<K, V, V1> extends KStreamImpl<K, V, K, V1> {
   }
 
   @Override
-  public void receive(K key, V1 value, long timestamp, long streamTime) {
+  public void receive(Object key, Object value, long timestamp, long streamTime) {
     synchronized(this) {
-      Iterable<V> newValues = mapper.apply(value);
+      Iterable<V> newValues = mapper.apply((V1)value);
       for (V v : newValues) {
         forward(key, v, timestamp, streamTime);
       }

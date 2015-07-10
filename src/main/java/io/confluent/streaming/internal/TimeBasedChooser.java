@@ -6,13 +6,13 @@ import java.util.PriorityQueue;
 /**
  * Created by yasuhiro on 6/25/15.
  */
-public class TimeBasedChooser<K, V> implements Chooser<K, V> {
+public class TimeBasedChooser implements Chooser {
 
-  private final PriorityQueue<RecordQueue<K, V>> pq;
+  private final PriorityQueue<RecordQueue> pq;
 
   public TimeBasedChooser() {
-    this(new Comparator<RecordQueue<K, V>>() {
-      public int compare(RecordQueue<K, V> queue1, RecordQueue<K, V> queue2) {
+    this(new Comparator<RecordQueue>() {
+      public int compare(RecordQueue queue1, RecordQueue queue2) {
         long time1 = queue1.trackedTimestamp();
         long time2 = queue2.trackedTimestamp();
 
@@ -23,17 +23,17 @@ public class TimeBasedChooser<K, V> implements Chooser<K, V> {
     });
   }
 
-  private TimeBasedChooser(Comparator<RecordQueue<K, V>> comparator) {
-    pq = new PriorityQueue<RecordQueue<K, V>>(3, comparator);
+  private TimeBasedChooser(Comparator<RecordQueue> comparator) {
+    pq = new PriorityQueue<>(3, comparator);
   }
 
   @Override
-  public void add(RecordQueue<K, V> queue) {
+  public void add(RecordQueue queue) {
     pq.offer(queue);
   }
 
   @Override
-  public RecordQueue<K, V> next() {
+  public RecordQueue next() {
     return pq.poll();
   }
 

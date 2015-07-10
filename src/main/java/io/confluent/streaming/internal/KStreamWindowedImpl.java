@@ -15,9 +15,9 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V, K, V> implement
   }
 
   @Override
-  public void receive(K key, V value, long timestamp, long streamTime) {
+  public void receive(Object key, Object value, long timestamp, long streamTime) {
     synchronized(this) {
-      window.put(key, value, timestamp);
+      window.put((K)key, (V)value, timestamp);
       forward(key, value, timestamp, streamTime);
     }
   }

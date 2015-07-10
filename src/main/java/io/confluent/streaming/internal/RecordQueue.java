@@ -6,20 +6,19 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayDeque;
-import java.util.Deque;
 
 /**
  * Created by yasuhiro on 6/25/15.
  */
-public class RecordQueue<K, V> {
+public class RecordQueue {
 
-  private final Deque<StampedRecord<K, V>> queue = new ArrayDeque<StampedRecord<K, V>>();
-  public final Receiver<K, V> receiver;
+  private final ArrayDeque<StampedRecord> queue = new ArrayDeque<>();
+  public final Receiver receiver;
   private final TopicPartition partition;
-  private TimestampTracker<ConsumerRecord<K, V>> timestampTracker;
+  private TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker;
   private long offset;
 
-  public RecordQueue(TopicPartition partition, Receiver<K, V> receiver, TimestampTracker<ConsumerRecord<K, V>> timestampTracker) {
+  public RecordQueue(TopicPartition partition, Receiver receiver, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
     this.partition = partition;
     this.receiver = receiver;
     this.timestampTracker = timestampTracker;
@@ -29,14 +28,14 @@ public class RecordQueue<K, V> {
     return partition;
   }
 
-  public void add(StampedRecord<K, V> record) {
+  public void add(StampedRecord record) {
     queue.addLast(record);
     timestampTracker.addStampedElement(record);
     offset = record.offset();
   }
 
-  public StampedRecord<K, V> next() {
-    StampedRecord<K, V> elem = queue.getFirst();
+  public StampedRecord next() {
+    StampedRecord elem = queue.getFirst();
 
     if (elem == null) return null;
 

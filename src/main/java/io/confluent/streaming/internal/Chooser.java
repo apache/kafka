@@ -3,11 +3,11 @@ package io.confluent.streaming.internal;
 /**
  * Created by yasuhiro on 6/25/15.
  */
-public interface Chooser<K, V> {
+public interface Chooser {
 
-  void add(RecordQueue<K, V> queue);
+  void add(RecordQueue queue);
 
-  RecordQueue<K, V> next();
+  RecordQueue next();
 
   void close();
 

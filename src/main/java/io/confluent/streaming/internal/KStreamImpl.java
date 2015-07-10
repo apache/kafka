@@ -8,9 +8,9 @@ import java.util.ArrayList;
 /**
  * Created by yasuhiro on 6/17/15.
  */
-abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V1> {
+abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver {
 
-  private final ArrayList<Receiver<K, V>> nextReceivers = new ArrayList<Receiver<K, V>>(1);
+  private final ArrayList<Receiver> nextReceivers = new ArrayList<>(1);
   final PartitioningInfo partitioningInfo;
   final KStreamContextImpl context;
 
@@ -96,22 +96,22 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver<K1, V
 
   @Override
   public void process(final Processor<K, V> processor) {
-    Receiver<K, V> receiver = new Receiver<K, V>() {
-      public void receive(K key, V value, long timestamp, long streamTime) {
-        processor.apply(key, value);
+    Receiver receiver = new Receiver() {
+      public void receive(Object key, Object value, long timestamp, long streamTime) {
+        processor.apply((K)key, (V)value);
       }
     };
     registerReceiver(receiver);
 
-    PunctuationScheduler scheduler = partitioningInfo.syncGroup.streamSynchronizer.getPunctuationScheduler(processor);
+    PunctuationScheduler scheduler = ((StreamSynchronizer)partitioningInfo.syncGroup).getPunctuationScheduler(processor);
     processor.init(scheduler);
   }
 
-  void registerReceiver(Receiver<K, V> receiver) {
+  void registerReceiver(Receiver receiver) {
     nextReceivers.add(receiver);
   }
 
-  protected void forward(K key, V value, long timestamp, long streamTime) {
+  protected void forward(Object key, Object value, long timestamp, long streamTime) {
     int numReceivers = nextReceivers.size();
     for (int i = 0; i < numReceivers; i++) {
       nextReceivers.get(i).receive(key, value, timestamp, streamTime);

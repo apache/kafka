@@ -27,7 +27,7 @@ public class MockIngestor implements Ingestor {
   }
 
   @Override
-  public void addStreamSynchronizerForPartition(StreamSynchronizer<?, ?> streamSynchronizer, TopicPartition partition) {
+  public void addStreamSynchronizerForPartition(StreamSynchronizer streamSynchronizer, TopicPartition partition) {
   }
 
   @Override
