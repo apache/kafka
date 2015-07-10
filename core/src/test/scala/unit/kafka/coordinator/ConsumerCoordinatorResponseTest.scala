@@ -43,7 +43,7 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   type HeartbeatCallback = Short => Unit
 
   val ConsumerMinSessionTimeout = 10
-  val ConsumerMaxSessionTimeout = 30
+  val ConsumerMaxSessionTimeout = 100
   val DefaultSessionTimeout = 20
   var consumerCoordinator: ConsumerCoordinator = null
   var offsetManager : OffsetManager = null
@@ -232,6 +232,30 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
   }
 
   @Test
+  def testHeartbeatDuringRebalanceCausesIllegalGeneration() {
+    val groupId = "groupId"
+    val partitionAssignmentStrategy = "range"
+
+    // First start up a group (with a slightly larger timeout to give us time to heartbeat when the rebalance starts)
+    val joinGroupResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_CONSUMER_ID, partitionAssignmentStrategy,
+      100, isCoordinatorForGroup = true)
+    val assignedConsumerId = joinGroupResult._2
+    val initialGenerationId = joinGroupResult._3
+    val joinGroupErrorCode = joinGroupResult._4
+    assertEquals(Errors.NONE.code, joinGroupErrorCode)
+
+    // Then join with a new consumer to trigger a rebalance
+    EasyMock.reset(offsetManager)
+    sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_CONSUMER_ID, partitionAssignmentStrategy,
+      DefaultSessionTimeout, isCoordinatorForGroup = true)
+
+    // We should be in the middle of a rebalance, so the heartbeat should return illegal generation
+    EasyMock.reset(offsetManager)
+    val heartbeatResult = heartbeat(groupId, assignedConsumerId, initialGenerationId, isCoordinatorForGroup = true)
+    assertEquals(Errors.ILLEGAL_GENERATION.code, heartbeatResult)
+  }
+
+  @Test
   def testGenerationIdIncrementsOnRebalance() {
     val groupId = "groupId"
     val consumerId = JoinGroupRequest.UNKNOWN_CONSUMER_ID
@@ -267,16 +291,25 @@ class ConsumerCoordinatorResponseTest extends JUnitSuite {
     (responseFuture, responseCallback)
   }
 
-  private def joinGroup(groupId: String,
-                        consumerId: String,
-                        partitionAssignmentStrategy: String,
-                        sessionTimeout: Int,
-                        isCoordinatorForGroup: Boolean): JoinGroupCallbackParams = {
+  private def sendJoinGroup(groupId: String,
+                            consumerId: String,
+                            partitionAssignmentStrategy: String,
+                            sessionTimeout: Int,
+                            isCoordinatorForGroup: Boolean): Future[JoinGroupCallbackParams] = {
     val (responseFuture, responseCallback) = setupJoinGroupCallback
     EasyMock.expect(offsetManager.partitionFor(groupId)).andReturn(1)
     EasyMock.expect(offsetManager.leaderIsLocal(1)).andReturn(isCoordinatorForGroup)
     EasyMock.replay(offsetManager)
     consumerCoordinator.handleJoinGroup(groupId, consumerId, Set.empty, sessionTimeout, partitionAssignmentStrategy, responseCallback)
+    responseFuture
+  }
+
+  private def joinGroup(groupId: String,
+                        consumerId: String,
+                        partitionAssignmentStrategy: String,
+                        sessionTimeout: Int,
+                        isCoordinatorForGroup: Boolean): JoinGroupCallbackParams = {
+    val responseFuture = sendJoinGroup(groupId, consumerId, partitionAssignmentStrategy, sessionTimeout, isCoordinatorForGroup)
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
   }
 
