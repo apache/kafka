@@ -2,9 +2,18 @@ package io.confluent.streaming.testutil;
 
 import io.confluent.streaming.internal.Ingestor;
 import io.confluent.streaming.internal.StreamSynchronizer;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.HashMap;
+import java.util.HashSet;
+
 public class MockIngestor implements Ingestor {
+
+  private HashMap<TopicPartition, StreamSynchronizer> streamSynchronizers = new HashMap<>();
+
+  public HashSet<TopicPartition> paused = new HashSet<>();
+
   @Override
   public void poll() {
   }
@@ -15,10 +24,12 @@ public class MockIngestor implements Ingestor {
 
   @Override
   public void pause(TopicPartition partition) {
+    paused.add(partition);
   }
 
   @Override
   public void unpause(TopicPartition partition, long offset) {
+    paused.remove(partition);
   }
 
   @Override
@@ -28,10 +39,15 @@ public class MockIngestor implements Ingestor {
 
   @Override
   public void addStreamSynchronizerForPartition(StreamSynchronizer streamSynchronizer, TopicPartition partition) {
+    streamSynchronizers.put(partition, streamSynchronizer);
   }
 
   @Override
   public void removeStreamSynchronizerForPartition(TopicPartition partition) {
+    streamSynchronizers.remove(partition);
   }
 
+  public void addRecords(TopicPartition partition, Iterable<ConsumerRecord<Object, Object>> records) {
+    streamSynchronizers.get(partition).addRecords(partition, records.iterator());
+  }
 }

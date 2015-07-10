@@ -126,6 +126,7 @@ public class StreamSynchronizer implements SyncGroup {
         }
       }
     }
+    newRecordBuffer.clear();
   }
 
   public PunctuationScheduler getPunctuationScheduler(Processor<?, ?> processor) {
