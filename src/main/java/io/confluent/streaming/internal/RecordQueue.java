@@ -13,14 +13,14 @@ import java.util.ArrayDeque;
 public class RecordQueue {
 
   private final ArrayDeque<StampedRecord> queue = new ArrayDeque<>();
-  public final Receiver receiver;
+  public final KStreamSource source;
   private final TopicPartition partition;
   private TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker;
   private long offset;
 
-  public RecordQueue(TopicPartition partition, Receiver receiver, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
+  public RecordQueue(TopicPartition partition, KStreamSource source, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
     this.partition = partition;
-    this.receiver = receiver;
+    this.source = source;
     this.timestampTracker = timestampTracker;
   }
 

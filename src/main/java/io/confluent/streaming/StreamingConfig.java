@@ -66,9 +66,14 @@ public class StreamingConfig {
 
     public StreamingConfig(Properties config) {
         this.config = config;
-        config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        config.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "range");
-        config.setProperty(ProducerConfig.LINGER_MS_CONFIG, "100");
+        this.config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        this.config.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "range");
+        this.config.setProperty(ProducerConfig.LINGER_MS_CONFIG, "100");
+    }
+
+    @Override
+    public StreamingConfig clone() {
+        return new StreamingConfig(this.config);
     }
 
     public void addContextObject(String key, Object value) {

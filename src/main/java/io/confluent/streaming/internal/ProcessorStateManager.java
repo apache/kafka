@@ -48,6 +48,10 @@ public class ProcessorStateManager {
         this.restoredOffsets = new HashMap<TopicPartition, Long>();
     }
 
+    public File baseDir() {
+        return this.baseDir;
+    }
+
     public void init() throws IOException {
         OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
         this.checkpointedOffsets.putAll(checkpoint.read());

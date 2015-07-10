@@ -70,7 +70,7 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver {
   @Override
   public KStream<K, V> through(String topic) {
     process(this.<K, V>getSendProcessor(topic));
-    return (KStream<K, V>)context.from(topic);
+    return (KStream<K, V>) context.from(topic, null, null);
   }
 
   @Override

@@ -42,7 +42,6 @@ public class KStreamContextImpl implements KStreamContext {
   private final ProcessorStateManager stateMgr;
   private Consumer<byte[], byte[]> restoreConsumer;
 
-  @SuppressWarnings("unchecked")
   public KStreamContextImpl(int id,
                             KStreamJob job,
                             Set<String> topics,
@@ -52,14 +51,33 @@ public class KStreamContextImpl implements KStreamContext {
                             StreamingConfig streamingConfig,
                             ProcessorConfig processorConfig,
                             Metrics metrics) {
+
+    this(id, job, topics, ingestor,
+        new RecordCollectors.SimpleRecordCollector(producer),
+        coordinator, streamingConfig, processorConfig,
+        new ProcessorStateManager(id, new File(processorConfig.stateDir, Integer.toString(id))),
+        metrics);
+  }
+
+  @SuppressWarnings("unchecked")
+  public KStreamContextImpl(int id,
+                            KStreamJob job,
+                            Set<String> topics,
+                            Ingestor ingestor,
+                            RecordCollectors.SimpleRecordCollector simpleCollector,
+                            Coordinator coordinator,
+                            StreamingConfig streamingConfig,
+                            ProcessorConfig processorConfig,
+                            ProcessorStateManager stateMgr,
+                            Metrics metrics) {
     this.id = id;
     this.job = job;
     this.topics = topics;
     this.ingestor = ingestor;
 
-    this.simpleCollector = new RecordCollectors.SimpleRecordCollector(producer);
+    this.simpleCollector = simpleCollector;
     this.collector = new RecordCollectors.SerializingRecordCollector<Object, Object>(
-      simpleCollector, (Serializer<Object>) streamingConfig.keySerializer(), (Serializer<Object>) streamingConfig.valueSerializer());
+        simpleCollector, (Serializer<Object>) streamingConfig.keySerializer(), (Serializer<Object>) streamingConfig.valueSerializer());
 
     this.coordinator = coordinator;
     this.streamingConfig = streamingConfig;
@@ -68,8 +86,8 @@ public class KStreamContextImpl implements KStreamContext {
     this.timestampExtractor = this.streamingConfig.timestampExtractor();
     if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractor is  missing");
 
-    this.stateDir = new File(processorConfig.stateDir, Integer.toString(id));
-    this.stateMgr = new ProcessorStateManager(id, stateDir);
+    this.stateMgr = stateMgr;
+    this.stateDir = this.stateMgr.baseDir();
     this.metrics = metrics;
   }
 
@@ -99,13 +117,13 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
-  public KStream<?, ?> from(String topic) {
-    return from(topic, syncGroup(DEFAULT_SYNCHRONIZATION_GROUP));
+  public KStream<?, ?> from(String topic, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer) {
+    return from(topic, syncGroup(DEFAULT_SYNCHRONIZATION_GROUP), keyDeserializer, valDeserializer);
   }
 
   @Override
   @SuppressWarnings("unchecked")
-  public KStream<?, ?> from(String topic, SyncGroup syncGroup) {
+  public KStream<?, ?> from(String topic, SyncGroup syncGroup, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer) {
     if (syncGroup == null) throw new NullPointerException();
 
     synchronized (this) {
@@ -122,7 +140,24 @@ public class KStreamContextImpl implements KStreamContext {
           partitioningInfos.put(topic, partitioningInfo);
         }
 
-        stream = new KStreamSource<Object, Object>(partitioningInfo, this);
+        // override the deserializer classes if specified
+        if (keyDeserializer == null && valDeserializer == null) {
+          stream = new KStreamSource<Object, Object>(partitioningInfo, this);
+        } else {
+          StreamingConfig newConfig = this.streamingConfig.clone();
+          if (keyDeserializer != null)
+            newConfig.keyDeserializer(keyDeserializer);
+          if (valDeserializer != null)
+            newConfig.valueDeserializer(valDeserializer);
+
+          KStreamContextImpl newContext = new KStreamContextImpl(
+              this.id, this.job, this.topics, this.ingestor,
+              this.simpleCollector, this.coordinator,
+              newConfig, this.processorConfig,
+              this.stateMgr, this.metrics);
+          stream = new KStreamSource<Object, Object>(partitioningInfo, newContext);
+        }
+
         sourceStreams.put(topic, stream);
 
         TopicPartition partition = new TopicPartition(topic, id);
@@ -133,6 +168,13 @@ public class KStreamContextImpl implements KStreamContext {
       else {
         if (stream.partitioningInfo.syncGroup == syncGroup)
           throw new IllegalStateException("topic is already assigned a different synchronization group");
+
+        // with this constraint we will not allow users to create KStream with different deser from the same topic,
+        // this constraint may better be relaxed later.
+        if (keyDeserializer != null && !keyDeserializer.getClass().equals(this.keyDeserializer().getClass()))
+          throw new IllegalStateException("another source stream with the same topic but different key deserializer is already created");
+        if (valDeserializer != null && !valDeserializer.getClass().equals(this.valueDeserializer().getClass()))
+          throw new IllegalStateException("another source stream with the same topic but different value deserializer is already created");
       }
 
       return stream;
@@ -189,7 +231,7 @@ public class KStreamContextImpl implements KStreamContext {
           new StreamSynchronizer(name, ingestor, chooser, timestampExtractor, desiredUnprocessedPerPartition);
         streamSynchronizerMap.put(name, streamSynchronizer);
       }
-      return (SyncGroup)streamSynchronizer;
+      return streamSynchronizer;
     }
   }
 

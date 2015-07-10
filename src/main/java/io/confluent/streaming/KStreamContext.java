@@ -49,17 +49,25 @@ public interface KStreamContext {
   /**
    * Creates a KStream instance for the specified topic. The stream is added to the default synchronization group.
    * @param topic the topic name
+   * @param keyDeserializer key deserializer used to read this source KStream,
+   *                        if not specified the default deserializer defined in the configs will be used
+   * @param valDeserializer value deserializer used to read this source KStream,
+   *                        if not specified the default deserializer defined in the configs will be used
    * @return KStream
    */
-  KStream<?, ?> from(String topic);
+  KStream<?, ?> from(String topic, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer);
 
   /**
    * Creates a KStream instance for the specified topic. The stream is added to the specified synchronization group.
    * @param topic the topic name
    * @param syncGroup the synchronization group
+   * @param keyDeserializer key deserializer used to read this source KStream,
+   *                        if not specified the default deserializer defined in the configs will be used
+   * @param valDeserializer value deserializer used to read this source KStream,
+   *                        if not specified the default deserializer defined in the configs will be used
    * @return KStream
    */
-  KStream<?, ?> from(String topic, SyncGroup syncGroup);
+  KStream<?, ?> from(String topic, SyncGroup syncGroup, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer);
 
   /**
    * Returns a RecordCollector which takes binary (byte array) key and value.

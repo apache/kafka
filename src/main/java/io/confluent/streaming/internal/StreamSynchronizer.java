@@ -5,6 +5,7 @@ import io.confluent.streaming.util.MinTimestampTracker;
 import io.confluent.streaming.util.ParallelExecutor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.ArrayDeque;
 import java.util.HashMap;
@@ -74,12 +75,12 @@ public class StreamSynchronizer implements SyncGroup {
   }
 
   @SuppressWarnings("unchecked")
-  public void addPartition(TopicPartition partition, Receiver receiver) {
+  public void addPartition(TopicPartition partition, KStreamSource source) {
     synchronized (this) {
       RecordQueue recordQueue = stash.get(partition);
 
       if (recordQueue == null) {
-        stash.put(partition, createRecordQueue(partition, receiver));
+        stash.put(partition, createRecordQueue(partition, source));
       } else {
         throw new IllegalStateException("duplicate partition");
       }
@@ -90,23 +91,32 @@ public class StreamSynchronizer implements SyncGroup {
   public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<K, V>> iterator) {
 =======
   @SuppressWarnings("unchecked")
+<<<<<<< HEAD
   public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<Object, Object>> iterator) {
 >>>>>>> removed some generics
+=======
+  public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<byte[], byte[]>> iterator) {
+>>>>>>> allow deserializer override at KStream construction
     synchronized (this) {
-      newRecordBuffer.addLast(new NewRecords<>(partition, iterator));
+      newRecordBuffer.addLast(new NewRecords(partition, iterator));
     }
   }
 
   private void ingestNewRecords() {
     for (NewRecords<K, V> newRecords : newRecordBuffer) {
       TopicPartition partition = newRecords.partition;
+<<<<<<< HEAD
       Iterator<ConsumerRecord<K, V>> iterator = newRecords.iterator;
+=======
+      Iterator<ConsumerRecord<byte[], byte[]>> iterator = newRecords.iterator;
+>>>>>>> allow deserializer override at KStream construction
 
       RecordQueue recordQueue = stash.get(partition);
       if (recordQueue != null) {
         boolean wasEmpty = recordQueue.isEmpty();
 
         while (iterator.hasNext()) {
+<<<<<<< HEAD
           ConsumerRecord<Object, Object> record = iterator.next();
           long timestamp = timestampExtractor.extract(record.topic(), record.key(), record.value());
 <<<<<<< HEAD
@@ -114,6 +124,20 @@ public class StreamSynchronizer implements SyncGroup {
 =======
           recordQueue.add(new StampedRecord(record, timestamp));
 >>>>>>> removed some generics
+=======
+          ConsumerRecord<byte[], byte[]> record = iterator.next();
+
+          // deserialize the raw record, extract the timestamp and put into the queue
+          Deserializer<?> keyDeserializer = recordQueue.source.context().keyDeserializer();
+          Deserializer<?> valDeserializer = recordQueue.source.context().valueDeserializer();
+
+          Object key = keyDeserializer.deserialize(record.topic(), record.key());
+          Object value = valDeserializer.deserialize(record.topic(), record.value());
+          ConsumerRecord deserializedRecord = new ConsumerRecord<>(record.topic(), record.partition(), record.offset(), key, value);
+
+          long timestamp = timestampExtractor.extract(record.topic(), key, value);
+          recordQueue.add(new StampedRecord(deserializedRecord, timestamp));
+>>>>>>> allow deserializer override at KStream construction
           buffered++;
         }
 
@@ -159,7 +183,7 @@ public class StreamSynchronizer implements SyncGroup {
 
       if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
-      recordQueue.receiver.receive(record.key(), record.value(), record.timestamp, streamTime);
+      recordQueue.source.receive(record.key(), record.value(), record.timestamp, streamTime);
       consumedOffsets.put(recordQueue.partition(), record.offset());
 
       if (recordQueue.size() > 0) chooser.add(recordQueue);
@@ -183,15 +207,15 @@ public class StreamSynchronizer implements SyncGroup {
     stash.clear();
   }
 
-  protected RecordQueue createRecordQueue(TopicPartition partition, Receiver receiver) {
-    return new RecordQueue(partition, receiver, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
+  protected RecordQueue createRecordQueue(TopicPartition partition, KStreamSource source) {
+    return new RecordQueue(partition, source, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
   }
 
-  private static class NewRecords<K, V> {
+  private static class NewRecords {
     final TopicPartition partition;
-    final Iterator<ConsumerRecord<K, V>> iterator;
+    final Iterator<ConsumerRecord<byte[], byte[]>> iterator;
 
-    NewRecords(TopicPartition partition, Iterator<ConsumerRecord<K, V>> iterator) {
+    NewRecords(TopicPartition partition, Iterator<ConsumerRecord<byte[], byte[]>> iterator) {
       this.partition = partition;
       this.iterator = iterator;
     }

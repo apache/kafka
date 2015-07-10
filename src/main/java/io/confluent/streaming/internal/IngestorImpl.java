@@ -60,7 +60,7 @@ public class IngestorImpl implements Ingestor {
       StreamSynchronizer streamSynchronizer = streamSynchronizers.get(partition);
 
       if (streamSynchronizer != null)
-        streamSynchronizer.addRecords(partition, new DeserializingIterator(records.records(partition).iterator()));
+        streamSynchronizer.addRecords(partition, records.records(partition).iterator());
       else
         log.warn("unused topic: " + partition.topic());
     }
