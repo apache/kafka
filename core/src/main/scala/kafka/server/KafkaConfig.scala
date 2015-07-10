@@ -725,8 +725,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
       validateUniquePortAndProtocol(getString(KafkaConfig.AdvertisedListenersProp))
       CoreUtils.listenerListToEndPoints(getString(KafkaConfig.AdvertisedListenersProp))
     } else if (getString(KafkaConfig.AdvertisedHostNameProp) != null || getInt(KafkaConfig.AdvertisedPortProp) != null) {
-      CoreUtils.listenerListToEndPoints("PLAINTEXT://" +
-            getString(KafkaConfig.AdvertisedHostNameProp) + ":" + getInt(KafkaConfig.AdvertisedPortProp))
+      CoreUtils.listenerListToEndPoints("PLAINTEXT://" + advertisedHostName + ":" + advertisedPort)
     } else {
       getListeners()
     }

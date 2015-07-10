@@ -155,13 +155,12 @@ class KafkaConfigTest extends JUnit3Suite {
 
   @Test
   def testAdvertiseConfigured() {
-    val port = "9999"
     val advertisedHostName = "routable-host"
     val advertisedPort = "1234"
 
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put(KafkaConfig.AdvertisedHostNameProp, advertisedHostName)
-    props.put(KafkaConfig.AdvertisedPortProp, advertisedPort.toString)
+    props.put(KafkaConfig.AdvertisedPortProp, advertisedPort)
 
     val serverConfig = KafkaConfig.fromProps(props)
     val endpoints = serverConfig.advertisedListeners
@@ -170,8 +169,41 @@ class KafkaConfigTest extends JUnit3Suite {
     assertEquals(endpoint.host, advertisedHostName)
     assertEquals(endpoint.port, advertisedPort.toInt)
   }
+    
+  @Test
+  def testAdvertisePortDefault() {
+    val advertisedHostName = "routable-host"
+    val port = "9999"
 
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put(KafkaConfig.AdvertisedHostNameProp, advertisedHostName)
+    props.put(KafkaConfig.PortProp, port)
 
+    val serverConfig = KafkaConfig.fromProps(props)
+    val endpoints = serverConfig.advertisedListeners
+    val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
+
+    assertEquals(endpoint.host, advertisedHostName)
+    assertEquals(endpoint.port, port.toInt)
+  }
+  
+  @Test
+  def testAdvertiseHostNameDefault() {
+    val hostName = "routable-host"
+    val advertisedPort = "9999"
+
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put(KafkaConfig.HostNameProp, hostName)
+    props.put(KafkaConfig.AdvertisedPortProp, advertisedPort)
+
+    val serverConfig = KafkaConfig.fromProps(props)
+    val endpoints = serverConfig.advertisedListeners
+    val endpoint = endpoints.get(SecurityProtocol.PLAINTEXT).get
+
+    assertEquals(endpoint.host, hostName)
+    assertEquals(endpoint.port, advertisedPort.toInt)
+  }    
+    
   @Test
   def testDuplicateListeners() {
     val props = new Properties()
