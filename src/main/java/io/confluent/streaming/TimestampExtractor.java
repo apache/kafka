@@ -10,7 +10,7 @@ public interface TimestampExtractor {
    * @param topic the topic name
    * @param key the key object
    * @param value the value object
-   * @return
+   * @return timestamp
    */
   long extract(String topic, Object key, Object value);
 
