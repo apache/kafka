@@ -42,9 +42,6 @@ public class OffsetFetchRequest extends AbstractRequest {
     // partition level field names
     private static final String PARTITION_KEY_NAME = "partition";
 
-    public static final int DEFAULT_GENERATION_ID = -1;
-    public static final String DEFAULT_CONSUMER_ID = "";
-
     private final String groupId;
     private final List<TopicPartition> partitions;
 

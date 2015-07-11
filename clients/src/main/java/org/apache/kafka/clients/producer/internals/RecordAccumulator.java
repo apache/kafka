@@ -21,6 +21,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
@@ -112,7 +114,6 @@ public final class RecordAccumulator {
     }
 
     private void registerMetrics(Metrics metrics, String metricGrpName, Map<String, String> metricTags) {
-
         MetricName metricName = new MetricName("waiting-threads", metricGrpName, "The number of user threads blocked waiting for buffer memory to enqueue their records", metricTags);
         Measurable waitingThreads = new Measurable() {
             public double measure(MetricConfig config, long now) {
@@ -120,7 +121,7 @@ public final class RecordAccumulator {
             }
         };
         metrics.addMetric(metricName, waitingThreads);
-                 
+
         metricName = new MetricName("buffer-total-bytes", metricGrpName, "The maximum amount of buffer memory the client can use (whether or not it is currently used).", metricTags);
         Measurable totalBytes = new Measurable() {
             public double measure(MetricConfig config, long now) {
@@ -128,6 +129,7 @@ public final class RecordAccumulator {
             }
         };
         metrics.addMetric(metricName, totalBytes);
+
         metricName = new MetricName("buffer-available-bytes", metricGrpName, "The total amount of buffer memory that is not being used (either unallocated or in the free list).", metricTags);
         Measurable availableBytes = new Measurable() {
             public double measure(MetricConfig config, long now) {
@@ -135,6 +137,10 @@ public final class RecordAccumulator {
             }
         };
         metrics.addMetric(metricName, availableBytes);
+
+        Sensor bufferExhaustedRecordSensor = metrics.sensor("buffer-exhausted-records");
+        metricName = new MetricName("buffer-exhausted-rate", metricGrpName, "The average per-second number of record sends that are dropped due to buffer exhaustion", metricTags);
+        bufferExhaustedRecordSensor.add(metricName, new Rate());
     }
 
     /**

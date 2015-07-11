@@ -42,4 +42,14 @@ public final class Heartbeat {
     public long lastHeartbeatSend() {
         return this.lastHeartbeatSend;
     }
+
+    public long timeToNextHeartbeat(long now) {
+        long timeSinceLastHeartbeat = now - lastHeartbeatSend;
+
+        long hbInterval = timeout / HEARTBEATS_PER_SESSION_INTERVAL;
+        if (timeSinceLastHeartbeat > hbInterval)
+            return 0;
+        else
+            return hbInterval - timeSinceLastHeartbeat;
+    }
 }

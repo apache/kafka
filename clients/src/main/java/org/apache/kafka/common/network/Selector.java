@@ -284,6 +284,7 @@ public class Selector implements Selectable {
                         } catch (InvalidReceiveException e) {
                             log.error("Invalid data received from " + channel.id() + " closing connection", e);
                             close(channel.id());
+                            this.disconnected.add(channel.id());
                             throw e;
                         }
                     }

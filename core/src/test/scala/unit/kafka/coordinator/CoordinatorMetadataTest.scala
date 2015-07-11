@@ -40,7 +40,7 @@ class CoordinatorMetadataTest extends JUnitSuite {
   def setUp() {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
     zkClient = EasyMock.createStrictMock(classOf[ZkClient])
-    coordinatorMetadata = new CoordinatorMetadata(KafkaConfig.fromProps(props), zkClient, null)
+    coordinatorMetadata = new CoordinatorMetadata(KafkaConfig.fromProps(props).brokerId, zkClient, null)
   }
 
   @Test

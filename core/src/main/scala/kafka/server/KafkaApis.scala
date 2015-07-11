@@ -37,7 +37,6 @@ import org.I0Itec.zkclient.ZkClient
  */
 class KafkaApis(val requestChannel: RequestChannel,
                 val replicaManager: ReplicaManager,
-                val offsetManager: OffsetManager,
                 val coordinator: ConsumerCoordinator,
                 val controller: KafkaController,
                 val zkClient: ZkClient,
@@ -95,8 +94,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     // stop serving data to clients for the topic being deleted
     val leaderAndIsrRequest = request.requestObj.asInstanceOf[LeaderAndIsrRequest]
     try {
-      val (response, error) = replicaManager.becomeLeaderOrFollower(leaderAndIsrRequest, offsetManager)
-      val leaderAndIsrResponse = new LeaderAndIsrResponse(leaderAndIsrRequest.correlationId, response, error)
+      // call replica manager to handle updating partitions to become leader or follower
+      val result = replicaManager.becomeLeaderOrFollower(leaderAndIsrRequest)
+      val leaderAndIsrResponse = new LeaderAndIsrResponse(leaderAndIsrRequest.correlationId, result.responseMap, result.errorCode)
+      // for each new leader or follower, call coordinator to handle
+      // consumer group migration
+      result.updatedLeaders.foreach { case partition =>
+        if (partition.topic == ConsumerCoordinator.OffsetsTopicName)
+          coordinator.handleGroupImmigration(partition.partitionId)
+      }
+      result.updatedFollowers.foreach { case partition =>
+        partition.leaderReplicaIdOpt.foreach { leaderReplica =>
+          if (partition.topic == ConsumerCoordinator.OffsetsTopicName &&
+              leaderReplica == brokerId)
+            coordinator.handleGroupEmigration(partition.partitionId)
+        }
+      }
+
       requestChannel.sendResponse(new Response(request, new RequestOrResponseSend(request.connectionId, leaderAndIsrResponse)))
     } catch {
       case e: KafkaStorageException =>
@@ -142,6 +156,12 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleOffsetCommitRequest(request: RequestChannel.Request) {
     val offsetCommitRequest = request.requestObj.asInstanceOf[OffsetCommitRequest]
 
+    // filter non-exist topics
+    val invalidRequestsInfo = offsetCommitRequest.requestInfo.filter { case (topicAndPartition, offsetMetadata) =>
+      !metadataCache.contains(topicAndPartition.topic)
+    }
+    val filteredRequestInfo = (offsetCommitRequest.requestInfo -- invalidRequestsInfo.keys)
+
     // the callback for sending an offset commit response
     def sendResponseCallback(commitStatus: immutable.Map[TopicAndPartition, Short]) {
       commitStatus.foreach { case (topicAndPartition, errorCode) =>
@@ -154,14 +174,14 @@ class KafkaApis(val requestChannel: RequestChannel,
             topicAndPartition, ErrorMapping.exceptionNameFor(errorCode)))
         }
       }
-
-      val response = OffsetCommitResponse(commitStatus, offsetCommitRequest.correlationId)
+      val combinedCommitStatus = commitStatus ++ invalidRequestsInfo.map(_._1 -> ErrorMapping.UnknownTopicOrPartitionCode)
+      val response = OffsetCommitResponse(combinedCommitStatus, offsetCommitRequest.correlationId)
       requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
     }
 
     if (offsetCommitRequest.versionId == 0) {
       // for version 0 always store offsets to ZK
-      val responseInfo = offsetCommitRequest.requestInfo.map {
+      val responseInfo = filteredRequestInfo.map {
         case (topicAndPartition, metaAndError) => {
           val topicDirs = new ZKGroupTopicDirs(offsetCommitRequest.groupId, topicAndPartition.topic)
           try {
@@ -189,7 +209,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val offsetRetention =
         if (offsetCommitRequest.versionId <= 1 ||
           offsetCommitRequest.retentionMs == org.apache.kafka.common.requests.OffsetCommitRequest.DEFAULT_RETENTION_TIME) {
-          offsetManager.config.offsetsRetentionMs
+          coordinator.offsetConfig.offsetsRetentionMs
         } else {
           offsetCommitRequest.retentionMs
         }
@@ -203,7 +223,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val currentTimestamp = SystemTime.milliseconds
       val defaultExpireTimestamp = offsetRetention + currentTimestamp
 
-      val offsetData = offsetCommitRequest.requestInfo.mapValues(offsetAndMetadata =>
+      val offsetData = filteredRequestInfo.mapValues(offsetAndMetadata =>
         offsetAndMetadata.copy(
           commitTimestamp = currentTimestamp,
           expireTimestamp = {
@@ -215,8 +235,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       )
 
-      // call offset manager to store offsets
-      offsetManager.storeOffsets(
+      // call coordinator to handle commit offset
+      coordinator.handleCommitOffsets(
         offsetCommitRequest.groupId,
         offsetCommitRequest.consumerId,
         offsetCommitRequest.groupGenerationId,
@@ -422,9 +442,9 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (topics.size > 0 && topicResponses.size != topics.size) {
       val nonExistentTopics = topics -- topicResponses.map(_.topic).toSet
       val responsesForNonExistentTopics = nonExistentTopics.map { topic =>
-        if (topic == OffsetManager.OffsetsTopicName || config.autoCreateTopicsEnable) {
+        if (topic == ConsumerCoordinator.OffsetsTopicName || config.autoCreateTopicsEnable) {
           try {
-            if (topic == OffsetManager.OffsetsTopicName) {
+            if (topic == ConsumerCoordinator.OffsetsTopicName) {
               val aliveBrokers = metadataCache.getAliveBrokers
               val offsetsTopicReplicationFactor =
                 if (aliveBrokers.length > 0)
@@ -433,7 +453,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                   config.offsetsTopicReplicationFactor.toInt
               AdminUtils.createTopic(zkClient, topic, config.offsetsTopicPartitions,
                                      offsetsTopicReplicationFactor,
-                                     offsetManager.offsetsTopicConfig)
+                                     coordinator.offsetsTopicConfigs)
               info("Auto creation of topic %s with %d partitions and replication factor %d is successful!"
                 .format(topic, config.offsetsTopicPartitions, offsetsTopicReplicationFactor))
             }
@@ -496,26 +516,19 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       OffsetFetchResponse(collection.immutable.Map(responseInfo: _*), offsetFetchRequest.correlationId)
     } else {
-      // version 1 reads offsets from Kafka
-      val (unknownTopicPartitions, knownTopicPartitions) = offsetFetchRequest.requestInfo.partition(topicAndPartition =>
-        metadataCache.getPartitionInfo(topicAndPartition.topic, topicAndPartition.partition).isEmpty
-      )
-      val unknownStatus = unknownTopicPartitions.map(topicAndPartition => (topicAndPartition, OffsetMetadataAndError.UnknownTopicOrPartition)).toMap
-      val knownStatus =
-        if (knownTopicPartitions.size > 0)
-          offsetManager.getOffsets(offsetFetchRequest.groupId, knownTopicPartitions).toMap
-        else
-          Map.empty[TopicAndPartition, OffsetMetadataAndError]
-      val status = unknownStatus ++ knownStatus
+      // version 1 reads offsets from Kafka;
+      val offsets = coordinator.handleFetchOffsets(offsetFetchRequest.groupId, offsetFetchRequest.requestInfo).toMap
 
-      OffsetFetchResponse(status, offsetFetchRequest.correlationId)
+      // Note that we do not need to filter the partitions in the
+      // metadata cache as the topic partitions will be filtered
+      // in coordinator's offset manager through the offset cache
+      OffsetFetchResponse(offsets, offsetFetchRequest.correlationId)
     }
 
     trace("Sending offset fetch response %s for correlation id %d to client %s."
           .format(response, offsetFetchRequest.correlationId, offsetFetchRequest.clientId))
 
     requestChannel.sendResponse(new RequestChannel.Response(request, new RequestOrResponseSend(request.connectionId, response)))
-
   }
 
   /*
@@ -524,10 +537,10 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleConsumerMetadataRequest(request: RequestChannel.Request) {
     val consumerMetadataRequest = request.requestObj.asInstanceOf[ConsumerMetadataRequest]
 
-    val partition = offsetManager.partitionFor(consumerMetadataRequest.group)
+    val partition = coordinator.partitionFor(consumerMetadataRequest.group)
 
     // get metadata (and create the topic if necessary)
-    val offsetsTopicMetadata = getTopicMetadata(Set(OffsetManager.OffsetsTopicName), request.securityProtocol).head
+    val offsetsTopicMetadata = getTopicMetadata(Set(ConsumerCoordinator.OffsetsTopicName), request.securityProtocol).head
 
     val errorResponse = ConsumerMetadataResponse(None, ErrorMapping.ConsumerCoordinatorNotAvailableCode, consumerMetadataRequest.correlationId)
 

@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.MockTime;
 
 import org.junit.Test;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -41,5 +42,13 @@ public class HeartbeatTest {
         heartbeat.sentHeartbeat(time.milliseconds());
         time.sleep(timeout / (2 * Heartbeat.HEARTBEATS_PER_SESSION_INTERVAL));
         assertFalse(heartbeat.shouldHeartbeat(time.milliseconds()));
+    }
+
+    @Test
+    public void testTimeToNextHeartbeat() {
+        heartbeat.sentHeartbeat(0);
+        assertEquals(100, heartbeat.timeToNextHeartbeat(0));
+        assertEquals(0, heartbeat.timeToNextHeartbeat(100));
+        assertEquals(0, heartbeat.timeToNextHeartbeat(200));
     }
 }

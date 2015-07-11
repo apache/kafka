@@ -182,6 +182,21 @@ public class Utils {
     }
 
     /**
+     * Get the minimum of some long values.
+     * @param first Used to ensure at least one value
+     * @param rest The rest of longs to compare
+     * @return The minimum of all passed argument.
+     */
+    public static long min(long first, long ... rest) {
+        long min = first;
+        for (int i = 0; i < rest.length; i++) {
+            if (rest[i] < min)
+                min = rest[i];
+        }
+        return min;
+    }
+
+    /**
      * Get the length for UTF8-encoding a string without encoding it first
      *
      * @param s The string to calculate the length for

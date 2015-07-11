@@ -77,7 +77,11 @@ public enum Errors {
     UNKNOWN_CONSUMER_ID(25,
             new ApiException("The coordinator is not aware of this consumer.")),
     INVALID_SESSION_TIMEOUT(26,
-            new ApiException("The session timeout is not within an acceptable range."));
+            new ApiException("The session timeout is not within an acceptable range.")),
+    COMMITTING_PARTITIONS_NOT_ASSIGNED(27,
+            new ApiException("Some of the committing partitions are not assigned the committer")),
+    INVALID_COMMIT_OFFSET_SIZE(28,
+            new ApiException("The committing offset data size is not valid"));
 
     private static Map<Class<?>, Errors> classToError = new HashMap<Class<?>, Errors>();
     private static Map<Short, Errors> codeToError = new HashMap<Short, Errors>();
