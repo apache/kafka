@@ -86,12 +86,6 @@ public interface KStreamContext {
   KStream<?, ?> from(String topic, SyncGroup syncGroup, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer);
 
   /**
-   * Returns a RecordCollector which takes binary (byte array) key and value.
-   * @return RecordCollector
-   */
-  RecordCollector<byte[], byte[]> simpleRecordCollector();
-
-  /**
    * Returns a RecordCollector which applies the serializer to key and value.
    * @return RecordCollector
    */

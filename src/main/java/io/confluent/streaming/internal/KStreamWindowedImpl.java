@@ -1,15 +1,21 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.*;
+
+import io.confluent.streaming.KStream;
+import io.confluent.streaming.KStreamContext;
+import io.confluent.streaming.KStreamWindowed;
+import io.confluent.streaming.NotCopartitionedException;
+import io.confluent.streaming.ValueJoiner;
+import io.confluent.streaming.Window;
 
 /**
  * Created by yasuhiro on 6/18/15.
  */
-public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V, K, V> implements KStreamWindowed<K, V> {
+public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStreamWindowed<K, V> {
 
   final Window<K, V> window;
 
-  KStreamWindowedImpl(Window<K, V> window, PartitioningInfo partitioningInfo, KStreamContextImpl context) {
+  KStreamWindowedImpl(Window<K, V> window, PartitioningInfo partitioningInfo, KStreamContext context) {
     super(partitioningInfo, context);
     this.window = window;
   }

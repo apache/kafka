@@ -1,9 +1,17 @@
 package io.confluent.streaming;
 
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
+
 /**
  * KStream is an abstraction of a stream of key-value pairs.
  */
 public interface KStream<K, V> {
+
+  /**
+   * Returns the KStreamContext used to create this stream
+   */
+  KStreamContext context();
 
   /**
    * Creates a new stream consists of all elements of this stream which satisfy a predicate
@@ -72,6 +80,7 @@ public interface KStream<K, V> {
 
   /**
    * Sends key-value to a topic, also creates a new stream from the topic.
+   * The created stream is added to the default synchronization group.
    * This is equivalent to calling sendTo(topic) and KStreamContext.from(topic).
    * @param topic the topic name
    * @return KStream
@@ -79,10 +88,67 @@ public interface KStream<K, V> {
   KStream<K, V> through(String topic);
 
   /**
+   * Sends key-value to a topic, also creates a new stream from the topic.
+   * The created stream is added to the specified synchronization group.
+   * This is equivalent to calling sendTo(topic) and KStreamContext.from(topic, syncGroup).
+   * @param topic the topic name
+   * @param syncGroup the synchronization group
+   * @return KStream
+   */
+  KStream<K, V> through(String topic, SyncGroup syncGroup);
+
+  /**
+   * Sends key-value to a topic, also creates a new stream from the topic.
+   * The created stream is added to the default synchronization group.
+   * This is equivalent to calling sendTo(topic) and KStreamContext.from(topic).
+   * @param topic the topic name
+   * @param keySerializer key serializer used to send key-value pairs,
+   *                      if not specified the default serializer defined in the configs will be used
+   * @param valSerializer value serializer used to send key-value pairs,
+   *                      if not specified the default serializer defined in the configs will be used
+   * @param keyDeserializer key deserializer used to create the new KStream,
+   *                        if not specified the default deserializer defined in the configs will be used
+   * @param valDeserializer value deserializer used to create the new KStream,
+   *                        if not specified the default deserializer defined in the configs will be used
+   *
+   * @return KStream
+   */
+  <K1, V1> KStream<K1, V1> through(String topic, Serializer<?> keySerializer, Serializer<?> valSerializer, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer);
+
+  /**
+   * Sends key-value to a topic, also creates a new stream from the topic.
+   * The created stream is added to the specific synchronization group.
+   * This is equivalent to calling sendTo(topic) and KStreamContext.from(topic).
+   * @param topic the topic name
+   * @param syncGroup the synchronization group
+   * @param keySerializer key serializer used to send key-value pairs,
+   *                      if not specified the default serializer defined in the configs will be used
+   * @param valSerializer value serializer used to send key-value pairs,
+   *                      if not specified the default serializer defined in the configs will be used
+   * @param keyDeserializer key deserializer used to create the new KStream,
+   *                        if not specified the default deserializer defined in the configs will be used
+   * @param valDeserializer value deserializer used to create the new KStream,
+   *                        if not specified the default deserializer defined in the configs will be used
+   *
+   * @return KStream
+   */
+  <K1, V1> KStream<K1, V1> through(String topic, SyncGroup syncGroup, Serializer<?> keySerializer, Serializer<?> valSerializer, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer);
+
+  /**
    * Sends key-value to a topic.
    * @param topic the topic name
    */
   void sendTo(String topic);
+
+  /**
+   * Sends key-value to a topic.
+   * @param topic the topic name
+   * @param keySerializer key serializer used to send key-value pairs,
+   *                      if not specified the default serializer defined in the configs will be used
+   * @param valSerializer value serializer used to send key-value pairs,
+   *                      if not specified the default serializer defined in the configs will be used
+   */
+  void sendTo(String topic, Serializer<?> keySerializer, Serializer<?> valSerializer);
 
   /**
    * Processes all elements in this stream by applying a processor.

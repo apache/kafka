@@ -1,5 +1,6 @@
 package io.confluent.streaming.internal;
 
+import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.Predicate;
 
 import java.lang.reflect.Array;
@@ -14,7 +15,7 @@ class KStreamBranch<K, V> implements Receiver {
   final KStreamSource<K, V>[] branches;
 
   @SuppressWarnings("unchecked")
-  KStreamBranch(Predicate<K, V>[] predicates, PartitioningInfo partitioningInfo, KStreamContextImpl context) {
+  KStreamBranch(Predicate<K, V>[] predicates, PartitioningInfo partitioningInfo, KStreamContext context) {
     this.predicates = Arrays.copyOf(predicates, predicates.length);
     this.branches = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
     for (int i = 0; i < branches.length; i++) {

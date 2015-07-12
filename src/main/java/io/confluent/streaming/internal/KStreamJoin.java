@@ -1,5 +1,6 @@
 package io.confluent.streaming.internal;
 
+import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.ValueJoiner;
 import io.confluent.streaming.Window;
 
@@ -8,7 +9,7 @@ import java.util.Iterator;
 /**
  * Created by yasuhiro on 6/17/15.
  */
-class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V, K, V1> {
+class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
 
   private static abstract class Finder<K, T> {
     abstract Iterator<T> find(K key, long timestamp);
@@ -19,7 +20,7 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V, K, V1> {
   private final ValueJoiner<V, V1, V2> joiner;
   final Receiver receiverForOtherStream;
 
-  KStreamJoin(final Window<K, V1> window1, final Window<K, V2> window2, boolean prior, ValueJoiner<V, V1, V2> joiner, PartitioningInfo partitioningInfo, KStreamContextImpl context) {
+  KStreamJoin(final Window<K, V1> window1, final Window<K, V2> window2, boolean prior, ValueJoiner<V, V1, V2> joiner, PartitioningInfo partitioningInfo, KStreamContext context) {
     super(partitioningInfo, context);
 
     if (prior) {

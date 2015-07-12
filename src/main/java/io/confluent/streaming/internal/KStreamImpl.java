@@ -1,22 +1,39 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.*;
+import io.confluent.streaming.KStream;
+import io.confluent.streaming.KStreamContext;
+import io.confluent.streaming.KStreamWindowed;
+import io.confluent.streaming.KeyValueMapper;
+import io.confluent.streaming.Predicate;
+import io.confluent.streaming.Processor;
+import io.confluent.streaming.PunctuationScheduler;
+import io.confluent.streaming.RecordCollector;
+import io.confluent.streaming.SyncGroup;
+import io.confluent.streaming.ValueMapper;
+import io.confluent.streaming.Window;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 
 import java.util.ArrayList;
 
 /**
  * Created by yasuhiro on 6/17/15.
  */
-abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver {
+abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   private final ArrayList<Receiver> nextReceivers = new ArrayList<>(1);
   final PartitioningInfo partitioningInfo;
-  final KStreamContextImpl context;
+  final KStreamContext context;
 
-  protected KStreamImpl(PartitioningInfo partitioningInfo, KStreamContextImpl context) {
+  protected KStreamImpl(PartitioningInfo partitioningInfo, KStreamContext context) {
     this.partitioningInfo = partitioningInfo;
     this.context = context;
+  }
+
+  @Override
+  public KStreamContext context() {
+    return this.context;
   }
 
   @Override
@@ -69,18 +86,46 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver {
   @SuppressWarnings("unchecked")
   @Override
   public KStream<K, V> through(String topic) {
-    process(this.<K, V>getSendProcessor(topic));
-    return (KStream<K, V>) context.from(topic, null, null);
+    return through(topic, null);
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public KStream<K, V> through(String topic, SyncGroup syncGroup) {
+    return through(topic, syncGroup, null, null, null, null);
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public <K1, V1> KStream<K1, V1> through(String topic, Serializer<?> keySerializer, Serializer<?> valSerializer, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer) {
+    return through(topic, context.syncGroup(context.DEFAULT_SYNCHRONIZATION_GROUP), keySerializer, valSerializer, keyDeserializer, valDeserializer);
+  }
+
+  @SuppressWarnings("unchecked")
+  @Override
+  public <K1, V1> KStream<K1, V1> through(String topic, SyncGroup syncGroup, Serializer<?> keySerializer, Serializer<?> valSerializer, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer) {
+    process(this.<K, V>getSendProcessor(topic, keySerializer, valSerializer));
+    return (KStream<K1, V1>) context.from(topic, syncGroup, keyDeserializer, valDeserializer);
   }
 
   @Override
   public void sendTo(String topic) {
-    process(this.<K, V>getSendProcessor(topic));
+    process(this.<K, V>getSendProcessor(topic, null, null));
   }
 
+  @Override
+  public void sendTo(String topic, Serializer<?> keySerializer, Serializer<?> valSerializer) { process(this.<K, V>getSendProcessor(topic, keySerializer, valSerializer)); }
+
   @SuppressWarnings("unchecked")
-  private <K, V> Processor<K, V> getSendProcessor(final String topic) {
-    final RecordCollector<K, V> collector = (RecordCollector<K, V>) context.recordCollector();
+  private <K, V> Processor<K, V> getSendProcessor(final String topic, Serializer<?> keySerializer, Serializer<?> valSerializer) {
+    final RecordCollector<K, V> collector;
+    if (keySerializer == null && valSerializer == null)
+      collector = (RecordCollector<K, V>) context.recordCollector();
+    else
+      collector = (RecordCollector<K, V>) new RecordCollectors.SerializingRecordCollector(
+          ((KStreamContextImpl)context).simpleRecordCollector(),
+          keySerializer == null ? context.keySerializer() : keySerializer,
+          valSerializer == null ? context.valueSerializer() : valSerializer);
 
     return new Processor<K, V>() {
       @Override
@@ -118,7 +163,7 @@ abstract class KStreamImpl<K,V, K1, V1> implements KStream<K, V>, Receiver {
     }
   }
 
-  protected <K1, V1> KStream<K1, V1> chain(KStreamImpl<K1, V1, K, V> kstream) {
+  protected <K1, V1> KStream<K1, V1> chain(KStreamImpl<K1, V1> kstream) {
     synchronized(this) {
       nextReceivers.add(kstream);
       return kstream;

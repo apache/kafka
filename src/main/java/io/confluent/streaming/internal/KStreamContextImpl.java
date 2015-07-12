@@ -76,8 +76,8 @@ public class KStreamContextImpl implements KStreamContext {
     this.ingestor = ingestor;
 
     this.simpleCollector = simpleCollector;
-    this.collector = new RecordCollectors.SerializingRecordCollector<Object, Object>(
-        simpleCollector, (Serializer<Object>) streamingConfig.keySerializer(), (Serializer<Object>) streamingConfig.valueSerializer());
+    this.collector = new RecordCollectors.SerializingRecordCollector(
+        simpleCollector, streamingConfig.keySerializer(), streamingConfig.valueSerializer());
 
     this.coordinator = coordinator;
     this.streamingConfig = streamingConfig;
@@ -90,6 +90,8 @@ public class KStreamContextImpl implements KStreamContext {
     this.stateDir = this.stateMgr.baseDir();
     this.metrics = metrics;
   }
+
+  public RecordCollectors.SimpleRecordCollector simpleRecordCollector() { return this.simpleCollector; }
 
   @Override
   public int id() {
@@ -179,8 +181,8 @@ public class KStreamContextImpl implements KStreamContext {
         if (stream.partitioningInfo.syncGroup == syncGroup)
           throw new IllegalStateException("topic is already assigned a different synchronization group");
 
-        // with this constraint we will not allow users to create KStream with different deser from the same topic,
-        // this constraint may better be relaxed later.
+        // TODO: with this constraint we will not allow users to create KStream with different
+        // deser from the same topic, this constraint may better be relaxed later.
         if (keyDeserializer != null && !keyDeserializer.getClass().equals(this.keyDeserializer().getClass()))
           throw new IllegalStateException("another source stream with the same topic but different key deserializer is already created");
         if (valDeserializer != null && !valDeserializer.getClass().equals(this.valueDeserializer().getClass()))
@@ -189,11 +191,6 @@ public class KStreamContextImpl implements KStreamContext {
 
       return stream;
     }
-  }
-
-  @Override
-  public RecordCollector<byte[], byte[]> simpleRecordCollector() {
-    return simpleCollector;
   }
 
   @Override

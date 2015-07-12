@@ -47,7 +47,7 @@ public class MockIngestor implements Ingestor {
     streamSynchronizers.remove(partition);
   }
 
-  public void addRecords(TopicPartition partition, Iterable<ConsumerRecord<Object, Object>> records) {
+  public void addRecords(TopicPartition partition, Iterable<ConsumerRecord<byte[], byte[]>> records) {
     streamSynchronizers.get(partition).addRecords(partition, records.iterator());
   }
 }
