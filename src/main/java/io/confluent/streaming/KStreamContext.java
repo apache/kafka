@@ -46,44 +46,47 @@ public interface KStreamContext {
    */
   Deserializer<?> valueDeserializer();
 
-  /**
-   * Creates a KStream instance for the specified topic. The stream is added to the default synchronization group.
-   * @param topic the topic name
-   * @return KStream
-   */
-  KStream<?, ?> from(String topic);
+  // TODO: support regex topic matching in from() calls, for example:
+  // context.from("Topic*PageView")
 
   /**
-   * Creates a KStream instance for the specified topic. The stream is added to the specified synchronization group.
-   * @param topic the topic name
+   * Creates a KStream instance for the specified topics. The stream is added to the default synchronization group.
+   * @param topics the topic name
+   * @return KStream
+   */
+  KStream<?, ?> from(String... topics);
+
+  /**
+   * Creates a KStream instance for the specified topics. The stream is added to the specified synchronization group.
    * @param syncGroup the synchronization group
+   * @param topics the topic name
    * @return KStream
    */
-  KStream<?, ?> from(String topic, SyncGroup syncGroup);
+  KStream<?, ?> from(SyncGroup syncGroup, String... topics);
 
 
   /**
    * Creates a KStream instance for the specified topic. The stream is added to the default synchronization group.
-   * @param topic the topic name
    * @param keyDeserializer key deserializer used to read this source KStream,
    *                        if not specified the default deserializer defined in the configs will be used
    * @param valDeserializer value deserializer used to read this source KStream,
    *                        if not specified the default deserializer defined in the configs will be used
+   * @param topics the topic name
    * @return KStream
    */
-  <K, V> KStream<K, V> from(String topic, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer);
+  <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics);
 
   /**
    * Creates a KStream instance for the specified topic. The stream is added to the specified synchronization group.
-   * @param topic the topic name
    * @param syncGroup the synchronization group
    * @param keyDeserializer key deserializer used to read this source KStream,
    *                        if not specified the default deserializer defined in the configs will be used
    * @param valDeserializer value deserializer used to read this source KStream,
    *                        if not specified the default deserializer defined in the configs will be used
+   * @param topics the topic name
    * @return KStream
    */
-  <K, V> KStream<K, V> from(String topic, SyncGroup syncGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer);
+  <K, V> KStream<K, V> from(SyncGroup syncGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics);
 
   /**
    * Returns a RecordCollector which applies the serializer to key and value.

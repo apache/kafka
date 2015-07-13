@@ -6,6 +6,7 @@ import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 
 import java.util.ArrayList;
+import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 
@@ -25,7 +26,10 @@ public class KStreamFlatMapValuesTest {
     10
   );
 
-  private PartitioningInfo partitioningInfo = new PartitioningInfo(streamSynchronizer, 1);
+  private String topicName = "topic";
+
+  private KStreamMetadata streamMetadata = new KStreamMetadata(streamSynchronizer, Collections.singletonMap(topicName, new PartitioningInfo(1)));
+
 
   @Test
   public void testFlatMapValues() {
@@ -47,11 +51,11 @@ public class KStreamFlatMapValuesTest {
     TestProcessor<Integer, String> processor;
 
     processor = new TestProcessor<Integer, String>();
-    stream = new KStreamSource<Integer, String>(partitioningInfo, null);
+    stream = new KStreamSource<Integer, String>(streamMetadata, null);
     stream.flatMapValues(mapper).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
+      stream.receive(topicName, expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(8, processor.processed.size());

@@ -1,6 +1,15 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.*;
+import io.confluent.streaming.Coordinator;
+import io.confluent.streaming.KStream;
+import io.confluent.streaming.KStreamContext;
+import io.confluent.streaming.KStreamException;
+import io.confluent.streaming.KStreamJob;
+import io.confluent.streaming.RecordCollector;
+import io.confluent.streaming.StorageEngine;
+import io.confluent.streaming.StreamingConfig;
+import io.confluent.streaming.SyncGroup;
+import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.util.Util;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.producer.Producer;
@@ -13,7 +22,11 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.*;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Created by yasuhiro on 6/19/15.
@@ -31,8 +44,8 @@ public class KStreamContextImpl implements KStreamContext {
   private final RecordCollector<Object, Object> collector;
 
   private final Coordinator coordinator;
-  private final HashMap<String, KStreamSource<?, ?>> sourceStreams = new HashMap<String, KStreamSource<?, ?>>();
-  private final HashMap<String, PartitioningInfo> partitioningInfos = new HashMap<String, PartitioningInfo>();
+  private final HashMap<String, KStreamSource<?, ?>> sourceStreams = new HashMap<>();
+  private final HashMap<String, PartitioningInfo> partitioningInfos = new HashMap<>();
   private final TimestampExtractor timestampExtractor;
   private final HashMap<String, StreamSynchronizer> streamSynchronizerMap = new HashMap<>();
   private final StreamingConfig streamingConfig;
@@ -119,42 +132,68 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
-  public KStream<?, ?> from(String topic) {
-    return from(topic, syncGroup(DEFAULT_SYNCHRONIZATION_GROUP), null, null);
+  public KStream<?, ?> from(String... topics) {
+    return from(syncGroup(DEFAULT_SYNCHRONIZATION_GROUP), null, null, topics);
   }
 
   @Override
-  public KStream<?, ?> from(String topic, SyncGroup syncGroup) {
-    return from(topic, syncGroup, null, null);
+  public KStream<?, ?> from(SyncGroup syncGroup, String... topics) {
+    return from(syncGroup, null, null, topics);
   }
 
   @Override
-  public <K, V> KStream<K, V> from(String topic, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
-    return from(topic, syncGroup(DEFAULT_SYNCHRONIZATION_GROUP), keyDeserializer, valDeserializer);
+  public <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
+    return from(syncGroup(DEFAULT_SYNCHRONIZATION_GROUP), keyDeserializer, valDeserializer, topics);
   }
 
   @Override
   @SuppressWarnings("unchecked")
-  public <K, V> KStream<K, V> from(String topic, SyncGroup syncGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+  public <K, V> KStream<K, V> from(SyncGroup syncGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
     if (syncGroup == null) throw new NullPointerException();
 
+    KStreamSource<?, ?> stream = null;
+
     synchronized (this) {
-      if (!topics.contains(topic))
-        throw new IllegalArgumentException("topic not subscribed: " + topic);
+      // iterate over the topics and check if the stream has already been created for them
+      for (String topic : topics) {
+        if (!this.topics.contains(topic))
+          throw new IllegalArgumentException("topic not subscribed: " + topic);
 
-      KStreamSource<?, ?> stream = sourceStreams.get(topic);
+        KStreamSource<?, ?> streamForTopic = sourceStreams.get(topic);
 
-      if (stream == null) {
-        PartitioningInfo partitioningInfo = partitioningInfos.get(topic);
-
-        if (partitioningInfo == null) {
-          partitioningInfo = new PartitioningInfo(syncGroup, ingestor.numPartitions(topic));
-          partitioningInfos.put(topic, partitioningInfo);
+        if (stream == null) {
+          if (streamForTopic != null)
+            stream = streamForTopic;
+        } else {
+          if (streamForTopic != null) {
+            if (!stream.equals(streamForTopic))
+              throw new IllegalArgumentException("another stream created with the same topic " + topic);
+          } else {
+            sourceStreams.put(topic, stream);
+          }
         }
+      }
+
+      // if there is no stream for any of the topics, create one
+      if (stream == null) {
+        // create stream metadata
+        Map<String, PartitioningInfo> topicPartitionInfos = new HashMap<>();
+        for (String topic : topics) {
+          PartitioningInfo partitioningInfo = this.partitioningInfos.get(topic);
+
+          if (partitioningInfo == null) {
+            partitioningInfo = new PartitioningInfo(ingestor.numPartitions(topic));
+            this.partitioningInfos.put(topic, partitioningInfo);
+          }
+
+          topicPartitionInfos.put(topic, partitioningInfo);
+        }
+
+        KStreamMetadata streamMetadata = new KStreamMetadata(syncGroup, topicPartitionInfos);
 
         // override the deserializer classes if specified
         if (keyDeserializer == null && valDeserializer == null) {
-          stream = new KStreamSource<Object, Object>(partitioningInfo, this);
+          stream = new KStreamSource<Object, Object>(streamMetadata, this);
         } else {
           StreamingConfig newConfig = this.streamingConfig.clone();
           if (keyDeserializer != null)
@@ -167,18 +206,21 @@ public class KStreamContextImpl implements KStreamContext {
               this.simpleCollector, this.coordinator,
               newConfig, this.processorConfig,
               this.stateMgr, this.metrics);
-          stream = new KStreamSource<Object, Object>(partitioningInfo, newContext);
+          stream = new KStreamSource<Object, Object>(streamMetadata, newContext);
         }
 
-        sourceStreams.put(topic, stream);
+        // update source stream map
+        for (String topic : topics) {
+          if (sourceStreams.containsKey(topic))
+            sourceStreams.put(topic, stream);
 
-        TopicPartition partition = new TopicPartition(topic, id);
-        StreamSynchronizer streamSynchronizer = (StreamSynchronizer)syncGroup;
-        streamSynchronizer.addPartition(partition, stream);
-        ingestor.addStreamSynchronizerForPartition(streamSynchronizer, partition);
-      }
-      else {
-        if (stream.partitioningInfo.syncGroup == syncGroup)
+          TopicPartition partition = new TopicPartition(topic, id);
+          StreamSynchronizer streamSynchronizer = (StreamSynchronizer)syncGroup;
+          streamSynchronizer.addPartition(partition, stream);
+          ingestor.addStreamSynchronizerForPartition(streamSynchronizer, partition);
+        }
+      } else {
+        if (stream.metadata.syncGroup == syncGroup)
           throw new IllegalStateException("topic is already assigned a different synchronization group");
 
         // TODO: with this constraint we will not allow users to create KStream with different

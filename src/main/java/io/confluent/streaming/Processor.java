@@ -3,9 +3,9 @@ package io.confluent.streaming;
 /**
  * Created by yasuhiro on 6/17/15.
  */
-public interface Processor<K,V>  {
+public interface Processor<K, V>  {
 
-  void apply(K key, V value);
+  void apply(String topic, K key, V value);
 
   void init(PunctuationScheduler punctuationScheduler);
 

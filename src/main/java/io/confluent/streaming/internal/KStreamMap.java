@@ -13,15 +13,15 @@ class KStreamMap<K, V, K1, V1> extends KStreamImpl<K, V> {
   private final KeyValueMapper<K, V, K1, V1> mapper;
 
   KStreamMap(KeyValueMapper<K, V, K1, V1> mapper, SyncGroup syncGroup, KStreamContext context) {
-    super(PartitioningInfo.unjoinable(syncGroup), context);
+    super(KStreamMetadata.unjoinable(syncGroup), context);
     this.mapper = mapper;
   }
 
   @Override
-  public void receive(Object key, Object value, long timestamp, long streamTime) {
+  public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
     synchronized (this) {
       KeyValue<K, V> newPair = mapper.apply((K1)key, (V1)value);
-      forward(newPair.key, newPair.value, timestamp, streamTime);
+      forward(topic, newPair.key, newPair.value, timestamp, streamTime);
     }
   }
 

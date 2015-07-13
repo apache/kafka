@@ -10,16 +10,16 @@ class KStreamFilter<K, V> extends KStreamImpl<K, V> {
 
   private final Predicate<K, V> predicate;
 
-  KStreamFilter(Predicate<K, V> predicate, PartitioningInfo partitioningInfo, KStreamContext context) {
-    super(partitioningInfo, context);
+  KStreamFilter(Predicate<K, V> predicate, KStreamMetadata metadata, KStreamContext context) {
+    super(metadata, context);
     this.predicate = predicate;
   }
 
   @Override
-  public void receive(Object key, Object value, long timestamp,long streamTime) {
+  public void receive(String topic, Object key, Object value, long timestamp,long streamTime) {
     synchronized(this) {
       if (predicate.apply((K)key, (V)value)) {
-        forward(key, value, timestamp, streamTime);
+        forward(topic, key, value, timestamp, streamTime);
       }
     }
   }

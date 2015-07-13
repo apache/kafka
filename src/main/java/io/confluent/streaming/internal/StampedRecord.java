@@ -9,6 +9,8 @@ public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
     super(record, timestamp);
   }
 
+  public String topic() { return value.topic(); }
+
   public Object key() {
     return value.key();
   }

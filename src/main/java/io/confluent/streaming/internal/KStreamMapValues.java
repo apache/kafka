@@ -10,16 +10,16 @@ class KStreamMapValues<K, V, V1> extends KStreamImpl<K, V> {
 
   private final ValueMapper<V, V1> mapper;
 
-  KStreamMapValues(ValueMapper<V, V1> mapper, PartitioningInfo partitioningInfo, KStreamContext context) {
-    super(partitioningInfo, context);
+  KStreamMapValues(ValueMapper<V, V1> mapper, KStreamMetadata metadata, KStreamContext context) {
+    super(metadata, context);
     this.mapper = mapper;
   }
 
   @Override
-  public void receive(Object key, Object value, long timestamp, long streamTime) {
+  public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
     synchronized (this) {
       V newValue = mapper.apply((V1)value);
-      forward(key, newValue, timestamp, streamTime);
+      forward(topic, key, newValue, timestamp, streamTime);
     }
   }
 

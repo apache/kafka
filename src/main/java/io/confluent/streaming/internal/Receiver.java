@@ -5,6 +5,6 @@ package io.confluent.streaming.internal;
  */
 public interface Receiver {
 
-  void receive(Object key, Object value, long timestamp, long streamTime);
+  void receive(String topic, Object key, Object value, long timestamp, long streamTime);
 
 }

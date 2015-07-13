@@ -23,11 +23,11 @@ import java.util.ArrayList;
 abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   private final ArrayList<Receiver> nextReceivers = new ArrayList<>(1);
-  final PartitioningInfo partitioningInfo;
+  final KStreamMetadata metadata;
   final KStreamContext context;
 
-  protected KStreamImpl(PartitioningInfo partitioningInfo, KStreamContext context) {
-    this.partitioningInfo = partitioningInfo;
+  protected KStreamImpl(KStreamMetadata metadata, KStreamContext context) {
+    this.metadata = metadata;
     this.context = context;
   }
 
@@ -38,7 +38,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   @Override
   public KStream<K, V> filter(Predicate<K, V> predicate) {
-    return chain(new KStreamFilter<K, V>(predicate, partitioningInfo, context));
+    return chain(new KStreamFilter<K, V>(predicate, metadata, context));
   }
 
   @Override
@@ -53,32 +53,36 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   @Override
   public <K1, V1> KStream<K1, V1> map(KeyValueMapper<K1, V1, K, V> mapper) {
-    return chain(new KStreamMap<K1, V1, K, V>(mapper, partitioningInfo.syncGroup, context));
+    return chain(new KStreamMap<K1, V1, K, V>(mapper, metadata.syncGroup, context));
   }
 
   @Override
   public <V1> KStream<K, V1> mapValues(ValueMapper<V1, V> mapper) {
-    return chain(new KStreamMapValues<K, V1, V>(mapper, partitioningInfo, context));
+    return chain(new KStreamMapValues<K, V1, V>(mapper, metadata, context));
   }
 
   @Override
   public <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K1, ? extends Iterable<V1>, K, V> mapper) {
-    return chain(new KStreamFlatMap<K1, V1, K, V>(mapper, partitioningInfo.syncGroup, context));
+    return chain(new KStreamFlatMap<K1, V1, K, V>(mapper, metadata.syncGroup, context));
   }
 
   @Override
   public <V1> KStream<K, V1> flatMapValues(ValueMapper<? extends Iterable<V1>, V> mapper) {
-    return chain(new KStreamFlatMapValues<K, V1, V>(mapper, partitioningInfo, context));
+    return chain(new KStreamFlatMapValues<K, V1, V>(mapper, metadata, context));
   }
 
   @Override
   public KStreamWindowed<K, V> with(Window<K, V> window) {
-    return (KStreamWindowed<K, V>)chain(new KStreamWindowedImpl<K, V>(window, partitioningInfo, context));
+    // TODO: we can extend to allow construction of windowable stream with a multiple topics
+    if (metadata.topicPartitionInfos.size() != 1)
+      throw new IllegalStateException("Do not support windowable stream construction with multipel topics: " + metadata.topicPartitionInfos.keySet());
+
+    return (KStreamWindowed<K, V>)chain(new KStreamWindowedImpl<K, V>(window, metadata, context));
   }
 
   @Override
   public KStream<K, V>[] branch(Predicate<K, V>... predicates) {
-    KStreamBranch<K, V> branch = new KStreamBranch<K, V>(predicates, partitioningInfo, context);
+    KStreamBranch<K, V> branch = new KStreamBranch<K, V>(predicates, metadata, context);
     registerReceiver(branch);
     return branch.branches;
   }
@@ -105,7 +109,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   @Override
   public <K1, V1> KStream<K1, V1> through(String topic, SyncGroup syncGroup, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer) {
     process(this.<K, V>getSendProcessor(topic, keySerializer, valSerializer));
-    return context.from(topic, syncGroup, keyDeserializer, valDeserializer);
+    return context.from(syncGroup, keyDeserializer, valDeserializer, topic);
   }
 
   @Override
@@ -117,7 +121,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   public void sendTo(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) { process(this.<K, V>getSendProcessor(topic, keySerializer, valSerializer)); }
 
   @SuppressWarnings("unchecked")
-  private <K, V> Processor<K, V> getSendProcessor(final String topic, Serializer<?> keySerializer, Serializer<?> valSerializer) {
+  private <K, V> Processor<K, V> getSendProcessor(final String sendTopic, Serializer<?> keySerializer, Serializer<?> valSerializer) {
     final RecordCollector<K, V> collector;
     if (keySerializer == null && valSerializer == null)
       collector = (RecordCollector<K, V>) context.recordCollector();
@@ -129,8 +133,8 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
     return new Processor<K, V>() {
       @Override
-      public void apply(K key, V value) {
-        collector.send(new ProducerRecord<K, V>(topic, key, value));
+      public void apply(String topic, K key, V value) {
+        collector.send(new ProducerRecord<K, V>(sendTopic, key, value));
       }
       @Override
       public void init(PunctuationScheduler scheduler) {}
@@ -142,13 +146,13 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   @Override
   public void process(final Processor<K, V> processor) {
     Receiver receiver = new Receiver() {
-      public void receive(Object key, Object value, long timestamp, long streamTime) {
-        processor.apply((K)key, (V)value);
+      public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
+        processor.apply(topic, (K)key, (V)value);
       }
     };
     registerReceiver(receiver);
 
-    PunctuationScheduler scheduler = ((StreamSynchronizer)partitioningInfo.syncGroup).getPunctuationScheduler(processor);
+    PunctuationScheduler scheduler = ((StreamSynchronizer)metadata.syncGroup).getPunctuationScheduler(processor);
     processor.init(scheduler);
   }
 
@@ -156,10 +160,10 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
     nextReceivers.add(receiver);
   }
 
-  protected void forward(Object key, Object value, long timestamp, long streamTime) {
+  protected void forward(String topic, Object key, Object value, long timestamp, long streamTime) {
     int numReceivers = nextReceivers.size();
     for (int i = 0; i < numReceivers; i++) {
-      nextReceivers.get(i).receive(key, value, timestamp, streamTime);
+      nextReceivers.get(i).receive(topic, key, value, timestamp, streamTime);
     }
   }
 

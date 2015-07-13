@@ -15,16 +15,16 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
 
   final Window<K, V> window;
 
-  KStreamWindowedImpl(Window<K, V> window, PartitioningInfo partitioningInfo, KStreamContext context) {
-    super(partitioningInfo, context);
+  KStreamWindowedImpl(Window<K, V> window, KStreamMetadata streamMetadata, KStreamContext context) {
+    super(streamMetadata, context);
     this.window = window;
   }
 
   @Override
-  public void receive(Object key, Object value, long timestamp, long streamTime) {
+  public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
     synchronized(this) {
       window.put((K)key, (V)value, timestamp);
-      forward(key, value, timestamp, streamTime);
+      forward(topic, key, value, timestamp, streamTime);
     }
   }
 
@@ -42,10 +42,10 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
 
     KStreamWindowedImpl<K, V1> otherImpl = (KStreamWindowedImpl<K, V1>) other;
 
-    if (!partitioningInfo.isJoinCompatibleWith(otherImpl.partitioningInfo)) throw new NotCopartitionedException();
+    if (!this.metadata.isJoinCompatibleWith(otherImpl.metadata)) throw new NotCopartitionedException();
 
     KStreamJoin<K, V2, V, V1> stream =
-      new KStreamJoin<K, V2, V, V1>(this.window, otherImpl.window, prior, processor, partitioningInfo, context);
+      new KStreamJoin<K, V2, V, V1>(this.window, otherImpl.window, prior, processor, this.metadata, context);
     otherImpl.registerReceiver(stream.receiverForOtherStream);
 
     return chain(stream);

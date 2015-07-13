@@ -10,7 +10,7 @@ public class TestProcessor<K, V> implements Processor<K, V> {
   public final ArrayList<Long> punctuated = new ArrayList<Long>();
 
   @Override
-  public void apply(K key, V value) {
+  public void apply(String topic, K key, V value) {
     processed.add(key + ":" + value);
   }
 

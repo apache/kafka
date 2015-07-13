@@ -6,6 +6,7 @@ import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 
 import java.lang.reflect.Array;
+import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 
@@ -25,7 +26,9 @@ public class KStreamBranchTest {
     10
   );
 
-  private PartitioningInfo partitioningInfo = new PartitioningInfo(streamSynchronizer, 1);
+  private String topicName = "topic";
+
+  private KStreamMetadata streamMetadata = new KStreamMetadata(streamSynchronizer, Collections.singletonMap(topicName, new PartitioningInfo(1)));
 
   @SuppressWarnings("unchecked")
   @Test
@@ -56,7 +59,7 @@ public class KStreamBranchTest {
     KStream<Integer, String>[] branches;
     TestProcessor<Integer, String>[] processors;
 
-    stream = new KStreamSource<Integer, String>(partitioningInfo, null);
+    stream = new KStreamSource<Integer, String>(streamMetadata, null);
     branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
     assertEquals(3, branches.length);
@@ -68,14 +71,14 @@ public class KStreamBranchTest {
     }
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
+      stream.receive(topicName, expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(3, processors[0].processed.size());
     assertEquals(1, processors[1].processed.size());
     assertEquals(3, processors[2].processed.size());
 
-    stream = new KStreamSource<Integer, String>(partitioningInfo, null);
+    stream = new KStreamSource<Integer, String>(streamMetadata, null);
     branches = stream.branch(isEven, isOdd, isMultipleOfThree);
 
     assertEquals(3, branches.length);
@@ -87,7 +90,7 @@ public class KStreamBranchTest {
     }
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
+      stream.receive(topicName, expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(3, processors[0].processed.size());

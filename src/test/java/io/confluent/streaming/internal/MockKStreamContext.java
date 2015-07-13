@@ -43,16 +43,16 @@ public class MockKStreamContext implements KStreamContext {
   public Deserializer<?> valueDeserializer() { return deserializer; }
 
   @Override
-  public KStream<?, ?> from(String topic) { throw new UnsupportedOperationException("from() not supported."); }
+  public KStream<?, ?> from(String... topic) { throw new UnsupportedOperationException("from() not supported."); }
 
   @Override
-  public KStream<?, ?> from(String topic, SyncGroup syncGroup) { throw new UnsupportedOperationException("from() not supported."); }
+  public KStream<?, ?> from(SyncGroup syncGroup, String... topic) { throw new UnsupportedOperationException("from() not supported."); }
 
   @Override
-  public KStream<?, ?> from(String topic, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer) { throw new UnsupportedOperationException("from() not supported."); }
+  public <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topic) { throw new UnsupportedOperationException("from() not supported."); }
 
   @Override
-  public KStream<?, ?> from(String topic, SyncGroup syncGroup, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer) { throw new UnsupportedOperationException("from() not supported."); }
+  public <K, V> KStream<K, V> from(SyncGroup syncGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topic) { throw new UnsupportedOperationException("from() not supported."); }
 
   @Override
   public RecordCollector<Object, Object> recordCollector() { throw new UnsupportedOperationException("recordCollector() not supported."); }

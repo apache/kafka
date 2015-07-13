@@ -5,6 +5,7 @@ import io.confluent.streaming.testutil.MockIngestor;
 import io.confluent.streaming.testutil.UnlimitedWindow;
 import org.junit.Test;
 
+import java.util.Collections;
 import java.util.Iterator;
 
 import static org.junit.Assert.assertEquals;
@@ -25,7 +26,9 @@ public class KStreamWindowedTest {
     10
   );
 
-  private PartitioningInfo partitioningInfo = new PartitioningInfo(streamSynchronizer, 1);
+  private String topicName = "topic";
+
+  private KStreamMetadata streamMetadata = new KStreamMetadata(streamSynchronizer, Collections.singletonMap(topicName, new PartitioningInfo(1)));
 
   @Test
   public void testWindowedStream() {
@@ -37,7 +40,7 @@ public class KStreamWindowedTest {
     String[] expected;
 
     window = new UnlimitedWindow<Integer, String>();
-    stream = new KStreamSource<Integer, String>(partitioningInfo, null);
+    stream = new KStreamSource<Integer, String>(streamMetadata, null);
     stream.with(window);
 
     boolean exceptionRaised = false;
@@ -45,7 +48,7 @@ public class KStreamWindowedTest {
     // two items in the window
 
     for (int i = 0; i < 2; i++) {
-      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
+      stream.receive(topicName, expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(1, countItem(window.find(0, 0L)));
@@ -56,7 +59,7 @@ public class KStreamWindowedTest {
     // previous two items + all items, thus two are duplicates, in the window
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], "Y" + expectedKeys[i], 0L, 0L);
+      stream.receive(topicName, expectedKeys[i], "Y" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(2, countItem(window.find(0, 0L)));

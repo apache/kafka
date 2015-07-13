@@ -15,21 +15,21 @@ class KStreamBranch<K, V> implements Receiver {
   final KStreamSource<K, V>[] branches;
 
   @SuppressWarnings("unchecked")
-  KStreamBranch(Predicate<K, V>[] predicates, PartitioningInfo partitioningInfo, KStreamContext context) {
+  KStreamBranch(Predicate<K, V>[] predicates, KStreamMetadata streamMetadata, KStreamContext context) {
     this.predicates = Arrays.copyOf(predicates, predicates.length);
     this.branches = (KStreamSource<K, V>[]) Array.newInstance(KStreamSource.class, predicates.length);
     for (int i = 0; i < branches.length; i++) {
-      branches[i] = new KStreamSource<K, V>(partitioningInfo, context);
+      branches[i] = new KStreamSource<K, V>(streamMetadata, context);
     }
   }
 
   @Override
-  public void receive(Object key, Object value, long timestamp, long streamTime) {
+  public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
     synchronized(this) {
       for (int i = 0; i < predicates.length; i++) {
         Predicate<K, V> predicate = predicates[i];
         if (predicate.apply((K)key, (V)value)) {
-          branches[i].receive(key, value, timestamp, streamTime);
+          branches[i].receive(topic, key, value, timestamp, streamTime);
           return;
         }
       }

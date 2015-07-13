@@ -5,6 +5,8 @@ import io.confluent.streaming.testutil.MockIngestor;
 import io.confluent.streaming.testutil.TestProcessor;
 import org.junit.Test;
 
+import java.util.Collections;
+
 import static org.junit.Assert.assertEquals;
 
 public class KStreamFilterTest {
@@ -23,7 +25,9 @@ public class KStreamFilterTest {
     10
   );
 
-  private PartitioningInfo partitioningInfo = new PartitioningInfo(streamSynchronizer, 1);
+  private String topicName = "topic";
+
+  private KStreamMetadata streamMetadata = new KStreamMetadata(streamSynchronizer, Collections.singletonMap(topicName, new PartitioningInfo(1)));
 
   private Predicate<Integer, String> isMultipleOfThree = new Predicate<Integer, String>() {
     @Override
@@ -40,11 +44,11 @@ public class KStreamFilterTest {
     TestProcessor<Integer, String> processor;
 
     processor = new TestProcessor<Integer, String>();
-    stream = new KStreamSource<Integer, String>(partitioningInfo, null);
+    stream = new KStreamSource<Integer, String>(streamMetadata, null);
     stream.filter(isMultipleOfThree).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
+      stream.receive(topicName, expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(2, processor.processed.size());
@@ -58,11 +62,11 @@ public class KStreamFilterTest {
     TestProcessor<Integer, String> processor;
 
     processor = new TestProcessor<Integer, String>();
-    stream = new KStreamSource<Integer, String>(partitioningInfo, null);
+    stream = new KStreamSource<Integer, String>(streamMetadata, null);
     stream.filterOut(isMultipleOfThree).process(processor);
 
     for (int i = 0; i < expectedKeys.length; i++) {
-      stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
+      stream.receive(topicName, expectedKeys[i], "V" + expectedKeys[i], 0L, 0L);
     }
 
     assertEquals(5, processor.processed.size());
