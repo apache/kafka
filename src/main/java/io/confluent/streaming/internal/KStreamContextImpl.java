@@ -129,13 +129,13 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
-  public KStream<?, ?> from(String topic, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer) {
+  public <K, V> KStream<K, V> from(String topic, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
     return from(topic, syncGroup(DEFAULT_SYNCHRONIZATION_GROUP), keyDeserializer, valDeserializer);
   }
 
   @Override
   @SuppressWarnings("unchecked")
-  public KStream<?, ?> from(String topic, SyncGroup syncGroup, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer) {
+  public <K, V> KStream<K, V> from(String topic, SyncGroup syncGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
     if (syncGroup == null) throw new NullPointerException();
 
     synchronized (this) {
@@ -189,7 +189,7 @@ public class KStreamContextImpl implements KStreamContext {
           throw new IllegalStateException("another source stream with the same topic but different value deserializer is already created");
       }
 
-      return stream;
+      return (KStream<K, V>) stream;
     }
   }
 

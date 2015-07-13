@@ -97,15 +97,15 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   @SuppressWarnings("unchecked")
   @Override
-  public <K1, V1> KStream<K1, V1> through(String topic, Serializer<?> keySerializer, Serializer<?> valSerializer, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer) {
+  public <K1, V1> KStream<K1, V1> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer) {
     return through(topic, context.syncGroup(context.DEFAULT_SYNCHRONIZATION_GROUP), keySerializer, valSerializer, keyDeserializer, valDeserializer);
   }
 
   @SuppressWarnings("unchecked")
   @Override
-  public <K1, V1> KStream<K1, V1> through(String topic, SyncGroup syncGroup, Serializer<?> keySerializer, Serializer<?> valSerializer, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer) {
+  public <K1, V1> KStream<K1, V1> through(String topic, SyncGroup syncGroup, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer) {
     process(this.<K, V>getSendProcessor(topic, keySerializer, valSerializer));
-    return (KStream<K1, V1>) context.from(topic, syncGroup, keyDeserializer, valDeserializer);
+    return context.from(topic, syncGroup, keyDeserializer, valDeserializer);
   }
 
   @Override
@@ -114,7 +114,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   }
 
   @Override
-  public void sendTo(String topic, Serializer<?> keySerializer, Serializer<?> valSerializer) { process(this.<K, V>getSendProcessor(topic, keySerializer, valSerializer)); }
+  public void sendTo(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer) { process(this.<K, V>getSendProcessor(topic, keySerializer, valSerializer)); }
 
   @SuppressWarnings("unchecked")
   private <K, V> Processor<K, V> getSendProcessor(final String topic, Serializer<?> keySerializer, Serializer<?> valSerializer) {

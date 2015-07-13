@@ -1,5 +1,6 @@
 package io.confluent.streaming;
 
+import com.sun.javafx.geom.Vec2d;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -116,7 +117,7 @@ public interface KStream<K, V> {
    *
    * @return KStream
    */
-  <K1, V1> KStream<K1, V1> through(String topic, Serializer<?> keySerializer, Serializer<?> valSerializer, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer);
+  <K1, V1> KStream<K1, V1> through(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer);
 
   /**
    * Sends key-value to a topic, also creates a new stream from the topic.
@@ -137,7 +138,7 @@ public interface KStream<K, V> {
    *
    * @return KStream
    */
-  <K1, V1> KStream<K1, V1> through(String topic, SyncGroup syncGroup, Serializer<?> keySerializer, Serializer<?> valSerializer, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer);
+  <K1, V1> KStream<K1, V1> through(String topic, SyncGroup syncGroup, Serializer<K> keySerializer, Serializer<V> valSerializer, Deserializer<K1> keyDeserializer, Deserializer<V1> valDeserializer);
 
   /**
    * Sends key-value to a topic.
@@ -153,7 +154,7 @@ public interface KStream<K, V> {
    * @param valSerializer value serializer used to send key-value pairs,
    *                      if not specified the default serializer defined in the configs will be used
    */
-  void sendTo(String topic, Serializer<?> keySerializer, Serializer<?> valSerializer);
+  void sendTo(String topic, Serializer<K> keySerializer, Serializer<V> valSerializer);
 
   /**
    * Processes all elements in this stream by applying a processor.

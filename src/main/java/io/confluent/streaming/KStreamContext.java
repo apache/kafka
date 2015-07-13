@@ -71,7 +71,7 @@ public interface KStreamContext {
    *                        if not specified the default deserializer defined in the configs will be used
    * @return KStream
    */
-  KStream<?, ?> from(String topic, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer);
+  <K, V> KStream<K, V> from(String topic, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer);
 
   /**
    * Creates a KStream instance for the specified topic. The stream is added to the specified synchronization group.
@@ -83,7 +83,7 @@ public interface KStreamContext {
    *                        if not specified the default deserializer defined in the configs will be used
    * @return KStream
    */
-  KStream<?, ?> from(String topic, SyncGroup syncGroup, Deserializer<?> keyDeserializer, Deserializer<?> valDeserializer);
+  <K, V> KStream<K, V> from(String topic, SyncGroup syncGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer);
 
   /**
    * Returns a RecordCollector which applies the serializer to key and value.
