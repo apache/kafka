@@ -1,6 +1,5 @@
 package io.confluent.streaming;
 
-import com.sun.javafx.geom.Vec2d;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 
