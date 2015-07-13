@@ -26,7 +26,11 @@ public class RecordQueue {
   /**
    * Creates a new instance of RecordQueue
    * @param partition partition
+<<<<<<< HEAD
    * @param receiver the receiver of the stream of this partition
+=======
+   * @param stream the instance of KStreamImpl that receives records
+>>>>>>> more fix
    * @param timestampTracker TimestampTracker
    */
   public RecordQueue(TopicPartition partition, Receiver receiver, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {

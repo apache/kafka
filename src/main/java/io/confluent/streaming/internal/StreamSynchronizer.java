@@ -88,7 +88,7 @@ public class StreamSynchronizer implements SyncGroup {
   /**
    * Adds a partition and its receiver to this stream synchronizer
    * @param partition the partition
-   * @param receiver the receiver
+   * @param stream the instance of KStreamImpl
    */
   @SuppressWarnings("unchecked")
   public void addPartition(TopicPartition partition, KStreamImpl stream) {

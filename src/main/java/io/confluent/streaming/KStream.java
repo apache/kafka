@@ -10,6 +10,7 @@ public interface KStream<K, V> {
 
   /**
    * Returns the KStreamContext used to create this stream
+   * @return KStreamContext
    */
   KStreamContext context();
 
@@ -110,6 +111,8 @@ public interface KStream<K, V> {
    *                        if not specified the default deserializer defined in the configs will be used
    * @param valDeserializer value deserializer used to create the new KStream,
    *                        if not specified the default deserializer defined in the configs will be used
+   * @param <K1> the key type of the new stream
+   * @param <V1> the value type of the new stream
    *
    * @return KStream
    */
@@ -129,6 +132,8 @@ public interface KStream<K, V> {
    *                        if not specified the default deserializer defined in the configs will be used
    * @param valDeserializer value deserializer used to create the new KStream,
    *                        if not specified the default deserializer defined in the configs will be used
+   * @param <K1> the key type of the new stream
+   * @param <V1> the value type of the new stream
    *
    * @return KStream
    */
