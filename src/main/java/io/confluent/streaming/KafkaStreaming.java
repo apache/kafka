@@ -416,29 +416,19 @@ public class KafkaStreaming implements Runnable {
 
     private void removePartitions(Collection<TopicPartition> assignment) {
         commitAll(time.milliseconds());
-        // remove all partitions
-        for (TopicPartition partition : assignment) {
-            Collection<StreamSynchronizer> streamSynchronizers = this.streamSynchronizersForPartition.remove(partition.partition());
-            if (streamSynchronizers != null) {
-                log.info("Removing synchronization groups {}", partition.partition());
-                for (StreamSynchronizer streamSynchronizer : streamSynchronizers)
-                    streamSynchronizer.close();
-            }
+        for (StreamSynchronizer streamSynchronizer : streamSynchronizers) {
+            log.info("Removing synchronization groups {}", streamSynchronizer.name());
+            streamSynchronizer.close();
         }
-        for (TopicPartition partition : assignment) {
-            KStreamContextImpl kstreamContext = kstreamContexts.remove(partition.partition());
-            ingestor.removeStreamSynchronizerForPartition(partition);
-
-            if (kstreamContext != null) {
-                log.info("Removing stream context {}", partition.partition());
-                try {
-                    kstreamContext.close();
-                }
-                catch (Exception e) {
-                    throw new KafkaException(e);
-                }
-                streamingMetrics.processorDestruction.record();
+        for (KStreamContextImpl kstreamContext : kstreamContexts.values()) {
+            log.info("Removing stream context {}", kstreamContext.id());
+            try {
+                kstreamContext.close();
             }
+            catch (Exception e) {
+                throw new KafkaException(e);
+            }
+            streamingMetrics.processorDestruction.record();
         }
         streamSynchronizers.clear();
         ingestor.clear();

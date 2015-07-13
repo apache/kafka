@@ -98,15 +98,6 @@ public class IngestorImpl implements Ingestor {
     }
   }
 
-  @Override
-  public void removeStreamSynchronizerForPartition(TopicPartition partition) {
-    synchronized (this) {
-      streamSynchronizers.remove(partition);
-      unpaused.remove(partition);
-      toBePaused.remove(partition);
-    }
-  }
-
   public void clear() {
     unpaused.clear();
     toBePaused.clear();

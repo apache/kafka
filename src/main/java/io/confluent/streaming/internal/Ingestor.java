@@ -19,6 +19,4 @@ public interface Ingestor {
 
   void addStreamSynchronizerForPartition(StreamSynchronizer streamSynchronizer, TopicPartition partition);
 
-  void removeStreamSynchronizerForPartition(TopicPartition partition);
-
 }
