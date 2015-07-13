@@ -58,7 +58,7 @@ public class ParallelExecutor {
           wakeUpWorkers(Math.min(numTasks - 1, workerThreads.length));
 
           // the calling thread also picks up tasks
-          if (taskIndex.get() > 0) doRun();
+          if (taskIndex.get() > 0) doProcess();
 
           while (true) {
             try {
@@ -91,7 +91,7 @@ public class ParallelExecutor {
     }
   }
 
-  private void doRun() {
+  private void doProcess() {
     int index = taskIndex.decrementAndGet();
     if (index >= 0) {
       try {
@@ -122,11 +122,12 @@ public class ParallelExecutor {
     public void run() {
       while (running) {
         if (taskIndex.get() > 0) {
-          doRun();
+          doProcess();
         }
         else {
           // no more work. park this thread.
           LockSupport.park();
+          Thread.interrupted();
         }
       }
     }
