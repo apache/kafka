@@ -205,6 +205,7 @@ class JsonValueTest {
     assertTo[Option[Int]](None, _("null"))
     assertTo[Option[Int]](Some(1234), _("int"))
     assertToFails[Option[String]](_("int"))
+    assertToFails[Option[String]](_("long"))
   }
 
 }
