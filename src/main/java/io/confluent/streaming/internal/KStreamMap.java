@@ -21,7 +21,7 @@ class KStreamMap<K, V, K1, V1> extends KStreamImpl<K, V> {
   public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
     synchronized (this) {
       KeyValue<K, V> newPair = mapper.apply((K1)key, (V1)value);
-      forward(topic, newPair.key, newPair.value, timestamp, streamTime);
+      forward(KStreamMetadata.UNKNOWN_TOPICNAME, newPair.key, newPair.value, timestamp, streamTime);
     }
   }
 

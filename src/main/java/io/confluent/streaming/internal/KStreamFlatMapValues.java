@@ -20,7 +20,7 @@ class KStreamFlatMapValues<K, V, V1> extends KStreamImpl<K, V> {
     synchronized(this) {
       Iterable<V> newValues = mapper.apply((V1)value);
       for (V v : newValues) {
-        forward(topic, key, v, timestamp, streamTime);
+        forward(KStreamMetadata.UNKNOWN_TOPICNAME, key, v, timestamp, streamTime);
       }
     }
   }

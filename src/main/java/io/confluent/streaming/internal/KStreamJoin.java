@@ -80,7 +80,7 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
 
   // TODO: use the "outer-stream" topic as the resulted join stream topic
   private void doJoin(K key, V1 value1, V2 value2, long timestamp, long streamTime) {
-    forward(this.metadata.topicPartitionInfos.keySet().iterator().next(), key, joiner.apply(value1, value2), timestamp, streamTime);
+    forward(KStreamMetadata.UNKNOWN_TOPICNAME, key, joiner.apply(value1, value2), timestamp, streamTime);
   }
 
 }

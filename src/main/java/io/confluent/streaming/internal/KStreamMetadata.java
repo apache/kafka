@@ -10,9 +10,10 @@ import java.util.Map;
  */
 public class KStreamMetadata {
 
+  public static String UNKNOWN_TOPICNAME = "__UNKNOWN_TOPIC__";
+
   public static KStreamMetadata unjoinable(SyncGroup syncGroup) {
-    // TODO: how to define the topic name for flat functions?
-    return new KStreamMetadata(syncGroup, Collections.singletonMap("FlatTopic", new PartitioningInfo(-1)));
+    return new KStreamMetadata(syncGroup, Collections.singletonMap(UNKNOWN_TOPICNAME, new PartitioningInfo(-1)));
   }
 
   public final SyncGroup syncGroup;
@@ -24,13 +25,28 @@ public class KStreamMetadata {
   }
 
   boolean isJoinCompatibleWith(KStreamMetadata other) {
-    // the two streams should only be joinable if they only contain one topic-partition each
-    if (this.topicPartitionInfos.size() != 1 || other.topicPartitionInfos.size() != 1)
+    // the two streams should only be joinable if they are inside the same sync group
+    // and their contained streams all have the same number of partitions
+    if (this.syncGroup != other.syncGroup)
       return false;
-    else {
-      return syncGroup == other.syncGroup
-          && this.topicPartitionInfos.values().iterator().next().numPartitions >= 0
-          && this.topicPartitionInfos.values().iterator().next().numPartitions == other.topicPartitionInfos.values().iterator().next().numPartitions;
+
+    int numPartitions = -1;
+    for (PartitioningInfo partitionInfo : this.topicPartitionInfos.values()) {
+      if (partitionInfo.numPartitions < 0) {
+        return false;
+      } else if (numPartitions >= 0) {
+        if (partitionInfo.numPartitions != numPartitions)
+          return false;
+      } else {
+        numPartitions = partitionInfo.numPartitions;
+      }
     }
+
+    for (PartitioningInfo partitionInfo : other.topicPartitionInfos.values()) {
+      if (partitionInfo.numPartitions != numPartitions)
+        return false;
+    }
+
+    return true;
   }
 }

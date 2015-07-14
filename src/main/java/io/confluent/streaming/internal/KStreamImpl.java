@@ -73,10 +73,6 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
   @Override
   public KStreamWindowed<K, V> with(Window<K, V> window) {
-    // TODO: we can extend to allow construction of windowable stream with a multiple topics
-    if (metadata.topicPartitionInfos.size() != 1)
-      throw new IllegalStateException("Do not support windowable stream construction with multipel topics: " + metadata.topicPartitionInfos.keySet());
-
     return (KStreamWindowed<K, V>)chain(new KStreamWindowedImpl<K, V>(window, metadata, context));
   }
 
@@ -147,7 +143,10 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
   public void process(final Processor<K, V> processor) {
     Receiver receiver = new Receiver() {
       public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
-        processor.apply(topic, (K)key, (V)value);
+        if (topic.equals(KStreamMetadata.UNKNOWN_TOPICNAME))
+          processor.apply(null, (K)key, (V)value);
+        else
+          processor.apply(topic, (K)key, (V)value);
       }
     };
     registerReceiver(receiver);
