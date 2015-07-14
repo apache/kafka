@@ -15,6 +15,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class StreamSynchronizerTest {
@@ -99,13 +100,9 @@ public class StreamSynchronizerTest {
       new ConsumerRecord(partition2.topic(), partition2.partition(), 4, serializer.serialize(partition1.topic(), new Integer(600)), recordValue)
     ));
 
-    StreamSynchronizer.Status status = new StreamSynchronizer.Status();
-
-    streamSynchronizer.process(status);
+    streamSynchronizer.process();
     assertEquals(stream1.numReceived, 1);
     assertEquals(stream2.numReceived, 0);
-
-    assertTrue(status.pollRequired());
 
     assertEquals(mockIngestor.paused.size(), 1);
     assertTrue(mockIngestor.paused.contains(partition2));
@@ -116,7 +113,7 @@ public class StreamSynchronizerTest {
       new ConsumerRecord(partition1.topic(), partition1.partition(), 5, serializer.serialize(partition1.topic(), new Integer(50)), recordValue)
     ));
 
-    streamSynchronizer.process(status);
+    streamSynchronizer.process();
     assertEquals(stream1.numReceived, 2);
     assertEquals(stream2.numReceived, 0);
 
@@ -124,44 +121,44 @@ public class StreamSynchronizerTest {
     assertTrue(mockIngestor.paused.contains(partition1));
     assertTrue(mockIngestor.paused.contains(partition2));
 
-    streamSynchronizer.process(status);
+    streamSynchronizer.process();
     assertEquals(stream1.numReceived, 3);
     assertEquals(stream2.numReceived, 0);
 
-    streamSynchronizer.process(status);
+    streamSynchronizer.process();
     assertEquals(stream1.numReceived, 3);
     assertEquals(stream2.numReceived, 1);
 
     assertEquals(mockIngestor.paused.size(), 1);
     assertTrue(mockIngestor.paused.contains(partition2));
 
-    streamSynchronizer.process(status);
+    streamSynchronizer.process();
     assertEquals(stream1.numReceived, 4);
     assertEquals(stream2.numReceived, 1);
 
     assertEquals(mockIngestor.paused.size(), 1);
 
-    streamSynchronizer.process(status);
+    streamSynchronizer.process();
     assertEquals(stream1.numReceived, 4);
     assertEquals(stream2.numReceived, 2);
 
     assertEquals(mockIngestor.paused.size(), 0);
 
-    streamSynchronizer.process(status);
+    streamSynchronizer.process();
     assertEquals(stream1.numReceived, 5);
     assertEquals(stream2.numReceived, 2);
 
-    streamSynchronizer.process(status);
+    streamSynchronizer.process();
     assertEquals(stream1.numReceived, 5);
     assertEquals(stream2.numReceived, 3);
 
-    streamSynchronizer.process(status);
+    streamSynchronizer.process();
     assertEquals(stream1.numReceived, 5);
     assertEquals(stream2.numReceived, 4);
 
     assertEquals(mockIngestor.paused.size(), 0);
 
-    streamSynchronizer.process(status);
+    streamSynchronizer.process();
     assertEquals(stream1.numReceived, 5);
     assertEquals(stream2.numReceived, 4);
   }

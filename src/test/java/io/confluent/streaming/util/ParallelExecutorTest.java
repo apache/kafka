@@ -15,20 +15,20 @@ public class ParallelExecutorTest {
   public void testExecutingShortTaskList() throws Exception {
     ParallelExecutor parallelExecutor = new ParallelExecutor(10);
     ArrayList<TestTask> taskList = new ArrayList<>();
-    Counter counter = new Counter();
+    AtomicInteger counter = new AtomicInteger(0);
 
     for (int i = 0; i < 5; i++) {
-      taskList.add(new TestTask());
+      taskList.add(new TestTask(counter));
     }
 
-    parallelExecutor.execute(taskList, counter);
+    parallelExecutor.execute(taskList);
 
     for (TestTask task : taskList) {
       assertEquals(task.executionCount, 1);
     }
     assertEquals(counter.get(), taskList.size());
 
-    parallelExecutor.execute(taskList, counter);
+    parallelExecutor.execute(taskList);
 
     for (TestTask task : taskList) {
       assertEquals(task.executionCount, 2);
@@ -40,20 +40,20 @@ public class ParallelExecutorTest {
   public void testExecutingLongTaskList() throws Exception {
     ParallelExecutor parallelExecutor = new ParallelExecutor(10);
     ArrayList<TestTask> taskList = new ArrayList<>();
-    Counter counter = new Counter();
+    AtomicInteger counter = new AtomicInteger(0);
 
     for (int i = 0; i < 20; i++) {
-      taskList.add(new TestTask());
+      taskList.add(new TestTask(counter));
     }
 
-    parallelExecutor.execute(taskList, counter);
+    parallelExecutor.execute(taskList);
 
     for (TestTask task : taskList) {
       assertEquals(task.executionCount, 1);
     }
     assertEquals(counter.get(), taskList.size());
 
-    parallelExecutor.execute(taskList, counter);
+    parallelExecutor.execute(taskList);
 
     for (TestTask task : taskList) {
       assertEquals(task.executionCount, 2);
@@ -65,25 +65,25 @@ public class ParallelExecutorTest {
   public void testException() {
     ParallelExecutor parallelExecutor = new ParallelExecutor(10);
     ArrayList<TestTask> taskList = new ArrayList<>();
-    Counter counter = new Counter();
+    AtomicInteger counter = new AtomicInteger(0);
 
     for (int i = 0; i < 20; i++) {
       if (i == 15) {
-        taskList.add(new TestTask() {
+        taskList.add(new TestTask(counter) {
           @Override
-          public void process(Object context) {
+          public void process() {
             throw new TestException();
           }
         });
       }
       else {
-        taskList.add(new TestTask());
+        taskList.add(new TestTask(counter));
       }
     }
 
     Exception exception = null;
     try {
-      parallelExecutor.execute(taskList, counter);
+      parallelExecutor.execute(taskList);
     }
     catch (Exception ex) {
       exception = ex;
@@ -96,10 +96,14 @@ public class ParallelExecutorTest {
 
   private static class TestTask implements ParallelExecutor.Task {
     public volatile int executionCount = 0;
+    private AtomicInteger counter;
+
+    TestTask(AtomicInteger counter) {
+      this.counter = counter;
+    }
 
     @Override
-    public void process(Object context) {
-      Counter counter = (Counter) context;
+    public void process() {
       try {
         Thread.sleep(20);
         executionCount++;
@@ -107,19 +111,7 @@ public class ParallelExecutorTest {
       catch (Exception ex) {
         // ignore
       }
-      counter.incr();
-    }
-  }
-
-  private static class Counter {
-    private AtomicInteger totalExecutionCount = new AtomicInteger();
-
-    public void incr() {
-      totalExecutionCount.incrementAndGet();
-    }
-
-    public int get() {
-      return totalExecutionCount.get();
+      counter.incrementAndGet();
     }
   }
 

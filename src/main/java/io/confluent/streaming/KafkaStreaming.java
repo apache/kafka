@@ -41,7 +41,6 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -141,6 +140,7 @@ public class KafkaStreaming implements Runnable {
         this.streamingMetrics = new KafkaStreamingMetrics();
         this.requestingCommit = new ArrayList<>();
         this.config = new ProcessorConfig(config.config());
+<<<<<<< HEAD
         this.ingestor =
 <<<<<<< HEAD
             new IngestorImpl<>(this.consumer,
@@ -153,6 +153,9 @@ public class KafkaStreaming implements Runnable {
                              (Deserializer<Object>) config.valueDeserializer(),
                              this.config.pollTimeMs);
 >>>>>>> removed some generics
+=======
+        this.ingestor = new IngestorImpl(this.consumer, this.config.pollTimeMs);
+>>>>>>> clean up ingestor and stream synchronizer
         this.running = true;
         this.lastCommit = 0;
         this.nextStateCleaning = Long.MAX_VALUE;
@@ -238,17 +241,15 @@ public class KafkaStreaming implements Runnable {
 
     private void runLoop() {
         try {
-            StreamSynchronizer.Status status = new StreamSynchronizer.Status();
-            status.pollRequired(true);
-
             while (stillRunning()) {
-                if (status.pollRequired()) {
-                    ingestor.poll();
-                    status.pollRequired(false);
-                }
+                ingestor.poll();
 
 <<<<<<< HEAD
+<<<<<<< HEAD
                 parallelExecutor.execute(streamSynchronizers, status);
+=======
+                parallelExecutor.execute(streamSynchronizers);
+>>>>>>> clean up ingestor and stream synchronizer
 
 =======
                 for (Map.Entry<Integer, Collection<StreamSynchronizer>> entry : streamSynchronizersForPartition.entrySet()) {

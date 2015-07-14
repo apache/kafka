@@ -16,15 +16,13 @@ public class ParallelExecutor {
   public interface Task {
     /**
      * Executes a task
-     * @param context an application specific context object for a task
      */
-    void process(Object context);
+    void process();
   }
 
   private final WorkerThread[] workerThreads;
   private final AtomicInteger taskIndex = new AtomicInteger(0);
   private volatile ArrayList<? extends Task> tasks = new ArrayList();
-  private volatile Object context;
   private volatile CountDownLatch latch;
   private volatile boolean running = true;
   private volatile Exception exception;
@@ -41,17 +39,15 @@ public class ParallelExecutor {
   /**
    * Executes tasks in parallel. While this method is executing, other execute call will be blocked.
    * @param tasks a list of tasks executed in parallel
-   * @param context a context object passed to tasks
    * @throws Exception an exception thrown by a failed task
    */
-  public void execute(ArrayList<? extends Task> tasks, Object context) throws Exception {
+  public void execute(ArrayList<? extends Task> tasks) throws Exception {
     synchronized (this) {
       try {
         int numTasks = tasks.size();
         exception = null;
         if (numTasks > 0) {
           this.tasks = tasks;
-          this.context = context;
           this.latch = new CountDownLatch(numTasks);
 
           taskIndex.set(numTasks);
@@ -73,7 +69,6 @@ public class ParallelExecutor {
       }
       finally {
         this.tasks = null;
-        this.context = null;
         this.latch = null;
         this.exception = null;
       }
@@ -95,7 +90,7 @@ public class ParallelExecutor {
     int index = taskIndex.decrementAndGet();
     if (index >= 0) {
       try {
-        tasks.get(index).process(context);
+        tasks.get(index).process();
       }
       catch (Exception ex) {
         exception = ex;

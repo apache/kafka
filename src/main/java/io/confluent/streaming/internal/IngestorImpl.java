@@ -1,11 +1,8 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.util.FilteredIterator;
 import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,18 +15,12 @@ public class IngestorImpl implements Ingestor {
   private final Consumer<byte[], byte[]> consumer;
   private final Set<TopicPartition> unpaused = new HashSet<>();
   private final Set<TopicPartition> toBePaused = new HashSet<>();
-  private final Deserializer<Object> keyDeserializer;
-  private final Deserializer<Object> valueDeserializer;
   private final long pollTimeMs;
   private final Map<TopicPartition, StreamSynchronizer> streamSynchronizers = new HashMap<>();
 
   public IngestorImpl(Consumer<byte[], byte[]> consumer,
-                      Deserializer<Object> keyDeserializer,
-                      Deserializer<Object> valueDeserializer,
                       long pollTimeMs) {
     this.consumer = consumer;
-    this.keyDeserializer = keyDeserializer;
-    this.valueDeserializer = valueDeserializer;
     this.pollTimeMs = pollTimeMs;
   }
 
@@ -45,24 +36,24 @@ public class IngestorImpl implements Ingestor {
 
   @Override
   public void poll(long timeoutMs) {
-    ConsumerRecords<byte[], byte[]> records;
-
     synchronized (this) {
       for (TopicPartition partition : toBePaused) {
         doPause(partition);
       }
       toBePaused.clear();
 
-      records = consumer.poll(timeoutMs);
-    }
+      if (!unpaused.isEmpty()) {
+        ConsumerRecords<byte[], byte[]> records = consumer.poll(timeoutMs);
 
-    for (TopicPartition partition : unpaused) {
-      StreamSynchronizer streamSynchronizer = streamSynchronizers.get(partition);
+        for (TopicPartition partition : unpaused) {
+          StreamSynchronizer streamSynchronizer = streamSynchronizers.get(partition);
 
-      if (streamSynchronizer != null)
-        streamSynchronizer.addRecords(partition, records.records(partition).iterator());
-      else
-        log.warn("unused topic: " + partition.topic());
+          if (streamSynchronizer != null)
+            streamSynchronizer.addRecords(partition, records.records(partition).iterator());
+          else
+            log.warn("unused topic: " + partition.topic());
+        }
+      }
     }
   }
 
