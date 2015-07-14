@@ -25,7 +25,7 @@ import kafka.api.{TopicMetadataResponse, TopicMetadataRequest}
 import kafka.client.ClientUtils
 import kafka.cluster.{Broker, BrokerEndPoint}
 import kafka.common.ErrorMapping
-import kafka.server.{NotRunning, KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer, NotRunning}
 import kafka.utils.TestUtils
 import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
@@ -36,7 +36,7 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
   private var server1: KafkaServer = null
   var brokerEndPoints: Seq[BrokerEndPoint] = null
   var adHocConfigs: Seq[KafkaConfig] = null
-  val numConfigs: Int = 2
+  val numConfigs: Int = 4
 
   override def setUp() {
     super.setUp()
@@ -171,13 +171,15 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
 
 
   def testIsrAfterBrokerShutDownAndJoinsBack {
+    val numBrokers = 2 //just 2 brokers are enough for the test
+
     // start adHoc brokers
-    val adHocServers = adHocConfigs.map(p => createServer(p))
+    val adHocServers = adHocConfigs.take(numBrokers - 1).map(p => createServer(p))
     val allServers: Seq[KafkaServer] = Seq(server1) ++ adHocServers
 
     // create topic
     val topic: String = "test"
-    AdminUtils.createTopic(zkClient, topic, 1, numConfigs)
+    AdminUtils.createTopic(zkClient, topic, 1, numBrokers)
 
     // shutdown a broker
     adHocServers.last.shutdown()
@@ -190,6 +192,62 @@ class TopicMetadataTest extends JUnit3Suite with ZooKeeperTestHarness {
     checkIsr(allServers)
 
     // shutdown adHoc brokers
+    adHocServers.map(p => p.shutdown())
+  }
+
+  private def checkMetadata(servers: Seq[KafkaServer], expectedBrokersCount: Int): Unit = {
+    var topicMetadata: TopicMetadataResponse = new TopicMetadataResponse(Seq(), Seq(), -1)
+
+    // Get topic metadata from old broker
+    // Wait for metadata to get updated by checking metadata from a new broker
+    waitUntilTrue(() => {
+    topicMetadata = ClientUtils.fetchTopicMetadata(
+      Set.empty, brokerEndPoints, "TopicMetadataTest-testBasicTopicMetadata", 2000, 0)
+    topicMetadata.brokers.size == expectedBrokersCount},
+      "Alive brokers list is not correctly propagated by coordinator to brokers"
+    )
+
+    // Assert that topic metadata at new brokers is updated correctly
+    servers.filter(x => x.brokerState.currentState != NotRunning.state).foreach(x =>
+      waitUntilTrue(() =>
+        topicMetadata == ClientUtils.fetchTopicMetadata(
+          Set.empty,
+          Seq(new Broker(x.config.brokerId,
+            x.config.hostName,
+            x.boundPort()).getBrokerEndPoint(SecurityProtocol.PLAINTEXT)),
+          "TopicMetadataTest-testBasicTopicMetadata",
+          2000, 0), "Topic metadata is not correctly updated"))
+  }
+
+
+  def testAliveBrokerListWithNoTopics {
+    checkMetadata(Seq(server1), 1)
+  }
+
+  def testAliveBrokersListWithNoTopicsAfterNewBrokerStartup {
+    var adHocServers = adHocConfigs.takeRight(adHocConfigs.size - 1).map(p => createServer(p))
+
+    checkMetadata(adHocServers, numConfigs - 1)
+
+    // Add a broker
+    adHocServers = adHocServers ++ Seq(createServer(adHocConfigs.head))
+
+    checkMetadata(adHocServers, numConfigs)
+    adHocServers.map(p => p.shutdown())
+  }
+
+
+  def testAliveBrokersListWithNoTopicsAfterABrokerShutdown {
+    val adHocServers = adHocConfigs.map(p => createServer(p))
+
+    checkMetadata(adHocServers, numConfigs)
+
+    // Shutdown a broker
+    adHocServers.last.shutdown()
+    adHocServers.last.awaitShutdown()
+
+    checkMetadata(adHocServers, numConfigs - 1)
+
     adHocServers.map(p => p.shutdown())
   }
 }
