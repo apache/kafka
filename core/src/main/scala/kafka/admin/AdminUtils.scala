@@ -314,24 +314,16 @@ object AdminUtils extends Logging {
   def fetchTopicConfig(zkClient: ZkClient, topic: String): Properties = {
     val str: String = zkClient.readData(ZkUtils.getTopicConfigPath(topic), true)
     val props = new Properties()
-    if(str != null) {
-      Json.parseFull(str) match {
-        case None => // there are no config overrides
-        case Some(mapAnon: Map[_, _]) =>
-          val map = mapAnon collect { case (k: String, v: Any) => k -> v }
-          require(map("version") == 1)
-          map.get("config") match {
-            case Some(config: Map[_, _]) =>
-              for(configTup <- config)
-                configTup match {
-                  case (k: String, v: String) =>
-                    props.setProperty(k, v)
-                  case _ => throw new IllegalArgumentException("Invalid topic config: " + str)
-                }
-            case _ => throw new IllegalArgumentException("Invalid topic config: " + str)
-          }
-
-        case o => throw new IllegalArgumentException("Unexpected value in config: "  + str)
+    if (str != null) {
+      Json.parseFull(str).foreach { jsValue =>
+        val jsObject = jsValue.asJsonObjectOption.getOrElse {
+          throw new IllegalArgumentException("Unexpected value in config: " + str)
+        }
+        require(jsObject("version").to[Int] == 1)
+        val config = jsObject.get("config").flatMap(_.asJsonObjectOption).getOrElse {
+          throw new IllegalArgumentException("Invalid topic config: " + str)
+        }
+        config.iterator.foreach { case (k, v) => props.setProperty(k, v.to[String]) }
       }
     }
     props

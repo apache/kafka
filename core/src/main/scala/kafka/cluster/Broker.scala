@@ -60,20 +60,20 @@ object Broker {
       throw new BrokerNotAvailableException("Broker id %s does not exist".format(id))
     try {
       Json.parseFull(brokerInfoString) match {
-        case Some(m) =>
-          val brokerInfo = m.asInstanceOf[Map[String, Any]]
-          val version = brokerInfo("version").asInstanceOf[Int]
+        case Some(js) =>
+          val brokerInfo = js.asJsonObject
+          val version = brokerInfo("version").to[Int]
           val endpoints = version match {
             case 1 =>
-              val host = brokerInfo("host").asInstanceOf[String]
-              val port = brokerInfo("port").asInstanceOf[Int]
+              val host = brokerInfo("host").to[String]
+              val port = brokerInfo("port").to[Int]
               Map(SecurityProtocol.PLAINTEXT -> new EndPoint(host, port, SecurityProtocol.PLAINTEXT))
             case 2 =>
-              val listeners = brokerInfo("endpoints").asInstanceOf[List[String]]
-              listeners.map(listener => {
+              val listeners = brokerInfo("endpoints").to[Seq[String]]
+              listeners.map { listener =>
                 val ep = EndPoint.createEndPoint(listener)
                 (ep.protocolType, ep)
-              }).toMap
+              }.toMap
             case _ => throw new KafkaException("Unknown version of broker registration. Only versions 1 and 2 are supported." + brokerInfoString)
           }
           new Broker(id, endpoints)
