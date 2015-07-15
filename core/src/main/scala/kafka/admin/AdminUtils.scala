@@ -231,6 +231,7 @@ object AdminUtils extends Logging {
                   partitions: Int, 
                   replicationFactor: Int, 
                   topicConfig: Properties = new Properties) {
+
     val brokerList = ZkUtils.getSortedBrokerList(zkClient)
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerList, partitions, replicationFactor)
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, replicaAssignment, topicConfig)
@@ -246,7 +247,7 @@ object AdminUtils extends Logging {
     require(partitionReplicaAssignment.values.map(_.size).toSet.size == 1, "All partitions should have the same number of replicas.")
 
     val topicPath = ZkUtils.getTopicPath(topic)
-
+    
     if (!update) {
       if (zkClient.exists(topicPath))
         throw new TopicExistsException("Topic \"%s\" already exists.".format(topic))
@@ -256,6 +257,11 @@ object AdminUtils extends Logging {
         if (collidingTopics.nonEmpty) {
           throw new InvalidTopicException("Topic \"%s\" collides with existing topics: %s".format(topic, collidingTopics.mkString(", ")))
         }
+      }
+
+      //by default we make user that issues topic creation as the owner.
+      if(!config.containsKey(LogConfig.OwnersProp)) {
+        config.put(LogConfig.OwnersProp,  System.getProperty("user.name"))
       }
     }
 

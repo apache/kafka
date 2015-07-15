@@ -120,6 +120,8 @@ class AdminTest extends ZooKeeperTestHarness with Logging {
     TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
     // create the topic
     AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkClient, topic, expectedReplicaAssignment)
+    val config: Properties = AdminUtils.fetchTopicConfig(zkClient, topic)
+    assertEquals(System.getProperty("user.name"), config.getProperty(LogConfig.OwnersProp))
     // create leaders for all partitions
     TestUtils.makeLeaderForPartition(zkClient, topic, leaderForPartitionMap, 1)
     val actualReplicaList = leaderForPartitionMap.keys.toArray.map(p => (p -> ZkUtils.getReplicasForPartition(zkClient, topic, p))).toMap

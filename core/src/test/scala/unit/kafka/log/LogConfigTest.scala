@@ -55,7 +55,8 @@ class LogConfigTest {
   def testFromPropsInvalid() {
     LogConfig.configNames().foreach((name) => {
       name match {
-        case LogConfig.UncleanLeaderElectionEnableProp  => return
+        case LogConfig.UncleanLeaderElectionEnableProp  =>
+        case LogConfig.OwnersProp  =>
         case LogConfig.RetentionBytesProp => assertPropertyInvalid(name, "not_a_number")
         case LogConfig.RetentionMsProp => assertPropertyInvalid(name, "not_a_number" )
         case LogConfig.CleanupPolicyProp => assertPropertyInvalid(name, "true", "foobar");
