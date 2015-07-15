@@ -73,7 +73,8 @@ public interface ConsumerRebalanceCallback {
      * It is guaranteed that all the processes in a consumer group will execute their
      * {@link #onPartitionsRevoked(Consumer, Collection)} callback before any instance executes its
      * {@link #onPartitionsAssigned(Consumer, Collection)} callback.
-     * 
+     *
+     * @param consumer Reference to the consumer for convenience
      * @param partitions The list of partitions that are now assigned to the consumer (may include partitions previously
      *            assigned to the consumer)
      */
@@ -86,7 +87,8 @@ public interface ConsumerRebalanceCallback {
      * custom offset store to prevent duplicate data
      * <p>
      * For examples on usage of this API, see Usage Examples section of {@link KafkaConsumer KafkaConsumer}
-     * 
+     *
+     * @param consumer  Reference to the consumer for convenience
      * @param partitions The list of partitions that were assigned to the consumer on the last rebalance
      */
     public void onPartitionsRevoked(Consumer<?, ?> consumer, Collection<TopicPartition> partitions);

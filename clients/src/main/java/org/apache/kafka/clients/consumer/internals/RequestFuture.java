@@ -12,78 +12,49 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.protocol.Errors;
+
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * Result of an asynchronous request through {@link org.apache.kafka.clients.KafkaClient}. To get the
- * result of the request, you must use poll using {@link org.apache.kafka.clients.KafkaClient#poll(long, long)}
- * until {@link #isDone()} returns true. Typical usage might look like this:
+ * Result of an asynchronous request from {@link ConsumerNetworkClient}. Use {@link ConsumerNetworkClient#poll(long)}
+ * (and variants) to finish a request future. Use {@link #isDone()} to check if the future is complete, and
+ * {@link #succeeded()} to check if the request completed successfully. Typical usage might look like this:
  *
  * <pre>
- *     RequestFuture future = sendRequest();
- *     while (!future.isDone()) {
- *         client.poll(timeout, now);
+ *     RequestFuture<ClientResponse> future = client.send(api, request);
+ *     client.poll(future);
+ *
+ *     if (future.succeeded()) {
+ *         ClientResponse response = future.value();
+ *         // Handle response
+ *     } else {
+ *         throw future.exception();
  *     }
- *
- *     switch (future.outcome()) {
- *     case SUCCESS:
- *         // handle request success
- *         break;
- *     case NEED_RETRY:
- *         // retry after taking possible retry action
- *         break;
- *     case EXCEPTION:
- *         // handle exception
-  *     }
  * </pre>
- *
- * When {@link #isDone()} returns true, there are three possible outcomes (obtained through {@link #outcome()}):
- *
- * <ol>
- * <li> {@link org.apache.kafka.clients.consumer.internals.RequestFuture.Outcome#SUCCESS}: If the request was
- *    successful, then you can use {@link #value()} to obtain the result.</li>
- * <li> {@link org.apache.kafka.clients.consumer.internals.RequestFuture.Outcome#EXCEPTION}: If an unhandled exception
- *    was encountered, you can use {@link #exception()} to get it.</li>
- * <li> {@link org.apache.kafka.clients.consumer.internals.RequestFuture.Outcome#NEED_RETRY}: The request may
- *    not have been successful, but the failure may be ephemeral and the caller just needs to try the request again.
- *    In this case, use {@link #retryAction()} to determine what action should be taken (if any) before
- *    retrying.</li>
- * </ol>
  *
  * @param <T> Return type of the result (Can be Void if there is no response)
  */
 public class RequestFuture<T> {
-    public static final RequestFuture<Object> NEED_NEW_COORDINATOR = newRetryFuture(RetryAction.FIND_COORDINATOR);
-    public static final RequestFuture<Object> NEED_POLL = newRetryFuture(RetryAction.POLL);
-    public static final RequestFuture<Object> NEED_METADATA_REFRESH = newRetryFuture(RetryAction.REFRESH_METADATA);
 
-    public enum RetryAction {
-        NOOP,             // Retry immediately.
-        POLL,             // Retry after calling poll (e.g. to finish a connection)
-        BACKOFF,          // Retry after a delay
-        FIND_COORDINATOR, // Find a new coordinator before retrying
-        REFRESH_METADATA  // Refresh metadata before retrying
-    }
-
-    public enum Outcome {
-        SUCCESS,
-        NEED_RETRY,
-        EXCEPTION
-    }
-
-    private Outcome outcome;
-    private RetryAction retryAction;
+    private boolean isDone = false;
     private T value;
     private RuntimeException exception;
+    private List<RequestFutureListener<T>> listeners = new ArrayList<RequestFutureListener<T>>();
+
 
     /**
      * Check whether the response is ready to be handled
      * @return true if the response is ready, false otherwise
      */
     public boolean isDone() {
-        return outcome != null;
+        return isDone;
     }
 
     /**
-     * Get the value corresponding to this request (if it has one, as indicated by {@link #outcome()}).
+     * Get the value corresponding to this request (only available if the request succeeded)
      * @return the value if it exists or null
      */
     public T value() {
@@ -92,77 +63,35 @@ public class RequestFuture<T> {
 
     /**
      * Check if the request succeeded;
-     * @return true if a value is available, false otherwise
+     * @return true if the request completed and was successful
      */
     public boolean succeeded() {
-        return outcome == Outcome.SUCCESS;
+        return isDone && exception == null;
     }
 
     /**
-     * Check if the request completed failed.
-     * @return true if the request failed (whether or not it can be retried)
+     * Check if the request failed.
+     * @return true if the request completed with a failure
      */
     public boolean failed() {
-        return outcome != Outcome.SUCCESS;
+        return isDone && exception != null;
     }
 
     /**
-     * Return the error from this response (assuming {@link #succeeded()} has returned false. If the
-     * response is not ready or if there is no retryAction, null is returned.
-     * @return the error if it exists or null
+     * Check if the request is retriable (convenience method for checking if
+     * the exception is an instance of {@link RetriableException}.
+     * @return true if it is retriable, false otherwise
      */
-    public RetryAction retryAction() {
-        return retryAction;
+    public boolean isRetriable() {
+        return exception instanceof RetriableException;
     }
 
     /**
-     * Get the exception from a failed result. You should check that there is an exception
-     * with {@link #hasException()} before using this method.
+     * Get the exception from a failed result (only available if the request failed)
      * @return The exception if it exists or null
      */
     public RuntimeException exception() {
         return exception;
-    }
-
-    /**
-     * Check whether there was an exception.
-     * @return true if this request failed with an exception
-     */
-    public boolean hasException() {
-        return outcome == Outcome.EXCEPTION;
-    }
-
-    /**
-     * Check the outcome of the future if it is ready.
-     * @return the outcome or null if the future is not finished
-     */
-    public Outcome outcome() {
-        return outcome;
-    }
-
-    /**
-     * The request failed, but should be retried using the provided retry action.
-     * @param retryAction The action that should be taken by the caller before retrying the request
-     */
-    public void retry(RetryAction retryAction) {
-        this.outcome = Outcome.NEED_RETRY;
-        this.retryAction = retryAction;
-    }
-
-    public void retryNow() {
-        retry(RetryAction.NOOP);
-    }
-
-    public void retryAfterBackoff() {
-        retry(RetryAction.BACKOFF);
-    }
-
-    public void retryWithNewCoordinator() {
-        retry(RetryAction.FIND_COORDINATOR);
-    }
-
-    public void retryAfterMetadataRefresh() {
-        retry(RetryAction.REFRESH_METADATA);
     }
 
     /**
@@ -171,39 +100,103 @@ public class RequestFuture<T> {
      * @param value corresponding value (or null if there is none)
      */
     public void complete(T value) {
-        this.outcome = Outcome.SUCCESS;
         this.value = value;
+        this.isDone = true;
+        fireSuccess();
     }
 
     /**
      * Raise an exception. The request will be marked as failed, and the caller can either
      * handle the exception or throw it.
-     * @param e The exception that
+     * @param e corresponding exception to be passed to caller
      */
     public void raise(RuntimeException e) {
-        this.outcome = Outcome.EXCEPTION;
         this.exception = e;
+        this.isDone = true;
+        fireFailure();
     }
 
-    private static <T> RequestFuture<T> newRetryFuture(RetryAction retryAction) {
-        RequestFuture<T> result = new RequestFuture<T>();
-        result.retry(retryAction);
-        return result;
+    /**
+     * Raise an error. The request will be marked as failed.
+     * @param error corresponding error to be passed to caller
+     */
+    public void raise(Errors error) {
+        raise(error.exception());
     }
 
-    @SuppressWarnings("unchecked")
-    public static <T> RequestFuture<T> pollNeeded() {
-        return (RequestFuture<T>) NEED_POLL;
+    private void fireSuccess() {
+        for (RequestFutureListener listener: listeners)
+            listener.onSuccess(value);
     }
 
-    @SuppressWarnings("unchecked")
-    public static <T> RequestFuture<T> metadataRefreshNeeded() {
-        return (RequestFuture<T>) NEED_METADATA_REFRESH;
+    private void fireFailure() {
+        for (RequestFutureListener listener: listeners)
+            listener.onFailure(exception);
     }
 
-    @SuppressWarnings("unchecked")
-    public static <T> RequestFuture<T> newCoordinatorNeeded() {
-        return (RequestFuture<T>) NEED_NEW_COORDINATOR;
+    /**
+     * Add a listener which will be notified when the future completes
+     * @param listener
+     */
+    public void addListener(RequestFutureListener<T> listener) {
+        if (isDone) {
+            if (exception != null)
+                listener.onFailure(exception);
+            else
+                listener.onSuccess(value);
+        } else {
+            this.listeners.add(listener);
+        }
+    }
+
+    /**
+     * Convert from a request future of one type to another type
+     * @param adapter The adapter which does the conversion
+     * @param <S> The type of the future adapted to
+     * @return The new future
+     */
+    public <S> RequestFuture<S> compose(final RequestFutureAdapter<T, S> adapter) {
+        final RequestFuture<S> adapted = new RequestFuture<S>();
+        addListener(new RequestFutureListener<T>() {
+            @Override
+            public void onSuccess(T value) {
+                adapter.onSuccess(value, adapted);
+            }
+
+            @Override
+            public void onFailure(RuntimeException e) {
+                adapter.onFailure(e, adapted);
+            }
+        });
+        return adapted;
+    }
+
+    public static <T> RequestFuture<T> failure(RuntimeException e) {
+        RequestFuture<T> future = new RequestFuture<T>();
+        future.raise(e);
+        return future;
+    }
+
+    public static RequestFuture<Void> voidSuccess() {
+        RequestFuture<Void> future = new RequestFuture<Void>();
+        future.complete(null);
+        return future;
+    }
+
+    public static <T> RequestFuture<T> coordinatorNotAvailable() {
+        return failure(Errors.CONSUMER_COORDINATOR_NOT_AVAILABLE.exception());
+    }
+
+    public static <T> RequestFuture<T> leaderNotAvailable() {
+        return failure(Errors.LEADER_NOT_AVAILABLE.exception());
+    }
+
+    public static <T> RequestFuture<T> noBrokersAvailable() {
+        return failure(new NoAvailableBrokersException());
+    }
+
+    public static <T> RequestFuture<T> staleMetadata() {
+        return failure(new StaleMetadataException());
     }
 
 }

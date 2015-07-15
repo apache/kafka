@@ -12,17 +12,13 @@
  */
 package kafka.api
 
+import java.{lang, util}
+
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.clients.consumer.Consumer
-import org.apache.kafka.clients.consumer.KafkaConsumer
-import org.apache.kafka.clients.consumer.ConsumerRebalanceCallback
-import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.consumer.CommitType
+import org.apache.kafka.clients.consumer._
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.clients.consumer.NoOffsetForPartitionException
 
 import kafka.utils.{TestUtils, Logging}
 import kafka.server.KafkaConfig
@@ -46,6 +42,8 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   val topic = "topic"
   val part = 0
   val tp = new TopicPartition(topic, part)
+  val part2 = 1
+  val tp2 = new TopicPartition(topic, part2)
 
   // configure the servers and clients
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
@@ -56,12 +54,13 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
   this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-  
+  this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+
   override def setUp() {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(this.zkClient, topic, 1, serverCount, this.servers)
+    TestUtils.createTopic(this.zkClient, topic, 2, serverCount, this.servers)
   }
 
   def testSimpleConsumption() {
@@ -74,6 +73,45 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     
     this.consumers(0).seek(tp, 0)
     consumeRecords(this.consumers(0), numRecords = numRecords, startingOffset = 0)
+
+    // check async commit callbacks
+    val commitCallback = new CountConsumerCommitCallback()
+    this.consumers(0).commit(CommitType.ASYNC, commitCallback)
+
+    // shouldn't make progress until poll is invoked
+    Thread.sleep(10)
+    assertEquals(0, commitCallback.count)
+    awaitCommitCallback(this.consumers(0), commitCallback)
+  }
+
+  def testCommitSpecifiedOffsets() {
+    sendRecords(5, tp)
+    sendRecords(7, tp2)
+
+    this.consumers(0).subscribe(tp)
+    this.consumers(0).subscribe(tp2)
+
+    // Need to poll to join the group
+    this.consumers(0).poll(50)
+    val pos1 = this.consumers(0).position(tp)
+    val pos2 = this.consumers(0).position(tp2)
+    this.consumers(0).commit(Map[TopicPartition,java.lang.Long]((tp, 3L)), CommitType.SYNC)
+    assertEquals(3, this.consumers(0).committed(tp))
+    intercept[NoOffsetForPartitionException] {
+      this.consumers(0).committed(tp2)
+    }
+    // positions should not change
+    assertEquals(pos1, this.consumers(0).position(tp))
+    assertEquals(pos2, this.consumers(0).position(tp2))
+    this.consumers(0).commit(Map[TopicPartition,java.lang.Long]((tp2, 5L)), CommitType.SYNC)
+    assertEquals(3, this.consumers(0).committed(tp))
+    assertEquals(5, this.consumers(0).committed(tp2))
+
+    // Using async should pick up the committed changes after commit completes
+    val commitCallback = new CountConsumerCommitCallback()
+    this.consumers(0).commit(Map[TopicPartition,java.lang.Long]((tp2, 7L)), CommitType.ASYNC, commitCallback)
+    awaitCommitCallback(this.consumers(0), commitCallback)
+    assertEquals(7, this.consumers(0).committed(tp2))
   }
 
   def testAutoOffsetReset() {
@@ -150,7 +188,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
 
   def testPartitionReassignmentCallback() {
     val callback = new TestConsumerReassignmentCallback()
-    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "200"); // timeout quickly to avoid slow test
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100"); // timeout quickly to avoid slow test
     val consumer0 = new KafkaConsumer(this.consumerConfig, callback, new ByteArrayDeserializer(), new ByteArrayDeserializer())
     consumer0.subscribe(topic)
         
@@ -172,6 +210,7 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     // this should cause another callback execution
     while(callback.callsToAssigned < 2)
       consumer0.poll(50)
+
     assertEquals(2, callback.callsToAssigned)
     assertEquals(2, callback.callsToRevoked)
 
@@ -191,9 +230,13 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
     } 
   }
 
-  private def sendRecords(numRecords: Int) {
+  private def sendRecords(numRecords: Int): Unit = {
+    sendRecords(numRecords, tp)
+  }
+
+  private def sendRecords(numRecords: Int, tp: TopicPartition) {
     val futures = (0 until numRecords).map { i =>
-      this.producers(0).send(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes))
+      this.producers(0).send(new ProducerRecord(tp.topic(), tp.partition(), i.toString.getBytes, i.toString.getBytes))
     }
     futures.map(_.get)
   }
@@ -216,6 +259,20 @@ class ConsumerTest extends IntegrationTestHarness with Logging {
       assertEquals(part, record.partition())
       assertEquals(offset.toLong, record.offset())
     }
+  }
+
+  private def awaitCommitCallback(consumer: Consumer[Array[Byte], Array[Byte]], commitCallback: CountConsumerCommitCallback): Unit = {
+    val startCount = commitCallback.count
+    val started = System.currentTimeMillis()
+    while (commitCallback.count == startCount && System.currentTimeMillis() - started < 10000)
+      this.consumers(0).poll(10000)
+    assertEquals(startCount + 1, commitCallback.count)
+  }
+
+  private class CountConsumerCommitCallback extends ConsumerCommitCallback {
+    var count = 0
+
+    override def onComplete(offsets: util.Map[TopicPartition, lang.Long], exception: Exception): Unit = count += 1
   }
 
 }

@@ -13,17 +13,18 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
-import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -38,7 +39,6 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.ListOffsetRequest;
 import org.apache.kafka.common.requests.ListOffsetResponse;
-import org.apache.kafka.common.requests.RequestSend;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -52,21 +52,24 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 
 /**
  * This class manage the fetching process with the brokers.
  */
 public class Fetcher<K, V> {
+    private static final long EARLIEST_OFFSET_TIMESTAMP = -2L;
+    private static final long LATEST_OFFSET_TIMESTAMP = -1L;
 
     private static final Logger log = LoggerFactory.getLogger(Fetcher.class);
 
-    private final KafkaClient client;
-
+    private final ConsumerNetworkClient client;
     private final Time time;
     private final int minBytes;
     private final int maxWaitMs;
     private final int fetchSize;
+    private final long retryBackoffMs;
     private final boolean checkCrcs;
     private final Metadata metadata;
     private final FetchManagerMetrics sensors;
@@ -75,8 +78,7 @@ public class Fetcher<K, V> {
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
 
-
-    public Fetcher(KafkaClient client,
+    public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
                    int maxWaitMs,
                    int fetchSize,
@@ -88,7 +90,8 @@ public class Fetcher<K, V> {
                    Metrics metrics,
                    String metricGrpPrefix,
                    Map<String, String> metricTags,
-                   Time time) {
+                   Time time,
+                   long retryBackoffMs) {
 
         this.time = time;
         this.client = client;
@@ -105,21 +108,101 @@ public class Fetcher<K, V> {
         this.records = new LinkedList<PartitionRecords<K, V>>();
 
         this.sensors = new FetchManagerMetrics(metrics, metricGrpPrefix, metricTags);
+        this.retryBackoffMs = retryBackoffMs;
     }
 
     /**
      * Set-up a fetch request for any node that we have assigned partitions for which doesn't have one.
      *
      * @param cluster The current cluster metadata
-     * @param now The current time
      */
-    public void initFetches(Cluster cluster, long now) {
-        for (ClientRequest request : createFetchRequests(cluster)) {
-            Node node = cluster.nodeById(Integer.parseInt(request.request().destination()));
-            if (client.ready(node, now)) {
-                log.trace("Initiating fetch to node {}: {}", node.id(), request);
-                client.send(request);
+    public void initFetches(Cluster cluster) {
+        for (Map.Entry<Node, FetchRequest> fetchEntry: createFetchRequests(cluster).entrySet()) {
+            final FetchRequest fetch = fetchEntry.getValue();
+            client.send(fetchEntry.getKey(), ApiKeys.FETCH, fetch)
+                    .addListener(new RequestFutureListener<ClientResponse>() {
+                        @Override
+                        public void onSuccess(ClientResponse response) {
+                            handleFetchResponse(response, fetch);
+                        }
+
+                        @Override
+                        public void onFailure(RuntimeException e) {
+                            log.debug("Fetch failed", e);
+                        }
+                    });
+        }
+    }
+
+    /**
+     * Update the fetch positions for the provided partitions.
+     * @param partitions
+     */
+    public void updateFetchPositions(Set<TopicPartition> partitions) {
+        // reset the fetch position to the committed position
+        for (TopicPartition tp : partitions) {
+            // skip if we already have a fetch position
+            if (subscriptions.fetched(tp) != null)
+                continue;
+
+            // TODO: If there are several offsets to reset, we could submit offset requests in parallel
+            if (subscriptions.isOffsetResetNeeded(tp)) {
+                resetOffset(tp);
+            } else if (subscriptions.committed(tp) == null) {
+                // there's no committed position, so we need to reset with the default strategy
+                subscriptions.needOffsetReset(tp);
+                resetOffset(tp);
+            } else {
+                log.debug("Resetting offset for partition {} to the committed offset {}",
+                        tp, subscriptions.committed(tp));
+                subscriptions.seek(tp, subscriptions.committed(tp));
             }
+        }
+    }
+
+    /**
+     * Reset offsets for the given partition using the offset reset strategy.
+     *
+     * @param partition The given partition that needs reset offset
+     * @throws org.apache.kafka.clients.consumer.NoOffsetForPartitionException If no offset reset strategy is defined
+     */
+    private void resetOffset(TopicPartition partition) {
+        OffsetResetStrategy strategy = subscriptions.resetStrategy(partition);
+        final long timestamp;
+        if (strategy == OffsetResetStrategy.EARLIEST)
+            timestamp = EARLIEST_OFFSET_TIMESTAMP;
+        else if (strategy == OffsetResetStrategy.LATEST)
+            timestamp = LATEST_OFFSET_TIMESTAMP;
+        else
+            throw new NoOffsetForPartitionException("No offset is set and no reset policy is defined");
+
+        log.debug("Resetting offset for partition {} to {} offset.", partition, strategy.name().toLowerCase());
+        long offset = listOffset(partition, timestamp);
+        this.subscriptions.seek(partition, offset);
+    }
+
+    /**
+     * Fetch a single offset before the given timestamp for the partition.
+     *
+     * @param partition The partition that needs fetching offset.
+     * @param timestamp The timestamp for fetching offset.
+     * @return The offset of the message that is published before the given timestamp
+     */
+    private long listOffset(TopicPartition partition, long timestamp) {
+        while (true) {
+            RequestFuture<Long> future = sendListOffsetRequest(partition, timestamp);
+            client.poll(future);
+
+            if (future.succeeded())
+                return future.value();
+
+            if (!future.isRetriable())
+                throw future.exception();
+
+            if (future.exception() instanceof InvalidMetadataException)
+                client.awaitMetadataUpdate();
+            else
+                Utils.sleep(retryBackoffMs);
         }
     }
 
@@ -163,37 +246,27 @@ public class Fetcher<K, V> {
      * @param timestamp The timestamp for fetching offset.
      * @return A response which can be polled to obtain the corresponding offset.
      */
-    public RequestFuture<Long> listOffset(final TopicPartition topicPartition, long timestamp) {
+    private RequestFuture<Long> sendListOffsetRequest(final TopicPartition topicPartition, long timestamp) {
         Map<TopicPartition, ListOffsetRequest.PartitionData> partitions = new HashMap<TopicPartition, ListOffsetRequest.PartitionData>(1);
         partitions.put(topicPartition, new ListOffsetRequest.PartitionData(timestamp, 1));
-        long now = time.milliseconds();
         PartitionInfo info = metadata.fetch().partition(topicPartition);
         if (info == null) {
             metadata.add(topicPartition.topic());
             log.debug("Partition {} is unknown for fetching offset, wait for metadata refresh", topicPartition);
-            return RequestFuture.metadataRefreshNeeded();
+            return RequestFuture.staleMetadata();
         } else if (info.leader() == null) {
             log.debug("Leader for partition {} unavailable for fetching offset, wait for metadata refresh", topicPartition);
-            return RequestFuture.metadataRefreshNeeded();
-        } else if (this.client.ready(info.leader(), now)) {
-            final RequestFuture<Long> future = new RequestFuture<Long>();
+            return RequestFuture.leaderNotAvailable();
+        } else {
             Node node = info.leader();
             ListOffsetRequest request = new ListOffsetRequest(-1, partitions);
-            RequestSend send = new RequestSend(node.idString(),
-                    this.client.nextRequestHeader(ApiKeys.LIST_OFFSETS),
-                    request.toStruct());
-            RequestCompletionHandler completionHandler = new RequestCompletionHandler() {
-                @Override
-                public void onComplete(ClientResponse resp) {
-                    handleListOffsetResponse(topicPartition, resp, future);
-                }
-            };
-            ClientRequest clientRequest = new ClientRequest(now, true, send, completionHandler);
-            this.client.send(clientRequest);
-            return future;
-        } else {
-            // We initiated a connect to the leader, but we need to poll to finish it.
-            return RequestFuture.pollNeeded();
+            return client.send(node, ApiKeys.LIST_OFFSETS, request)
+                    .compose(new RequestFutureAdapter<ClientResponse, Long>() {
+                        @Override
+                        public void onSuccess(ClientResponse response, RequestFuture<Long> future) {
+                            handleListOffsetResponse(topicPartition, response, future);
+                        }
+                    });
         }
     }
 
@@ -206,7 +279,7 @@ public class Fetcher<K, V> {
                                           ClientResponse clientResponse,
                                           RequestFuture<Long> future) {
         if (clientResponse.wasDisconnected()) {
-            future.retryAfterMetadataRefresh();
+            future.raise(new DisconnectException());
         } else {
             ListOffsetResponse lor = new ListOffsetResponse(clientResponse.responseBody());
             short errorCode = lor.responseData().get(topicPartition).errorCode;
@@ -222,11 +295,11 @@ public class Fetcher<K, V> {
                     || errorCode == Errors.UNKNOWN_TOPIC_OR_PARTITION.code()) {
                 log.warn("Attempt to fetch offsets for partition {} failed due to obsolete leadership information, retrying.",
                         topicPartition);
-                future.retryAfterMetadataRefresh();
+                future.raise(Errors.forCode(errorCode));
             } else {
                 log.error("Attempt to fetch offsets for partition {} failed due to: {}",
                         topicPartition, Errors.forCode(errorCode).exception().getMessage());
-                future.retryAfterMetadataRefresh();
+                future.raise(new StaleMetadataException());
             }
         }
     }
@@ -235,37 +308,31 @@ public class Fetcher<K, V> {
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
-    private List<ClientRequest> createFetchRequests(Cluster cluster) {
+    private Map<Node, FetchRequest> createFetchRequests(Cluster cluster) {
         // create the fetch info
-        Map<Integer, Map<TopicPartition, FetchRequest.PartitionData>> fetchable = new HashMap<Integer, Map<TopicPartition, FetchRequest.PartitionData>>();
+        Map<Node, Map<TopicPartition, FetchRequest.PartitionData>> fetchable = new HashMap<Node, Map<TopicPartition, FetchRequest.PartitionData>>();
         for (TopicPartition partition : subscriptions.assignedPartitions()) {
             Node node = cluster.leaderFor(partition);
             if (node == null) {
                 metadata.requestUpdate();
-            } else if (this.client.inFlightRequestCount(node.idString()) == 0) {
+            } else if (this.client.pendingRequestCount(node) == 0) {
                 // if there is a leader and no in-flight requests, issue a new fetch
-                Map<TopicPartition, FetchRequest.PartitionData> fetch = fetchable.get(node.id());
+                Map<TopicPartition, FetchRequest.PartitionData> fetch = fetchable.get(node);
                 if (fetch == null) {
                     fetch = new HashMap<TopicPartition, FetchRequest.PartitionData>();
-                    fetchable.put(node.id(), fetch);
+                    fetchable.put(node, fetch);
                 }
                 long offset = this.subscriptions.fetched(partition);
                 fetch.put(partition, new FetchRequest.PartitionData(offset, this.fetchSize));
             }
         }
 
-        // create the requests
-        List<ClientRequest> requests = new ArrayList<ClientRequest>(fetchable.size());
-        for (Map.Entry<Integer, Map<TopicPartition, FetchRequest.PartitionData>> entry : fetchable.entrySet()) {
-            int nodeId = entry.getKey();
-            final FetchRequest fetch = new FetchRequest(this.maxWaitMs, this.minBytes, entry.getValue());
-            RequestSend send = new RequestSend(Integer.toString(nodeId), this.client.nextRequestHeader(ApiKeys.FETCH), fetch.toStruct());
-            RequestCompletionHandler handler = new RequestCompletionHandler() {
-                public void onComplete(ClientResponse response) {
-                    handleFetchResponse(response, fetch);
-                }
-            };
-            requests.add(new ClientRequest(time.milliseconds(), true, send, handler));
+        // create the fetches
+        Map<Node, FetchRequest> requests = new HashMap<Node, FetchRequest>();
+        for (Map.Entry<Node, Map<TopicPartition, FetchRequest.PartitionData>> entry : fetchable.entrySet()) {
+            Node node = entry.getKey();
+            FetchRequest fetch = new FetchRequest(this.maxWaitMs, this.minBytes, entry.getValue());
+            requests.put(node, fetch);
         }
         return requests;
     }
@@ -352,7 +419,6 @@ public class Fetcher<K, V> {
             this.records = records;
         }
     }
-
 
     private class FetchManagerMetrics {
         public final Metrics metrics;
