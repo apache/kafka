@@ -31,11 +31,16 @@ public class ProcessorConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 
     static {
-        CONFIG = new ConfigDef().define(StreamingConfig.STATE_DIR_CONFIG,
-                                        Type.STRING,
-                                        System.getProperty("java.io.tmpdir"),
-                                        Importance.MEDIUM,
-                                        "")
+        CONFIG = new ConfigDef().define(StreamingConfig.TOPICS_CONFIG,
+            Type.STRING,
+            "",
+            Importance.HIGH,
+            "All the possible topic names this job need to interact with")
+                                .define(StreamingConfig.STATE_DIR_CONFIG,
+                                    Type.STRING,
+                                    System.getProperty("java.io.tmpdir"),
+                                    Importance.MEDIUM,
+                                    "")
                                 .define(StreamingConfig.POLL_TIME_MS_CONFIG,
                                         Type.LONG,
                                         100,
@@ -73,6 +78,7 @@ public class ProcessorConfig extends AbstractConfig {
                                         "The number of threads to execute stream processing.");
     }
 
+    public final String topics;
     public final File stateDir;
     public final long pollTimeMs;
     public final long commitTimeMs;
@@ -84,6 +90,7 @@ public class ProcessorConfig extends AbstractConfig {
 
     public ProcessorConfig(Properties processor) {
         super(CONFIG, processor);
+        this.topics = this.getString(StreamingConfig.TOPICS_CONFIG);
         this.stateDir = new File(this.getString(StreamingConfig.STATE_DIR_CONFIG));
         this.pollTimeMs = this.getLong(StreamingConfig.POLL_TIME_MS_CONFIG);
         this.commitTimeMs = this.getLong(StreamingConfig.COMMIT_TIME_MS_CONFIG);

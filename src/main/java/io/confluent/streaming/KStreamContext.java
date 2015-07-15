@@ -51,7 +51,7 @@ public interface KStreamContext {
 
   /**
    * Creates a KStream instance for the specified topics. The stream is added to the default synchronization group.
-   * @param topics the topic name
+   * @param topics the topic names, if empty default to all the topics in the config
    * @return KStream
    */
   KStream<?, ?> from(String... topics);
@@ -59,7 +59,7 @@ public interface KStreamContext {
   /**
    * Creates a KStream instance for the specified topics. The stream is added to the specified synchronization group.
    * @param syncGroup the synchronization group
-   * @param topics the topic name
+   * @param topics the topic names, if empty default to all the topics in the config
    * @return KStream
    */
   KStream<?, ?> from(SyncGroup syncGroup, String... topics);
@@ -71,7 +71,7 @@ public interface KStreamContext {
    *                        if not specified the default deserializer defined in the configs will be used
    * @param valDeserializer value deserializer used to read this source KStream,
    *                        if not specified the default deserializer defined in the configs will be used
-   * @param topics the topic name
+   * @param topics the topic names, if empty default to all the topics in the config
    * @return KStream
    */
   <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics);
@@ -83,7 +83,7 @@ public interface KStreamContext {
    *                        if not specified the default deserializer defined in the configs will be used
    * @param valDeserializer value deserializer used to read this source KStream,
    *                        if not specified the default deserializer defined in the configs will be used
-   * @param topics the topic name
+   * @param topics the topic names, if empty default to all the topics in the config
    * @return KStream
    */
   <K, V> KStream<K, V> from(SyncGroup syncGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics);

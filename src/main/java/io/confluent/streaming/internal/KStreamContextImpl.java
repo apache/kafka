@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -152,10 +153,18 @@ public class KStreamContextImpl implements KStreamContext {
     if (syncGroup == null) throw new NullPointerException();
 
     KStreamSource<?, ?> stream = null;
+    Set<String> fromTopics;
 
     synchronized (this) {
+      // if topics not specified, use all the topics be default
+      if (topics == null) {
+        fromTopics = this.topics;
+      } else {
+        fromTopics = Collections.unmodifiableSet(Util.mkSet(topics));
+      }
+
       // iterate over the topics and check if the stream has already been created for them
-      for (String topic : topics) {
+      for (String topic : fromTopics) {
         if (!this.topics.contains(topic))
           throw new IllegalArgumentException("topic not subscribed: " + topic);
 

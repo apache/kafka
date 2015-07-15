@@ -48,7 +48,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -122,7 +129,7 @@ public class KafkaStreaming implements Runnable {
         }
     };
 
-    public KafkaStreaming(Class<KStreamJob> jobClass, StreamingConfig config) {
+    public KafkaStreaming(Class<? extends KStreamJob> jobClass, StreamingConfig config) {
         this(jobClass, config, null, null);
     }
 
@@ -132,7 +139,6 @@ public class KafkaStreaming implements Runnable {
                              Producer<byte[], byte[]> producer,
                              Consumer<byte[], byte[]> consumer) {
         this.jobClass = jobClass;
-        this.topics = extractTopics(jobClass);
         this.producer = producer == null? new KafkaProducer<>(config.config(), new ByteArraySerializer(), new ByteArraySerializer()): producer;
         this.consumer = consumer == null? new KafkaConsumer<>(config.config(), rebalanceCallback, new ByteArrayDeserializer(), new ByteArrayDeserializer()): consumer;
         this.streamingConfig = config;
@@ -162,6 +168,13 @@ public class KafkaStreaming implements Runnable {
         this.recordsProcessed = 0;
         this.time = new SystemTime();
         this.parallelExecutor = new ParallelExecutor(this.config.numStreamThreads);
+
+        try {
+            this.topics = new HashSet<>(Arrays.asList(this.config.topics.split(",")));
+        }
+        catch (Exception e) {
+            throw new KStreamException("failed to get a topic list from the job", e);
+        }
     }
 
     /**

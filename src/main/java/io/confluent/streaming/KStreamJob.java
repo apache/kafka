@@ -7,10 +7,8 @@ package io.confluent.streaming;
 public interface KStreamJob {
 
   /**
-   * Returns a set of topics used in this job
-   * @return Topics
+   * Creates a job instance
    */
-  Topics topics();
 
   /**
    * Initializes a stream processing job for a partition. This method is called for each partition.

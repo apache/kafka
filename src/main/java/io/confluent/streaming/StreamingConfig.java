@@ -32,7 +32,10 @@ import java.util.*;
  */
 public class StreamingConfig {
 
-    /** <code>window.time.ms</code> */
+    /** <code>topics</code> */
+    public static final String TOPICS_CONFIG = "topics";
+
+    /** <code>state.dir</code> */
     public static final String STATE_DIR_CONFIG = "state.dir";
 
     /** <code>poll.time.ms</code> */
