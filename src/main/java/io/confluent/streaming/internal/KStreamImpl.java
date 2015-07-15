@@ -1,5 +1,6 @@
 package io.confluent.streaming.internal;
 
+import io.confluent.streaming.Coordinator;
 import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamWindowed;
@@ -129,8 +130,8 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
 
     return new Processor<K, V>() {
       @Override
-      public void apply(String topic, K key, V value) {
-        collector.send(new ProducerRecord<K, V>(sendTopic, key, value));
+      public void apply(String topic, K key, V value, RecordCollector<K, V> dummyCollector, Coordinator coordinator) {
+        collector.send(new ProducerRecord<>(sendTopic, key, value));
       }
       @Override
       public void init(PunctuationScheduler scheduler) {}
@@ -144,9 +145,9 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
     Receiver receiver = new Receiver() {
       public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
         if (topic.equals(KStreamMetadata.UNKNOWN_TOPICNAME))
-          processor.apply(null, (K)key, (V)value);
+          processor.apply(null, (K)key, (V)value, (RecordCollector<K, V>) context.recordCollector(), context.coordinator());
         else
-          processor.apply(topic, (K)key, (V)value);
+          processor.apply(topic, (K)key, (V)value, (RecordCollector<K, V>) context.recordCollector(), context.coordinator());
       }
     };
     registerReceiver(receiver);
