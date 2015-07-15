@@ -66,9 +66,8 @@ import static org.apache.kafka.common.utils.Utils.min;
  * The consumer maintains TCP connections to the necessary brokers to fetch data for the topics it subscribes to.
  * Failure to close the consumer after use will leak these connections.
  * <p>
- * The consumer is thread safe but generally will be used only from within a single thread. The consumer client has no
- * threads of it's own, all work is done in the caller's thread when calls are made on the various methods exposed.
- * 
+ * The consumer is not thread-safe. See <a href="#multithreaded">Multi-threaded Processing</a> for more details.
+ *
  * <h3>Offsets and Consumer Position</h3>
  * Kafka maintains a numerical offset for each record in a partition. This offset acts as a kind of unique identifier of
  * a record within that partition, and also denotes the position of the consumer in the partition. That is, a consumer
@@ -302,7 +301,8 @@ import static org.apache.kafka.common.utils.Utils.min;
  * methods for seeking to the earliest and latest offset the server maintains are also available (
  * {@link #seekToBeginning(TopicPartition...)} and {@link #seekToEnd(TopicPartition...)} respectively).
  * 
- * <h3>Multithreaded Processing</h3>
+ *
+ * <h3><a name="multithreaded">Multi-threaded Processing</a></h3>
  * 
  * The Kafka consumer is NOT thread-safe. All network I/O happens in the thread of the application
  * making the call. It is the responsibility of the user to ensure that multi-threaded access
