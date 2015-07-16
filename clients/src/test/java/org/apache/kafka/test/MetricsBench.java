@@ -17,11 +17,7 @@ import java.util.Arrays;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Percentile;
-import org.apache.kafka.common.metrics.stats.Percentiles;
+import org.apache.kafka.common.metrics.stats.*;
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
 
 public class MetricsBench {
@@ -33,6 +29,7 @@ public class MetricsBench {
         Sensor child = metrics.sensor("child", parent);
         for (Sensor sensor : Arrays.asList(parent, child)) {
             sensor.add(new MetricName(sensor.name() + ".avg", "grp1"), new Avg());
+            sensor.add(new MetricName(sensor.name() + ".stddev", "grp1"), new StdDev());
             sensor.add(new MetricName(sensor.name() + ".count", "grp1"), new Count());
             sensor.add(new MetricName(sensor.name() + ".max", "grp1"), new Max());
             sensor.add(new Percentiles(1024,
