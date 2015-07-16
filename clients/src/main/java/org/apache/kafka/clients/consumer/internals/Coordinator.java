@@ -272,7 +272,7 @@ public final class Coordinator {
 
                     @Override
                     public void onFailure(RuntimeException e) {
-                        client.schedule(HeartbeatTask.this, retryBackoffMs);
+                        client.schedule(HeartbeatTask.this, time.milliseconds() + retryBackoffMs);
                     }
                 });
             }
