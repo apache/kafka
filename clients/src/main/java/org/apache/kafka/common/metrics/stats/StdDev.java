@@ -36,8 +36,7 @@ public class StdDev extends SampledStat {
         double total = 0.0;
         double totalSquare = 0.0;
         long count = 0;
-        for (int i = 0; i < samples.size(); i++) {
-            Sample s = samples.get(i);
+        for (Sample s:samples) {
             total += s.value;
             totalSquare += s.secondValue;
             count += s.eventCount;
