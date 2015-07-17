@@ -22,6 +22,14 @@ import org.junit.{Test, After, Before}
 class JsonTest {
 
   @Test
+  def testJsonParse() {
+    assertEquals(Json.parseFull("{}"), Some(Map()))
+    assertEquals(Json.parseFull("""{"foo":"bar"s}"""), None)
+    assertEquals(Json.parseFull("""{"foo":"bar", "is_enabled":true}"""), Some(Map("foo" -> "bar", "is_enabled" -> true)))
+    assertEquals(Json.parseFull("[1, 2, 3]"), Some(List(1, 2, 3)))
+  }
+
+  @Test
   def testJsonEncoding() {
     assertEquals("null", Json.encode(null))
     assertEquals("1", Json.encode(1))
