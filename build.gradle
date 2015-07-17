@@ -523,13 +523,13 @@ project(':core') {
 
   dependencies {
     compile project(':clients')
+    compile libs.jacksonDatabind
     compile libs.joptSimple
     compile libs.metrics
     compile libs.scala
     compile libs.slf4jlog4j
     compile libs.zkclient
     compile libs.zookeeper
-    compile libs.scalaParserCombinators
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix

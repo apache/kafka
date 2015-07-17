@@ -93,29 +93,30 @@ object Broker {
       throw new BrokerNotAvailableException(s"Broker id $id does not exist")
     try {
       Json.parseFull(brokerInfoString) match {
-        case Some(m) =>
-          val brokerInfo = m.asInstanceOf[Map[String, Any]]
-          val version = brokerInfo(VersionKey).asInstanceOf[Int]
+        case Some(js) =>
+          val brokerInfo = js.asJsonObject
+          val version = brokerInfo(VersionKey).to[Int]
+
           val endpoints =
             if (version < 1)
               throw new KafkaException(s"Unsupported version of broker registration: $brokerInfoString")
             else if (version == 1) {
-              val host = brokerInfo(HostKey).asInstanceOf[String]
-              val port = brokerInfo(PortKey).asInstanceOf[Int]
+              val host = brokerInfo(HostKey).to[String]
+              val port = brokerInfo(PortKey).to[Int]
               val securityProtocol = SecurityProtocol.PLAINTEXT
               val endPoint = new EndPoint(host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
               Seq(endPoint)
             }
             else {
               val securityProtocolMap = brokerInfo.get(ListenerSecurityProtocolMapKey).map(
-                _.asInstanceOf[Map[String, String]].map { case (listenerName, securityProtocol) =>
-                new ListenerName(listenerName) -> SecurityProtocol.forName(securityProtocol)
-              })
-              val listeners = brokerInfo(EndpointsKey).asInstanceOf[List[String]]
+                _.to[Map[String, String]].map { case (listenerName, securityProtocol) =>
+                  new ListenerName(listenerName) -> SecurityProtocol.forName(securityProtocol)
+                })
+              val listeners = brokerInfo(EndpointsKey).to[Seq[String]]
               listeners.map(EndPoint.createEndPoint(_, securityProtocolMap))
             }
-          val rack = brokerInfo.get(RackKey).filter(_ != null).map(_.asInstanceOf[String])
 
+          val rack = brokerInfo.get(RackKey).filter(_ != null).map(_.to[String])
           Broker(id, endpoints, rack)
         case None =>
           throw new BrokerNotAvailableException(s"Broker id $id does not exist")

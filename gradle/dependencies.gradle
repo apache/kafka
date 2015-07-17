@@ -105,7 +105,6 @@ libs += [
   scala: "org.scala-lang:scala-library:$versions.scala",
   scalaCompiler: "org.scala-lang:scala-compiler:$versions.scala",
   scalaTest: "org.scalatest:scalatest_$versions.baseScala:$versions.scalaTest",
-  scalaParserCombinators: "org.scala-lang.modules:scala-parser-combinators_$versions.baseScala:$versions.scalaParserCombinators",
   scoveragePlugin: "org.scoverage:scalac-scoverage-plugin_$versions.baseScala:$versions.scoverage",
   scoverageRuntime: "org.scoverage:scalac-scoverage-runtime_$versions.baseScala:$versions.scoverage",
   slf4jApi: "org.slf4j:slf4j-api:$versions.slf4j",
