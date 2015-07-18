@@ -31,7 +31,7 @@ import java.security.Principal;
 public interface TransportLayer extends ScatteringByteChannel, GatheringByteChannel {
 
     /**
-     * Returns true if the channel has handshake and authenticaiton done.
+     * Returns true if the channel has handshake and authentication done.
      */
     boolean ready();
 
@@ -44,6 +44,11 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
      * disconnect socketChannel
      */
     void disconnect();
+
+    /**
+     * Tells whether or not this channel's network socket is connected.
+     */
+    boolean isConnected();
 
     /**
      * returns underlying socketChannel

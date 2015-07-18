@@ -116,6 +116,11 @@ public class SSLTransportLayer implements TransportLayer {
         return socketChannel.isOpen();
     }
 
+    public boolean isConnected() {
+        return socketChannel.isConnected();
+    }
+
+
     /**
     * Sends a SSL close message and closes socketChannel.
     * @throws IOException if an I/O error occurs
@@ -561,7 +566,7 @@ public class SSLTransportLayer implements TransportLayer {
     }
 
     /**
-     * Adds interestOps to SelecitonKey of the TransportLayer
+     * Adds interestOps to SelectionKey of the TransportLayer
      * @param ops SelectionKey interestOps
      */
     public void addInterestOps(int ops) {
@@ -575,7 +580,7 @@ public class SSLTransportLayer implements TransportLayer {
     }
 
     /**
-     * removes interestOps to SelecitonKey of the TransportLayer
+     * removes interestOps to SelectionKey of the TransportLayer
      * @param ops SelectionKey interestOps
      */
     public void removeInterestOps(int ops) {

@@ -68,7 +68,7 @@ public class Selector implements Selectable {
     private static final Logger log = LoggerFactory.getLogger(Selector.class);
 
     private final java.nio.channels.Selector nioSelector;
-    private final Map<String, Channel> channels;
+    private final Map<String, KafkaChannel> channels;
     private final List<Send> completedSends;
     private final List<NetworkReceive> completedReceives;
     private final List<String> disconnected;
@@ -101,7 +101,7 @@ public class Selector implements Selectable {
         this.time = time;
         this.metricGrpPrefix = metricGrpPrefix;
         this.metricTags = metricTags;
-        this.channels = new HashMap<String, Channel>();
+        this.channels = new HashMap<String, KafkaChannel>();
         this.completedSends = new ArrayList<Send>();
         this.completedReceives = new ArrayList<NetworkReceive>();
         this.connected = new ArrayList<String>();
@@ -154,7 +154,7 @@ public class Selector implements Selectable {
             throw e;
         }
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_CONNECT);
-        Channel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
+        KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
         key.attach(channel);
         this.channels.put(id, channel);
     }
@@ -166,7 +166,7 @@ public class Selector implements Selectable {
      */
     public void register(String id, SocketChannel socketChannel) throws ClosedChannelException {
         SelectionKey key = socketChannel.register(nioSelector, SelectionKey.OP_READ);
-        Channel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
+        KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize);
         key.attach(channel);
         this.channels.put(id, channel);
     }
@@ -177,7 +177,7 @@ public class Selector implements Selectable {
      */
     @Override
     public void disconnect(String id) {
-        Channel channel = channelForId(id);
+        KafkaChannel channel = channelForId(id);
         if (channel != null)
             channel.disconnect();
     }
@@ -212,7 +212,7 @@ public class Selector implements Selectable {
      * @param send The request to send
      */
     public void send(Send send) {
-        Channel channel = channelForId(send.destination());
+        KafkaChannel channel = channelForId(send.destination());
         if (channel == null) {
             throw new IllegalStateException("channel is not connected");
         }
@@ -254,7 +254,7 @@ public class Selector implements Selectable {
             while (iter.hasNext()) {
                 SelectionKey key = iter.next();
                 iter.remove();
-                Channel channel = channel(key);
+                KafkaChannel channel = channel(key);
 
                 // register all per-connection metrics at once
                 sensors.maybeRegisterConnectionMetrics(channel.id());
@@ -269,7 +269,7 @@ public class Selector implements Selectable {
                     }
 
                     /* if channel is not ready finish prepare */
-                    if (!channel.ready()) {
+                    if (channel.isConnected() && !channel.ready()) {
                         channel.prepare();
                     }
 
@@ -341,33 +341,33 @@ public class Selector implements Selectable {
 
     @Override
     public void mute(String id) {
-        Channel channel = channelForId(id);
+        KafkaChannel channel = channelForId(id);
         mute(channel);
     }
 
-    private void mute(Channel channel) {
+    private void mute(KafkaChannel channel) {
         channel.mute();
     }
 
     @Override
     public void unmute(String id) {
-        Channel channel = channelForId(id);
+        KafkaChannel channel = channelForId(id);
         unmute(channel);
     }
 
-    private void unmute(Channel channel) {
+    private void unmute(KafkaChannel channel) {
         channel.unmute();
     }
 
     @Override
     public void muteAll() {
-        for (Channel channel : this.channels.values())
+        for (KafkaChannel channel : this.channels.values())
             mute(channel);
     }
 
     @Override
     public void unmuteAll() {
-        for (Channel channel : this.channels.values())
+        for (KafkaChannel channel : this.channels.values())
             unmute(channel);
     }
 
@@ -425,7 +425,7 @@ public class Selector implements Selectable {
      * @param id channel id
      */
     public void close(String id) {
-        Channel channel = this.channels.get(id);
+        KafkaChannel channel = this.channels.get(id);
         if (channel != null)
             close(channel);
     }
@@ -433,7 +433,7 @@ public class Selector implements Selectable {
     /**
      * Begin closing this connection
      */
-    private void close(Channel channel) {
+    private void close(KafkaChannel channel) {
         try {
             channel.close();
         } catch (IOException e) {
@@ -446,8 +446,8 @@ public class Selector implements Selectable {
     /**
      * Get the channel associated with this numeric id
      */
-    private Channel channelForId(String id) {
-        Channel channel = this.channels.get(id);
+    private KafkaChannel channelForId(String id) {
+        KafkaChannel channel = this.channels.get(id);
         if (channel == null)
             throw new IllegalStateException("Attempt to write to socket for which there is no open connection. Connection id " + id + " existing connections " + channels.keySet().toString());
         return channel;
@@ -456,8 +456,8 @@ public class Selector implements Selectable {
     /**
      * Get the channel associated with selectionKey
      */
-    private Channel channel(SelectionKey key) {
-        return (Channel) key.attachment();
+    private KafkaChannel channel(SelectionKey key) {
+        return (KafkaChannel) key.attachment();
     }
 
 

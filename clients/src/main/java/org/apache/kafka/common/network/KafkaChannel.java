@@ -29,8 +29,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class Channel {
-    private static final Logger log = LoggerFactory.getLogger(Channel.class);
+public class KafkaChannel {
+    private static final Logger log = LoggerFactory.getLogger(KafkaChannel.class);
     private final String id;
     public TransportLayer transportLayer;
     private Authenticator authenticator;
@@ -38,7 +38,7 @@ public class Channel {
     private Send send;
     private int maxReceiveSize;
 
-    public Channel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize) throws IOException {
+    public KafkaChannel(String id, TransportLayer transportLayer, Authenticator authenticator, int maxReceiveSize) throws IOException {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticator = authenticator;
@@ -78,6 +78,10 @@ public class Channel {
 
     public void finishConnect() throws IOException {
         transportLayer.finishConnect();
+    }
+
+    public boolean isConnected() {
+        return transportLayer.isConnected();
     }
 
     public String id() {

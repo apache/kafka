@@ -72,10 +72,12 @@ public class SSLFactory implements Configurable {
             this.endpointIdentification = (String) configs.get(SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
         }
 
-        if (configs.containsKey(SSLConfigs.SSL_NEED_CLIENT_AUTH_CONFIG)) {
-            this.needClientAuth = (Boolean) configs.get(SSLConfigs.SSL_NEED_CLIENT_AUTH_CONFIG);
-        } else if (configs.containsKey(SSLConfigs.SSL_WANT_CLIENT_AUTH_CONFIG)) {
-            this.wantClientAuth = (Boolean) configs.get(SSLConfigs.SSL_WANT_CLIENT_AUTH_CONFIG);
+        if (configs.containsKey(SSLConfigs.SSL_CLIENT_AUTH_CONFIG)) {
+            String clientAuthConfig = (String) configs.get(SSLConfigs.SSL_CLIENT_AUTH_CONFIG);
+            if (clientAuthConfig.equals("required"))
+                this.needClientAuth = true;
+            else if (clientAuthConfig.equals("requested"))
+                this.wantClientAuth = true;
         }
 
         this.kmfAlgorithm = (String) configs.get(SSLConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG);
@@ -135,7 +137,7 @@ public class SSLFactory implements Configurable {
             if (needClientAuth)
                 sslEngine.setNeedClientAuth(needClientAuth);
             else
-                sslEngine.setNeedClientAuth(wantClientAuth);
+                sslEngine.setWantClientAuth(wantClientAuth);
         } else {
             sslEngine.setUseClientMode(true);
             SSLParameters sslParams = sslEngine.getSSLParameters();

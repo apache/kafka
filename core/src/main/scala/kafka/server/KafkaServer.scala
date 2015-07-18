@@ -55,6 +55,18 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
 
   private var shutdownLatch = new CountDownLatch(1)
 
+  private val jmxPrefix: String = "kafka.server"
+  private val reporters: java.util.List[MetricsReporter] =  config.metricReporterClasses
+  reporters.add(new JmxReporter(jmxPrefix))
+
+  // This exists so SocketServer (which uses Client libraries) can use the client Time objects without having to convert all of Kafka to use them
+  // Once we get rid of kafka.utils.time, we can get rid of this too
+  private val socketServerTime: org.apache.kafka.common.utils.Time = new org.apache.kafka.common.utils.SystemTime()
+
+  private val metricConfig: MetricConfig = new MetricConfig()
+    .samples(config.metricNumSamples)
+    .timeWindow(config.metricSampleWindowMs, TimeUnit.MILLISECONDS)
+
   val brokerState: BrokerState = new BrokerState
 
   var apis: KafkaApis = null
@@ -120,8 +132,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = SystemTime) extends Logg
         config.brokerId =  getBrokerId
         this.logIdent = "[Kafka Server " + config.brokerId + "], "
 
+        val metrics = new Metrics(metricConfig, reporters, socketServerTime)
 
-        socketServer = new SocketServer(config)
+        socketServer = new SocketServer(config, metrics, socketServerTime)
         socketServer.startup()
 
         /* start replica manager */

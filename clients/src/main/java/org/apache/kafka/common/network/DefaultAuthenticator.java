@@ -29,7 +29,7 @@ public class DefaultAuthenticator implements Authenticator {
     private PrincipalBuilder principalBuilder;
     private Principal principal;
 
-    public DefaultAuthenticator(TransportLayer transportLayer, PrincipalBuilder principalBuilder) {
+    public void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder) {
         this.transportLayer = transportLayer;
         this.principalBuilder = principalBuilder;
     }
@@ -53,7 +53,7 @@ public class DefaultAuthenticator implements Authenticator {
     public void close() throws IOException {}
 
     /**
-     * DefaultAuthenticator doesn't implement any additional authentication.
+     * DefaultAuthenticator doesn't implement any additional authentication mechanism.
      * @returns true
      */
     public boolean complete() {

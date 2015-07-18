@@ -50,7 +50,7 @@ class SocketServerTest extends JUnitSuite {
   props.put("max.connections.per.ip", "5")
   props.put("connections.max.idle.ms", "60000")
   val config: KafkaConfig = KafkaConfig.fromProps(props)
-  val server: SocketServer = new SocketServer(config)
+  val server: SocketServer = new SocketServer(config, new Metrics(), new SystemTime())
   server.startup()
 
   def sendRequest(socket: Socket, id: Short, request: Array[Byte]) {
@@ -179,7 +179,7 @@ class SocketServerTest extends JUnitSuite {
     val overrideNum = 6
     val overrides: Map[String, Int] = Map("localhost" -> overrideNum)
     val overrideprops = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
-    val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideprops))
+    val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideprops), new Metrics(), new SystemTime())
     overrideServer.startup()
     // make the maximum allowable number of connections and then leak them
     val conns = ((0 until overrideNum).map(i => connect(overrideServer)))
@@ -196,16 +196,30 @@ class SocketServerTest extends JUnitSuite {
     val overrideprops = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0, enableSSL = true, trustStoreFile = Some(trustStoreFile))
     overrideprops.put("listeners", "SSL://localhost:0")
 
-    val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideprops))
+    val overrideServer: SocketServer = new SocketServer(KafkaConfig.fromProps(overrideprops), new Metrics(), new SystemTime())
     overrideServer.startup()
     val sslContext = SSLContext.getInstance("TLSv1.2")
     sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
     val socketFactory = sslContext.getSocketFactory
-    val socket = socketFactory.createSocket("localhost", overrideServer.boundPort(SecurityProtocol.SSL)).asInstanceOf[SSLSocket]
-    socket.setNeedClientAuth(false)
-    val bytes = new Array[Byte](40)
-    sendRequest(socket, 0, bytes)
+    val sslSocket = socketFactory.createSocket("localhost", overrideServer.boundPort(SecurityProtocol.SSL)).asInstanceOf[SSLSocket]
+    sslSocket.setNeedClientAuth(false)
+
+    val correlationId = -1
+    val clientId = SyncProducerConfig.DefaultClientId
+    val ackTimeoutMs = SyncProducerConfig.DefaultAckTimeoutMs
+    val ack = SyncProducerConfig.DefaultRequiredAcks
+    val emptyRequest =
+      new ProducerRequest(correlationId, clientId, ack, ackTimeoutMs, collection.mutable.Map[TopicAndPartition, ByteBufferMessageSet]())
+
+    val byteBuffer = ByteBuffer.allocate(emptyRequest.sizeInBytes)
+    emptyRequest.writeTo(byteBuffer)
+    byteBuffer.rewind()
+    val serializedBytes = new Array[Byte](byteBuffer.remaining)
+    byteBuffer.get(serializedBytes)
+
+    sendRequest(sslSocket, 0, serializedBytes)
     processRequest(overrideServer.requestChannel)
+    assertEquals(serializedBytes.toSeq, receiveResponse(sslSocket).toSeq)
     overrideServer.shutdown()
   }
 }

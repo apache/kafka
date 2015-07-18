@@ -24,21 +24,17 @@ package org.apache.kafka.common.network;
 import java.io.IOException;
 import java.security.Principal;
 
+import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.KafkaException;
 
 public interface Authenticator {
 
     /**
-     * Closes this Authenticator
-     *
-     * @throws IOException if any I/O error occurs
+     * configures Authenticator using principalbuilder and transportLayer.
+     * @param TransportLayer transportLayer
+     * @param PrincipalBuilder principalBuilder
      */
-    void close() throws IOException;
-
-    /**
-     * Returns Principal after authentication is established
-     */
-    Principal principal() throws KafkaException;
+    void configure(TransportLayer transportLayer, PrincipalBuilder principalBuilder);
 
     /**
      * Implements any authentication mechanism. Use transportLayer to read or write tokens.
@@ -47,8 +43,20 @@ public interface Authenticator {
     void authenticate() throws IOException;
 
     /**
+     * Returns Principal using PrincipalBuilder
+     */
+    Principal principal() throws KafkaException;
+
+    /**
      * returns true if authentication is complete otherwise returns false;
      */
     boolean complete();
+
+    /**
+     * Closes this Authenticator
+     *
+     * @throws IOException if any I/O error occurs
+     */
+    void close() throws IOException;
 
 }

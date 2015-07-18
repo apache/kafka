@@ -247,8 +247,7 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
         case KafkaConfig.SSLTruststoreLocationProp => expected.setProperty(name, "/tmp/truststore.jks")
         case KafkaConfig.SSLKeyManagerAlgorithmProp => expected.setProperty(name, "ssl")
         case KafkaConfig.SSLTrustManagerAlgorithmProp => expected.setProperty(name, "tls")
-        case KafkaConfig.SSLNeedClientAuthProp => expected.setProperty(name, randFrom("true", "false"))
-        case KafkaConfig.SSLWantClientAuthProp => expected.setProperty(name, randFrom("true", "false"))
+        case KafkaConfig.SSLClientAuthProp => expected.setProperty(name, randFrom("none", "requested", "required"))
         case nonNegativeIntProperty => expected.setProperty(name, nextInt(Int.MaxValue).toString)
       }
     })
@@ -370,8 +369,7 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
         case KafkaConfig.SSLTruststoreLocationProp => // ignore string
         case KafkaConfig.SSLKeyManagerAlgorithmProp =>
         case KafkaConfig.SSLTrustManagerAlgorithmProp =>
-        case KafkaConfig.SSLNeedClientAuthProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
-        case KafkaConfig.SSLWantClientAuthProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_boolean", "0")
+        case KafkaConfig.SSLClientAuthProp => // ignore string
 
         case nonNegativeIntProperty => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }

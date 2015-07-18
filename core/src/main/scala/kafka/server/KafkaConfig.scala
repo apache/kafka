@@ -154,8 +154,10 @@ object Defaults {
   val SSLTruststorePassword = SSLConfigs.DEFAULT_TRUSTSTORE_PASSWORD
   val SSLKeyManagerAlgorithm = SSLConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM
   val SSLTrustManagerAlgorithm = SSLConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM
-  val SSLNeedClientAuth = false
-  val SSLWantClientAuth = false
+  val SSLClientAuthRequired = "required"
+  val SSLClientAuthRequested = "requested"
+  val SSLClientAuthNone = "none"
+  val SSLClientAuth = SSLClientAuthNone
 
 }
 
@@ -292,8 +294,7 @@ object KafkaConfig {
   val SSLKeyManagerAlgorithmProp = SSLConfigs.SSL_KEYMANAGER_ALGORITHM_CONFIG
   val SSLTrustManagerAlgorithmProp = SSLConfigs.SSL_TRUSTMANAGER_ALGORITHM_CONFIG
   val SSLEndpointIdentificationAlgorithmProp = SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG
-  val SSLNeedClientAuthProp = SSLConfigs.SSL_NEED_CLIENT_AUTH_CONFIG
-  val SSLWantClientAuthProp = SSLConfigs.SSL_WANT_CLIENT_AUTH_CONFIG
+  val SSLClientAuthProp = SSLConfigs.SSL_CLIENT_AUTH_CONFIG
 
 
   /* Documentation */
@@ -450,9 +451,7 @@ object KafkaConfig {
   val SSLKeyManagerAlgorithmDoc = SSLConfigs.SSL_KEYMANAGER_ALGORITHM_DOC
   val SSLTrustManagerAlgorithmDoc = SSLConfigs.SSL_TRUSTMANAGER_ALGORITHM_DOC
   val SSLEndpointIdentificationAlgorithmDoc = SSLConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC
-  val SSLNeedClientAuthDoc = SSLConfigs.SSL_NEED_CLIENT_AUTH_DOC
-  val SSLWantClientAuthDoc = SSLConfigs.SSL_WANT_CLIENT_AUTH_DOC
-
+  val SSLClientAuthDoc = SSLConfigs.SSL_CLIENT_AUTH_DOC
 
   private val configDef = {
     import ConfigDef.Range._
@@ -592,8 +591,7 @@ object KafkaConfig {
     .define(SSLTruststorePasswordProp, STRING, Defaults.SSLTruststorePassword, MEDIUM, SSLTruststorePasswordDoc)
     .define(SSLKeyManagerAlgorithmProp, STRING, Defaults.SSLKeyManagerAlgorithm, MEDIUM, SSLKeyManagerAlgorithmDoc)
     .define(SSLTrustManagerAlgorithmProp, STRING, Defaults.SSLTrustManagerAlgorithm, MEDIUM, SSLTrustManagerAlgorithmDoc)
-    .define(SSLNeedClientAuthProp, BOOLEAN, Defaults.SSLNeedClientAuth, MEDIUM, SSLNeedClientAuthDoc)
-    .define(SSLWantClientAuthProp, BOOLEAN, Defaults.SSLWantClientAuth, MEDIUM, SSLWantClientAuthDoc)
+    .define(SSLClientAuthProp, STRING, Defaults.SSLClientAuth, in(Defaults.SSLClientAuthRequired, Defaults.SSLClientAuthRequested, Defaults.SSLClientAuthNone), MEDIUM, SSLClientAuthDoc)
   }
 
   def configNames() = {
@@ -747,8 +745,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
   val sslTruststorePassword = getString(KafkaConfig.SSLTruststorePasswordProp)
   val sslKeyManagerAlgorithm = getString(KafkaConfig.SSLKeyManagerAlgorithmProp)
   val sslTrustManagerAlgorithm = getString(KafkaConfig.SSLTrustManagerAlgorithmProp)
-  val sslNeedClientAuth = getBoolean(KafkaConfig.SSLNeedClientAuthProp)
-  val sslWantClientAuth = getBoolean(KafkaConfig.SSLWantClientAuthProp)
+  val sslClientAuth = getString(KafkaConfig.SSLClientAuthProp)
 
   val deleteTopicEnable = getBoolean(KafkaConfig.DeleteTopicEnableProp)
   val compressionType = getString(KafkaConfig.CompressionTypeProp)
@@ -880,8 +877,7 @@ case class KafkaConfig (props: java.util.Map[_, _]) extends AbstractConfig(Kafka
     channelConfigs.put(SSLTruststorePasswordProp, sslTruststorePassword)
     channelConfigs.put(SSLKeyManagerAlgorithmProp, sslKeyManagerAlgorithm)
     channelConfigs.put(SSLTrustManagerAlgorithmProp, sslTrustManagerAlgorithm)
-    channelConfigs.put(SSLNeedClientAuthProp, sslNeedClientAuth: java.lang.Boolean)
-    channelConfigs.put(SSLWantClientAuthProp, sslWantClientAuth: java.lang.Boolean)
+    channelConfigs.put(SSLClientAuthProp, sslClientAuth)
     channelConfigs
   }
 

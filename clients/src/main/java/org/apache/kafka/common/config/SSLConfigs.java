@@ -85,8 +85,17 @@ public class SSLConfigs {
     public static final String SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG = "ssl.endpoint.identification.algorithm";
     public static final String SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC = "The endpoint identification algorithm to validate server hostname using server certificate. ";
 
-    public static final String SSL_NEED_CLIENT_AUTH_CONFIG = "ssl.need.client.auth";
-    public static final String SSL_NEED_CLIENT_AUTH_DOC = "If set to true kafka broker requires all the ssl client connecting to provide client authentication. "
+    public static final String SSL_CLIENT_AUTH_CONFIG = "ssl.client.auth";
+    public static final String SSL_CLIENT_AUTH_DOC = "Configures kafka broker to request client authentication."
+                                           + " The following settings are common: "
+                                           + " <ul>"
+                                           + " <li><code>ssl.want.client.auth=required</code> If set to required"
+                                           + " client authentication is required."
+                                           + " <li><code>ssl.client.auth=requested</code> This means client authentication is optional."
+                                           + " unlike requested , if this option is set client can choose not to provide authentication information about itself"
+                                           + " <li><code>ssl.client.auth=none</code> This means client authentication is not needed.";
+
+    public static final String SSL_NEED_CLIENT_AUTH_DOC = "It can be REQUESTED . "
         + "Default value is false";
     public static final Boolean DEFAULT_SSL_NEED_CLIENT_AUTH = false;
 

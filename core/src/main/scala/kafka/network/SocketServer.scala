@@ -46,21 +46,9 @@ import scala.collection._
  *   Acceptor has N Processor threads that each have their own selector and read requests from sockets
  *   M Handler threads that handle requests and produce responses back to the processor threads for writing.
  */
-class SocketServer(val config: KafkaConfig) extends Logging with KafkaMetricsGroup {
-
-  private val jmxPrefix: String = "kafka.server"
-  private val reporters: java.util.List[MetricsReporter] =  config.metricReporterClasses
-  reporters.add(new JmxReporter(jmxPrefix))
-
-  private val metricConfig: MetricConfig = new MetricConfig()
-    .samples(config.metricNumSamples)
-    .timeWindow(config.metricSampleWindowMs, TimeUnit.MILLISECONDS)
+class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time) extends Logging with KafkaMetricsGroup {
 
   val channelConfigs = config.channelConfigs
-
-  // This exists so SocketServer (which uses Client libraries) can use the client Time objects without having to convert all of Kafka to use them
-  // Once we get rid of kafka.utils.time, we can get rid of this too
-  private val time: org.apache.kafka.common.utils.Time = new org.apache.kafka.common.utils.SystemTime()
 
   val endpoints = config.listeners
   val numProcessorThreads = config.numNetworkThreads
@@ -105,13 +93,20 @@ class SocketServer(val config: KafkaConfig) extends Logging with KafkaMetricsGro
       var processorBeginIndex = 0
       endpoints.values.foreach(endpoint => {
         val acceptor = new Acceptor(endpoint.host, endpoint.port, sendBufferSize, recvBufferSize, config.brokerId, requestChannel, processors, processorBeginIndex, numProcessorThreads, quotas,
-          endpoint.protocolType, portToProtocol, channelConfigs,  maxQueuedRequests, maxRequestSize, connectionsMaxIdleMs, new Metrics(metricConfig, reporters, time), allMetricNames, time)
+          endpoint.protocolType, portToProtocol, channelConfigs,  maxQueuedRequests, maxRequestSize, connectionsMaxIdleMs, metrics, allMetricNames, time)
         acceptors.put(endpoint, acceptor)
         Utils.newThread("kafka-socket-acceptor-%s-%d".format(endpoint.protocolType.toString, endpoint.port), acceptor, false).start()
         acceptor.awaitStartup
         processorBeginIndex += numProcessorThreads
       })
     }
+
+    newGauge("NetworkProcessorAvgIdlePercent",
+      new Gauge[Double] {
+        def value = allMetricNames.map( metricName =>
+          metrics.metrics().get(metricName).value()).sum / totalProcessorThreads
+      }
+    )
 
     info("Started " + acceptors.size + " acceptor threads")
   }
@@ -232,13 +227,6 @@ private[kafka] class Acceptor(val host: String,
 
   portToProtocol.put(serverChannel.socket().getLocalPort, protocol)
 
-  newGauge("NetworkProcessorAvgIdlePercent",
-    new Gauge[Double] {
-      def value = allMetricNames.map( metricName =>
-        metrics.metrics().get(metricName).value()).sum / numProcessorThreads
-    }
-  )
-
   this.synchronized {
     for (i <- processorBeginIndex until processorEndIndex) {
         processors(i) = new Processor(i,
@@ -279,7 +267,7 @@ private[kafka] class Acceptor(val host: String,
                throw new IllegalStateException("Unrecognized key state for acceptor thread.")
 
             // round robin to the next processor thread
-            currentProcessor = (currentProcessor + 1) % (processorEndIndex - 1)
+            currentProcessor = (currentProcessor + 1) % processorEndIndex
             if (currentProcessor < processorBeginIndex) currentProcessor = processorBeginIndex
           } catch {
             case e: Throwable => error("Error while accepting connection", e)

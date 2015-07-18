@@ -79,8 +79,10 @@ public class ClientUtils {
 
         if (securityProtocol == SecurityProtocol.SSL) {
             channelBuilder = new SSLChannelBuilder(SSLFactory.Mode.CLIENT);
-        } else {
+        } else if (securityProtocol == SecurityProtocol.PLAINTEXT) {
             channelBuilder = new PlainTextChannelBuilder();
+        } else {
+            throw new ConfigException("Invalid SecurityProtocol " + CommonClientConfigs.SECURITY_PROTOCOL_CONFIG);
         }
 
         channelBuilder.configure(configs);
