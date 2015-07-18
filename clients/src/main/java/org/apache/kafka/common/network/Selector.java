@@ -283,7 +283,7 @@ public class Selector implements Selectable {
                             }
                         } catch (InvalidReceiveException e) {
                             log.error("Invalid data received from " + channel.id() + " closing connection", e);
-                            close(channel.id());
+                            close(channel);
                             this.disconnected.add(channel.id());
                             throw e;
                         }
@@ -300,7 +300,7 @@ public class Selector implements Selectable {
 
                     /* cancel any defunct sockets */
                     if (!key.isValid()) {
-                        close(channel(key));
+                        close(channel);
                         this.disconnected.add(channel.id());
                     }
                 } catch (IOException e) {
@@ -309,7 +309,7 @@ public class Selector implements Selectable {
                         log.debug("Connection {} disconnected", desc);
                     else
                         log.warn("Error in I/O with connection to {}", desc, e);
-                    close(channel(key));
+                    close(channel);
                     this.disconnected.add(channel.id());
                 }
             }
@@ -434,12 +434,12 @@ public class Selector implements Selectable {
      * Begin closing this connection
      */
     private void close(Channel channel) {
-        this.channels.remove(channel.id());
         try {
             channel.close();
         } catch (IOException e) {
             log.error("Exception closing connection to node {}:", channel.id(), e);
         }
+        this.channels.remove(channel.id());
         this.sensors.connectionClosed.record();
     }
 

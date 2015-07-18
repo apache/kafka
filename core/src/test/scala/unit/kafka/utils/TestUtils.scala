@@ -49,6 +49,8 @@ import junit.framework.AssertionFailedError
 import junit.framework.Assert._
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.consumer.KafkaConsumer
+import org.apache.kafka.clients.consumer.ConsumerRebalanceCallback
+import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.network.SSLFactory
 import org.apache.kafka.common.config.SSLConfigs
@@ -430,7 +432,12 @@ object TestUtils extends Logging {
   def createNewConsumer(brokerList: String,
                         groupId: String,
                         autoOffsetReset: String = "earliest",
-                        partitionFetchSize: Long = 4096L) : KafkaConsumer[Array[Byte],Array[Byte]] = {
+                        partitionFetchSize: Long = 4096L,
+                        partitionAssignmentStrategy: String = "blah",
+                        sessionTimeout: Int = 30000,
+                        callback: Option[ConsumerRebalanceCallback] = None,
+                        enableSSL: Boolean = false,
+                        trustStoreFile: Option[File] = None) : KafkaConsumer[Array[Byte],Array[Byte]] = {
     import org.apache.kafka.clients.consumer.ConsumerConfig
 
     val consumerProps= new Properties()
@@ -442,7 +449,17 @@ object TestUtils extends Logging {
     consumerProps.put(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, "200")
     consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer")
-    new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
+    consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, partitionAssignmentStrategy)
+    consumerProps.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeout.toString)
+    if (enableSSL) {
+      consumerProps.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL")
+      consumerProps.putAll(addSSLConfigs(SSLFactory.Mode.CLIENT, false, trustStoreFile, "consumer"))
+    }
+    if (callback.isDefined) {
+      new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps, callback.get, new ByteArrayDeserializer(), new ByteArrayDeserializer())
+    } else {
+      new KafkaConsumer[Array[Byte],Array[Byte]](consumerProps)
+    }
   }
 
   /**

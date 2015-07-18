@@ -194,8 +194,9 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
   }
 
   def close(channel: SocketChannel) {
+
     if(channel != null) {
-      debug("Closing connection from " + channel.socket.getRemoteSocketAddress())
+      println("Closing connection from " + channel.socket.getRemoteSocketAddress())
       connectionQuotas.dec(channel.socket.getInetAddress)
       swallowError(channel.socket().close())
       swallowError(channel.close())
@@ -278,8 +279,8 @@ private[kafka] class Acceptor(val host: String,
                throw new IllegalStateException("Unrecognized key state for acceptor thread.")
 
             // round robin to the next processor thread
-            currentProcessor = (currentProcessor + 1) % processorEndIndex
-            if (currentProcessor < processorBeginIndex) currentProcessor = processorEndIndex
+            currentProcessor = (currentProcessor + 1) % (processorEndIndex - 1)
+            if (currentProcessor < processorBeginIndex) currentProcessor = processorBeginIndex
           } catch {
             case e: Throwable => error("Error while accepting connection", e)
           }

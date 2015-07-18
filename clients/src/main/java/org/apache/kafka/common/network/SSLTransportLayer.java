@@ -125,23 +125,25 @@ public class SSLTransportLayer implements TransportLayer {
         if (closing) return;
         closing = true;
         sslEngine.closeOutbound();
-
-        if (!flush(netWriteBuffer)) {
-            throw new IOException("Remaining data in the network buffer, can't send SSL close message.");
+        try {
+            if (!flush(netWriteBuffer)) {
+                throw new IOException("Remaining data in the network buffer, can't send SSL close message.");
+            }
+            //prep the buffer for the close message
+            netWriteBuffer.clear();
+            //perform the close, since we called sslEngine.closeOutbound
+            SSLEngineResult handshake = sslEngine.wrap(emptyBuf, netWriteBuffer);
+            //we should be in a close state
+            if (handshake.getStatus() != SSLEngineResult.Status.CLOSED) {
+                throw new IOException("Invalid close state, will not send network data.");
+            }
+            netWriteBuffer.flip();
+            flush(netWriteBuffer);
+        } catch (IOException ie) {
+            log.warn("Failed to send SSL Close message ", ie);
         }
-        //prep the buffer for the close message
-        netWriteBuffer.clear();
-        //perform the close, since we called sslEngine.closeOutbound
-        SSLEngineResult handshake = sslEngine.wrap(emptyBuf, netWriteBuffer);
-        //we should be in a close state
-        if (handshake.getStatus() != SSLEngineResult.Status.CLOSED) {
-            throw new IOException("Invalid close state, will not send network data.");
-        }
-        netWriteBuffer.flip();
-        flush(netWriteBuffer);
         socketChannel.socket().close();
         socketChannel.close();
-        closed = !netWriteBuffer.hasRemaining() && (handshake.getHandshakeStatus() != HandshakeStatus.NEED_WRAP);
     }
 
     /**
