@@ -61,8 +61,8 @@ public class ByteBufferSend implements Send {
         // This is temporary workaround. As Send , Receive interfaces are being used by BlockingChannel.
         // Once BlockingChannel is removed we can make Send, Receive to work with transportLayer rather than
         // GatheringByteChannel or ScatteringByteChannel.
-        if (channel instanceof SSLTransportLayer) {
-            pending = ((SSLTransportLayer) channel).pending();
+        if (channel instanceof TransportLayer) {
+            pending = ((TransportLayer) channel).hasPendingWrites();
         }
         return written;
     }

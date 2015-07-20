@@ -48,6 +48,7 @@ public class PlainTextTransportLayer implements TransportLayer {
         return true;
     }
 
+    @Override
     public void finishConnect() throws IOException {
         socketChannel.finishConnect();
         int ops = key.interestOps();
@@ -56,19 +57,22 @@ public class PlainTextTransportLayer implements TransportLayer {
         key.interestOps(ops);
     }
 
+    @Override
     public void disconnect() {
         key.cancel();
     }
 
+    @Override
     public SocketChannel socketChannel() {
         return socketChannel;
     }
 
-
+    @Override
     public boolean isOpen() {
         return socketChannel.isOpen();
     }
 
+    @Override
     public boolean isConnected() {
         return socketChannel.isConnected();
     }
@@ -78,6 +82,7 @@ public class PlainTextTransportLayer implements TransportLayer {
      *
      * @throws IOException If and I/O error occurs
      */
+    @Override
     public void close() throws IOException {
         socketChannel.socket().close();
         socketChannel.close();
@@ -97,7 +102,7 @@ public class PlainTextTransportLayer implements TransportLayer {
     * @return The number of bytes read, possible zero or -1 if the channel has reached end-of-stream
     * @throws IOException if some other I/O error occurs
     */
-
+    @Override
     public int read(ByteBuffer dst) throws IOException {
         return socketChannel.read(dst);
     }
@@ -109,6 +114,7 @@ public class PlainTextTransportLayer implements TransportLayer {
      * @return The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream.
      * @throws IOException if some other I/O error occurs
      */
+    @Override
     public long read(ByteBuffer[] dsts) throws IOException {
         return socketChannel.read(dsts);
     }
@@ -121,6 +127,7 @@ public class PlainTextTransportLayer implements TransportLayer {
      * @returns The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream.
      * @throws IOException if some other I/O error occurs
      */
+    @Override
     public long read(ByteBuffer[] dsts, int offset, int length) throws IOException {
         return socketChannel.read(dsts, offset, length);
     }
@@ -132,6 +139,7 @@ public class PlainTextTransportLayer implements TransportLayer {
     * @returns The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
     * @throws IOException If some other I/O error occurs
     */
+    @Override
     public int write(ByteBuffer src) throws IOException {
         return socketChannel.write(src);
     }
@@ -143,6 +151,7 @@ public class PlainTextTransportLayer implements TransportLayer {
     * @returns The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
     * @throws IOException If some other I/O error occurs
     */
+    @Override
     public long write(ByteBuffer[] srcs) throws IOException {
         return socketChannel.write(srcs);
     }
@@ -156,8 +165,18 @@ public class PlainTextTransportLayer implements TransportLayer {
     * @return returns no.of bytes written , possibly zero.
     * @throws IOException If some other I/O error occurs
     */
+    @Override
     public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
         return socketChannel.write(srcs, offset, length);
+    }
+
+
+    /**
+     * always returns false as there will be not be any
+     * pending writes
+     */
+    public boolean hasPendingWrites() {
+        return false;
     }
 
     /**

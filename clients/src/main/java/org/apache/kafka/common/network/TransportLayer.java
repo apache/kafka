@@ -18,7 +18,11 @@
 package org.apache.kafka.common.network;
 
 /*
- * Transport layer for underlying communication
+ * Transport layer for underlying communication.
+ * At very basic level it is wrapper around SocketChannel and can be used as substitue for SocketChannel
+ * and other network Channel implementations.
+ * As NetworkClient replaces BlockingChannel and other implementations we will be using KafkaChannel as
+ * a network I/O channel.
  */
 import java.io.IOException;
 import java.nio.channels.SocketChannel;
@@ -63,6 +67,10 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
     */
     void handshake() throws IOException;
 
+    /**
+     * Returns true if there are any pending writes
+     */
+    boolean hasPendingWrites();
 
     /**
      * returns SSLSession.getPeerPrinicpal if SSLTransportLayer used

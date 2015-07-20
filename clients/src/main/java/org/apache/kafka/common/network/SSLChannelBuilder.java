@@ -48,7 +48,7 @@ public class SSLChannelBuilder implements ChannelBuilder {
         KafkaChannel channel = null;
         try {
             SocketChannel socketChannel = (SocketChannel) key.channel();
-            SSLTransportLayer transportLayer = new SSLTransportLayer(key,
+            SSLTransportLayer transportLayer = new SSLTransportLayer(id, key,
                                                                      sslFactory.createSSLEngine(socketChannel.socket().getInetAddress().getHostName(),
                                                                                                 socketChannel.socket().getPort()));
             Authenticator authenticator = new DefaultAuthenticator();
