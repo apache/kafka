@@ -349,11 +349,6 @@ import static org.apache.kafka.common.utils.Utils.min;
  *     consumer.wakeup();
  * </pre>
  *
-####### Ancestor
- *
- * The Kafka consumer is threadsafe but coarsely synchronized. All network I/O happens in the thread of the application
- * making the call. We have intentionally avoided implementing a particular threading model for processing.
-======= end
  * <p>
  * We have intentionally avoided implementing a particular threading model for processing. This leaves several
  * options for implementing multi-threaded processing of records.

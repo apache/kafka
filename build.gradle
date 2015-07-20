@@ -450,7 +450,7 @@ project(':log4j-appender') {
   }
 
   checkstyle {
-    configFile = new File(rootDir, "checkstyle/checkstyle.xml")
+     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
   }
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 }

@@ -16,6 +16,7 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.channels.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -140,10 +141,11 @@ public class Selector implements Selectable {
 
         SocketChannel socketChannel = SocketChannel.open();
         socketChannel.configureBlocking(false);
-        socketChannel.socket().setKeepAlive(true);
-        socketChannel.socket().setSendBufferSize(sendBufferSize);
-        socketChannel.socket().setReceiveBufferSize(receiveBufferSize);
-        socketChannel.socket().setTcpNoDelay(true);
+        Socket socket = socketChannel.socket();
+        socket.setKeepAlive(true);
+        socket.setSendBufferSize(sendBufferSize);
+        socket.setReceiveBufferSize(receiveBufferSize);
+        socket.setTcpNoDelay(true);
         try {
             socketChannel.connect(address);
         } catch (UnresolvedAddressException e) {
