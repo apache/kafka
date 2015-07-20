@@ -96,7 +96,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     val metadata = ClientUtils.fetchTopicMetadata(Set(topic1), brokers.map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)), "AddPartitionsTest-testIncrementPartitions",
       2000,0).topicsMetadata
     val metaDataForTopic1 = metadata.filter(p => p.topic.equals(topic1))
-    val partitionDataForTopic1 = metaDataForTopic1.head.partitionsMetadata
+    val partitionDataForTopic1 = metaDataForTopic1.head.partitionsMetadata.sortBy(_.partitionId)
     assertEquals(partitionDataForTopic1.size, 3)
     assertEquals(partitionDataForTopic1(1).partitionId, 1)
     assertEquals(partitionDataForTopic1(2).partitionId, 2)
@@ -121,7 +121,7 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
     val metadata = ClientUtils.fetchTopicMetadata(Set(topic2), brokers.map(_.getBrokerEndPoint(SecurityProtocol.PLAINTEXT)), "AddPartitionsTest-testManualAssignmentOfReplicas",
       2000,0).topicsMetadata
     val metaDataForTopic2 = metadata.filter(p => p.topic.equals(topic2))
-    val partitionDataForTopic2 = metaDataForTopic2.head.partitionsMetadata
+    val partitionDataForTopic2 = metaDataForTopic2.head.partitionsMetadata.sortBy(_.partitionId)
     assertEquals(partitionDataForTopic2.size, 3)
     assertEquals(partitionDataForTopic2(1).partitionId, 1)
     assertEquals(partitionDataForTopic2(2).partitionId, 2)
@@ -146,12 +146,13 @@ class AddPartitionsTest extends JUnit3Suite with ZooKeeperTestHarness {
       2000,0).topicsMetadata
 
     val metaDataForTopic3 = metadata.filter(p => p.topic.equals(topic3)).head
-    val partition1DataForTopic3 = metaDataForTopic3.partitionsMetadata(1)
-    val partition2DataForTopic3 = metaDataForTopic3.partitionsMetadata(2)
-    val partition3DataForTopic3 = metaDataForTopic3.partitionsMetadata(3)
-    val partition4DataForTopic3 = metaDataForTopic3.partitionsMetadata(4)
-    val partition5DataForTopic3 = metaDataForTopic3.partitionsMetadata(5)
-    val partition6DataForTopic3 = metaDataForTopic3.partitionsMetadata(6)
+    val partitionsMetadataForTopic3 = metaDataForTopic3.partitionsMetadata.sortBy(_.partitionId)
+    val partition1DataForTopic3 = partitionsMetadataForTopic3(1)
+    val partition2DataForTopic3 = partitionsMetadataForTopic3(2)
+    val partition3DataForTopic3 = partitionsMetadataForTopic3(3)
+    val partition4DataForTopic3 = partitionsMetadataForTopic3(4)
+    val partition5DataForTopic3 = partitionsMetadataForTopic3(5)
+    val partition6DataForTopic3 = partitionsMetadataForTopic3(6)
 
     assertEquals(partition1DataForTopic3.replicas.size, 4)
     assertEquals(partition1DataForTopic3.replicas(0).id, 3)

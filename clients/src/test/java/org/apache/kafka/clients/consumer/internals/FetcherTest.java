@@ -52,6 +52,7 @@ public class FetcherTest {
     private int minBytes = 1;
     private int maxWaitMs = 0;
     private int fetchSize = 1000;
+    private long retryBackoffMs = 100;
     private MockTime time = new MockTime();
     private MockClient client = new MockClient(time);
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE);
@@ -60,10 +61,11 @@ public class FetcherTest {
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
     private Metrics metrics = new Metrics(time);
     private Map<String, String> metricTags = new LinkedHashMap<String, String>();
+    private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(client, metadata, time, 100);
 
     private MemoryRecords records = MemoryRecords.emptyRecords(ByteBuffer.allocate(1024), CompressionType.NONE);
 
-    private Fetcher<byte[], byte[]> fetcher = new Fetcher<byte[], byte[]>(client,
+    private Fetcher<byte[], byte[]> fetcher = new Fetcher<byte[], byte[]>(consumerClient,
         minBytes,
         maxWaitMs,
         fetchSize,
@@ -75,7 +77,8 @@ public class FetcherTest {
         metrics,
         "consumer" + groupId,
         metricTags,
-        time);
+        time,
+        retryBackoffMs);
 
     @Before
     public void setup() throws Exception {
@@ -97,9 +100,9 @@ public class FetcherTest {
         subscriptions.consumed(tp, 0);
 
         // normal fetch
-        fetcher.initFetches(cluster, time.milliseconds());
-        client.respond(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L));
-        client.poll(0, time.milliseconds());
+        fetcher.initFetches(cluster);
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NONE.code(), 100L));
+        consumerClient.poll(0);
         records = fetcher.fetchedRecords().get(tp);
         assertEquals(3, records.size());
         assertEquals(4L, (long) subscriptions.fetched(tp)); // this is the next fetching position
@@ -119,24 +122,24 @@ public class FetcherTest {
         subscriptions.consumed(tp, 0);
 
         // fetch with not leader
-        fetcher.initFetches(cluster, time.milliseconds());
-        client.respond(fetchResponse(this.records.buffer(), Errors.NOT_LEADER_FOR_PARTITION.code(), 100L));
-        client.poll(0, time.milliseconds());
+        fetcher.initFetches(cluster);
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.NOT_LEADER_FOR_PARTITION.code(), 100L));
+        consumerClient.poll(0);
         assertEquals(0, fetcher.fetchedRecords().size());
         assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
 
         // fetch with unknown topic partition
-        fetcher.initFetches(cluster, time.milliseconds());
-        client.respond(fetchResponse(this.records.buffer(), Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), 100L));
-        client.poll(0, time.milliseconds());
+        fetcher.initFetches(cluster);
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), 100L));
+        consumerClient.poll(0);
         assertEquals(0, fetcher.fetchedRecords().size());
         assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
 
         // fetch with out of range
         subscriptions.fetched(tp, 5);
-        fetcher.initFetches(cluster, time.milliseconds());
-        client.respond(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L));
-        client.poll(0, time.milliseconds());
+        fetcher.initFetches(cluster);
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L));
+        consumerClient.poll(0);
         assertTrue(subscriptions.isOffsetResetNeeded(tp));
         assertEquals(0, fetcher.fetchedRecords().size());
         assertEquals(null, subscriptions.fetched(tp));
@@ -151,9 +154,9 @@ public class FetcherTest {
         subscriptions.consumed(tp, 5);
 
         // fetch with out of range
-        fetcher.initFetches(cluster, time.milliseconds());
-        client.respond(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L));
-        client.poll(0, time.milliseconds());
+        fetcher.initFetches(cluster);
+        client.prepareResponse(fetchResponse(this.records.buffer(), Errors.OFFSET_OUT_OF_RANGE.code(), 100L));
+        consumerClient.poll(0);
         assertTrue(subscriptions.isOffsetResetNeeded(tp));
         assertEquals(0, fetcher.fetchedRecords().size());
         assertEquals(null, subscriptions.fetched(tp));

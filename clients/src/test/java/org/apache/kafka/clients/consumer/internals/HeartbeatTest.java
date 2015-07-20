@@ -51,4 +51,19 @@ public class HeartbeatTest {
         assertEquals(0, heartbeat.timeToNextHeartbeat(100));
         assertEquals(0, heartbeat.timeToNextHeartbeat(200));
     }
+
+    @Test
+    public void testSessionTimeoutExpired() {
+        heartbeat.sentHeartbeat(time.milliseconds());
+        time.sleep(305);
+        assertTrue(heartbeat.sessionTimeoutExpired(time.milliseconds()));
+    }
+
+    @Test
+    public void testResetSession() {
+        heartbeat.sentHeartbeat(time.milliseconds());
+        time.sleep(305);
+        heartbeat.resetSessionTimeout(time.milliseconds());
+        assertFalse(heartbeat.sessionTimeoutExpired(time.milliseconds()));
+    }
 }

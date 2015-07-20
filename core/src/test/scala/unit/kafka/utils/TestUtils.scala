@@ -179,6 +179,7 @@ object TestUtils extends Logging {
     if (enableSSL) {
       props.putAll(addSSLConfigs(SSLFactory.Mode.SERVER, true, trustStoreFile, "server"+nodeId))
     }
+    props.put("port", port.toString)
     props
   }
 

@@ -174,7 +174,8 @@ public class ConsumerConfig extends AbstractConfig {
                                         SESSION_TIMEOUT_MS_DOC)
                                 .define(PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                                         Type.STRING,
-                                        "blah",
+                                        "range",
+                                        in("range", "roundrobin"),
                                         Importance.MEDIUM,
                                         PARTITION_ASSIGNMENT_STRATEGY_DOC)
                                 .define(METADATA_MAX_AGE_CONFIG,

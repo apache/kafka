@@ -105,6 +105,10 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
         }
     }
 
+    public boolean isEmpty() {
+        return records.isEmpty();
+    }
+
     @SuppressWarnings("unchecked")
     public static <K, V> ConsumerRecords<K, V> empty() {
         return (ConsumerRecords<K, V>) EMPTY;

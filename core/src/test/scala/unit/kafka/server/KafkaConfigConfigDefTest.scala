@@ -134,7 +134,7 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
     Assert.assertEquals(expectedConfig.compressionType, actualConfig.compressionType)
   }
 
-  private def atLeastXIntProp(x: Int): String = (nextInt(Int.MaxValue - 1) + x).toString
+  private def atLeastXIntProp(x: Int): String = (nextInt(Int.MaxValue - x) + x).toString
 
   private def atLeastOneIntProp: String = atLeastXIntProp(1)
 
@@ -157,9 +157,9 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
         case KafkaConfig.QueuedMaxRequestsProp => expected.setProperty(name, atLeastOneIntProp)
 
         case KafkaConfig.PortProp => expected.setProperty(name, "1234")
-        case KafkaConfig.HostNameProp => expected.setProperty(name, nextString(10))
+        case KafkaConfig.HostNameProp => expected.setProperty(name, "hostname")
         case KafkaConfig.ListenersProp => expected.setProperty(name, "PLAINTEXT://:9092")
-        case KafkaConfig.AdvertisedHostNameProp => expected.setProperty(name, nextString(10))
+        case KafkaConfig.AdvertisedHostNameProp => expected.setProperty(name, "advertised.hostname")
         case KafkaConfig.AdvertisedPortProp => expected.setProperty(name, "4321")
         case KafkaConfig.AdvertisedListenersProp => expected.setProperty(name, "PLAINTEXT://:2909")
         case KafkaConfig.SocketRequestMaxBytesProp => expected.setProperty(name, atLeastOneIntProp)
@@ -225,7 +225,7 @@ class KafkaConfigConfigDefTest extends JUnit3Suite {
         case KafkaConfig.ReplicaLagTimeMaxMsProp => expected.setProperty(name, atLeastXIntProp(321))
         //require(offsetCommitRequiredAcks >= -1 && offsetCommitRequiredAcks <= offsetsTopicReplicationFactor)
         case KafkaConfig.OffsetCommitRequiredAcksProp => expected.setProperty(name, "-1")
-        case KafkaConfig.OffsetsTopicReplicationFactorProp => expected.setProperty(name, inRangeIntProp(-1, Short.MaxValue))
+        case KafkaConfig.OffsetsTopicReplicationFactorProp => expected.setProperty(name, inRangeIntProp(1, Short.MaxValue))
         //BrokerCompressionCodec.isValid(compressionType)
         case KafkaConfig.CompressionTypeProp => expected.setProperty(name, randFrom(BrokerCompressionCodec.brokerCompressionOptions))
 

@@ -64,9 +64,19 @@ public interface Consumer<K, V> extends Closeable {
     public void commit(CommitType commitType);
 
     /**
+     * @see KafkaConsumer#commit(CommitType, ConsumerCommitCallback)
+     */
+    public void commit(CommitType commitType, ConsumerCommitCallback callback);
+
+    /**
      * @see KafkaConsumer#commit(Map, CommitType)
      */
     public void commit(Map<TopicPartition, Long> offsets, CommitType commitType);
+
+    /**
+     * @see KafkaConsumer#commit(Map, CommitType, ConsumerCommitCallback)
+     */
+    public void commit(Map<TopicPartition, Long> offsets, CommitType commitType, ConsumerCommitCallback callback);
 
     /**
      * @see KafkaConsumer#seek(TopicPartition, long)
